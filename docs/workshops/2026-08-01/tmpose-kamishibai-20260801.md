@@ -197,7 +197,7 @@ https://kubohiroya.github.io/tmpose-kamishibai-samples/samples/urashima/web/
 フォルダの内容の表示方法の切り替えができます。
 ここでは「中アイコン」と「詳細」の2つを試して、表示方法の切り替えをできるように練習しておいてください。
 
-![](../../images/image13.png){style="width: 240.16px;"}
+![](../../images/image13.png){style="width: 140px;"}
 
 ### 2.2.2 「draft」フォルダを開く
 
@@ -205,14 +205,14 @@ https://kubohiroya.github.io/tmpose-kamishibai-samples/samples/urashima/web/
 「pose1.png」「pose2.png」「pose3.png」「pose4.png」というように4つのファイルが並んでいるのが見えます。
 これらを「棒人間記入用ファイル」として用いることとします。
 
-![](../../images/image14.png){style="width: 150.58px;"}
+![](../../images/image14.png){style="width: 250px;"}
 
 ### 2.2.3 「ペイント」アプリで開いて「棒人間」の絵を描く
 
 「draft」フォルダの中の、棒人間記入用ファイルのうち、「pose1.png」のファイルの上で「右クリック」し、
 表示されたメニューの中から「ペイントで編集する」をクリックする、あるいは「プログラムから開く」を選択して「ペイント」をクリックしてください。
 
-![](../../images/explorer-paint.png){style="width: 150.58px;"}
+![](../../images/explorer-paint.png){style="width: 200px;"}
 
 「ペイント」アプリが起動し、この「pose1.png」ファイルが読み込まれます。
 
@@ -276,7 +276,7 @@ M365チャットの画面中央に、「Copilotにメッセージを送信する
 入力欄上の「＋」ボタンをクリック、「画像とファイルのアップロード」をクリックすることで、
 画像ファイルをCopilotにアップロードできます。
 
-![](../../images/image21.png){style="width: 600px;"}
+![](../../images/image21.png){style="width: 400px;"}
 
 配布資料の「master」フォルダ(立ち絵画像フォルダ)から、乙姫様の立ち絵の画像を選択し、Copilotにアップロードしてください。
 
@@ -303,7 +303,7 @@ M365チャットの画面中央に、「Copilotにメッセージを送信する
 
 ```text
 添付した2つの画像のうち、立ち絵の画像「Princess」を、棒人間の画像「pose」で示したポーズに変えて
-描き直した画像を作成してください。画像の背景は、\#00FF00 の緑一色で塗りつぶしてください。
+描き直した画像を作成してください。画像の背景は、#00FF00 の緑一色で塗りつぶしてください。
 ```
 
 ![](../../images/image24.png){style="width: 406.20px;"}
@@ -324,12 +324,12 @@ M365チャットの画面中央に、「Copilotにメッセージを送信する
 生成された画像の背景は、緑色で塗りつぶされています。これを、背景が透明な画像に変換しましょう。
 生成された画像をクリックすると、その右側に画像編集画面が表示されます。
 
-![](../../images/copilot-edit.png){style="width: 221.40px;"}
+![](../../images/copilot-edit.png){style="width: 300.40px;"}
 
 この画像編集画面の上部の「背景」ボタンをクリックすると、次のように「削除」「塗りつぶす」ボタンが表示されます。
 ここでは、「削除」ボタンを押しましょう。
 
-![](../../images/copilot-edit-transparent.png){style="width: 360px;"}
+![](../../images/copilot-edit-transparent.png){style="width: 300px;"}
 
 しばらく待つと、緑色だった背景が、白と灰色のチェック模様の背景に変化します。
 
@@ -378,21 +378,21 @@ M365チャットの画面中央に、「Copilotにメッセージを送信する
 
 生成されたポーズ画像ファイルが保存されている様子が確認できます。
 
-![](../../images/image37.png){style="width: 360.40px;"}
+![](../../images/image37.png){style="width: 300.40px;"}
 
 これらのファイルのひとつ（例：Designer(31).png）を右クリックして、表示されるメニュー下端にある「名前の変更」アイコン
 （下図参照）をクリックしてください。
 
 ![](../../images/image38.png){style="width: 251.33px;"}
-![](../../images/image39.png){style="width: 180.00px;"}
+![](../../images/image39.png){style="width: 100.00px;"}
 
 すると、アイコンの下に、ファイル名を入力できる状態になります。
 
 このポーズが「1番目」であるならば、ファイル名を「p1.png」のように入力して、Enterキーを押すと、
 ファイル名が変更されます。
 
-![](../../images/image40.png){style="width: 176.00px;"}
-![](../../images/image41.png){style="width: 176.00px;"}
+![](../../images/image40.png){style="width: 150.00px;"}
+![](../../images/image41.png){style="width: 150.00px;"}
 
 作成したポーズの順番に応じて、さらに「p2.png」「p3.png」「p4.png」というように、
 それぞれのファイルがポーズの番号を示したファイル名となるように変更してください。
@@ -420,7 +420,7 @@ M365チャットの画面中央に、「Copilotにメッセージを送信する
 
 これにより、「generated」フォルダ内は次のようになります。
 
-![](../../images/generated.png){style="width: 251.33px;"}
+![](../../images/generated.png){style="width: 320px;"}
 
 「p3.png」や「p4.png」を作成している場合には、
 これらのファイルも同様に「generated」フォルダ内に移動させてください。
@@ -437,7 +437,7 @@ Edgeで [https://turbowarp.org/editor](https://turbowarp.org/editor) を開い�
 
 画面左上の「ファイル→コンピュータから読み込む」をクリックして、配布資料フォルダの中の「my-urashima.sb3」を開きます。
 
-![](../../images/image43.png){style="width: 346.50px;"}
+![](../../images/image43.png){style="width: 300px;"}
 
 「拡張機能セキュリティ」として、
 「Asset Manager」「TMPose」「Text Lines」「Runtime Expression」「Async Input」（順番は変化することがあります）
@@ -447,7 +447,7 @@ Edgeで [https://turbowarp.org/editor](https://turbowarp.org/editor) を開い�
 1. 「サンドボックスなしで実行する」にチェックをしてください。
 2. 「許可」ボタンをクリックしてください。
 
-![](../../images/image44.png){style="width: 200px;"}
+![](../../images/image44.png){style="width: 230px;"}
 
 #### ⚠️注意
 
@@ -459,15 +459,15 @@ Edgeで [https://turbowarp.org/editor](https://turbowarp.org/editor) を開い�
 
 画面右のスプライト一覧画面から、「Princess」を選択してください。
 
-![](../../images/image45.png){style="width: 601.70px;"}
+![](../../images/image45.png){style="width: 400px;"}
 
 「Princess」を選択した後に、次に、画面左上の「コスチューム」を選んでください。
 
-![](../../images/image46.png){style="width: 601.70px;"}
+![](../../images/image46.png){style="width: 400px;"}
 
 次に、配布資料フォルダの中の「generated」フォルダ内に、2.3.5で整理して移動させておいた画像があるので、これらを、既存コスチューム「1 Princess 360x360」の下にドラッグ＆ドロップをして読み込ませてください。
 
-![](../../images/turbowarp-costumes.png){style="width: 269.00px;"}
+![](../../images/turbowarp-costumes.png){style="width: 200px;"}
 
 
 ドラッグ＆ドロップ操作をうまく設定できたか確認しましょう。2番目以降に、「p1」「p2」（作成した場合は、さらに「p3」「p4」）の画像が表示されているのが確認できればOKです。
@@ -484,11 +484,11 @@ Edgeで [https://turbowarp.org/editor](https://turbowarp.org/editor) を開い�
 
 TurboWarp画面上部の「ファイル」メニューから「my-urashima.sb3に保存する」をクリックして、現在までの編集内容をファイルに保存してください。
 
-![](../../images/image50.png){style="width: 198.50px;"}
+![](../../images/image50.png){style="width: 200px;"}
 
 # 4. 休憩しよう
 
-![](../../images/image51.png){style="width: 411.63px;"}
+![](../../images/image51.png){style="width: 400px;"}
 
 トイレに行っておきましょう。
 
@@ -770,9 +770,7 @@ action=Princess:pose:p1,p2,p3,p4,p1,p2,p3,p4:p1,p2,p3,p4,p1,p2,p3,p4:Drum...
 
 メニューから、「ファイル」→「保存」 を実行し、my-urashima.txtファイルを保存してください。
 
-＜⭐️ここのスクリーンショットを日本語UIのものに差し替える＞
-
-![](../../images/image59.png){style="width: 100px;"}
+![](../../images/image59.png){style="width: 140px;"}
 
 # 7. 動作確認しよう
 
