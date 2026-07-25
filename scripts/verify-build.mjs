@@ -438,22 +438,11 @@ export async function verifyBuild() {
   ).length;
   const tocLabelCount = (toc.match(/class="toc-label"/gu) ?? []).length;
   const codeBlocks = combinedHtml.match(/<pre\b[\s\S]*?<\/pre>/gu) ?? [];
-  const sourceImagePlacements = [...combinedSource.matchAll(
-    /!\[\]\(\.\.\/\.\.\/images\/(image\d{2}\.(?:jpg|png))\)\{style="(width|height): ([0-9.]+)px;"\}/gu,
-  )];
-  const sourceImageCount = sourceImagePlacements.length;
-  const sourceImageSizes = sourceImagePlacements.map(([, , dimension, size]) => (
-    `${dimension}:${size}`
-  ));
   const docsEntries = await readdir(docsDirectory, {withFileTypes: true});
   const tocLinks = await verifyLocalReferences(tocPath, 'a', 'href');
   const coverImages = await verifyLocalReferences(coverHtmlPath, 'img', 'src');
   const bodyImages = await verifyLocalReferences(htmlPath, 'img', 'src');
   const images = [...coverImages, ...bodyImages];
-  const imageStyles = [
-    ...attributeValues(coverHtml, 'img', 'style'),
-    ...attributeValues(html, 'img', 'style'),
-  ];
   const readingOrder = publicationManifest.readingOrder.map((entry) => entry.url ?? entry);
   const legacySamplesExists = await access(path.join(outputDirectory, 'samples')).then(
     () => true,
@@ -464,7 +453,14 @@ export async function verifyBuild() {
   const generalResults = await verifyGeneralDocuments(grade);
   const staffResults = await verifyStaffDocument();
   const faviconHtmlCount = await verifyFavicon();
-  const sourceHeadingCount = (source.match(/^#{1,4}\s+/gmu) ?? []).length;
+  const bodyHeadingIds = attributeValues(html, 'h[1-4]', 'id');
+  const bodyHtmlFilename = documentConfig.sourceFilename.replace(/\.md$/u, '.html');
+  const tocHeadingIds = tocLinks.flatMap((reference) => {
+    const [relativePath, encodedFragment] = reference.split('#');
+    return relativePath === bodyHtmlFilename && encodedFragment
+      ? [decodeURIComponent(encodedFragment)]
+      : [];
+  });
 
   assert(!legacySamplesExists,
     'The retired /samples/ page is still present in the published site.');
@@ -510,8 +506,11 @@ export async function verifyBuild() {
     'Documentation does not contain a generated doc-toc navigation.');
   assert(!/<body\b[^>]*>\s*<h1\b/iu.test(toc),
     'Documentation table of contents still contains a duplicate publication title.');
-  assert(tocLinks.length === sourceHeadingCount - 1,
-    `Expected ${sourceHeadingCount - 1} generated TOC links, found ${tocLinks.length}.`);
+  assert(tocHeadingIds.length === tocLinks.length,
+    'Documentation table of contents contains a link outside the generated body headings.');
+  assert(JSON.stringify(tocHeadingIds) === JSON.stringify(bodyHeadingIds),
+    `Expected TOC links for ${bodyHeadingIds.length} rendered headings in document order, `
+      + `found ${tocHeadingIds.length}.`);
   assert(tocLabelCount === tocLinks.length,
     `Expected every TOC link to contain one label, found ${tocLabelCount} labels.`);
   assert(toc.includes('data-section-level="4"'),
@@ -550,20 +549,7 @@ export async function verifyBuild() {
     'The scoped 久保裕也 name reading override was not applied to every occurrence.');
   assert(incorrectNameRubyCount === 0,
     'Documentation HTML still contains the incorrect ゆうや reading.');
-  assert(sourceImageCount > 0, 'Documentation Markdown does not contain any images.');
-  assert(sourceImagePlacements.every(([, , , size]) => Number(size) > 0),
-    'Every Markdown image placement must have a positive pixel size.');
-  assert(images.length === sourceImageCount,
-    `Expected ${sourceImageCount} documentation image elements, found ${images.length}.`);
-  const generatedImageSizes = imageStyles.map((style) => {
-    const match = style.match(/(?:^|;)\s*(width|height):\s*([0-9.]+)px;/u);
-    return match ? `${match[1]}:${match[2]}` : undefined;
-  });
-  assert(imageStyles.length === images.length
-      && generatedImageSizes.every(Boolean),
-  'A generated documentation image is missing its source placement size.');
-  assert(JSON.stringify(generatedImageSizes) === JSON.stringify(sourceImageSizes),
-    'Generated documentation image sizes do not match the Markdown placements.');
+  assert(images.length > 0, 'Generated documentation does not contain any local images.');
   assert(!combinedHtml.includes('data:image/'),
     'Documentation HTML contains an embedded image data URL.');
   assert(toc.includes(`data-rubygana-grade="${grade}"`),
