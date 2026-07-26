@@ -11,6 +11,7 @@ import {
 import generalVivliostyleConfig from '../docs/vivliostyle.general.config.mjs';
 import staffVivliostyleConfig from '../docs/vivliostyle.staff.config.mjs';
 import workshopVivliostyleConfig from '../docs/vivliostyle.workshop.config.mjs';
+import {normalizeWorkshopImagePaths} from '../scripts/build-docs.mjs';
 
 test('uses the configured grade when no environment override is present', () => {
   const originalGrade = process.env.RUBYGANA_GRADE;
@@ -59,10 +60,14 @@ test('delegates the workshop table of contents to Vivliostyle', () => {
     'utf8',
   );
 
-  assert.equal(documentConfig.tocSectionDepth, 4);
+  assert.equal(documentConfig.tocSectionDepth, 3);
   assert.equal(workshopVivliostyleConfig.viewerParam, 'bookMode=true');
   assert.equal(documentConfig.coverHtmlFilename, 'index.html');
   assert.notEqual(documentConfig.coverHtmlFilename, documentConfig.tocHtmlFilename);
+  assert.equal(
+    workshopVivliostyleConfig.copyAsset.excludes.includes('workshops/**'),
+    false,
+  );
   assert.doesNotMatch(`${cover}\n${source}`, /^## 目次\s*$/mu);
   assert.doesNotMatch(`${cover}\n${source}`, /^#{1,6}\s+!\[/mu);
   assert.equal((cover.match(/^#\s+/gmu) ?? []).length, 1);
@@ -70,8 +75,21 @@ test('delegates the workshop table of contents to Vivliostyle', () => {
   assert.match(cover, /vivliostyle\.org\/viewer\/#src=.*&amp;bookMode=true/u);
   assert.match(source, /^# 0\. この教材と体験会について$/mu);
   assert.doesNotMatch(source, /^# [ABC]\. 付録/mu);
-  assert.match(source, /^#### うまく動かないとき$/mu);
-  assert.doesNotMatch(source, /^#{5,6}\s+/mu);
+  assert.match(source, /^\*\*うまく動かないとき\*\*$/mu);
+  assert.doesNotMatch(source, /^#{4,6}\s+/mu);
+});
+
+test('normalizes shared and document-local workshop image paths', () => {
+  assert.equal(
+    normalizeWorkshopImagePaths([
+      '<img src="../../images/shared.png">',
+      '<img src="./local.png">',
+    ].join('\n')),
+    [
+      '<img src="images/shared.png">',
+      `<img src="${documentConfig.sourceDirectory}/local.png">`,
+    ].join('\n'),
+  );
 });
 
 test('publishes appendix A as a standalone non-ruby staff document', () => {

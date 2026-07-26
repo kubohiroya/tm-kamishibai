@@ -49,7 +49,6 @@ export default defineConfig({
     excludes: [
       'dist/**',
       'general/**',
-      'workshops/**',
       'tmp/**',
     ],
   },

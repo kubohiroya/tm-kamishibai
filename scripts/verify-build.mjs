@@ -513,9 +513,9 @@ export async function verifyBuild() {
       + `found ${tocHeadingIds.length}.`);
   assert(tocLabelCount === tocLinks.length,
     `Expected every TOC link to contain one label, found ${tocLabelCount} labels.`);
-  assert(toc.includes('data-section-level="4"'),
-    'Documentation table of contents does not include fourth-level headings.');
-  assert(!toc.includes('data-section-level="5"'),
+  assert(toc.includes(`data-section-level="${documentConfig.tocSectionDepth}"`),
+    'Documentation table of contents does not include its configured deepest headings.');
+  assert(!toc.includes(`data-section-level="${documentConfig.tocSectionDepth + 1}"`),
     'Documentation table of contents includes headings deeper than configured.');
   assert(!html.includes('付録1-体験会運営用資料')
       && !html.includes('付録2-アプリ')
