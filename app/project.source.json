@@ -22157,7 +22157,7 @@
               1,
               [
                 10,
-                "208"
+                "360"
               ]
             ]
           },
@@ -28049,7 +28049,7 @@
       "visible": false,
       "x": 2.0677075140657823,
       "y": -125.39406473774856,
-      "size": 100,
+      "size": 65,
       "direction": 90,
       "draggable": false,
       "rotationStyle": "all around"
