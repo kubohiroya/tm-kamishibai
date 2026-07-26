@@ -155,7 +155,7 @@ async function prepareWorkshopHtml(htmlPath, grade) {
   const section = path.basename(htmlPath) === documentConfig.coverHtmlFilename
     ? 'cover'
     : isTableOfContents ? 'toc' : 'body';
-  const note = `<p class="furigana-build-note">このHTMLとPDFは、小学${grade}年生までに学ぶ漢字を既習として、以後に学ぶ漢字へふりがなを付けています。</p>`;
+  const note = `<p class="furigana-build-note">このドキュメントには、小学${grade}年生までに学ぶ漢字を学習済みとして想定し、それ以後に学ぶ漢字についてふりがなを付けています。</p>`;
   const withoutGeneratedTitle = isTableOfContents
     ? source.replace(/(<body\b[^>]*>)\s*<h1\b[^>]*>[\s\S]*?<\/h1>/iu, '$1')
     : source;
@@ -239,7 +239,37 @@ async function prepareGeneralFuriganaHtml(htmlPath, grade) {
   ));
 }
 
-export async function buildDocs({distDirectory = path.join(projectRoot, 'dist')} = {}) {
+async function removeDirectoryContentsExcept(directory, preservedEntryNames = []) {
+  let entries;
+  try {
+    entries = await readdir(directory);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  const preservedEntries = new Set(preservedEntryNames);
+  await Promise.all(
+    entries
+      .filter((entry) => !preservedEntries.has(entry))
+      .map((entry) => rm(path.join(directory, entry), {recursive: true, force: true})),
+  );
+}
+
+export async function buildDocs({
+  distDirectory = path.join(projectRoot, 'dist'),
+  publications = ['general', 'workshop', 'staff'],
+} = {}) {
+  const selectedPublications = new Set(publications);
+  const unknownPublications = [...selectedPublications].filter(
+    (publication) => !['general', 'workshop', 'staff'].includes(publication),
+  );
+  if (unknownPublications.length > 0) {
+    throw new Error(`Unknown documentation publication(s): ${unknownPublications.join(', ')}`);
+  }
+
   const grade = resolveLearnedThroughGrade();
   const docsDirectory = path.join(distDirectory, 'docs');
   const generalDirectory = path.join(docsDirectory, generalDocumentConfig.outputDirectory);
@@ -253,103 +283,142 @@ export async function buildDocs({distDirectory = path.join(projectRoot, 'dist')}
   const staffTempDirectory = path.join(projectRoot, 'tmp/docs-staff-webpub');
   const pdfDirectory = path.join(projectRoot, 'output/pdf');
 
-  await rm(docsDirectory, {recursive: true, force: true});
-  await rm(pdfDirectory, {recursive: true, force: true});
   await mkdir(docsDirectory, {recursive: true});
-  await copyFile(path.join(projectRoot, 'site/docs/index.html'), path.join(docsDirectory, 'index.html'));
+  await copyFile(
+    path.join(projectRoot, 'site/docs/index.html'),
+    path.join(docsDirectory, 'index.html'),
+  );
 
-  await buildWebPublication(generalConfigPath, generalTempDirectory);
-  await cp(generalTempDirectory, generalDirectory, {recursive: true});
+  if (selectedPublications.has('general')) {
+    await Promise.all([
+      rm(generalDirectory, {recursive: true, force: true}),
+      rm(path.join(pdfDirectory, generalDocumentConfig.outputDirectory), {
+        recursive: true,
+        force: true,
+      }),
+    ]);
+    await buildWebPublication(generalConfigPath, generalTempDirectory);
+    await cp(generalTempDirectory, generalDirectory, {recursive: true});
 
-  for (const generalDocument of generalDocumentConfig.documents) {
-    const htmlFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.html');
-    const pdfFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.pdf');
-    const htmlPath = path.join(generalDirectory, htmlFilename);
-    const pdfPath = path.join(pdfDirectory, generalDocumentConfig.outputDirectory, pdfFilename);
-    if (generalDocument.addFurigana === true) {
-      await prepareGeneralFuriganaHtml(htmlPath, grade);
-      await applyRubygana(htmlPath, grade);
+    for (const generalDocument of generalDocumentConfig.documents) {
+      const htmlFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.html');
+      const pdfFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.pdf');
+      const htmlPath = path.join(generalDirectory, htmlFilename);
+      const pdfPath = path.join(pdfDirectory, generalDocumentConfig.outputDirectory, pdfFilename);
+      if (generalDocument.addFurigana === true) {
+        await prepareGeneralFuriganaHtml(htmlPath, grade);
+        await applyRubygana(htmlPath, grade);
+      }
+      await buildPdf(htmlPath, pdfPath);
+      await copyFile(pdfPath, path.join(generalDirectory, pdfFilename));
     }
-    await buildPdf(htmlPath, pdfPath);
-    await copyFile(pdfPath, path.join(generalDirectory, pdfFilename));
+
+    await writeBuildInfo(
+      generalDirectory,
+      baseBuildInfo({
+        publicationKind: 'general-documentation',
+        rubyApplied: true,
+        rubyPolicy: 'selected-documents',
+        ...rubyganaBuildDetails(grade),
+        sourceDirectory: generalDocumentConfig.sourceDirectory,
+        documents: generalDocumentConfig.documents.map(({sourceFilename, title, addFurigana}) => ({
+          sourceFilename,
+          title,
+          htmlFilename: sourceFilename.replace(/\.md$/u, '.html'),
+          pdfFilename: sourceFilename.replace(/\.md$/u, '.pdf'),
+          rubyApplied: addFurigana === true,
+          ...(addFurigana === true ? {learnedThroughGrade: grade} : {}),
+        })),
+      }),
+    );
   }
 
-  await writeBuildInfo(generalDirectory, baseBuildInfo({
-    publicationKind: 'general-documentation',
-    rubyApplied: true,
-    rubyPolicy: 'selected-documents',
-    ...rubyganaBuildDetails(grade),
-    sourceDirectory: generalDocumentConfig.sourceDirectory,
-    documents: generalDocumentConfig.documents.map(({sourceFilename, title, addFurigana}) => ({
-      sourceFilename,
-      title,
-      htmlFilename: sourceFilename.replace(/\.md$/u, '.html'),
-      pdfFilename: sourceFilename.replace(/\.md$/u, '.pdf'),
-      rubyApplied: addFurigana === true,
-      ...(addFurigana === true ? {learnedThroughGrade: grade} : {}),
-    })),
-  }));
+  if (selectedPublications.has('workshop')) {
+    const workshopPdfDirectory = path.join(pdfDirectory, documentConfig.outputDirectory);
+    await Promise.all([
+      removeDirectoryContentsExcept(workshopDirectory, [path.basename(staffDirectory)]),
+      removeDirectoryContentsExcept(workshopPdfDirectory, [
+        path.basename(path.join(pdfDirectory, staffDocumentConfig.outputDirectory)),
+      ]),
+    ]);
+    await buildWebPublication(workshopConfigPath, workshopTempDirectory);
+    await processWorkshopHtmlFiles(workshopTempDirectory, grade);
+    await cp(workshopTempDirectory, workshopDirectory, {recursive: true});
 
-  await buildWebPublication(workshopConfigPath, workshopTempDirectory);
-  await cp(workshopTempDirectory, workshopDirectory, {recursive: true});
-  await processWorkshopHtmlFiles(workshopDirectory, grade);
+    const workshopManifest = path.join(workshopDirectory, 'publication.json');
+    if (!existsSync(workshopManifest)) {
+      throw new Error('Workshop Web Publication does not contain publication.json.');
+    }
 
-  const workshopManifest = path.join(workshopDirectory, 'publication.json');
-  if (!existsSync(workshopManifest)) {
-    throw new Error('Workshop Web Publication does not contain publication.json.');
+    const workshopPdfPath = path.join(workshopPdfDirectory, documentConfig.pdfFilename);
+    await buildPdf(workshopManifest, workshopPdfPath);
+    await copyFile(workshopPdfPath, path.join(workshopDirectory, documentConfig.pdfFilename));
+    await writeBuildInfo(
+      workshopDirectory,
+      workshopBuildInfo(grade, {
+        publicationKind: 'workshop-documentation',
+        navigation: {
+          viewerBookMode: true,
+          pdfBookmarks: 'generatedTableOfContents',
+        },
+        sourceDirectory: documentConfig.sourceDirectory,
+        coverFilename: documentConfig.coverFilename,
+        sourceFilename: documentConfig.sourceFilename,
+        generatedTableOfContents: {
+          title: '目次',
+          htmlFilename: documentConfig.tocHtmlFilename,
+          sectionDepth: documentConfig.tocSectionDepth,
+        },
+      }),
+    );
   }
 
-  const workshopPdfPath = path.join(
-    pdfDirectory,
-    documentConfig.outputDirectory,
-    documentConfig.pdfFilename,
-  );
-  await buildPdf(workshopManifest, workshopPdfPath);
-  await copyFile(workshopPdfPath, path.join(workshopDirectory, documentConfig.pdfFilename));
-  await writeBuildInfo(workshopDirectory, workshopBuildInfo(grade, {
-    publicationKind: 'workshop-documentation',
-    navigation: {
-      viewerBookMode: true,
-      pdfBookmarks: 'generatedTableOfContents',
-    },
-    sourceDirectory: documentConfig.sourceDirectory,
-    coverFilename: documentConfig.coverFilename,
-    sourceFilename: documentConfig.sourceFilename,
-    generatedTableOfContents: {
-      title: '目次',
-      htmlFilename: documentConfig.tocHtmlFilename,
-      sectionDepth: documentConfig.tocSectionDepth,
-    },
-  }));
+  if (selectedPublications.has('staff')) {
+    const staffPdfDirectory = path.join(pdfDirectory, staffDocumentConfig.outputDirectory);
+    await Promise.all([
+      rm(staffDirectory, {recursive: true, force: true}),
+      rm(staffPdfDirectory, {recursive: true, force: true}),
+    ]);
+    await buildWebPublication(staffConfigPath, staffTempDirectory);
+    await cp(staffTempDirectory, staffDirectory, {recursive: true});
 
-  await buildWebPublication(staffConfigPath, staffTempDirectory);
-  await cp(staffTempDirectory, staffDirectory, {recursive: true});
+    const staffHtmlPath = path.join(staffDirectory, staffDocumentConfig.htmlFilename);
+    await normalizeGeneratedImagePaths(staffHtmlPath);
+    const staffPdfPath = path.join(staffPdfDirectory, staffDocumentConfig.pdfFilename);
+    await buildPdf(staffHtmlPath, staffPdfPath);
+    await copyFile(staffPdfPath, path.join(staffDirectory, staffDocumentConfig.pdfFilename));
+    await writeBuildInfo(
+      staffDirectory,
+      baseBuildInfo({
+        publicationKind: 'workshop-staff-documentation',
+        rubyApplied: false,
+        sourceDirectory: staffDocumentConfig.sourceDirectory,
+        sourceFilename: staffDocumentConfig.sourceFilename,
+        htmlFilename: staffDocumentConfig.htmlFilename,
+        pdfFilename: staffDocumentConfig.pdfFilename,
+      }),
+    );
+  }
 
-  const staffHtmlPath = path.join(staffDirectory, staffDocumentConfig.htmlFilename);
-  await normalizeGeneratedImagePaths(staffHtmlPath);
-  const staffPdfPath = path.join(
-    pdfDirectory,
-    staffDocumentConfig.outputDirectory,
-    staffDocumentConfig.pdfFilename,
-  );
-  await buildPdf(staffHtmlPath, staffPdfPath);
-  await copyFile(staffPdfPath, path.join(staffDirectory, staffDocumentConfig.pdfFilename));
-  await writeBuildInfo(staffDirectory, baseBuildInfo({
-    publicationKind: 'workshop-staff-documentation',
-    rubyApplied: false,
-    sourceDirectory: staffDocumentConfig.sourceDirectory,
-    sourceFilename: staffDocumentConfig.sourceFilename,
-    htmlFilename: staffDocumentConfig.htmlFilename,
-    pdfFilename: staffDocumentConfig.pdfFilename,
-  }));
-
-  console.log(
-    `Built ${generalDocumentConfig.documents.length} general HTML/PDF document pairs in `
-      + `${path.relative(projectRoot, generalDirectory)}/`,
-  );
-  console.log(`Built grade ${grade} workshop publication in ${path.relative(projectRoot, workshopDirectory)}/`);
-  console.log(`Built non-ruby staff publication in ${path.relative(projectRoot, staffDirectory)}/`);
-  console.log(`Built printable PDFs in ${path.relative(projectRoot, pdfDirectory)}/`);
+  if (selectedPublications.has('general')) {
+    console.log(
+      `Built ${generalDocumentConfig.documents.length} general HTML/PDF document pairs in ` +
+        `${path.relative(projectRoot, generalDirectory)}/`,
+    );
+  }
+  if (selectedPublications.has('workshop')) {
+    console.log(
+      `Built grade ${grade} workshop publication in ${path.relative(projectRoot, workshopDirectory)}/`,
+    );
+  }
+  if (selectedPublications.has('staff')) {
+    console.log(
+      `Built non-ruby staff publication in ${path.relative(projectRoot, staffDirectory)}/`,
+    );
+  }
+  if (selectedPublications.size > 0) {
+    console.log(`Built printable PDFs in ${path.relative(projectRoot, pdfDirectory)}/`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

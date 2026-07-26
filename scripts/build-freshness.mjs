@@ -26,3 +26,14 @@ export async function outputsAreUpToDate(inputPaths, outputPaths, {force = false
 
   return Math.max(...inputTimes) <= Math.min(...outputTimes);
 }
+
+export async function outdatedPublicationNames(publications, {force = false} = {}) {
+  const freshness = await Promise.all(
+    publications.map(async ({name, inputs, outputs}) => ({
+      name,
+      upToDate: await outputsAreUpToDate(inputs, outputs, {force}),
+    })),
+  );
+
+  return freshness.filter(({upToDate}) => !upToDate).map(({name}) => name);
+}

@@ -2,11 +2,11 @@
 
 千葉商科大学 総合政策学部 教授 久保裕也
 
-2026/07/21 更新
+2026/07/26 更新
 
 ![](../../images/image01.png){style="width: 601.70px;"}
 
-この教材はCreative Commons CC-BY-SA 4.0で利用可能です。
+この教材は[Creative Commons CC-BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0)で利用可能です。
 
 ![](../../images/image02.png){style="width: 129.00px;"}
 
