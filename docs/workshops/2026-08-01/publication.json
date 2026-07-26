@@ -8,11 +8,11 @@
   "name": "AIを使って「紙芝居の物語に参加する仕組み」を作ろう！",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-26T05:51:41.989Z",
+  "dateModified": "2026-07-26T13:49:44.261Z",
   "readingOrder": [
     {
       "url": "index.html",
-      "name": "AIを使って「紙芝居の物語に参加する仕組み」を作ろう！ 「親子AIプログラミング体験会」@千葉商科大学 (2026/08/01)",
+      "name": "AIを使って「紙芝居の物語に参加する仕組み」を作ろう！",
       "rel": "cover",
       "type": "LinkedResource"
     },
@@ -122,7 +122,9 @@
     "images/turbowarp-costumes.png",
     "images/webcam-preview.png",
     "staff-theme.css",
-    "theme.css"
+    "theme.css",
+    "workshops/2026-08-01/qr-child.png",
+    "workshops/2026-08-01/qr-parent.png"
   ],
   "links": []
 }
