@@ -315,7 +315,7 @@
         },
         "c/": {
           "opcode": "procedures_call",
-          "next": "ag",
+          "next": "uiFlagDefaultValue1",
           "parent": "c.",
           "inputs": {},
           "fields": {},
@@ -5197,7 +5197,7 @@
         },
         "es": {
           "opcode": "procedures_call",
-          "next": "aK",
+          "next": "uiStoryDefaultValue1",
           "parent": "er",
           "inputs": {},
           "fields": {},
@@ -5214,7 +5214,7 @@
         "aK": {
           "opcode": "procedures_call",
           "next": "et",
-          "parent": "es",
+          "parent": "uiStoryDefaultValue5",
           "inputs": {
             "[`1{O5_LlbE0dC!htLSe": [
               1,
@@ -5267,7 +5267,7 @@
         },
         "et": {
           "opcode": "procedures_call",
-          "next": "eu",
+          "next": "uiStoryRegister1",
           "parent": "aK",
           "inputs": {},
           "fields": {},
@@ -5284,7 +5284,7 @@
         "eu": {
           "opcode": "procedures_call",
           "next": "aL",
-          "parent": "et",
+          "parent": "uiStoryRegister5",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -15880,7 +15880,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "Z"
+              "actionTextDispatch"
             ]
           },
           "fields": {},
@@ -16080,10 +16080,171 @@
           "shadow": false,
           "topLevel": false
         },
-        "Z": {
+        "actionTextDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "Y",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actionCommandIsText"
+            ],
+            "SUBSTACK": [
+              2,
+              "actionSetTextValue"
+            ],
+            "SUBSTACK2": [
+              2,
+              "Z"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionCommandIsText": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "actionTextDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "actionCommandForText",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionCommandForText": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actionCommandIsText",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionCommand"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionSetTextValue": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": null,
+          "parent": "actionTextDispatch",
+          "inputs": {
+            "NAME": [
+              3,
+              "actionTextAssetName",
+              [
+                10,
+                "Narration"
+              ]
+            ],
+            "VALUE": [
+              3,
+              "actionTextValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionTextAssetName": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actionSetTextValue",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionTextValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "actionSetTextValue",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "3"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "actionTextValueRaw",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "actionTextValueRaw": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "actionTextValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "Z": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "actionTextDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -19315,7 +19476,7 @@
         "ag": {
           "opcode": "files_setOpenMode",
           "next": "iN",
-          "parent": "c/",
+          "parent": "uiFlagColor5",
           "inputs": {
             "mode": [
               1,
@@ -21482,6 +21643,796 @@
               null
             ]
           },
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue1": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiFlagDefaultValue2",
+          "parent": "c/",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Pose!"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue2": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiFlagDefaultValue3",
+          "parent": "uiFlagDefaultValue1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Invalid script"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue3": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiFlagDefaultValue4",
+          "parent": "uiFlagDefaultValue2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Open file"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue4": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiFlagDefaultValue5",
+          "parent": "uiFlagDefaultValue3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue5": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiFlagRegister1",
+          "parent": "uiFlagDefaultValue4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "About"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister1": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiFlagWidth1",
+          "parent": "uiFlagDefaultValue5",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth1": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagColor1",
+          "parent": "uiFlagRegister1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "315"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor1": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagRegister2",
+          "parent": "uiFlagWidth1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#ff6666"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister2": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiFlagWidth2",
+          "parent": "uiFlagColor1",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth2": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagColor2",
+          "parent": "uiFlagRegister2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "420"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor2": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagRegister3",
+          "parent": "uiFlagWidth2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#9966ff"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister3": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiFlagWidth3",
+          "parent": "uiFlagColor2",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth3": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagColor3",
+          "parent": "uiFlagRegister3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "326"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor3": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagRegister4",
+          "parent": "uiFlagWidth3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister4": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiFlagWidth4",
+          "parent": "uiFlagColor3",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth4": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagColor4",
+          "parent": "uiFlagRegister4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "208"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor4": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagRegister5",
+          "parent": "uiFlagWidth4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister5": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiFlagWidth5",
+          "parent": "uiFlagColor4",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth5": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "uiFlagColor5",
+          "parent": "uiFlagRegister5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "360"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor5": {
+          "opcode": "twAssetManager_setTextStyle",
+          "next": "ag",
+          "parent": "uiFlagWidth5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryDefaultValue1": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiStoryDefaultValue2",
+          "parent": "es",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Pose!"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryDefaultValue2": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiStoryDefaultValue3",
+          "parent": "uiStoryDefaultValue1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Invalid script"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryDefaultValue3": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiStoryDefaultValue4",
+          "parent": "uiStoryDefaultValue2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Open file"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryDefaultValue4": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "uiStoryDefaultValue5",
+          "parent": "uiStoryDefaultValue3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryDefaultValue5": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": "aK",
+          "parent": "uiStoryDefaultValue4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "About"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryRegister1": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiStoryRegister2",
+          "parent": "et",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryRegister2": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiStoryRegister3",
+          "parent": "uiStoryRegister1",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryRegister3": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiStoryRegister4",
+          "parent": "uiStoryRegister2",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryRegister4": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "uiStoryRegister5",
+          "parent": "uiStoryRegister3",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoryRegister5": {
+          "opcode": "twAssetManager_registerAsset",
+          "next": "eu",
+          "parent": "uiStoryRegister4",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ]
+          },
+          "fields": {},
           "shadow": false,
           "topLevel": false
         }
@@ -26105,7 +27056,7 @@
         },
         "iy": {
           "opcode": "data_showvariable",
-          "next": "cT",
+          "next": "uiPromptSetSkin",
           "parent": "ix",
           "inputs": {},
           "fields": {
@@ -26117,38 +27068,10 @@
           "shadow": false,
           "topLevel": false
         },
-        "cT": {
-          "opcode": "looks_switchcostumeto",
-          "next": "oT",
-          "parent": "iy",
-          "inputs": {
-            "COSTUME": [
-              1,
-              "oU"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "oU": {
-          "opcode": "looks_costume",
-          "next": null,
-          "parent": "cT",
-          "inputs": {},
-          "fields": {
-            "COSTUME": [
-              "Lets pose",
-              null
-            ]
-          },
-          "shadow": true,
-          "topLevel": false
-        },
         "oT": {
           "opcode": "looks_show",
           "next": null,
-          "parent": "cT",
+          "parent": "uiPromptSetSkin",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -26224,31 +27147,20 @@
           "y": 459
         },
         "cU": {
-          "opcode": "looks_switchcostumeto",
+          "opcode": "twAssetManager_setThisSpriteSkin",
           "next": "oY",
           "parent": "oX",
           "inputs": {
-            "COSTUME": [
+            "NAME": [
               1,
-              "oZ"
+              [
+                10,
+                "ui.invalidScript"
+              ]
             ]
           },
           "fields": {},
           "shadow": false,
-          "topLevel": false
-        },
-        "oZ": {
-          "opcode": "looks_costume",
-          "next": null,
-          "parent": "cU",
-          "inputs": {},
-          "fields": {
-            "COSTUME": [
-              "Error",
-              null
-            ]
-          },
-          "shadow": true,
           "topLevel": false
         },
         "oY": {
@@ -26259,28 +27171,36 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "uiPromptSetSkin": {
+          "opcode": "twAssetManager_setThisSpriteSkin",
+          "next": "oT",
+          "parent": "iy",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.prompt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
         {
-          "name": "Lets pose",
+          "name": "ui-placeholder",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "d8d3dd41ea6f87ad7911d0c13c5b40a1",
-          "md5ext": "d8d3dd41ea6f87ad7911d0c13c5b40a1.svg",
-          "rotationCenterX": 74.75,
-          "rotationCenterY": 16.4375
-        },
-        {
-          "name": "Error",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "assetId": "7a84540a8d2977632e535480016e2561",
-          "md5ext": "7a84540a8d2977632e535480016e2561.svg",
-          "rotationCenterX": 130.25,
-          "rotationCenterY": 15.981249999999989
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
         }
       ],
       "sounds": [],
@@ -26455,7 +27375,7 @@
         },
         "o,": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "o-",
+          "next": "uiOpenSetSkin",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -26472,8 +27392,25 @@
         "o-": {
           "opcode": "looks_show",
           "next": null,
-          "parent": "o,",
+          "parent": "uiOpenSetSkin",
           "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiOpenSetSkin": {
+          "opcode": "twAssetManager_setThisSpriteSkin",
+          "next": "o-",
+          "parent": "o,",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ]
+          },
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -26483,13 +27420,13 @@
       "currentCostume": 0,
       "costumes": [
         {
-          "name": "open1",
+          "name": "ui-placeholder",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "0812b6c58035edb6f60719d2f0f5fad8",
-          "md5ext": "0812b6c58035edb6f60719d2f0f5fad8.svg",
-          "rotationCenterX": 165.5,
-          "rotationCenterY": 40.6875
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
         }
       ],
       "sounds": [],
@@ -26644,7 +27581,7 @@
         },
         "iE": {
           "opcode": "localstorage_setProjectId",
-          "next": "ae",
+          "next": "uiReloadSetSkin",
           "parent": "o[",
           "inputs": {
             "ID": [
@@ -26662,7 +27599,7 @@
         "ae": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "iE",
+          "parent": "uiReloadSetSkin",
           "inputs": {
             "CONDITION": [
               2,
@@ -26776,19 +27713,36 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "uiReloadSetSkin": {
+          "opcode": "twAssetManager_setThisSpriteSkin",
+          "next": "ae",
+          "parent": "iE",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
         {
-          "name": "open1",
+          "name": "ui-placeholder",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "afdfdd2603d90a405c22412c9ad59b94",
-          "md5ext": "afdfdd2603d90a405c22412c9ad59b94.svg",
-          "rotationCenterX": 103.81203884624315,
-          "rotationCenterY": 34.861680000000035
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
         }
       ],
       "sounds": [],
@@ -26901,7 +27855,7 @@
         },
         "iJ": {
           "opcode": "localstorage_setProjectId",
-          "next": "af",
+          "next": "uiAboutSetSkin",
           "parent": "pb",
           "inputs": {
             "ID": [
@@ -26919,7 +27873,7 @@
         "af": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "iJ",
+          "parent": "uiAboutSetSkin",
           "inputs": {
             "CONDITION": [
               2,
@@ -27057,19 +28011,36 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "uiAboutSetSkin": {
+          "opcode": "twAssetManager_setThisSpriteSkin",
+          "next": "af",
+          "parent": "iJ",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
         {
-          "name": "info",
+          "name": "ui-placeholder",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "929874737712be7fdb38c9462e1c073f",
-          "md5ext": "929874737712be7fdb38c9462e1c073f.svg",
-          "rotationCenterX": 103.81203884624315,
-          "rotationCenterY": 27.416230000000013
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
         }
       ],
       "sounds": [],
@@ -27078,7 +28049,7 @@
       "visible": false,
       "x": 2.0677075140657823,
       "y": -125.39406473774856,
-      "size": 100,
+      "size": 65,
       "direction": 90,
       "draggable": false,
       "rotationStyle": "all around"

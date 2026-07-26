@@ -27,8 +27,10 @@
   ];
   const DEFAULT_STAGE_WIDTH = 480;
   const DEFAULT_FONT = "Handwriting";
-  const DEFAULT_COLOR = "#575e75";
+  const DEFAULT_COLOR = "#ffffff";
   const DEFAULT_ALIGNMENT = "center";
+  const DEFAULT_OUTLINE_WIDTH = 2;
+  const DEFAULT_OUTLINE_COLOR = "#000000";
   function textRuntimeVariableName(name) {
     return `${TEXT_RUNTIME_NAMESPACE}:${name}`;
   }
@@ -104,7 +106,7 @@
     };
   }
   const EXTENSION_ID = "twAssetManager";
-  const EXTENSION_VERSION = "2026-07-23";
+  const EXTENSION_VERSION = "2026-07-26";
   const DB_NAME = "tw-asset-manager";
   const DB_VERSION = 1;
   const STORE_NAME = "assets";
@@ -221,6 +223,7 @@
       __publicField(this, "soundAssets", /* @__PURE__ */ new Map());
       __publicField(this, "textAssets", /* @__PURE__ */ new Map());
       __publicField(this, "assetRegistry", /* @__PURE__ */ new Map());
+      __publicField(this, "displayedAssets", /* @__PURE__ */ new Map());
       __publicField(this, "playingAudio", /* @__PURE__ */ new Map());
       __publicField(this, "registrationVersions", /* @__PURE__ */ new Map());
       __publicField(this, "lastAssetErrorType", "");
@@ -320,6 +323,7 @@
       this.soundAssets.clear();
       this.textAssets.clear();
       this.assetRegistry.clear();
+      this.displayedAssets.clear();
       for (const audio of [...this.playingAudio.keys()]) this.stopExternalAudio(audio);
       this.playingAudio.clear();
     }
@@ -407,7 +411,7 @@
     getVersion() {
       return EXTENSION_VERSION;
     }
-    setTextValue(args) {
+    async setTextValue(args) {
       const name = this.requireTextAssetName(args.NAME);
       const kind = this.assetRegistry.get(name);
       if (kind !== void 0 && kind !== "text") {
@@ -417,6 +421,15 @@
       this.setRuntimeVariable(
         reference?.runtimeVariableName ?? textRuntimeVariableName(name),
         String(args.VALUE ?? "")
+      );
+      const targets = this.runtime.targets.filter(
+        (target) => this.displayedAssets.get(target.id) === name
+      );
+      await Promise.all(
+        targets.map((target) => this.applyTextToTarget(target, name, {
+          runtime: this.runtime,
+          target
+        }))
       );
     }
     setTextStyle(args) {
@@ -586,6 +599,9 @@
         this.textAssets.delete(name);
       }
       this.assetRegistry.delete(name);
+      for (const [targetId, displayedName] of this.displayedAssets) {
+        if (displayedName === name) this.displayedAssets.delete(targetId);
+      }
     }
     openDatabase() {
       return new Promise((resolve, reject) => {
@@ -680,9 +696,10 @@
       if (!kind) throw new Error(`Asset is not loaded: ${name}`);
       if (kind === "text") {
         await this.applyTextToTarget(target, name, util);
-        return;
+      } else {
+        this.applySkinToTarget(target, await this.resolveSkin(name));
       }
-      this.applySkinToTarget(target, await this.resolveSkin(name));
+      this.displayedAssets.set(target.id, name);
     }
     async applyTextToTarget(target, name, util) {
       if (target.isStage) throw new Error(`Text asset can only be shown on a sprite: ${name}`);
@@ -694,6 +711,8 @@
       const setFont = this.requireAnimatedTextOpcode("text_setFont");
       const setColor = this.requireAnimatedTextOpcode("text_setColor");
       const setWidth = this.requireAnimatedTextOpcode("text_setWidth");
+      const setOutlineWidth = this.runtime.getOpcodeFunction?.("text_setOutlineWidth");
+      const setOutlineColor = this.runtime.getOpcodeFunction?.("text_setOutlineColor");
       const displayText = this.requireAnimatedTextOpcode(
         style.animation === "none" ? "text_setText" : "text_animateText"
       );
@@ -702,6 +721,12 @@
       await Promise.resolve(setFont({ FONT: style.font }, blockUtility));
       await Promise.resolve(setColor({ COLOR: style.color }, blockUtility));
       await Promise.resolve(setWidth({ WIDTH: style.width, ALIGN: style.align }, blockUtility));
+      if (setOutlineWidth) {
+        await Promise.resolve(setOutlineWidth({ WIDTH: DEFAULT_OUTLINE_WIDTH }, blockUtility));
+      }
+      if (setOutlineColor) {
+        await Promise.resolve(setOutlineColor({ COLOR: DEFAULT_OUTLINE_COLOR }, blockUtility));
+      }
       const displayResult = displayText(
         style.animation === "none" ? { TEXT: String(text ?? "") } : { ANIMATE: style.animation, TEXT: String(text ?? "") },
         blockUtility

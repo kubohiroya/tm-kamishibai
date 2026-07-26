@@ -1,8 +1,14 @@
+import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const BlockType = require('scratch-vm/src/extension-support/block-type');
 const Cast = require('scratch-vm/src/util/cast');
+const assetManagerSource = readFileSync(
+  new URL('../../app/extensions/twAssetManager.js', import.meta.url),
+  'utf8',
+);
 
 function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
   return {
@@ -24,19 +30,76 @@ function register(vm, id, ExtensionClass) {
   vm.extensionManager.addBuiltinExtension(id, ExtensionClass);
 }
 
-export function registerKamishibaiTestExtensions(vm, clock) {
+function createProductionAssetManagerClass(vm, onCreate) {
+  let registeredExtension = null;
+  const Scratch = {
+    vm,
+    extensions: {
+      unsandboxed: true,
+      register(extension) {
+        registeredExtension = extension;
+      },
+    },
+    BlockType,
+    ArgumentType: {
+      STRING: 'string',
+    },
+    translate(value) {
+      return typeof value === 'object' && value !== null
+        ? value.default ?? value.defaultMessage ?? ''
+        : value;
+    },
+  };
+  runInNewContext(assetManagerSource, {
+    AbortSignal,
+    Audio: class {},
+    Blob,
+    console,
+    fetch,
+    indexedDB: {},
+    performance,
+    Response,
+    Scratch,
+    setTimeout,
+    clearTimeout,
+    URL,
+  });
+  if (!registeredExtension) {
+    throw new Error('Production Asset Manager did not register itself.');
+  }
+  const ProductionAssetManager = registeredExtension.constructor;
+  return class {
+    constructor() {
+      const extension = new ProductionAssetManager();
+      onCreate(extension);
+      return extension;
+    }
+  };
+}
+
+export function registerKamishibaiTestExtensions(
+  vm,
+  clock,
+  {productionAssetManager = false} = {},
+) {
   const state = {
     actorSequences: new Map(),
     actorSkins: new Map(),
+    assetManager: null,
     asyncInput: null,
     assets: new Map(),
     consoleErrors: [],
+    displayedAssets: new Map(),
+    displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
     localStorage: new Map(),
     playingSounds: new Set(),
     timers: new Map(),
     tempVariables: null,
+    textColors: new Map(),
+    textOutlineColors: new Map(),
+    textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
   };
 
@@ -183,6 +246,7 @@ export function registerKamishibaiTestExtensions(vm, clock) {
       const resetState = () => {
         state.actorSequences.clear();
         state.actorSkins.clear();
+        state.displayedAssets.clear();
         state.playingSounds.clear();
       };
       runtime.on('PROJECT_START', resetState);
@@ -194,6 +258,7 @@ export function registerKamishibaiTestExtensions(vm, clock) {
         block('playSound', BlockType.COMMAND, ['NAME']),
         block('playSoundUntilDone', BlockType.COMMAND, ['NAME']),
         block('registerAsset', BlockType.COMMAND, ['RESOURCE_ID', 'NAME']),
+        block('setTextStyle', BlockType.COMMAND, ['NAME', 'PROPERTY', 'VALUE']),
         block('setTextValue', BlockType.COMMAND, ['NAME', 'VALUE']),
         block('setStageSkin', BlockType.COMMAND, ['NAME']),
         block('setThisSpriteSkin', BlockType.COMMAND, ['NAME']),
@@ -207,19 +272,28 @@ export function registerKamishibaiTestExtensions(vm, clock) {
     registerAsset(args) {
       state.assets.set(Cast.toString(args.NAME), Cast.toString(args.RESOURCE_ID));
     }
+    setTextStyle() {}
     setTextValue(args) {
       const name = Cast.toString(args.NAME);
       const resource = state.assets.get(name);
-      if (resource !== 'text' && !resource?.startsWith('text:')) {
+      if (
+        resource !== undefined
+        && resource !== 'text'
+        && !resource.startsWith('text:')
+      ) {
         throw new Error(`Asset is not text: ${name}`);
       }
-      const explicitName = resource.startsWith('text:')
+      const explicitName = resource?.startsWith('text:')
         ? resource.slice('text:'.length).trim()
         : '';
+      const value = Cast.toString(args.VALUE);
       state.tempVariables.setRuntimeVariable({
         VAR: `text:${explicitName || name}`,
-        STRING: Cast.toString(args.VALUE),
+        STRING: value,
       });
+      for (const [targetId, displayedName] of state.displayedAssets) {
+        if (displayedName === name) state.displayedText.set(targetId, value);
+      }
     }
     isLoaded(args) {
       return state.assets.has(Cast.toString(args.NAME));
@@ -241,7 +315,22 @@ export function registerKamishibaiTestExtensions(vm, clock) {
       this.applyCostume(this.runtime.getTargetForStage(), args.NAME);
     }
     setThisSpriteSkin(args, util) {
-      this.applyCostume(util.target, args.NAME);
+      const name = Cast.toString(args.NAME);
+      const resource = state.assets.get(name);
+      if (resource === 'text' || resource?.startsWith('text:')) {
+        const explicitName = resource.startsWith('text:')
+          ? resource.slice('text:'.length).trim()
+          : '';
+        state.displayedAssets.set(util.target.id, name);
+        state.displayedText.set(
+          util.target.id,
+          state.tempVariables.getRuntimeVariable({
+            VAR: `text:${explicitName || name}`,
+          }),
+        );
+        return;
+      }
+      this.applyCostume(util.target, name);
     }
     playSound(args) {
       state.playingSounds.add(Cast.toString(args.NAME));
@@ -476,15 +565,47 @@ export function registerKamishibaiTestExtensions(vm, clock) {
 
   class TextExtension {
     getInfo() {
-      return extensionInfo('text', [block('animateText', BlockType.REPORTER, ['TEXT'])]);
+      return extensionInfo('text', [
+        block('setText', BlockType.COMMAND, ['TEXT']),
+        block('animateText', BlockType.COMMAND, ['ANIMATE', 'TEXT']),
+        block('setFont', BlockType.COMMAND, ['FONT']),
+        block('setColor', BlockType.COMMAND, ['COLOR']),
+        block('setWidth', BlockType.COMMAND, ['WIDTH', 'ALIGN']),
+        block('setOutlineWidth', BlockType.COMMAND, ['WIDTH']),
+        block('setOutlineColor', BlockType.COMMAND, ['COLOR']),
+      ]);
     }
-    animateText(args) { return args.TEXT; }
+    setText(args, util) {
+      state.displayedText.set(util.target.id, Cast.toString(args.TEXT));
+    }
+    animateText(args, util) {
+      state.displayedText.set(util.target.id, Cast.toString(args.TEXT));
+    }
+    setFont() {}
+    setColor(args, util) {
+      state.textColors.set(util.target.id, Cast.toString(args.COLOR));
+    }
+    setWidth() {}
+    setOutlineWidth(args, util) {
+      state.textOutlineWidths.set(util.target.id, Cast.toNumber(args.WIDTH));
+    }
+    setOutlineColor(args, util) {
+      state.textOutlineColors.set(util.target.id, Cast.toString(args.COLOR));
+    }
   }
 
   register(vm, 'sipcconsole', ConsoleExtension);
   register(vm, 'lmsTempVars2', TempVariablesExtension);
   register(vm, 'strings', StringsExtension);
-  register(vm, 'twAssetManager', AssetManagerExtension);
+  register(
+    vm,
+    'twAssetManager',
+    productionAssetManager
+      ? createProductionAssetManagerClass(vm, (extension) => {
+        state.assetManager = extension;
+      })
+      : AssetManagerExtension,
+  );
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);

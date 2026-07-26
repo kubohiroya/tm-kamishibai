@@ -192,6 +192,28 @@ setRuntimeVariable=score:1
 registerBranch=chooseRoute:score == 1,true:ocean,home
 ```
 
+### 4.7 プロンプト／メニュー文言
+
+ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の `---` より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、`asset=` は不要です。
+
+```text
+text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて
+```
+
+| アセット名 | 表示場所 |
+|---|---|
+| `ui.prompt` | ポーズ認識中の案内 |
+| `ui.invalidScript` | 不正な台本を読み込んだときのエラー |
+| `ui.open` | 台本ファイルを選ぶメニュー |
+| `ui.reload` | 直前の台本をもう一度実行するメニュー |
+| `ui.about` | タイトル画面へ戻るメニュー |
+
+ランタイムは物語開始時に既定値へ戻してからscene 0を実行するため、別の言語の台本を続けて読み込んでも前の文言は残りません。台本をまだ読み込んでいない最初のメニューでは、ランタイムの既定値が表示されます。
+
 ## 5. シーンを書く
 
 シーンは `---` で区切ります。
@@ -404,15 +426,20 @@ action=Hero:sequence:Hero1,StepSound,Hero2:0,0.5
 ```text
 asset=Narration,text
 actor=Narration,Narration
+action=text:Narration:むかし
 action=Narration:show:Narration:0,0,100
-text=Narration:むかし　むかし、あるところに...
+action=wait:2
+action=text:Narration:むかし　むかし、あるところに...
 ```
 
-`text=テキストアセット名:文字列` は表示内容を更新します。空の文字列を指定すると内容を消せます。
+`action=text:テキストアセット名:文字列` は、アクション列のその位置で表示内容を更新します。`wait` と組み合わせることで、同じテキストアセットの内容を時系列に沿って変更できます。空の文字列を指定すると内容を消せます。
+テキストは、明るい背景と暗い背景のどちらでも読めるよう、既定では白文字に黒い縁取りで表示されます。
 
 ```text
-text=Narration:
+action=text:Narration:
 ```
+
+シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。ただし、予約済みの `ui.*` 文言は時系列の演出ではなく初期設定なので、scene 0 の `text=...` で定義します。
 
 ### 6.11 シーンを分岐させる
 

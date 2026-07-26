@@ -275,20 +275,7 @@ sceneLabel=ocean
 action=stage:Ocean
 ```
 
-### 2.8 `text`
-
-```text
-text=テキストアセット名:文字列
-```
-
-`asset=名前,text` で登録したテキストアセットの内容を更新します。空文字列で内容を消せます。
-
-```text
-text=Narration:むかし　むかし、あるところに...
-text=Narration:
-```
-
-### 2.9 `TMPoseURL`
+### 2.8 `TMPoseURL`
 
 ```text
 TMPoseURL=ポーズモデルURL
@@ -306,6 +293,32 @@ TMPoseURL=ポーズモデルURL
 ```text
 TMPoseURL=https://example.com/kamishibai/pose-model/
 ```
+
+### 2.9 `text`：scene 0 のUI文言
+
+```text
+text=予約済みUIテキストアセット名:文字列
+```
+
+プロンプト／メニューの文言は、scene 0（最初の `---` より前）で定義します。次の5アセットはランタイムが自動登録するため、`asset=` による登録は不要です。
+
+```text
+text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて
+```
+
+| アセット名 | 用途 | 未定義時の既定値 |
+|---|---|---|
+| `ui.prompt` | ポーズ認識中の案内 | `Pose!` |
+| `ui.invalidScript` | 台本エラー | `Invalid script` |
+| `ui.open` | ファイル読込 | `Open file` |
+| `ui.reload` | 再読込 | `Reload` |
+| `ui.about` | タイトル表示 | `About` |
+
+有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。
 
 ## 3. グローバルアクション
 
@@ -371,7 +384,25 @@ action=sound:Gong
 
 効果音の演出を確実に聞かせたい場面や、音が終わってから次の場面へ進めたい場合に使います。
 
-### 3.5 `transition`
+### 3.5 `text`
+
+```text
+action=text:テキストアセット名:文字列
+```
+
+`asset=名前,text` で登録したテキストアセットの内容を、アクション列のその位置で更新します。`wait` と組み合わせると、内容を時系列に沿って順次変更できます。空文字列で内容を消せます。
+
+```text
+action=text:Narration:むかし
+action=wait:2
+action=text:Narration:むかし　むかし、あるところに...
+action=wait:2
+action=text:Narration:
+```
+
+シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。予約済みの `ui.*` 文言だけは初期設定としてscene 0の `text=...` を使用します。
+
+### 3.6 `transition`
 
 ```text
 action=transition:fadeOut
@@ -387,7 +418,7 @@ action=transition:reset
 | `fadeUp` | 明るさを段階的に上げる |
 | `reset` | 明るさ効果を `0` へ戻す |
 
-### 3.6 `branch`
+### 3.7 `branch`
 
 ```text
 action=branch:分岐名
@@ -395,7 +426,7 @@ action=branch:分岐名
 
 `registerBranch` で登録した条件を評価し、選ばれた `sceneLabel` へ移動します。真になる条件がなければ、そのまま次のアクション／シーンへ進みます。
 
-### 3.7 `keyInputToChangeScene`
+### 3.8 `keyInputToChangeScene`
 
 ```text
 action=keyInputToChangeScene:キーID1,キーID2,...:シーンラベル1,シーンラベル2,...
@@ -409,7 +440,7 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:leftRoute,rightRoute
 
 キーIDは `KeyA`、`Space`、`ArrowLeft` などのコードを使います。キーID数とラベル数はそろえてください。
 
-### 3.8 `touchInputToChangeScene`
+### 3.9 `touchInputToChangeScene`
 
 ```text
 action=touchInputToChangeScene:アクター名1,アクター名2,...:シーンラベル1,シーンラベル2,...
