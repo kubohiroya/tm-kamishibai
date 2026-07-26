@@ -115,6 +115,14 @@ export class KamishibaiVmHarness {
     ));
   }
 
+  getSprite(name) {
+    return this.vm.runtime.targets.find((target) => (
+      !target.isStage
+      && target.isOriginal
+      && target.sprite?.name === name
+    ));
+  }
+
   getBubbleText(name) {
     return this.getActor(name)?.getCustomState('Scratch.looks')?.text ?? '';
   }

@@ -294,6 +294,32 @@ TMPoseURL=ポーズモデルURL
 TMPoseURL=https://example.com/kamishibai/pose-model/
 ```
 
+### 2.9 `text`：scene 0 のUI文言
+
+```text
+text=予約済みUIテキストアセット名:文字列
+```
+
+プロンプト／メニューの文言は、scene 0（最初の `---` より前）で定義します。次の5アセットはランタイムが自動登録するため、`asset=` による登録は不要です。
+
+```text
+text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて
+```
+
+| アセット名 | 用途 | 未定義時の既定値 |
+|---|---|---|
+| `ui.prompt` | ポーズ認識中の案内 | `Pose!` |
+| `ui.invalidScript` | 台本エラー | `Invalid script` |
+| `ui.open` | ファイル読込 | `Open file` |
+| `ui.reload` | 再読込 | `Reload` |
+| `ui.about` | タイトル表示 | `About` |
+
+有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。
+
 ## 3. グローバルアクション
 
 グローバルアクションは、特定のアクターではなく、ステージ、音、時間を操作します。
@@ -374,7 +400,7 @@ action=wait:2
 action=text:Narration:
 ```
 
-シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。
+シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。予約済みの `ui.*` 文言だけは初期設定としてscene 0の `text=...` を使用します。
 
 ### 3.6 `transition`
 

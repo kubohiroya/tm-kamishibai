@@ -89,6 +89,7 @@ export function registerKamishibaiTestExtensions(
     asyncInput: null,
     assets: new Map(),
     consoleErrors: [],
+    displayedAssets: new Map(),
     displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
@@ -245,6 +246,7 @@ export function registerKamishibaiTestExtensions(
       const resetState = () => {
         state.actorSequences.clear();
         state.actorSkins.clear();
+        state.displayedAssets.clear();
         state.playingSounds.clear();
       };
       runtime.on('PROJECT_START', resetState);
@@ -256,6 +258,7 @@ export function registerKamishibaiTestExtensions(
         block('playSound', BlockType.COMMAND, ['NAME']),
         block('playSoundUntilDone', BlockType.COMMAND, ['NAME']),
         block('registerAsset', BlockType.COMMAND, ['RESOURCE_ID', 'NAME']),
+        block('setTextStyle', BlockType.COMMAND, ['NAME', 'PROPERTY', 'VALUE']),
         block('setTextValue', BlockType.COMMAND, ['NAME', 'VALUE']),
         block('setStageSkin', BlockType.COMMAND, ['NAME']),
         block('setThisSpriteSkin', BlockType.COMMAND, ['NAME']),
@@ -269,19 +272,28 @@ export function registerKamishibaiTestExtensions(
     registerAsset(args) {
       state.assets.set(Cast.toString(args.NAME), Cast.toString(args.RESOURCE_ID));
     }
+    setTextStyle() {}
     setTextValue(args) {
       const name = Cast.toString(args.NAME);
       const resource = state.assets.get(name);
-      if (resource !== 'text' && !resource?.startsWith('text:')) {
+      if (
+        resource !== undefined
+        && resource !== 'text'
+        && !resource.startsWith('text:')
+      ) {
         throw new Error(`Asset is not text: ${name}`);
       }
-      const explicitName = resource.startsWith('text:')
+      const explicitName = resource?.startsWith('text:')
         ? resource.slice('text:'.length).trim()
         : '';
+      const value = Cast.toString(args.VALUE);
       state.tempVariables.setRuntimeVariable({
         VAR: `text:${explicitName || name}`,
-        STRING: Cast.toString(args.VALUE),
+        STRING: value,
       });
+      for (const [targetId, displayedName] of state.displayedAssets) {
+        if (displayedName === name) state.displayedText.set(targetId, value);
+      }
     }
     isLoaded(args) {
       return state.assets.has(Cast.toString(args.NAME));
@@ -303,7 +315,22 @@ export function registerKamishibaiTestExtensions(
       this.applyCostume(this.runtime.getTargetForStage(), args.NAME);
     }
     setThisSpriteSkin(args, util) {
-      this.applyCostume(util.target, args.NAME);
+      const name = Cast.toString(args.NAME);
+      const resource = state.assets.get(name);
+      if (resource === 'text' || resource?.startsWith('text:')) {
+        const explicitName = resource.startsWith('text:')
+          ? resource.slice('text:'.length).trim()
+          : '';
+        state.displayedAssets.set(util.target.id, name);
+        state.displayedText.set(
+          util.target.id,
+          state.tempVariables.getRuntimeVariable({
+            VAR: `text:${explicitName || name}`,
+          }),
+        );
+        return;
+      }
+      this.applyCostume(util.target, name);
     }
     playSound(args) {
       state.playingSounds.add(Cast.toString(args.NAME));

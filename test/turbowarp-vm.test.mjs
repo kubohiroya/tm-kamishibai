@@ -95,6 +95,18 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'Hatchling',
     ],
   );
+  for (const name of [
+    'prompt',
+    'openButton',
+    'reloadButton',
+    'showTitleButton',
+  ]) {
+    assert.deepEqual(
+      harness.getSprite(name).getCostumes().map((costume) => costume.name),
+      ['ui-placeholder'],
+      `${name} still contains a localized costume`,
+    );
+  }
 });
 
 for (const branchCase of [
@@ -207,6 +219,79 @@ test('keeps the external script flow when the embedded script slot is empty', as
   harness.clickStage();
   harness.runUntil(() => !harness.hasRuntimeVariable('skipMode'));
   assert.equal(harness.hasRuntimeVariable('script'), false);
+});
+
+test('uses scene 0 text values for prompt and menu UI assets', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.broadcast('showMenu');
+  harness.runUntil(() => harness.getSprite('openButton')?.visible === true);
+
+  const openButton = harness.getSprite('openButton');
+  assert.equal(
+    harness.extensionState.displayedText.get(openButton.id),
+    'Open file',
+  );
+
+  harness.setRuntimeVariable('script', [
+    'kamishibai=3.1',
+    'text=ui.prompt:ポーズをとろう！',
+    'text=ui.invalidScript:エラー：不正な台本ファイル',
+    'text=ui.open:ファイルをひらく',
+    'text=ui.reload:もういちど',
+    'text=ui.about:このアプリについて',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=wait:30',
+  ].join('\n'));
+  harness.broadcast('hideMenu');
+  harness.broadcast('startStory');
+  harness.runUntil(() => harness.getBackdropName() === 'Stars');
+
+  assert.equal(harness.getRuntimeVariable('text:ui.prompt'), 'ポーズをとろう！');
+  assert.equal(harness.getRuntimeVariable('text:ui.open'), 'ファイルをひらく');
+
+  harness.broadcast('showPrompt');
+  harness.runUntil(() => harness.getSprite('prompt')?.visible === true);
+  const prompt = harness.getSprite('prompt');
+  assert.equal(
+    harness.extensionState.displayedText.get(prompt.id),
+    'ポーズをとろう！',
+  );
+
+  harness.broadcast('invalidScript');
+  harness.runUntil(() => (
+    harness.extensionState.displayedText.get(prompt.id)
+      === 'エラー：不正な台本ファイル'
+  ));
+
+  harness.broadcast('showMenu');
+  harness.runUntil(() => (
+    harness.getSprite('reloadButton')?.visible === true
+    && harness.getSprite('showTitleButton')?.visible === true
+  ));
+  assert.equal(
+    harness.extensionState.displayedText.get(openButton.id),
+    'ファイルをひらく',
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('reloadButton').id),
+    'もういちど',
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(
+      harness.getSprite('showTitleButton').id,
+    ),
+    'このアプリについて',
+  );
+  assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
 test('updates and clears a registered text asset from ordered text actions', async (context) => {
