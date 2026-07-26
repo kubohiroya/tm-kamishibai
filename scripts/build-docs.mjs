@@ -115,6 +115,18 @@ async function applyRubygana(htmlFile, grade) {
   await rename(rubyOutput, htmlFile);
 }
 
+export function normalizeWorkshopImagePaths(source) {
+  return source
+    .replace(
+      /(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu,
+      '$1images/',
+    )
+    .replace(
+      /(<img\b[^>]*\bsrc=")\.\//giu,
+      `$1${documentConfig.sourceDirectory}/`,
+    );
+}
+
 function baseBuildInfo(details = {}) {
   return {
     htmlAndPdfGenerator: 'Vivliostyle CLI 11.1.0',
@@ -155,7 +167,7 @@ async function prepareWorkshopHtml(htmlPath, grade) {
   const section = path.basename(htmlPath) === documentConfig.coverHtmlFilename
     ? 'cover'
     : isTableOfContents ? 'toc' : 'body';
-  const note = `<p class="furigana-build-note">このドキュメントには、小学${grade}年生までに学ぶ漢字を学習済みとして想定し、それ以後に学ぶ漢字についてふりがなを付けています。</p>`;
+  const note = `<p class="furigana-build-note">このドキュメントは、小学${grade}年生までに学ぶ漢字を学習済みとして想定して、それ以後に学ぶ漢字についての、ふりがなを付けています。</p>`;
   const withoutGeneratedTitle = isTableOfContents
     ? source.replace(/(<body\b[^>]*>)\s*<h1\b[^>]*>[\s\S]*?<\/h1>/iu, '$1')
     : source;
@@ -166,10 +178,7 @@ async function prepareWorkshopHtml(htmlPath, grade) {
       '$1<span class="toc-label">$2</span>$3',
     ),
   );
-  const withLocalImages = withTocLabels.replace(
-    /(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu,
-    '$1images/',
-  );
+  const withLocalImages = normalizeWorkshopImagePaths(withTocLabels);
   const withGrade = withLocalImages.replace(
     /<html(\s|>)/i,
     `<html data-rubygana-grade="${grade}"$1`,

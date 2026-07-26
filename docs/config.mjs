@@ -63,7 +63,7 @@ export const documentConfig = {
   sourceFilename: 'tmpose-kamishibai-20260801.md',
   tocHtmlFilename: 'toc.html',
   pdfFilename: 'tmpose-kamishibai-20260801.pdf',
-  tocSectionDepth: 4,
+  tocSectionDepth: 3,
   rubyOverrides: [
     '久保裕也:裕也:ひろや',
     '竜宮城:りゅうぐうじょう',
