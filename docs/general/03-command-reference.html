@@ -315,14 +315,7 @@ sceneLabel=ocean
 action=stage:Ocean</code></pre>
         </section>
         <section class="level3">
-          <h3 id="28-text">2.8 <code>text</code></h3>
-          <pre class="language-text"><code class="language-text">text=テキストアセット名:文字列</code></pre>
-          <p><code>asset=名前,text</code> で登録したテキストアセットの内容を更新します。空文字列で内容を消せます。</p>
-          <pre class="language-text"><code class="language-text">text=Narration:むかし　むかし、あるところに...
-text=Narration:</code></pre>
-        </section>
-        <section class="level3">
-          <h3 id="29-tmposeurl">2.9 <code>TMPoseURL</code></h3>
+          <h3 id="28-tmposeurl">2.8 <code>TMPoseURL</code></h3>
           <pre class="language-text"><code class="language-text">TMPoseURL=ポーズモデルURL</code></pre>
           <table>
             <thead>
@@ -352,6 +345,53 @@ text=Narration:</code></pre>
           </table>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/kamishibai/pose-model/</code></pre>
+        </section>
+        <section class="level3">
+          <h3 id="29-textscene-0-のui文言">2.9 <code>text</code>：scene 0 のUI文言</h3>
+          <pre class="language-text"><code class="language-text">text=予約済みUIテキストアセット名:文字列</code></pre>
+          <p>プロンプト／メニューの文言は、scene 0（最初の <code>---</code> より前）で定義します。次の5アセットはランタイムが自動登録するため、<code>asset=</code> による登録は不要です。</p>
+          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>アセット名</th>
+                <th>用途</th>
+                <th>未定義時の既定値</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>ui.prompt</code></td>
+                <td>ポーズ認識中の案内</td>
+                <td><code>Pose!</code></td>
+              </tr>
+              <tr>
+                <td><code>ui.invalidScript</code></td>
+                <td>台本エラー</td>
+                <td><code>Invalid script</code></td>
+              </tr>
+              <tr>
+                <td><code>ui.open</code></td>
+                <td>ファイル読込</td>
+                <td><code>Open file</code></td>
+              </tr>
+              <tr>
+                <td><code>ui.reload</code></td>
+                <td>再読込</td>
+                <td><code>Reload</code></td>
+              </tr>
+              <tr>
+                <td><code>ui.about</code></td>
+                <td>タイトル表示</td>
+                <td><code>About</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。</p>
         </section>
       </section>
       <section class="level2">
@@ -388,7 +428,18 @@ text=Narration:</code></pre>
           <p>効果音の演出を確実に聞かせたい場面や、音が終わってから次の場面へ進めたい場合に使います。</p>
         </section>
         <section class="level3">
-          <h3 id="35-transition">3.5 <code>transition</code></h3>
+          <h3 id="35-text">3.5 <code>text</code></h3>
+          <pre class="language-text"><code class="language-text">action=text:テキストアセット名:文字列</code></pre>
+          <p><code>asset=名前,text</code> で登録したテキストアセットの内容を、アクション列のその位置で更新します。<code>wait</code> と組み合わせると、内容を時系列に沿って順次変更できます。空文字列で内容を消せます。</p>
+          <pre class="language-text"><code class="language-text">action=text:Narration:むかし
+action=wait:2
+action=text:Narration:むかし　むかし、あるところに...
+action=wait:2
+action=text:Narration:</code></pre>
+          <p>シーン直下の <code>text=...</code> も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には <code>action=text:...</code> を使用してください。予約済みの <code>ui.*</code> 文言だけは初期設定としてscene 0の <code>text=...</code> を使用します。</p>
+        </section>
+        <section class="level3">
+          <h3 id="36-transition">3.6 <code>transition</code></h3>
           <pre class="language-text"><code class="language-text">action=transition:fadeOut
 action=transition:fadeUp
 action=transition:reset</code></pre>
@@ -417,19 +468,19 @@ action=transition:reset</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="36-branch">3.6 <code>branch</code></h3>
+          <h3 id="37-branch">3.7 <code>branch</code></h3>
           <pre class="language-text"><code class="language-text">action=branch:分岐名</code></pre>
           <p><code>registerBranch</code> で登録した条件を評価し、選ばれた <code>sceneLabel</code> へ移動します。真になる条件がなければ、そのまま次のアクション／シーンへ進みます。</p>
         </section>
         <section class="level3">
-          <h3 id="37-keyinputtochangescene">3.7 <code>keyInputToChangeScene</code></h3>
+          <h3 id="38-keyinputtochangescene">3.8 <code>keyInputToChangeScene</code></h3>
           <pre class="language-text"><code class="language-text">action=keyInputToChangeScene:キーID1,キーID2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>物理キーの入力をバックグラウンドで待ち、押されたキーと同じ位置のシーンラベルへ移動します。</p>
           <pre class="language-text"><code class="language-text">action=keyInputToChangeScene:ArrowLeft,ArrowRight:leftRoute,rightRoute</code></pre>
           <p>キーIDは <code>KeyA</code>、<code>Space</code>、<code>ArrowLeft</code> などのコードを使います。キーID数とラベル数はそろえてください。</p>
         </section>
         <section class="level3">
-          <h3 id="38-touchinputtochangescene">3.8 <code>touchInputToChangeScene</code></h3>
+          <h3 id="39-touchinputtochangescene">3.9 <code>touchInputToChangeScene</code></h3>
           <pre class="language-text"><code class="language-text">action=touchInputToChangeScene:アクター名1,アクター名2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>指定アクターへのポインター／タッチ入力を待ち、選ばれたアクターと同じ位置のシーンラベルへ移動します。アクター数とラベル数はそろえてください。</p>
         </section>

@@ -160,6 +160,46 @@ registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=score:1
 registerBranch=chooseRoute:score == 1,true:ocean,home</code></pre>
         </section>
+        <section class="level3">
+          <h3 id="47-プロンプトメニュー文言">4.7 プロンプト／メニュー文言</h3>
+          <p>ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の <code>---</code> より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、<code>asset=</code> は不要です。</p>
+          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>アセット名</th>
+                <th>表示場所</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>ui.prompt</code></td>
+                <td>ポーズ認識中の案内</td>
+              </tr>
+              <tr>
+                <td><code>ui.invalidScript</code></td>
+                <td>不正な台本を読み込んだときのエラー</td>
+              </tr>
+              <tr>
+                <td><code>ui.open</code></td>
+                <td>台本ファイルを選ぶメニュー</td>
+              </tr>
+              <tr>
+                <td><code>ui.reload</code></td>
+                <td>直前の台本をもう一度実行するメニュー</td>
+              </tr>
+              <tr>
+                <td><code>ui.about</code></td>
+                <td>タイトル画面へ戻るメニュー</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>ランタイムは物語開始時に既定値へ戻してからscene 0を実行するため、別の言語の台本を続けて読み込んでも前の文言は残りません。台本をまだ読み込んでいない最初のメニューでは、ランタイムの既定値が表示されます。</p>
+        </section>
       </section>
       <section class="level2">
         <h2 id="5-シーンを書く">5. シーンを書く</h2>
@@ -292,10 +332,16 @@ action=Princess:think:</code></pre>
           <p>ヘッダでテキストアセットとアクターを登録し、通常の <code>show</code> で表示します。</p>
           <pre class="language-text"><code class="language-text">asset=Narration,text
 actor=Narration,Narration
+action=text:Narration:むかし
 action=Narration:show:Narration:0,0,100
-text=Narration:むかし　むかし、あるところに...</code></pre>
-          <p><code>text=テキストアセット名:文字列</code> は表示内容を更新します。空の文字列を指定すると内容を消せます。</p>
-          <pre class="language-text"><code class="language-text">text=Narration:</code></pre>
+action=wait:2
+action=text:Narration:むかし　むかし、あるところに...</code></pre>
+          <p>
+            <code>action=text:テキストアセット名:文字列</code> は、アクション列のその位置で表示内容を更新します。<code>wait</code> と組み合わせることで、同じテキストアセットの内容を時系列に沿って変更できます。空の文字列を指定すると内容を消せます。
+            テキストは、明るい背景と暗い背景のどちらでも読めるよう、既定では白文字に黒い縁取りで表示されます。
+          </p>
+          <pre class="language-text"><code class="language-text">action=text:Narration:</code></pre>
+          <p>シーン直下の <code>text=...</code> も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には <code>action=text:...</code> を使用してください。ただし、予約済みの <code>ui.*</code> 文言は時系列の演出ではなく初期設定なので、scene 0 の <code>text=...</code> で定義します。</p>
         </section>
         <section class="level3">
           <h3 id="611-シーンを分岐させる">6.11 シーンを分岐させる</h3>
