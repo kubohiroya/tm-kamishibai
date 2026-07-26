@@ -209,7 +209,7 @@ test('keeps the external script flow when the embedded script slot is empty', as
   assert.equal(harness.hasRuntimeVariable('script'), false);
 });
 
-test('updates and clears a registered text asset from scene commands', async (context) => {
+test('updates and clears a registered text asset from ordered text actions', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   startScript(harness, [
@@ -221,21 +221,13 @@ test('updates and clears a registered text asset from scene commands', async (co
     'cover=Title,',
     '---',
     'sceneLabel=first',
-    'text=Narration:むかし',
     'action=stage:Stars',
+    'action=text:Narration:むかし',
     'action=Narration:show:Narration:0,0,100',
-    'action=wait:30',
-    '---',
-    'sceneLabel=second',
-    'text=Narration:つづき',
-    'action=stage:Title',
-    'action=Narration:show:Narration:0,0,100',
-    'action=wait:30',
-    '---',
-    'sceneLabel=third',
-    'text=Narration:',
-    'action=stage:Stars',
-    'action=Narration:show:Narration:0,0,100',
+    'action=wait:0.2',
+    'action=text:Narration:むかし　むかし、',
+    'action=wait:0.2',
+    'action=text:Narration:',
     'action=wait:30',
   ].join('\n'));
 
@@ -247,21 +239,66 @@ test('updates and clears a registered text asset from scene commands', async (co
   assert.equal(harness.hasRuntimeVariable('Narration'), false);
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 
-  harness.pressKey('ArrowDown');
   harness.runUntil(() => (
-    Number(harness.getRuntimeVariable('sceneIndex')) === 2
-    && harness.getRuntimeVariable('text:Narration') === 'つづき'
-    && harness.getBackdropName() === 'Title'
+    harness.getRuntimeVariable('text:Narration') === 'むかし　むかし、'
   ));
-  assert.equal(harness.getBackdropName(), 'Title');
+  assert.equal(Number(harness.getRuntimeVariable('sceneIndex')), 1);
 
-  harness.pressKey('ArrowDown');
   harness.runUntil(() => (
-    Number(harness.getRuntimeVariable('sceneIndex')) === 3
-    && harness.getRuntimeVariable('text:Narration') === ''
-    && harness.getBackdropName() === 'Stars'
+    harness.getRuntimeVariable('text:Narration') === ''
   ));
   assert.equal(harness.getBackdropName(), 'Stars');
+  assert.equal(harness.getActor('Narration')?.visible, true);
+  assert.deepEqual(harness.extensionState.consoleErrors, []);
+});
+
+test('registers and displays a text asset through the production Asset Manager', async (context) => {
+  const harness = await loadKamishibaiVm({productionAssetManager: true});
+  context.after(() => harness.quit());
+  const actor = harness.vm.runtime.targets.find((target) => (
+    target.isOriginal && target.sprite?.name === 'Actor'
+  ));
+  const util = {runtime: harness.vm.runtime, target: actor};
+
+  await harness.extensionState.assetManager.registerAsset({
+    NAME: 'Narration',
+    RESOURCE_ID: 'text',
+  });
+  await harness.extensionState.assetManager.setTextValue({
+    NAME: 'Narration',
+    VALUE: 'むかし',
+  });
+  await harness.extensionState.assetManager.setThisSpriteSkin(
+    {NAME: 'Narration'},
+    util,
+  );
+
+  assert.equal(
+    harness.extensionState.assetManager?.isLoaded({NAME: 'Narration'}),
+    true,
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(actor.id),
+    'むかし',
+  );
+  assert.equal(harness.extensionState.textColors.get(actor.id), '#ffffff');
+  assert.equal(harness.extensionState.textOutlineWidths.get(actor.id), 2);
+  assert.equal(harness.extensionState.textOutlineColors.get(actor.id), '#000000');
+
+  await harness.extensionState.assetManager.setTextValue({
+    NAME: 'Narration',
+    VALUE: 'むかし　むかし、あるところに...',
+  });
+  assert.equal(
+    harness.extensionState.displayedText.get(actor.id),
+    'むかし　むかし、あるところに...',
+  );
+
+  await harness.extensionState.assetManager.setTextValue({
+    NAME: 'Narration',
+    VALUE: '',
+  });
+  assert.equal(harness.extensionState.displayedText.get(actor.id), '');
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 

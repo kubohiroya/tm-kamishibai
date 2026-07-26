@@ -169,7 +169,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
       'setRuntimeVariable',
       'registerBranch',
       'sceneLabel',
-      'text=',
+      'action=text:',
       'transition:fadeOut',
       'branch:',
       'keyInputToChangeScene',

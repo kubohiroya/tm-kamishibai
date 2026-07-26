@@ -404,15 +404,20 @@ action=Hero:sequence:Hero1,StepSound,Hero2:0,0.5
 ```text
 asset=Narration,text
 actor=Narration,Narration
+action=text:Narration:むかし
 action=Narration:show:Narration:0,0,100
-text=Narration:むかし　むかし、あるところに...
+action=wait:2
+action=text:Narration:むかし　むかし、あるところに...
 ```
 
-`text=テキストアセット名:文字列` は表示内容を更新します。空の文字列を指定すると内容を消せます。
+`action=text:テキストアセット名:文字列` は、アクション列のその位置で表示内容を更新します。`wait` と組み合わせることで、同じテキストアセットの内容を時系列に沿って変更できます。空の文字列を指定すると内容を消せます。
+テキストは、明るい背景と暗い背景のどちらでも読めるよう、既定では白文字に黒い縁取りで表示されます。
 
 ```text
-text=Narration:
+action=text:Narration:
 ```
+
+シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。
 
 ### 6.11 シーンを分岐させる
 

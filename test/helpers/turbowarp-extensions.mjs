@@ -1,8 +1,14 @@
+import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const BlockType = require('scratch-vm/src/extension-support/block-type');
 const Cast = require('scratch-vm/src/util/cast');
+const assetManagerSource = readFileSync(
+  new URL('../../app/extensions/twAssetManager.js', import.meta.url),
+  'utf8',
+);
 
 function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
   return {
@@ -24,19 +30,75 @@ function register(vm, id, ExtensionClass) {
   vm.extensionManager.addBuiltinExtension(id, ExtensionClass);
 }
 
-export function registerKamishibaiTestExtensions(vm, clock) {
+function createProductionAssetManagerClass(vm, onCreate) {
+  let registeredExtension = null;
+  const Scratch = {
+    vm,
+    extensions: {
+      unsandboxed: true,
+      register(extension) {
+        registeredExtension = extension;
+      },
+    },
+    BlockType,
+    ArgumentType: {
+      STRING: 'string',
+    },
+    translate(value) {
+      return typeof value === 'object' && value !== null
+        ? value.default ?? value.defaultMessage ?? ''
+        : value;
+    },
+  };
+  runInNewContext(assetManagerSource, {
+    AbortSignal,
+    Audio: class {},
+    Blob,
+    console,
+    fetch,
+    indexedDB: {},
+    performance,
+    Response,
+    Scratch,
+    setTimeout,
+    clearTimeout,
+    URL,
+  });
+  if (!registeredExtension) {
+    throw new Error('Production Asset Manager did not register itself.');
+  }
+  const ProductionAssetManager = registeredExtension.constructor;
+  return class {
+    constructor() {
+      const extension = new ProductionAssetManager();
+      onCreate(extension);
+      return extension;
+    }
+  };
+}
+
+export function registerKamishibaiTestExtensions(
+  vm,
+  clock,
+  {productionAssetManager = false} = {},
+) {
   const state = {
     actorSequences: new Map(),
     actorSkins: new Map(),
+    assetManager: null,
     asyncInput: null,
     assets: new Map(),
     consoleErrors: [],
+    displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
     localStorage: new Map(),
     playingSounds: new Set(),
     timers: new Map(),
     tempVariables: null,
+    textColors: new Map(),
+    textOutlineColors: new Map(),
+    textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
   };
 
@@ -476,15 +538,47 @@ export function registerKamishibaiTestExtensions(vm, clock) {
 
   class TextExtension {
     getInfo() {
-      return extensionInfo('text', [block('animateText', BlockType.REPORTER, ['TEXT'])]);
+      return extensionInfo('text', [
+        block('setText', BlockType.COMMAND, ['TEXT']),
+        block('animateText', BlockType.COMMAND, ['ANIMATE', 'TEXT']),
+        block('setFont', BlockType.COMMAND, ['FONT']),
+        block('setColor', BlockType.COMMAND, ['COLOR']),
+        block('setWidth', BlockType.COMMAND, ['WIDTH', 'ALIGN']),
+        block('setOutlineWidth', BlockType.COMMAND, ['WIDTH']),
+        block('setOutlineColor', BlockType.COMMAND, ['COLOR']),
+      ]);
     }
-    animateText(args) { return args.TEXT; }
+    setText(args, util) {
+      state.displayedText.set(util.target.id, Cast.toString(args.TEXT));
+    }
+    animateText(args, util) {
+      state.displayedText.set(util.target.id, Cast.toString(args.TEXT));
+    }
+    setFont() {}
+    setColor(args, util) {
+      state.textColors.set(util.target.id, Cast.toString(args.COLOR));
+    }
+    setWidth() {}
+    setOutlineWidth(args, util) {
+      state.textOutlineWidths.set(util.target.id, Cast.toNumber(args.WIDTH));
+    }
+    setOutlineColor(args, util) {
+      state.textOutlineColors.set(util.target.id, Cast.toString(args.COLOR));
+    }
   }
 
   register(vm, 'sipcconsole', ConsoleExtension);
   register(vm, 'lmsTempVars2', TempVariablesExtension);
   register(vm, 'strings', StringsExtension);
-  register(vm, 'twAssetManager', AssetManagerExtension);
+  register(
+    vm,
+    'twAssetManager',
+    productionAssetManager
+      ? createProductionAssetManagerClass(vm, (extension) => {
+        state.assetManager = extension;
+      })
+      : AssetManagerExtension,
+  );
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);

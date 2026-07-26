@@ -15880,7 +15880,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "Z"
+              "actionTextDispatch"
             ]
           },
           "fields": {},
@@ -16080,10 +16080,171 @@
           "shadow": false,
           "topLevel": false
         },
-        "Z": {
+        "actionTextDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "Y",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actionCommandIsText"
+            ],
+            "SUBSTACK": [
+              2,
+              "actionSetTextValue"
+            ],
+            "SUBSTACK2": [
+              2,
+              "Z"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionCommandIsText": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "actionTextDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "actionCommandForText",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionCommandForText": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actionCommandIsText",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionCommand"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionSetTextValue": {
+          "opcode": "twAssetManager_setTextValue",
+          "next": null,
+          "parent": "actionTextDispatch",
+          "inputs": {
+            "NAME": [
+              3,
+              "actionTextAssetName",
+              [
+                10,
+                "Narration"
+              ]
+            ],
+            "VALUE": [
+              3,
+              "actionTextValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionTextAssetName": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actionSetTextValue",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionTextValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "actionSetTextValue",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "3"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "actionTextValueRaw",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "actionTextValueRaw": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "actionTextValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "Z": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "actionTextDispatch",
           "inputs": {
             "CONDITION": [
               2,

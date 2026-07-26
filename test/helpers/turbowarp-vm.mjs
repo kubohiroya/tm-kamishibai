@@ -132,7 +132,10 @@ export class KamishibaiVmHarness {
   }
 }
 
-export async function loadKamishibaiVm({sb3Path = defaultKamishibaiSb3Path} = {}) {
+export async function loadKamishibaiVm({
+  sb3Path = defaultKamishibaiSb3Path,
+  productionAssetManager = false,
+} = {}) {
   const originalWarn = vmLog.warn;
   const originalWarning = vmLog.warning;
   vmLog.warn = () => {};
@@ -145,7 +148,9 @@ export async function loadKamishibaiVm({sb3Path = defaultKamishibaiSb3Path} = {}
     vmLog.warning = originalWarning;
   }
   const clock = {now: 0};
-  const extensionState = registerKamishibaiTestExtensions(vm, clock);
+  const extensionState = registerKamishibaiTestExtensions(vm, clock, {
+    productionAssetManager,
+  });
 
   vm.setCompatibilityMode(false);
   vm.setTurboMode(false);
