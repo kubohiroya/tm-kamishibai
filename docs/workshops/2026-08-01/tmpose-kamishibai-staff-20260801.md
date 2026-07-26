@@ -55,6 +55,9 @@ USBカメラの死角となる場所に、😃マークで教員2名+学生ス�
   * pose2.png
   * pose3.png
   * pose4.png
+* draft-sample (棒人間画像サンプル)
+  * pose1.png
+  * pose2.png
 * master (立ち絵画像)
   * Urashima.png
   * Princess.png
@@ -65,10 +68,12 @@ USBカメラの死角となる場所に、😃マークで教員2名+学生ス�
   * p2.png
   * p3.png
   * p4.png
-* TMPose (Teaching Machineプロジェクトファイル)
+* tmpose (Teaching Machineプロジェクト)
   * (ファイルなし)
+* tmpose-sample(Teaching Machineプロジェクトサンプル)
+  * project.tm
 * kamishibai.sb3
-* samples (作品サンプル)
+* story (作品サンプル)
   * urashima 
     * urashima.txt
     * urashima.sb3
