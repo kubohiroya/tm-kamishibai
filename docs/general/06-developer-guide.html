@@ -119,10 +119,19 @@ pnpm run build</code></pre>
           <p>ビルダーはステージ背景、スプライトのコスチューム、ステージ音、スプライト音を追加します。ベースSB3にあるブロック、拡張機能、変数、モニター、既存アセットは保持し、入力SB3と入力台本は書き換えません。台本は行単位で解析し、有効な<code>asset=</code>コマンドだけを変換します。コメント、他のコマンド、本文、行順、改行コードは保持します。</p>
           <section class="level4">
             <h4 id="固定バージョンでの導入">固定バージョンでの導入</h4>
-            <p>消費側は浮動<code>main</code>へ依存せず、検証済みのパッケージ版を固定します。</p>
-            <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token function">add</span> --save-exact @kubohiroya/tmpose-kamishibai@3.1.0</code></pre>
-            <p>リリースでは<code>package.json</code>のバージョン<code>3.1.0</code>とGitタグ<code>v3.1.0</code>を対応させます。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。</p>
+            <p>消費側は浮動<code>main</code>へ依存せず、検証済みのGitタグを<code>package.json</code>へ固定します。現在のリポジトリ間依存ではnpmレジストリ公開を前提にしません。</p>
+            <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@kubohiroya/tmpose-kamishibai"</span><span class="token operator">:</span> <span class="token string">"github:kubohiroya/tmpose-kamishibai#v3.1.0"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+            <p>pnpm 11はGit依存パッケージの準備スクリプトを既定で拒否します。消費側の<code>pnpm-workspace.yaml</code>で、このパッケージだけを信頼対象として明示します。全依存のスクリプトを一括許可してはいけません。</p>
+            <pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">allowBuilds</span><span class="token punctuation">:</span>
+  <span class="token key atrule">'@kubohiroya/tmpose-kamishibai'</span><span class="token punctuation">:</span> <span class="token boolean important">true</span></code></pre>
+            <p>初回は<code>pnpm install</code>を実行し、生成された<code>pnpm-lock.yaml</code>を<code>package.json</code>、<code>pnpm-workspace.yaml</code>とともにコミットします。lockfileはGitタグを具体的なコミットSHAと取得元tarballへ解決します。CIでは<code>pnpm install --frozen-lockfile</code>を使用し、lockfileにない依存更新を拒否します。</p>
+            <p>リリースでは<code>package.json</code>のバージョン<code>3.1.0</code>とGitタグ<code>v3.1.0</code>を対応させ、公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。</p>
             <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> pack</code></pre>
+            <p>npmレジストリ公開は、リポジトリ間の固定依存を成立させるための必須条件ではありません。不特定の外部利用者へ標準的なSemVerパッケージとして提供する場合は、別のリリースIssueで公開とprovenanceを管理します。</p>
           </section>
           <section class="level4">
             <h4 id="javascript-api">JavaScript API</h4>
@@ -278,7 +287,7 @@ pnpm run build</code></pre>
             <h4 id="エラーとロールバック">エラーとロールバック</h4>
             <p>アセット固有のエラーには処理段階、DSLアセット名、入力URIを含めます。欠損、HTTPエラー、Content-Type・サイズ・SHA-256不一致、target欠損、名前競合、危険なパスのいずれでも、検証が完了するまで既存出力を変更しません。</p>
             <p>3成果物は同じ出力ディレクトリ内の一時領域で生成・検証します。確定時は既存3成果物をロールバック領域へ移してから新成果物へ置き換え、途中で失敗した場合は新成果物を除去して旧成果物を復元します。<code>.＜出力名＞.rollback-*</code>が残っている場合は、前回処理が中断した可能性があるため自動上書きせず停止します。内容を確認して旧成果物を復元した後に再実行します。</p>
-            <p>パッケージに問題がある場合、消費側は依存バージョンを直前の検証済み版へ戻します。このビルダーは通常の本体ビルドへ直接組み込まれていないため、本体配布処理を変更せず切り戻せます。</p>
+            <p>パッケージに問題がある場合、消費側はGitタグ指定とlockfileを直前の検証済み版へ戻します。このビルダーは通常の本体ビルドへ直接組み込まれていないため、本体配布処理を変更せず切り戻せます。</p>
           </section>
         </section>
         <section class="level3">
