@@ -838,6 +838,7 @@ asset=Backdrop,backdrop
 asset=ActorSkin,costume:Actor
 asset=Music,sound
 asset=Narration,text
+text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound
 registerBranch=route:flag,true:sceneA,sceneB
@@ -868,6 +869,7 @@ action=stage:Beach1
 action=wait:1.5
 action=bgm:Music
 action=sound:Effect
+action=text:Narration:場面の説明
 action=Hero:show:Hero-normal:0,-60,30
 action=Hero:say:こんにちは:2
 action=Hero:think:どうしよう:2
@@ -894,3 +896,12 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right
 ## 12. 互換性メモ
 
 このリファレンスは、提供されたTurboWarpプロジェクトの `kamishibai=3.1` 実装を前提にしています。3.1より前の台本では、アセット識別子、シーンラベル、分岐、入力、トランジション、アニメーション、テキストが異なる、または利用できない場合があります。台本を配布する場合は、台本ファイルと対応するアプリのバージョンを一緒に管理してください。
+
+## 13. 関連ドキュメント
+
+- `01-user-guide.md`: 紙芝居アプリの操作方法
+- `02-dsl-manual.md`: 紙芝居DSLファイルの作り方
+- `04-executive-summary-adult.md`: 大人向け概要説明
+- `05-executive-summary-kids.md`: 子供向け概要説明
+- `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
+- `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

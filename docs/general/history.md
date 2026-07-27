@@ -1,7 +1,7 @@
 # 紙芝居DSL 2.0から3.1への変更履歴
 
 対象DSL: `kamishibai=2.0` → `kamishibai=3.1`\
-文書化日: 2026年7月22日
+文書化日: 2026年7月27日
 
 この文書は、2.0向けの旧ドキュメントと3.1の現行仕様を比較し、台本作者・教材作成者・開発者が把握すべき差分をまとめたものです。中間バージョンごとの導入時期は区別せず、2.0から3.1までの累積差分として記載します。
 
@@ -19,7 +19,7 @@
 | 状態管理 | DSLから利用する明示的な仕組みなし | ランタイム変数を追加 |
 | 画面効果 | 背景の即時切り替え | フェードアウト／フェードアップを追加 |
 | アニメーション | スキンの個別切り替え | 画像・音のループ／一回再生を追加 |
-| 画面上の文字 | 吹き出し中心 | テキストアセットの表示・更新を追加 |
+| 画面上の文字 | 吹き出し中心 | テキストアセットの表示・時系列更新と、プロンプト／メニュー文言の台本定義を追加 |
 | アクター表示 | スキン、位置、サイズをすべて指定 | スキン省略形、スキンとサイズの同時変更を追加 |
 
 ## 2. 追加したトップレベルコマンド
@@ -57,13 +57,19 @@ sceneLabel=シーンラベル
 
 シーンへ一意の名前を付けられるようにしました。条件分岐、キー入力、タッチ入力の移動先として使います。
 
-### 2.4 `text`
+### 2.4 scene 0の`text`
 
 ```text
-text=テキストアセット名:文字列
+text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて
 ```
 
-画面上のテキスト内容を台本から更新できるようにしました。空文字列を指定すると内容を消せます。
+ポーズ案内、台本エラー、ファイル読込、再読込、タイトル表示の文言を台本から定義できるようにしました。これら5つはランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定の英語文言へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。
+
+シーン直下の`text=テキストアセット名:文字列`も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の`action=text:...`を使用します。
 
 ## 3. 追加したアクション
 
@@ -74,6 +80,7 @@ text=テキストアセット名:文字列
 | `action=transition:fadeOut` | ステージを段階的に暗くする |
 | `action=transition:fadeUp` | ステージを段階的に明るくする |
 | `action=transition:reset` | ステージの明るさ効果を標準値へ戻す |
+| `action=text:テキストアセット名:文字列` | アクション列のその位置でテキストを更新する |
 | `action=branch:分岐名` | 登録済みの条件を評価して別シーンへ移動する |
 | `action=keyInputToChangeScene:キー一覧:ラベル一覧` | 物理キーの入力先に応じて別シーンへ移動する |
 | `action=touchInputToChangeScene:アクター一覧:ラベル一覧` | アクターへのポインター／タッチ入力に応じて別シーンへ移動する |
@@ -178,6 +185,11 @@ asset=Home,backdrop
 asset=Hero,costume
 asset=Opening,sound
 asset=Narration,text
+text=ui.prompt:ポーズをとろう！
+text=ui.invalidScript:エラー：不正な台本ファイル
+text=ui.open:ファイルをひらく
+text=ui.reload:もういちど
+text=ui.about:このアプリについて
 actor=Hero,Hero
 actor=Narration,Narration
 cover=Beach,Opening
@@ -188,7 +200,7 @@ action=stage:Beach
 action=transition:fadeUp
 action=Hero:show:0,-60,30
 action=Narration:show:Narration:0,120,100
-text=Narration:どちらへ進みますか？
+action=text:Narration:どちらへ進みますか？
 action=Hero:say:こんにちは！:2
 action=branch:chooseRoute
 ---
@@ -206,7 +218,9 @@ action=stage:Home
 - [ ] プロジェクト内アセットの参照先が存在することを確認した
 - [ ] `setCostume`を使っている箇所を`asset`と`setSkin`へ置き換えた
 - [ ] 必要なシーンへ重複しない`sceneLabel`を付けた
-- [ ] `startSceneIndex`を設定した
+- [ ] `startSceneIndex`の既定値`1`を確認し、別の開始シーンが必要な場合だけ設定した
+- [ ] 必要に応じてscene 0の`text=ui.*`でプロンプト／メニュー文言を定義した
+- [ ] シーン内の時系列テキスト更新を`action=text:...`で記述した
 - [ ] 分岐の条件数と移動先ラベル数をそろえた
 - [ ] キー／タッチ入力の項目数と移動先ラベル数をそろえた
 - [ ] すべての分岐先ラベルが存在することを確認した
@@ -218,11 +232,11 @@ action=stage:Home
 
 | 文書 | 主な修正内容 |
 |---|---|
-| `01-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト機能と確認項目を追加 |
-| `02-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、移行上の注意、作成・テスト手順を追加 |
-| `03-command-reference.md` | アセット識別子、トップレベルコマンド、グローバル／アクターアクション、エラー例を更新 |
-| `04-executive-summary-adult.md` | 3.1の機能、状態管理、分岐を利用者向けの説明へ反映 |
-| `05-executive-summary-kids.md` | アニメーション、文字表示、分かれ道をやさしい説明で追加 |
-| `06-developer-guide.md` | Asset Manager、Temporary Variables、Runtime Expression、Async Inputなど3.1の構成要素を整理 |
+| `01-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト機能、用途別成果物、変更可能なUI文言を追加 |
+| `02-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、scene 0のUI文言、時系列テキスト、移行・テスト手順を追加 |
+| `03-command-reference.md` | アセット識別子、トップレベルコマンド、グローバル／アクターアクション、予約UI文言、エラー例を更新 |
+| `04-executive-summary-adult.md` | 3.1の機能、状態管理、分岐、用途別成果物を利用者向けの説明へ反映 |
+| `05-executive-summary-kids.md` | アニメーション、文字表示、分かれ道、Web版とSB3の使い分けをやさしい説明で追加 |
+| `06-developer-guide.md` | Asset Manager、Temporary Variables、Runtime Expression、Async Input、用途別成果物と公開構成を整理 |
 
 詳細な書式は`02-dsl-manual.md`と`03-command-reference.md`を参照してください。
