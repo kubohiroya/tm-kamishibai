@@ -33,7 +33,7 @@
 
 `app/` ディレクトリを紙芝居アプリの正本としてGit管理します。ルートの `kamishibai.sb3` や `site/downloads/` 配下のSB3バイナリは正本として管理しません。
 
-浦島太郎の台本と画像・音声を組み込んだスナップショットは、[サンプルサイト](https://kubohiroya.github.io/tmpose-kamishibai-samples/) で MPL-2.0 により配信し、本体とは別の [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) リポジトリの `samples/urashima/urashima.sb3` で管理します。本体リポジトリでは、浦島太郎固有のSB3、台本、画像、音声を管理・配布しません。
+浦島太郎の正本は、本体とは別の[`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples)リポジトリの`stories/urashima/`以下で管理します。`source.txt`、画像・音声、アセットロック、生成設定を正本とし、公開ビルドで編集用`_urashima.sb3`、再生用`urashima.sb3`、変換済み`urashima.txt`、Web版を生成します。生成物は[浦島太郎の公開ページ](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/)でMPL-2.0により配信します。本体リポジトリでは、浦島太郎固有のSB3、台本、画像、音声を管理・配布しません。
 
 `app/` の主な内容は次のとおりです。
 
@@ -294,7 +294,7 @@ TurboWarp PackagerでHTMLを生成する場合は、`player`だけを入力に�
 - 同じ入力と固定依存から各プロファイルを再生成した場合、SB3、台本、manifestのハッシュが一致しなければなりません。
 - `player`は、タイトルクリック後にファイル選択を開かず最初のシーンへ進み、台本固有アセットのHTTP取得を行わないことをVMテストとブラウザテストで確認します。
 
-このプロファイル契約は段階導入中です。本体の台本組み込みとタイトルクリック開始は[Issue #60](https://github.com/kubohiroya/tmpose-kamishibai/issues/60)、浦島太郎の`editor`／`player`生成は[`tmpose-kamishibai-samples` Issue #2](https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/2)、Packager Web版は同[Issue #7](https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/7)で管理します。各Issueが完了するまでは、現在配布中のSB3がこの最終契約をすべて満たすとはみなしません。
+このプロファイル契約は導入済みです。本体の台本組み込みとタイトルクリック開始は完了済みの[Issue #60](https://github.com/kubohiroya/tmpose-kamishibai/issues/60)、浦島太郎の`editor`／`player`生成は完了済みの[`tmpose-kamishibai-samples` Issue #2](https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/2)、Packager Web版は完了済みの同[Issue #7](https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/7)に実装履歴を記録しています。現在の公開物は、上記の生成と検証の契約を満たすものとしてビルド・検証します。
 
 問題が見つかった場合、Web版と`player`の公開を停止し、台本を外部から開く`editor`へ切り戻します。ビルダーの不具合では固定依存を直前の検証済みバージョンへ戻します。サンプル固有ファイルを本体リポジトリへコピーしてロールバックしてはいけません。
 
@@ -425,3 +425,10 @@ tmpose-kamishibaiの動作基盤として開発したもののうち、他のプ
 
 - rubygana.js: A node.js library for converting Japanese text to kana.
   - [https://github.com/kubohiroya/rubygana](https://github.com/kubohiroya/rubygana)
+
+## 4. 関連ドキュメント
+
+- `01-user-guide.md`: 紙芝居アプリの操作方法と用途別成果物の使い分け
+- `02-dsl-manual.md`: 紙芝居DSLファイルの作り方
+- `03-command-reference.md`: コマンドとアクションの詳細仕様
+- `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

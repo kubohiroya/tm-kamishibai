@@ -501,11 +501,11 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 
 ## 7. `urashima.txt` の構成例
 
-`urashima.txt` は、次のような構成になっています。
+公開中の[`urashima.txt`](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt)は、次のような構成になっています。Web版と用途別SB3は、[浦島太郎の公開ページ](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/)から利用できます。
 
 | シーン | 内容 | 主な機能 |
 |---|---|---|
-| ヘッダ | バージョン、初期変数、アセット、アクター、表紙を定義 | `kamishibai`, `setRuntimeVariable`, `asset`, `actor`, `cover` |
+| ヘッダ | バージョン、初期変数、アセット、アクター、表紙、UI文言を定義 | `kamishibai`, `setRuntimeVariable`, `asset`, `actor`, `cover`, `text=ui.*` |
 | opening | 導入のナレーション | テキストアセット、フェード |
 | scene 1 | 浜辺で浦島がカメを助ける | 背景、セリフ、移動、ポーズ認識 |
 | scene 2 | カメに乗って海を進む | 移動、連続ポーズ、効果音 |
@@ -517,7 +517,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 | scene 8 | 竜宮城の別れ | 複数アクター表示、セリフ |
 | scene 9 | エンディング | 背景、完了音 |
 
-この例は、3.1のアセット形式、シーンラベル、テキスト、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。
+この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の`action=text:`、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。
 
 ## 8. 紙芝居DSLの作成手順
 
@@ -716,3 +716,4 @@ abc
 - `04-executive-summary-adult.md`: 大人向け概要説明
 - `05-executive-summary-kids.md`: 子供向け概要説明
 - `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
+- `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

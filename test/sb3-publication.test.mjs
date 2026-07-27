@@ -46,7 +46,14 @@ test('links and documents the generated downloadable SB3', async () => {
     assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
   }
   assert.match(developerGuide, /`app\/`[^\n]*正本/u);
+  assert.match(developerGuide, /`stories\/urashima\/`/u);
+  assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
   assert.match(readme, /`dist\/downloads\/kamishibai\.sb3`/u);
+  assert.match(userGuide, /kubohiroya\.github\.io\/tmpose-kamishibai\/downloads\//u);
+  assert.match(
+    userGuide,
+    /kubohiroya\.github\.io\/tmpose-kamishibai-samples\/stories\/urashima\//u,
+  );
   for (const document of [developerGuide, readme]) {
     assert.match(
       document,
@@ -106,6 +113,8 @@ test('documents the generic, editor, and player artifact profiles', async () => 
   assert.match(profileSection, /issues\/60/u);
   assert.match(profileSection, /tmpose-kamishibai-samples\/issues\/2/u);
   assert.match(profileSection, /tmpose-kamishibai-samples\/issues\/7/u);
+  assert.match(profileSection, /プロファイル契約は導入済み/u);
+  assert.doesNotMatch(profileSection, /段階導入中/u);
 });
 
 test('keeps only minimal validation scripts in the application repository', async () => {

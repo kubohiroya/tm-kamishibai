@@ -207,7 +207,8 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     'setRuntimeVariable',
     'registerBranch',
     'sceneLabel',
-    'text=',
+    'action=text:',
+    'text=ui.prompt:',
     'transition:fadeOut',
     'branch:',
     'keyInputToChangeScene',
@@ -220,6 +221,59 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     'setSkin',
   ]) {
     assert(history.includes(feature), `history.md does not document the ${feature} migration.`);
+  }
+});
+
+test('keeps general guides aligned with artifact modes, UI text, and public samples', () => {
+  const sources = new Map(
+    generalDocumentConfig.documents.map(({sourceFilename}) => [
+      sourceFilename,
+      readFileSync(
+        new URL(
+          `../docs/${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ]),
+  );
+  const userGuide = sources.get('01-user-guide.md');
+  const developerGuide = sources.get('06-developer-guide.md');
+
+  for (const artifactMode of ['Web版', '`player`', '`editor`', '`generic`']) {
+    assert(
+      userGuide.includes(artifactMode),
+      `01-user-guide.md does not document the ${artifactMode} artifact mode.`,
+    );
+  }
+  for (const uiText of ['ui.prompt', 'ui.invalidScript', 'Pose!', 'Invalid script']) {
+    assert(
+      userGuide.includes(uiText),
+      `01-user-guide.md does not document the ${uiText} UI text behavior.`,
+    );
+  }
+
+  for (const sourceFilename of [
+    '01-user-guide.md',
+    '02-dsl-manual.md',
+    '04-executive-summary-adult.md',
+    '06-developer-guide.md',
+  ]) {
+    assert.match(
+      sources.get(sourceFilename),
+      /kubohiroya\.github\.io\/tmpose-kamishibai-samples\/stories\/urashima\//u,
+      `${sourceFilename} does not link the current Urashima publication.`,
+    );
+  }
+
+  assert.match(developerGuide, /`stories\/urashima\/`/u);
+  assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
+  assert.match(developerGuide, /プロファイル契約は導入済み/u);
+  assert.doesNotMatch(developerGuide, /段階導入中/u);
+
+  for (const [sourceFilename, source] of sources) {
+    if (sourceFilename === 'history.md') continue;
+    assert(source.includes('`history.md`'), `${sourceFilename} does not reference history.md.`);
   }
 });
 
