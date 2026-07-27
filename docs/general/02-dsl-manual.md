@@ -18,6 +18,7 @@ DSLは「Domain Specific Language」の略です。ここでは「紙芝居を�
 ```text
 kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
+setLoadingCostume=読み込み画像1,読み込み画像2
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
 asset=音名,sound
@@ -116,6 +117,21 @@ asset=Narration,text
 名前を明示したい場合は、`costume:スプライト名:コスチューム名`、`backdrop:背景名`、`sound:スプライト名:音名`、`text:テキスト名` も使えます。ステージ音のスプライト名は `@stage` です。
 
 アセット名は台本内で何度も参照します。分かりやすく、重複しない名前にしてください。
+
+#### Loading表示を変更する
+
+```text
+asset=loading1,https://example.com/loading/loading1.png
+asset=loading2,https://example.com/loading/loading2.png
+asset=loading3,https://example.com/loading/loading3.png
+setLoadingCostume=loading1,loading2,loading3
+```
+
+`setLoadingCostume`には、`asset`で定義した画像アセット名をカンマ区切りで指定します。指定した画像は他のアセットより先に読み込まれ、その後の通常アセット読込中に、特別な組み込みスプライト`Loading`へ順番に表示されます。通常アセットの1件目では`loading1`、2件目では`loading2`、4件目では再び`loading1`というように循環します。
+
+Loading用アセットは、読込進捗の完了数と総数から除外されます。たとえばLoading用画像が3件、通常アセットが10件なら、吹き出しは`0 / 10`から`10 / 10`まで進みます。コマンドを省略した場合は、組み込みの`Loading`コスチュームを表示します。
+
+指定名は画像アセットとして定義されている必要があります。未定義の名前を指定すると読込エラーになります。
 
 ### 4.3 アクター定義
 

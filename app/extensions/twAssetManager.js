@@ -12,6 +12,55 @@
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
   const extensionName = "Asset Manager";
   const blocks = [{ "opcode": "registerAsset", "blockType": "COMMAND", "text": "register resource [RESOURCE_ID] as asset [NAME]", "description": "Registers an external URL, cached asset, sprite costume, stage backdrop, project sound, or runtime text variable under one asset name.", "arguments": { "RESOURCE_ID": { "type": "STRING", "defaultValue": "https://example.com/asset.png" }, "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "assetErrorType", "blockType": "REPORTER", "text": "asset registration error type", "description": "Returns the stable type token for the most recent asset registration error, or an empty string when the latest registration succeeded.", "arguments": {} }, { "opcode": "assetErrorLabel", "blockType": "REPORTER", "text": "asset registration error label", "description": "Returns the missing or invalid name associated with the most recent asset registration error, or an empty string when the latest registration succeeded.", "arguments": {} }, { "opcode": "loadAsset", "blockType": "COMMAND", "text": "load asset from URL [URL] or cache as [NAME]", "description": "Legacy compatibility block. Loads an external image or audio asset from the supplied URL, or from IndexedDB when the URL is empty.", "arguments": { "URL": { "type": "STRING", "defaultValue": "https://example.com/asset.png" }, "NAME": { "type": "STRING", "defaultValue": "asset1" } }, "hideFromPalette": true }, { "opcode": "deleteMemoryAsset", "blockType": "COMMAND", "text": "delete asset [NAME] from memory", "description": "Unregisters one asset. Owned external renderer skins are released; project costumes, sounds, and runtime variables are left unchanged.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "deleteAllMemoryAssets", "blockType": "COMMAND", "text": "delete all assets from memory", "description": "Unregisters all assets, releases owned external renderer skins, stops actor animations, and stops tracked external audio playback.", "arguments": {} }, { "opcode": "deleteCachedAsset", "blockType": "COMMAND", "text": "delete asset [NAME] from cache", "description": "Deletes one named external asset from the IndexedDB cache.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "deleteAllCachedAssets", "blockType": "COMMAND", "text": "delete all assets from cache", "description": "Clears all external assets from the IndexedDB cache.", "arguments": {} }, { "opcode": "isLoaded", "blockType": "BOOLEAN", "text": "asset [NAME] is loaded", "description": "Returns whether the named external, project-local, or runtime text asset is currently registered.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "setTextValue", "blockType": "COMMAND", "text": "set text asset [NAME] to [VALUE]", "description": "Sets the runtime text value for a text asset using Asset Manager's internal namespace.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "Narration" }, "VALUE": { "type": "STRING", "defaultValue": "Once upon a time..." } } }, { "opcode": "setTextStyle", "blockType": "COMMAND", "text": "set text asset [NAME] style [PROPERTY] to [VALUE]", "description": "Sets one runtime style property for a text asset. Supported properties are animation, font, color, width, and align. An empty value restores the default.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "Narration" }, "PROPERTY": { "type": "STRING", "defaultValue": "font" }, "VALUE": { "type": "STRING", "defaultValue": "Sans Serif" } } }, { "opcode": "setThisSpriteSkin", "blockType": "COMMAND", "text": "show asset [NAME] on this sprite", "description": "Applies a registered image asset or displays a registered runtime text asset on the current sprite or clone.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "setSpriteSkin", "blockType": "COMMAND", "text": "show asset [NAME] on [SPRITE] (compatibility)", "description": "Stops any actor animation and applies a registered image asset or displays a registered runtime text asset on a named sprite. This block is retained for compatibility.", "arguments": { "SPRITE": { "type": "STRING", "defaultValue": "Sprite1" }, "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "startActorLoop", "blockType": "COMMAND", "text": "loop actor [ACTOR] through assets [ASSETS] for seconds [DURATIONS]", "description": "Starts or replaces a background loop. ASSETS contains registered image or audio asset names. DURATIONS must have the same number of items; each item is the interval before the next asset, including the last-to-first interval. A zero makes the next asset start together with the preceding asset. If a simultaneous group has multiple image assets, only its last image is applied. Empty ASSETS and DURATIONS stop the actor animation.", "arguments": { "ACTOR": { "type": "STRING", "defaultValue": "Sprite1" }, "ASSETS": { "type": "STRING", "defaultValue": "asset1,asset2" }, "DURATIONS": { "type": "STRING", "defaultValue": "0.5,0.5" } } }, { "opcode": "startActorSequence", "blockType": "COMMAND", "text": "play actor [ACTOR] through assets [ASSETS] for seconds [DURATIONS] once in background", "description": "Starts or replaces a one-shot background sequence and returns immediately. ASSETS contains registered image or audio asset names. DURATIONS must have exactly one fewer item; each item is the interval before the next asset. A zero makes the next asset start together with the preceding asset. If a simultaneous group has multiple image assets, only its last image is applied.", "arguments": { "ACTOR": { "type": "STRING", "defaultValue": "Sprite1" }, "ASSETS": { "type": "STRING", "defaultValue": "asset1,asset2" }, "DURATIONS": { "type": "STRING", "defaultValue": "0.5" } } }, { "opcode": "stopActorAnimation", "blockType": "COMMAND", "text": "stop animation of actor [ACTOR]", "description": "Stops the actor's current loop or sequence and leaves the currently displayed skin unchanged.", "arguments": { "ACTOR": { "type": "STRING", "defaultValue": "Sprite1" } } }, { "opcode": "finishAllActorSequences", "blockType": "COMMAND", "text": "finish all actor sequences", "description": "Finishes every one-shot actor sequence on its final image without stopping loops.", "arguments": {} }, { "opcode": "setStageSkin", "blockType": "COMMAND", "text": "set stage backdrop to asset [NAME]", "description": "Applies a registered external image, sprite costume, or stage backdrop to the stage drawable.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "backdrop1" } } }, { "opcode": "playSound", "blockType": "COMMAND", "text": "play asset [NAME] as sound", "description": "Starts playback of a registered external audio asset or project sound without waiting for completion.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "sound1" } } }, { "opcode": "playSoundUntilDone", "blockType": "COMMAND", "text": "play asset [NAME] as sound until done", "description": "Plays a registered external audio asset or project sound and waits until playback ends or fails.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "sound1" } } }, { "opcode": "stopSound", "blockType": "COMMAND", "text": "stop asset sound [NAME]", "description": "Stops every active playback of one registered external or project sound asset without stopping other sounds.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "sound1" } } }, { "opcode": "stopAllSounds", "blockType": "COMMAND", "text": "stop all asset sounds", "description": "Stops all external and project sounds currently tracked by Asset Manager.", "arguments": {} }, { "opcode": "getAssetMimeType", "blockType": "REPORTER", "text": "MIME type of asset [NAME]", "description": "Returns the normalized MIME type of a registered external, project-local, or runtime text asset.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "asset1" } } }, { "opcode": "getVersion", "blockType": "REPORTER", "text": "Asset Manager version", "description": "Returns the Asset Manager implementation version.", "arguments": {} }];
+  blocks.unshift(
+    {
+      opcode: "setLoadingCostumes",
+      blockType: "COMMAND",
+      text: "set loading costume assets to [NAMES]",
+      description: "Configures the comma-separated image assets used by the loading indicator.",
+      arguments: {
+        NAMES: {
+          type: "STRING",
+          defaultValue: "loading1,loading2"
+        }
+      },
+      hideFromPalette: true
+    },
+    {
+      opcode: "prepareLoadingAssets",
+      blockType: "COMMAND",
+      text: "prioritize loading assets in list [LIST]",
+      description: "Moves configured loading assets to the front of the named asset definition list.",
+      arguments: {
+        LIST: {
+          type: "STRING",
+          defaultValue: "assetList"
+        }
+      },
+      hideFromPalette: true
+    },
+    {
+      opcode: "loadingAssetCount",
+      blockType: "REPORTER",
+      text: "loading asset count",
+      description: "Returns the number of configured loading assets present in the prepared asset list.",
+      arguments: {},
+      hideFromPalette: true
+    },
+    {
+      opcode: "loadingCostumeAt",
+      blockType: "REPORTER",
+      text: "loading costume for asset number [INDEX]",
+      description: "Returns the configured loading costume asset for a one-based regular asset number.",
+      arguments: {
+        INDEX: {
+          type: "NUMBER",
+          defaultValue: "1"
+        }
+      },
+      hideFromPalette: true
+    }
+  );
   const definitions = {
     extensionName,
     blocks
@@ -229,6 +278,52 @@
       __publicField(this, "lastAssetErrorType", "");
       __publicField(this, "lastAssetErrorLabel", "");
       __publicField(this, "assetErrorVersion", 0);
+    }
+    setLoadingCostumes(args) {
+      const seen = /* @__PURE__ */ new Set();
+      this.loadingCostumes = String(args.NAMES ?? "").split(",").map((name) => normalizeName(name)).filter((name) => {
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+      this.loadingAssetCountValue = 0;
+    }
+    prepareLoadingAssets(args, util) {
+      const listName = normalizeName(args.LIST);
+      const list = util.target?.lookupVariableByNameAndType?.(listName, "list");
+      if (!list || !Array.isArray(list.value)) {
+        throw new Error(`Loading asset list not found: ${listName || "(empty)"}`);
+      }
+      const loadingCostumes = this.loadingCostumes ?? [];
+      const loadingNames = new Set(loadingCostumes);
+      const entries = list.value.map((entry) => String(entry));
+      const declaredNames = new Set(entries.map((entry) => {
+        const separatorIndex = entry.indexOf(",");
+        return normalizeName(separatorIndex < 0 ? entry : entry.slice(0, separatorIndex));
+      }));
+      const missingNames = loadingCostumes.filter((name) => !declaredNames.has(name));
+      if (missingNames.length > 0) {
+        throw new Error(`Loading asset is not declared: ${missingNames.join(", ")}`);
+      }
+      const prioritized = [];
+      const regular = [];
+      for (const entry of entries) {
+        const separatorIndex = entry.indexOf(",");
+        const assetName = normalizeName(separatorIndex < 0 ? entry : entry.slice(0, separatorIndex));
+        (loadingNames.has(assetName) ? prioritized : regular).push(entry);
+      }
+      list.value.splice(0, list.value.length, ...prioritized, ...regular);
+      this.loadingAssetCountValue = prioritized.length;
+    }
+    loadingAssetCount() {
+      return this.loadingAssetCountValue ?? 0;
+    }
+    loadingCostumeAt(args) {
+      const loadingCostumes = this.loadingCostumes ?? [];
+      if (loadingCostumes.length === 0) return "";
+      const numericIndex = Number(args.INDEX);
+      const index = Number.isFinite(numericIndex) ? Math.max(1, Math.trunc(numericIndex)) : 1;
+      return loadingCostumes[(index - 1) % loadingCostumes.length];
     }
     getInfo() {
       return {
