@@ -2,9 +2,9 @@
 
 千葉商科大学 総合政策学部 教授 久保裕也
 
-2026年7月26日更新
+2026年7月27日更新
 
-![](../../images/image01.png){alt="浦島太郎と乙姫様が踊るAI紙芝居のイメージ" style="width: 601.70px;"}
+![](../../images/image01.png){alt="浦島太郎と乙姫様が踊るAI紙芝居のイメージ" style="width: 500.70px;"}
 
 この教材は[Creative Commons CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0)で利用できます。
 
