@@ -925,10 +925,10 @@ USBメモリを持参されている場合は、このフォルダごとコピ�
 
 https://forms.gle/XsFyFndZs4wAreGe6
 
-![保護者アンケート](./qr-parent.png)
+![](./qr-parent.png){alt="保護者アンケート" style="width: 90px;"}
 
 **小学生用アンケート**
 
 https://forms.gle/TDjzfb7tgDKVdYnG6
 
-![小学生用アンケート](./qr-child.png)
+![](./qr-child.png){alt="小学生用アンケート" style="width: 90px;"}
