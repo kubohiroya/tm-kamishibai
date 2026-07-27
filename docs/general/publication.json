@@ -8,7 +8,7 @@
   "name": "TMPose紙芝居 一般ドキュメント",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-27T12:11:43.062Z",
+  "dateModified": "2026-07-27T15:38:42.452Z",
   "readingOrder": [
     {
       "url": "toc.html",
@@ -49,6 +49,7 @@
     "document-theme.css",
     "general-theme.css",
     "images/Princess.png",
+    "images/bone.png",
     "images/camera.png",
     "images/copilot-edit-transparent.png",
     "images/copilot-edit.png",
