@@ -8,7 +8,7 @@
   "name": "AIを使って「紙芝居の物語に参加する仕組み」を作ろう！",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-27T12:38:06.644Z",
+  "dateModified": "2026-07-27T12:57:35.577Z",
   "readingOrder": [
     {
       "url": "index.html",
@@ -31,6 +31,7 @@
     "document-theme.css",
     "general-theme.css",
     "images/Princess.png",
+    "images/bone.png",
     "images/camera.png",
     "images/copilot-edit-transparent.png",
     "images/copilot-edit.png",
