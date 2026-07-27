@@ -20,6 +20,7 @@
 | 画面効果 | 背景の即時切り替え | フェードアウト／フェードアップを追加 |
 | アニメーション | スキンの個別切り替え | 画像・音のループ／一回再生を追加 |
 | 画面上の文字 | 吹き出し中心 | テキストアセットの表示・時系列更新と、プロンプト／メニュー文言の台本定義を追加 |
+| アセット読込表示 | 固定のHatching画像（旧データ上は`Hatchling`） | `Loading`へ改名し、優先読込する複数画像と通常アセットだけの進捗表示を追加 |
 | アクター表示 | スキン、位置、サイズをすべて指定 | スキン省略形、スキンとサイズの同時変更を追加 |
 
 ## 2. 追加したトップレベルコマンド
@@ -70,6 +71,14 @@ text=ui.about:このアプリについて
 ポーズ案内、台本エラー、ファイル読込、再読込、タイトル表示の文言を台本から定義できるようにしました。これら5つはランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定の英語文言へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。
 
 シーン直下の`text=テキストアセット名:文字列`も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の`action=text:...`を使用します。
+
+### 2.5 `setLoadingCostume`
+
+```text
+setLoadingCostume=loading1,loading2,loading3
+```
+
+アセット読込中に表示する画像アセットを複数指定できるようにしました。指定アセットを通常アセットより先に読み込み、通常アセットの読込番号に応じて循環表示します。吹き出しの`完了数 / 総数`からLoading用アセット自身は除外します。省略した台本は組み込みのLoadingコスチュームを使います。
 
 ## 3. 追加したアクション
 
@@ -185,6 +194,9 @@ asset=Home,backdrop
 asset=Hero,costume
 asset=Opening,sound
 asset=Narration,text
+asset=loading1,https://example.com/loading1.png
+asset=loading2,https://example.com/loading2.png
+setLoadingCostume=loading1,loading2
 text=ui.prompt:ポーズをとろう！
 text=ui.invalidScript:エラー：不正な台本ファイル
 text=ui.open:ファイルをひらく
@@ -216,6 +228,7 @@ action=stage:Home
 - [ ] 先頭を`kamishibai=3.1`へ変更した
 - [ ] `background:`を`backdrop:`へ変更した
 - [ ] プロジェクト内アセットの参照先が存在することを確認した
+- [ ] `setLoadingCostume`を使う場合、指定名がすべて画像の`asset=`として定義されている
 - [ ] `setCostume`を使っている箇所を`asset`と`setSkin`へ置き換えた
 - [ ] 必要なシーンへ重複しない`sceneLabel`を付けた
 - [ ] `startSceneIndex`の既定値`1`を確認し、別の開始シーンが必要な場合だけ設定した
@@ -232,11 +245,11 @@ action=stage:Home
 
 | 文書 | 主な修正内容 |
 |---|---|
-| `01-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト機能、用途別成果物、変更可能なUI文言を追加 |
-| `02-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、scene 0のUI文言、時系列テキスト、移行・テスト手順を追加 |
-| `03-command-reference.md` | アセット識別子、トップレベルコマンド、グローバル／アクターアクション、予約UI文言、エラー例を更新 |
-| `04-executive-summary-adult.md` | 3.1の機能、状態管理、分岐、用途別成果物を利用者向けの説明へ反映 |
-| `05-executive-summary-kids.md` | アニメーション、文字表示、分かれ道、Web版とSB3の使い分けをやさしい説明で追加 |
-| `06-developer-guide.md` | Asset Manager、Temporary Variables、Runtime Expression、Async Input、用途別成果物と公開構成を整理 |
+| `01-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト、Loading表示、用途別成果物、変更可能なUI文言を追加 |
+| `02-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、Loading設定、scene 0のUI文言、時系列テキスト、移行・テスト手順を追加 |
+| `03-command-reference.md` | アセット識別子、トップレベルコマンド、Loadingの優先読込と進捗、グローバル／アクターアクション、予約UI文言、エラー例を更新 |
+| `04-executive-summary-adult.md` | 3.1の機能、状態管理、分岐、Loading表示、用途別成果物を利用者向けの説明へ反映 |
+| `05-executive-summary-kids.md` | アニメーション、文字表示、分かれ道、Loadingの数字、Web版とSB3の使い分けをやさしい説明で追加 |
+| `06-developer-guide.md` | Asset Manager、Loadingの実行順、Temporary Variables、Runtime Expression、Async Input、用途別成果物と公開構成を整理 |
 
 詳細な書式は`02-dsl-manual.md`と`03-command-reference.md`を参照してください。

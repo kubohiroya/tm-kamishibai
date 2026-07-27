@@ -2,7 +2,7 @@ kamishibai=3.1
 # Runtime fixture for pose skip consumption and propagation tests.
 asset=Title,backdrop
 asset=Stars,backdrop
-asset=Hero,costume:Hatchling:hatchling-c
+asset=Hero,costume:Loading:loading
 actor=Hero,Hero
 cover=Title,
 ---

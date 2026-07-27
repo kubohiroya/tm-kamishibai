@@ -181,9 +181,14 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     assert.doesNotMatch(source, /kamishibai=2\.0/u, `${sourceFilename} still targets DSL 2.0.`);
   }
 
+  for (const [sourceFilename, source] of sources) {
+    assert(source.includes('Loading'), `${sourceFilename} does not document Loading.`);
+  }
+
   for (const sourceFilename of ['02-dsl-manual.md', '03-command-reference.md']) {
     const source = sources.get(sourceFilename);
     for (const feature of [
+      'setLoadingCostume',
       'setRuntimeVariable',
       'registerBranch',
       'sceneLabel',
@@ -204,6 +209,8 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   assert.match(history, /kamishibai=2\.0/u);
   assert.match(history, /kamishibai=3\.1/u);
   for (const feature of [
+    'setLoadingCostume',
+    'Loading',
     'setRuntimeVariable',
     'registerBranch',
     'sceneLabel',
@@ -222,6 +229,10 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   ]) {
     assert(history.includes(feature), `history.md does not document the ${feature} migration.`);
   }
+
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /setLoadingCostume=loading1,loading2,loading3/u);
+  assert.match(readme, /Loading用.*分子・分母/u);
 });
 
 test('keeps general guides aligned with artifact modes, UI text, and public samples', () => {

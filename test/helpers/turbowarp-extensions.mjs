@@ -42,6 +42,7 @@ function createProductionAssetManagerClass(vm, onCreate) {
     },
     BlockType,
     ArgumentType: {
+      NUMBER: 'number',
       STRING: 'string',
     },
     translate(value) {
@@ -86,15 +87,20 @@ export function registerKamishibaiTestExtensions(
     actorSequences: new Map(),
     actorSkins: new Map(),
     assetManager: null,
+    assetRegistrations: [],
     asyncInput: null,
     assets: new Map(),
     consoleErrors: [],
     displayedAssets: new Map(),
+    displayedAssetHistory: [],
     displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
     localStorage: new Map(),
+    loadingAssetCount: 0,
+    loadingCostumes: [],
     playingSounds: new Set(),
+    runtimeVariableWrites: [],
     timers: new Map(),
     tempVariables: null,
     textColors: new Map(),
@@ -157,6 +163,10 @@ export function registerKamishibaiTestExtensions(
     }
     setRuntimeVariable(args) {
       this.runtimeVariables[args.VAR] = args.STRING;
+      state.runtimeVariableWrites.push({
+        name: Cast.toString(args.VAR),
+        value: Cast.toString(args.STRING),
+      });
     }
     changeRuntimeVariable(args) {
       this.runtimeVariables[args.VAR]
@@ -173,6 +183,7 @@ export function registerKamishibaiTestExtensions(
     }
     resetRuntimeVariables() {
       this.runtimeVariables = Object.create(null);
+      state.runtimeVariableWrites.length = 0;
     }
   }
 
@@ -246,7 +257,11 @@ export function registerKamishibaiTestExtensions(
       const resetState = () => {
         state.actorSequences.clear();
         state.actorSkins.clear();
+        state.assetRegistrations.length = 0;
         state.displayedAssets.clear();
+        state.displayedAssetHistory.length = 0;
+        state.loadingAssetCount = 0;
+        state.loadingCostumes = [];
         state.playingSounds.clear();
       };
       runtime.on('PROJECT_START', resetState);
@@ -258,6 +273,10 @@ export function registerKamishibaiTestExtensions(
         block('playSound', BlockType.COMMAND, ['NAME']),
         block('playSoundUntilDone', BlockType.COMMAND, ['NAME']),
         block('registerAsset', BlockType.COMMAND, ['RESOURCE_ID', 'NAME']),
+        block('setLoadingCostumes', BlockType.COMMAND, ['NAMES']),
+        block('prepareLoadingAssets', BlockType.COMMAND, ['LIST']),
+        block('loadingAssetCount', BlockType.REPORTER),
+        block('loadingCostumeAt', BlockType.REPORTER, ['INDEX']),
         block('setTextStyle', BlockType.COMMAND, ['NAME', 'PROPERTY', 'VALUE']),
         block('setTextValue', BlockType.COMMAND, ['NAME', 'VALUE']),
         block('setStageSkin', BlockType.COMMAND, ['NAME']),
@@ -270,7 +289,55 @@ export function registerKamishibaiTestExtensions(
       ]);
     }
     registerAsset(args) {
-      state.assets.set(Cast.toString(args.NAME), Cast.toString(args.RESOURCE_ID));
+      const name = Cast.toString(args.NAME);
+      state.assetRegistrations.push(name);
+      state.assets.set(name, Cast.toString(args.RESOURCE_ID));
+    }
+    setLoadingCostumes(args) {
+      const seen = new Set();
+      state.loadingCostumes = Cast.toString(args.NAMES)
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => {
+          if (!name || seen.has(name)) return false;
+          seen.add(name);
+          return true;
+        });
+      state.loadingAssetCount = 0;
+    }
+    prepareLoadingAssets(args, util) {
+      const listName = Cast.toString(args.LIST).trim();
+      const list = util.target.lookupVariableByNameAndType(listName, 'list');
+      if (!list || !Array.isArray(list.value)) {
+        throw new Error(`Loading asset list not found: ${listName || '(empty)'}`);
+      }
+      const loadingNames = new Set(state.loadingCostumes);
+      const entries = list.value.map((entry) => Cast.toString(entry));
+      const declaredNames = new Set(entries.map((entry) => {
+        const separatorIndex = entry.indexOf(',');
+        return (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
+      }));
+      const missingNames = state.loadingCostumes.filter((name) => !declaredNames.has(name));
+      if (missingNames.length > 0) {
+        throw new Error(`Loading asset is not declared: ${missingNames.join(', ')}`);
+      }
+      const prioritized = [];
+      const regular = [];
+      for (const entry of entries) {
+        const separatorIndex = entry.indexOf(',');
+        const assetName = (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
+        (loadingNames.has(assetName) ? prioritized : regular).push(entry);
+      }
+      list.value.splice(0, list.value.length, ...prioritized, ...regular);
+      state.loadingAssetCount = prioritized.length;
+    }
+    loadingAssetCount() {
+      return state.loadingAssetCount;
+    }
+    loadingCostumeAt(args) {
+      if (state.loadingCostumes.length === 0) return '';
+      const index = Math.max(1, Math.trunc(Cast.toNumber(args.INDEX)));
+      return state.loadingCostumes[(index - 1) % state.loadingCostumes.length];
     }
     setTextStyle() {}
     setTextValue(args) {
@@ -305,6 +372,11 @@ export function registerKamishibaiTestExtensions(
       return parts.at(-1) || Cast.toString(name);
     }
     applyCostume(target, name) {
+      state.displayedAssets.set(target.id, Cast.toString(name));
+      state.displayedAssetHistory.push({
+        assetName: Cast.toString(name),
+        targetName: target.getName(),
+      });
       const costumeName = this.resolveCostumeName(name);
       const index = target.getCostumes().findIndex((costume) => costume.name === costumeName);
       if (index >= 0) target.setCostume(index);

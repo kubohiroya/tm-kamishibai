@@ -34,7 +34,7 @@ function actorActionScript(action, {before = []} = {}) {
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Hero,costume:Hatchling:hatchling-c',
+    'asset=Hero,costume:Loading:loading',
     'actor=Hero,Hero',
     'cover=Title,',
     '---',
@@ -56,8 +56,8 @@ function sceneNavigationScript(firstSceneActions, {runtimeVariables = [], branch
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=LeftDoor,costume:Hatchling:hatchling-c',
-    'asset=RightDoor,costume:Hatchling:hatchling-c',
+    'asset=LeftDoor,costume:Loading:loading',
+    'asset=RightDoor,costume:Loading:loading',
     'actor=LeftDoor,LeftDoor',
     'actor=RightDoor,RightDoor',
     ...runtimeVariables.map((value) => `setRuntimeVariable=${value}`),
@@ -92,7 +92,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'openButton',
       'reloadButton',
       'showTitleButton',
-      'Hatchling',
+      'Loading',
     ],
   );
   for (const name of [
@@ -107,6 +107,49 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       `${name} still contains a localized costume`,
     );
   }
+});
+
+test('prioritizes configured loading costumes and reports only regular asset progress', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=loading1,costume:Loading:loading',
+    'asset=Music,sound:Loading:Chirp',
+    'asset=loading2,costume:Loading:loading',
+    'asset=Stars,backdrop',
+    'setLoadingCostume=loading1, loading2',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=wait:30',
+  ].join('\n'));
+
+  assert.deepEqual(
+    harness.extensionState.assetRegistrations.filter((name) => (
+      ['Title', 'loading1', 'Music', 'loading2', 'Stars'].includes(name)
+    )),
+    ['loading1', 'loading2', 'Title', 'Music', 'Stars'],
+  );
+  const loadingHistory = harness.extensionState.displayedAssetHistory
+    .filter(({targetName}) => targetName === 'Loading')
+    .map(({assetName}) => assetName)
+    .filter((assetName, index, values) => index === 0 || assetName !== values[index - 1]);
+  assert.deepEqual(loadingHistory, ['loading1', 'loading2', 'loading1']);
+  assert.deepEqual(
+    harness.extensionState.runtimeVariableWrites
+      .filter(({name}) => name === 'message')
+      .map(({value}) => value),
+    ['0 / 3', '1 / 3', '1 / 3', '2 / 3', '2 / 3', '3 / 3'],
+  );
+  assert.equal(
+    harness.getSprite('Loading').getCustomState('Scratch.looks')?.text,
+    '3 / 3',
+  );
+  assert.equal(harness.getSprite('Loading').visible, false);
 });
 
 for (const branchCase of [
@@ -387,6 +430,37 @@ test('registers and displays a text asset through the production Asset Manager',
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
+test('production Asset Manager prepares and cycles loading assets', async (context) => {
+  const harness = await loadKamishibaiVm({productionAssetManager: true});
+  context.after(() => harness.quit());
+  const manager = harness.extensionState.assetManager;
+  const stage = harness.getStage();
+  const assetList = stage.lookupVariableByNameAndType('assetList', 'list');
+  assetList.value = [
+    'Title,backdrop',
+    'loading1,costume:Loading:loading',
+    'Music,sound:Loading:Chirp',
+    'loading2,costume:Loading:loading',
+  ];
+
+  manager.setLoadingCostumes({NAMES: 'loading1, loading2, loading1'});
+  manager.prepareLoadingAssets({LIST: 'assetList'}, {target: stage});
+
+  assert.deepEqual(
+    Array.from(assetList.value),
+    [
+      'loading1,costume:Loading:loading',
+      'loading2,costume:Loading:loading',
+      'Title,backdrop',
+      'Music,sound:Loading:Chirp',
+    ],
+  );
+  assert.equal(manager.loadingAssetCount(), 2);
+  assert.equal(manager.loadingCostumeAt({INDEX: 1}), 'loading1');
+  assert.equal(manager.loadingCostumeAt({INDEX: 2}), 'loading2');
+  assert.equal(manager.loadingCostumeAt({INDEX: 3}), 'loading1');
+});
+
 test('ignores rehearsal keys while the project is stopped', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
@@ -594,7 +668,7 @@ test('stops an asset sound when Right finishes sound-until-done', async (context
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Effect,sound:Hatchling:Chirp',
+    'asset=Effect,sound:Loading:Chirp',
     'asset=Music,https://example.com/music.mp3',
     'cover=Title,',
     '---',
@@ -626,7 +700,7 @@ test('keeps BGM playing when Right finishes an unrelated wait', async (context) 
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Music,sound:Hatchling:Chirp',
+    'asset=Music,sound:Loading:Chirp',
     'cover=Title,',
     '---',
     'sceneLabel=first',
@@ -697,8 +771,8 @@ test('applies the final image when a later Right input finishes a sequence', asy
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Hero,costume:Hatchling:hatchling-c',
-    'asset=Hero2,costume:Hatchling:hatchling-c',
+    'asset=Hero,costume:Loading:loading',
+    'asset=Hero2,costume:Loading:loading',
     'actor=Hero,Hero',
     'cover=Title,',
     '---',

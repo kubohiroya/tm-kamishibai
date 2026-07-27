@@ -3531,7 +3531,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "l"
+              "loadingCommandDispatch"
             ]
           },
           "fields": {},
@@ -3614,10 +3614,103 @@
           "shadow": false,
           "topLevel": false
         },
-        "l": {
+        "loadingCommandDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "k",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingCommandMatches"
+            ],
+            "SUBSTACK": [
+              2,
+              "loadingCommandSet"
+            ],
+            "SUBSTACK2": [
+              2,
+              "l"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCommandMatches": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "loadingCommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingCommandKey",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "setLoadingCostume"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCommandKey": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "loadingCommandMatches",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCommandSet": {
+          "opcode": "twAssetManager_setLoadingCostumes",
+          "next": null,
+          "parent": "loadingCommandDispatch",
+          "inputs": {
+            "NAMES": [
+              3,
+              "loadingCommandValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCommandValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "loadingCommandSet",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "l": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "loadingCommandDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -5183,7 +5276,7 @@
         },
         "er": {
           "opcode": "data_deletealloflist",
-          "next": "es",
+          "next": "loadingReset",
           "parent": "eq",
           "inputs": {},
           "fields": {
@@ -5195,10 +5288,27 @@
           "shadow": false,
           "topLevel": false
         },
+        "loadingReset": {
+          "opcode": "twAssetManager_setLoadingCostumes",
+          "next": "es",
+          "parent": "er",
+          "inputs": {
+            "NAMES": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "es": {
           "opcode": "procedures_call",
           "next": "uiStoryDefaultValue1",
-          "parent": "er",
+          "parent": "loadingReset",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -8310,7 +8420,7 @@
         },
         "fe": {
           "opcode": "procedures_definition",
-          "next": "ff",
+          "next": "loadingPrepare",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -8342,10 +8452,27 @@
             "warp": "false"
           }
         },
+        "loadingPrepare": {
+          "opcode": "twAssetManager_prepareLoadingAssets",
+          "next": "ff",
+          "parent": "fe",
+          "inputs": {
+            "LIST": [
+              1,
+              [
+                10,
+                "assetList"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "ff": {
           "opcode": "lmsTempVars2_setThreadVariable",
           "next": "C",
-          "parent": "fe",
+          "parent": "loadingPrepare",
           "inputs": {
             "VAR": [
               1,
@@ -8771,7 +8898,7 @@
         },
         "a^": {
           "opcode": "sipcconsole_debug",
-          "next": "D",
+          "next": "loadingPreProgressIf",
           "parent": "fi",
           "inputs": {
             "string": [
@@ -8780,6 +8907,486 @@
               [
                 10,
                 "デバッグ"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreProgressIf": {
+          "opcode": "control_if",
+          "next": "D",
+          "parent": "a^",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingPreIsRegular"
+            ],
+            "SUBSTACK": [
+              2,
+              "loadingPreFirstIf"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreIsRegular": {
+          "opcode": "operator_gt",
+          "next": null,
+          "parent": "loadingPreProgressIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingPreIndex",
+              [
+                10,
+                "0"
+              ]
+            ],
+            "OPERAND2": [
+              3,
+              "loadingPreCount",
+              [
+                10,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingPreIsRegular",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "index"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingPreIsRegular",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreFirstIf": {
+          "opcode": "control_if",
+          "next": "loadingPreSetCostume",
+          "parent": "loadingPreProgressIf",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingPreIsFirst"
+            ],
+            "SUBSTACK": [
+              2,
+              "fp"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreIsFirst": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "loadingPreFirstIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingPreFirstNumber",
+              [
+                10,
+                "0"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreFirstNumber": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "loadingPreIsFirst",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingPreFirstIndex",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingPreFirstCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreFirstIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingPreFirstNumber",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "index"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreFirstCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingPreFirstNumber",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreSetCostume": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "loadingPreSetMessage",
+          "parent": "loadingPreFirstIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "loadingCostume"
+              ]
+            ],
+            "STRING": [
+              3,
+              "loadingPreCostume",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCostume": {
+          "opcode": "twAssetManager_loadingCostumeAt",
+          "next": null,
+          "parent": "loadingPreSetCostume",
+          "inputs": {
+            "INDEX": [
+              3,
+              "loadingPreCostumeIndex",
+              [
+                4,
+                "1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCostumeIndex": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "loadingPreCostume",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingPreCostumeRawIndex",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingPreCostumeCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCostumeRawIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingPreCostumeIndex",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "index"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCostumeCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingPreCostumeIndex",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreSetMessage": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "loadingPreBroadcast",
+          "parent": "loadingPreSetCostume",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "message"
+              ]
+            ],
+            "STRING": [
+              3,
+              "loadingPreMessage",
+              [
+                10,
+                "0 / 0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreMessage": {
+          "opcode": "operator_join",
+          "next": null,
+          "parent": "loadingPreSetMessage",
+          "inputs": {
+            "STRING1": [
+              3,
+              "loadingPreCompleted",
+              [
+                10,
+                "0"
+              ]
+            ],
+            "STRING2": [
+              3,
+              "loadingPreMessageTotal",
+              [
+                10,
+                " / 0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCompleted": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "loadingPreMessage",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingPreCompletedNumber",
+              [
+                4,
+                "1"
+              ]
+            ],
+            "NUM2": [
+              1,
+              [
+                4,
+                "1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCompletedNumber": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "loadingPreCompleted",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingPreCompletedIndex",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingPreCompletedCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCompletedIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingPreCompletedNumber",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "index"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreCompletedCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingPreCompletedNumber",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreMessageTotal": {
+          "opcode": "operator_join",
+          "next": null,
+          "parent": "loadingPreMessage",
+          "inputs": {
+            "STRING1": [
+              1,
+              [
+                10,
+                " / "
+              ]
+            ],
+            "STRING2": [
+              3,
+              "loadingPreTotal",
+              [
+                10,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreTotal": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "loadingPreMessageTotal",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingPreAssetLength",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingPreTotalCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreAssetLength": {
+          "opcode": "data_lengthoflist",
+          "next": null,
+          "parent": "loadingPreTotal",
+          "inputs": {},
+          "fields": {
+            "LIST": [
+              "assetList",
+              "_fx7;?py{8^TL;,eyogt"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreTotalCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingPreTotal",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingPreBroadcast": {
+          "opcode": "event_broadcastandwait",
+          "next": null,
+          "parent": "loadingPreSetMessage",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "assetLoadingProgress",
+                "VpA079)JJW*L4Zx:f;Xe"
               ]
             ]
           },
@@ -8900,7 +9507,7 @@
         "D": {
           "opcode": "control_repeat_until",
           "next": "E",
-          "parent": "a^",
+          "parent": "loadingPreProgressIf",
           "inputs": {
             "CONDITION": [
               2,
@@ -9070,7 +9677,7 @@
           "topLevel": false
         },
         "fo": {
-          "opcode": "operator_equals",
+          "opcode": "operator_gt",
           "next": null,
           "parent": "E",
           "inputs": {
@@ -9083,10 +9690,11 @@
               ]
             ],
             "OPERAND2": [
-              1,
+              3,
+              "loadingCompleteCount",
               [
                 10,
-                "1"
+                "0"
               ]
             ]
           },
@@ -9103,7 +9711,7 @@
               1,
               [
                 10,
-                "hasRead"
+                "index"
               ]
             ]
           },
@@ -9111,9 +9719,18 @@
           "shadow": false,
           "topLevel": false
         },
+        "loadingCompleteCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "fo",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "a`": {
           "opcode": "sipcconsole_Journal",
-          "next": "fp",
+          "next": "a~",
           "parent": "E",
           "inputs": {
             "string": [
@@ -9374,8 +9991,8 @@
         },
         "fp": {
           "opcode": "event_broadcastandwait",
-          "next": "a~",
-          "parent": "a`",
+          "next": null,
+          "parent": "loadingPreFirstIf",
           "inputs": {
             "BROADCAST_INPUT": [
               1,
@@ -9442,9 +10059,35 @@
           "topLevel": false
         },
         "k[": {
-          "opcode": "lmsTempVars2_getThreadVariable",
+          "opcode": "operator_subtract",
           "next": null,
           "parent": "ba",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingCompleteIndex",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingCompleteMessageCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCompleteIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "k[",
           "inputs": {
             "VAR": [
               1,
@@ -9454,6 +10097,15 @@
               ]
             ]
           },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCompleteMessageCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "k[",
+          "inputs": {},
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -9484,9 +10136,35 @@
           "topLevel": false
         },
         "k]": {
-          "opcode": "data_lengthoflist",
+          "opcode": "operator_subtract",
           "next": null,
           "parent": "fu",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingCompleteAssetLength",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingCompleteTotalCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCompleteAssetLength": {
+          "opcode": "data_lengthoflist",
+          "next": null,
+          "parent": "k]",
           "inputs": {},
           "fields": {
             "LIST": [
@@ -9494,6 +10172,15 @@
               "_fx7;?py{8^TL;,eyogt"
             ]
           },
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCompleteTotalCount": {
+          "opcode": "twAssetManager_loadingAssetCount",
+          "next": null,
+          "parent": "k]",
+          "inputs": {},
+          "fields": {},
           "shadow": false,
           "topLevel": false
         },
@@ -28056,7 +28743,7 @@
     },
     {
       "isStage": false,
-      "name": "Hatchling",
+      "name": "Loading",
       "variables": {},
       "lists": {},
       "broadcasts": {},
@@ -28108,7 +28795,7 @@
         },
         "pj": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "cX",
+          "next": "loadingSkinIf",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -28122,10 +28809,84 @@
           "x": 267,
           "y": 839
         },
+        "loadingSkinIf": {
+          "opcode": "control_if",
+          "next": "cX",
+          "parent": "pj",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingSkinConfigured"
+            ],
+            "SUBSTACK": [
+              2,
+              "pk"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingSkinConfigured": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "loadingSkinIf",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "loadingSkinEmpty"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingSkinEmpty": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "loadingSkinConfigured",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingSkinValueForCheck",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingSkinValueForCheck": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "loadingSkinEmpty",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "loadingCostume"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "cX": {
           "opcode": "looks_say",
-          "next": "pk",
-          "parent": "pj",
+          "next": null,
+          "parent": "loadingSkinIf",
           "inputs": {
             "MESSAGE": [
               3,
@@ -28158,10 +28919,36 @@
           "topLevel": false
         },
         "pk": {
-          "opcode": "looks_nextcostume",
+          "opcode": "twAssetManager_setThisSpriteSkin",
           "next": null,
-          "parent": "cX",
-          "inputs": {},
+          "parent": "loadingSkinIf",
+          "inputs": {
+            "NAME": [
+              3,
+              "loadingSkinValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingSkinValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "pk",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "loadingCostume"
+              ]
+            ]
+          },
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -28196,11 +28983,11 @@
       "currentCostume": 0,
       "costumes": [
         {
-          "name": "hatchling-c",
+          "name": "loading",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "f27d557be70a9522fae4392bfd4f5249",
-          "md5ext": "f27d557be70a9522fae4392bfd4f5249.svg",
+          "assetId": "ceec75fe8e7f80e5a498fe7faf1055a8",
+          "md5ext": "ceec75fe8e7f80e5a498fe7faf1055a8.svg",
           "rotationCenterX": 38,
           "rotationCenterY": 72
         }

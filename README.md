@@ -249,6 +249,19 @@ pnpm run build
 
 浦島太郎の台本、専用スプライト、背景、画像、音声、組み込み済みSB3は、[サンプルサイト](https://kubohiroya.github.io/tmpose-kamishibai-samples/) で配信し、別リポジトリ [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) で管理します。本体リポジトリの `pnpm run build` では、浦島太郎固有コンテンツを生成・公開しません。
 
+## Loading表示のカスタマイズ
+
+アセット読込中は、組み込みスプライト`Loading`が、Loading用アセットを除いた通常アセットの進捗を`完了数 / 総数`の吹き出しで表示します。台本でLoading用の画像アセットを複数指定すると、それらを通常アセットより先に読み込み、通常アセットの読込番号に合わせて循環表示します。
+
+```text
+asset=loading1,https://example.com/loading/loading1.png
+asset=loading2,https://example.com/loading/loading2.png
+asset=loading3,https://example.com/loading/loading3.png
+setLoadingCostume=loading1,loading2,loading3
+```
+
+この例では、通常アセット1、2、3、4件目の読込中に、`loading1`、`loading2`、`loading3`、`loading1`の順で表示します。Loading用の3アセットは進捗の分子・分母に含めません。`setLoadingCostume`を省略した場合は、組み込みのLoadingコスチュームを使用します。詳しい書式は[`02-dsl-manual.md`](docs/general/02-dsl-manual.md)と[`03-command-reference.md`](docs/general/03-command-reference.md)を参照してください。
+
 ## 汎用SB3・台本変換ビルダー
 
 `@kubohiroya/tmpose-kamishibai`は、外部画像・音声をベースSB3へ組み込み、台本の`asset=`行をプロジェクト内参照へ変換するJavaScript APIとCLIを提供します。消費側では浮動ブランチではなく、検証済みバージョンを固定します。

@@ -184,7 +184,33 @@ asset=main-caption,text:Narration
 * 同じアセット名を再度登録した場合は、新しい登録内容で置き換えられます。
 * プロジェクト内のコスチューム、背景、音を使用する場合、それらのデータは`.sb3`ファイル内に保存されるため、外部の画像・音声サーバは必要ありません。
 
-### 2.3 `actor`
+### 2.3 `setLoadingCostume`
+
+```text
+setLoadingCostume=Loading用アセット名1,Loading用アセット名2,...
+```
+
+アセット読込中に特別な組み込みスプライト`Loading`へ表示する画像アセットを指定します。
+
+```text
+asset=loading1,https://example.com/loading/loading1.png
+asset=loading2,https://example.com/loading/loading2.png
+asset=loading3,https://example.com/loading/loading3.png
+setLoadingCostume=loading1,loading2,loading3
+```
+
+| 項目 | 内容 |
+|---|---|
+| 役割 | Loading用画像の優先読込と切替表示を設定する |
+| 必須 | 任意。省略時は組み込み`Loading`コスチュームを使う |
+| 値 | `asset`で定義した画像アセット名のカンマ区切りリスト |
+| 読込順 | 指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む |
+| 進捗 | Loading用アセットを除外した`完了数 / 総数`を吹き出しに表示する |
+| アニメーション | 通常アセットの1始まりの読込番号で指定画像を循環選択する |
+
+たとえば3画像を指定した場合、通常アセット1、2、3、4件目には、それぞれ`loading1`、`loading2`、`loading3`、`loading1`が表示されます。カンマ前後の空白は無視され、重複名は1件として扱われます。指定した名前が`asset`で定義されていない場合は読込エラーになります。
+
+### 2.4 `actor`
 
 ```text
 actor=アクター名,初期スキン名
@@ -204,7 +230,7 @@ actor=Urashima,Urashima-walk-1
 actor=Turtle,Turtle
 ```
 
-### 2.4 `cover`
+### 2.5 `cover`
 
 ```text
 cover=背景アセット名,音声アセット名
@@ -223,7 +249,7 @@ cover=背景アセット名,音声アセット名
 cover=Beach1,OceanWave
 ```
 
-### 2.5 `setRuntimeVariable`
+### 2.6 `setRuntimeVariable`
 
 ```text
 setRuntimeVariable=変数名:値
@@ -238,7 +264,7 @@ setRuntimeVariable=takeSeaRoute:true
 
 `startSceneIndex` は最初に実行するシーン番号です。条件分岐で参照する変数もこのコマンドで初期化できます。
 
-### 2.6 `registerBranch`
+### 2.7 `registerBranch`
 
 ```text
 registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...
@@ -261,7 +287,7 @@ registerBranch=chooseByName:route === "ocean",true:ocean,home
 
 等価比較演算子は `==`、`!=`、`===`、`!==` です。単独の `=` は代入記号であり、条件式の演算子としては使用できません。条件数とラベル数はそろえてください。最後の条件に `true` を置くと既定の移動先になります。登録した分岐は `action=branch:分岐名` で実行します。
 
-### 2.7 `sceneLabel`
+### 2.8 `sceneLabel`
 
 ```text
 sceneLabel=シーンラベル
@@ -275,7 +301,7 @@ sceneLabel=ocean
 action=stage:Ocean
 ```
 
-### 2.8 `TMPoseURL`
+### 2.9 `TMPoseURL`
 
 ```text
 TMPoseURL=ポーズモデルURL
@@ -294,7 +320,7 @@ TMPoseURL=ポーズモデルURL
 TMPoseURL=https://example.com/kamishibai/pose-model/
 ```
 
-### 2.9 `text`：scene 0 のUI文言
+### 2.10 `text`：scene 0 のUI文言
 
 ```text
 text=予約済みUIテキストアセット名:文字列
@@ -838,6 +864,9 @@ asset=Backdrop,backdrop
 asset=ActorSkin,costume:Actor
 asset=Music,sound
 asset=Narration,text
+asset=Loading1,https://example.com/loading1.png
+asset=Loading2,https://example.com/loading2.png
+setLoadingCostume=Loading1,Loading2
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound
