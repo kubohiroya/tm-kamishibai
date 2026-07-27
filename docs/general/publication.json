@@ -8,7 +8,7 @@
   "name": "TMPose紙芝居 一般ドキュメント",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-27T05:02:43.624Z",
+  "dateModified": "2026-07-27T12:11:43.062Z",
   "readingOrder": [
     {
       "url": "toc.html",
@@ -128,6 +128,9 @@
     "images/paint.png",
     "images/pose1-transparent-save.png",
     "images/pose1-transparent.png",
+    "images/side-a.png",
+    "images/side-b.png",
+    "images/titlebar-maxmize.png",
     "images/tm-class-p1.png",
     "images/tmpose-capture.png",
     "images/tmpose-classes.png",
