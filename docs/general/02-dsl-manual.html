@@ -21,6 +21,7 @@
         <p>紙芝居DSLファイルは、次のような構造です。</p>
         <pre class="language-text"><code class="language-text">kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
+setLoadingCostume=読み込み画像1,読み込み画像2
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
 asset=音名,sound
@@ -121,6 +122,16 @@ asset=Narration,text</code></pre>
           </ul>
           <p>名前を明示したい場合は、<code>costume:スプライト名:コスチューム名</code>、<code>backdrop:背景名</code>、<code>sound:スプライト名:音名</code>、<code>text:テキスト名</code> も使えます。ステージ音のスプライト名は <code>@stage</code> です。</p>
           <p>アセット名は台本内で何度も参照します。分かりやすく、重複しない名前にしてください。</p>
+          <section class="level4">
+            <h4 id="loading表示を変更する">Loading表示を変更する</h4>
+            <pre class="language-text"><code class="language-text">asset=loading1,https://example.com/loading/loading1.png
+asset=loading2,https://example.com/loading/loading2.png
+asset=loading3,https://example.com/loading/loading3.png
+setLoadingCostume=loading1,loading2,loading3</code></pre>
+            <p><code>setLoadingCostume</code>には、<code>asset</code>で定義した画像アセット名をカンマ区切りで指定します。指定した画像は他のアセットより先に読み込まれ、その後の通常アセット読込中に、特別な組み込みスプライト<code>Loading</code>へ順番に表示されます。通常アセットの1件目では<code>loading1</code>、2件目では<code>loading2</code>、4件目では再び<code>loading1</code>というように循環します。</p>
+            <p>Loading用アセットは、読込進捗の完了数と総数から除外されます。たとえばLoading用画像が3件、通常アセットが10件なら、吹き出しは<code>0 / 10</code>から<code>10 / 10</code>まで進みます。コマンドを省略した場合は、組み込みの<code>Loading</code>コスチュームを表示します。</p>
+            <p>指定名は画像アセットとして定義されている必要があります。未定義の名前を指定すると読込エラーになります。</p>
+          </section>
         </section>
         <section class="level3">
           <h3 id="43-アクター定義">4.3 アクター定義</h3>
@@ -409,7 +420,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
       </section>
       <section class="level2">
         <h2 id="7-urashimatxt-の構成例">7. <code>urashima.txt</code> の構成例</h2>
-        <p><code>urashima.txt</code> は、次のような構成になっています。</p>
+        <p>公開中の<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt"><code>urashima.txt</code></a>は、次のような構成になっています。Web版と用途別SB3は、<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>から利用できます。</p>
         <table>
           <thead>
             <tr>
@@ -421,8 +432,8 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <tbody>
             <tr>
               <td>ヘッダ</td>
-              <td>バージョン、初期変数、アセット、アクター、表紙を定義</td>
-              <td><code>kamishibai</code>, <code>setRuntimeVariable</code>, <code>asset</code>, <code>actor</code>, <code>cover</code></td>
+              <td>バージョン、初期変数、アセット、アクター、表紙、UI文言を定義</td>
+              <td><code>kamishibai</code>, <code>setRuntimeVariable</code>, <code>asset</code>, <code>actor</code>, <code>cover</code>, <code>text=ui.*</code></td>
             </tr>
             <tr>
               <td>opening</td>
@@ -476,7 +487,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
             </tr>
           </tbody>
         </table>
-        <p>この例は、3.1のアセット形式、シーンラベル、テキスト、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。</p>
+        <p>この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の<code>action=text:</code>、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。</p>
       </section>
       <section class="level2">
         <h2 id="8-紙芝居dslの作成手順">8. 紙芝居DSLの作成手順</h2>
@@ -717,6 +728,7 @@ abc</code></pre>
           <li><code>04-executive-summary-adult.md</code>: 大人向け概要説明</li>
           <li><code>05-executive-summary-kids.md</code>: 子供向け概要説明</li>
           <li><code>06-developer-guide.md</code>: アプリ本体と関連ライブラリの開発者向け情報</li>
+          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
         </ul>
       </section>
     </section>

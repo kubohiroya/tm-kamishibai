@@ -12,7 +12,7 @@
       <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
       <section class="level2">
         <h2 id="1-概要">1. 概要</h2>
-        <p>この紙芝居アプリは、TurboWarp上で動作する、参加型デジタル紙芝居プレイヤーです。紙芝居の内容は <code>.txt</code> の台本ファイルとして外部化されており、画像、音声、登場人物、セリフ、移動、ポーズ認識を台本から制御できます。</p>
+        <p>この紙芝居アプリは、TurboWarp上で動作する、参加型デジタル紙芝居プレイヤーです。紙芝居の内容は <code>.txt</code> の台本ファイルを正本として作成し、画像、音声、登場人物、セリフ、移動、ポーズ認識を台本から制御できます。汎用SB3と編集用SB3では台本を外部ファイルとして読み込み、再生用SB3とWeb版では同じ台本を作品内へ組み込んで配布します。</p>
         <p>従来の紙芝居が「読み手が見せ、聞き手が見る」形式であるのに対し、このアプリは、参加者がカメラの前でポーズを取ることで物語の進行に関われる点が特徴です。教材、発表、ワークショップ、創作活動に向いた、紙芝居とプログラミング的表現の中間にあるツールです。</p>
       </section>
       <section class="level2">
@@ -41,8 +41,8 @@
           </thead>
           <tbody>
             <tr>
-              <td>台本読込</td>
-              <td><code>kamishibai=3.1</code> の <code>.txt</code> 形式DSLファイルを読み込む</td>
+              <td>台本実行</td>
+              <td><code>kamishibai=3.1</code> の外部TXT、または再生用SB3／Web版へ組み込んだ同じ台本を実行する</td>
             </tr>
             <tr>
               <td>再実行</td>
@@ -50,7 +50,11 @@
             </tr>
             <tr>
               <td>アセット管理</td>
-              <td>画像・音声をURLから読み込んで利用する</td>
+              <td>画像・音声をURLまたはSB3内から読み込んで利用する</td>
+            </tr>
+            <tr>
+              <td>用途別成果物</td>
+              <td>汎用SB3、編集用SB3、再生用SB3、Web版を用途に応じて使い分ける</td>
             </tr>
             <tr>
               <td>表紙</td>
@@ -71,6 +75,10 @@
             <tr>
               <td>テキスト表示</td>
               <td>テキストアセットを画面に表示し、内容を台本から更新する</td>
+            </tr>
+            <tr>
+              <td>UI文言</td>
+              <td>ポーズ案内、エラー、メニューの文言をscene 0の台本定義で変更する</td>
             </tr>
             <tr>
               <td>アニメーション</td>
@@ -102,7 +110,7 @@
             </tr>
             <tr>
               <td>読込表示</td>
-              <td>アセット読み込み中の進捗を表示する</td>
+              <td>Loading用画像を先に読み込み、通常アセットの進捗と切替画像を表示する</td>
             </tr>
             <tr>
               <td>エラー表示</td>
@@ -145,20 +153,24 @@
         <p>このアプリは、以下のような構成で動作します。</p>
         <pre class="language-text"><code class="language-text">紙芝居DSLファイル (.txt)
         ↓
-TurboWarp紙芝居アプリ
+外部TXTとして読み込む、または再生用SB3／Web版へ組み込む
         ↓
-アセット読込 画像・音声
+TurboWarp紙芝居アプリ／Web版
+        ↓
+アセット読込 URLまたはSB3内の画像・音声
         ↓
 シーン実行 背景、登場人物、セリフ、音、移動
         ↓
 必要に応じてTMPoseモデルを読込
         ↓
 参加者のポーズ成功で次へ進む</code></pre>
-        <p>アプリ側では、<code>asset</code>、<code>actor</code>、<code>cover</code>、<code>setRuntimeVariable</code>、<code>registerBranch</code>、<code>sceneLabel</code>、<code>TMPoseURL</code>、<code>text</code>、<code>action</code> といったコマンドを解釈します。シーンは <code>---</code> で区切られ、通常は順番に、分岐が指定された場合は対応するラベルへ移動して実行されます。</p>
+        <p>アプリ側では、<code>asset</code>、<code>setLoadingCostume</code>、<code>actor</code>、<code>cover</code>、<code>setRuntimeVariable</code>、<code>registerBranch</code>、<code>sceneLabel</code>、<code>TMPoseURL</code>、<code>text</code>、<code>action</code> といったコマンドを解釈します。シーンは <code>---</code> で区切られ、通常は順番に、分岐が指定された場合は対応するラベルへ移動して実行されます。</p>
+        <p><code>setLoadingCostume</code>で指定した画像アセットは、通常アセットより先に読み込まれます。その後、組み込みスプライト<code>Loading</code>が通常アセットだけを対象とした<code>完了数 / 総数</code>を吹き出しに表示し、指定画像を読込番号に応じて循環表示します。未指定時は組み込みコスチュームを使うため、既存台本も変更せず実行できます。</p>
+        <p>用途別成果物のうち、<code>generic</code>は汎用の作成・再生用雛形、<code>editor</code>はアセット組み込み済み・台本外部読込の編集用SB3、<code>player</code>は台本とアセットを組み込んだ再生用SB3です。Web版は<code>player</code>から生成します。</p>
       </section>
       <section class="level2">
         <h2 id="6-urashimatxt-の位置づけ">6. <code>urashima.txt</code> の位置づけ</h2>
-        <p><code>urashima.txt</code> は、浦島太郎を題材にしたサンプル台本です。次の要素を含んでいるため、教材・デモ・テンプレートとして有用です。</p>
+        <p>公開中の<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt"><code>urashima.txt</code></a>は、浦島太郎を題材にしたサンプル台本です。<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>では、Web版、再生用SB3、編集用SB3も利用できます。次の要素を含んでいるため、教材・デモ・テンプレートとして有用です。</p>
         <ul>
           <li>背景画像の切り替え</li>
           <li>複数キャラクターの表示</li>
@@ -186,11 +198,11 @@ TurboWarp紙芝居アプリ
           <tbody>
             <tr>
               <td>実行環境</td>
-              <td>TurboWarpが動作するブラウザ</td>
+              <td>Web版、またはTurboWarpが動作するブラウザ</td>
             </tr>
             <tr>
               <td>ネットワーク</td>
-              <td>画像、音声、TMPoseモデルのURLにアクセスできること</td>
+              <td>TMPoseのライブラリとモデルの取得に必要。汎用SB3では、台本が外部URLを参照する画像・音声の取得にも必要</td>
             </tr>
             <tr>
               <td>カメラ</td>
@@ -202,7 +214,7 @@ TurboWarp紙芝居アプリ
             </tr>
             <tr>
               <td>アセット管理</td>
-              <td>公開URL、またはアプリが読み込める場所に配置すること</td>
+              <td>汎用SB3では公開URL、編集用・再生用SB3ではSB3内に配置すること</td>
             </tr>
             <tr>
               <td>事前確認</td>
@@ -219,6 +231,7 @@ TurboWarp紙芝居アプリ
           <li>参加者に取ってほしいポーズを決める</li>
           <li>必要な画像・音声・TMPoseモデルを用意する</li>
           <li><code>asset</code> と <code>actor</code> を定義する</li>
+          <li>必要ならLoading用画像を<code>setLoadingCostume</code>で指定する</li>
           <li>シーンに <code>sceneLabel</code> を付け、シーンごとに <code>action</code> を書く</li>
           <li>必要なら変数、条件分岐、キー・タッチ入力による遷移を加える</li>
           <li>アプリで読み込んで再生確認する</li>
@@ -250,6 +263,7 @@ TurboWarp紙芝居アプリ
           <li><code>03-command-reference.md</code>: コマンド・アクションの詳細仕様</li>
           <li><code>05-executive-summary-kids.md</code>: 子供向けの概要説明</li>
           <li><code>06-developer-guide.md</code>: アプリ本体と関連ライブラリの開発者向け情報</li>
+          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
         </ul>
       </section>
     </section>

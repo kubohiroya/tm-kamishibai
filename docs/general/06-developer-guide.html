@@ -45,7 +45,7 @@
         <section class="level3">
           <h3 id="13-正本と生成物">1.3 正本と生成物</h3>
           <p><code>app/</code> ディレクトリを紙芝居アプリの正本としてGit管理します。ルートの <code>kamishibai.sb3</code> や <code>site/downloads/</code> 配下のSB3バイナリは正本として管理しません。</p>
-          <p>浦島太郎の台本と画像・音声を組み込んだスナップショットは、<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプルサイト</a> で MPL-2.0 により配信し、本体とは別の <a href="https://github.com/kubohiroya/tmpose-kamishibai-samples"><code>kubohiroya/tmpose-kamishibai-samples</code></a> リポジトリの <code>samples/urashima/urashima.sb3</code> で管理します。本体リポジトリでは、浦島太郎固有のSB3、台本、画像、音声を管理・配布しません。</p>
+          <p>浦島太郎の正本は、本体とは別の<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples"><code>kubohiroya/tmpose-kamishibai-samples</code></a>リポジトリの<code>stories/urashima/</code>以下で管理します。<code>source.txt</code>、画像・音声、アセットロック、生成設定を正本とし、公開ビルドで編集用<code>_urashima.sb3</code>、再生用<code>urashima.sb3</code>、変換済み<code>urashima.txt</code>、Web版を生成します。生成物は<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>でMPL-2.0により配信します。本体リポジトリでは、浦島太郎固有のSB3、台本、画像、音声を管理・配布しません。</p>
           <p><code>app/</code> の主な内容は次のとおりです。</p>
           <ul>
             <li><code>project.source.json</code>: 整形済みのScratchプロジェクトJSON</li>
@@ -109,6 +109,22 @@ pnpm run build</code></pre>
           </ul>
           <p>ソース更新を戻す場合は、該当コミットを <code>git revert</code> してから <code>pnpm sb3:build</code> と <code>pnpm run build</code> を再実行します。未コミットの <code>app/</code> を戻す操作は差分を失うため、先に <code>git diff -- app</code> を確認し、必要ならコミットまたはstashします。</p>
           <p>importまたはbuildの途中で <code>.app.rollback-*</code> や <code>.kamishibai.sb3.rollback-*</code> が残った場合は、自動削除や再実行をせず、中身と元の出力を比較します。復旧対象を確定した後で元の場所へ戻し、通常の検証を実行します。配布に問題が見つかった場合は、GitHub Pagesを直前の検証済みコミットから再構築できます。SB3バイナリを正本としてリポジトリへ戻す必要はありません。</p>
+          <section class="level4">
+            <h4 id="loading表示とアセット読込順">Loading表示とアセット読込順</h4>
+            <p>汎用SB3は、アセット読込専用の組み込みスプライト<code>Loading</code>と組み込みコスチューム<code>loading</code>を持ちます。従来名称<code>Hatching</code>（旧SB3データ上は<code>Hatchling</code>）は使用しません。</p>
+            <p>台本の<code>setLoadingCostume=名前1,名前2,...</code>は、<code>asset=</code>で登録する画像アセット名のリストです。ランタイムはストーリー開始時に前回の設定を空へ戻し、scene 0の全コマンドを解析した後で次の順序を確定します。このため、<code>setLoadingCostume</code>と対象<code>asset=</code>の記述順には依存しません。</p>
+            <ol>
+              <li>指定名の前後空白を除去し、空要素と重複名を除外する。</li>
+              <li>指定名がすべて<code>assetList</code>に存在することを検証する。未定義名があれば読込を停止する。</li>
+              <li>指定されたLoading用アセットを、互いの記述順を保ったまま<code>assetList</code>の先頭へ移動する。</li>
+              <li>Loading用アセットをすべて登録してから、残りの通常アセットを登録する。</li>
+              <li>通常アセットの読込開始前と完了後に、Loading用アセットを除いた<code>完了数 / 総数</code>を通知する。</li>
+              <li>通常アセットの1始まりの読込番号をLoading用画像数で循環させ、<code>Loading</code>スプライトへ適用する。</li>
+              <li>全アセット完了後に吹き出しと<code>Loading</code>スプライトを非表示にする。</li>
+            </ol>
+            <p>Asset Managerの内部ブロック<code>setLoadingCostumes</code>、<code>prepareLoadingAssets</code>、<code>loadingAssetCount</code>、<code>loadingCostumeAt</code>が、設定の正規化、安定した優先順、除外件数、循環選択を担当します。これらはSB3内のランタイム実装用で、台本作者が直接呼び出すブロックではありません。<code>setLoadingCostume</code>がない場合、循環対象名は空となり、組み込みコスチュームをそのまま表示します。</p>
+            <p>進捗の分母は<code>assetListの長さ - Loading用アセット数</code>、分子は<code>現在のassetList番号 - Loading用アセット数</code>です。Loading用アセットだけの台本では通常アセットの進捗表示を開始せず、そのまま完了通知へ進みます。</p>
+          </section>
         </section>
         <section class="level3">
           <h3 id="16-汎用sb3台本変換ビルダー">1.6 汎用SB3・台本変換ビルダー</h3>
@@ -353,7 +369,7 @@ pnpm run build</code></pre>
               <li>同じ入力と固定依存から各プロファイルを再生成した場合、SB3、台本、manifestのハッシュが一致しなければなりません。</li>
               <li><code>player</code>は、タイトルクリック後にファイル選択を開かず最初のシーンへ進み、台本固有アセットのHTTP取得を行わないことをVMテストとブラウザテストで確認します。</li>
             </ul>
-            <p>このプロファイル契約は段階導入中です。本体の台本組み込みとタイトルクリック開始は<a href="https://github.com/kubohiroya/tmpose-kamishibai/issues/60">Issue #60</a>、浦島太郎の<code>editor</code>／<code>player</code>生成は<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/2"><code>tmpose-kamishibai-samples</code> Issue #2</a>、Packager Web版は同<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/7">Issue #7</a>で管理します。各Issueが完了するまでは、現在配布中のSB3がこの最終契約をすべて満たすとはみなしません。</p>
+            <p>このプロファイル契約は導入済みです。本体の台本組み込みとタイトルクリック開始は完了済みの<a href="https://github.com/kubohiroya/tmpose-kamishibai/issues/60">Issue #60</a>、浦島太郎の<code>editor</code>／<code>player</code>生成は完了済みの<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/2"><code>tmpose-kamishibai-samples</code> Issue #2</a>、Packager Web版は完了済みの同<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/7">Issue #7</a>に実装履歴を記録しています。現在の公開物は、上記の生成と検証の契約を満たすものとしてビルド・検証します。</p>
             <p>問題が見つかった場合、Web版と<code>player</code>の公開を停止し、台本を外部から開く<code>editor</code>へ切り戻します。ビルダーの不具合では固定依存を直前の検証済みバージョンへ戻します。サンプル固有ファイルを本体リポジトリへコピーしてロールバックしてはいけません。</p>
           </section>
         </section>
@@ -540,7 +556,7 @@ pnpm run build</code></pre>
         <section class="level3">
           <h3 id="25-テスト方針">2.5 テスト方針</h3>
           <p><code>test/skip-mode.test.mjs</code> は生成SB3のScratchブロックグラフを検査し、許可値、存在判定、要求の削除などの構造上の不変条件を確認します。ブロックIDは固定せず、オペコード、入力値、カスタムブロック名、親子関係を使います。</p>
-          <p><code>test/turbowarp-vm.test.mjs</code> は <code>pretest</code> が <code>app/</code> から生成した <code>tmp/kamishibai.sb3</code> を、固定コミット <code>c4823421cb7c17d8d8a89878851ce1668c26a21f</code> のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。</p>
+          <p><code>test/turbowarp-vm.test.mjs</code> は <code>pretest</code> が <code>app/</code> から生成した <code>tmp/kamishibai.sb3</code> を、固定コミット <code>c4823421cb7c17d8d8a89878851ce1668c26a21f</code> のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える<code>0 / N</code>から<code>N / N</code>までの進捗、複数画像の循環、完了後の非表示を検証します。</p>
           <p>外部URLの機能拡張、カメラ、ネットワーク、音声出力は決定的なテストダブルへ置き換えます。テスト中に外部通信は行いません。VM内部APIへの依存は <code>test/helpers/turbowarp-vm.mjs</code> に隔離します。</p>
           <p>通常のテストは次のコマンドで実行します。</p>
           <pre class="language-sh"><code class="language-sh">pnpm test</code></pre>
@@ -617,6 +633,15 @@ pnpm run build</code></pre>
             </li>
           </ul>
         </section>
+      </section>
+      <section class="level2">
+        <h2 id="4-関連ドキュメント">4. 関連ドキュメント</h2>
+        <ul>
+          <li><code>01-user-guide.md</code>: 紙芝居アプリの操作方法と用途別成果物の使い分け</li>
+          <li><code>02-dsl-manual.md</code>: 紙芝居DSLファイルの作り方</li>
+          <li><code>03-command-reference.md</code>: コマンドとアクションの詳細仕様</li>
+          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
+        </ul>
       </section>
     </section>
   

@@ -57,6 +57,10 @@
               <td>ナレーションや場面の<ruby><rb>説明</rb><rp>(</rp><rt>せつめい</rt><rp>)</rp></ruby>を、画面に大きく出せます。</td>
             </tr>
             <tr>
+              <td>読みこみを知らせる</td>
+              <td>Loadingの絵と数字で、絵や音をいくつ読みこめたか分かります。</td>
+            </tr>
+            <tr>
               <td>ポーズで進める</td>
               <td>カメラの前でポーズをとると、お話が進みます。</td>
             </tr>
@@ -69,15 +73,16 @@
       </section>
       <section class="level2">
         <h2 id="3-どうやって使うの">3. どうやって使うの？</h2>
+        <p>できあがった作品で遊ぶときは、<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプルサイト</a>からWeb<ruby><rb>版</rb><rp>(</rp><rt>ばん</rt><rp>)</rp></ruby>を開くのがかんたんです。</p>
         <ol>
-          <li>アプリを開きます。</li>
-          <li>緑の<ruby><rb>旗</rb><rp>(</rp><rt>はた</rt><rp>)</rp></ruby>を<ruby><rb>押</rb><rp>(</rp><rt>お</rt><rp>)</rp></ruby>します。</li>
-          <li>紙しばいの台本ファイルを<ruby><rb>選</rb><rp>(</rp><rt>えら</rt><rp>)</rp></ruby>びます。</li>
-          <li>絵や音が読みこまれるまで待ちます。</li>
+          <li>遊びたい作品のWeb<ruby><rb>版</rb><rp>(</rp><rt>ばん</rt><rp>)</rp></ruby>を開きます。</li>
+          <li>タイトル画面をクリックします。</li>
           <li>お話が始まります。</li>
-          <li>「ポーズをとろう」と出たら、カメラの前でポーズをとります。</li>
+          <li>ポーズの<ruby><rb>案内</rb><rp>(</rp><rt>あんない</rt><rp>)</rp></ruby>が出たら、カメラの前でポーズをとります。<ruby><rb>案内</rb><rp>(</rp><rt>あんない</rt><rp>)</rp></ruby>の言葉は台本によって<ruby><rb>変</rb><rp>(</rp><rt>か</rt><rp>)</rp></ruby>わります。</li>
           <li>チャージが100になったら<ruby><rb>成功</rb><rp>(</rp><rt>せいこう</rt><rp>)</rp></ruby>です。</li>
         </ol>
+        <p>自分で台本を作ったり直したりするときは、TurboWarpで<ruby><rb>汎用</rb><rp>(</rp><rt>はんよう</rt><rp>)</rp></ruby>SB3または<ruby><rb>編集</rb><rp>(</rp><rt>へんしゅう</rt><rp>)</rp></ruby>用SB3を開き、緑の<ruby><rb>旗</rb><rp>(</rp><rt>はた</rt><rp>)</rp></ruby>を<ruby><rb>押</rb><rp>(</rp><rt>お</rt><rp>)</rp></ruby>してから紙しばいの台本ファイルを<ruby><rb>選</rb><rp>(</rp><rt>えら</rt><rp>)</rp></ruby>びます。<ruby><rb>再生</rb><rp>(</rp><rt>さいせい</rt><rp>)</rp></ruby>用SB3では台本と絵や音が中に入っているため、ファイルを<ruby><rb>選</rb><rp>(</rp><rt>えら</rt><rp>)</rp></ruby>ばずタイトル画面から始められます。</p>
+        <p>絵や音を読みこんでいる間は、Loadingという<ruby><rb>案内</rb><rp>(</rp><rt>あんない</rt><rp>)</rp></ruby>役が<code>3 / 10</code>のような数字を出します。これは「10このうち3こまで読みこめた」という意味です。紙しばいを作る人は、Loadingに使う絵を何まいか<ruby><rb>選</rb><rp>(</rp><rt>えら</rt><rp>)</rp></ruby>び、読みこみ中のアニメにすることもできます。</p>
       </section>
       <section class="level2">
         <h2 id="4-ポーズのコツ">4. ポーズのコツ</h2>
@@ -229,6 +234,8 @@ action=Urashima:pose:Urashima-help-1:help:SquishPop</code></pre>
           <li><code>03-command-reference.md</code>: 使える<ruby><rb>命令</rb><rp>(</rp><rt>めいれい</rt><rp>)</rp></ruby>の<ruby><rb>一覧</rb><rp>(</rp><rt>いちらん</rt><rp>)</rp></ruby></li>
           <li><code>04-executive-summary-adult.md</code>: 大人向けの<ruby><rb>説明</rb><rp>(</rp><rt>せつめい</rt><rp>)</rp></ruby></li>
           <li><code>06-developer-guide.md</code>: アプリを開発する人向けの<ruby><rb>説明</rb><rp>(</rp><rt>せつめい</rt><rp>)</rp></ruby></li>
+          <li><code>history.md</code>: 紙しばいDSL 2.0から3.1への<ruby><rb>変</rb><rp>(</rp><rt>か</rt><rp>)</rp></ruby>わり方</li>
+          <li><a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプルサイト</a>: Web<ruby><rb>版</rb><rp>(</rp><rt>ばん</rt><rp>)</rp></ruby>や台本を開く</li>
         </ul>
       </section>
     </section>

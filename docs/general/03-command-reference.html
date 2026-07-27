@@ -222,7 +222,51 @@ asset=main-caption,text:Narration</code></pre>
           </section>
         </section>
         <section class="level3">
-          <h3 id="23-actor">2.3 <code>actor</code></h3>
+          <h3 id="23-setloadingcostume">2.3 <code>setLoadingCostume</code></h3>
+          <pre class="language-text"><code class="language-text">setLoadingCostume=Loading用アセット名1,Loading用アセット名2,...</code></pre>
+          <p>アセット読込中に特別な組み込みスプライト<code>Loading</code>へ表示する画像アセットを指定します。</p>
+          <pre class="language-text"><code class="language-text">asset=loading1,https://example.com/loading/loading1.png
+asset=loading2,https://example.com/loading/loading2.png
+asset=loading3,https://example.com/loading/loading3.png
+setLoadingCostume=loading1,loading2,loading3</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th>内容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>役割</td>
+                <td>Loading用画像の優先読込と切替表示を設定する</td>
+              </tr>
+              <tr>
+                <td>必須</td>
+                <td>任意。省略時は組み込み<code>Loading</code>コスチュームを使う</td>
+              </tr>
+              <tr>
+                <td>値</td>
+                <td><code>asset</code>で定義した画像アセット名のカンマ区切りリスト</td>
+              </tr>
+              <tr>
+                <td>読込順</td>
+                <td>指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む</td>
+              </tr>
+              <tr>
+                <td>進捗</td>
+                <td>Loading用アセットを除外した<code>完了数 / 総数</code>を吹き出しに表示する</td>
+              </tr>
+              <tr>
+                <td>アニメーション</td>
+                <td>通常アセットの1始まりの読込番号で指定画像を循環選択する</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>たとえば3画像を指定した場合、通常アセット1、2、3、4件目には、それぞれ<code>loading1</code>、<code>loading2</code>、<code>loading3</code>、<code>loading1</code>が表示されます。カンマ前後の空白は無視され、重複名は1件として扱われます。指定した名前が<code>asset</code>で定義されていない場合は読込エラーになります。</p>
+        </section>
+        <section class="level3">
+          <h3 id="24-actor">2.4 <code>actor</code></h3>
           <pre class="language-text"><code class="language-text">actor=アクター名,初期スキン名</code></pre>
           <table>
             <thead>
@@ -255,7 +299,7 @@ asset=main-caption,text:Narration</code></pre>
 actor=Turtle,Turtle</code></pre>
         </section>
         <section class="level3">
-          <h3 id="24-cover">2.4 <code>cover</code></h3>
+          <h3 id="25-cover">2.5 <code>cover</code></h3>
           <pre class="language-text"><code class="language-text">cover=背景アセット名,音声アセット名</code></pre>
           <table>
             <thead>
@@ -287,7 +331,7 @@ actor=Turtle,Turtle</code></pre>
           <pre class="language-text"><code class="language-text">cover=Beach1,OceanWave</code></pre>
         </section>
         <section class="level3">
-          <h3 id="25-setruntimevariable">2.5 <code>setRuntimeVariable</code></h3>
+          <h3 id="26-setruntimevariable">2.6 <code>setRuntimeVariable</code></h3>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=変数名:値</code></pre>
           <p>Temporary Variables拡張のランタイム変数へ値を設定します。ヘッダまたはシーン内で使用できます。</p>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=startSceneIndex:1
@@ -295,7 +339,7 @@ setRuntimeVariable=takeSeaRoute:true</code></pre>
           <p><code>startSceneIndex</code> は最初に実行するシーン番号です。条件分岐で参照する変数もこのコマンドで初期化できます。</p>
         </section>
         <section class="level3">
-          <h3 id="26-registerbranch">2.6 <code>registerBranch</code></h3>
+          <h3 id="27-registerbranch">2.7 <code>registerBranch</code></h3>
           <pre class="language-text"><code class="language-text">registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>Runtime Expressionで評価する条件と、移動先シーンラベルの組を登録します。条件は左から評価され、最初に真になった条件と同じ位置のラベルが選ばれます。</p>
           <pre class="language-text"><code class="language-text">registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
@@ -307,7 +351,7 @@ registerBranch=chooseByName:route === "ocean",true:ocean,home</code></pre>
           <p>等価比較演算子は <code>==</code>、<code>!=</code>、<code>===</code>、<code>!==</code> です。単独の <code>=</code> は代入記号であり、条件式の演算子としては使用できません。条件数とラベル数はそろえてください。最後の条件に <code>true</code> を置くと既定の移動先になります。登録した分岐は <code>action=branch:分岐名</code> で実行します。</p>
         </section>
         <section class="level3">
-          <h3 id="27-scenelabel">2.7 <code>sceneLabel</code></h3>
+          <h3 id="28-scenelabel">2.8 <code>sceneLabel</code></h3>
           <pre class="language-text"><code class="language-text">sceneLabel=シーンラベル</code></pre>
           <p><code>---</code> で区切られたシーンへ一意の名前を付けます。<code>branch</code>、<code>keyInputToChangeScene</code>、<code>touchInputToChangeScene</code> はこのラベルを移動先として使います。</p>
           <pre class="language-text"><code class="language-text">---
@@ -315,7 +359,7 @@ sceneLabel=ocean
 action=stage:Ocean</code></pre>
         </section>
         <section class="level3">
-          <h3 id="28-tmposeurl">2.8 <code>TMPoseURL</code></h3>
+          <h3 id="29-tmposeurl">2.9 <code>TMPoseURL</code></h3>
           <pre class="language-text"><code class="language-text">TMPoseURL=ポーズモデルURL</code></pre>
           <table>
             <thead>
@@ -347,7 +391,7 @@ action=stage:Ocean</code></pre>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/kamishibai/pose-model/</code></pre>
         </section>
         <section class="level3">
-          <h3 id="29-textscene-0-のui文言">2.9 <code>text</code>：scene 0 のUI文言</h3>
+          <h3 id="210-textscene-0-のui文言">2.10 <code>text</code>：scene 0 のUI文言</h3>
           <pre class="language-text"><code class="language-text">text=予約済みUIテキストアセット名:文字列</code></pre>
           <p>プロンプト／メニューの文言は、scene 0（最初の <code>---</code> より前）で定義します。次の5アセットはランタイムが自動登録するため、<code>asset=</code> による登録は不要です。</p>
           <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
@@ -895,6 +939,10 @@ asset=Backdrop,backdrop
 asset=ActorSkin,costume:Actor
 asset=Music,sound
 asset=Narration,text
+asset=Loading1,https://example.com/loading1.png
+asset=Loading2,https://example.com/loading2.png
+setLoadingCostume=Loading1,Loading2
+text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound
 registerBranch=route:flag,true:sceneA,sceneB</code></pre>
@@ -921,6 +969,7 @@ action=branch:route</code></pre>
 action=wait:1.5
 action=bgm:Music
 action=sound:Effect
+action=text:Narration:場面の説明
 action=Hero:show:Hero-normal:0,-60,30
 action=Hero:say:こんにちは:2
 action=Hero:think:どうしよう:2
@@ -973,6 +1022,17 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right</code></pre>
       <section class="level2">
         <h2 id="12-互換性メモ">12. 互換性メモ</h2>
         <p>このリファレンスは、提供されたTurboWarpプロジェクトの <code>kamishibai=3.1</code> 実装を前提にしています。3.1より前の台本では、アセット識別子、シーンラベル、分岐、入力、トランジション、アニメーション、テキストが異なる、または利用できない場合があります。台本を配布する場合は、台本ファイルと対応するアプリのバージョンを一緒に管理してください。</p>
+      </section>
+      <section class="level2">
+        <h2 id="13-関連ドキュメント">13. 関連ドキュメント</h2>
+        <ul>
+          <li><code>01-user-guide.md</code>: 紙芝居アプリの操作方法</li>
+          <li><code>02-dsl-manual.md</code>: 紙芝居DSLファイルの作り方</li>
+          <li><code>04-executive-summary-adult.md</code>: 大人向け概要説明</li>
+          <li><code>05-executive-summary-kids.md</code>: 子供向け概要説明</li>
+          <li><code>06-developer-guide.md</code>: アプリ本体と関連ライブラリの開発者向け情報</li>
+          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
+        </ul>
       </section>
     </section>
   

@@ -9,7 +9,7 @@
   <body>
     <section class="level1">
       <h1 id="紙芝居アプリ-操作説明書">紙芝居アプリ 操作説明書</h1>
-      <p>対象: 紙芝居を再生する人、発表者、授業やワークショップで進行する人<br>対象アプリ: TurboWarp版 紙芝居アプリ <code>kamishibai=3.1</code></p>
+      <p>対象: 紙芝居を再生する人、発表者、授業やワークショップで進行する人<br>対象アプリ: 紙芝居アプリ <code>kamishibai=3.1</code> のWeb版と用途別SB3</p>
       <section class="level2">
         <h2 id="1-このアプリでできること">1. このアプリでできること</h2>
         <p>この紙芝居アプリは、テキストで書かれた紙芝居DSLファイルを読み込み、背景画像、登場人物、画面上のテキスト、セリフ、思考吹き出し、効果音、音楽、移動・切り替え演出、ポーズ認識を組み合わせて紙芝居を再生するアプリです。</p>
@@ -17,7 +17,46 @@
         <p>3.1では、シーンに名前を付け、条件分岐やキー・タッチ入力で移動先を変えられます。フェード演出、アクター画像のループ／一回再生、ランタイム変数、画面上のテキストも台本から扱えます。</p>
       </section>
       <section class="level2">
-        <h2 id="2-利用に必要なもの">2. 利用に必要なもの</h2>
+        <h2 id="2-利用形態と必要なもの">2. 利用形態と必要なもの</h2>
+        <p>紙芝居アプリには、台本と作品固有アセットの持ち方が異なる4つの利用形態があります。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>利用形態</th>
+              <th>開き方</th>
+              <th>台本と作品固有アセット</th>
+              <th>主な用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Web版</td>
+              <td><a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプルサイト</a>から作品を開く</td>
+              <td>Webページに組み込み済み</td>
+              <td>すぐに作品を再生する</td>
+            </tr>
+            <tr>
+              <td><code>player</code>（再生用SB3）</td>
+              <td>サンプルサイトから作品のSB3を取得し、TurboWarpで開く</td>
+              <td>SB3に組み込み済み</td>
+              <td>配布・再生、Web版の生成</td>
+            </tr>
+            <tr>
+              <td><code>editor</code>（編集用SB3）</td>
+              <td>サンプルサイトの作品詳細から <code>_作品名.sb3</code> を取得し、TurboWarpで開く</td>
+              <td>アセットは組み込み済み、台本は外部TXT</td>
+              <td>台本を編集しながら確認する</td>
+            </tr>
+            <tr>
+              <td><code>generic</code>（汎用SB3）</td>
+              <td><a href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/">ダウンロードページ</a>から <code>kamishibai.sb3</code> を取得し、TurboWarpで開く</td>
+              <td>台本は外部TXT、アセットは台本の指定に従う</td>
+              <td>新しい作品を作る</td>
+            </tr>
+          </tbody>
+        </table>
+        <p><a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>では、Web版、再生用SB3、編集用SB3、<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt">公開台本 <code>urashima.txt</code></a>を取得できます。</p>
+        <p>共通して、次の点を確認してください。</p>
         <table>
           <thead>
             <tr>
@@ -27,16 +66,12 @@
           </thead>
           <tbody>
             <tr>
-              <td>TurboWarpで実行できる紙芝居アプリ</td>
-              <td>ダウンロードページから取得できる <code>kamishibai.sb3</code> をTurboWarpで開いて使います。</td>
-            </tr>
-            <tr>
-              <td>紙芝居DSLファイル</td>
-              <td>例: <code>urashima.txt</code>。拡張子は <code>.txt</code> を想定しています。</td>
+              <td>対応ブラウザ</td>
+              <td>Web版の再生とTurboWarpの利用に必要です。</td>
             </tr>
             <tr>
               <td>インターネット接続</td>
-              <td>画像、音声、TMPoseモデルをURLから読み込むために必要です。</td>
+              <td>TMPoseのライブラリとモデルを取得する場合に必要です。<code>generic</code>では、台本が外部URLを参照していれば画像・音声の取得にも使用します。</td>
             </tr>
             <tr>
               <td>カメラ</td>
@@ -57,29 +92,38 @@
         <h2 id="3-基本的な使い方">3. 基本的な使い方</h2>
         <section class="level3">
           <h3 id="31-アプリを起動する">3.1 アプリを起動する</h3>
-          <ol>
-            <li>TurboWarpで紙芝居アプリを開きます。</li>
-            <li>緑の旗を押します。</li>
-            <li>表紙画面とメニューが表示されます。</li>
-            <li>以前に読み込んだ台本がある場合は、「前回の台本を開く」ためのボタンが表示されます。</li>
-          </ol>
+          <ul>
+            <li>Web版は、サンプルサイトから作品を開きます。</li>
+            <li>SB3はTurboWarpで開き、緑の旗を押します。</li>
+          </ul>
+          <p>タイトル画面が表示された後の操作は、利用形態によって異なります。</p>
         </section>
         <section class="level3">
-          <h3 id="32-新しい台本ファイルを読み込む">3.2 新しい台本ファイルを読み込む</h3>
+          <h3 id="32-web版または再生用sb3を再生する">3.2 Web版または再生用SB3を再生する</h3>
           <ol>
-            <li>メニューにあるファイル読込ボタンを押します。</li>
+            <li>タイトル画面をクリックします。</li>
+            <li>組み込み済みの台本と作品固有アセットが読み込まれます。</li>
+            <li>紙芝居が始まります。</li>
+          </ol>
+          <p>ファイル選択は必要ありません。画像・音声・台本は作品へ組み込まれていますが、ポーズ認識を使う作品ではTMPoseのライブラリ・モデル取得とカメラ利用のためにネットワーク接続が必要です。</p>
+        </section>
+        <section class="level3">
+          <h3 id="33-汎用sb3または編集用sb3で台本を読み込む">3.3 汎用SB3または編集用SB3で台本を読み込む</h3>
+          <ol>
+            <li>メニューにあるファイル読込ボタンを押します。未定義時の表示は <code>Open file</code> です。</li>
             <li><code>.txt</code> の台本ファイルを選びます。</li>
             <li>アプリが台本を読み込みます。</li>
-            <li>画像や音声などのアセットを読み込みます。</li>
+            <li>台本にLoading用画像が指定されている場合は、それらを先に読み込みます。</li>
+            <li>Loadingの吹き出しで進捗を表示しながら、残りの画像や音声を読み込みます。編集用SB3では作品固有アセットをSB3内から、汎用SB3では台本の指定に従って読み込みます。</li>
             <li>読み込みが終わると、紙芝居が始まります。</li>
           </ol>
           <p>台本を一度読み込むと、ブラウザのlocalStorageに保存されます。同じブラウザであれば、次回以降は前回の台本を再生できます。</p>
         </section>
         <section class="level3">
-          <h3 id="33-前回の台本を再生する">3.3 前回の台本を再生する</h3>
+          <h3 id="34-前回の台本を再生する">3.4 前回の台本を再生する</h3>
           <ol>
             <li>緑の旗を押します。</li>
-            <li>前回台本ボタンが表示されていることを確認します。</li>
+            <li>前回台本ボタンが表示されていることを確認します。未定義時の表示は <code>Reload</code> です。</li>
             <li>前回台本ボタンを押します。</li>
             <li>保存されている台本が再生されます。</li>
           </ol>
@@ -88,48 +132,68 @@
       </section>
       <section class="level2">
         <h2 id="4-画面に表示される主なもの">4. 画面に表示される主なもの</h2>
+        <p>プロンプトとメニューの文言は、台本のscene 0にある <code>text=ui.*</code> で変更できます。次の表では役割と未定義時の既定値を示します。浦島太郎の公開台本では日本語に設定されています。</p>
         <table>
           <thead>
             <tr>
-              <th>表示</th>
-              <th>役割</th>
+              <th>表示・役割</th>
+              <th>未定義時の表示</th>
+              <th>説明</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>表紙画面</td>
+              <td>-</td>
               <td>台本読み込み前、または物語終了後に表示される画面です。</td>
             </tr>
             <tr>
               <td>ファイル読込ボタン</td>
-              <td>新しい <code>.txt</code> 台本ファイルを選ぶためのボタンです。</td>
+              <td><code>Open file</code></td>
+              <td>新しい <code>.txt</code> 台本ファイルを選ぶためのボタンです。<code>ui.open</code> で変更できます。</td>
             </tr>
             <tr>
               <td>前回台本ボタン</td>
-              <td>localStorageに保存された前回の台本を再生するボタンです。</td>
+              <td><code>Reload</code></td>
+              <td>localStorageに保存された前回の台本を再生するボタンです。<code>ui.reload</code> で変更できます。</td>
             </tr>
             <tr>
-              <td>Hatchling</td>
-              <td>アセット読み込み中に表示される案内役です。読み込み数を表示します。</td>
+              <td>タイトル表示ボタン</td>
+              <td><code>About</code></td>
+              <td>タイトル画面へ戻るボタンです。<code>ui.about</code> で変更できます。</td>
             </tr>
             <tr>
-              <td>ポーズをとろう</td>
-              <td>ポーズ認識が必要な場面で表示されるプロンプトです。</td>
+              <td>Loading</td>
+              <td>-</td>
+              <td>アセット読み込み中に表示される案内役です。通常アセットの完了数／総数を吹き出しに表示します。</td>
+            </tr>
+            <tr>
+              <td>ポーズ案内</td>
+              <td><code>Pose!</code></td>
+              <td>ポーズ認識が必要な場面で表示されるプロンプトです。<code>ui.prompt</code> で変更できます。</td>
             </tr>
             <tr>
               <td>ポーズ認識</td>
+              <td>-</td>
               <td>現在のポーズ認識の信頼度を示す目安です。</td>
             </tr>
             <tr>
               <td>チャージ</td>
+              <td>-</td>
               <td>目標ポーズが一定時間認識されると増える値です。100になると成功です。</td>
             </tr>
             <tr>
-              <td>不正な台本</td>
-              <td>台本の書き方に問題がある場合に表示されます。</td>
+              <td>台本エラー</td>
+              <td><code>Invalid script</code></td>
+              <td>台本の書き方に問題がある場合に表示されます。<code>ui.invalidScript</code> で変更できます。</td>
             </tr>
           </tbody>
         </table>
+        <section class="level3">
+          <h3 id="41-loadingの見方">4.1 Loadingの見方</h3>
+          <p>Loadingの吹き出しは<code>完了数 / 総数</code>です。<code>3 / 10</code>なら、通常アセット10件のうち3件の読込が完了しています。Loading表示そのものに使う画像は先に読み込まれるため、この分子・分母には含まれません。</p>
+          <p>台本作者は<code>setLoadingCostume=loading1,loading2,loading3</code>のように画像アセット名を指定できます。複数指定されている場合は、通常アセットの読込番号に応じて画像が順番に切り替わります。指定がない台本では、アプリ組み込みのLoadingコスチュームが表示されます。</p>
+        </section>
       </section>
       <section class="level2">
         <h2 id="5-紙芝居の進み方">5. 紙芝居の進み方</h2>
@@ -158,7 +222,7 @@
         <section class="level3">
           <h3 id="62-ポーズを取る">6.2 ポーズを取る</h3>
           <ol>
-            <li>画面に「ポーズをとろう」と表示されます。</li>
+            <li>画面にポーズ案内が表示されます。浦島太郎の公開台本では「ポーズをとろう！」、未定義時は <code>Pose!</code> です。</li>
             <li>カメラの前に立ちます。</li>
             <li>画面のキャラクターや進行役の指示に合わせてポーズを取ります。</li>
             <li>正しく認識されると、チャージが増えます。</li>
@@ -267,8 +331,8 @@
       <section class="level2">
         <h2 id="9-よくあるトラブルと対処">9. よくあるトラブルと対処</h2>
         <section class="level3">
-          <h3 id="91-不正な台本と表示される">9.1 「不正な台本」と表示される</h3>
-          <p>台本の文法に誤りがある可能性があります。</p>
+          <h3 id="91-台本エラーが表示される">9.1 台本エラーが表示される</h3>
+          <p>台本の文法に誤りがある可能性があります。未定義時は <code>Invalid script</code>、浦島太郎の公開台本では「エラー：不正な台本ファイル」と表示されます。</p>
           <p>確認すること:</p>
           <ul>
             <li>先頭に <code>kamishibai=3.1</code> があるか</li>
@@ -288,6 +352,7 @@
             <li>ファイル名の大文字・小文字が一致しているか</li>
             <li>画像や音声が公開URLに置かれているか</li>
             <li>ネットワークが安定しているか</li>
+            <li><code>setLoadingCostume</code>に書いた名前が<code>asset=</code>で画像として定義されているか</li>
           </ul>
         </section>
         <section class="level3">
@@ -314,6 +379,7 @@
         <h2 id="10-本番前チェックリスト">10. 本番前チェックリスト</h2>
         <ul class="contains-task-list">
           <li class="task-list-item"><input type="checkbox" disabled=""> 台本ファイルを読み込める</li>
+          <li class="task-list-item"><input type="checkbox" disabled=""> Loadingの進捗が総数まで進み、読込完了後に消える</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> 表紙が表示される</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> すべての背景が表示される</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> 登場人物が正しい位置に出る</li>
@@ -333,6 +399,7 @@
           <li><code>04-executive-summary-adult.md</code>: 大人向け概要説明</li>
           <li><code>05-executive-summary-kids.md</code>: 子供向け概要説明</li>
           <li><code>06-developer-guide.md</code>: アプリ本体と関連ライブラリの開発者向け情報</li>
+          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
         </ul>
       </section>
     </section>
