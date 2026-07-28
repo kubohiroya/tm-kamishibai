@@ -93,7 +93,7 @@ importまたはbuildの途中で `.app.rollback-*` や `.kamishibai.sb3.rollback
 
 #### Loading表示とアセット読込順
 
-汎用SB3は、アセット読込専用の組み込みスプライト`Loading`と組み込みコスチューム`loading`を持ちます。従来名称`Hatching`（旧SB3データ上は`Hatchling`）は使用しません。
+汎用SB3は、アセット読込専用の組み込みスプライト`Loading`と組み込みコスチューム`loading`を持ちます。進捗吹き出しは、skinを切り替えない内部スプライト`LoadingBubbleAnchor`から表示します。アンカーは固定座標と固定コスチュームを持つため、`Loading`へ適用する画像の描画境界が変わっても吹き出し位置は変化しません。従来名称`Hatching`（旧SB3データ上は`Hatchling`）は使用しません。
 
 台本の`setLoadingCostume=名前1,名前2,...`は、`asset=`で登録する画像アセット名のリストです。ランタイムはストーリー開始時に前回の設定を空へ戻し、scene 0の全コマンドを解析した後で次の順序を確定します。このため、`setLoadingCostume`と対象`asset=`の記述順には依存しません。
 
@@ -103,7 +103,7 @@ importまたはbuildの途中で `.app.rollback-*` や `.kamishibai.sb3.rollback
 4. Loading用アセットをすべて登録してから、残りの通常アセットを登録する。
 5. 通常アセットの読込開始前と完了後に、Loading用アセットを除いた`完了数 / 総数`を通知する。
 6. 通常アセットの1始まりの読込番号をLoading用画像数で循環させ、`Loading`スプライトへ適用する。
-7. 全アセット完了後に吹き出しと`Loading`スプライトを非表示にする。
+7. `LoadingBubbleAnchor`から進捗を表示し、全アセット完了後に空の`say`で吹き出しを消して、アンカーと`Loading`スプライトを非表示にする。
 
 Asset Managerの内部ブロック`setLoadingCostumes`、`prepareLoadingAssets`、`loadingAssetCount`、`loadingCostumeAt`が、設定の正規化、安定した優先順、除外件数、循環選択を担当します。これらはSB3内のランタイム実装用で、台本作者が直接呼び出すブロックではありません。`setLoadingCostume`がない場合、循環対象名は空となり、組み込みコスチュームをそのまま表示します。
 
@@ -388,7 +388,7 @@ TurboWarp PackagerでHTMLを生成する場合は、`player`だけを入力に�
 
 `test/skip-mode.test.mjs` は生成SB3のScratchブロックグラフを検査し、許可値、存在判定、要求の削除などの構造上の不変条件を確認します。ブロックIDは固定せず、オペコード、入力値、カスタムブロック名、親子関係を使います。
 
-`test/turbowarp-vm.test.mjs` は `pretest` が `app/` から生成した `tmp/kamishibai.sb3` を、固定コミット `c4823421cb7c17d8d8a89878851ce1668c26a21f` のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える`0 / N`から`N / N`までの進捗、複数画像の循環、完了後の非表示を検証します。
+`test/turbowarp-vm.test.mjs` は `pretest` が `app/` から生成した `tmp/kamishibai.sb3` を、固定コミット `c4823421cb7c17d8d8a89878851ce1668c26a21f` のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える`0 / N`から`N / N`までの進捗、複数画像の循環、`Loading`ではなく固定アンカーからの吹き出し表示、完了後の消去と非表示を検証します。
 
 外部URLの機能拡張、カメラ、ネットワーク、音声出力は決定的なテストダブルへ置き換えます。テスト中に外部通信は行いません。VM内部APIへの依存は `test/helpers/turbowarp-vm.mjs` に隔離します。
 

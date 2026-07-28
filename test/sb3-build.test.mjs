@@ -112,7 +112,7 @@ function readCentralDirectory(archive) {
 test('validates the current source and builds bit-for-bit deterministic SB3 archives', async () => {
   const validated = await validateSb3Source(currentSourceDirectory);
   assert.equal(validated.assetContents.size, 7);
-  assert.equal(validated.assetReferenceCount, 10);
+  assert.equal(validated.assetReferenceCount, 11);
   assert.equal(validated.extensions.length, 5);
 
   const [first, second] = await Promise.all([

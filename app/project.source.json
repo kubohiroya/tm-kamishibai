@@ -28811,7 +28811,7 @@
         },
         "loadingSkinIf": {
           "opcode": "control_if",
-          "next": "cX",
+          "next": null,
           "parent": "pj",
           "inputs": {
             "CONDITION": [
@@ -28876,41 +28876,6 @@
               [
                 10,
                 "loadingCostume"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "cX": {
-          "opcode": "looks_say",
-          "next": null,
-          "parent": "loadingSkinIf",
-          "inputs": {
-            "MESSAGE": [
-              3,
-              "pl",
-              [
-                10,
-                "こんにちは!"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "pl": {
-          "opcode": "lmsTempVars2_getRuntimeVariable",
-          "next": null,
-          "parent": "cX",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "message"
               ]
             ]
           },
@@ -29008,6 +28973,176 @@
       "visible": false,
       "x": 1,
       "y": -92,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "LoadingBubbleAnchor",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "loadingBubbleFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "loadingBubbleFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 490,
+          "y": 551
+        },
+        "loadingBubbleFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "loadingBubbleFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBubbleStarted": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "loadingBubbleShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "assetLoadingStarted",
+              "h7XoXG=lI0E8jv|FVotV"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 490,
+          "y": 695
+        },
+        "loadingBubbleShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "loadingBubbleStarted",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBubbleProgress": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "loadingBubbleSay",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "assetLoadingProgress",
+              "VpA079)JJW*L4Zx:f;Xe"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 490,
+          "y": 839
+        },
+        "loadingBubbleSay": {
+          "opcode": "looks_say",
+          "next": null,
+          "parent": "loadingBubbleProgress",
+          "inputs": {
+            "MESSAGE": [
+              3,
+              "loadingBubbleMessage",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBubbleMessage": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "loadingBubbleSay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "message"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBubbleCompleted": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "loadingBubbleClear",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "assetLoadingCompleted",
+              "zeRQU6vLAx`yyQGqhb.C"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 490,
+          "y": 1032
+        },
+        "loadingBubbleClear": {
+          "opcode": "looks_say",
+          "next": "loadingBubbleHide",
+          "parent": "loadingBubbleCompleted",
+          "inputs": {
+            "MESSAGE": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBubbleHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "loadingBubbleClear",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "loading-bubble-anchor",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 5,
+      "visible": false,
+      "x": 1,
+      "y": -20,
       "size": 100,
       "direction": 90,
       "draggable": false,
