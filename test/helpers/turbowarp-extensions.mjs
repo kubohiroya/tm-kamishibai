@@ -90,6 +90,7 @@ export function registerKamishibaiTestExtensions(
     assetRegistrations: [],
     asyncInput: null,
     assets: new Map(),
+    bubbleUpdates: [],
     consoleErrors: [],
     displayedAssets: new Map(),
     displayedAssetHistory: [],
@@ -108,6 +109,13 @@ export function registerKamishibaiTestExtensions(
     textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
   };
+  vm.runtime.on('SAY', (target, type, text) => {
+    state.bubbleUpdates.push({
+      targetName: target.getName(),
+      text: Cast.toString(text),
+      type,
+    });
+  });
 
   class ConsoleExtension {
     getInfo() {
