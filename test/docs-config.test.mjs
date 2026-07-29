@@ -119,7 +119,7 @@ test('publishes appendix A as a standalone non-ruby staff document', () => {
   assert.doesNotMatch(source, /^#{1,3} [ABC]\./mu);
 });
 
-test('publishes appendices B and C as a general software developer document', () => {
+test('publishes the current software developer guide', () => {
   const developerDocument = generalDocumentConfig.documents.find(
     ({sourceFilename}) => sourceFilename === '06-developer-guide.md',
   );
@@ -130,9 +130,24 @@ test('publishes appendices B and C as a general software developer document', ()
     'utf8',
   );
   assert.match(source, /^# 紙芝居アプリ ソフトウェア開発者向け資料$/mu);
-  assert.match(source, /^## 1\. アプリ$/mu);
-  assert.match(source, /^## 2\. 内部仕様: `skipMode` と `skipContext`$/mu);
-  assert.match(source, /^## 3\. 関連ライブラリ$/mu);
+  for (const heading of [
+    '対象と責務',
+    'セットアップ',
+    'リポジトリ構成',
+    '基本開発フロー',
+    '成果物プロファイル',
+    'SB3・台本変換ビルダー',
+    '検証',
+    '公開',
+    'トラブルシューティング',
+    'ライセンスと秘密情報',
+  ]) {
+    assert.match(source, new RegExp(`^## ${heading}$`, 'mu'));
+  }
+  assert.doesNotMatch(source, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
+  assert.doesNotMatch(source, /@kubohiroya\/tmpose-kamishibai@[0-9]+\.[0-9]+\.[0-9]+/u);
+  assert.doesNotMatch(source, /Issue #[0-9]+/u);
+  assert.doesNotMatch(source, /^## .*`skipMode`/mu);
   assert.doesNotMatch(source, /^#{1,3} [BC]\./mu);
 });
 
@@ -281,8 +296,7 @@ test('keeps general guides aligned with artifact modes, UI text, and public samp
 
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(developerGuide, /プロファイル契約は導入済み/u);
-  assert.doesNotMatch(developerGuide, /段階導入中/u);
+  assert.match(developerGuide, /^## 成果物プロファイル$/mu);
 
   for (const [sourceFilename, source] of sources) {
     if (sourceFilename === 'history.md') continue;

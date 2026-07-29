@@ -55,7 +55,7 @@ test('links and documents the generated downloadable SB3', async () => {
   }
   assert.match(developerGuide, /`app\/`[^\n]*正本/u);
   assert.match(developerGuide, /github\.com\/kubohiroya\/sb3-toolchain/u);
-  assert.match(developerGuide, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
+  assert.doesNotMatch(developerGuide, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.match(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
@@ -71,12 +71,17 @@ test('links and documents the generated downloadable SB3', async () => {
     userGuide,
     /kubohiroya\.github\.io\/tmpose-kamishibai-samples\/stories\/urashima\//u,
   );
+  assert.match(
+    readme,
+    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.1/u,
+    'README installation must use the current fixed npm version.',
+  );
+  assert.match(
+    developerGuide,
+    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u,
+  );
+  assert.match(developerGuide, /npm view @kubohiroya\/tmpose-kamishibai version/u);
   for (const document of [developerGuide, readme]) {
-    assert.match(
-      document,
-      /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.1/u,
-      'Builder installation must use the fixed npm version.',
-    );
     assert.doesNotMatch(
       document,
       /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
@@ -87,6 +92,24 @@ test('links and documents the generated downloadable SB3', async () => {
     assert.match(document, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
   }
   assert.match(developerGuide, /pnpm install --frozen-lockfile/u);
+  for (const command of [
+    'pnpm sb3:extensions:status',
+    'pnpm sb3:extensions:sync',
+    'pnpm sb3:extensions:update -- OLD_ID --migrate-id NEW_ID',
+    'pnpm run preview:docs',
+    'pnpm release:check',
+    'npm publish --access public',
+  ]) {
+    assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
+  }
+  for (const exportedName of [
+    'buildSb3Bundle',
+    'Sb3BuilderError',
+    'validateAssetManifest',
+    'validateBundle',
+  ]) {
+    assert(developerGuide.includes(exportedName), `Developer guide is missing: ${exportedName}`);
+  }
   assert.match(readme, /\[開発者ガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
 });
@@ -113,7 +136,7 @@ test('documents the generic, editor, and player artifact profiles', async () => 
     'utf8',
   );
   const profileSection = developerGuide.match(
-    /### 1\.7 成果物プロファイル(?<section>[\s\S]*?)\n## 2\./u,
+    /^## 成果物プロファイル$(?<section>[\s\S]*?)(?=^## )/mu,
   )?.groups?.section;
 
   assert(profileSection, 'Developer guide is missing the artifact profile section.');
@@ -126,14 +149,9 @@ test('documents the generic, editor, and player artifact profiles', async () => 
   assert.match(profileSection, /`generic`[^\n]*`kamishibai\.sb3`[^\n]*非埋め込み[^\n]*非埋め込み/u);
   assert.match(profileSection, /`editor`[^\n]*`_urashima\.sb3`[^\n]*非埋め込み[^\n]*埋め込み/u);
   assert.match(profileSection, /`player`[^\n]*`urashima\.sb3`[^\n]*埋め込み[^\n]*埋め込み/u);
-  assert.match(profileSection, /TurboWarp Packager[^\n]*`player`だけを入力/u);
-  assert.match(profileSection, /タイトル画面をクリック[^\n]*ファイル選択を行わず/u);
-  assert.match(profileSection, /「再生専用」ではなく「再生用」/u);
-  assert.match(profileSection, /issues\/60/u);
-  assert.match(profileSection, /tmpose-kamishibai-samples\/issues\/2/u);
-  assert.match(profileSection, /tmpose-kamishibai-samples\/issues\/7/u);
-  assert.match(profileSection, /プロファイル契約は導入済み/u);
-  assert.doesNotMatch(profileSection, /段階導入中/u);
+  assert.match(profileSection, /builder APIとCLIが受け付ける`profile`は`editor`または`player`/u);
+  assert.match(profileSection, /`player`[^\n]*ファイル選択なし/u);
+  assert.match(profileSection, /オンライン依存[^\n]*成果物manifest/u);
 });
 
 test('keeps only minimal validation scripts in the application repository', async () => {
