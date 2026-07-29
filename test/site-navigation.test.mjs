@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 import {injectSiteAppBar} from '../scripts/site-appbar.mjs';
 import {
+  renderAppBarState,
   shouldHideAppBarForFragment,
   updateAppBarScrollState,
 } from '../site/site-shell.js';
@@ -104,6 +105,7 @@ test('keeps the shared navigation visible and operable on narrow screens', async
   );
   assert.match(css, /@media \(max-width:\s*760px\)/u);
   assert.match(css, /\.site-header--hidden\s*\{[\s\S]*?transform:\s*translateY\(/u);
+  assert.match(css, /\.site-header--instant\s*\{[\s\S]*?transition:\s*none;/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
   assert.match(css, /@media print/u);
   assert.match(css, /:focus-visible/u);
@@ -212,6 +214,41 @@ test('starts hidden when a document opens at a heading fragment', () => {
     }),
     false,
   );
+});
+
+test('skips the transition when hiding for a heading fragment', () => {
+  const classes = new Set();
+  const operations = [];
+  const header = {
+    classList: {
+      remove(name) {
+        operations.push(['remove', name]);
+        classes.delete(name);
+      },
+      toggle(name, enabled) {
+        operations.push(['toggle', name, enabled]);
+        if (enabled) {
+          classes.add(name);
+        } else {
+          classes.delete(name);
+        }
+      },
+    },
+    getBoundingClientRect() {
+      operations.push(['measure']);
+      return {};
+    },
+  };
+
+  renderAppBarState(header, {hidden: true, instant: true});
+
+  assert.deepEqual(operations, [
+    ['toggle', 'site-header--instant', true],
+    ['toggle', 'site-header--hidden', true],
+    ['measure'],
+    ['remove', 'site-header--instant'],
+  ]);
+  assert.deepEqual([...classes], ['site-header--hidden']);
 });
 
 test('keeps only the table-of-contents button on the workshop cover', async () => {
