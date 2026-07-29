@@ -131,19 +131,45 @@ test('publishes the current software developer guide', () => {
   );
   assert.match(source, /^# 紙芝居アプリ ソフトウェア開発者向け資料$/mu);
   for (const heading of [
-    '対象と責務',
-    'セットアップ',
-    'リポジトリ構成',
-    '基本開発フロー',
-    '成果物プロファイル',
-    'SB3・台本変換ビルダー',
-    '検証',
-    '公開',
-    'トラブルシューティング',
-    'ライセンスと秘密情報',
+    '1. 紙芝居アプリの開発',
+    '2. 成果物・ビルダー・検証・公開',
+    '3. 関連プロジェクト',
+    '4. 関連ドキュメント',
   ]) {
     assert.match(source, new RegExp(`^## ${heading}$`, 'mu'));
   }
+  for (const heading of [
+    '1.1 対象と責務',
+    '1.2 セットアップ',
+    '1.3 リポジトリ構成',
+    '1.4 基本開発フロー',
+    '1.5 アプリSB3を変更する',
+    '1.6 埋め込み機能拡張を更新する',
+    '1.7 ビルダーを変更する',
+    '1.8 ドキュメントとサイトを変更する',
+    '2.1 成果物プロファイル',
+    '2.2 SB3・台本変換ビルダー',
+    '2.3 検証',
+    '2.4 公開',
+    '2.5 トラブルシューティング',
+    '2.6 ライセンスと秘密情報',
+  ]) {
+    assert.match(source, new RegExp(`^### ${heading}$`, 'mu'));
+  }
+  let previousRelatedProjectIndex = -1;
+  for (const heading of [
+    '3.1 sb3-toolchain',
+    '3.2 Viteプラグイン',
+    '3.3 TurboWarp 機能拡張開発用テンプレート',
+    '3.4 TurboWarp 機能拡張',
+    '3.5 その他のライブラリ',
+  ]) {
+    const headingIndex = source.indexOf(`### ${heading}`);
+    assert(headingIndex > previousRelatedProjectIndex, `${heading} is missing or out of order.`);
+    previousRelatedProjectIndex = headingIndex;
+  }
+  assert.match(source, /sb3-toolchain\/blob\/main\/docs\/workflows\.md/u);
+  assert.doesNotMatch(source, /`--discard-local-changes`/u);
   assert.doesNotMatch(source, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.doesNotMatch(source, /@kubohiroya\/tmpose-kamishibai@[0-9]+\.[0-9]+\.[0-9]+/u);
   assert.doesNotMatch(source, /Issue #[0-9]+/u);
@@ -296,7 +322,7 @@ test('keeps general guides aligned with artifact modes, UI text, and public samp
 
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(developerGuide, /^## 成果物プロファイル$/mu);
+  assert.match(developerGuide, /^### 2\.1 成果物プロファイル$/mu);
 
   for (const [sourceFilename, source] of sources) {
     if (sourceFilename === 'history.md') continue;

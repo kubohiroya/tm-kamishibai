@@ -136,7 +136,7 @@ test('documents the generic, editor, and player artifact profiles', async () => 
     'utf8',
   );
   const profileSection = developerGuide.match(
-    /^## 成果物プロファイル$(?<section>[\s\S]*?)(?=^## )/mu,
+    /^### 2\.1 成果物プロファイル$(?<section>[\s\S]*?)(?=^### 2\.2 )/mu,
   )?.groups?.section;
 
   assert(profileSection, 'Developer guide is missing the artifact profile section.');
