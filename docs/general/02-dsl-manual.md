@@ -1,5 +1,7 @@
 # 紙芝居DSLファイル作成マニュアル
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 対象: 台本作者、教材作成者、授業設計者、開発者\
 対象DSL: `kamishibai=3.1`
 

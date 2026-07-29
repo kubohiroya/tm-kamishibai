@@ -1,5 +1,7 @@
 # 紙芝居アプリ ソフトウェア開発者向け資料
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 この資料は、TMPose紙芝居を構成するアプリと、開発に関連するライブラリをソフトウェア開発者向けにまとめたものです。
 
 対象アプリ／DSL: `kamishibai=3.1`
@@ -160,24 +162,13 @@ Asset Managerの内部ブロック`setLoadingCostumes`、`prepareLoadingAssets`�
 
 #### 固定バージョンでの導入
 
-消費側は浮動`main`へ依存せず、検証済みのGitタグを`package.json`へ固定します。現在のリポジトリ間依存ではnpmレジストリ公開を前提にしません。
+消費側は浮動`main`へ依存せず、npmへ公開された検証済みバージョンを固定します。
 
-```json
-{
-  "dependencies": {
-    "@kubohiroya/tmpose-kamishibai": "github:kubohiroya/tmpose-kamishibai#v3.1.0"
-  }
-}
+```bash
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
 ```
 
-pnpm 11はGit依存パッケージの準備スクリプトを既定で拒否します。消費側の`pnpm-workspace.yaml`で、このパッケージだけを信頼対象として明示します。全依存のスクリプトを一括許可してはいけません。
-
-```yaml
-allowBuilds:
-  '@kubohiroya/tmpose-kamishibai': true
-```
-
-初回は`pnpm install`を実行し、生成された`pnpm-lock.yaml`を`package.json`、`pnpm-workspace.yaml`とともにコミットします。lockfileはGitタグを具体的なコミットSHAと取得元tarballへ解決します。CIでは`pnpm install --frozen-lockfile`を使用し、lockfileにない依存更新を拒否します。
+初回は`pnpm install`を実行し、生成されたlockfileを`package.json`とともにコミットします。CIでは`pnpm install --frozen-lockfile`を使用し、lockfileにない依存更新を拒否します。
 
 リリースでは`package.json`のバージョン`3.1.0`とGitタグ`v3.1.0`を対応させ、公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。
 
@@ -185,7 +176,7 @@ allowBuilds:
 pnpm pack
 ```
 
-npmレジストリ公開は、リポジトリ間の固定依存を成立させるための必須条件ではありません。不特定の外部利用者へ標準的なSemVerパッケージとして提供する場合は、別のリリースIssueで公開とprovenanceを管理します。
+リリース時は`package.json`、npmの公開バージョン、Gitタグを同じ`3.1.0`へ揃えます。公開済みのバージョンとタグは移動・再利用しません。
 
 #### JavaScript API
 

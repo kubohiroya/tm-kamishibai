@@ -9,20 +9,26 @@
     "type": "git",
     "url": "git+https://github.com/kubohiroya/tmpose-kamishibai.git"
   },
+  "bugs": {
+    "url": "https://github.com/kubohiroya/tmpose-kamishibai/issues"
+  },
   "exports": {
     "./builder": "./src/builder/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
-    "tmpose-kamishibai": "./bin/tmpose-kamishibai.mjs"
+    "tmpose-kamishibai": "bin/tmpose-kamishibai.mjs"
   },
   "files": [
     "bin/",
     "src/builder/",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "LICENSES.md"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "packageManager": "pnpm@11.11.0",
   "scripts": {
@@ -33,8 +39,8 @@
     "sb3:extensions:status": "sb3-toolchain extensions status app",
     "sb3:extensions:sync": "sb3-toolchain extensions sync app",
     "sb3:extensions:update": "sb3-toolchain extensions update app",
-    "lint": "eslint src/builder bin test/builder.test.mjs",
-    "format": "prettier --check package.json src/builder bin test/builder.test.mjs docs/general/06-developer-guide.md README.md",
+    "lint": "eslint src/builder bin test/builder.test.mjs test/documentation-license.test.mjs",
+    "format": "prettier --check package.json src/builder bin test/builder.test.mjs test/documentation-license.test.mjs docs/general/06-developer-guide.md docs/general/LICENSE.md docs/workshops/LICENSE.md README.md LICENSES.md",
     "typecheck": "tsc --project tsconfig.builder.json",
     "preview:docs": "vivliostyle preview --config docs/vivliostyle.general.config.mjs",
     "preview:staff": "vivliostyle preview --config docs/vivliostyle.staff.config.mjs",
@@ -43,7 +49,9 @@
     "test": "node --test test/*.test.mjs",
     "predeploy": "pnpm run build",
     "deploy": "gh-pages -d dist",
-    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs",
+    "pack:check": "npm pack --dry-run --ignore-scripts",
+    "release:check": "npm publish --dry-run --access public",
+    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs && pnpm pack:check",
     "tmpose-kamishibai": "node bin/tmpose-kamishibai.mjs"
   },
   "keywords": [
@@ -54,7 +62,7 @@
     "kamishibai"
   ],
   "author": "Hiroya Kubo",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "dependencies": {
     "fflate": "0.8.3"
   },
