@@ -37,6 +37,8 @@ const downloadIndexPath = path.join(downloadDirectory, 'index.html');
 const downloadPath = path.join(downloadDirectory, downloadFilename);
 const sb3SourceDirectory = path.join(projectRoot, 'app');
 const docsIndexPath = path.join(docsDirectory, 'index.html');
+const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
+const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const generalDirectory = path.join(docsDirectory, generalDocumentConfig.outputDirectory);
 const workshopDirectory = path.join(docsDirectory, documentConfig.outputDirectory);
 const staffDirectory = path.join(docsDirectory, staffDocumentConfig.outputDirectory);
@@ -122,6 +124,40 @@ async function verifyFavicon() {
     assert(linkCount === 1,
       `${path.relative(outputDirectory, htmlFile)} must contain exactly one favicon link.`);
     await access(path.resolve(path.dirname(htmlFile), expectedHref));
+  }
+
+  return htmlFiles.length;
+}
+
+async function verifySiteAppBars() {
+  const htmlFiles = await findHtmlFiles(outputDirectory);
+
+  for (const htmlFile of htmlFiles) {
+    const html = await readFile(htmlFile, 'utf8');
+    const relativeCss = path.relative(path.dirname(htmlFile), siteShellCssPath)
+      .split(path.sep)
+      .join('/');
+    const relativeScript = path.relative(path.dirname(htmlFile), siteShellScriptPath)
+      .split(path.sep)
+      .join('/');
+    const stylesheet = `<link rel=\"stylesheet\" href=\"${relativeCss}\">`;
+    const script = `<script type=\"module\" src=\"${relativeScript}\"></script>`;
+
+    assert((html.match(/<header class="site-header">/gu) ?? []).length === 1,
+      `${path.relative(outputDirectory, htmlFile)} must contain exactly one site AppBar.`);
+    assert(html.split(stylesheet).length - 1 === 1,
+      `${path.relative(outputDirectory, htmlFile)} must load the shared site stylesheet once.`);
+    assert(html.split(script).length - 1 === 1,
+      `${path.relative(outputDirectory, htmlFile)} must load the AppBar behavior once.`);
+    assert(html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/\"')
+        && html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/docs/\"')
+        && html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai-samples/\"')
+        && html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/downloads/\"'),
+    `${path.relative(outputDirectory, htmlFile)} is missing a shared AppBar destination.`);
+    await Promise.all([
+      access(path.resolve(path.dirname(htmlFile), relativeCss)),
+      access(path.resolve(path.dirname(htmlFile), relativeScript)),
+    ]);
   }
 
   return htmlFiles.length;
@@ -527,6 +563,7 @@ async function verifyStaffDocument() {
   ]);
   const docsIndexLinks = await verifyLocalReferences(docsIndexPath, 'a', 'href');
   const images = await verifyLocalReferences(htmlPath, 'img', 'src');
+  const contentImages = images.filter((image) => !image.endsWith('favicon.png'));
   const readingOrder = publicationManifest.readingOrder.map((entry) => entry.url ?? entry);
 
   assert(source.startsWith(`# ${staffDocumentConfig.title}\n`),
@@ -542,7 +579,7 @@ async function verifyStaffDocument() {
     'Staff HTML does not contain its configured title.');
   assert(!html.includes('<ruby') && !html.includes('data-rubygana-grade='),
     'Staff HTML was unexpectedly processed by rubygana.');
-  assert(images.length === 1 && images[0] === 'images/image03.jpg',
+  assert(contentImages.length === 1 && contentImages[0] === 'images/image03.jpg',
     'Staff HTML does not contain the expected local venue map.');
   assert(JSON.stringify(readingOrder) === JSON.stringify([staffDocumentConfig.htmlFilename]),
     `Unexpected staff publication reading order: ${readingOrder.join(', ')}`);
@@ -559,7 +596,7 @@ async function verifyStaffDocument() {
 
   const pageCount = await verifyPdfFile(publishedPdfPath);
   await verifyPdfFile(outputPdfPath);
-  return {imageCount: images.length, pageCount};
+  return {imageCount: contentImages.length, pageCount};
 }
 
 export async function verifyBuild() {
@@ -584,7 +621,8 @@ export async function verifyBuild() {
   const tocLabelCount = (toc.match(/class="toc-label"/gu) ?? []).length;
   const codeBlocks = combinedHtml.match(/<pre\b[\s\S]*?<\/pre>/gu) ?? [];
   const docsEntries = await readdir(docsDirectory, {withFileTypes: true});
-  const tocLinks = await verifyLocalReferences(tocPath, 'a', 'href');
+  const tocLinks = (await verifyLocalReferences(tocPath, 'a', 'href'))
+    .filter((reference) => reference !== '#main-content');
   const coverImages = await verifyLocalReferences(coverHtmlPath, 'img', 'src');
   const bodyImages = await verifyLocalReferences(htmlPath, 'img', 'src');
   const images = [...coverImages, ...bodyImages];
@@ -598,6 +636,7 @@ export async function verifyBuild() {
   const generalResults = await verifyGeneralDocuments(grade);
   const staffResults = await verifyStaffDocument();
   const faviconHtmlCount = await verifyFavicon();
+  const appBarHtmlCount = await verifySiteAppBars();
   const bodyHeadingIds = attributeValues(html, 'h[1-4]', 'id');
   const bodyHtmlFilename = documentConfig.sourceFilename.replace(/\.md$/u, '.html');
   const tocHeadingIds = tocLinks.flatMap((reference) => {
@@ -676,9 +715,10 @@ export async function verifyBuild() {
     'Documentation cover does not contain the furigana build note.');
   assert(coverHtml.includes(`href="${documentConfig.tocHtmlFilename}"`),
     'Documentation cover does not link to the table of contents.');
-  assert(coverHtml.includes('vivliostyle.org/viewer/#src=')
-      && coverHtml.includes('bookMode=true'),
-    'Documentation cover does not link to Vivliostyle Viewer in Book Mode.');
+  assert(!coverHtml.includes('vivliostyle.org/viewer/#src='),
+    'Documentation cover still contains the redundant Vivliostyle Viewer link.');
+  assert(!coverHtml.includes('href="../../"'),
+    'Documentation cover still contains the redundant documentation-list link.');
   assert(!toc.includes('class="furigana-build-note"')
       && !html.includes('class="furigana-build-note"'),
     'Furigana build note appears outside the documentation cover.');
@@ -722,7 +762,7 @@ export async function verifyBuild() {
       + `${images.length} workshop images, `
       + `staff PDF ${staffResults.pageCount} pages/${staffResults.imageCount} image, `
       + `${rubyCount} ruby elements, `
-      + `favicon links in ${faviconHtmlCount} HTML file(s), `
+      + `favicon links and AppBars in ${faviconHtmlCount}/${appBarHtmlCount} HTML file(s), `
       + `${tocLinks.length} PDF bookmarks, ${downloadResults.filename} `
       + `(${downloadResults.size} bytes), and both PDF copies.`,
   );
