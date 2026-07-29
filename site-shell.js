@@ -6,6 +6,17 @@ export function shouldHideAppBarForFragment({hash, isDocumentPage}) {
   return isDocumentPage && hash.length > 1 && hash !== '#main-content';
 }
 
+export function renderAppBarState(header, {hidden, instant = false}) {
+  header.classList.toggle('site-header--instant', instant);
+  header.classList.toggle('site-header--hidden', hidden);
+
+  if (instant) {
+    // Commit the hidden transform before restoring transitions.
+    header.getBoundingClientRect();
+    header.classList.remove('site-header--instant');
+  }
+}
+
 export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
   const currentY = Math.max(0, scrollY);
   const delta = currentY - state.lastY;
@@ -42,16 +53,16 @@ function initializeSiteAppBar(header) {
       hash: window.location.hash,
       isDocumentPage: document.body.classList.contains('site-document'),
     });
+  const initiallyHidden = shouldHideForCurrentFragment();
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,
-    hidden: shouldHideForCurrentFragment(),
+    hidden: initiallyHidden,
   };
   let frameRequested = false;
 
-  const render = () => {
-    header.classList.toggle('site-header--hidden', state.hidden);
-  };
+  const render = ({instant = false} = {}) =>
+    renderAppBarState(header, {hidden: state.hidden, instant});
   const reveal = () => {
     state = {
       ...state,
@@ -61,18 +72,18 @@ function initializeSiteAppBar(header) {
     };
     render();
   };
-  const conceal = () => {
+  const conceal = ({instant = false} = {}) => {
     state = {
       ...state,
       lastY: Math.max(0, window.scrollY),
       accumulatedDelta: 0,
       hidden: true,
     };
-    render();
+    render({instant});
   };
   const synchronizeFragmentVisibility = () => {
     if (shouldHideForCurrentFragment()) {
-      conceal();
+      conceal({instant: true});
       return;
     }
     reveal();
@@ -97,7 +108,7 @@ function initializeSiteAppBar(header) {
   window.addEventListener('pageshow', synchronizeFragmentVisibility);
   window.addEventListener('hashchange', synchronizeFragmentVisibility);
   header.addEventListener('focusin', reveal);
-  render();
+  render({instant: initiallyHidden});
 }
 
 function initializeSiteAppBars() {

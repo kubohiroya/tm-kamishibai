@@ -44,6 +44,10 @@
   transform: translateY(calc(-100% - 1px));
 }
 
+.site-header--instant {
+  transition: none;
+}
+
 .site-header:focus-within {
   transform: translateY(0);
 }
