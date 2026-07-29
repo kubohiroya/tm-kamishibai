@@ -1,5 +1,5 @@
 // Name: Runtime Expression
-// ID: twRuntimeExpression
+// ID: kubohiroyaruntimeexpression
 // Description: Safely evaluate JavaScript-like conditions over Temporary Variables runtime variables.
 // By: Hiroya Kubo
 // License: MPL-2.0
@@ -572,7 +572,7 @@
     }
     return true;
   }
-  const EXTENSION_ID = "twRuntimeExpression";
+  const EXTENSION_ID = "kubohiroyaruntimeexpression";
   const blockDefinitions = definitions.blocks;
   class RuntimeExpressionExtension {
     constructor() {

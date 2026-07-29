@@ -1887,7 +1887,7 @@
           "topLevel": false
         },
         "as": {
-          "opcode": "twAssetManager_playSound",
+          "opcode": "kubohiroyaassetmanager_playSound",
           "next": "dD",
           "parent": "dC",
           "inputs": {
@@ -3676,7 +3676,7 @@
           "topLevel": false
         },
         "loadingCommandSet": {
-          "opcode": "twAssetManager_setLoadingCostumes",
+          "opcode": "kubohiroyaassetmanager_setLoadingCostumes",
           "next": null,
           "parent": "loadingCommandDispatch",
           "inputs": {
@@ -3930,7 +3930,7 @@
           "topLevel": false
         },
         "sceneSetTextValue": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": null,
           "parent": "sceneTextCommandDispatch",
           "inputs": {
@@ -5289,7 +5289,7 @@
           "topLevel": false
         },
         "loadingReset": {
-          "opcode": "twAssetManager_setLoadingCostumes",
+          "opcode": "kubohiroyaassetmanager_setLoadingCostumes",
           "next": "es",
           "parent": "er",
           "inputs": {
@@ -7027,7 +7027,7 @@
           "topLevel": false
         },
         "e!": {
-          "opcode": "twAssetManager_isLoaded",
+          "opcode": "kubohiroyaassetmanager_isLoaded",
           "next": null,
           "parent": "aZ",
           "inputs": {
@@ -7079,7 +7079,7 @@
           "topLevel": false
         },
         "e#": {
-          "opcode": "twAssetManager_playSound",
+          "opcode": "kubohiroyaassetmanager_playSound",
           "next": null,
           "parent": "eZ",
           "inputs": {
@@ -7171,7 +7171,7 @@
           "topLevel": false
         },
         "e)": {
-          "opcode": "twAssetManager_isLoaded",
+          "opcode": "kubohiroyaassetmanager_isLoaded",
           "next": null,
           "parent": "a!",
           "inputs": {
@@ -7223,7 +7223,7 @@
           "topLevel": false
         },
         "e*": {
-          "opcode": "twAssetManager_setStageSkin",
+          "opcode": "kubohiroyaassetmanager_setStageSkin",
           "next": null,
           "parent": "e%",
           "inputs": {
@@ -8453,7 +8453,7 @@
           }
         },
         "loadingPrepare": {
-          "opcode": "twAssetManager_prepareLoadingAssets",
+          "opcode": "kubohiroyaassetmanager_prepareLoadingAssets",
           "next": "ff",
           "parent": "fe",
           "inputs": {
@@ -8976,7 +8976,7 @@
           "topLevel": false
         },
         "loadingPreCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "loadingPreIsRegular",
           "inputs": {},
@@ -9071,7 +9071,7 @@
           "topLevel": false
         },
         "loadingPreFirstCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "loadingPreFirstNumber",
           "inputs": {},
@@ -9105,7 +9105,7 @@
           "topLevel": false
         },
         "loadingPreCostume": {
-          "opcode": "twAssetManager_loadingCostumeAt",
+          "opcode": "kubohiroyaassetmanager_loadingCostumeAt",
           "next": null,
           "parent": "loadingPreSetCostume",
           "inputs": {
@@ -9166,7 +9166,7 @@
           "topLevel": false
         },
         "loadingPreCostumeCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "loadingPreCostumeIndex",
           "inputs": {},
@@ -9294,7 +9294,7 @@
           "topLevel": false
         },
         "loadingPreCompletedCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "loadingPreCompletedNumber",
           "inputs": {},
@@ -9368,7 +9368,7 @@
           "topLevel": false
         },
         "loadingPreTotalCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "loadingPreTotal",
           "inputs": {},
@@ -9523,7 +9523,7 @@
           "topLevel": false
         },
         "fm": {
-          "opcode": "twAssetManager_isLoaded",
+          "opcode": "kubohiroyaassetmanager_isLoaded",
           "next": null,
           "parent": "D",
           "inputs": {
@@ -9558,7 +9558,7 @@
           "topLevel": false
         },
         "F": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "fn",
           "parent": "D",
           "inputs": {
@@ -9720,7 +9720,7 @@
           "topLevel": false
         },
         "loadingCompleteCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "fo",
           "inputs": {},
@@ -10102,7 +10102,7 @@
           "topLevel": false
         },
         "loadingCompleteMessageCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "k[",
           "inputs": {},
@@ -10176,7 +10176,7 @@
           "topLevel": false
         },
         "loadingCompleteTotalCount": {
-          "opcode": "twAssetManager_loadingAssetCount",
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
           "parent": "k]",
           "inputs": {},
@@ -15018,7 +15018,7 @@
           "topLevel": false
         },
         "T": {
-          "opcode": "twAssetManager_startActorLoop",
+          "opcode": "kubohiroyaassetmanager_startActorLoop",
           "next": null,
           "parent": "bS",
           "inputs": {
@@ -15284,7 +15284,7 @@
           "topLevel": false
         },
         "V": {
-          "opcode": "twAssetManager_startActorSequence",
+          "opcode": "kubohiroyaassetmanager_startActorSequence",
           "next": null,
           "parent": "bU",
           "inputs": {
@@ -16188,7 +16188,7 @@
           "topLevel": false
         },
         "gV": {
-          "opcode": "twAssetManager_setStageSkin",
+          "opcode": "kubohiroyaassetmanager_setStageSkin",
           "next": null,
           "parent": "gU",
           "inputs": {
@@ -16353,7 +16353,7 @@
           "topLevel": false
         },
         "gZ": {
-          "opcode": "twAssetManager_playSound",
+          "opcode": "kubohiroyaassetmanager_playSound",
           "next": null,
           "parent": "gY",
           "inputs": {
@@ -16518,7 +16518,7 @@
           "topLevel": false
         },
         "g(": {
-          "opcode": "twAssetManager_playSoundUntilDone",
+          "opcode": "kubohiroyaassetmanager_playSoundUntilDone",
           "next": null,
           "parent": "g%",
           "inputs": {
@@ -16832,7 +16832,7 @@
           "topLevel": false
         },
         "actionSetTextValue": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": null,
           "parent": "actionTextDispatch",
           "inputs": {
@@ -18093,7 +18093,7 @@
           "topLevel": false
         },
         "hh": {
-          "opcode": "twRuntimeExpression_runtimeCondition",
+          "opcode": "kubohiroyaruntimeexpression_runtimeCondition",
           "next": null,
           "parent": "b;",
           "inputs": {
@@ -18880,7 +18880,7 @@
           "y": 525
         },
         "na": {
-          "opcode": "twAsyncInput_stopAllKeyListeners",
+          "opcode": "kubohiroyaasyncinput_stopAllKeyListeners",
           "next": null,
           "parent": "m~",
           "inputs": {},
@@ -19262,7 +19262,7 @@
           "topLevel": false
         },
         "+": {
-          "opcode": "twAsyncInput_listenForKeyAndBroadcast",
+          "opcode": "kubohiroyaasyncinput_listenForKeyAndBroadcast",
           "next": "nj",
           "parent": "b~",
           "inputs": {
@@ -19761,7 +19761,7 @@
           "topLevel": false
         },
         ",": {
-          "opcode": "twAsyncInput_listenForActorTouchAndBroadcast",
+          "opcode": "kubohiroyaasyncinput_listenForActorTouchAndBroadcast",
           "next": "nu",
           "parent": "cg",
           "inputs": {
@@ -19875,7 +19875,7 @@
           "y": 501
         },
         "ny": {
-          "opcode": "twAsyncInput_stopAllInputListeners",
+          "opcode": "kubohiroyaasyncinput_stopAllInputListeners",
           "next": null,
           "parent": "nx",
           "inputs": {},
@@ -22087,7 +22087,7 @@
           "topLevel": false
         },
         "ctxRightStopCurrentSound": {
-          "opcode": "twAssetManager_stopSound",
+          "opcode": "kubohiroyaassetmanager_stopSound",
           "next": null,
           "parent": "ctxRightStopSound",
           "inputs": {
@@ -22122,7 +22122,7 @@
           "topLevel": false
         },
         "ctxDownStopSound": {
-          "opcode": "twAssetManager_stopAllSounds",
+          "opcode": "kubohiroyaassetmanager_stopAllSounds",
           "next": "ctxDownFinishSequence",
           "parent": "i~",
           "inputs": {},
@@ -22131,7 +22131,7 @@
           "topLevel": false
         },
         "ctxPoseStopSound": {
-          "opcode": "twAssetManager_stopAllSounds",
+          "opcode": "kubohiroyaassetmanager_stopAllSounds",
           "next": null,
           "parent": "i[",
           "inputs": {},
@@ -22140,7 +22140,7 @@
           "topLevel": false
         },
         "ctxRightFinishSequence": {
-          "opcode": "twAssetManager_finishAllActorSequences",
+          "opcode": "kubohiroyaassetmanager_finishAllActorSequences",
           "next": "ctxRightFinishActor",
           "parent": "ctxRightStopSound",
           "inputs": {},
@@ -22149,7 +22149,7 @@
           "topLevel": false
         },
         "ctxDownFinishSequence": {
-          "opcode": "twAssetManager_finishAllActorSequences",
+          "opcode": "kubohiroyaassetmanager_finishAllActorSequences",
           "next": "ctxDownFinishActor",
           "parent": "ctxDownStopSound",
           "inputs": {},
@@ -22334,7 +22334,7 @@
           "topLevel": false
         },
         "uiFlagDefaultValue1": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagDefaultValue2",
           "parent": "c/",
           "inputs": {
@@ -22358,7 +22358,7 @@
           "topLevel": false
         },
         "uiFlagDefaultValue2": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagDefaultValue3",
           "parent": "uiFlagDefaultValue1",
           "inputs": {
@@ -22382,7 +22382,7 @@
           "topLevel": false
         },
         "uiFlagDefaultValue3": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagDefaultValue4",
           "parent": "uiFlagDefaultValue2",
           "inputs": {
@@ -22406,7 +22406,7 @@
           "topLevel": false
         },
         "uiFlagDefaultValue4": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagDefaultValue5",
           "parent": "uiFlagDefaultValue3",
           "inputs": {
@@ -22430,7 +22430,7 @@
           "topLevel": false
         },
         "uiFlagDefaultValue5": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagRegister1",
           "parent": "uiFlagDefaultValue4",
           "inputs": {
@@ -22454,7 +22454,7 @@
           "topLevel": false
         },
         "uiFlagRegister1": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth1",
           "parent": "uiFlagDefaultValue5",
           "inputs": {
@@ -22478,7 +22478,7 @@
           "topLevel": false
         },
         "uiFlagWidth1": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagColor1",
           "parent": "uiFlagRegister1",
           "inputs": {
@@ -22509,7 +22509,7 @@
           "topLevel": false
         },
         "uiFlagColor1": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagRegister2",
           "parent": "uiFlagWidth1",
           "inputs": {
@@ -22540,7 +22540,7 @@
           "topLevel": false
         },
         "uiFlagRegister2": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth2",
           "parent": "uiFlagColor1",
           "inputs": {
@@ -22564,7 +22564,7 @@
           "topLevel": false
         },
         "uiFlagWidth2": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagColor2",
           "parent": "uiFlagRegister2",
           "inputs": {
@@ -22595,7 +22595,7 @@
           "topLevel": false
         },
         "uiFlagColor2": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagRegister3",
           "parent": "uiFlagWidth2",
           "inputs": {
@@ -22626,7 +22626,7 @@
           "topLevel": false
         },
         "uiFlagRegister3": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth3",
           "parent": "uiFlagColor2",
           "inputs": {
@@ -22650,7 +22650,7 @@
           "topLevel": false
         },
         "uiFlagWidth3": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagColor3",
           "parent": "uiFlagRegister3",
           "inputs": {
@@ -22681,7 +22681,7 @@
           "topLevel": false
         },
         "uiFlagColor3": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagRegister4",
           "parent": "uiFlagWidth3",
           "inputs": {
@@ -22712,7 +22712,7 @@
           "topLevel": false
         },
         "uiFlagRegister4": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth4",
           "parent": "uiFlagColor3",
           "inputs": {
@@ -22736,7 +22736,7 @@
           "topLevel": false
         },
         "uiFlagWidth4": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagColor4",
           "parent": "uiFlagRegister4",
           "inputs": {
@@ -22767,7 +22767,7 @@
           "topLevel": false
         },
         "uiFlagColor4": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagRegister5",
           "parent": "uiFlagWidth4",
           "inputs": {
@@ -22798,7 +22798,7 @@
           "topLevel": false
         },
         "uiFlagRegister5": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth5",
           "parent": "uiFlagColor4",
           "inputs": {
@@ -22822,7 +22822,7 @@
           "topLevel": false
         },
         "uiFlagWidth5": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "uiFlagColor5",
           "parent": "uiFlagRegister5",
           "inputs": {
@@ -22853,7 +22853,7 @@
           "topLevel": false
         },
         "uiFlagColor5": {
-          "opcode": "twAssetManager_setTextStyle",
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
           "next": "ag",
           "parent": "uiFlagWidth5",
           "inputs": {
@@ -22884,7 +22884,7 @@
           "topLevel": false
         },
         "uiStoryDefaultValue1": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiStoryDefaultValue2",
           "parent": "es",
           "inputs": {
@@ -22908,7 +22908,7 @@
           "topLevel": false
         },
         "uiStoryDefaultValue2": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiStoryDefaultValue3",
           "parent": "uiStoryDefaultValue1",
           "inputs": {
@@ -22932,7 +22932,7 @@
           "topLevel": false
         },
         "uiStoryDefaultValue3": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiStoryDefaultValue4",
           "parent": "uiStoryDefaultValue2",
           "inputs": {
@@ -22956,7 +22956,7 @@
           "topLevel": false
         },
         "uiStoryDefaultValue4": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiStoryDefaultValue5",
           "parent": "uiStoryDefaultValue3",
           "inputs": {
@@ -22980,7 +22980,7 @@
           "topLevel": false
         },
         "uiStoryDefaultValue5": {
-          "opcode": "twAssetManager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "aK",
           "parent": "uiStoryDefaultValue4",
           "inputs": {
@@ -23004,7 +23004,7 @@
           "topLevel": false
         },
         "uiStoryRegister1": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryRegister2",
           "parent": "et",
           "inputs": {
@@ -23028,7 +23028,7 @@
           "topLevel": false
         },
         "uiStoryRegister2": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryRegister3",
           "parent": "uiStoryRegister1",
           "inputs": {
@@ -23052,7 +23052,7 @@
           "topLevel": false
         },
         "uiStoryRegister3": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryRegister4",
           "parent": "uiStoryRegister2",
           "inputs": {
@@ -23076,7 +23076,7 @@
           "topLevel": false
         },
         "uiStoryRegister4": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryRegister5",
           "parent": "uiStoryRegister3",
           "inputs": {
@@ -23100,7 +23100,7 @@
           "topLevel": false
         },
         "uiStoryRegister5": {
-          "opcode": "twAssetManager_registerAsset",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "eu",
           "parent": "uiStoryRegister4",
           "inputs": {
@@ -25948,7 +25948,7 @@
           "topLevel": false
         },
         "ii": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": null,
           "parent": "ad",
           "inputs": {
@@ -26609,7 +26609,7 @@
           "topLevel": false
         },
         "cJ": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "^",
           "parent": "h=",
           "inputs": {
@@ -26627,7 +26627,7 @@
           "topLevel": false
         },
         "cQ": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "ip",
           "parent": "cP",
           "inputs": {
@@ -27834,7 +27834,7 @@
           "y": 459
         },
         "cU": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "oY",
           "parent": "oX",
           "inputs": {
@@ -27860,7 +27860,7 @@
           "topLevel": false
         },
         "uiPromptSetSkin": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "oT",
           "parent": "iy",
           "inputs": {
@@ -28086,7 +28086,7 @@
           "topLevel": false
         },
         "uiOpenSetSkin": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "o-",
           "parent": "o,",
           "inputs": {
@@ -28402,7 +28402,7 @@
           "topLevel": false
         },
         "uiReloadSetSkin": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "ae",
           "parent": "iE",
           "inputs": {
@@ -28700,7 +28700,7 @@
           "topLevel": false
         },
         "uiAboutSetSkin": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "af",
           "parent": "iJ",
           "inputs": {
@@ -28884,7 +28884,7 @@
           "topLevel": false
         },
         "pk": {
-          "opcode": "twAssetManager_setThisSpriteSkin",
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": null,
           "parent": "loadingSkinIf",
           "inputs": {
@@ -29314,12 +29314,12 @@
     "sipcconsole",
     "lmsTempVars2",
     "strings",
-    "twAssetManager",
+    "kubohiroyaassetmanager",
     "tmpose",
     "localstorage",
     "kubohiroyatextlines",
-    "twRuntimeExpression",
-    "twAsyncInput",
+    "kubohiroyaruntimeexpression",
+    "kubohiroyaasyncinput",
     "lmsTimers",
     "files",
     "text"
@@ -29328,12 +29328,12 @@
     "sipcconsole": "https://extensions.turbowarp.org/-SIPC-/consoles.js",
     "lmsTempVars2": "https://extensions.turbowarp.org/Lily/TempVariables2.js",
     "strings": "https://extensions.turbowarp.org/text.js",
-    "twAssetManager": "embedded-extension:extensions/twAssetManager.js",
+    "kubohiroyaassetmanager": "embedded-extension:extensions/kubohiroyaassetmanager.js",
     "tmpose": "embedded-extension:extensions/tmpose.js",
     "localstorage": "https://extensions.turbowarp.org/local-storage.js",
     "kubohiroyatextlines": "embedded-extension:extensions/kubohiroyatextlines.js",
-    "twRuntimeExpression": "embedded-extension:extensions/twRuntimeExpression.js",
-    "twAsyncInput": "embedded-extension:extensions/twAsyncInput.js",
+    "kubohiroyaruntimeexpression": "embedded-extension:extensions/kubohiroyaruntimeexpression.js",
+    "kubohiroyaasyncinput": "embedded-extension:extensions/kubohiroyaasyncinput.js",
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",
     "text": "https://extensions.turbowarp.org/lab/text.js"

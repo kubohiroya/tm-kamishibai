@@ -1,5 +1,5 @@
 // Name: Async Input
-// ID: twAsyncInput
+// ID: kubohiroyaasyncinput
 // Description: Bind keyboard and current-sprite pointer input to Temporary Variables runtime variables.
 // By: Hiroya Kubo
 // License: MPL-2.0
@@ -35,7 +35,7 @@
   function writeRuntimeVariable(extension, name, value) {
     extension.setRuntimeVariable({ VAR: name, STRING: value });
   }
-  const EXTENSION_ID = "twAsyncInput";
+  const EXTENSION_ID = "kubohiroyaasyncinput";
   const ACCUMULATED_POSE_CHANGED_EVENT = "TMPOSE_ACCUMULATED_POSE_CHANGED";
   const ARITHMETIC_OPERATORS = /* @__PURE__ */ new Set(["+", "-", "*", "/"]);
   const POSE_CHANGE_REASONS = /* @__PURE__ */ new Set(["prediction", "reset", "stop"]);
@@ -302,10 +302,7 @@
     resolveActorTarget(value) {
       const actorName = normalizeName(value);
       if (!actorName) throw new Error("ACTOR must be specified.");
-      const matches = this.runtime.targets.filter((target) => (
-        !target.isStage
-        && String(target.lookupVariableByNameAndType?.("actorName", "")?.value ?? "") === actorName
-      ));
+      const matches = this.runtime.targets.filter((target) => !target.isStage && String(target.lookupVariableByNameAndType?.("actorName", "")?.value ?? "") === actorName);
       if (matches.length === 0) throw new Error(`Actor not found: ${actorName}`);
       if (matches.length > 1) throw new Error(`Actor name is not unique: ${actorName}`);
       return matches[0];

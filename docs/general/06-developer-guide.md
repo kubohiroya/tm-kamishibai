@@ -26,6 +26,7 @@
 
 - Animated TextやTemporary Variablesなど、`extensions.turbowarp.org` で提供されるTurboWarp Extension Gallery採用済みの機能拡張は、外部URLを参照します。本資料では、これらをTurboWarp標準の機能拡張と呼びます。
 - Asset Manager、TMPose、Text Lines、Runtime Expression、Async Inputなど、tmpose-kamishibai固有の非サンドボックス機能拡張は、JavaScriptをbase64データURLに変換して `kamishibai.sb3` 内へ格納します。
+- 埋め込む機能拡張はGitHub上の正本、追跡ref、固定commit、成果物パス、SHA-256を記録し、固定commitから再現できる状態で管理します。
 - 台本で使用する画像・音声アセットは `kamishibai.sb3` に組み込まず、台本ファイルの `asset=` 行から外部URLを参照します。
 - TurboWarp標準の機能拡張と外部アセットは、提供元が内容とURLを安定して維持することを前提に利用します。SHA-3などのハッシュ値による独自の完全性検証は行いません。
 
@@ -40,7 +41,7 @@
 `app/` の主な内容は次のとおりです。
 
 - `project.source.json`: 整形済みのScratchプロジェクトJSON
-- `embedded-extensions.json`: 埋め込み拡張のID、ファイル、データURL符号化方式
+- `embedded-extensions.json`: 埋め込み拡張のID、ファイル、データURL符号化方式、GitHub由来とintegrity
 - `extensions/`: 個別ファイルへ復号したカスタム機能拡張
 - `assets/`: 汎用実行環境自体が参照する画像・音声
 - `sb3-source.json`: ZIPエントリの順序を含む展開ソースのマニフェスト
@@ -54,7 +55,7 @@
 ```json
 {
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d"
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb"
   }
 }
 ```
@@ -66,7 +67,18 @@ SB3は用途ごとに次の場所へ生成します。どちらもGit管理対�
 | TurboWarpでの再編集、ローカルテスト | `tmp/kamishibai.sb3`            | `pnpm sb3:build` |
 | GitHub Pagesでの配布                | `dist/downloads/kamishibai.sb3` | `pnpm run build` |
 
-生成処理はZIPエントリ順とタイムスタンプを固定します。同じ `app/` から生成したSB3はbit-for-bitで一致します。`pnpm sb3:check` は、アセット参照とMD5、マニフェストの不足・余剰、埋め込み拡張の対応関係を検証します。
+生成処理はZIPエントリ順とタイムスタンプを固定します。同じ `app/` から生成したSB3はbit-for-bitで一致します。`pnpm sb3:check` は、アセット参照とMD5、マニフェストの不足・余剰、埋め込み拡張の対応関係に加えて、管理対象拡張のSHA-256と宣言IDをネットワークなしで検証します。
+
+管理対象拡張の状態確認と固定commitからの復元は次のコマンドで行います。
+
+```sh
+pnpm sb3:extensions:status
+pnpm sb3:extensions:sync
+```
+
+`status`だけが追跡refの現在位置を確認し、`sync`はmutableなrefを使わず
+`resolvedCommit`から同一成果物を復元します。追跡refを新commitへ進めるときだけ
+`pnpm sb3:extensions:update -- [EXTENSION_ID]`を使用します。
 
 ### 1.4 TurboWarpで編集した内容を取り込む
 
@@ -88,7 +100,12 @@ pnpm run build
 
 importは、入力SB3から作成した候補と既存の `app/` を比較します。内容が同一なら書き換えません。相違がある場合、Git管理外の出力や未コミット差分を既定では置換しません。Git管理済みでcleanな差分の確認だけを省略するときは `--yes`、未コミット差分も意図的に破棄するときだけ `--discard-local-changes` を追加します。後者は別指定であり、`--yes` だけでは未コミット差分を破棄できません。
 
-カスタム機能拡張だけを修正する場合は、`app/extensions/` のJavaScriptを直接編集できます。手作業でもコーディングエージェントでも、編集後は同じ3つの検証コマンドを実行します。TurboWarp GUIで行った変更とソースファイルへの部分修正を同時に取り込む場合は、先にimportを完了してGit差分を確認してから、部分修正を重ねます。
+カスタム機能拡張を修正する場合は、`app/extensions/` の生成JavaScriptを直接編集せず、
+`embedded-extensions.json`の`source.repository`が示す正本リポジトリでsource、tests、
+生成distを更新します。その固定commitを`sb3:extensions:update`で取り込み、`git diff -- app`
+と上記3つの検証コマンドを確認します。拡張IDを変更する場合は、上流の新成果物と
+sb3-toolchainの`extensions update --migrate-id`を同じ変更として扱い、block opcode、
+manifest、URL mapping、成果物名をschema-awareに移行します。
 
 ### 1.5 配布確認とロールバック
 
