@@ -34,8 +34,7 @@ broadcast、hat、カスタムブロック定義は、このファイルから�
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   12 |
 
-block IDは展開ソース内の対応箇所を特定するために掲載します。TurboWarpでブロックを
-作り直すとIDは変わり得るため、外部仕様や永続IDとして使用しません。
+本書に掲載するblock IDの意味と安定性は6章で説明します。
 
 ### 1.2 使用する機能拡張
 
@@ -317,40 +316,53 @@ runtime variableと同名の`sceneIndex` thread variableは、カスタムブロ
 
 ## 6. event、カスタムブロック、呼出し関係
 
+表の`target`はblockを所有するStageまたはsprite、`ID`はそのtargetの`blocks`
+objectにあるkeyです。SB3内では`project.json`の`targets[].blocks`、このリポジトリ
+では`app/project.source.json`の同じ位置に保存されます。IDはopcodeや表示名ではなく、
+この実装スナップショット内のblockを特定するための内部識別子です。
+
+`sb3-toolchain`のbuildとimportはblock IDを新規採番せず、入力に含まれるIDを保持します。
+既存blockを再生成しないTurboWarp上の編集・保存でも通常は保持されます。一方、blockの
+削除と再作成、複製やcopy & pasteによる新しいblockの作成、target／projectのimportなどで
+blockが再生成されるとIDは変わります。したがって、IDは外部仕様、永続ID、他の版をまたぐ
+参照には使いません。アプリを編集してIDが変わった場合は、本章も現在の
+`app/project.source.json`に合わせて更新します。
+
 ### 6.1 event hat一覧
 
 `procedures_definition`と、接続されていないreporter blockはevent hatに含めません。
-「直接の下流」はhatから到達するカスタムブロック呼出しとbroadcastです。
+「実行される内容」はhatを起点とする主要なカスタムブロック呼出し、broadcast、状態変更、
+表示操作を要約したもので、標準blockを含む全処理の逐語的な列挙ではありません。
 
 #### Stage
 
-| ID   | trigger               | 直接の下流                                                                                    |
-| ---- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `iM` | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
-| `i;` | key `space`           | `showCover`送信                                                                               |
-| `i}` | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
-| `jb` | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
-| `jX` | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
-| `j/` | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
-| `j?` | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
-| `kD` | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
-| `l=` | Stage click           | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
-| `l[` | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
-| `m~` | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
-| `nx` | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
+| target  | ID   | trigger               | 実行される内容                                                                                |
+| ------- | ---- | --------------------- | --------------------------------------------------------------------------------------------- |
+| `Stage` | `iM` | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
+| `Stage` | `i;` | key `space`           | `showCover`送信                                                                               |
+| `Stage` | `i}` | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
+| `Stage` | `jb` | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
+| `Stage` | `jX` | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
+| `Stage` | `j/` | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
+| `Stage` | `j?` | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
+| `Stage` | `kD` | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
+| `Stage` | `l=` | Stage click           | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
+| `Stage` | `l[` | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
+| `Stage` | `m~` | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
+| `Stage` | `nx` | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
 
 #### Actor
 
-| ID               | trigger                      | 直接の下流                                              |
-| ---------------- | ---------------------------- | ------------------------------------------------------- |
-| `nY`             | `execActorAction`受信        | `isTimeBasedAction`, `wait for actor action %s seconds` |
-| `oH`             | `deleteAllActors`受信        | cloneを削除                                             |
-| `oJ`             | clone開始                    | `actorName`、位置、scaleをruntime envelopeから初期化    |
-| `actorFinishHat` | `finishTimedActorAction`受信 | 対象actorと`skipMode`を照合して時間actionを完了         |
+| target  | ID               | trigger                      | 実行される内容                                          |
+| ------- | ---------------- | ---------------------------- | ------------------------------------------------------- |
+| `Actor` | `nY`             | `execActorAction`受信        | `isTimeBasedAction`, `wait for actor action %s seconds` |
+| `Actor` | `oH`             | `deleteAllActors`受信        | cloneを削除                                             |
+| `Actor` | `oJ`             | clone開始                    | `actorName`、位置、scaleをruntime envelopeから初期化    |
+| `Actor` | `actorFinishHat` | `finishTimedActorAction`受信 | 対象actorと`skipMode`を照合して時間actionを完了         |
 
 #### UI sprite
 
-| target                | ID                       | trigger                     | 直接の下流                                 |
+| target                | ID                       | trigger                     | 実行される内容                             |
 | --------------------- | ------------------------ | --------------------------- | ------------------------------------------ |
 | `prompt`              | `oS`                     | `showPrompt`受信            | 案内costumeを表示                          |
 | `prompt`              | `oV`                     | `hidePrompt`受信            | 非表示                                     |
@@ -379,11 +391,12 @@ runtime variableと同名の`sceneIndex` thread variableは、カスタムブロ
 ### 6.2 カスタムブロック定義一覧
 
 引数名はprototypeの`argumentnames`、warpはprototypeの`mutation.warp`から取得します。
-「直接の呼出し」には定義内で呼ぶ別のカスタムブロックだけを示し、broadcastは明記します。
+「呼び出す処理／送信するmessage」には定義内で呼ぶ別のカスタムブロックや機能拡張の
+処理を示し、broadcast messageは送信する名前を明記します。
 
 #### 初期化・parse・共通処理
 
-| target  | ID   | 定義                                       | 引数                         | warp | 直接の呼出し／broadcast                                                                                      |
+| target  | ID   | 定義                                       | 引数                         | warp | 呼び出す処理／送信するmessage                                                                                |
 | ------- | ---- | ------------------------------------------ | ---------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
 | `Stage` | `c:` | `init skinList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
 | `Stage` | `c_` | `init poseList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
@@ -399,7 +412,7 @@ runtime variableと同名の`sceneIndex` thread variableは、カスタムブロ
 
 #### camera・pose
 
-| target  | ID   | 定義                   | 引数        | warp | 直接の呼出し／broadcast                                                                                                          |
+| target  | ID   | 定義                   | 引数        | warp | 呼び出す処理／送信するmessage                                                                                                    |
 | ------- | ---- | ---------------------- | ----------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `Stage` | `dQ` | `setTMPoseURL with %s` | `URL`       | no   | —                                                                                                                                |
 | `Stage` | `dU` | `start camera`         | —           | no   | —                                                                                                                                |
@@ -415,7 +428,7 @@ runtime variableと同名の`sceneIndex` thread variableは、カスタムブロ
 
 #### scene・action・actor
 
-| target  | ID             | 定義                               | 引数                      | warp | 直接の呼出し／broadcast                                                                                                                          |
+| target  | ID             | 定義                               | 引数                      | warp | 呼び出す処理／送信するmessage                                                                                                                    |
 | ------- | -------------- | ---------------------------------- | ------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Stage` | `fB`           | `exec scene # %s with %s`          | `sceneIndex`, `sceneData` | no   | `selectValue # %s separated by %s from %s`, `substr of %s after %s`, `exec command %s %s`, `exec actionList`, `hide all actors`; `invalidScript` |
 | `Stage` | `e=`           | `exec actionList`                  | —                         | no   | `exec action %s`                                                                                                                                 |
@@ -430,7 +443,7 @@ runtime variableと同名の`sceneIndex` thread variableは、カスタムブロ
 
 #### transition・branch・input
 
-| target  | ID   | 定義                               | 引数                              | warp | 直接の呼出し                                                                 |
+| target  | ID   | 定義                               | 引数                              | warp | 呼び出す処理／送信するmessage                                                |
 | ------- | ---- | ---------------------------------- | --------------------------------- | ---- | ---------------------------------------------------------------------------- |
 | `Stage` | `ga` | `exec transition action %s`        | `transitionName`                  | no   | `exec transition reset`, `exec transition fadeUp`, `exec transition fadeOut` |
 | `Stage` | `gf` | `exec transition fadeOut`          | —                                 | no   | —                                                                            |

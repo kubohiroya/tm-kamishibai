@@ -103,6 +103,48 @@ test('documents invalidScript as a terminal error instead of a pose transition',
   );
 });
 
+test('explains block IDs and uses consistent section 6 table vocabulary', () => {
+  const section = specification.match(
+    /^## 6\. event、カスタムブロック、呼出し関係$(?<body>[\s\S]*?)(?=^## 7\. )/mu,
+  )?.groups?.body;
+
+  assert(section, 'Internal specification is missing section 6.');
+  assert.match(section, /`ID`はそのtargetの`blocks`\s*objectにあるkey/u);
+  assert.match(section, /`project\.json`の`targets\[\]\.blocks`/u);
+  assert.match(section, /buildとimportはblock IDを新規採番せず/u);
+  assert.match(section, /削除と再作成、複製やcopy & paste/u);
+  assert.match(section, /外部仕様、永続ID、他の版をまたぐ\s*参照には使いません/u);
+  assert.doesNotMatch(section, /(?:直接|直後)の(?:下流|呼出し)/u);
+
+  const tableHeaders = section
+    .split('\n')
+    .filter((line) => line.startsWith('|') && !line.includes('---'))
+    .map((line) =>
+      line
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    );
+  const eventHeaders = tableHeaders.filter((cells) => cells.includes('trigger'));
+  assert.equal(eventHeaders.length, 3);
+  for (const header of eventHeaders) {
+    assert.deepEqual(header, ['target', 'ID', 'trigger', '実行される内容']);
+  }
+
+  const customBlockHeaders = tableHeaders.filter((cells) => cells.includes('定義'));
+  assert.equal(customBlockHeaders.length, 4);
+  for (const header of customBlockHeaders) {
+    assert.deepEqual(header, [
+      'target',
+      'ID',
+      '定義',
+      '引数',
+      'warp',
+      '呼び出す処理／送信するmessage',
+    ]);
+  }
+});
+
 test('keeps the implementation snapshot aligned with the current SB3 source', () => {
   const blocks = projectSource.targets.flatMap((target) => Object.entries(target.blocks ?? {}));
   const eventHats = blocks.filter(
