@@ -1,28 +1,40 @@
-# 紙芝居アプリ ソフトウェア開発者向け資料
+# 紙芝居アプリ ソフトウェアメンテナンスガイド
 
 Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
 
-このガイドは、TMPose紙芝居のアプリ、SB3ソース、ビルダー、Webサイト、ドキュメントを
-変更する開発者向けの入口です。アプリの内部構造、成果物、ビルダー仕様、検証、公開は
-[紙芝居アプリ内部仕様書](07-internal-specification.md)、台本の書式とコマンド仕様は
-[台本DSLマニュアル](04-dsl-manual.md)と[コマンドリファレンス](05-command-reference.md)
-を正本とします。
+このガイドは、TMPose紙芝居の成果物とビルダーを利用し、アプリ、SB3ソース、
+ビルダー、Webサイト、ドキュメントを変更・検証・公開するソフトウェア開発者向けの
+作業資料です。次を本書の責務とします。
+
+- 成果物プロファイルとSB3・台本変換ビルダーの外部契約
+- リポジトリの開発環境、構成、共通フロー、変更対象別手順
+- テスト、成果物検証、GitHub Pagesとnpmの公開手順
+- 開発時のトラブルシューティング、ライセンス、秘密情報の扱い
+
+汎用アプリSB3のtarget、変数、event、custom block、呼出し関係、状態遷移は
+[紙芝居アプリ内部仕様書](07-internal-specification.md)を正本とします。台本の書式と
+コマンド仕様は[台本DSLマニュアル](04-dsl-manual.md)と
+[コマンドリファレンス](05-command-reference.md)を参照してください。本書には、
+これらの内部構造やDSL項目を重複して列挙しません。
 
 対象アプリ／DSL: `kamishibai=3.1`
 
 過去のバージョンからの変更は[`history.md`](history.md)を参照してください。
 
-このガイドの章は、次の3つの区分で並んでいます。
+このガイドの章は、次の5つの区分で並んでいます。
 
-| 区分           | 対象                                        | 読み方                                     |
-| -------------- | ------------------------------------------- | ------------------------------------------ |
-| 導入           | 管理範囲の理解から共通の開発フローまで      | 初めて開発するときに、この順に読む         |
-| 変更対象別手順 | アプリSB3、機能拡張、ビルダー、文書とサイト | 変更対象に応じて、必要な章だけを読む       |
-| 参照           | 関連プロジェクトと関連ドキュメント          | 関連プロジェクトや資料を探すときに参照する |
+| 区分           | 対象                                                     | 読み方                                 |
+| -------------- | -------------------------------------------------------- | -------------------------------------- |
+| 導入           | 管理範囲、開発環境、リポジトリ構成、共通フロー           | 初めて開発するときに、この順に読む     |
+| 利用契約       | 成果物プロファイル、ビルダーのCLI／API／manifest         | 成果物を生成・利用するときに参照する   |
+| 変更対象別手順 | アプリSB3、機能拡張、ビルダー実装、文書とサイト          | 変更対象に応じて、必要な章だけを読む   |
+| 検証と公開     | 自動・手動検証、GitHub Pages、npm、障害時の扱い          | PRとリリースの完了条件として読む       |
+| 参照           | 関連プロジェクト、ライセンス、秘密情報、関連ドキュメント | 関連する規約や資料を探すときに参照する |
 
 「導入」では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
-開発フローへ進みます。「変更対象別手順」は、この順に実施する一連の工程ではなく、
-変更対象ごとに独立した手順です。「参照」は作業手順ではありません。
+開発フローへ進みます。「利用契約」はビルダー実装の変更手順ではありません。
+「変更対象別手順」は、この順に実施する一連の工程ではなく、変更対象ごとに独立した
+手順です。「検証と公開」は対象変更に必要な確認を選び、標準チェックへ合流します。
 
 ## 管理範囲と責務を理解する
 
@@ -126,8 +138,162 @@ PRへ分けます。
 
 無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
 置換を行う前には、必ず`git status`と対象パスの差分を確認します。変更対象ごとの
-テストと公開前チェックは[内部仕様書の検証](07-internal-specification.md#verification)を
+テストと公開前チェックは[「変更を検証する」](#verification){data-ref="chapter"}を
 参照してください。
+
+## 成果物プロファイルを理解する {#artifact-profiles}
+
+紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。
+
+| プロファイル | 例               | 台本       | 物語固有アセット | 主な用途                   |
+| ------------ | ---------------- | ---------- | ---------------- | -------------------------- |
+| `generic`    | `kamishibai.sb3` | 非埋め込み | 非埋め込み       | 本体が配布する汎用雛形     |
+| `editor`     | `_urashima.sb3`  | 非埋め込み | 埋め込み         | 物語作成者の編集・動作確認 |
+| `player`     | `urashima.sb3`   | 埋め込み   | 埋め込み         | 配布・再生、Packager Web版 |
+
+`generic`は`app/`から生成し、特定の物語を含めません。builder APIとCLIが受け付ける
+`profile`は`editor`または`player`です。
+
+`editor`と`player`は同じベースSB3、台本、アセットロックから生成します。両者の
+変換済み台本とアセット参照を分岐させません。`player`は組み込み台本を予約変数へ保存し、
+タイトル操作後にファイル選択なしで開始します。
+
+`player`へ台本とアセットを組み込んでも、TMPoseモデル、カメラ、外部サービスまで
+自動的にオフライン化されるわけではありません。残るオンライン依存は成果物manifestと
+公開ページへ明記します。
+
+## SB3・台本変換ビルダーを利用する {#sb3-script-builder}
+
+この章はビルダー利用者に対する外部契約を示します。ビルダーの実装を変更する手順は
+[「ビルダーの実装を変更する」](#builder-implementation){data-ref="chapter"}を
+参照してください。汎用アプリSB3の内部構造は本章の対象外です。
+
+### 導入
+
+利用可能なバージョンを確認し、消費側で明示的に固定します。
+
+```bash
+npm view @kubohiroya/tmpose-kamishibai version
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@<VERSION>
+```
+
+生成したlockfileをcommitし、CIでは`pnpm install --frozen-lockfile`を使います。
+
+### CLI
+
+```bash
+pnpm exec tmpose-kamishibai build-sb3 \
+  --base kamishibai.sb3 \
+  --script source.txt \
+  --assets assets.lock.json \
+  --output dist/sample \
+  --profile editor
+```
+
+`--output`は拡張子を含まないベース名です。次の3ファイルを同じtransactionとして
+生成します。
+
+```text
+dist/sample.sb3
+dist/sample.txt
+dist/sample.manifest.json
+```
+
+| オプション              | 意味                                      |
+| ----------------------- | ----------------------------------------- |
+| `--allow-file-root DIR` | `file:`の許可ルートを追加。複数回指定可能 |
+| `--allow-http`          | 平文HTTPを明示的に許可                    |
+| `--timeout-ms N`        | 1リクエストのタイムアウト                 |
+| `--max-asset-bytes N`   | 1アセットの最大バイト数                   |
+| `--max-script-bytes N`  | 組み込み台本の最大バイト数                |
+| `--max-redirects N`     | HTTPリダイレクト上限                      |
+
+完全な一覧は`pnpm exec tmpose-kamishibai --help`で確認します。
+
+### JavaScript API
+
+```js
+import {
+  Sb3BuilderError,
+  buildSb3Bundle,
+  validateAssetManifest,
+  validateBundle,
+} from '@kubohiroya/tmpose-kamishibai/builder';
+
+const result = await buildSb3Bundle({
+  baseSb3: 'kamishibai.sb3',
+  sourceScript: 'source.txt',
+  assetManifest: 'assets.lock.json',
+  outputDirectory: 'dist',
+  outputName: 'sample',
+  profile: 'editor',
+});
+
+console.log(result.outputPaths);
+```
+
+`baseSb3`と`sourceScript`にはファイルパスまたは`file:` URLを指定できます。
+`assetManifest`にはファイルパス、`file:` URL、または検証対象のJavaScriptオブジェクトを
+指定できます。相対`file:`を含むオブジェクトでは`manifestBaseDirectory`も指定します。
+
+ネットワーク・ファイル取得は`allowedFileRoots`、`allowHttp`、`requestTimeoutMs`、
+`maxAssetBytes`、`maxRedirects`で制限できます。`player`の組み込み台本上限は
+`maxEmbeddedScriptBytes`で変更できます。
+
+`buildSb3Bundle`は`manifest`と`outputPaths`を返します。入力・アセット・出力の問題は
+`Sb3BuilderError`として処理段階とアセット情報を保持します。
+
+### アセットマニフェスト
+
+入力manifestは`formatVersion: 1`と1件以上の`assets`を持ちます。
+
+```json
+{
+  "formatVersion": 1,
+  "assets": [
+    {
+      "name": "forest",
+      "uri": "file:assets/forest.svg",
+      "kind": "backdrop",
+      "target": "@stage",
+      "sb3Name": "森",
+      "contentType": "image/svg+xml",
+      "dataFormat": "svg",
+      "size": 1234,
+      "sha256": "<64文字の16進数>",
+      "license": "CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/",
+      "metadata": {
+        "bitmapResolution": 1,
+        "rotationCenterX": 240,
+        "rotationCenterY": 180
+      }
+    }
+  ]
+}
+```
+
+| `kind`        | `target`     | 変換後の台本参照             |
+| ------------- | ------------ | ---------------------------- |
+| `backdrop`    | `@stage`     | `backdrop:<sb3Name>`         |
+| `costume`     | スプライト名 | `costume:<target>:<sb3Name>` |
+| `stageSound`  | `@stage`     | `sound:@stage:<sb3Name>`     |
+| `spriteSound` | スプライト名 | `sound:<target>:<sb3Name>`   |
+
+DSL名、同一target内のSB3名、既存SB3のアセット名は重複できません。`license`には素材の
+ライセンスまたは利用条件の識別情報と参照先を記録します。
+
+### 安全性と再現性
+
+- `file:`は既定でmanifestのディレクトリ以下だけを許可し、`..`やsymlinkによる脱出を拒否する
+- HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する
+- Content-Type、実サイズ、ロック済みサイズ、SHA-256、timeout、redirectを検証する
+- ZIP entry順、timestamp、圧縮設定、JSON表現を固定する
+- SB3、変換済み台本、出力manifestの対応を確定前に再検証する
+- 3成果物を一時領域で生成し、すべて成功した場合だけ置換する
+- 失敗時は既存成果物を保持または復元する
+
+同じ入力、固定依存、設定から生成したSB3、台本、manifestはbit-for-bitで一致しなければ
+なりません。
 
 ## アプリSB3を変更する
 
@@ -193,13 +359,14 @@ pnpm sb3:extensions:update -- OLD_ID --migrate-id NEW_ID
 `git diff -- app`、`pnpm sb3:check`、`pnpm test`、`pnpm run build`を確認し、
 生成したSB3をTurboWarpで開いて対象拡張の主要機能を確認します。
 
-## ビルダーを変更する
+## ビルダーの実装を変更する {#builder-implementation}
 
 公開APIは`src/builder/index.js`、CLIは`src/builder/cli.js`と`bin/`、仕様テストは
 `test/builder.test.mjs`にあります。公開API、CLI、アセットマニフェスト、決定的生成、
 transactional更新の現行仕様は
-[内部仕様書のSB3・台本変換ビルダー](07-internal-specification.md#sb3-script-builder)
-を参照してください。
+[「SB3・台本変換ビルダーを利用する」](#sb3-script-builder){data-ref="chapter"}を
+参照してください。この章では仕様そのものを繰り返さず、実装変更時の確認事項だけを
+扱います。
 
 APIまたはCLIを変更するときは次を同じ変更に含めます。
 
@@ -245,6 +412,134 @@ Markdownの見出しには章・節番号を書きません。`h1`は番号な�
 `{.unnumbered}`を付けます。本文から見出しを参照するときは、番号ではなく意味の変わらない
 IDを付けてリンクし、組版結果にも現在の章・節番号を表示する場合は、リンクへ
 `{data-ref="chapter"}`または`{data-ref="section"}`を付けます。
+
+## 変更を検証する {#verification}
+
+### 変更対象ごとのテスト
+
+| 変更対象               | 主なテスト                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| builder API／CLI       | `test/builder.test.mjs`                                                                         |
+| 展開SB3の構造          | `test/sb3-project.test.mjs`、`test/skip-mode.test.mjs`                                          |
+| 内部仕様書の構造一覧   | `test/internal-specification.test.mjs`                                                          |
+| TurboWarp実行結果      | `test/turbowarp-vm.test.mjs`                                                                    |
+| 入力、分岐、wait       | `test/async-input.test.mjs`、`test/register-branch.test.mjs`、`test/wait-action.test.mjs`       |
+| 文書、画像、ライセンス | `test/docs-config.test.mjs`、`test/docs-images.test.mjs`、`test/documentation-license.test.mjs` |
+| 公開物と汎用性         | `test/sb3-publication.test.mjs`、`test/build-freshness.test.mjs`                                |
+
+### 標準チェック
+
+```bash
+pnpm lint
+pnpm format
+pnpm typecheck
+pnpm test
+pnpm run build
+```
+
+GitHub ActionsはcleanなLinux環境で`pnpm install --frozen-lockfile`、`pnpm test`、
+`pnpm build`を実行します。ローカルで成功しても、未追跡ファイルや既存生成物へ依存して
+いないことをCIで確認します。
+
+`pnpm run build`は少なくとも次を生成・検証します。
+
+- `dist/downloads/kamishibai.sb3`
+- 一般文書ごとのWeb Publication、HTML/PDF、Vivliostyle CLIが`h2`・`h3`までから生成する目次
+- 参加者向け・スタッフ向け体験会資料
+- 公開サイトのリンク、画像、目次、PDF bookmark、favicon
+
+SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて次を手動確認します。
+
+- 読込エラーがない
+- green flagでtitleとmenuが表示される
+- 外部台本と組み込み台本の対象フローが開始できる
+- pause、Space、Right、Downの進行が意図どおり動く
+- Loading、画像、音声、テキストが正しく表示・再生される
+
+内部構造を変更したPRでは、`app/project.source.json`と内部仕様書のtarget、変数、message、
+hat、custom block一覧を同時に更新します。
+
+## 公開する {#publication}
+
+### GitHub Pages
+
+```bash
+pnpm run deploy
+```
+
+`predeploy`がフルbuildを行い、成功した`dist/`だけを`gh-pages`へ公開します。公開後は
+top page、文書一覧、各カードのHTML／Vivliostyle Viewer／PDF、SB3 downloadを実際の
+URLから確認します。
+
+問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
+deployします。生成済み`dist/`だけを手作業で修正しません。
+
+### npmパッケージ
+
+公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。
+
+1. `package.json`、lockfile、`src/builder/constants.js`、READMEの導入例を同じversionへ更新する。
+2. cleanなcommitで標準チェック、フルbuild、公開内容のdry-runを実行する。
+
+```bash
+pnpm release:check
+```
+
+3. tarballのファイル一覧、license、size、CLI/APIを確認する。
+4. Git worktreeではなく通常のclean cloneから公開する。
+5. WebAuthnなどの認証を完了してpublic packageとして公開する。
+
+```bash
+npm publish --access public
+```
+
+6. registry反映後にmetadataを確認する。
+
+```bash
+npm view @kubohiroya/tmpose-kamishibai@<VERSION> \
+  version license dist-tags.latest dist.integrity --json
+```
+
+7. 一時ディレクトリへ公開版を導入し、CLIの`--version`と
+   `@kubohiroya/tmpose-kamishibai/builder`のimportを確認する。
+8. 公開に使った確定commitへannotated tagを作り、GitHub Releaseを作成する。
+
+公開後に問題が見つかった場合は対象versionを`npm deprecate`し、修正版を新しいpatch
+versionとして公開します。公開済みtarballやtagを差し替えません。
+
+## 開発上の問題を解決する
+
+| 症状                                              | 確認と対応                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sb3:import`が置換を拒否する                      | `git status`と`git diff -- app`を確認し、[toolchainの手順](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#既存ソースへの再import)に従う |
+| `.app.rollback-*`や`.＜出力名＞.rollback-*`が残る | 削除前に元出力と比較し、[toolchainの失敗時の扱い](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#失敗時の扱い)に従う                    |
+| 埋め込み拡張が追跡refと異なる                     | `pnpm sb3:extensions:status`で確認し、固定commitへ戻すなら`sync`、更新するなら`update`を使う                                                                     |
+| PDF生成browserが見つからない                      | Chrome/Chromiumを導入し、必要なら`VIVLIOSTYLE_CHROME_PATH`を設定する                                                                                             |
+| ローカルだけtestが通る                            | 生成物と未追跡ファイルを確認し、clean cloneと`pnpm install --frozen-lockfile`で再現する                                                                          |
+| builderが既存出力を更新しない                     | エラーの`stage`、asset名、URIを確認する。rollback領域が残っていないか確認する                                                                                    |
+| 公開直後にnpm registryが404になる                 | 同じversionを再publishせず、npm公開pageとregistryの反映を待って確認する                                                                                          |
+
+復旧でGit履歴を破壊しません。公開済み変更は`git revert`または新しい修正PRで戻し、tagを
+移動しません。
+
+## ライセンスと秘密情報を扱う
+
+| 対象                                                                     | ライセンス                                         |
+| ------------------------------------------------------------------------ | -------------------------------------------------- |
+| `docs/general/**`                                                        | CC BY-SA 4.0                                       |
+| `docs/workshops/**`                                                      | Copyright © 2026 Hiroya Kubo. All rights reserved. |
+| 上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材 | MPL-2.0                                            |
+
+詳細は[`LICENSES.md`](../../LICENSES.md)、[`docs/general/LICENSE.md`](LICENSE.md)、
+[`docs/workshops/LICENSE.md`](../workshops/LICENSE.md)を参照してください。
+
+第三者の画像、音声、font、model、機能拡張には個別のlicenseまたは利用条件が適用されます。
+builderで組み込む素材はasset manifestの`license`へ由来を記録します。許諾が確認できない
+素材を本体またはsampleへ追加しません。
+
+token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本、manifest、生成HTMLへ
+記録しません。認証情報は環境変数、OSのkeychain、GitHub Secretsなど、公開物へ含まれない
+仕組みで渡します。
 
 ## 関連プロジェクトを確認する
 
@@ -298,6 +593,6 @@ TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境�
 - [`03-user-guide.md`](03-user-guide.md): アプリの利用方法と成果物の使い分け
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
 - [`05-command-reference.md`](05-command-reference.md): コマンドとアクションの仕様
-- [`07-internal-specification.md`](07-internal-specification.md): アプリ内部構造、成果物、検証、公開
+- [`07-internal-specification.md`](07-internal-specification.md): 汎用アプリSB3の内部構造、呼出し関係、状態遷移
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口と主要コマンド

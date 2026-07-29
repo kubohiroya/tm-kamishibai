@@ -247,6 +247,6 @@ Loadingの吹き出しは`完了数 / 総数`です。`3 / 10`なら、通常ア
 - `05-command-reference.md`: コマンドとアクションの早見表
 - `01-executive-summary-adult.md`: 大人向け概要説明
 - `02-executive-summary-kids.md`: 子供向け概要説明
-- `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
-- `07-internal-specification.md`: アプリ内部構造、成果物、検証、公開の仕様
+- `06-developer-guide.md`: 成果物とビルダーの利用、開発、検証、公開の手順
+- `07-internal-specification.md`: 汎用アプリSB3の内部構造、呼出し関係、状態遷移
 - `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

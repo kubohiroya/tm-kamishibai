@@ -41,15 +41,15 @@ export const generalDocumentConfig = {
     },
     {
       sourceFilename: '06-developer-guide.md',
-      title: '紙芝居アプリ ソフトウェア開発者向け資料',
+      title: '紙芝居アプリ ソフトウェアメンテナンスガイド',
       audience: 'ソフトウェア開発者',
-      description: 'アプリ本体、SB3、ビルダー、ドキュメントを変更するための開発手順を案内します。',
+      description: '成果物とビルダーの利用、アプリ本体、SB3、ドキュメントの変更、検証、公開手順を案内します。',
     },
     {
       sourceFilename: '07-internal-specification.md',
       title: '紙芝居アプリ内部仕様書',
       audience: 'アプリの実装を調査・変更する方',
-      description: '現行SB3のtarget、変数、block、message、状態遷移と、成果物・検証・公開の内部仕様を記録します。',
+      description: '現行の汎用アプリSB3におけるtarget、変数、block、message、呼出し関係、状態遷移を記録します。',
     },
     {
       sourceFilename: 'history.md',
