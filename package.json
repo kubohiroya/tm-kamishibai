@@ -59,7 +59,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb",
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#fa0d827a8ee0fe58436aa1e7a6c227e6ace44186",
     "@types/node": "^24.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@vivliostyle/cli": "11.1.0",

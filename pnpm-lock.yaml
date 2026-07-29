@@ -16,8 +16,8 @@ importers:
         version: 0.8.3
     devDependencies:
       '@kubohiroya/sb3-toolchain':
-        specifier: github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb
-        version: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/51f26fcfd68ab39b12f329e86a89e9f306dd7bfb
+        specifier: github:kubohiroya/sb3-toolchain#fa0d827a8ee0fe58436aa1e7a6c227e6ace44186
+        version: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/fa0d827a8ee0fe58436aa1e7a6c227e6ace44186
       '@turbowarp/scratch-svg-renderer':
         specifier: 1.1.0
         version: 1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)
@@ -199,8 +199,8 @@ packages:
     engines: {node: '>=20.18.1'}
     hasBin: true
 
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/51f26fcfd68ab39b12f329e86a89e9f306dd7bfb':
-    resolution: {gitHosted: true, integrity: sha512-TGZg3yEPiZi9mZs+ICT8e70oUF1WgxM9dLxGvip/oUNiforHaj6gyW5QG173mB4wZOVITeJN9saUkABfhqJf/w==, tarball: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/51f26fcfd68ab39b12f329e86a89e9f306dd7bfb}
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/fa0d827a8ee0fe58436aa1e7a6c227e6ace44186':
+    resolution: {gitHosted: true, integrity: sha512-XkknTCnFEeEZOkM9IMrFdk8sPrCagCT4gk+yRtTF5sxfOe944vnrzb6xhs89PvcTPzpjxM8ZZ5guXPE+lPRIgA==, tarball: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/fa0d827a8ee0fe58436aa1e7a6c227e6ace44186}
     version: 0.1.0
     engines: {node: '>=22.12.0'}
     hasBin: true
@@ -4241,7 +4241,7 @@ snapshots:
       kuromoji: 0.1.2
       marked: 15.0.12
 
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/51f26fcfd68ab39b12f329e86a89e9f306dd7bfb':
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/fa0d827a8ee0fe58436aa1e7a6c227e6ace44186':
     dependencies:
       fflate: 0.8.3
 
