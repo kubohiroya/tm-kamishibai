@@ -298,7 +298,7 @@ setLoadingCostume=loading1,loading2,loading3
 npmで検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.1
 ```
 
 初回の`pnpm install`で生成したlockfileをコミットし、CIでは固定バージョンからだけ復元します。
@@ -319,7 +319,9 @@ tmpose-kamishibai build-sb3 \
 
 ## バージョン
 
-既存の開発履歴を引き継ぎ、汎用ビルダーを公開する最初のnpmパッケージ版は`3.1.0`とします。`package.json`のバージョン、npmの公開バージョン、Gitタグ`v3.1.0`を一致させ、公開済みバージョンとタグは移動・削除しません。
+既存の`v3.1.0`タグを維持し、汎用ビルダーを公開する最初のnpmパッケージ版は
+`3.1.1`とします。`package.json`のバージョン、npmの公開バージョン、Gitタグ
+`v3.1.1`を一致させ、公開済みバージョンとタグは移動・削除しません。
 
 紙芝居アプリの配布SB3は、kamishibai 3.1の展開ソースからビルド時に生成します。
 

@@ -165,18 +165,21 @@ Asset Managerの内部ブロック`setLoadingCostumes`、`prepareLoadingAssets`�
 消費側は浮動`main`へ依存せず、npmへ公開された検証済みバージョンを固定します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.1
 ```
 
 初回は`pnpm install`を実行し、生成されたlockfileを`package.json`とともにコミットします。CIでは`pnpm install --frozen-lockfile`を使用し、lockfileにない依存更新を拒否します。
 
-リリースでは`package.json`のバージョン`3.1.0`とGitタグ`v3.1.0`を対応させ、公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。
+リリースでは`package.json`のバージョン`3.1.1`とGitタグ`v3.1.1`を対応させ、
+公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドで
+tarball化して確認できます。
 
 ```bash
 pnpm pack
 ```
 
-リリース時は`package.json`、npmの公開バージョン、Gitタグを同じ`3.1.0`へ揃えます。公開済みのバージョンとタグは移動・再利用しません。
+リリース時は`package.json`、npmの公開バージョン、Gitタグを同じ`3.1.1`へ揃えます。
+既存の`v3.1.0`を含め、公開済みのバージョンとタグは移動・再利用しません。
 
 #### JavaScript API
 
