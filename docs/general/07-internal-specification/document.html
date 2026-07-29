@@ -711,9 +711,11 @@ dist/sample.manifest.json</code></pre>
               <code>create sceneList</code>は<code>script</code>をscene単位に分けます。<code>exec scene # %s with %s</code>は現在のsceneを
               行単位の<code>commandList</code>に分け、<code>exec command %s %s</code>でcommandを順に処理します。このうち
               <code>action=</code>の値を<code>actionList</code>へ集め、<code>exec actionList</code>が各actionを<code>exec action %s</code>へ渡します。
-              Stage actionはStage内で実行され、Actor actionだけがaction envelopeとmessageを経由します。
-              messageはすべての<code>Actor</code> cloneが受け取りますが、実際に処理するのは宛先に一致した
-              アクターだけです。
+              Stage actionはStage内で実行されます。Actor actionでは、Stageが<code>actionTarget</code>、
+              <code>actionCommand</code>、<code>actionParam</code>、<code>actionParam2</code>へaction envelopeを書き込んでから、
+              <code>execActorAction</code>をbroadcastします。messageを受信した各<code>Actor</code> cloneは4変数を読み、
+              自分の<code>actorName</code>と宛先を照合します。実際にcommandを分岐して処理するのは、宛先に
+              一致したアクターだけです。
             </p>
           </section>
         </section>

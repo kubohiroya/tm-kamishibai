@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1040" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1270" role="img" aria-labelledby="title desc">
   <title id="title">台本ファイルからアクターでの命令実行までのシーケンス</title>
   <desc id="desc">
-    台本ファイルをscriptへ読み込み、sceneListからsceneを取り出し、commandListのcommandを処理してactionListを作り、各actionを実行する。Actor actionではStageがaction envelopeを設定してexecActorActionをbroadcastし、Actor cloneが宛先を照合してcommandを実行する。
+    台本ファイルをscriptへ読み込み、sceneListからsceneを取り出し、commandListのcommandを処理してactionListを作り、各actionを実行する。Actor actionではStageがaction envelopeの4つのruntime variableを書いてexecActorActionをbroadcastし、Actor cloneがmessage受信後に4変数を読んで宛先を照合し、commandを実行する。
   </desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
@@ -23,6 +23,9 @@
         font-size: 21px;
         font-weight: 700;
         text-anchor: middle;
+      }
+      .participant-label-small {
+        font-size: 17px;
       }
       .lifeline {
         fill: none;
@@ -97,28 +100,30 @@
 
   <rect class="participant" x="540" y="25" width="220" height="68"/>
   <text class="participant-label" x="650" y="54">Stage内の</text>
-  <text class="participant-label" x="650" y="79">変数・list</text>
+  <text class="participant-label participant-label-small" x="650" y="79">
+    list・runtime variable
+  </text>
 
   <rect class="participant participant-main" x="795" y="25" width="180" height="68"/>
-  <text class="participant-label" x="885" y="54">Actor</text>
-  <text class="participant-label" x="885" y="79">clone群</text>
+  <text class="participant-label" x="885" y="54">Actor target</text>
+  <text class="participant-label" x="885" y="79">／clone群</text>
 
-  <path class="lifeline" d="M 125 93 L 125 965"/>
-  <path class="lifeline" d="M 390 93 L 390 965"/>
-  <path class="lifeline" d="M 650 93 L 650 965"/>
-  <path class="lifeline" d="M 885 93 L 885 965"/>
+  <path class="lifeline" d="M 125 93 L 125 1200"/>
+  <path class="lifeline" d="M 390 93 L 390 1200"/>
+  <path class="lifeline" d="M 650 93 L 650 1200"/>
+  <path class="lifeline" d="M 885 93 L 885 1200"/>
 
   <rect class="frame" x="170" y="315" width="600" height="360"/>
   <path class="frame-tab" d="M 170 315 H 350 L 370 338 H 170 z"/>
   <text class="frame-label" x="185" y="333">sceneごとに反復</text>
 
-  <rect class="frame" x="170" y="690" width="790" height="280"/>
+  <rect class="frame" x="170" y="690" width="790" height="510"/>
   <path class="frame-tab" d="M 170 690 H 350 L 370 713 H 170 z"/>
   <text class="frame-label" x="185" y="708">Actor actionの場合</text>
 
-  <rect class="activation" x="382" y="125" width="16" height="690"/>
-  <rect class="activation" x="642" y="195" width="16" height="455"/>
-  <rect class="activation" x="877" y="765" width="16" height="195"/>
+  <rect class="activation" x="382" y="125" width="16" height="805"/>
+  <rect class="activation" x="642" y="195" width="16" height="900"/>
+  <rect class="activation" x="877" y="905" width="16" height="285"/>
 
   <g id="step-file-script" aria-label="台本ファイルをscriptへ読み込む">
     <path class="message" d="M 125 145 L 382 145"/>
@@ -171,40 +176,57 @@
     </text>
   </g>
 
-  <g id="step-action-envelope" aria-label="Actor actionをaction envelopeへ変換する">
-    <path class="message" d="M 398 735 H 515 V 770 H 405"/>
-    <text class="message-label" x="515" y="725">
+  <g id="step-parse-actor-action" aria-label="Actor actionをaction envelopeへ分解する">
+    <path class="message" d="M 398 760 H 515 V 790 H 405"/>
+    <text class="message-label" x="520" y="720">
       <tspan class="code">Actor action</tspan>を解析
     </text>
-    <text class="message-label" x="515" y="747">
-      <tspan class="code">action envelope</tspan>を設定
+    <text class="message-label" x="520" y="744">
+      <tspan class="code">action envelope</tspan>へ分解
     </text>
   </g>
 
-  <g id="step-envelope-message" aria-label="action envelopeをexecActorAction messageでActorへ送る">
-    <path class="message" d="M 398 800 L 877 800"/>
-    <text class="message-label" x="637" y="785">
+  <g id="step-set-action-envelope" aria-label="action envelopeの4つのruntime variableへ書き込む">
+    <path class="message" d="M 398 850 L 642 850"/>
+    <text class="message-label" x="520" y="810">
+      <tspan class="code">actionTarget・actionCommand</tspan>
+    </text>
+    <text class="message-label" x="520" y="832">
+      <tspan class="code">actionParam・actionParam2</tspan>へ書き込む
+    </text>
+  </g>
+
+  <g id="step-broadcast-actor-action" aria-label="execActorAction messageをActor clone群へbroadcastする">
+    <path class="message" d="M 398 920 L 877 920"/>
+    <text class="message-label" x="637" y="905">
       <tspan class="code">execActorAction</tspan>をbroadcast
     </text>
   </g>
 
   <g id="step-actor-receive" aria-label="Actor cloneがmessageを受信する">
-    <path class="message" d="M 877 840 H 770 V 875 H 870"/>
-    <text class="message-label" x="823" y="827">messageを受信</text>
+    <path class="message" d="M 893 970 H 960 V 1000 H 900"/>
+    <text class="message-label message-label-end" x="865" y="958">messageを受信</text>
+  </g>
+
+  <g id="step-actor-read-envelope" aria-label="Actor cloneがaction envelopeの4つのruntime variableを読む">
+    <path class="message" d="M 658 1060 L 877 1060"/>
+    <text class="message-label" x="768" y="1045">
+      <tspan class="code">action envelope</tspan>（4変数）を読む
+    </text>
   </g>
 
   <g id="step-actor-process" aria-label="Actor cloneが宛先を照合してcommandを実行する">
-    <path class="message" d="M 877 940 H 685 V 960 H 870"/>
-    <text class="message-label message-label-end" x="865" y="900">
+    <path class="message" d="M 893 1160 H 970 V 1185 H 900"/>
+    <text class="message-label message-label-end" x="865" y="1115">
       <tspan class="code">actorName</tspan>と<tspan class="code">actionTarget</tspan>を照合
     </text>
-    <text class="message-label message-label-end" x="865" y="923">
+    <text class="message-label message-label-end" x="865" y="1137">
       <tspan class="code">actionCommand</tspan>を分岐して処理を実行
     </text>
   </g>
 
-  <rect class="note" x="250" y="985" width="710" height="42"/>
-  <text class="note-text" x="605" y="1012">
+  <rect class="note" x="250" y="1215" width="710" height="42"/>
+  <text class="note-text" x="605" y="1242">
     Stage actionはActorへmessageを送らず、Stage内の対応する処理へ進む
   </text>
 </svg>

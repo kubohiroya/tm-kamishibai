@@ -107,7 +107,7 @@
 
   <rect class="participant participant-main" x="795" y="25" width="180" height="68"/>
   <text class="participant-label" x="885" y="54">Actor target</text>
-  <text class="participant-label" x="885" y="79">／clone</text>
+  <text class="participant-label" x="885" y="79">／clone群</text>
 
   <path class="lifeline" d="M 125 93 L 125 900"/>
   <path class="lifeline" d="M 390 93 L 390 900"/>
@@ -115,14 +115,15 @@
   <path class="lifeline" d="M 885 93 L 885 900"/>
 
   <rect class="frame" x="250" y="265" width="710" height="620"/>
-  <path class="frame-tab" d="M 250 265 H 445 L 465 288 H 250 z"/>
-  <text class="frame-label" x="265" y="283">
-    <tspan class="code">actorList</tspan>の定義ごとに反復
-  </text>
 
   <rect class="activation" x="382" y="125" width="16" height="735"/>
   <rect class="activation" x="642" y="195" width="16" height="650"/>
   <rect class="activation" x="877" y="520" width="16" height="245"/>
+
+  <path class="frame-tab" d="M 250 265 H 445 L 465 288 H 250 z"/>
+  <text class="frame-label" x="265" y="283">
+    <tspan class="code">actorList</tspan>の定義ごとに反復
+  </text>
 
   <g id="step-actor-command-register" aria-label="actor commandの値をactorListへ登録する">
     <path class="message" d="M 125 145 L 382 145"/>
@@ -169,11 +170,11 @@
 
   <g id="step-clone-start" aria-label="clone開始hatを実行する">
     <path class="message" d="M 893 585 H 960 V 620 H 900"/>
-    <text class="message-label message-label-end" x="955" y="575">clone開始hat</text>
+    <text class="message-label message-label-end" x="865" y="575">clone開始hat</text>
   </g>
 
   <g id="step-clone-read-name" aria-label="actionTargetをcloneローカルのactorNameへ設定する">
-    <path class="message" d="M 642 665 L 877 665"/>
+    <path class="message" d="M 658 665 L 877 665"/>
     <text class="message-label" x="760" y="638">
       <tspan class="code">actionTarget</tspan>を読む
     </text>
@@ -183,7 +184,7 @@
   </g>
 
   <g id="step-clone-set-skin" aria-label="actionParamをAsset Managerのskinへ設定する">
-    <path class="message" d="M 642 745 L 877 745"/>
+    <path class="message" d="M 658 745 L 877 745"/>
     <text class="message-label" x="760" y="718">
       <tspan class="code">actionParam</tspan>を読む
     </text>
