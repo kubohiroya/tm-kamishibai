@@ -7,7 +7,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 この文書は、2.0向けの旧ドキュメントと3.1の現行仕様を比較し、台本作者・教材作成者・開発者が把握すべき差分をまとめたものです。中間バージョンごとの導入時期は区別せず、2.0から3.1までの累積差分として記載します。
 
-## 1. 変更の概要
+## 変更の概要
 
 2.0は、シーンを先頭から順番に再生し、背景、登場人物、セリフ、音、移動、ポーズ認識を組み合わせる構成でした。
 
@@ -25,9 +25,9 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 | アセット読込表示 | 固定のHatching画像（旧データ上は`Hatchling`） | `Loading`へ改名し、優先読込する複数画像と通常アセットだけの進捗表示を追加 |
 | アクター表示 | スキン、位置、サイズをすべて指定 | スキン省略形、スキンとサイズの同時変更を追加 |
 
-## 2. 追加したトップレベルコマンド
+## 追加したトップレベルコマンド
 
-### 2.1 `setRuntimeVariable`
+### `setRuntimeVariable`
 
 ```text
 setRuntimeVariable=変数名:値
@@ -40,7 +40,7 @@ setRuntimeVariable=startSceneIndex:1
 setRuntimeVariable=takeSeaRoute:true
 ```
 
-### 2.2 `registerBranch`
+### `registerBranch`
 
 ```text
 registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...
@@ -52,7 +52,7 @@ Runtime Expressionで評価する条件と移動先を登録できるように�
 registerBranch=chooseRoute:takeSeaRoute,true:ocean,home
 ```
 
-### 2.3 `sceneLabel`
+### `sceneLabel`
 
 ```text
 sceneLabel=シーンラベル
@@ -60,7 +60,7 @@ sceneLabel=シーンラベル
 
 シーンへ一意の名前を付けられるようにしました。条件分岐、キー入力、タッチ入力の移動先として使います。
 
-### 2.4 scene 0の`text`
+### scene 0の`text`
 
 ```text
 text=ui.prompt:ポーズをとろう！
@@ -74,7 +74,7 @@ text=ui.about:このアプリについて
 
 シーン直下の`text=テキストアセット名:文字列`も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の`action=text:...`を使用します。
 
-### 2.5 `setLoadingCostume`
+### `setLoadingCostume`
 
 ```text
 setLoadingCostume=loading1,loading2,loading3
@@ -82,9 +82,9 @@ setLoadingCostume=loading1,loading2,loading3
 
 アセット読込中に表示する画像アセットを複数指定できるようにしました。指定アセットを通常アセットより先に読み込み、通常アセットの読込番号に応じて循環表示します。吹き出しの`完了数 / 総数`からLoading用アセット自身は除外します。省略した台本は組み込みのLoadingコスチュームを使います。
 
-## 3. 追加したアクション
+## 追加したアクション
 
-### 3.1 グローバルアクション
+### グローバルアクション
 
 | アクション | 用途 |
 |---|---|
@@ -98,7 +98,7 @@ setLoadingCostume=loading1,loading2,loading3
 
 キー入力とタッチ入力はバックグラウンドで待機します。入力項目と移動先ラベルは、同じ個数を同じ順番で指定します。
 
-### 3.2 アクターアクション
+### アクターアクション
 
 | アクション | 用途 |
 |---|---|
@@ -107,9 +107,9 @@ setLoadingCostume=loading1,loading2,loading3
 
 `loop`はアセット数と秒数の個数をそろえます。`sequence`の秒数はアセット数より1つ少なくします。どちらも待ち時間に `0` を使うことで、画像と音などを同時に開始できます。
 
-## 4. 変更・拡張した既存仕様
+## 変更・拡張した既存仕様
 
-### 4.1 アセット識別子
+### アセット識別子
 
 3.1では、プロジェクト内アセットを短く指定できるようにし、ステージ背景の識別子を `backdrop` に統一しました。また、ランタイムテキストをアセットとして扱えるようにしました。
 
@@ -124,7 +124,7 @@ setLoadingCostume=loading1,loading2,loading3
 
 短縮指定では、アセット名と同名のコスチューム、背景、音、テキストを参照します。
 
-### 4.2 `show`
+### `show`
 
 従来の書式に加え、スキン名を省略して初期スキンまたは現在のスキンを使えるようにしました。
 
@@ -136,7 +136,7 @@ action=Hero:show:Hero-normal:0,-60,30
 action=Hero:show:0,-60,30
 ```
 
-### 4.3 `setSkin`
+### `setSkin`
 
 スキン切り替えと同時にサイズを変更できる書式を追加しました。
 
@@ -144,7 +144,7 @@ action=Hero:show:0,-60,30
 action=Hero:setSkin:Hero-surprised:45
 ```
 
-### 4.4 シーンの実行モデル
+### シーンの実行モデル
 
 2.0の記述順による進行を維持しつつ、3.1では次の仕組みで任意のシーンへ移動できるようにしました。
 
@@ -154,7 +154,7 @@ action=Hero:setSkin:Hero-surprised:45
 - `keyInputToChangeScene`によるキー入力分岐
 - `touchInputToChangeScene`によるタッチ入力分岐
 
-## 5. 廃止・置換した記法
+## 廃止・置換した記法
 
 | 2.0の記法 | 3.1での扱い |
 |---|---|
@@ -165,9 +165,9 @@ action=Hero:setSkin:Hero-surprised:45
 
 `actor`、`cover`、`TMPoseURL`、`stage`、`wait`、`bgm`、`sound`、`hide`、`say`、`think`、`setScale`、`setPosition`、`moveTo`、`setLayer`、`pose`の基本的な役割は3.1でも継続しています。
 
-## 6. 移行例
+## 移行例
 
-### 6.1 2.0
+### 2.0
 
 ```text
 kamishibai=2.0
@@ -183,7 +183,7 @@ action=Hero:show:Hero:0,-60,30
 action=Hero:say:こんにちは！:2
 ```
 
-### 6.2 3.1
+### 3.1
 
 ```text
 kamishibai=3.1
@@ -225,7 +225,7 @@ sceneLabel=home
 action=stage:Home
 ```
 
-## 7. 2.0台本の移行チェックリスト
+## 2.0台本の移行チェックリスト
 
 - [ ] 先頭を`kamishibai=3.1`へ変更した
 - [ ] `background:`を`backdrop:`へ変更した
@@ -241,7 +241,7 @@ action=stage:Home
 - [ ] すべての分岐先ラベルが存在することを確認した
 - [ ] 3.1対応アプリで先頭から全経路を再生確認した
 
-## 8. 一般ドキュメントで修正した範囲
+## 一般ドキュメントで修正した範囲
 
 3.1への更新では、DSL仕様だけでなく、一般ドキュメント全体の説明も次のように修正しました。
 

@@ -260,10 +260,11 @@ async function verifyPdfFile(pdfPath, minimumSize = 10_000) {
 }
 
 async function verifyGeneralDocuments(grade) {
-  const buildInfo = JSON.parse(await readFile(path.join(generalDirectory, 'build-info.json'), 'utf8'));
-  const publicationManifest = JSON.parse(
-    await readFile(path.join(generalDirectory, 'publication.json'), 'utf8'),
-  );
+  const [buildInfo, publicationManifest, generalTheme] = await Promise.all([
+    readFile(path.join(generalDirectory, 'build-info.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(generalDirectory, 'publication.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(projectRoot, 'docs/general-theme.css'), 'utf8'),
+  ]);
   const readingOrder = publicationManifest.readingOrder.map((entry) => entry.url ?? entry);
   const docsIndexLinks = await verifyLocalReferences(docsIndexPath, 'a', 'href');
   const docsIndex = await readFile(docsIndexPath, 'utf8');
@@ -275,6 +276,20 @@ async function verifyGeneralDocuments(grade) {
   let totalPages = 0;
   let rubyDocumentCount = 0;
   let rubyCount = 0;
+  const generatedHeadingIds = new Map(await Promise.all(
+    generalDocumentConfig.documents.map(async ({sourceFilename}) => {
+      const basename = sourceFilename.replace(/\.md$/u, '');
+      const article = await readFile(
+        path.join(
+          generalDirectory,
+          basename,
+          generalDocumentConfig.standaloneArticleHtmlFilename,
+        ),
+        'utf8',
+      );
+      return [sourceFilename, new Set(attributeValues(article, 'h[1-3]', 'id'))];
+    }),
+  ));
 
   assert(buildInfo.publicationKind === 'general-documentation',
     'General build metadata does not identify the general publication.');
@@ -290,6 +305,22 @@ async function verifyGeneralDocuments(grade) {
   assert((docsIndex.match(/>Vivliostyle Viewer<\/a>/gu) ?? []).length
       === documentationCardIcons.length,
   `Expected ${documentationCardIcons.length} Vivliostyle Viewer links.`);
+  assert(generalTheme.includes('counter-reset: general-chapter;')
+      && generalTheme.includes('counter-increment: general-section;'),
+  'The general theme does not generate body chapter and section numbers.');
+  assert(generalTheme.includes('counter-increment: general-toc-chapter;')
+      && generalTheme.includes('counter-increment: general-toc-section;'),
+  'The general theme does not generate table-of-contents numbers.');
+  assert(generalTheme.includes('target-counter(attr(href), general-chapter)')
+      && generalTheme.includes('target-counter(attr(href), general-section)'),
+  'The general theme does not generate chapter and section cross-reference numbers.');
+  assert(
+    /#toc > ol > li\[data-section-level="1"\]:only-child > a\s*\{\s*display: none;/u
+      .test(generalTheme)
+      && /#toc > ol > li\[data-section-level="1"\]:only-child > ol\s*\{\s*padding-left: 0;/u
+        .test(generalTheme),
+    'A standalone table of contents does not promote chapters to the visual top level.',
+  );
   for (const [icon, title] of documentationCardIcons) {
     assert(docsIndex.includes(
       `<h3><span class="card-icon" aria-hidden="true">${icon}</span>${title}</h3>`,
@@ -353,6 +384,31 @@ async function verifyGeneralDocuments(grade) {
       `${htmlFilename} does not contain its configured title.`);
     assert(standaloneArticle.includes(generalDocument.title),
       `${basename}/${generalDocumentConfig.standaloneArticleHtmlFilename} does not contain its configured title.`);
+    assert(!/^#{2,3} [0-9]+(?:\.[0-9]+)*\.? /mu.test(source),
+      `${generalDocument.sourceFilename} contains a manually numbered h2 or h3 heading.`);
+    assert(!/\]\([^)\n]*#[0-9]/u.test(source),
+      `${generalDocument.sourceFilename} contains a numeric heading fragment reference.`);
+    for (const match of source.matchAll(/\]\((?!https?:)([^)\s]+\.md)#([^)]+)\)/gu)) {
+      const [, targetReference, fragment] = match;
+      const targetFilename = path.basename(targetReference);
+      assert(generatedHeadingIds.get(targetFilename)?.has(decodeURIComponent(fragment)),
+        `${targetReference}#${fragment} does not resolve from ${generalDocument.sourceFilename}.`);
+    }
+    for (const referenceType of ['chapter', 'section']) {
+      const sourceReferenceCount = (
+        source.match(
+          new RegExp(
+            `\\]\\([^\\n)]+\\)\\{data-ref="${referenceType}"\\}`,
+            'gu',
+          ),
+        ) ?? []
+      ).length;
+      const generatedReferenceCount = attributeValues(standaloneArticle, 'a', 'data-ref')
+        .filter((value) => value === referenceType)
+        .length;
+      assert(sourceReferenceCount === generatedReferenceCount,
+        `${generalDocument.sourceFilename} lost a ${referenceType} cross-reference attribute.`);
+    }
     if (generalDocument.sourceFilename === '02-executive-summary-kids.md') {
       assert(!source.includes('忍者') && !source.includes('銅像')
           && !standaloneArticle.includes('忍者') && !standaloneArticle.includes('銅像'),

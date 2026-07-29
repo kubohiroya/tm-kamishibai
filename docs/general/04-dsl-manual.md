@@ -5,7 +5,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 対象: 台本作者、教材作成者、授業設計者、開発者\
 対象DSL: `kamishibai=3.1`
 
-## 1. 紙芝居DSLとは
+## 紙芝居DSLとは
 
 紙芝居DSLは、紙芝居アプリに読み込ませるためのテキスト形式の台本です。背景、登場人物、画面上のテキスト、セリフ、音、移動、アニメーション、ポーズ認識、シーン分岐などを、1行ずつ書きます。
 
@@ -13,7 +13,7 @@ DSLは「Domain Specific Language」の略です。ここでは「紙芝居を�
 
 このDSLの大きな特徴は、紙芝居の演出だけでなく、TMPoseモデルを使ったポーズ認識を物語進行に組み込めることです。
 
-## 2. ファイルの基本構造
+## ファイルの基本構造
 
 紙芝居DSLファイルは、次のような構造です。
 
@@ -48,7 +48,7 @@ action=演出
 | `---` | シーンの区切りです。 |
 | `#` | コメント行です。台本の説明やメモに使えます。 |
 
-## 3. 最小サンプル
+## 最小サンプル
 
 まずは、背景を出し、登場人物にセリフを言わせるだけの最小例です。
 
@@ -75,9 +75,9 @@ action=wait:1
 3. `こんにちは！` と2秒間言う
 4. 1秒待つ
 
-## 4. ヘッダ部を書く
+## ヘッダ部を書く
 
-### 4.1 バージョン行
+### バージョン行
 
 ```text
 kamishibai=3.1
@@ -85,7 +85,7 @@ kamishibai=3.1
 
 台本の先頭に書きます。このアプリは `kamishibai=3.1` の台本として読み込みます。2.0の台本を流用する場合も、追加仕様とアセット識別子を確認してから3.1へ更新してください。
 
-### 4.2 アセット定義
+### アセット定義
 
 ```text
 asset=アセット名,URL
@@ -137,7 +137,7 @@ Loading用アセットは、読込進捗の完了数と総数から除外され�
 
 指定名は画像アセットとして定義されている必要があります。未定義の名前を指定すると読込エラーになります。
 
-### 4.3 アクター定義
+### アクター定義
 
 ```text
 actor=アクター名,初期スキン名
@@ -155,7 +155,7 @@ actor=Princess,Princess
 
 `action=Urashima:say:...` のように、アクションの対象として使う名前がアクター名です。
 
-### 4.4 表紙定義
+### 表紙定義
 
 ```text
 cover=背景アセット名,音声アセット名
@@ -175,7 +175,7 @@ cover=Beach1,OceanWave
 cover=Beach1,
 ```
 
-### 4.5 ランタイム変数
+### ランタイム変数
 
 ```text
 setRuntimeVariable=変数名:値
@@ -190,7 +190,7 @@ setRuntimeVariable=takeSeaRoute:true
 
 `startSceneIndex` は、最初に実行するシーン番号を指定するための予約された変数です。通常は `1` にします。
 
-### 4.6 条件分岐の登録
+### 条件分岐の登録
 
 ```text
 registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...
@@ -212,7 +212,7 @@ setRuntimeVariable=score:1
 registerBranch=chooseRoute:score == 1,true:ocean,home
 ```
 
-### 4.7 プロンプト／メニュー文言
+### プロンプト／メニュー文言
 
 ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の `---` より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、`asset=` は不要です。
 
@@ -234,7 +234,7 @@ text=ui.about:このアプリについて
 
 ランタイムは物語開始時に既定値へ戻してからscene 0を実行するため、別の言語の台本を続けて読み込んでも前の文言は残りません。台本をまだ読み込んでいない最初のメニューでは、ランタイムの既定値が表示されます。
 
-## 5. シーンを書く
+## シーンを書く
 
 シーンは `---` で区切ります。
 
@@ -249,7 +249,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Urashima:say:今日は浜辺を散歩しよう。:2
 ```
 
-### 5.1 シーンの基本方針
+### シーンの基本方針
 
 シーンごとに、必要な背景、登場人物、音、セリフを改めて指定します。アプリはシーン終了時にアクターを隠し、音を止めるため、前のシーンの表示状態は次のシーンへ引き継がれません。
 
@@ -271,7 +271,7 @@ action=bgm:Odesong
 # 背景やアクターを出さず、前シーンから残っている前提で書く
 ```
 
-### 5.2 コメント行
+### コメント行
 
 `#` で始まる行はコメントです。
 
@@ -282,7 +282,7 @@ action=bgm:Odesong
 
 コメントは、シーン名、演出意図、修正メモに使うと便利です。
 
-### 5.3 シーンラベル
+### シーンラベル
 
 ```text
 sceneLabel=opening
@@ -290,7 +290,7 @@ sceneLabel=opening
 
 シーンへ一意の名前を付けます。`branch`、`keyInputToChangeScene`、`touchInputToChangeScene` の移動先として使います。分岐を使う台本では、すべてのシーンに重複しないラベルを付けることをおすすめします。
 
-### 5.4 TMPoseURL
+### TMPoseURL
 
 ```text
 TMPoseURL=https://example.com/model/
@@ -308,7 +308,7 @@ action=stage:Beach2
 action=Urashima:pose:Urashima-open-1,Urashima-open-2:open1,open2:OpenSound,OpenSound
 ```
 
-## 6. アクションを書く
+## アクションを書く
 
 アクションは `action=` で書きます。
 
@@ -319,7 +319,7 @@ action=対象:命令:値:追加値
 
 大きく分けると、背景・音・待機のアクションと、アクターに対するアクションがあります。
 
-### 6.1 背景を変える
+### 背景を変える
 
 ```text
 action=stage:Beach1
@@ -327,7 +327,7 @@ action=stage:Beach1
 
 `Beach1` は `asset=Beach1,...` で登録済みの背景画像です。
 
-### 6.2 待つ
+### 待つ
 
 ```text
 action=wait:1.5
@@ -335,7 +335,7 @@ action=wait:1.5
 
 指定秒数だけ待ちます。
 
-### 6.3 音を鳴らす
+### 音を鳴らす
 
 ```text
 action=bgm:GuitarChords2
@@ -346,7 +346,7 @@ action=sound:Gong
 
 名前は `BGM` ですが、実装上は「待たずに鳴らす音」と考えると分かりやすいです。ループ再生専用ではありません。
 
-### 6.4 画面をフェードさせる
+### 画面をフェードさせる
 
 ```text
 action=transition:fadeOut
@@ -356,7 +356,7 @@ action=transition:fadeUp
 
 `fadeOut` はステージを暗くし、`fadeUp` は明るく戻します。`reset` は明るさ効果を標準値へ戻します。背景切り替えの前後に置くと場面転換を滑らかに見せられます。
 
-### 6.5 アクターを表示する
+### アクターを表示する
 
 ```text
 action=Urashima:show:Urashima-walk-1:172,-77,25
@@ -379,7 +379,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Fish:show:-130,-27,70
 ```
 
-### 6.6 アクターを移動する
+### アクターを移動する
 
 ```text
 action=Urashima:moveTo:40,-57,1.5
@@ -393,7 +393,7 @@ action=Urashima:moveTo:40,-57,1.5
 action=Urashima:setPosition:40,-57
 ```
 
-### 6.7 セリフと思考吹き出し
+### セリフと思考吹き出し
 
 ```text
 action=Princess:say:ようこそ竜宮城へ。:2.5
@@ -409,7 +409,7 @@ action=Urashima:say:
 action=Princess:think:
 ```
 
-### 6.8 スキンを変える
+### スキンを変える
 
 ```text
 action=Urashima:setSkin:Urashima-surprised
@@ -423,7 +423,7 @@ action=Urashima:setSkin:Urashima-surprised
 action=Urashima:setSkin:Urashima-surprised:45
 ```
 
-### 6.9 画像や音を連続再生する
+### 画像や音を連続再生する
 
 繰り返し再生:
 
@@ -439,7 +439,7 @@ action=Hero:sequence:Hero1,StepSound,Hero2:0,0.5
 
 `loop` はアセット数と待ち時間の数を同じにします。最後の待ち時間の後は先頭へ戻ります。`sequence` は一回だけバックグラウンド再生し、待ち時間はアセット数より1つ少なくします。待ち時間 `0` を使うと、画像と音などを同時に開始できます。
 
-### 6.10 テキストアセットを表示・更新する
+### テキストアセットを表示・更新する
 
 ヘッダでテキストアセットとアクターを登録し、通常の `show` で表示します。
 
@@ -461,7 +461,7 @@ action=text:Narration:
 
 シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。ただし、予約済みの `ui.*` 文言は時系列の演出ではなく初期設定なので、scene 0 の `text=...` で定義します。
 
-### 6.11 シーンを分岐させる
+### シーンを分岐させる
 
 登録済みの条件分岐を評価する場合:
 
@@ -483,7 +483,7 @@ action=touchInputToChangeScene:LeftDoor,RightDoor:leftRoute,rightRoute
 
 キー／アクターのリストとシーンラベルのリストは、同じ個数を同じ順番で書きます。入力待ちは登録後も他のアクションと並行して続き、入力されると指定ラベルのシーンへ移動します。
 
-### 6.12 ポーズ認識を入れる
+### ポーズ認識を入れる
 
 基本形:
 
@@ -519,7 +519,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 | 3 | `Urashima-ride-2` | `ride2` | `Splash` |
 | 4 | `Urashima-ride-1` | `ride1` | `Splash` |
 
-## 7. `urashima.txt` の構成例
+## `urashima.txt` の構成例
 
 公開中の[`urashima.txt`](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt)は、次のような構成になっています。Web版と用途別SB3は、[浦島太郎の公開ページ](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/)から利用できます。
 
@@ -539,9 +539,9 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 
 この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の`action=text:`、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。
 
-## 8. 紙芝居DSLの作成手順
+## 紙芝居DSLの作成手順
 
-### 8.1 物語をシーンに分ける
+### 物語をシーンに分ける
 
 最初に、物語を5〜10個程度のシーンに分けます。
 
@@ -555,7 +555,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 
 各シーンで、背景、登場人物、セリフ、音、参加者の動作を決めます。
 
-### 8.2 必要なアセットを洗い出す
+### 必要なアセットを洗い出す
 
 次の一覧を作ります。
 
@@ -567,7 +567,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 | BGM | 場面の雰囲気を作る音 |
 | ポーズ用スキン | 参加者に真似してほしい姿勢の画像 |
 
-### 8.3 アセット名を決める
+### アセット名を決める
 
 おすすめの命名規則:
 
@@ -579,7 +579,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 
 この例では、参照箇所を見分けやすくするため英数字、ハイフン、アンダースコアを使用しています。名前は文字列として照合されるため、定義箇所と参照箇所で同じ表記を使います。アクション要素として使う名前に半角 `:` があると別の要素に分割され、リスト要素として使う名前に半角 `,` があると別の項目に分割されます。
 
-### 8.4 ヘッダを書く
+### ヘッダを書く
 
 すべてのアセットを `asset` で登録し、登場人物を `actor` で登録します。
 
@@ -593,7 +593,7 @@ actor=Hero,Hero
 cover=Beach,OceanWave
 ```
 
-### 8.5 各シーンを書く
+### 各シーンを書く
 
 シーンごとに、背景、表示、セリフ、移動、待機を順番に書きます。
 
@@ -608,7 +608,7 @@ action=Hero:say:冒険に出発だ！:2
 action=wait:1
 ```
 
-### 8.6 ポーズ認識を追加する
+### ポーズ認識を追加する
 
 ポーズを使うシーンには、まず `TMPoseURL` を書きます。
 
@@ -628,7 +628,7 @@ action=Hero:pose:Hero-jump-1:jump:JumpSound
 action=Hero:pose:Hero-left,Hero-right:left,right:StepSound,StepSound
 ```
 
-## 9. 書き方の注意
+## 書き方の注意
 
 | 注意点 | 理由 |
 |---|---|
@@ -644,9 +644,9 @@ action=Hero:pose:Hero-left,Hero-right:left,right:StepSound,StepSound
 | 各シーンで表示状態を作り直す | シーン終了時にアクターが隠れ、音が止まるためです。 |
 | 音声ファイルは短めにする | `sound` は音が終わるまで待つためです。 |
 
-## 10. テスト方法
+## テスト方法
 
-### 10.1 まず文法を確認する
+### まず文法を確認する
 
 - `kamishibai=3.1` がある
 - `asset`, `actor`, `cover` が正しく書かれている
@@ -654,14 +654,14 @@ action=Hero:pose:Hero-left,Hero-right:left,right:StepSound,StepSound
 - すべての `action` が `action=...` で始まっている
 - 分岐先の `sceneLabel` が存在する
 
-### 10.2 次にアセットを確認する
+### 次にアセットを確認する
 
 - URLをブラウザで開ける
 - 画像が表示される
 - 音声が再生できる
 - アセット名のスペルが一致している
 
-### 10.3 最後に演出を確認する
+### 最後に演出を確認する
 
 - 背景が意図通りに切り替わる
 - アクターの位置とサイズが適切
@@ -670,15 +670,15 @@ action=Hero:pose:Hero-left,Hero-right:left,right:StepSound,StepSound
 - ポーズ認識が成功する
 - 条件分岐、キー入力、タッチ入力が正しい移動先を選ぶ
 
-## 11. 改善しやすい台本にするコツ
+## 改善しやすい台本にするコツ
 
-### 11.1 シーン番号をコメントで書く
+### シーン番号をコメントで書く
 
 ```text
 # scene 1: 浜辺でカメと出会う
 ```
 
-### 11.2 演出のまとまりごとに空行を入れる
+### 演出のまとまりごとに空行を入れる
 
 ```text
 action=stage:Beach1
@@ -688,7 +688,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Urashima:say:今日は浜辺を散歩しよう。:2
 ```
 
-### 11.3 ポーズの意味が分かる名前を使う
+### ポーズの意味が分かる名前を使う
 
 よい例:
 
@@ -707,11 +707,11 @@ pose2
 abc
 ```
 
-### 11.4 長い物語は小さく作る
+### 長い物語は小さく作る
 
 最初に1シーンだけ作って動かし、確認後に2シーン目を足すと、文法エラーや不足アセットをシーン単位で特定できます。紙芝居制作は、料理でいえば味見しながら作るタイプです。いきなり鍋いっぱいにしないのがコツです。
 
-## 12. 作成チェックリスト
+## 作成チェックリスト
 
 - [ ] 物語をシーンに分けた
 - [ ] 背景画像を用意した
@@ -729,7 +729,7 @@ abc
 - [ ] 条件・入力と移動先ラベルの対応を確認した
 - [ ] 最初から最後まで再生確認した
 
-## 13. 関連ドキュメント
+## 関連ドキュメント
 
 - `03-user-guide.md`: 紙芝居アプリの操作方法
 - `05-command-reference.md`: コマンドとアクションの詳細仕様

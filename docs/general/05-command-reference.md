@@ -5,9 +5,9 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 対象DSL: `kamishibai=3.1`\
 対象読者: 台本作者、教材作成者、開発者
 
-## 1. 記法の基本
+## 記法の基本
 
-### 1.1 コマンド行
+### コマンド行
 
 ```text
 キー=値
@@ -19,7 +19,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 asset=Beach1,backdrop
 ```
 
-### 1.2 アクション行
+### アクション行
 
 ```text
 action=対象:命令:値
@@ -33,7 +33,7 @@ action=Urashima:say:こんにちは:2
 action=stage:Beach1
 ```
 
-### 1.3 シーン区切り
+### シーン区切り
 
 ```text
 ---
@@ -41,7 +41,7 @@ action=stage:Beach1
 
 `---` でシーンを区切ります。
 
-### 1.4 コメント
+### コメント
 
 ```text
 # ここはコメント
@@ -49,7 +49,7 @@ action=stage:Beach1
 
 `#` で始まる行はコメントです。
 
-### 1.5 区切り文字
+### 区切り文字
 
 | 文字 | 用途 |
 |---|---|
@@ -63,9 +63,9 @@ action=stage:Beach1
 
 半角 `:` と `,` の解釈はコマンドごとに異なります。たとえば `say` と `think` では半角 `:` が本文と秒数の区切りになるため、本文中のコロンには全角 `：` を使用します。
 
-## 2. トップレベルコマンド
+## トップレベルコマンド
 
-### 2.1 `kamishibai`
+### `kamishibai`
 
 ```text
 kamishibai=3.1
@@ -78,7 +78,7 @@ kamishibai=3.1
 | 推奨位置 | ファイルの先頭 |
 | 値 | `3.1` |
 
-### 2.2 `asset`：画像・音声・テキストアセットの登録
+### `asset`：画像・音声・テキストアセットの登録
 
 #### 書式
 
@@ -186,7 +186,7 @@ asset=main-caption,text:Narration
 * 同じアセット名を再度登録した場合は、新しい登録内容で置き換えられます。
 * プロジェクト内のコスチューム、背景、音を使用する場合、それらのデータは`.sb3`ファイル内に保存されるため、外部の画像・音声サーバは必要ありません。
 
-### 2.3 `setLoadingCostume`
+### `setLoadingCostume`
 
 ```text
 setLoadingCostume=Loading用アセット名1,Loading用アセット名2,...
@@ -214,7 +214,7 @@ setLoadingCostume=loading1,loading2,loading3
 
 進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。指定画像の大きさや非透明部分の外形は、吹き出し位置に影響しません。
 
-### 2.4 `actor`
+### `actor`
 
 ```text
 actor=アクター名,初期スキン名
@@ -234,7 +234,7 @@ actor=Urashima,Urashima-walk-1
 actor=Turtle,Turtle
 ```
 
-### 2.5 `cover`
+### `cover`
 
 ```text
 cover=背景アセット名,音声アセット名
@@ -253,7 +253,7 @@ cover=背景アセット名,音声アセット名
 cover=Beach1,OceanWave
 ```
 
-### 2.6 `setRuntimeVariable`
+### `setRuntimeVariable`
 
 ```text
 setRuntimeVariable=変数名:値
@@ -268,7 +268,7 @@ setRuntimeVariable=takeSeaRoute:true
 
 `startSceneIndex` は最初に実行するシーン番号です。条件分岐で参照する変数もこのコマンドで初期化できます。
 
-### 2.7 `registerBranch`
+### `registerBranch`
 
 ```text
 registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...
@@ -291,7 +291,7 @@ registerBranch=chooseByName:route === "ocean",true:ocean,home
 
 等価比較演算子は `==`、`!=`、`===`、`!==` です。単独の `=` は代入記号であり、条件式の演算子としては使用できません。条件数とラベル数はそろえてください。最後の条件に `true` を置くと既定の移動先になります。登録した分岐は `action=branch:分岐名` で実行します。
 
-### 2.8 `sceneLabel`
+### `sceneLabel`
 
 ```text
 sceneLabel=シーンラベル
@@ -305,7 +305,7 @@ sceneLabel=ocean
 action=stage:Ocean
 ```
 
-### 2.9 `TMPoseURL`
+### `TMPoseURL`
 
 ```text
 TMPoseURL=ポーズモデルURL
@@ -324,7 +324,7 @@ TMPoseURL=ポーズモデルURL
 TMPoseURL=https://example.com/kamishibai/pose-model/
 ```
 
-### 2.10 `text`：scene 0 のUI文言
+### `text`：scene 0 のUI文言
 
 ```text
 text=予約済みUIテキストアセット名:文字列
@@ -350,11 +350,11 @@ text=ui.about:このアプリについて
 
 有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。
 
-## 3. グローバルアクション
+## グローバルアクション
 
 グローバルアクションは、特定のアクターではなく、ステージ、音、時間を操作します。
 
-### 3.1 `stage`
+### `stage`
 
 ```text
 action=stage:背景アセット名
@@ -368,7 +368,7 @@ action=stage:背景アセット名
 action=stage:Beach1
 ```
 
-### 3.2 `wait`
+### `wait`
 
 ```text
 action=wait:秒数
@@ -382,7 +382,7 @@ action=wait:秒数
 action=wait:1.5
 ```
 
-### 3.3 `bgm`
+### `bgm`
 
 ```text
 action=bgm:音声アセット名
@@ -398,7 +398,7 @@ action=bgm:Odesong
 
 補足: `bgm` はループ再生しません。再生開始後すぐに次のアクションへ進み、シーン終了時に停止します。
 
-### 3.4 `sound`
+### `sound`
 
 ```text
 action=sound:音声アセット名
@@ -414,7 +414,7 @@ action=sound:Gong
 
 効果音の演出を確実に聞かせたい場面や、音が終わってから次の場面へ進めたい場合に使います。
 
-### 3.5 `text`
+### `text`
 
 ```text
 action=text:テキストアセット名:文字列
@@ -432,7 +432,7 @@ action=text:Narration:
 
 シーン直下の `text=...` も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には `action=text:...` を使用してください。予約済みの `ui.*` 文言だけは初期設定としてscene 0の `text=...` を使用します。
 
-### 3.6 `transition`
+### `transition`
 
 ```text
 action=transition:fadeOut
@@ -448,7 +448,7 @@ action=transition:reset
 | `fadeUp` | 明るさを段階的に上げる |
 | `reset` | 明るさ効果を `0` へ戻す |
 
-### 3.7 `branch`
+### `branch`
 
 ```text
 action=branch:分岐名
@@ -456,7 +456,7 @@ action=branch:分岐名
 
 `registerBranch` で登録した条件を評価し、選ばれた `sceneLabel` へ移動します。真になる条件がなければ、そのまま次のアクション／シーンへ進みます。
 
-### 3.8 `keyInputToChangeScene`
+### `keyInputToChangeScene`
 
 ```text
 action=keyInputToChangeScene:キーID1,キーID2,...:シーンラベル1,シーンラベル2,...
@@ -470,7 +470,7 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:leftRoute,rightRoute
 
 キーIDは `KeyA`、`Space`、`ArrowLeft` などのコードを使います。キーID数とラベル数はそろえてください。
 
-### 3.9 `touchInputToChangeScene`
+### `touchInputToChangeScene`
 
 ```text
 action=touchInputToChangeScene:アクター名1,アクター名2,...:シーンラベル1,シーンラベル2,...
@@ -478,7 +478,7 @@ action=touchInputToChangeScene:アクター名1,アクター名2,...:シーン�
 
 指定アクターへのポインター／タッチ入力を待ち、選ばれたアクターと同じ位置のシーンラベルへ移動します。アクター数とラベル数はそろえてください。
 
-## 4. アクターアクション
+## アクターアクション
 
 アクターアクションは、`actor=` で登録した登場人物に対して実行します。
 
@@ -486,7 +486,7 @@ action=touchInputToChangeScene:アクター名1,アクター名2,...:シーン�
 action=アクター名:命令:値
 ```
 
-### 4.1 対象指定
+### 対象指定
 
 | 指定 | 意味 | 例 |
 |---|---|---|
@@ -503,7 +503,7 @@ action=*:hide
 
 複数指定や `*` は実装上サポートされていますが、台本の読みやすさを優先するなら、通常は単独指定をおすすめします。
 
-### 4.2 `show`
+### `show`
 
 ```text
 action=アクター名:show:スキン名:x,y,サイズ
@@ -527,7 +527,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 
 スキン名を省略した書式では、`actor` で指定した初期スキンまたは現在のスキンを使います。
 
-### 4.3 `hide`
+### `hide`
 
 ```text
 action=アクター名:hide
@@ -541,7 +541,7 @@ action=アクター名:hide
 action=Princess:hide
 ```
 
-### 4.4 `say`
+### `say`
 
 ```text
 action=アクター名:say:セリフ
@@ -562,7 +562,7 @@ action=Princess:say:ようこそ竜宮城へ。:2.5
 action=Urashima:say:
 ```
 
-### 4.5 `think`
+### `think`
 
 ```text
 action=アクター名:think:文章
@@ -577,7 +577,7 @@ action=アクター名:think:文章:秒数
 action=Urashima:think:あっという間におじいさんになってしまった…:3
 ```
 
-### 4.6 `setSkin`
+### `setSkin`
 
 ```text
 action=アクター名:setSkin:スキン名
@@ -593,7 +593,7 @@ action=Urashima:setSkin:Urashima-surprised
 action=Urashima:setSkin:Urashima-surprised:45
 ```
 
-### 4.7 `setScale`
+### `setScale`
 
 ```text
 action=アクター名:setScale:サイズ
@@ -607,7 +607,7 @@ action=アクター名:setScale:サイズ
 action=Urashima:setScale:30
 ```
 
-### 4.8 `setPosition`
+### `setPosition`
 
 ```text
 action=アクター名:setPosition:x,y
@@ -621,7 +621,7 @@ action=アクター名:setPosition:x,y
 action=Urashima:setPosition:0,-57
 ```
 
-### 4.9 `moveTo`
+### `moveTo`
 
 ```text
 action=アクター名:moveTo:x,y,秒数
@@ -635,7 +635,7 @@ action=アクター名:moveTo:x,y,秒数
 action=Urashima:moveTo:40,-57,1.5
 ```
 
-### 4.10 `setLayer`
+### `setLayer`
 
 ```text
 action=アクター名:setLayer:front
@@ -659,7 +659,7 @@ action=Princess:setLayer:front
 action=Turtle:setLayer:back
 ```
 
-### 4.11 `loop`
+### `loop`
 
 ```text
 action=アクター名:loop:アセット1,アセット2,...:秒数1,秒数2,...
@@ -673,7 +673,7 @@ action=Fish:loop:Fish1,Fish2:1,1
 
 秒数 `0` で複数アセットを同時に開始できます。同時グループに複数の画像がある場合は最後の画像が表示されます。
 
-### 4.12 `sequence`
+### `sequence`
 
 ```text
 action=アクター名:sequence:アセット1,アセット2,...:秒数1,秒数2,...
@@ -685,9 +685,9 @@ action=アクター名:sequence:アセット1,アセット2,...:秒数1,秒数2,
 action=Hero:sequence:Hero1,StepSound,Hero2:0,0.5
 ```
 
-## 5. ポーズ認識アクション
+## ポーズ認識アクション
 
-### 5.1 基本形
+### 基本形
 
 ```text
 action=アクター名:pose:スキン名リスト:ポーズ名リスト:効果音リスト
@@ -699,7 +699,7 @@ action=アクター名:pose:スキン名リスト:ポーズ名リスト:効果�
 action=Urashima:pose:Urashima-help-1:help:SquishPop
 ```
 
-### 5.2 複数ポーズ
+### 複数ポーズ
 
 ```text
 action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3
@@ -713,7 +713,7 @@ action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3
 | ポーズ名リスト | TMPoseモデルに登録されたラベル名 |
 | 効果音リスト | 各ポーズ成功時に鳴らす音 |
 
-### 5.3 実行時の流れ
+### 実行時の流れ
 
 1. カメラプレビューを表示します。
 2. ポーズ認識を開始します。
@@ -726,7 +726,7 @@ action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3
 9. 次のポーズがあれば繰り返します。
 10. すべて完了したら、ポーズ認識とカメラプレビューを閉じます。
 
-### 5.4 認識パラメータの実装値
+### 認識パラメータの実装値
 
 現在の配布用アプリは、起動時に `poseRecog=0.5`、`poseCharge=10`、`poseIdle=0.1` を設定し、次の計算で進行します。
 
@@ -739,7 +739,7 @@ action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3
 
 しきい値未満でも対象ポーズのスコアに応じてチャージは増えますが、認識中の100分の1の係数です。このため、短い一致よりもポーズを保った場合の方が早く成功条件へ到達します。
 
-### 5.5 ポーズ設計のコツ
+### ポーズ設計のコツ
 
 | よいポーズ | 避けたいポーズ |
 |---|---|
@@ -748,7 +748,7 @@ action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3
 | 子供でもまねしやすい | 難しすぎる、危ない |
 | 1〜2秒止まれる | 素早すぎる動き |
 
-## 6. 座標とサイズ
+## 座標とサイズ
 
 TurboWarpのステージ座標は、中央が `(0, 0)` です。
 
@@ -767,7 +767,7 @@ action=Urashima:show:Urashima-walk-1:0,-60,30
 
 これは、浦島を中央やや下に、サイズ30で表示します。
 
-## 7. シーン終了時の挙動
+## シーン終了時の挙動
 
 各シーン終了時に、アプリは次の処理を行います。
 
@@ -779,9 +779,9 @@ action=Urashima:show:Urashima-walk-1:0,-60,30
 
 通常は次のシーン番号へ進みます。`branch` またはキー／タッチ入力が `nextSceneLabel` を設定した場合は、`sceneLabelList`から同名ラベルを探し、そのシーンへ移動します。
 
-## 8. 台本エラーになりやすい例
+## 台本エラーになりやすい例
 
-### 8.1 未対応コマンド
+### 未対応コマンド
 
 ```text
 background=Beach1
@@ -793,7 +793,7 @@ background=Beach1
 action=stage:Beach1
 ```
 
-### 8.2 `=` がない
+### `=` がない
 
 ```text
 asset Beach1,https://example.com/Beach1.png
@@ -805,7 +805,7 @@ asset Beach1,https://example.com/Beach1.png
 asset=Beach1,https://example.com/Beach1.png
 ```
 
-### 8.3 `:` が不足している
+### `:` が不足している
 
 ```text
 action=Urashima say こんにちは
@@ -817,7 +817,7 @@ action=Urashima say こんにちは
 action=Urashima:say:こんにちは:2
 ```
 
-### 8.4 未登録アセットを参照する
+### 未登録アセットを参照する
 
 ```text
 action=stage:Beach99
@@ -829,7 +829,7 @@ action=stage:Beach99
 asset=Beach99,https://example.com/Beach99.png
 ```
 
-### 8.5 存在しないシーンラベルを参照する
+### 存在しないシーンラベルを参照する
 
 ```text
 action=keyInputToChangeScene:ArrowRight:missingScene
@@ -837,7 +837,7 @@ action=keyInputToChangeScene:ArrowRight:missingScene
 
 移動先には、いずれかのシーンで定義した `sceneLabel` を指定します。ラベルは大文字・小文字や空白も含めて一致させてください。
 
-### 8.6 対応リストの個数が違う
+### 対応リストの個数が違う
 
 ```text
 registerBranch=route:routeA,routeB:sceneA
@@ -845,7 +845,7 @@ registerBranch=route:routeA,routeB:sceneA
 
 条件とラベル、キーIDとラベル、タッチ対象とラベル、`loop`のアセットと秒数は、それぞれ必要な個数をそろえます。
 
-## 9. リハーサル用キー
+## リハーサル用キー
 
 | キー | 実装上の効果 | 使いどころ |
 |---|---|---|
@@ -857,9 +857,9 @@ registerBranch=route:routeA,routeB:sceneA
 
 本番運用では誤操作に注意してください。
 
-## 10. チートシート
+## チートシート
 
-### 10.1 ヘッダ
+### ヘッダ
 
 ```text
 kamishibai=3.1
@@ -877,7 +877,7 @@ cover=CoverBackground,CoverSound
 registerBranch=route:flag,true:sceneA,sceneB
 ```
 
-### 10.2 シーン
+### シーン
 
 ```text
 ---
@@ -895,7 +895,7 @@ action=Actor:pose:Skin1,Skin2:pose1,pose2:Sound1,Sound2
 action=branch:route
 ```
 
-### 10.3 よく使うアクション
+### よく使うアクション
 
 ```text
 action=stage:Beach1
@@ -915,7 +915,7 @@ action=Hero:pose:Hero-help:help:Success
 action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right
 ```
 
-## 11. 推奨命名規則
+## 推奨命名規則
 
 | 対象 | 例 |
 |---|---|
@@ -926,11 +926,11 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right
 | 音 | `OceanWave`, `GoalCheer`, `Jump` |
 | ポーズ | `help`, `ride1`, `dance2`, `open3`, `despair` |
 
-## 12. 互換性メモ
+## 互換性メモ
 
 このリファレンスは、提供されたTurboWarpプロジェクトの `kamishibai=3.1` 実装を前提にしています。3.1より前の台本では、アセット識別子、シーンラベル、分岐、入力、トランジション、アニメーション、テキストが異なる、または利用できない場合があります。台本を配布する場合は、台本ファイルと対応するアプリのバージョンを一緒に管理してください。
 
-## 13. 関連ドキュメント
+## 関連ドキュメント
 
 - `03-user-guide.md`: 紙芝居アプリの操作方法
 - `04-dsl-manual.md`: 紙芝居DSLファイルの作り方

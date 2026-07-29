@@ -64,13 +64,13 @@ test('publishes the internal specification as a general HTML/PDF document', () =
 
 test('provides the terminology before the numbered specification', () => {
   const glossary = specification.match(
-    /^## この文書で使う用語$(?<body>[\s\S]*?)(?=^## 1\. 文書の範囲と実装基準$)/mu,
+    /^## この文書で使う用語 \{#terminology \.unnumbered\}$(?<body>[\s\S]*?)(?=^## 文書の範囲と実装基準$)/mu,
   )?.groups?.body;
 
   assert(glossary, 'Internal specification is missing its terminology.');
   assert(
-    specification.indexOf('## この文書で使う用語') <
-      specification.indexOf('## 1. 文書の範囲と実装基準'),
+    specification.indexOf('## この文書で使う用語 {#terminology .unnumbered}') <
+      specification.indexOf('## 文書の範囲と実装基準'),
   );
   assert.match(
     glossary,
@@ -114,7 +114,7 @@ test('provides the terminology before the numbered specification', () => {
 
 test('defines Stage before listing the SB3 targets', () => {
   const sectionIntroduction = specification.match(
-    /^## 4\. SB3の構成$(?<body>[\s\S]*?)(?=^### 4\.1 target一覧$)/mu,
+    /^## SB3の構成 \{#sb3-structure\}$(?<body>[\s\S]*?)(?=^### target一覧$)/mu,
   )?.groups?.body;
 
   assert(sectionIntroduction, 'Internal specification is missing the section 4 introduction.');
@@ -132,7 +132,7 @@ test('defines Stage before listing the SB3 targets', () => {
 
 test('explains the actor command architecture and asset separation', () => {
   const section = specification.match(
-    /^### 4\.2 アクターへ命令を届けるしくみ$(?<body>[\s\S]*?)(?=^### 4\.3 )/mu,
+    /^### アクターへ命令を届けるしくみ \{#actor-message-delivery\}$(?<body>[\s\S]*?)(?=^### target間の責務$)/mu,
   )?.groups?.body;
 
   assert(section, 'Internal specification is missing the actor architecture overview.');
@@ -320,7 +320,7 @@ test('documents invalidScript as a terminal error instead of a pose transition',
 
 test('explains block IDs and uses consistent section 6 table vocabulary', () => {
   const section = specification.match(
-    /^## 6\. event、カスタムブロック、呼出し関係$(?<body>[\s\S]*?)(?=^## 7\. )/mu,
+    /^## event、カスタムブロック、呼出し関係 \{#events-custom-blocks-call-graph\}$(?<body>[\s\S]*?)(?=^## broadcastと状態遷移$)/mu,
   )?.groups?.body;
 
   assert(section, 'Internal specification is missing section 6.');
