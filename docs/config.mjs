@@ -5,6 +5,8 @@ export const generalDocumentConfig = {
   outputDirectory: 'general',
   tocHtmlFilename: 'toc.html',
   tocSectionDepth: 3,
+  standaloneArticleHtmlFilename: 'document.html',
+  standaloneTocHtmlFilename: 'index.html',
   documents: [
     {
       sourceFilename: '01-executive-summary-adult.md',

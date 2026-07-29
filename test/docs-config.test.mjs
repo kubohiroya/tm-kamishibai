@@ -8,7 +8,9 @@ import {
   resolveLearnedThroughGrade,
   staffDocumentConfig,
 } from '../docs/config.mjs';
-import generalVivliostyleConfig from '../docs/vivliostyle.general.config.mjs';
+import generalVivliostyleConfig, {
+  createGeneralVivliostyleConfig,
+} from '../docs/vivliostyle.general.config.mjs';
 import staffVivliostyleConfig from '../docs/vivliostyle.staff.config.mjs';
 import workshopVivliostyleConfig from '../docs/vivliostyle.workshop.config.mjs';
 import {
@@ -100,6 +102,41 @@ test('normalizes shared image paths for generated general document HTML', () => 
     normalizeGeneralImagePaths('<img src="../images/internal-state-transition.svg">'),
     '<img src="images/internal-state-transition.svg">',
   );
+});
+
+test('delegates each general document table of contents to Vivliostyle', () => {
+  const sourceFilename = '07-internal-specification.md';
+  const config = createGeneralVivliostyleConfig(sourceFilename);
+
+  assert.equal(config.title, '紙芝居アプリ内部仕様書');
+  assert.deepEqual(
+    config.entry.map(({path, output}) => ({path, output})),
+    [{
+      path: `${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
+      output: generalDocumentConfig.standaloneArticleHtmlFilename,
+    }],
+  );
+  assert.equal(config.toc.title, '目次');
+  assert.equal(config.toc.htmlPath, generalDocumentConfig.standaloneTocHtmlFilename);
+  assert.equal(config.toc.sectionDepth, 3);
+  assert.match(config.workspaceDir, /07-internal-specification$/u);
+  assert.throws(
+    () => createGeneralVivliostyleConfig('missing.md'),
+    /Unknown general document/u,
+  );
+});
+
+test('prints Vivliostyle-generated general document tables of contents with page numbers', () => {
+  const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
+
+  assert.match(generalTheme, /#toc\s*\{/u);
+  assert.match(generalTheme, /#toc li\s*\{[\s\S]*list-style:\s*none;/u);
+  assert.match(generalTheme, /#toc li a\s*\{/u);
+  assert.match(
+    generalTheme,
+    /#toc li a::after\s*\{[\s\S]*content:\s*target-counter\(attr\(href\), page\);/u,
+  );
+  assert.doesNotMatch(generalTheme, /\.document-toc/u);
 });
 
 test('publishes appendix A as a standalone non-ruby staff document', () => {
@@ -235,12 +272,17 @@ test('defines the general documents with furigana only for the kids summary', ()
       'utf8',
     );
     assert.match(source, new RegExp(`^# ${title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
+    assert.doesNotMatch(source, /^## 目次$/mu);
+    if (sourceFilename === '02-executive-summary-kids.md') {
+      assert.doesNotMatch(source, /忍者.*銅像/u);
+    }
   }
 
   const docsIndex = readFileSync(new URL('../site/docs/index.html', import.meta.url), 'utf8');
   for (const {sourceFilename} of generalDocumentConfig.documents) {
     const basename = sourceFilename.replace(/\.md$/u, '');
-    assert.match(docsIndex, new RegExp(`general/${basename}\\.html`, 'u'));
+    assert.match(docsIndex, new RegExp(`general/${basename}/`, 'u'));
+    assert.match(docsIndex, new RegExp(`general/${basename}/publication\\.json`, 'u'));
     assert.match(docsIndex, new RegExp(`general/${basename}\\.pdf`, 'u'));
   }
 });

@@ -287,6 +287,9 @@ async function verifyGeneralDocuments(grade) {
   assert((docsIndex.match(/<span class="card-icon" aria-hidden="true">/gu) ?? []).length
       === documentationCardIcons.length,
   `Expected ${documentationCardIcons.length} documentation card icons.`);
+  assert((docsIndex.match(/>Vivliostyle Viewer<\/a>/gu) ?? []).length
+      === documentationCardIcons.length,
+  `Expected ${documentationCardIcons.length} Vivliostyle Viewer links.`);
   for (const [icon, title] of documentationCardIcons) {
     assert(docsIndex.includes(
       `<h3><span class="card-icon" aria-hidden="true">${icon}</span>${title}</h3>`,
@@ -294,6 +297,7 @@ async function verifyGeneralDocuments(grade) {
   }
 
   for (const generalDocument of generalDocumentConfig.documents) {
+    const basename = generalDocument.sourceFilename.replace(/\.md$/u, '');
     const htmlFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.html');
     const pdfFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.pdf');
     const sourcePath = path.join(
@@ -303,6 +307,16 @@ async function verifyGeneralDocuments(grade) {
       generalDocument.sourceFilename,
     );
     const htmlPath = path.join(generalDirectory, htmlFilename);
+    const standaloneDirectory = path.join(generalDirectory, basename);
+    const standaloneTocPath = path.join(
+      standaloneDirectory,
+      generalDocumentConfig.standaloneTocHtmlFilename,
+    );
+    const standaloneArticlePath = path.join(
+      standaloneDirectory,
+      generalDocumentConfig.standaloneArticleHtmlFilename,
+    );
+    const standaloneManifestPath = path.join(standaloneDirectory, 'publication.json');
     const publishedPdfPath = path.join(generalDirectory, pdfFilename);
     const outputPdfPath = path.join(
       projectRoot,
@@ -310,27 +324,77 @@ async function verifyGeneralDocuments(grade) {
       generalDocumentConfig.outputDirectory,
       pdfFilename,
     );
-    const [source, html, publishedPdf, outputPdf] = await Promise.all([
+    const [source, html, standaloneToc, standaloneArticle, standaloneManifest, publishedPdf, outputPdf]
+      = await Promise.all([
       readFile(sourcePath, 'utf8'),
       readFile(htmlPath, 'utf8'),
+      readFile(standaloneTocPath, 'utf8'),
+      readFile(standaloneArticlePath, 'utf8'),
+      readFile(standaloneManifestPath, 'utf8').then(JSON.parse),
       readFile(publishedPdfPath),
       readFile(outputPdfPath),
     ]);
+    const standaloneTocLinks = await verifyLocalReferences(
+      standaloneTocPath,
+      'a',
+      'href',
+    );
+    await verifyLocalReferences(standaloneArticlePath, 'img', 'src');
+    const standaloneReadingOrder = standaloneManifest.readingOrder.map(
+      (entry) => entry.url ?? entry,
+    );
+    const standaloneTocNav = standaloneToc.match(
+      /<nav\b[^>]*\brole="doc-toc"[^>]*>[\s\S]*?<\/nav>/u,
+    )?.[0];
 
     assert(source.startsWith(`# ${generalDocument.title}\n`),
       `${generalDocument.sourceFilename} does not start with its configured title.`);
     assert(html.includes(generalDocument.title),
       `${htmlFilename} does not contain its configured title.`);
+    assert(standaloneArticle.includes(generalDocument.title),
+      `${basename}/${generalDocumentConfig.standaloneArticleHtmlFilename} does not contain its configured title.`);
+    if (generalDocument.sourceFilename === '02-executive-summary-kids.md') {
+      assert(!source.includes('忍者') && !source.includes('銅像')
+          && !standaloneArticle.includes('忍者') && !standaloneArticle.includes('銅像'),
+      'The retired ninja/statue sentence remains in the kids summary.');
+    }
+    assert(standaloneTocNav,
+      `${basename}/${generalDocumentConfig.standaloneTocHtmlFilename} does not contain a Vivliostyle-generated table of contents.`);
+    assert(standaloneTocNav.includes('<h2>目次</h2>'),
+      `${basename}/${generalDocumentConfig.standaloneTocHtmlFilename} does not use the configured table-of-contents title.`);
+    assert(JSON.stringify(standaloneReadingOrder) === JSON.stringify([
+      generalDocumentConfig.standaloneTocHtmlFilename,
+      generalDocumentConfig.standaloneArticleHtmlFilename,
+    ]), `Unexpected standalone reading order for ${basename}: ${standaloneReadingOrder.join(', ')}`);
+    assert(standaloneManifest.readingOrder[0].rel === 'contents',
+      `${basename}/publication.json does not identify its table of contents.`);
+    const bodyHeadingIds = attributeValues(standaloneArticle, 'h[1-3]', 'id');
+    const tocHeadingIds = standaloneTocLinks.flatMap((reference) => {
+      const [relativePath, encodedFragment] = reference.split('#');
+      return relativePath === generalDocumentConfig.standaloneArticleHtmlFilename
+          && encodedFragment
+        ? [decodeURIComponent(encodedFragment)]
+        : [];
+    });
+    assert(JSON.stringify(tocHeadingIds) === JSON.stringify(bodyHeadingIds),
+      `${basename} table of contents does not match its h1-h3 headings.`);
     const documentBuildInfo = buildInfo.documents.find(
       ({sourceFilename}) => sourceFilename === generalDocument.sourceFilename,
     );
     const shouldAddFurigana = generalDocument.addFurigana === true;
-    const documentRubyCount = (html.match(/<ruby\b/gu) ?? []).length;
-    const codeBlocks = html.match(/<pre\b[\s\S]*?<\/pre>/gu) ?? [];
+    const documentRubyCount = (standaloneArticle.match(/<ruby\b/gu) ?? []).length;
+    const codeBlocks = standaloneArticle.match(/<pre\b[\s\S]*?<\/pre>/gu) ?? [];
     assert(documentBuildInfo?.rubyApplied === shouldAddFurigana,
       `${htmlFilename} has inconsistent rubygana build metadata.`);
+    assert(documentBuildInfo?.webPublicationDirectory === basename,
+      `${htmlFilename} build metadata does not record its standalone Web Publication.`);
+    assert(documentBuildInfo?.generatedTableOfContents?.htmlFilename
+        === generalDocumentConfig.standaloneTocHtmlFilename
+        && documentBuildInfo.generatedTableOfContents.sectionDepth
+          === generalDocumentConfig.tocSectionDepth,
+    `${htmlFilename} build metadata does not record its generated table of contents.`);
     if (shouldAddFurigana) {
-      assert(html.includes(`data-rubygana-grade="${grade}"`),
+      assert(standaloneArticle.includes(`data-rubygana-grade="${grade}"`),
         `${htmlFilename} does not record the configured rubygana grade.`);
       assert(documentRubyCount >= 20,
         `${htmlFilename} was not processed by rubygana.`);
@@ -341,20 +405,27 @@ async function verifyGeneralDocuments(grade) {
       rubyDocumentCount += 1;
       rubyCount += documentRubyCount;
     } else {
-      assert(documentRubyCount === 0 && !html.includes('data-rubygana-grade='),
+      assert(documentRubyCount === 0 && !standaloneArticle.includes('data-rubygana-grade='),
         `${htmlFilename} was unexpectedly processed by rubygana.`);
     }
     assert(readingOrder.includes(htmlFilename),
       `${htmlFilename} is missing from the general publication reading order.`);
-    assert(docsIndexLinks.includes(`${generalDocumentConfig.outputDirectory}/${htmlFilename}`),
-      `${htmlFilename} is missing from the documentation entrance page.`);
+    assert(docsIndexLinks.includes(`${generalDocumentConfig.outputDirectory}/${basename}/`),
+      `${basename}/ is missing from the documentation entrance page.`);
     assert(docsIndexLinks.includes(`${generalDocumentConfig.outputDirectory}/${pdfFilename}`),
       `${pdfFilename} is missing from the documentation entrance page.`);
+    assert(docsIndex.includes(
+      `href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/`
+        + `tmpose-kamishibai/docs/general/${basename}/publication.json&amp;bookMode=true"`,
+    ), `${basename} Vivliostyle Viewer link is missing from the documentation entrance page.`);
     assert(publishedPdf.equals(outputPdf),
       `${pdfFilename} differs between dist/docs and output/pdf.`);
 
     totalPages += await verifyPdfFile(publishedPdfPath);
     await verifyPdfFile(outputPdfPath);
+    const bookmarkCount = await pdfBookmarkCount(publishedPdfPath);
+    assert(bookmarkCount >= bodyHeadingIds.length,
+      `${pdfFilename} does not contain bookmarks for its generated table of contents.`);
   }
 
   assert(generalTocLinks.length >= generalDocumentConfig.documents.length,

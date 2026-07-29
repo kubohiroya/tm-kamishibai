@@ -235,7 +235,9 @@ pnpm run preview:staff
 RUBYGANA_GRADE=4 pnpm run build
 ```
 
-`pnpm run build`はHTML、PDF、目次、画像参照、しおり、favicon、ライセンス、配布SB3を
+`pnpm run build`は一般文書ごとにWeb Publicationを構築し、Vivliostyle CLIの`toc`設定で
+`h2`・`h3`までを含む目次を生成します。目次をMarkdownへ重複して記述しません。HTML、
+Vivliostyle Viewer、PDF、文書横断目次、画像参照、しおり、favicon、ライセンス、配布SB3を
 まとめて検証します。Markdownだけを確認して完了にせず、生成されたHTML/PDFも確認します。
 
 ## 9. 関連プロジェクトを確認する

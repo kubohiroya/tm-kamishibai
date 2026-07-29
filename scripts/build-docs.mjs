@@ -213,7 +213,7 @@ function browserArguments() {
   return [];
 }
 
-async function buildWebPublication(configPath, outputDirectory) {
+async function buildWebPublication(configPath, outputDirectory, environment = process.env) {
   await rm(outputDirectory, {recursive: true, force: true});
   await runNode(vivliostyleBin, [
     'build',
@@ -223,7 +223,10 @@ async function buildWebPublication(configPath, outputDirectory) {
     outputDirectory,
     '--format',
     'webpub',
-  ], {cwd: path.dirname(configPath)});
+  ], {
+    cwd: path.dirname(configPath),
+    env: environment,
+  });
 }
 
 async function buildPdf(htmlPath, pdfPath) {
@@ -317,6 +320,7 @@ export async function buildDocs({
     await cp(generalTempDirectory, generalDirectory, {recursive: true});
 
     for (const generalDocument of generalDocumentConfig.documents) {
+      const basename = generalDocument.sourceFilename.replace(/\.md$/u, '');
       const htmlFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.html');
       const pdfFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.pdf');
       const htmlPath = path.join(generalDirectory, htmlFilename);
@@ -326,7 +330,27 @@ export async function buildDocs({
         await prepareGeneralFuriganaHtml(htmlPath, grade);
         await applyRubygana(htmlPath, grade);
       }
-      await buildPdf(htmlPath, pdfPath);
+
+      const standaloneDirectory = path.join(generalDirectory, basename);
+      await buildWebPublication(generalConfigPath, standaloneDirectory, {
+        ...process.env,
+        GENERAL_DOCUMENT_SOURCE: generalDocument.sourceFilename,
+      });
+      const standaloneArticlePath = path.join(
+        standaloneDirectory,
+        generalDocumentConfig.standaloneArticleHtmlFilename,
+      );
+      await writeFile(
+        standaloneArticlePath,
+        normalizeGeneralImagePaths(await readFile(standaloneArticlePath, 'utf8')),
+      );
+      if (generalDocument.addFurigana === true) {
+        await prepareGeneralFuriganaHtml(standaloneArticlePath, grade);
+        await applyRubygana(standaloneArticlePath, grade);
+      }
+
+      const standaloneManifestPath = path.join(standaloneDirectory, 'publication.json');
+      await buildPdf(standaloneManifestPath, pdfPath);
       await copyFile(pdfPath, path.join(generalDirectory, pdfFilename));
     }
 
@@ -344,6 +368,13 @@ export async function buildDocs({
           htmlFilename: sourceFilename.replace(/\.md$/u, '.html'),
           pdfFilename: sourceFilename.replace(/\.md$/u, '.pdf'),
           rubyApplied: addFurigana === true,
+          webPublicationDirectory: sourceFilename.replace(/\.md$/u, ''),
+          webPublicationManifestFilename: 'publication.json',
+          generatedTableOfContents: {
+            title: '目次',
+            htmlFilename: generalDocumentConfig.standaloneTocHtmlFilename,
+            sectionDepth: generalDocumentConfig.tocSectionDepth,
+          },
           ...(addFurigana === true ? {learnedThroughGrade: grade} : {}),
         })),
       }),
