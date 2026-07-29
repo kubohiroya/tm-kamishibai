@@ -356,9 +356,11 @@ clone開始hatは、`actionTarget`をそのcloneのスプライトローカル�
 `create sceneList`は`script`をscene単位に分けます。`exec scene # %s with %s`は現在のsceneを
 行単位の`commandList`に分け、`exec command %s %s`でcommandを順に処理します。このうち
 `action=`の値を`actionList`へ集め、`exec actionList`が各actionを`exec action %s`へ渡します。
-Stage actionはStage内で実行され、Actor actionだけがaction envelopeとmessageを経由します。
-messageはすべての`Actor` cloneが受け取りますが、実際に処理するのは宛先に一致した
-アクターだけです。
+Stage actionはStage内で実行されます。Actor actionでは、Stageが`actionTarget`、
+`actionCommand`、`actionParam`、`actionParam2`へaction envelopeを書き込んでから、
+`execActorAction`をbroadcastします。messageを受信した各`Actor` cloneは4変数を読み、
+自分の`actorName`と宛先を照合します。実際にcommandを分岐して処理するのは、宛先に
+一致したアクターだけです。
 
 ### target間の責務
 

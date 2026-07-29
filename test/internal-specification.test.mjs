@@ -155,11 +155,35 @@ test('explains the actor command architecture and asset separation', () => {
     /!\[台本ファイルからアクターでの命令実行までのシーケンス\]\(\.\.\/images\/internal-script-execution-sequence\.svg\)/u,
   );
   assert.match(section, /Stage actionはStage内で実行され/u);
-  assert.match(section, /Actor actionだけがaction envelopeとmessageを経由/u);
+  assert.match(
+    section,
+    /Actor actionでは、Stageが`actionTarget`、\s*`actionCommand`、`actionParam`、`actionParam2`へaction envelopeを書き込んでから/u,
+  );
+  assert.match(section, /messageを受信した各`Actor` cloneは4変数を読み/u);
 
   assert.match(
     scriptExecutionSequence,
     /<title id="title">台本ファイルからアクターでの命令実行までのシーケンス<\/title>/u,
+  );
+  for (const diagram of [actorCloneSequence, scriptExecutionSequence]) {
+    assert.match(diagram, />Stage内の<\/text>/u);
+    assert.match(diagram, />\s*list・runtime variable\s*<\/text>/u);
+    assert.match(diagram, />Actor target<\/text>/u);
+    assert.match(diagram, />／clone群<\/text>/u);
+  }
+  for (const variable of ['actionTarget', 'actionCommand', 'actionParam', 'actionParam2']) {
+    assert(
+      scriptExecutionSequence.includes(variable),
+      `Actor action sequence is missing ${variable}.`,
+    );
+  }
+  assert.match(
+    scriptExecutionSequence,
+    /aria-label="action envelopeの4つのruntime variableへ書き込む"/u,
+  );
+  assert.match(
+    scriptExecutionSequence,
+    /aria-label="Actor cloneがaction envelopeの4つのruntime variableを読む"/u,
   );
   const stepIds = [...scriptExecutionSequence.matchAll(/<g id="(step-[^"]+)"/gu)].map(
     ([, id]) => id,
@@ -172,9 +196,11 @@ test('explains the actor command architecture and asset separation', () => {
     'step-command-list-command',
     'step-command-action-list',
     'step-action-list-action',
-    'step-action-envelope',
-    'step-envelope-message',
+    'step-parse-actor-action',
+    'step-set-action-envelope',
+    'step-broadcast-actor-action',
     'step-actor-receive',
+    'step-actor-read-envelope',
     'step-actor-process',
   ]);
 });
@@ -221,6 +247,11 @@ test('documents actor clone creation before actor action delivery', () => {
     'step-clone-set-skin',
     'step-wait-before-next-actor',
   ]);
+  assert(
+    actorCloneSequence.indexOf('<rect class="activation" x="877"') <
+      actorCloneSequence.indexOf('<text class="frame-label"'),
+    'The actorList loop label must render in front of the activation bars.',
+  );
 
   const stage = projectSource.targets.find(({isStage}) => isStage);
   const actor = projectSource.targets.find(({name}) => name === 'Actor');

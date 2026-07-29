@@ -354,6 +354,11 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   const history = sources.get('history.md');
   assert.match(history, /kamishibai=2\.0/u);
   assert.match(history, /kamishibai=3\.1/u);
+  assert.match(history, /^### バージョン2\.0$/mu);
+  assert.match(history, /^### バージョン3\.1$/mu);
+  assert.match(history, /^## バージョン2\.0台本の移行チェックリスト$/mu);
+  assert.doesNotMatch(history, /^### (?:2\.0|3\.1)$/mu);
+  assert.doesNotMatch(history, /^## 2\.0台本の移行チェックリスト$/mu);
   for (const feature of [
     'setLoadingCostume',
     'Loading',

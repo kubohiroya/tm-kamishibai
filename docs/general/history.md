@@ -167,7 +167,7 @@ action=Hero:setSkin:Hero-surprised:45
 
 ## 移行例
 
-### 2.0
+### バージョン2.0
 
 ```text
 kamishibai=2.0
@@ -183,7 +183,7 @@ action=Hero:show:Hero:0,-60,30
 action=Hero:say:こんにちは！:2
 ```
 
-### 3.1
+### バージョン3.1
 
 ```text
 kamishibai=3.1
@@ -225,7 +225,7 @@ sceneLabel=home
 action=stage:Home
 ```
 
-## 2.0台本の移行チェックリスト
+## バージョン2.0台本の移行チェックリスト
 
 - [ ] 先頭を`kamishibai=3.1`へ変更した
 - [ ] `background:`を`backdrop:`へ変更した
