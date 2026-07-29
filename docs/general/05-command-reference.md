@@ -438,6 +438,8 @@ action=text:Narration:
 action=transition:fadeOut
 action=transition:fadeUp
 action=transition:reset
+action=transition:fadeToWhite
+action=transition:fadeFromWhite
 ```
 
 ステージの明るさ効果を使って場面転換します。
@@ -447,6 +449,8 @@ action=transition:reset
 | `fadeOut` | 明るさを段階的に下げる |
 | `fadeUp` | 明るさを段階的に上げる |
 | `reset` | 明るさ効果を `0` へ戻す |
+| `fadeToWhite` | 明るさを `+100` まで段階的に上げ、その状態を保持する |
+| `fadeFromWhite` | 明るさを `+100` から `0` まで段階的に下げる |
 
 ### `branch`
 
@@ -886,6 +890,9 @@ sceneLabel=opening
 TMPoseURL=https://example.com/model/
 action=stage:Background
 action=transition:fadeUp
+action=transition:fadeToWhite
+action=stage:NextBackground
+action=transition:fadeFromWhite
 action=wait:1
 action=Actor:show:Skin:x,y,scale
 action=Actor:say:Text:seconds

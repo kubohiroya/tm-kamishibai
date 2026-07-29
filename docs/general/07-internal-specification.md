@@ -73,9 +73,9 @@ broadcast、hat、カスタムブロック定義は、このファイルから�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1444 |
+| block                    | 1460 |
 | event hat                |   39 |
-| カスタムブロック定義     |   40 |
+| カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
 | Scratch list             |   11 |
 | broadcast message        |   18 |
@@ -580,16 +580,18 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### transition・branch・input
 
-| target  | ID   | 定義                               | 引数                              | warp | 呼び出す処理／送信するmessage                                                |
-| ------- | ---- | ---------------------------------- | --------------------------------- | ---- | ---------------------------------------------------------------------------- |
-| `Stage` | `ga` | `exec transition action %s`        | `transitionName`                  | no   | `exec transition reset`, `exec transition fadeUp`, `exec transition fadeOut` |
-| `Stage` | `gf` | `exec transition fadeOut`          | —                                 | no   | —                                                                            |
-| `Stage` | `gh` | `exec transition fadeUp`           | —                                 | no   | —                                                                            |
-| `Stage` | `gj` | `exec transition reset`            | —                                 | no   | —                                                                            |
-| `Stage` | `g]` | `exec branch action %s`            | `branchName`                      | no   | `selectValue...`                                                             |
-| `Stage` | `hq` | `exec keyInputToChangeScene %s %s` | `keyIdList`, `sceneLabelList`     | no   | Async Input                                                                  |
-| `Stage` | `hu` | `touchInputToChangeScene %s %s`    | `actorNameList`, `sceneLabelList` | no   | Async Input                                                                  |
-| `Stage` | `hy` | `wait %s seconds`                  | `seconds`                         | no   | More Timers                                                                  |
+| target  | ID                 | 定義                               | 引数                              | warp | 呼び出す処理／送信するmessage                                                                                                                |
+| ------- | ------------------ | ---------------------------------- | --------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Stage` | `ga`               | `exec transition action %s`        | `transitionName`                  | no   | `exec transition reset`, `exec transition fadeUp`, `exec transition fadeOut`, `exec transition fadeToWhite`, `exec transition fadeFromWhite` |
+| `Stage` | `gf`               | `exec transition fadeOut`          | —                                 | no   | —                                                                                                                                            |
+| `Stage` | `gh`               | `exec transition fadeUp`           | —                                 | no   | —                                                                                                                                            |
+| `Stage` | `gj`               | `exec transition reset`            | —                                 | no   | —                                                                                                                                            |
+| `Stage` | `fadeToWhiteDef`   | `exec transition fadeToWhite`      | —                                 | no   | `exec transition fadeUp`                                                                                                                     |
+| `Stage` | `fadeFromWhiteDef` | `exec transition fadeFromWhite`    | —                                 | no   | `exec transition fadeOut`                                                                                                                    |
+| `Stage` | `g]`               | `exec branch action %s`            | `branchName`                      | no   | `selectValue...`                                                                                                                             |
+| `Stage` | `hq`               | `exec keyInputToChangeScene %s %s` | `keyIdList`, `sceneLabelList`     | no   | Async Input                                                                                                                                  |
+| `Stage` | `hu`               | `touchInputToChangeScene %s %s`    | `actorNameList`, `sceneLabelList` | no   | Async Input                                                                                                                                  |
+| `Stage` | `hy`               | `wait %s seconds`                  | `seconds`                         | no   | More Timers                                                                                                                                  |
 
 ### 主要な呼出し経路
 

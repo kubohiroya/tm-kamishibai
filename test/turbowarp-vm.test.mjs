@@ -779,9 +779,52 @@ test('keeps BGM playing when Right finishes an unrelated wait', async (context) 
 });
 
 for (const transition of [
-  {name: 'fadeOut', before: [], finalBrightness: -100},
-  {name: 'fadeUp', before: ['action=transition:fadeOut'], finalBrightness: 0},
+  {
+    name: 'fadeOut',
+    before: [],
+    finalBrightness: -100,
+    isInProgress: (brightness) => brightness > -100 && brightness < 0,
+  },
+  {
+    name: 'fadeUp',
+    before: ['action=transition:fadeOut'],
+    finalBrightness: 0,
+    isInProgress: (brightness) => brightness > -100 && brightness < 0,
+  },
+  {
+    name: 'fadeToWhite',
+    before: [],
+    finalBrightness: 100,
+    isInProgress: (brightness) => brightness > 0 && brightness < 100,
+  },
+  {
+    name: 'fadeFromWhite',
+    before: ['action=transition:fadeToWhite'],
+    finalBrightness: 0,
+    isInProgress: (brightness) => brightness > 0 && brightness < 100,
+  },
 ]) {
+  test(`applies the final brightness when ${transition.name} completes`, async (context) => {
+    const harness = await loadKamishibaiVm();
+    context.after(() => harness.quit());
+    startScript(harness, [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      ...transition.before,
+      `action=transition:${transition.name}`,
+      'action=wait:30',
+    ].join('\n'));
+
+    harness.runUntil(() => harness.getRuntimeVariable('actionCommand') === 'wait');
+
+    assert.equal(harness.getStageEffect('brightness'), transition.finalBrightness);
+  });
+
   test(`applies the final brightness when Right finishes ${transition.name}`, async (context) => {
     const harness = await loadKamishibaiVm();
     context.after(() => harness.quit());
@@ -802,11 +845,13 @@ for (const transition of [
       'action=stage:Stars',
       'action=wait:30',
     ].join('\n'));
-    harness.runUntil(() => (
-      harness.getRuntimeVariable('actionParam') === transition.name
-      && harness.getStageEffect('brightness') > -100
-      && harness.getStageEffect('brightness') < 0
-    ));
+    harness.runUntil(() => {
+      const brightness = harness.getStageEffect('brightness');
+      return (
+        harness.getRuntimeVariable('actionParam') === transition.name
+        && transition.isInProgress(brightness)
+      );
+    });
 
     harness.pressKey('ArrowRight');
     harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});

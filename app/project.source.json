@@ -13565,6 +13565,10 @@
             "SUBSTACK": [
               2,
               "l*"
+            ],
+            "SUBSTACK2": [
+              2,
+              "transitionFadeToWhiteIf"
             ]
           },
           "fields": {},
@@ -13622,6 +13626,156 @@
             "tagName": "mutation",
             "children": [],
             "proccode": "exec transition reset",
+            "argumentids": "[]",
+            "warp": "false"
+          }
+        },
+        "transitionFadeToWhiteIf": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "bH",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "transitionFadeToWhiteEquals"
+            ],
+            "SUBSTACK": [
+              2,
+              "transitionFadeToWhiteCall"
+            ],
+            "SUBSTACK2": [
+              2,
+              "transitionFadeFromWhiteIf"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeToWhiteEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "transitionFadeToWhiteIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "transitionFadeToWhiteArgument",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "fadeToWhite"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeToWhiteArgument": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "transitionFadeToWhiteEquals",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "transitionName",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeToWhiteCall": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "transitionFadeToWhiteIf",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeToWhite",
+            "argumentids": "[]",
+            "warp": "false"
+          }
+        },
+        "transitionFadeFromWhiteIf": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "transitionFadeToWhiteIf",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "transitionFadeFromWhiteEquals"
+            ],
+            "SUBSTACK": [
+              2,
+              "transitionFadeFromWhiteCall"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeFromWhiteEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "transitionFadeFromWhiteIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "transitionFadeFromWhiteArgument",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "fadeFromWhite"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeFromWhiteArgument": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "transitionFadeFromWhiteEquals",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "transitionName",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "transitionFadeFromWhiteCall": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "transitionFadeFromWhiteIf",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeFromWhite",
             "argumentids": "[]",
             "warp": "false"
           }
@@ -13818,6 +13972,150 @@
           "opcode": "looks_seteffectto",
           "next": null,
           "parent": "gj",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {
+            "EFFECT": [
+              "BRIGHTNESS",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "fadeToWhiteDef": {
+          "opcode": "procedures_definition",
+          "next": "fadeToWhiteAnimate",
+          "parent": null,
+          "inputs": {
+            "custom_block": [
+              1,
+              "fadeToWhiteProto"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 7982,
+          "y": 1727
+        },
+        "fadeToWhiteProto": {
+          "opcode": "procedures_prototype",
+          "next": null,
+          "parent": "fadeToWhiteDef",
+          "inputs": {},
+          "fields": {},
+          "shadow": true,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeToWhite",
+            "argumentids": "[]",
+            "argumentnames": "[]",
+            "argumentdefaults": "[]",
+            "warp": "false"
+          }
+        },
+        "fadeToWhiteAnimate": {
+          "opcode": "procedures_call",
+          "next": "fadeToWhiteFinal",
+          "parent": "fadeToWhiteDef",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeUp",
+            "argumentids": "[]",
+            "warp": "false"
+          }
+        },
+        "fadeToWhiteFinal": {
+          "opcode": "looks_seteffectto",
+          "next": null,
+          "parent": "fadeToWhiteAnimate",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                4,
+                "100"
+              ]
+            ]
+          },
+          "fields": {
+            "EFFECT": [
+              "BRIGHTNESS",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "fadeFromWhiteDef": {
+          "opcode": "procedures_definition",
+          "next": "fadeFromWhiteAnimate",
+          "parent": null,
+          "inputs": {
+            "custom_block": [
+              1,
+              "fadeFromWhiteProto"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 8391,
+          "y": 1727
+        },
+        "fadeFromWhiteProto": {
+          "opcode": "procedures_prototype",
+          "next": null,
+          "parent": "fadeFromWhiteDef",
+          "inputs": {},
+          "fields": {},
+          "shadow": true,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeFromWhite",
+            "argumentids": "[]",
+            "argumentnames": "[]",
+            "argumentdefaults": "[]",
+            "warp": "false"
+          }
+        },
+        "fadeFromWhiteAnimate": {
+          "opcode": "procedures_call",
+          "next": "fadeFromWhiteFinal",
+          "parent": "fadeFromWhiteDef",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "exec transition fadeOut",
+            "argumentids": "[]",
+            "warp": "false"
+          }
+        },
+        "fadeFromWhiteFinal": {
+          "opcode": "looks_seteffectto",
+          "next": null,
+          "parent": "fadeFromWhiteAnimate",
           "inputs": {
             "VALUE": [
               1,
