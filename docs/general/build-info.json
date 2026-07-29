@@ -20,46 +20,53 @@
   "sourceDirectory": "general",
   "documents": [
     {
-      "sourceFilename": "01-user-guide.md",
-      "title": "紙芝居アプリ 操作説明書",
-      "htmlFilename": "01-user-guide.html",
-      "pdfFilename": "01-user-guide.pdf",
-      "rubyApplied": false
-    },
-    {
-      "sourceFilename": "02-dsl-manual.md",
-      "title": "紙芝居DSLファイル作成マニュアル",
-      "htmlFilename": "02-dsl-manual.html",
-      "pdfFilename": "02-dsl-manual.pdf",
-      "rubyApplied": false
-    },
-    {
-      "sourceFilename": "03-command-reference.md",
-      "title": "紙芝居DSL コマンドリファレンス",
-      "htmlFilename": "03-command-reference.html",
-      "pdfFilename": "03-command-reference.pdf",
-      "rubyApplied": false
-    },
-    {
-      "sourceFilename": "04-executive-summary-adult.md",
+      "sourceFilename": "01-executive-summary-adult.md",
       "title": "紙芝居アプリ 概要説明書 大人向け",
-      "htmlFilename": "04-executive-summary-adult.html",
-      "pdfFilename": "04-executive-summary-adult.pdf",
+      "htmlFilename": "01-executive-summary-adult.html",
+      "pdfFilename": "01-executive-summary-adult.pdf",
       "rubyApplied": false
     },
     {
-      "sourceFilename": "05-executive-summary-kids.md",
+      "sourceFilename": "02-executive-summary-kids.md",
       "title": "紙芝居アプリ 概要説明書 子供向け",
-      "htmlFilename": "05-executive-summary-kids.html",
-      "pdfFilename": "05-executive-summary-kids.pdf",
+      "htmlFilename": "02-executive-summary-kids.html",
+      "pdfFilename": "02-executive-summary-kids.pdf",
       "rubyApplied": true,
       "learnedThroughGrade": 3
+    },
+    {
+      "sourceFilename": "03-user-guide.md",
+      "title": "紙芝居アプリ 操作説明書",
+      "htmlFilename": "03-user-guide.html",
+      "pdfFilename": "03-user-guide.pdf",
+      "rubyApplied": false
+    },
+    {
+      "sourceFilename": "04-dsl-manual.md",
+      "title": "紙芝居DSLファイル作成マニュアル",
+      "htmlFilename": "04-dsl-manual.html",
+      "pdfFilename": "04-dsl-manual.pdf",
+      "rubyApplied": false
+    },
+    {
+      "sourceFilename": "05-command-reference.md",
+      "title": "紙芝居DSL コマンドリファレンス",
+      "htmlFilename": "05-command-reference.html",
+      "pdfFilename": "05-command-reference.pdf",
+      "rubyApplied": false
     },
     {
       "sourceFilename": "06-developer-guide.md",
       "title": "紙芝居アプリ ソフトウェア開発者向け資料",
       "htmlFilename": "06-developer-guide.html",
       "pdfFilename": "06-developer-guide.pdf",
+      "rubyApplied": false
+    },
+    {
+      "sourceFilename": "07-internal-specification.md",
+      "title": "紙芝居アプリ内部仕様書",
+      "htmlFilename": "07-internal-specification.html",
+      "pdfFilename": "07-internal-specification.pdf",
       "rubyApplied": false
     },
     {

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 760" role="img" aria-labelledby="title desc">
+  <title id="title">紙芝居アプリの主要状態遷移</title>
+  <desc id="desc">
+    初期化、タイトル、表紙とメニュー、台本準備、アセット読込、シーン実行、アクション実行、ポーズ待機の状態遷移。
+  </desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7b3f32"/>
+    </marker>
+    <style>
+      .state {
+        fill: #fffaf4;
+        stroke: #9e4635;
+        stroke-width: 2.5;
+        rx: 16;
+      }
+      .state-main {
+        fill: #f8e2d6;
+      }
+      .label {
+        fill: #2f2926;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        text-anchor: middle;
+      }
+      .detail {
+        fill: #554b46;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 16px;
+        text-anchor: middle;
+      }
+      .edge {
+        fill: none;
+        stroke: #7b3f32;
+        stroke-width: 2.2;
+        marker-end: url(#arrow);
+      }
+      .edge-label {
+        fill: #5f3329;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 15px;
+        text-anchor: middle;
+      }
+    </style>
+  </defs>
+
+  <rect class="state state-main" x="390" y="25" width="220" height="74"/>
+  <text class="label" x="500" y="58">初期化</text>
+  <text class="detail" x="500" y="82">green flag</text>
+
+  <rect class="state" x="390" y="145" width="220" height="74"/>
+  <text class="label" x="500" y="178">タイトル</text>
+  <text class="detail" x="500" y="202">showTitle</text>
+
+  <rect class="state" x="75" y="280" width="240" height="82"/>
+  <text class="label" x="195" y="316">表紙・メニュー</text>
+  <text class="detail" x="195" y="342">showCover / showMenu</text>
+
+  <rect class="state state-main" x="390" y="280" width="220" height="82"/>
+  <text class="label" x="500" y="316">台本準備</text>
+  <text class="detail" x="500" y="342">startStory</text>
+
+  <rect class="state" x="705" y="280" width="220" height="82"/>
+  <text class="label" x="815" y="316">アセット読込</text>
+  <text class="detail" x="815" y="342">create asset</text>
+
+  <rect class="state state-main" x="705" y="455" width="220" height="82"/>
+  <text class="label" x="815" y="491">シーン実行</text>
+  <text class="detail" x="815" y="517">exec scene</text>
+
+  <rect class="state" x="390" y="455" width="220" height="82"/>
+  <text class="label" x="500" y="491">アクション実行</text>
+  <text class="detail" x="500" y="517">exec actionList</text>
+
+  <rect class="state" x="75" y="455" width="240" height="82"/>
+  <text class="label" x="195" y="491">ポーズ待機</text>
+  <text class="detail" x="195" y="517">exec pose action</text>
+
+  <path class="edge" d="M 500 99 L 500 145"/>
+  <text class="edge-label" x="565" y="127">showTitle</text>
+
+  <path class="edge" d="M 390 182 C 280 182 195 225 195 280"/>
+  <text class="edge-label" x="270" y="220">showCover</text>
+
+  <path class="edge" d="M 500 219 L 500 280"/>
+  <text class="edge-label" x="588" y="252">組み込み台本</text>
+
+  <path class="edge" d="M 315 321 L 390 321"/>
+  <text class="edge-label" x="353" y="304">open / reload</text>
+
+  <path class="edge" d="M 610 321 L 705 321"/>
+  <text class="edge-label" x="657" y="304">create asset</text>
+
+  <path class="edge" d="M 815 362 L 815 455"/>
+  <text class="edge-label" x="885" y="413">completed</text>
+
+  <path class="edge" d="M 705 496 L 610 496"/>
+  <text class="edge-label" x="658" y="478">actionList</text>
+
+  <path class="edge" d="M 390 496 L 315 496"/>
+  <text class="edge-label" x="353" y="478">pose</text>
+
+  <path class="edge" d="M 195 537 C 195 590 500 590 500 537"/>
+  <text class="edge-label" x="347" y="613">成立 / Right / Down</text>
+
+  <path class="edge" d="M 610 520 C 665 565 760 565 795 537"/>
+  <text class="edge-label" x="700" y="586">次のaction / scene</text>
+
+  <path class="edge" d="M 925 496 C 970 496 970 410 925 410 C 875 410 875 455 875 455"/>
+  <text class="edge-label" x="946" y="438">branch</text>
+
+  <path class="edge" d="M 760 537 C 610 690 225 665 195 362"/>
+  <text class="edge-label" x="480" y="692">stopStory / 最終scene</text>
+
+  <path class="edge" d="M 195 280 C 195 125 355 125 410 162"/>
+  <text class="edge-label" x="255" y="142">title button</text>
+
+  <path class="edge" d="M 420 340 C 335 390 280 405 220 455"/>
+  <text class="edge-label" x="315" y="400">invalidScript</text>
+</svg>

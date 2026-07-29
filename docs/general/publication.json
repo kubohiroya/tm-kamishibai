@@ -8,7 +8,7 @@
   "name": "TMPose紙芝居 一般ドキュメント",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-27T23:30:52.416Z",
+  "dateModified": "2026-07-29T10:20:37.995Z",
   "readingOrder": [
     {
       "url": "toc.html",
@@ -17,28 +17,32 @@
       "type": "LinkedResource"
     },
     {
-      "url": "01-user-guide.html",
-      "name": "紙芝居アプリ 操作説明書"
-    },
-    {
-      "url": "02-dsl-manual.html",
-      "name": "紙芝居DSLファイル作成マニュアル"
-    },
-    {
-      "url": "03-command-reference.html",
-      "name": "紙芝居DSL コマンドリファレンス"
-    },
-    {
-      "url": "04-executive-summary-adult.html",
+      "url": "01-executive-summary-adult.html",
       "name": "紙芝居アプリ 概要説明書 大人向け"
     },
     {
-      "url": "05-executive-summary-kids.html",
+      "url": "02-executive-summary-kids.html",
       "name": "紙芝居アプリ 概要説明書 子供向け"
+    },
+    {
+      "url": "03-user-guide.html",
+      "name": "紙芝居アプリ 操作説明書"
+    },
+    {
+      "url": "04-dsl-manual.html",
+      "name": "紙芝居DSLファイル作成マニュアル"
+    },
+    {
+      "url": "05-command-reference.html",
+      "name": "紙芝居DSL コマンドリファレンス"
     },
     {
       "url": "06-developer-guide.html",
       "name": "紙芝居アプリ ソフトウェア開発者向け資料"
+    },
+    {
+      "url": "07-internal-specification.html",
+      "name": "紙芝居アプリ内部仕様書"
     },
     {
       "url": "history.html",
@@ -123,6 +127,7 @@
     "images/image64.png",
     "images/image65.png",
     "images/image66.png",
+    "images/internal-state-transition.svg",
     "images/model-upload.png",
     "images/model-uploaded.png",
     "images/paint-toolbar.png",

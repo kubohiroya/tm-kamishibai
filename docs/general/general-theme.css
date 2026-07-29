@@ -18,4 +18,8 @@ body > h1:first-child {
   body > h1:first-child {
     margin-top: 0;
   }
+
+  .print-page-break {
+    break-before: page;
+  }
 }

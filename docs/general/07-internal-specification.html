@@ -1,0 +1,1833 @@
+<!DOCTYPE html><html lang="ja"><head>
+  <link rel="icon" type="image/png" sizes="256x256" href="../../favicon.png">
+    <meta charset="utf-8">
+    <title>紙芝居アプリ内部仕様書</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="theme.css">
+    <link rel="stylesheet" type="text/css" href="general-theme.css">
+  </head>
+  <body>
+    <section class="level1">
+      <h1 id="紙芝居アプリ内部仕様書">紙芝居アプリ内部仕様書</h1>
+      <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
+      <p>
+        この文書は、TMPose紙芝居の汎用アプリSB3、成果物、SB3・台本変換ビルダー、検証、
+        公開の内部仕様を、現在の実装に対応させて記録します。アプリを変更する手順は
+        <a href="06-developer-guide.md">ソフトウェア開発者向け資料</a>、台本の外部仕様は
+        <a href="04-dsl-manual.md">台本DSLマニュアル</a>と
+        <a href="05-command-reference.md">コマンドリファレンス</a>を参照してください。
+      </p>
+      <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
+      <p>過去のバージョンからの変更は<a href="history.md"><code>history.md</code></a>を参照してください。</p>
+      <section class="level2">
+        <h2 id="1-文書の範囲と実装基準">1. 文書の範囲と実装基準</h2>
+        <p>
+          アプリ内部構造の正本は<code>app/project.source.json</code>です。本書のtarget、変数、list、
+          broadcast、hat、カスタムブロック定義は、このファイルから抽出した現在の構造を
+          記載しています。配布用<code>kamishibai.sb3</code>は<code>app/</code>から生成する成果物であり、本書の
+          調査元にはしません。
+        </p>
+        <section class="level3">
+          <h3 id="11-実装スナップショット">1.1 実装スナップショット</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th align="right">件数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>target（Stageを含む）</td>
+                <td align="right">8</td>
+              </tr>
+              <tr>
+                <td>block</td>
+                <td align="right">1444</td>
+              </tr>
+              <tr>
+                <td>event hat</td>
+                <td align="right">39</td>
+              </tr>
+              <tr>
+                <td>カスタムブロック定義</td>
+                <td align="right">40</td>
+              </tr>
+              <tr>
+                <td>Scratch変数</td>
+                <td align="right">6</td>
+              </tr>
+              <tr>
+                <td>Scratch list</td>
+                <td align="right">11</td>
+              </tr>
+              <tr>
+                <td>broadcast message</td>
+                <td align="right">18</td>
+              </tr>
+              <tr>
+                <td>静的なruntime variable名</td>
+                <td align="right">16</td>
+              </tr>
+              <tr>
+                <td>静的なthread variable名</td>
+                <td align="right">36</td>
+              </tr>
+              <tr>
+                <td>TurboWarp機能拡張</td>
+                <td align="right">12</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            block IDは展開ソース内の対応箇所を特定するために掲載します。TurboWarpでブロックを
+            作り直すとIDは変わり得るため、外部仕様や永続IDとして使用しません。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="12-使用する機能拡張">1.2 使用する機能拡張</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>役割</th>
+                <th>取得形態</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>sipcconsole</code></td>
+                <td>デバッグ用console</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>lmsTempVars2</code></td>
+                <td>runtime variable／thread variable</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>strings</code></td>
+                <td>文字列処理</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>kubohiroyaassetmanager</code></td>
+                <td>画像・音声の登録とLoading進捗</td>
+                <td>埋め込み</td>
+              </tr>
+              <tr>
+                <td><code>tmpose</code></td>
+                <td>カメラ姿勢認識</td>
+                <td>埋め込み</td>
+              </tr>
+              <tr>
+                <td><code>localstorage</code></td>
+                <td>台本のローカル保存</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>kubohiroyatextlines</code></td>
+                <td>行単位の台本処理</td>
+                <td>埋め込み</td>
+              </tr>
+              <tr>
+                <td><code>kubohiroyaruntimeexpression</code></td>
+                <td>分岐条件式の評価</td>
+                <td>埋め込み</td>
+              </tr>
+              <tr>
+                <td><code>kubohiroyaasyncinput</code></td>
+                <td>key／touch入力とscene移動</td>
+                <td>埋め込み</td>
+              </tr>
+              <tr>
+                <td><code>lmsTimers</code></td>
+                <td><code>wait</code>と時間ベースactor actionのタイマー</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>files</code></td>
+                <td>外部台本ファイルの選択</td>
+                <td>Gallery</td>
+              </tr>
+              <tr>
+                <td><code>text</code></td>
+                <td>テキスト描画・アニメーション</td>
+                <td>Gallery</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            埋め込み拡張の由来、固定commit、SHA-256は<code>app/embedded-extensions.json</code>を正本とし、
+            更新方法は<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のワークフロー</a>
+            に従います。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="2-成果物プロファイル">2. 成果物プロファイル</h2>
+        <p>紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>プロファイル</th>
+              <th>例</th>
+              <th>台本</th>
+              <th>物語固有アセット</th>
+              <th>主な用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>generic</code></td>
+              <td><code>kamishibai.sb3</code></td>
+              <td>非埋め込み</td>
+              <td>非埋め込み</td>
+              <td>本体が配布する汎用雛形</td>
+            </tr>
+            <tr>
+              <td><code>editor</code></td>
+              <td><code>_urashima.sb3</code></td>
+              <td>非埋め込み</td>
+              <td>埋め込み</td>
+              <td>物語作成者の編集・動作確認</td>
+            </tr>
+            <tr>
+              <td><code>player</code></td>
+              <td><code>urashima.sb3</code></td>
+              <td>埋め込み</td>
+              <td>埋め込み</td>
+              <td>配布・再生、Packager Web版</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <code>generic</code>は<code>app/</code>から生成し、特定の物語を含めません。builder APIとCLIが受け付ける
+          <code>profile</code>は<code>editor</code>または<code>player</code>です。
+        </p>
+        <p>
+          <code>editor</code>と<code>player</code>は同じベースSB3、台本、アセットロックから生成します。両者の
+          変換済み台本とアセット参照を分岐させません。<code>player</code>は組み込み台本を予約変数へ保存し、
+          タイトル操作後にファイル選択なしで開始します。
+        </p>
+        <p>
+          <code>player</code>へ台本とアセットを組み込んでも、TMPoseモデル、カメラ、外部サービスまで
+          自動的にオフライン化されるわけではありません。残るオンライン依存は成果物manifestと
+          公開ページへ明記します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="3-sb3台本変換ビルダー">3. SB3・台本変換ビルダー</h2>
+        <section class="level3">
+          <h3 id="31-導入">3.1 導入</h3>
+          <p>利用可能なバージョンを確認し、消費側で明示的に固定します。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> view @kubohiroya/tmpose-kamishibai version
+<span class="token function">pnpm</span> <span class="token function">add</span> --save-exact @kubohiroya/tmpose-kamishibai@<span class="token operator">&lt;</span>VERSION<span class="token operator">&gt;</span></code></pre>
+          <p>生成したlockfileをcommitし、CIでは<code>pnpm install --frozen-lockfile</code>を使います。</p>
+        </section>
+        <section class="level3">
+          <h3 id="32-cli">3.2 CLI</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token builtin class-name">exec</span> tmpose-kamishibai build-sb3 <span class="token punctuation">\</span>
+  --base kamishibai.sb3 <span class="token punctuation">\</span>
+  --script source.txt <span class="token punctuation">\</span>
+  --assets assets.lock.json <span class="token punctuation">\</span>
+  --output dist/sample <span class="token punctuation">\</span>
+  --profile editor</code></pre>
+          <p>
+            <code>--output</code>は拡張子を含まないベース名です。次の3ファイルを同じtransactionとして
+            生成します。
+          </p>
+          <pre class="language-text"><code class="language-text">dist/sample.sb3
+dist/sample.txt
+dist/sample.manifest.json</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>オプション</th>
+                <th>意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>--allow-file-root DIR</code></td>
+                <td><code>file:</code>の許可ルートを追加。複数回指定可能</td>
+              </tr>
+              <tr>
+                <td><code>--allow-http</code></td>
+                <td>平文HTTPを明示的に許可</td>
+              </tr>
+              <tr>
+                <td><code>--timeout-ms N</code></td>
+                <td>1リクエストのタイムアウト</td>
+              </tr>
+              <tr>
+                <td><code>--max-asset-bytes N</code></td>
+                <td>1アセットの最大バイト数</td>
+              </tr>
+              <tr>
+                <td><code>--max-script-bytes N</code></td>
+                <td>組み込み台本の最大バイト数</td>
+              </tr>
+              <tr>
+                <td><code>--max-redirects N</code></td>
+                <td>HTTPリダイレクト上限</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>完全な一覧は<code>pnpm exec tmpose-kamishibai --help</code>で確認します。</p>
+        </section>
+        <section class="level3">
+          <h3 id="33-javascript-api">3.3 JavaScript API</h3>
+          <pre class="language-js"><code class="language-js"><span class="token keyword module">import</span> <span class="token punctuation">{</span>
+  <span class="token known-class-name class-name">Sb3BuilderError</span><span class="token punctuation">,</span>
+  buildSb3Bundle<span class="token punctuation">,</span>
+  validateAssetManifest<span class="token punctuation">,</span>
+  validateBundle<span class="token punctuation">,</span>
+<span class="token punctuation">}</span> <span class="token keyword module">from</span> <span class="token string">'@kubohiroya/tmpose-kamishibai/builder'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword control-flow">await</span> <span class="token function">buildSb3Bundle</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  <span class="token literal-property property">baseSb3</span><span class="token operator">:</span> <span class="token string">'kamishibai.sb3'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">sourceScript</span><span class="token operator">:</span> <span class="token string">'source.txt'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">assetManifest</span><span class="token operator">:</span> <span class="token string">'assets.lock.json'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">outputDirectory</span><span class="token operator">:</span> <span class="token string">'dist'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">outputName</span><span class="token operator">:</span> <span class="token string">'sample'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">profile</span><span class="token operator">:</span> <span class="token string">'editor'</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token console class-name">console</span><span class="token punctuation">.</span><span class="token method function property-access">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span><span class="token property-access">outputPaths</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
+          <p>
+            <code>baseSb3</code>と<code>sourceScript</code>にはファイルパスまたは<code>file:</code> URLを指定できます。
+            <code>assetManifest</code>にはファイルパス、<code>file:</code> URL、または検証対象のJavaScriptオブジェクトを
+            指定できます。相対<code>file:</code>を含むオブジェクトでは<code>manifestBaseDirectory</code>も指定します。
+          </p>
+          <p>
+            ネットワーク・ファイル取得は<code>allowedFileRoots</code>、<code>allowHttp</code>、<code>requestTimeoutMs</code>、
+            <code>maxAssetBytes</code>、<code>maxRedirects</code>で制限できます。<code>player</code>の組み込み台本上限は
+            <code>maxEmbeddedScriptBytes</code>で変更できます。
+          </p>
+          <p>
+            <code>buildSb3Bundle</code>は<code>manifest</code>と<code>outputPaths</code>を返します。入力・アセット・出力の問題は
+            <code>Sb3BuilderError</code>として処理段階とアセット情報を保持します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="34-アセットマニフェスト">3.4 アセットマニフェスト</h3>
+          <p>入力manifestは<code>formatVersion: 1</code>と1件以上の<code>assets</code>を持ちます。</p>
+          <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"formatVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+  <span class="token property">"assets"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"forest"</span><span class="token punctuation">,</span>
+      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"file:assets/forest.svg"</span><span class="token punctuation">,</span>
+      <span class="token property">"kind"</span><span class="token operator">:</span> <span class="token string">"backdrop"</span><span class="token punctuation">,</span>
+      <span class="token property">"target"</span><span class="token operator">:</span> <span class="token string">"@stage"</span><span class="token punctuation">,</span>
+      <span class="token property">"sb3Name"</span><span class="token operator">:</span> <span class="token string">"森"</span><span class="token punctuation">,</span>
+      <span class="token property">"contentType"</span><span class="token operator">:</span> <span class="token string">"image/svg+xml"</span><span class="token punctuation">,</span>
+      <span class="token property">"dataFormat"</span><span class="token operator">:</span> <span class="token string">"svg"</span><span class="token punctuation">,</span>
+      <span class="token property">"size"</span><span class="token operator">:</span> <span class="token number">1234</span><span class="token punctuation">,</span>
+      <span class="token property">"sha256"</span><span class="token operator">:</span> <span class="token string">"&lt;64文字の16進数&gt;"</span><span class="token punctuation">,</span>
+      <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/"</span><span class="token punctuation">,</span>
+      <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        <span class="token property">"bitmapResolution"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+        <span class="token property">"rotationCenterX"</span><span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
+        <span class="token property">"rotationCenterY"</span><span class="token operator">:</span> <span class="token number">180</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span>
+<span class="token punctuation">}</span></code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th><code>kind</code></th>
+                <th><code>target</code></th>
+                <th>変換後の台本参照</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>backdrop</code></td>
+                <td><code>@stage</code></td>
+                <td><code>backdrop:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>costume</code></td>
+                <td>スプライト名</td>
+                <td><code>costume:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>stageSound</code></td>
+                <td><code>@stage</code></td>
+                <td><code>sound:@stage:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>spriteSound</code></td>
+                <td>スプライト名</td>
+                <td><code>sound:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            DSL名、同一target内のSB3名、既存SB3のアセット名は重複できません。<code>license</code>には素材の
+            ライセンスまたは利用条件の識別情報と参照先を記録します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="35-安全性と再現性">3.5 安全性と再現性</h3>
+          <ul>
+            <li><code>file:</code>は既定でmanifestのディレクトリ以下だけを許可し、<code>..</code>やsymlinkによる脱出を拒否する</li>
+            <li>HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する</li>
+            <li>Content-Type、実サイズ、ロック済みサイズ、SHA-256、timeout、redirectを検証する</li>
+            <li>ZIP entry順、timestamp、圧縮設定、JSON表現を固定する</li>
+            <li>SB3、変換済み台本、出力manifestの対応を確定前に再検証する</li>
+            <li>3成果物を一時領域で生成し、すべて成功した場合だけ置換する</li>
+            <li>失敗時は既存成果物を保持または復元する</li>
+          </ul>
+          <p>
+            同じ入力、固定依存、設定から生成したSB3、台本、manifestはbit-for-bitで一致しなければ
+            なりません。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="4-sb3の構成">4. SB3の構成</h2>
+        <section class="level3">
+          <h3 id="41-target一覧">4.1 target一覧</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>target</th>
+                <th>種別</th>
+                <th>役割</th>
+                <th>初期costume／sound</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Stage</code></td>
+                <td>Stage</td>
+                <td>初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括</td>
+                <td><code>Title</code>, <code>Stars</code></td>
+              </tr>
+              <tr>
+                <td><code>Actor</code></td>
+                <td>sprite雛形</td>
+                <td>物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行</td>
+                <td><code>button1</code>／<code>pop</code></td>
+              </tr>
+              <tr>
+                <td><code>prompt</code></td>
+                <td>UI sprite</td>
+                <td>操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>openButton</code></td>
+                <td>UI sprite</td>
+                <td>外部台本ファイルを選択して<code>startStory</code>へ渡す</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>reloadButton</code></td>
+                <td>UI sprite</td>
+                <td>保存済みの直前の台本を再読込する</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>showTitleButton</code></td>
+                <td>UI sprite</td>
+                <td>menuからtitleへ戻す</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>Loading</code></td>
+                <td>UI sprite</td>
+                <td>Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示</td>
+                <td><code>loading</code>／<code>Chirp</code></td>
+              </tr>
+              <tr>
+                <td><code>LoadingBubbleAnchor</code></td>
+                <td>UI sprite</td>
+                <td>Loading進捗メッセージ用のspeech bubble位置を固定</td>
+                <td><code>loading-bubble-anchor</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <code>Actor</code>の本体は非表示で、cloneだけを登場人物として表示します。<code>prompt</code>、3つのmenu button、
+            <code>Loading</code>、<code>LoadingBubbleAnchor</code>の実画像は、台本の<code>ui.*</code>設定または組み込みfallbackから
+            Asset Managerへ登録します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="42-target間の責務">4.2 target間の責務</h3>
+          <p>
+            <code>Stage</code>は台本を行へ分解し、<code>commandList</code>、<code>sceneList</code>、<code>actionList</code>へ段階的に変換します。
+            Stage actionは自分で実行し、Actor actionは共有runtime variableへ引数を置いて
+            <code>execActorAction</code>をbroadcastします。<code>Actor</code> cloneは自分の<code>actorName</code>と
+            <code>actionTarget</code>を照合し、対象になったcloneだけがactionを実行します。
+          </p>
+          <p>
+            UI spriteは表示状態を<code>showMenu</code>／<code>hideMenu</code>、<code>showPrompt</code>／<code>hidePrompt</code>、
+            Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ
+            複製せず、Stageを状態の所有者とします。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="5-変数とlist">5. 変数とlist</h2>
+        <p>
+          変数は、SB3へ永続化されるScratch変数／list、threadごとの一時値、project全体で共有する
+          runtime variableの3種類に分けます。
+        </p>
+        <section class="level3">
+          <h3 id="51-scratch変数">5.1 Scratch変数</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>所有者</th>
+                <th>変数</th>
+                <th>初期値</th>
+                <th>役割</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Stage</code></td>
+                <td><code>ポーズ認識</code></td>
+                <td><code>0</code></td>
+                <td>pose認識中の表示・互換用状態</td>
+              </tr>
+              <tr>
+                <td><code>Stage</code></td>
+                <td><code>チャージ</code></td>
+                <td><code>0</code></td>
+                <td>pose成立までのcharge表示・互換用状態</td>
+              </tr>
+              <tr>
+                <td><code>Stage</code></td>
+                <td><code>actionIndex</code></td>
+                <td><code>1</code></td>
+                <td>現在処理する<code>actionList</code>の位置</td>
+              </tr>
+              <tr>
+                <td><code>Stage</code></td>
+                <td><code>poseIndex</code></td>
+                <td><code>1</code></td>
+                <td>現在処理する<code>poseList</code>の位置</td>
+              </tr>
+              <tr>
+                <td><code>Stage</code></td>
+                <td><code>__tmpose_embedded_script</code></td>
+                <td>空文字</td>
+                <td><code>player</code> profileの組み込み台本予約領域</td>
+              </tr>
+              <tr>
+                <td><code>Actor</code></td>
+                <td><code>actorName</code></td>
+                <td><code>_template_</code></td>
+                <td>cloneが担当する台本上のactor名</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <code>__tmpose_embedded_script</code>はStageに一つだけ存在し、monitorを持ちません。<code>generic</code>と
+            <code>editor</code>では空、<code>player</code>ではbuilderが変換済み台本を設定します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="52-scratch-list">5.2 Scratch list</h3>
+          <p>すべてStage所有で、汎用SB3では空の初期状態です。</p>
+          <table>
+            <thead>
+              <tr>
+                <th>list</th>
+                <th>役割</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>skinList</code></td>
+                <td>actor action中のcostume候補</td>
+              </tr>
+              <tr>
+                <td><code>poseList</code></td>
+                <td>pose action中の認識label候補</td>
+              </tr>
+              <tr>
+                <td><code>soundList</code></td>
+                <td>actor action中のsound候補</td>
+              </tr>
+              <tr>
+                <td><code>actionList</code></td>
+                <td>現在sceneのaction列</td>
+              </tr>
+              <tr>
+                <td><code>sceneList</code></td>
+                <td>台本から抽出したscene block</td>
+              </tr>
+              <tr>
+                <td><code>commandList</code></td>
+                <td>sceneの前に評価する設定command</td>
+              </tr>
+              <tr>
+                <td><code>actorList</code></td>
+                <td>台本から生成するactor定義</td>
+              </tr>
+              <tr>
+                <td><code>assetList</code></td>
+                <td>登録するasset定義</td>
+              </tr>
+              <tr>
+                <td><code>durationList</code></td>
+                <td>pose候補ごとの継続時間</td>
+              </tr>
+              <tr>
+                <td><code>sceneLabelList</code></td>
+                <td>scene labelとindexの対応</td>
+              </tr>
+              <tr>
+                <td><code>lines</code></td>
+                <td>Text Linesで分割した台本行</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="53-runtime-variable">5.3 runtime variable</h3>
+          <p>静的な名前を持つruntime variableは次の16個です。</p>
+          <table>
+            <thead>
+              <tr>
+                <th>変数</th>
+                <th>生存期間／役割</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>script</code></td>
+                <td>読み込んだ変換済み台本。title、reload、<code>startStory</code>間で共有</td>
+              </tr>
+              <tr>
+                <td><code>version</code></td>
+                <td>台本の<code>kamishibai</code> version</td>
+              </tr>
+              <tr>
+                <td><code>startSceneIndex</code></td>
+                <td>台本で指定した開始scene</td>
+              </tr>
+              <tr>
+                <td><code>sceneIndex</code></td>
+                <td>現在実行中のscene index</td>
+              </tr>
+              <tr>
+                <td><code>actionTarget</code>, <code>actionCommand</code>, <code>actionParam</code>, <code>actionParam2</code></td>
+                <td>StageからActor cloneへ渡すaction envelope</td>
+              </tr>
+              <tr>
+                <td><code>nextSceneLabel</code></td>
+                <td>key／touch入力が要求した遷移先scene label</td>
+              </tr>
+              <tr>
+                <td><code>skipMode</code></td>
+                <td><code>Space</code>、<code>Right</code>、<code>Down</code>による未消費の進行要求</td>
+              </tr>
+              <tr>
+                <td><code>skipContext</code></td>
+                <td><code>title</code>、<code>action</code>、<code>pose</code>、<code>scene</code>のどの境界が要求を消費できるか</td>
+              </tr>
+              <tr>
+                <td><code>poseRecog</code>, <code>poseCharge</code>, <code>poseIdle</code></td>
+                <td>pose認識のしきい値、charge時間、idle時間</td>
+              </tr>
+              <tr>
+                <td><code>loadingCostume</code></td>
+                <td>Loading spriteへ適用するcostume名</td>
+              </tr>
+              <tr>
+                <td><code>message</code></td>
+                <td>Loading bubbleへ表示する現在の進捗文言</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            このほか、<code>exec command %s %s</code>はDSLで指定されたruntime variable名を動的に設定します。
+            分岐条件は<code>branch:&lt;branchName&gt;</code>という名前で保存します。この2系列は入力から名前が決まるため、
+            静的な16個には数えません。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="54-thread-variable">5.4 thread variable</h3>
+          <p>カスタムブロック呼出しごとに分離され、呼出し終了後に共有状態として残さない値です。</p>
+          <table>
+            <thead>
+              <tr>
+                <th>用途</th>
+                <th>名前</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>共通loop・文字列処理</td>
+                <td><code>index</code>, <code>length</code>, <code>line</code>, <code>lineIndex</code>, <code>name</code>, <code>value</code>, <code>key</code>, <code>keyValue</code></td>
+              </tr>
+              <tr>
+                <td>台本解析</td>
+                <td><code>sceneBlock</code>, <code>sceneLabel</code>, <code>sceneLabelList</code>, <code>condition</code>, <code>conditionList</code></td>
+              </tr>
+              <tr>
+                <td>asset／actor生成</td>
+                <td><code>asset</code>, <code>assetList</code>, <code>resourceId</code>, <code>actor</code>, <code>actorName</code>, <code>skin</code></td>
+              </tr>
+              <tr>
+                <td>action実行</td>
+                <td><code>action</code>, <code>actionResult</code>, <code>actionListResult</code>, <code>stageActionResult</code>, <code>actorActionResult</code></td>
+              </tr>
+              <tr>
+                <td>command／branch／入力</td>
+                <td><code>commandIndex</code>, <code>branchIndex</code>, <code>keyId</code>, <code>hasRead</code></td>
+              </tr>
+              <tr>
+                <td>cover</td>
+                <td><code>cover</code>, <code>coverBackground</code>, <code>coverBgm</code></td>
+              </tr>
+              <tr>
+                <td>Actor clone</td>
+                <td><code>x</code>, <code>y</code>, <code>scale</code></td>
+              </tr>
+              <tr>
+                <td>その他</td>
+                <td><code>durationList</code>, <code>sceneIndex</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            runtime variableと同名の<code>sceneIndex</code> thread variableは、カスタムブロック内の局所的な
+            引数・計算値です。project全体の現在sceneはruntime variable側だけを正本とします。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="6-eventカスタムブロック呼出し関係">6. event、カスタムブロック、呼出し関係</h2>
+        <section class="level3">
+          <h3 id="61-event-hat一覧">6.1 event hat一覧</h3>
+          <p>
+            <code>procedures_definition</code>と、接続されていないreporter blockはevent hatに含めません。
+            「直接の下流」はhatから到達するカスタムブロック呼出しとbroadcastです。
+          </p>
+          <section class="level4">
+            <h4 id="stage">Stage</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>trigger</th>
+                  <th>直接の下流</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>iM</code></td>
+                  <td>green flag</td>
+                  <td><code>stop camera preview</code>, <code>stop pose recog</code>, <code>stop camera</code>, <code>hide all actors</code>; <code>showTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>i;</code></td>
+                  <td>key <code>space</code></td>
+                  <td><code>showCover</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>i}</code></td>
+                  <td>key <code>down arrow</code></td>
+                  <td><code>finishTimedActorAction</code>送信、<code>skipMode=Down</code></td>
+                </tr>
+                <tr>
+                  <td><code>jb</code></td>
+                  <td>key <code>right arrow</code></td>
+                  <td><code>finishTimedActorAction</code>送信、<code>skipMode=Right</code></td>
+                </tr>
+                <tr>
+                  <td><code>jX</code></td>
+                  <td><code>startStory</code>受信</td>
+                  <td><code>start camera</code>, <code>create sceneList</code>, <code>exec scene # %s with %s</code>, <code>create asset</code>, <code>create actor</code></td>
+                </tr>
+                <tr>
+                  <td><code>j/</code></td>
+                  <td><code>stopStory</code>受信</td>
+                  <td><code>stop camera</code>, <code>stop pose recog</code>, <code>show cover</code>; <code>deleteAllActors</code>, <code>showMenu</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>j?</code></td>
+                  <td><code>debugTestCamera</code>受信</td>
+                  <td>TMPoseのcamera previewを直接確認</td>
+                </tr>
+                <tr>
+                  <td><code>kD</code></td>
+                  <td><code>showCover</code>受信</td>
+                  <td><code>show cover</code>; <code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>l=</code></td>
+                  <td>Stage click</td>
+                  <td>組み込み台本の有無に応じて<code>showCover</code>または<code>startStory</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>l[</code></td>
+                  <td><code>showTitle</code>受信</td>
+                  <td>実行contextをclearし、<code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>m~</code></td>
+                  <td><code>stopKeyInput</code>受信</td>
+                  <td>Async Inputの全listenerを停止</td>
+                </tr>
+                <tr>
+                  <td><code>nx</code></td>
+                  <td><code>stopTouchInput</code>受信</td>
+                  <td>Async Inputの全listenerを停止</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="level4">
+            <h4 id="actor">Actor</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>trigger</th>
+                  <th>直接の下流</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>nY</code></td>
+                  <td><code>execActorAction</code>受信</td>
+                  <td><code>isTimeBasedAction</code>, <code>wait for actor action %s seconds</code></td>
+                </tr>
+                <tr>
+                  <td><code>oH</code></td>
+                  <td><code>deleteAllActors</code>受信</td>
+                  <td>cloneを削除</td>
+                </tr>
+                <tr>
+                  <td><code>oJ</code></td>
+                  <td>clone開始</td>
+                  <td><code>actorName</code>、位置、scaleをruntime envelopeから初期化</td>
+                </tr>
+                <tr>
+                  <td><code>actorFinishHat</code></td>
+                  <td><code>finishTimedActorAction</code>受信</td>
+                  <td>対象actorと<code>skipMode</code>を照合して時間actionを完了</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="level4">
+            <h4 id="ui-sprite">UI sprite</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>target</th>
+                  <th>ID</th>
+                  <th>trigger</th>
+                  <th>直接の下流</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>prompt</code></td>
+                  <td><code>oS</code></td>
+                  <td><code>showPrompt</code>受信</td>
+                  <td>案内costumeを表示</td>
+                </tr>
+                <tr>
+                  <td><code>prompt</code></td>
+                  <td><code>oV</code></td>
+                  <td><code>hidePrompt</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>prompt</code></td>
+                  <td><code>oX</code></td>
+                  <td><code>invalidScript</code>受信</td>
+                  <td>エラーcostumeを表示</td>
+                </tr>
+                <tr>
+                  <td><code>openButton</code></td>
+                  <td><code>o!</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>openButton</code></td>
+                  <td><code>o%</code></td>
+                  <td>sprite click</td>
+                  <td>file選択後に<code>hideMenu</code>, <code>startStory</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>openButton</code></td>
+                  <td><code>o*</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>openButton</code></td>
+                  <td><code>o,</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td><code>ui.open</code> skinで表示</td>
+                </tr>
+                <tr>
+                  <td><code>reloadButton</code></td>
+                  <td><code>o.</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>reloadButton</code></td>
+                  <td><code>o:</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>reloadButton</code></td>
+                  <td><code>o=</code></td>
+                  <td>sprite click</td>
+                  <td>保存済み台本で<code>hideMenu</code>, <code>startStory</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>reloadButton</code></td>
+                  <td><code>o[</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td>台本が保存済みなら表示</td>
+                </tr>
+                <tr>
+                  <td><code>showTitleButton</code></td>
+                  <td><code>o`</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>showTitleButton</code></td>
+                  <td><code>o|</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>showTitleButton</code></td>
+                  <td><code>o~</code></td>
+                  <td>sprite click</td>
+                  <td><code>hideMenu</code>, <code>showTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>showTitleButton</code></td>
+                  <td><code>pb</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td>title以外なら表示</td>
+                </tr>
+                <tr>
+                  <td><code>Loading</code></td>
+                  <td><code>pf</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>Loading</code></td>
+                  <td><code>pm</code></td>
+                  <td><code>assetLoadingStarted</code>受信</td>
+                  <td>Loading costumeを表示</td>
+                </tr>
+                <tr>
+                  <td><code>Loading</code></td>
+                  <td><code>pj</code></td>
+                  <td><code>assetLoadingProgress</code>受信</td>
+                  <td>costumeを循環</td>
+                </tr>
+                <tr>
+                  <td><code>Loading</code></td>
+                  <td><code>ph</code></td>
+                  <td><code>assetLoadingCompleted</code>受信</td>
+                  <td>非表示、完了sound</td>
+                </tr>
+                <tr>
+                  <td><code>LoadingBubbleAnchor</code></td>
+                  <td><code>loadingBubbleFlag</code></td>
+                  <td>green flag</td>
+                  <td>非表示、bubbleをclear</td>
+                </tr>
+                <tr>
+                  <td><code>LoadingBubbleAnchor</code></td>
+                  <td><code>loadingBubbleStarted</code></td>
+                  <td><code>assetLoadingStarted</code>受信</td>
+                  <td>anchorを表示</td>
+                </tr>
+                <tr>
+                  <td><code>LoadingBubbleAnchor</code></td>
+                  <td><code>loadingBubbleProgress</code></td>
+                  <td><code>assetLoadingProgress</code>受信</td>
+                  <td>runtime variable <code>message</code>をsay</td>
+                </tr>
+                <tr>
+                  <td><code>LoadingBubbleAnchor</code></td>
+                  <td><code>loadingBubbleCompleted</code></td>
+                  <td><code>assetLoadingCompleted</code>受信</td>
+                  <td>bubbleをclearして非表示</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </section>
+        <section class="level3">
+          <h3 id="62-カスタムブロック定義一覧">6.2 カスタムブロック定義一覧</h3>
+          <p>
+            引数名はprototypeの<code>argumentnames</code>、warpはprototypeの<code>mutation.warp</code>から取得します。
+            「直接の呼出し」には定義内で呼ぶ別のカスタムブロックだけを示し、broadcastは明記します。
+          </p>
+          <section class="level4">
+            <h4 id="初期化parse共通処理">初期化・parse・共通処理</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>target</th>
+                  <th>ID</th>
+                  <th>定義</th>
+                  <th>引数</th>
+                  <th>warp</th>
+                  <th>直接の呼出し／broadcast</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>c:</code></td>
+                  <td><code>init skinList with %s</code></td>
+                  <td><code>commaSeparatedText</code></td>
+                  <td>yes</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>c_</code></td>
+                  <td><code>init poseList with %s</code></td>
+                  <td><code>commaSeparatedText</code></td>
+                  <td>yes</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dc</code></td>
+                  <td><code>init soundList with %s</code></td>
+                  <td><code>commaSeparatedText</code></td>
+                  <td>yes</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gH</code></td>
+                  <td><code>init durationList with %s</code></td>
+                  <td><code>commaSeparatedText</code></td>
+                  <td>no</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>eM</code></td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                  <td><code>index</code>, <code>separator</code>, <code>text</code></td>
+                  <td>yes</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>hl</code></td>
+                  <td><code>substr of %s after %s</code></td>
+                  <td><code>text</code>, <code>firstDelim</code></td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dL</code></td>
+                  <td><code>min %s %s</code></td>
+                  <td><code>valueA</code>, <code>valueB</code></td>
+                  <td>yes</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>d)</code></td>
+                  <td><code>exec command %s %s</code></td>
+                  <td><code>key</code>, <code>value</code></td>
+                  <td>no</td>
+                  <td><code>substr of %s after %s</code>, <code>selectValue # %s separated by %s from %s</code>, <code>setTMPoseURL with %s</code>; <code>invalidScript</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>e+</code></td>
+                  <td><code>create sceneList</code></td>
+                  <td>—</td>
+                  <td>yes</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>fe</code></td>
+                  <td><code>create asset</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td><code>selectValue...</code>; <code>assetLoadingStarted/Progress/Completed</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>fv</code></td>
+                  <td><code>create actor</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td><code>selectValue # %s separated by %s from %s</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="level4">
+            <h4 id="camerapose">camera・pose</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>target</th>
+                  <th>ID</th>
+                  <th>定義</th>
+                  <th>引数</th>
+                  <th>warp</th>
+                  <th>直接の呼出し／broadcast</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dQ</code></td>
+                  <td><code>setTMPoseURL with %s</code></td>
+                  <td><code>URL</code></td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dU</code></td>
+                  <td><code>start camera</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dX</code></td>
+                  <td><code>stop camera</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>eD</code></td>
+                  <td><code>start pose recog</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dG</code></td>
+                  <td><code>stop pose recog</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dY</code></td>
+                  <td><code>rate of pose recog</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>d!</code></td>
+                  <td><code>label of pose recog</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>d%</code></td>
+                  <td><code>start camera preview</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>d(</code></td>
+                  <td><code>stop camera preview</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>dk</code></td>
+                  <td><code>exec pose action %s</code></td>
+                  <td><code>actorName</code></td>
+                  <td>no</td>
+                  <td><code>start camera preview</code>, <code>start pose recog</code>, <code>exec pose %s</code>, <code>stop pose recog</code>, <code>stop camera preview</code>; <code>showPrompt</code>, <code>hidePrompt</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>f[</code></td>
+                  <td><code>exec pose %s</code></td>
+                  <td><code>actorName</code></td>
+                  <td>no</td>
+                  <td><code>change skin...</code>, <code>min...</code>, <code>rate of pose recog</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="level4">
+            <h4 id="sceneactionactor">scene・action・actor</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>target</th>
+                  <th>ID</th>
+                  <th>定義</th>
+                  <th>引数</th>
+                  <th>warp</th>
+                  <th>直接の呼出し／broadcast</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>fB</code></td>
+                  <td><code>exec scene # %s with %s</code></td>
+                  <td><code>sceneIndex</code>, <code>sceneData</code></td>
+                  <td>no</td>
+                  <td><code>selectValue # %s separated by %s from %s</code>, <code>substr of %s after %s</code>, <code>exec command %s %s</code>, <code>exec actionList</code>, <code>hide all actors</code>; <code>invalidScript</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>e=</code></td>
+                  <td><code>exec actionList</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td><code>exec action %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>f(</code></td>
+                  <td><code>exec action %s</code></td>
+                  <td><code>action</code></td>
+                  <td>no</td>
+                  <td><code>exec stage action %s</code>, <code>exec actor action %s</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gP</code></td>
+                  <td><code>exec stage action %s</code></td>
+                  <td><code>action</code></td>
+                  <td>no</td>
+                  <td><code>touchInputToChangeScene %s %s</code>, <code>exec keyInputToChangeScene %s %s</code>, <code>exec branch action %s</code>, <code>exec transition action %s</code>, <code>wait %s seconds</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gp</code></td>
+                  <td><code>exec actor action %s</code></td>
+                  <td><code>action</code></td>
+                  <td>no</td>
+                  <td><code>selectValue # %s separated by %s from %s</code>, 3つのlist初期化、<code>exec pose action %s</code>; <code>execActorAction</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>ee</code></td>
+                  <td><code>hide all actors</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td><code>execActorAction</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>eh</code></td>
+                  <td><code>change skin of %s to %s</code></td>
+                  <td><code>actorName</code>, <code>skinName</code></td>
+                  <td>no</td>
+                  <td><code>execActorAction</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>eR</code></td>
+                  <td><code>show cover</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td><code>selectValue # %s separated by %s from %s</code>; <code>showMenu</code></td>
+                </tr>
+                <tr>
+                  <td><code>Actor</code></td>
+                  <td><code>it</code></td>
+                  <td><code>isTimeBasedAction</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Actor</code></td>
+                  <td><code>actorWaitDef</code></td>
+                  <td><code>wait for actor action %s seconds</code></td>
+                  <td><code>seconds</code></td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="level4">
+            <h4 id="transitionbranchinput">transition・branch・input</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>target</th>
+                  <th>ID</th>
+                  <th>定義</th>
+                  <th>引数</th>
+                  <th>warp</th>
+                  <th>直接の呼出し</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>ga</code></td>
+                  <td><code>exec transition action %s</code></td>
+                  <td><code>transitionName</code></td>
+                  <td>no</td>
+                  <td><code>exec transition reset</code>, <code>exec transition fadeUp</code>, <code>exec transition fadeOut</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gf</code></td>
+                  <td><code>exec transition fadeOut</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gh</code></td>
+                  <td><code>exec transition fadeUp</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>gj</code></td>
+                  <td><code>exec transition reset</code></td>
+                  <td>—</td>
+                  <td>no</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>g]</code></td>
+                  <td><code>exec branch action %s</code></td>
+                  <td><code>branchName</code></td>
+                  <td>no</td>
+                  <td><code>selectValue...</code></td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>hq</code></td>
+                  <td><code>exec keyInputToChangeScene %s %s</code></td>
+                  <td><code>keyIdList</code>, <code>sceneLabelList</code></td>
+                  <td>no</td>
+                  <td>Async Input</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>hu</code></td>
+                  <td><code>touchInputToChangeScene %s %s</code></td>
+                  <td><code>actorNameList</code>, <code>sceneLabelList</code></td>
+                  <td>no</td>
+                  <td>Async Input</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>hy</code></td>
+                  <td><code>wait %s seconds</code></td>
+                  <td><code>seconds</code></td>
+                  <td>no</td>
+                  <td>More Timers</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </section>
+        <section class="level3">
+          <h3 id="63-主要な呼出し経路">6.3 主要な呼出し経路</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>起点</th>
+                <th>経路</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>green flag</td>
+                <td>初期化 → camera／pose停止 → actor非表示 → <code>showTitle</code></td>
+              </tr>
+              <tr>
+                <td><code>startStory</code></td>
+                <td>台本検証 → <code>create sceneList</code> → asset／actor生成 → <code>exec scene # %s with %s</code></td>
+              </tr>
+              <tr>
+                <td>scene実行</td>
+                <td><code>exec command %s %s</code> → <code>exec actionList</code> → actionごとに<code>exec action %s</code></td>
+              </tr>
+              <tr>
+                <td>Stage action</td>
+                <td>branch、transition、key／touch入力、<code>wait</code>などへdispatch</td>
+              </tr>
+              <tr>
+                <td>Actor action</td>
+                <td>runtime envelope設定 → <code>execActorAction</code> → 対象clone → 移動・見た目・音・時間action</td>
+              </tr>
+              <tr>
+                <td>pose action</td>
+                <td>camera preview／pose認識開始 → <code>exec pose %s</code>反復 →認識停止 → prompt非表示</td>
+              </tr>
+              <tr>
+                <td>終了</td>
+                <td><code>stopStory</code> → camera／pose停止 → actor削除 → cover → menu</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="7-broadcastと状態遷移">7. broadcastと状態遷移</h2>
+        <section class="level3">
+          <h3 id="71-message一覧">7.1 message一覧</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>message</th>
+                <th>主な送信者</th>
+                <th>受信者</th>
+                <th>役割</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>showPrompt</code></td>
+                <td><code>Stage</code></td>
+                <td><code>prompt</code></td>
+                <td>操作・pose案内を表示</td>
+              </tr>
+              <tr>
+                <td><code>hidePrompt</code></td>
+                <td><code>Stage</code></td>
+                <td><code>prompt</code></td>
+                <td>案内を非表示</td>
+              </tr>
+              <tr>
+                <td><code>invalidScript</code></td>
+                <td><code>Stage</code></td>
+                <td><code>prompt</code></td>
+                <td>台本エラーを表示</td>
+              </tr>
+              <tr>
+                <td><code>hideMenu</code></td>
+                <td>3つのmenu button</td>
+                <td>3つのmenu button</td>
+                <td>menuを一括非表示</td>
+              </tr>
+              <tr>
+                <td><code>showMenu</code></td>
+                <td><code>Stage</code></td>
+                <td>3つのmenu button</td>
+                <td>利用可能なmenuを表示</td>
+              </tr>
+              <tr>
+                <td><code>startStory</code></td>
+                <td><code>Stage</code>, <code>openButton</code>, <code>reloadButton</code></td>
+                <td><code>Stage</code></td>
+                <td>台本の解析・実行を開始</td>
+              </tr>
+              <tr>
+                <td><code>stopStory</code></td>
+                <td><code>Stage</code></td>
+                <td><code>Stage</code></td>
+                <td>実行を停止しcoverへ戻す</td>
+              </tr>
+              <tr>
+                <td><code>showCover</code></td>
+                <td><code>Stage</code></td>
+                <td><code>Stage</code></td>
+                <td>coverを構築してmenuを表示</td>
+              </tr>
+              <tr>
+                <td><code>showTitle</code></td>
+                <td><code>Stage</code>, <code>showTitleButton</code></td>
+                <td><code>Stage</code></td>
+                <td>title状態へ戻す</td>
+              </tr>
+              <tr>
+                <td><code>execActorAction</code></td>
+                <td><code>Stage</code></td>
+                <td><code>Actor</code></td>
+                <td>action envelopeをcloneへ通知</td>
+              </tr>
+              <tr>
+                <td><code>deleteAllActors</code></td>
+                <td><code>Stage</code></td>
+                <td><code>Actor</code></td>
+                <td>全cloneを削除</td>
+              </tr>
+              <tr>
+                <td><code>assetLoadingStarted</code></td>
+                <td><code>Stage</code>／Asset Manager</td>
+                <td><code>Loading</code>, <code>LoadingBubbleAnchor</code></td>
+                <td>Loading表示を開始</td>
+              </tr>
+              <tr>
+                <td><code>assetLoadingProgress</code></td>
+                <td><code>Stage</code>／Asset Manager</td>
+                <td><code>Loading</code>, <code>LoadingBubbleAnchor</code></td>
+                <td>進捗costumeとmessageを更新</td>
+              </tr>
+              <tr>
+                <td><code>assetLoadingCompleted</code></td>
+                <td><code>Stage</code>／Asset Manager</td>
+                <td><code>Loading</code>, <code>LoadingBubbleAnchor</code></td>
+                <td>Loading表示を終了</td>
+              </tr>
+              <tr>
+                <td><code>stopKeyInput</code></td>
+                <td>Async Input</td>
+                <td><code>Stage</code></td>
+                <td>key listenerを停止</td>
+              </tr>
+              <tr>
+                <td><code>stopTouchInput</code></td>
+                <td>Async Input</td>
+                <td><code>Stage</code></td>
+                <td>touch listenerを停止</td>
+              </tr>
+              <tr>
+                <td><code>finishTimedActorAction</code></td>
+                <td><code>Stage</code>のRight／Down key hat</td>
+                <td><code>Actor</code></td>
+                <td>時間actionを確定状態へ進める</td>
+              </tr>
+              <tr>
+                <td><code>debugTestCamera</code></td>
+                <td>TurboWarp editorからの手動送信</td>
+                <td><code>Stage</code></td>
+                <td>camera previewの診断</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <code>stopKeyInput</code>と<code>stopTouchInput</code>は標準broadcast blockではなく、Async Inputへ渡した
+            callback messageです。<code>debugTestCamera</code>は通常フローに送信元を持たない診断用messageです。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="72-状態遷移">7.2 状態遷移</h3>
+          <figure>
+            <img src="images/internal-state-transition.svg" alt="紙芝居アプリの主要状態遷移">
+            <figcaption aria-hidden="true">紙芝居アプリの主要状態遷移</figcaption>
+          </figure>
+          <p>
+            主要状態はStageが所有します。UI表示そのものを状態の正本にせず、runtime variable、
+            broadcast、実行中のcustom blockから導出します。
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>状態</th>
+                <th>入口</th>
+                <th>主な出口</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>初期化</td>
+                <td>green flag</td>
+                <td><code>showTitle</code></td>
+              </tr>
+              <tr>
+                <td>title</td>
+                <td><code>showTitle</code></td>
+                <td>組み込み台本ならStage clickで<code>startStory</code>、それ以外はcover</td>
+              </tr>
+              <tr>
+                <td>cover／menu</td>
+                <td><code>showCover</code>または<code>stopStory</code></td>
+                <td>open／reloadで<code>startStory</code>、title buttonで<code>showTitle</code></td>
+              </tr>
+              <tr>
+                <td>台本準備</td>
+                <td><code>startStory</code></td>
+                <td>正常ならasset loadingとscene実行、異常なら<code>invalidScript</code></td>
+              </tr>
+              <tr>
+                <td>asset loading</td>
+                <td><code>create asset</code></td>
+                <td><code>assetLoadingCompleted</code>後にscene実行</td>
+              </tr>
+              <tr>
+                <td>scene実行</td>
+                <td><code>exec scene # %s with %s</code></td>
+                <td>次scene／branch、または最終sceneで<code>stopStory</code></td>
+              </tr>
+              <tr>
+                <td>action実行</td>
+                <td><code>exec actionList</code></td>
+                <td>Rightでaction境界、Downでscene境界、完了で次action</td>
+              </tr>
+              <tr>
+                <td>pose待機</td>
+                <td><code>exec pose action %s</code></td>
+                <td>pose成立、Right／Down、エラーでaction実行へ戻る</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <code>skipMode</code>は要求、<code>skipContext</code>は消費可能な境界です。要求はtitle、action、pose、sceneの
+            該当境界だけが消費し、scene開始、cover、stopでclearします。<code>nextSceneLabel</code>はkey／touch
+            listenerが設定し、scene loopがlabelをindexへ解決したあと削除します。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="8-検証">8. 検証</h2>
+        <section class="level3">
+          <h3 id="81-変更対象ごとのテスト">8.1 変更対象ごとのテスト</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>変更対象</th>
+                <th>主なテスト</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>builder API／CLI</td>
+                <td><code>test/builder.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>展開SB3の構造</td>
+                <td><code>test/sb3-project.test.mjs</code>、<code>test/skip-mode.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>内部仕様書の構造一覧</td>
+                <td><code>test/internal-specification.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>TurboWarp実行結果</td>
+                <td><code>test/turbowarp-vm.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>入力、分岐、wait</td>
+                <td><code>test/async-input.test.mjs</code>、<code>test/register-branch.test.mjs</code>、<code>test/wait-action.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>文書、画像、ライセンス</td>
+                <td><code>test/docs-config.test.mjs</code>、<code>test/docs-images.test.mjs</code>、<code>test/documentation-license.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>公開物と汎用性</td>
+                <td><code>test/sb3-publication.test.mjs</code>、<code>test/build-freshness.test.mjs</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="82-標準チェック">8.2 標準チェック</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> lint
+<span class="token function">pnpm</span> <span class="token function">format</span>
+<span class="token function">pnpm</span> typecheck
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span>
+<span class="token function">pnpm</span> run build</code></pre>
+          <p>
+            GitHub ActionsはcleanなLinux環境で<code>pnpm install --frozen-lockfile</code>、<code>pnpm test</code>、
+            <code>pnpm build</code>を実行します。ローカルで成功しても、未追跡ファイルや既存生成物へ依存して
+            いないことをCIで確認します。
+          </p>
+          <p><code>pnpm run build</code>は少なくとも次を生成・検証します。</p>
+          <ul>
+            <li><code>dist/downloads/kamishibai.sb3</code></li>
+            <li>一般文書のHTML/PDF</li>
+            <li>参加者向け・スタッフ向け体験会資料</li>
+            <li>公開サイトのリンク、画像、目次、PDF bookmark、favicon</li>
+          </ul>
+          <p>SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて次を手動確認します。</p>
+          <ul>
+            <li>読込エラーがない</li>
+            <li>green flagでtitleとmenuが表示される</li>
+            <li>外部台本と組み込み台本の対象フローが開始できる</li>
+            <li>pause、Space、Right、Downの進行が意図どおり動く</li>
+            <li>Loading、画像、音声、テキストが正しく表示・再生される</li>
+          </ul>
+          <p>
+            内部構造を変更したPRでは、<code>app/project.source.json</code>と本書のtarget、変数、message、
+            hat、custom block一覧を同時に更新します。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="9-公開">9. 公開</h2>
+        <section class="level3">
+          <h3 id="91-github-pages">9.1 GitHub Pages</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> run deploy</code></pre>
+          <p>
+            <code>predeploy</code>がフルbuildを行い、成功した<code>dist/</code>だけを<code>gh-pages</code>へ公開します。公開後は
+            top page、文書一覧、HTML/PDF、SB3 downloadを実際のURLから確認します。
+          </p>
+          <p>
+            問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
+            deployします。生成済み<code>dist/</code>だけを手作業で修正しません。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="92-npmパッケージ">9.2 npmパッケージ</h3>
+          <p>公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。</p>
+          <ol>
+            <li><code>package.json</code>、lockfile、<code>src/builder/constants.js</code>、READMEの導入例を同じversionへ更新する。</li>
+            <li>cleanなcommitで標準チェック、フルbuild、公開内容のdry-runを実行する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> release:check</code></pre>
+          <ol start="3">
+            <li>tarballのファイル一覧、license、size、CLI/APIを確認する。</li>
+            <li>Git worktreeではなく通常のclean cloneから公開する。</li>
+            <li>WebAuthnなどの認証を完了してpublic packageとして公開する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> publish --access public</code></pre>
+          <ol start="6">
+            <li>registry反映後にmetadataを確認する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> view @kubohiroya/tmpose-kamishibai@<span class="token operator">&lt;</span>VERSION<span class="token operator">&gt;</span> <span class="token punctuation">\</span>
+  version license dist-tags.latest dist.integrity --json</code></pre>
+          <ol start="7">
+            <li>
+              一時ディレクトリへ公開版を導入し、CLIの<code>--version</code>と
+              <code>@kubohiroya/tmpose-kamishibai/builder</code>のimportを確認する。
+            </li>
+            <li>公開に使った確定commitへannotated tagを作り、GitHub Releaseを作成する。</li>
+          </ol>
+          <p>
+            公開後に問題が見つかった場合は対象versionを<code>npm deprecate</code>し、修正版を新しいpatch
+            versionとして公開します。公開済みtarballやtagを差し替えません。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="10-トラブルシューティング">10. トラブルシューティング</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>症状</th>
+              <th>確認と対応</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>sb3:import</code>が置換を拒否する</td>
+              <td><code>git status</code>と<code>git diff -- app</code>を確認し、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#%E6%97%A2%E5%AD%98%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%B8%E3%81%AE%E5%86%8Dimport">toolchainの手順</a>に従う</td>
+            </tr>
+            <tr>
+              <td><code>.app.rollback-*</code>や<code>.＜出力名＞.rollback-*</code>が残る</td>
+              <td>削除前に元出力と比較し、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#%E5%A4%B1%E6%95%97%E6%99%82%E3%81%AE%E6%89%B1%E3%81%84">toolchainの失敗時の扱い</a>に従う</td>
+            </tr>
+            <tr>
+              <td>埋め込み拡張が追跡refと異なる</td>
+              <td><code>pnpm sb3:extensions:status</code>で確認し、固定commitへ戻すなら<code>sync</code>、更新するなら<code>update</code>を使う</td>
+            </tr>
+            <tr>
+              <td>PDF生成browserが見つからない</td>
+              <td>Chrome/Chromiumを導入し、必要なら<code>VIVLIOSTYLE_CHROME_PATH</code>を設定する</td>
+            </tr>
+            <tr>
+              <td>ローカルだけtestが通る</td>
+              <td>生成物と未追跡ファイルを確認し、clean cloneと<code>pnpm install --frozen-lockfile</code>で再現する</td>
+            </tr>
+            <tr>
+              <td>builderが既存出力を更新しない</td>
+              <td>エラーの<code>stage</code>、asset名、URIを確認する。rollback領域が残っていないか確認する</td>
+            </tr>
+            <tr>
+              <td>公開直後にnpm registryが404になる</td>
+              <td>同じversionを再publishせず、npm公開pageとregistryの反映を待って確認する</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          復旧でGit履歴を破壊しません。公開済み変更は<code>git revert</code>または新しい修正PRで戻し、tagを
+          移動しません。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="11-ライセンスと秘密情報">11. ライセンスと秘密情報</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>対象</th>
+              <th>ライセンス</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>docs/general/**</code></td>
+              <td>CC BY-SA 4.0</td>
+            </tr>
+            <tr>
+              <td><code>docs/workshops/**</code></td>
+              <td>Copyright © 2026 Hiroya Kubo. All rights reserved.</td>
+            </tr>
+            <tr>
+              <td>上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材</td>
+              <td>MPL-2.0</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          詳細は<a href="../../LICENSES.md"><code>LICENSES.md</code></a>、<a href="LICENSE.md"><code>docs/general/LICENSE.md</code></a>、
+          <a href="../workshops/LICENSE.md"><code>docs/workshops/LICENSE.md</code></a>を参照してください。
+        </p>
+        <p>
+          第三者の画像、音声、font、model、機能拡張には個別のlicenseまたは利用条件が適用されます。
+          builderで組み込む素材はasset manifestの<code>license</code>へ由来を記録します。許諾が確認できない
+          素材を本体またはsampleへ追加しません。
+        </p>
+        <p>
+          token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本、manifest、生成HTMLへ
+          記録しません。認証情報は環境変数、OSのkeychain、GitHub Secretsなど、公開物へ含まれない
+          仕組みで渡します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="12-関連ドキュメント">12. 関連ドキュメント</h2>
+        <ul>
+          <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
+          <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>
+          <li><a href="05-command-reference.md"><code>05-command-reference.md</code></a>: コマンドとactionの外部仕様</li>
+          <li><a href="06-developer-guide.md"><code>06-developer-guide.md</code></a>: setupと変更手順</li>
+          <li><a href="history.md"><code>history.md</code></a>: DSLとアプリの変更履歴</li>
+          <li><a href="../../README.md"><code>README.md</code></a>: プロジェクト全体の入口</li>
+        </ul>
+      </section>
+    </section>
+  
+
+</body></html>

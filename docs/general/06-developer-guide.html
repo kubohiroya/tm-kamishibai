@@ -9,638 +9,418 @@
   <body>
     <section class="level1">
       <h1 id="紙芝居アプリ-ソフトウェア開発者向け資料">紙芝居アプリ ソフトウェア開発者向け資料</h1>
-      <p>この資料は、TMPose紙芝居を構成するアプリと、開発に関連するライブラリをソフトウェア開発者向けにまとめたものです。</p>
+      <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
+      <p>
+        このガイドは、TMPose紙芝居のアプリ、SB3ソース、ビルダー、Webサイト、ドキュメントを
+        変更する開発者向けの入口です。アプリの内部構造、成果物、ビルダー仕様、検証、公開は
+        <a href="07-internal-specification.md">紙芝居アプリ内部仕様書</a>、台本の書式とコマンド仕様は
+        <a href="04-dsl-manual.md">台本DSLマニュアル</a>と<a href="05-command-reference.md">コマンドリファレンス</a>
+        を正本とします。
+      </p>
       <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
+      <p>過去のバージョンからの変更は<a href="history.md"><code>history.md</code></a>を参照してください。</p>
+      <p>このガイドの章は、次の3つの区分で並んでいます。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>区分</th>
+            <th>対象</th>
+            <th>読み方</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>導入</td>
+            <td>第1〜4章</td>
+            <td>初めて開発するときに、この順に読む</td>
+          </tr>
+          <tr>
+            <td>変更対象別手順</td>
+            <td>第5〜8章</td>
+            <td>変更対象に応じて、必要な章だけを読む</td>
+          </tr>
+          <tr>
+            <td>参照</td>
+            <td>第9〜10章</td>
+            <td>関連プロジェクトや資料を探すときに参照する</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        第1〜4章では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
+        開発フローへ進みます。第5〜8章は、この順に実施する一連の工程ではなく、
+        変更対象ごとに独立した手順です。第9〜10章は作業手順ではありません。
+      </p>
       <section class="level2">
-        <h2 id="1-アプリ">1. アプリ</h2>
-        <section class="level3">
-          <h3 id="11-参加型ai紙芝居アプリ">1.1 「参加型」AI紙芝居アプリ</h3>
-          <p>「参加型」AI紙芝居アプリは、オープンソースライセンス(MPL2.0)で公開しています。</p>
-          <p>3.1では、Asset Managerによるプロジェクト内／外部アセットとテキストアセットの統合、Temporary Variablesによる状態管理、Runtime Expressionによる条件評価、Async Inputによる入力待ち、TMPoseによるポーズ認識を組み合わせてDSLを実行します。</p>
-          <ul>
-            <li>tmpose-kamishibai: アプリ本体・ドキュメント・汎用ビルドツール
-              <ul>
-                <li><a href="https://github.com/kubohiroya/tmpose-kamishibai">https://github.com/kubohiroya/tmpose-kamishibai</a></li>
-              </ul>
-            </li>
-            <li>tmpose-kamishibai-samples: 公開用台本・サンプル固有アセット
-              <ul>
-                <li><a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">https://kubohiroya.github.io/tmpose-kamishibai-samples/</a></li>
-                <li><a href="https://github.com/kubohiroya/tmpose-kamishibai-samples">https://github.com/kubohiroya/tmpose-kamishibai-samples</a></li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-        <section class="level3">
-          <h3 id="12-kamishibaisb3-の依存物管理方針">1.2 <code>kamishibai.sb3</code> の依存物管理方針</h3>
-          <p>配布する <code>kamishibai.sb3</code> は、台本固有の画像・音声アセットを組み込まない汎用実行環境として、Git管理された展開ソースから生成します。機能拡張とアセットは、提供元と用途に応じて次のように扱います。</p>
-          <ul>
-            <li>Animated TextやTemporary Variablesなど、<code>extensions.turbowarp.org</code> で提供されるTurboWarp Extension Gallery採用済みの機能拡張は、外部URLを参照します。本資料では、これらをTurboWarp標準の機能拡張と呼びます。</li>
-            <li>Asset Manager、TMPose、Text Lines、Runtime Expression、Async Inputなど、tmpose-kamishibai固有の非サンドボックス機能拡張は、JavaScriptをbase64データURLに変換して <code>kamishibai.sb3</code> 内へ格納します。</li>
-            <li>台本で使用する画像・音声アセットは <code>kamishibai.sb3</code> に組み込まず、台本ファイルの <code>asset=</code> 行から外部URLを参照します。</li>
-            <li>TurboWarp標準の機能拡張と外部アセットは、提供元が内容とURLを安定して維持することを前提に利用します。SHA-3などのハッシュ値による独自の完全性検証は行いません。</li>
-          </ul>
-          <p>外部アセットの提供元には、HTTPSで取得できること、ブラウザからの取得に必要なCORS設定が行われていること、URLが長期的に維持されることを求めます。配信内容またはURLが変更された場合は、必要に応じて台本ファイルを更新します。</p>
-        </section>
-        <section class="level3">
-          <h3 id="13-正本と生成物">1.3 正本と生成物</h3>
-          <p><code>app/</code> ディレクトリを紙芝居アプリの正本としてGit管理します。ルートの <code>kamishibai.sb3</code> や <code>site/downloads/</code> 配下のSB3バイナリは正本として管理しません。</p>
-          <p>浦島太郎の正本は、本体とは別の<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples"><code>kubohiroya/tmpose-kamishibai-samples</code></a>リポジトリの<code>stories/urashima/</code>以下で管理します。<code>source.txt</code>、画像・音声、アセットロック、生成設定を正本とし、公開ビルドで編集用<code>_urashima.sb3</code>、再生用<code>urashima.sb3</code>、変換済み<code>urashima.txt</code>、Web版を生成します。生成物は<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>でMPL-2.0により配信します。本体リポジトリでは、浦島太郎固有のSB3、台本、画像、音声を管理・配布しません。</p>
-          <p><code>app/</code> の主な内容は次のとおりです。</p>
-          <ul>
-            <li><code>project.source.json</code>: 整形済みのScratchプロジェクトJSON</li>
-            <li><code>embedded-extensions.json</code>: 埋め込み拡張のID、ファイル、データURL符号化方式</li>
-            <li><code>extensions/</code>: 個別ファイルへ復号したカスタム機能拡張</li>
-            <li><code>assets/</code>: 汎用実行環境自体が参照する画像・音声</li>
-            <li><code>sb3-source.json</code>: ZIPエントリの順序を含む展開ソースのマニフェスト</li>
-          </ul>
-          <p><code>app/project.source.json</code> の台本解析・実行用リストは空の初期状態で管理し、浦島太郎固有のターゲット、背景、コスチューム、音声は含めません。この不変条件は配布テストで検査します。</p>
-          <p>SB3は用途ごとに次の場所へ生成します。どちらもGit管理対象ではありません。</p>
-          <table>
-            <thead>
-              <tr>
-                <th>用途</th>
-                <th>生成先</th>
-                <th>生成コマンド</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>TurboWarpでの再編集、ローカルテスト</td>
-                <td><code>tmp/kamishibai.sb3</code></td>
-                <td><code>pnpm sb3:build</code></td>
-              </tr>
-              <tr>
-                <td>GitHub Pagesでの配布</td>
-                <td><code>dist/downloads/kamishibai.sb3</code></td>
-                <td><code>pnpm run build</code></td>
-              </tr>
-            </tbody>
-          </table>
-          <p>生成処理はZIPエントリ順とタイムスタンプを固定します。同じ <code>app/</code> から生成したSB3はbit-for-bitで一致します。<code>pnpm sb3:check</code> は、アセット参照とMD5、マニフェストの不足・余剰、埋め込み拡張の対応関係を検証します。</p>
-        </section>
-        <section class="level3">
-          <h3 id="14-turbowarpで編集した内容を取り込む">1.4 TurboWarpで編集した内容を取り込む</h3>
-          <p>通常の更新手順は次のとおりです。</p>
-          <ol>
-            <li><code>app/</code> に未コミット差分がないことを確認する。</li>
-            <li><code>pnpm sb3:build</code> を実行する。</li>
-            <li><code>tmp/kamishibai.sb3</code> をTurboWarpで開き、編集する。</li>
-            <li>TurboWarpから編集済みSB3を明示した場所へ保存する。</li>
-            <li><code>pnpm sb3:import -- /path/to/edited-kamishibai.sb3</code> を実行する。</li>
-            <li><code>git diff -- app</code> で、ブロック、拡張、アセットの差分を確認する。</li>
-            <li>次の検証を順に実行する。</li>
-          </ol>
-          <pre class="language-sh"><code class="language-sh">pnpm sb3:check
-pnpm test
-pnpm run build</code></pre>
-          <p>importは、入力SB3から作成した候補と既存の <code>app/</code> を比較します。内容が同一なら書き換えません。相違がある場合、Git管理外の出力や未コミット差分を既定では置換しません。Git管理済みでcleanな差分の確認だけを省略するときは <code>--yes</code>、未コミット差分も意図的に破棄するときだけ <code>--discard-local-changes</code> を追加します。後者は別指定であり、<code>--yes</code> だけでは未コミット差分を破棄できません。</p>
-          <p>カスタム機能拡張だけを修正する場合は、<code>app/extensions/</code> のJavaScriptを直接編集できます。手作業でもコーディングエージェントでも、編集後は同じ3つの検証コマンドを実行します。TurboWarp GUIで行った変更とソースファイルへの部分修正を同時に取り込む場合は、先にimportを完了してGit差分を確認してから、部分修正を重ねます。</p>
-        </section>
-        <section class="level3">
-          <h3 id="15-配布確認とロールバック">1.5 配布確認とロールバック</h3>
-          <p><code>pnpm run build</code> はサイト一式を作成し、<code>dist/downloads/kamishibai.sb3</code> が <code>app/</code> からの決定的生成結果と一致すること、ダウンロードページから参照されていること、ZIP形式とプロジェクト構造が妥当であることを検証します。</p>
-          <p>リリースまたはマージ前には、生成SB3をTurboWarpで開き、少なくとも次を手動確認します。</p>
-          <ul>
-            <li>読込エラーが表示されない。</li>
-            <li>緑の旗で表紙とメニューが表示される。</li>
-            <li>台本ファイルを読み込める。</li>
-            <li>スペースキー、右矢印キー、下矢印キーの進行操作が機能する。</li>
-          </ul>
-          <p>ソース更新を戻す場合は、該当コミットを <code>git revert</code> してから <code>pnpm sb3:build</code> と <code>pnpm run build</code> を再実行します。未コミットの <code>app/</code> を戻す操作は差分を失うため、先に <code>git diff -- app</code> を確認し、必要ならコミットまたはstashします。</p>
-          <p>importまたはbuildの途中で <code>.app.rollback-*</code> や <code>.kamishibai.sb3.rollback-*</code> が残った場合は、自動削除や再実行をせず、中身と元の出力を比較します。復旧対象を確定した後で元の場所へ戻し、通常の検証を実行します。配布に問題が見つかった場合は、GitHub Pagesを直前の検証済みコミットから再構築できます。SB3バイナリを正本としてリポジトリへ戻す必要はありません。</p>
-          <section class="level4">
-            <h4 id="loading表示とアセット読込順">Loading表示とアセット読込順</h4>
-            <p>汎用SB3は、アセット読込専用の組み込みスプライト<code>Loading</code>と組み込みコスチューム<code>loading</code>を持ちます。従来名称<code>Hatching</code>（旧SB3データ上は<code>Hatchling</code>）は使用しません。</p>
-            <p>台本の<code>setLoadingCostume=名前1,名前2,...</code>は、<code>asset=</code>で登録する画像アセット名のリストです。ランタイムはストーリー開始時に前回の設定を空へ戻し、scene 0の全コマンドを解析した後で次の順序を確定します。このため、<code>setLoadingCostume</code>と対象<code>asset=</code>の記述順には依存しません。</p>
-            <ol>
-              <li>指定名の前後空白を除去し、空要素と重複名を除外する。</li>
-              <li>指定名がすべて<code>assetList</code>に存在することを検証する。未定義名があれば読込を停止する。</li>
-              <li>指定されたLoading用アセットを、互いの記述順を保ったまま<code>assetList</code>の先頭へ移動する。</li>
-              <li>Loading用アセットをすべて登録してから、残りの通常アセットを登録する。</li>
-              <li>通常アセットの読込開始前と完了後に、Loading用アセットを除いた<code>完了数 / 総数</code>を通知する。</li>
-              <li>通常アセットの1始まりの読込番号をLoading用画像数で循環させ、<code>Loading</code>スプライトへ適用する。</li>
-              <li>全アセット完了後に吹き出しと<code>Loading</code>スプライトを非表示にする。</li>
-            </ol>
-            <p>Asset Managerの内部ブロック<code>setLoadingCostumes</code>、<code>prepareLoadingAssets</code>、<code>loadingAssetCount</code>、<code>loadingCostumeAt</code>が、設定の正規化、安定した優先順、除外件数、循環選択を担当します。これらはSB3内のランタイム実装用で、台本作者が直接呼び出すブロックではありません。<code>setLoadingCostume</code>がない場合、循環対象名は空となり、組み込みコスチュームをそのまま表示します。</p>
-            <p>進捗の分母は<code>assetListの長さ - Loading用アセット数</code>、分子は<code>現在のassetList番号 - Loading用アセット数</code>です。Loading用アセットだけの台本では通常アセットの進捗表示を開始せず、そのまま完了通知へ進みます。</p>
-          </section>
-        </section>
-        <section class="level3">
-          <h3 id="16-汎用sb3台本変換ビルダー">1.6 汎用SB3・台本変換ビルダー</h3>
-          <p><code>@kubohiroya/tmpose-kamishibai</code>は、ベースSB3、外部参照付き台本、アセットロックマニフェストから、次の3成果物を同時に生成します。</p>
-          <pre class="language-text"><code class="language-text">&lt;出力名&gt;.sb3
-&lt;出力名&gt;.txt
-&lt;出力名&gt;.manifest.json</code></pre>
-          <p>ビルダーはステージ背景、スプライトのコスチューム、ステージ音、スプライト音を追加します。ベースSB3にあるブロック、拡張機能、変数、モニター、既存アセットは保持し、入力SB3と入力台本は書き換えません。台本は行単位で解析し、有効な<code>asset=</code>コマンドだけを変換します。コメント、他のコマンド、本文、行順、改行コードは保持します。</p>
-          <section class="level4">
-            <h4 id="固定バージョンでの導入">固定バージョンでの導入</h4>
-            <p>消費側は浮動<code>main</code>へ依存せず、検証済みのGitタグを<code>package.json</code>へ固定します。現在のリポジトリ間依存ではnpmレジストリ公開を前提にしません。</p>
-            <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
-  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
-    <span class="token property">"@kubohiroya/tmpose-kamishibai"</span><span class="token operator">:</span> <span class="token string">"github:kubohiroya/tmpose-kamishibai#v3.1.0"</span>
-  <span class="token punctuation">}</span>
-<span class="token punctuation">}</span></code></pre>
-            <p>pnpm 11はGit依存パッケージの準備スクリプトを既定で拒否します。消費側の<code>pnpm-workspace.yaml</code>で、このパッケージだけを信頼対象として明示します。全依存のスクリプトを一括許可してはいけません。</p>
-            <pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">allowBuilds</span><span class="token punctuation">:</span>
-  <span class="token key atrule">'@kubohiroya/tmpose-kamishibai'</span><span class="token punctuation">:</span> <span class="token boolean important">true</span></code></pre>
-            <p>初回は<code>pnpm install</code>を実行し、生成された<code>pnpm-lock.yaml</code>を<code>package.json</code>、<code>pnpm-workspace.yaml</code>とともにコミットします。lockfileはGitタグを具体的なコミットSHAと取得元tarballへ解決します。CIでは<code>pnpm install --frozen-lockfile</code>を使用し、lockfileにない依存更新を拒否します。</p>
-            <p>リリースでは<code>package.json</code>のバージョン<code>3.1.0</code>とGitタグ<code>v3.1.0</code>を対応させ、公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。</p>
-            <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> pack</code></pre>
-            <p>npmレジストリ公開は、リポジトリ間の固定依存を成立させるための必須条件ではありません。不特定の外部利用者へ標準的なSemVerパッケージとして提供する場合は、別のリリースIssueで公開とprovenanceを管理します。</p>
-          </section>
-          <section class="level4">
-            <h4 id="javascript-api">JavaScript API</h4>
-            <p><code>package.json</code>の<code>./builder</code> exportから<code>buildSb3Bundle</code>を読み込みます。</p>
-            <pre class="language-js"><code class="language-js"><span class="token keyword module">import</span> <span class="token imports"><span class="token punctuation">{</span>buildSb3Bundle<span class="token punctuation">}</span></span> <span class="token keyword module">from</span> <span class="token string">'@kubohiroya/tmpose-kamishibai/builder'</span><span class="token punctuation">;</span>
-
-<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword control-flow">await</span> <span class="token function">buildSb3Bundle</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
-  <span class="token literal-property property">baseSb3</span><span class="token operator">:</span> <span class="token string">'kamishibai.sb3'</span><span class="token punctuation">,</span>
-  <span class="token literal-property property">sourceScript</span><span class="token operator">:</span> <span class="token string">'source.txt'</span><span class="token punctuation">,</span>
-  <span class="token literal-property property">assetManifest</span><span class="token operator">:</span> <span class="token string">'assets.lock.json'</span><span class="token punctuation">,</span>
-  <span class="token literal-property property">outputDirectory</span><span class="token operator">:</span> <span class="token string">'dist'</span><span class="token punctuation">,</span>
-  <span class="token literal-property property">outputName</span><span class="token operator">:</span> <span class="token string">'sample'</span><span class="token punctuation">,</span>
-  <span class="token literal-property property">profile</span><span class="token operator">:</span> <span class="token string">'editor'</span><span class="token punctuation">,</span>
-<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-
-<span class="token console class-name">console</span><span class="token punctuation">.</span><span class="token method function property-access">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span><span class="token property-access">outputPaths</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
-            <p><code>profile</code>は<code>editor</code>または<code>player</code>を必ず明示します。<code>editor</code>は変換済み台本を外部TXTだけに保持し、<code>player</code>は同じバイト列を外部TXTとSB3内の予約変数<code>tmposeEmbeddedScript</code>の両方へ保持します。<code>baseSb3</code>と<code>sourceScript</code>にはファイルパスまたは<code>file:</code> URLを指定します。<code>assetManifest</code>にはファイルパス、<code>file:</code> URL、または同じ構造のJavaScriptオブジェクトを指定できます。オブジェクトを渡し、相対<code>file:</code>参照を使う場合は<code>manifestBaseDirectory</code>で基準ディレクトリを明示します。</p>
-            <p>組み込み台本は既定で1 MiBまでです。APIの<code>maxEmbeddedScriptBytes</code>、CLIの<code>--max-script-bytes</code>で1以上のバイト数へ変更できます。空台本、不正なUTF-8、上限超過、予約変数の欠損・重複・型不一致、または台本が入ったベースSB3は、既存成果物を更新せずエラーにします。</p>
-          </section>
-          <section class="level4">
-            <h4 id="cli">CLI</h4>
-            <p>CLIはAPIと同じ<code>buildSb3Bundle</code>を呼び出し、生成仕様を重複実装しません。<code>--output</code>には拡張子を付けない出力ベース名を指定します。</p>
-            <pre class="language-bash"><code class="language-bash">tmpose-kamishibai build-sb3 <span class="token punctuation">\</span>
-  --base kamishibai.sb3 <span class="token punctuation">\</span>
-  --script source.txt <span class="token punctuation">\</span>
-  --assets assets.lock.json <span class="token punctuation">\</span>
-  --output dist/sample <span class="token punctuation">\</span>
-  --profile editor</code></pre>
-            <p>追加オプションは次のとおりです。</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>オプション</th>
-                  <th>意味</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>--profile PROFILE</code></td>
-                  <td><code>editor</code>または<code>player</code>を必ず指定する</td>
-                </tr>
-                <tr>
-                  <td><code>--allow-file-root DIR</code></td>
-                  <td><code>file:</code>の許可ルートを追加する。複数回指定可能</td>
-                </tr>
-                <tr>
-                  <td><code>--allow-http</code></td>
-                  <td>平文HTTPを明示的に許可する</td>
-                </tr>
-                <tr>
-                  <td><code>--timeout-ms N</code></td>
-                  <td>1リクエストのタイムアウト</td>
-                </tr>
-                <tr>
-                  <td><code>--max-asset-bytes N</code></td>
-                  <td>1アセットの最大サイズ</td>
-                </tr>
-                <tr>
-                  <td><code>--max-script-bytes N</code></td>
-                  <td>組み込み台本の最大サイズ</td>
-                </tr>
-                <tr>
-                  <td><code>--max-redirects N</code></td>
-                  <td>HTTPリダイレクトの上限</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-          <section class="level4">
-            <h4 id="入力マニフェスト">入力マニフェスト</h4>
-            <p><code>assets.lock.json</code>は<code>formatVersion: 1</code>と1件以上の<code>assets</code>を持ちます。各アセットは、DSL名、入力URI、組み込み種別、target、SB3内の名前、Content-Type、データ形式、サイズ、SHA-256、ライセンス参照、Scratchメタデータを固定します。</p>
-            <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
-  <span class="token property">"formatVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
-  <span class="token property">"assets"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
-    <span class="token punctuation">{</span>
-      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"forest"</span><span class="token punctuation">,</span>
-      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"file:assets/forest.svg"</span><span class="token punctuation">,</span>
-      <span class="token property">"kind"</span><span class="token operator">:</span> <span class="token string">"backdrop"</span><span class="token punctuation">,</span>
-      <span class="token property">"target"</span><span class="token operator">:</span> <span class="token string">"@stage"</span><span class="token punctuation">,</span>
-      <span class="token property">"sb3Name"</span><span class="token operator">:</span> <span class="token string">"森"</span><span class="token punctuation">,</span>
-      <span class="token property">"contentType"</span><span class="token operator">:</span> <span class="token string">"image/svg+xml"</span><span class="token punctuation">,</span>
-      <span class="token property">"dataFormat"</span><span class="token operator">:</span> <span class="token string">"svg"</span><span class="token punctuation">,</span>
-      <span class="token property">"size"</span><span class="token operator">:</span> <span class="token number">1234</span><span class="token punctuation">,</span>
-      <span class="token property">"sha256"</span><span class="token operator">:</span> <span class="token string">"&lt;64文字の16進数&gt;"</span><span class="token punctuation">,</span>
-      <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC-BY-4.0: https://example.com/license"</span><span class="token punctuation">,</span>
-      <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
-        <span class="token property">"bitmapResolution"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
-        <span class="token property">"rotationCenterX"</span><span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
-        <span class="token property">"rotationCenterY"</span><span class="token operator">:</span> <span class="token number">180</span>
-      <span class="token punctuation">}</span>
-    <span class="token punctuation">}</span><span class="token punctuation">,</span>
-    <span class="token punctuation">{</span>
-      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"opening"</span><span class="token punctuation">,</span>
-      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"https://example.com/opening.wav"</span><span class="token punctuation">,</span>
-      <span class="token property">"kind"</span><span class="token operator">:</span> <span class="token string">"stageSound"</span><span class="token punctuation">,</span>
-      <span class="token property">"target"</span><span class="token operator">:</span> <span class="token string">"@stage"</span><span class="token punctuation">,</span>
-      <span class="token property">"sb3Name"</span><span class="token operator">:</span> <span class="token string">"オープニング"</span><span class="token punctuation">,</span>
-      <span class="token property">"contentType"</span><span class="token operator">:</span> <span class="token string">"audio/wav"</span><span class="token punctuation">,</span>
-      <span class="token property">"dataFormat"</span><span class="token operator">:</span> <span class="token string">"wav"</span><span class="token punctuation">,</span>
-      <span class="token property">"size"</span><span class="token operator">:</span> <span class="token number">5678</span><span class="token punctuation">,</span>
-      <span class="token property">"sha256"</span><span class="token operator">:</span> <span class="token string">"&lt;64文字の16進数&gt;"</span><span class="token punctuation">,</span>
-      <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC0-1.0"</span><span class="token punctuation">,</span>
-      <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
-        <span class="token property">"format"</span><span class="token operator">:</span> <span class="token string">""</span><span class="token punctuation">,</span>
-        <span class="token property">"rate"</span><span class="token operator">:</span> <span class="token number">48000</span><span class="token punctuation">,</span>
-        <span class="token property">"sampleCount"</span><span class="token operator">:</span> <span class="token number">2800</span>
-      <span class="token punctuation">}</span>
-    <span class="token punctuation">}</span>
-  <span class="token punctuation">]</span>
-<span class="token punctuation">}</span></code></pre>
-            <p><code>kind</code>と<code>target</code>の組み合わせは次のとおりです。</p>
-            <table>
-              <thead>
-                <tr>
-                  <th><code>kind</code></th>
-                  <th><code>target</code></th>
-                  <th>変換後の台本参照</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>backdrop</code></td>
-                  <td><code>@stage</code></td>
-                  <td><code>backdrop:&lt;sb3Name&gt;</code></td>
-                </tr>
-                <tr>
-                  <td><code>costume</code></td>
-                  <td>スプライト名</td>
-                  <td><code>costume:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
-                </tr>
-                <tr>
-                  <td><code>stageSound</code></td>
-                  <td><code>@stage</code></td>
-                  <td><code>sound:@stage:&lt;sb3Name&gt;</code></td>
-                </tr>
-                <tr>
-                  <td><code>spriteSound</code></td>
-                  <td>スプライト名</td>
-                  <td><code>sound:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
-                </tr>
-              </tbody>
-            </table>
-            <p>DSL名は重複できません。同じtarget、同じコレクション、同じSB3名へ複数アセットを割り当てることもできません。既存SB3に同名アセットがある場合も、推測や上書きを行わずエラーにします。</p>
-          </section>
-          <section class="level4">
-            <h4 id="セキュリティ再現性検証">セキュリティ、再現性、検証</h4>
-            <p><code>file:</code>参照は既定でマニフェストのあるディレクトリ以下だけを許可します。<code>..</code>やシンボリックリンクの解決後に許可ルートを脱出するパスは拒否します。追加ルートはAPIの<code>allowedFileRoots</code>またはCLIの<code>--allow-file-root</code>で明示します。</p>
-            <p>HTTP(S)取得はステータス、Content-Type、実サイズ、ロック済みサイズ、SHA-256、タイムアウト、最大サイズ、リダイレクト回数を検証します。既定ではHTTPSだけを許可し、HTTPはAPIの<code>allowHttp: true</code>またはCLIの<code>--allow-http</code>を指定した場合だけ使用できます。</p>
-            <p>生成SB3はZIPエントリを<code>project.json</code>先頭、残りをファイル名順に並べ、日時を1980年1月1日、圧縮レベルを固定します。<code>project.json</code>と出力manifestも正規化して書き出します。同じ入力と設定から生成したSB3、台本、manifestはbit-for-bitで一致します。</p>
-            <p>出力manifestの<code>formatVersion</code>は2です。使用パッケージとバージョン、<code>profile</code>、入力3点のSHA-256、各アセットの入力ロックとSB3ファイル名・アセットID・台本参照、出力SB3と台本のSHA-256を記録します。<code>script</code>には<code>mode</code>（<code>external</code>または<code>embedded</code>）、予約変数ID、UTF-8バイト数、SHA-256を記録します。出力確定前に、SB3内のtargetとアセットファイル、変換済み台本、manifestの全対応を照合し、<code>player</code>ではSB3内の台本、外部TXT、manifestのサイズとハッシュが一致することを再読込して確認します。</p>
-          </section>
-          <section class="level4">
-            <h4 id="エラーとロールバック">エラーとロールバック</h4>
-            <p>アセット固有のエラーには処理段階、DSLアセット名、入力URIを含めます。欠損、HTTPエラー、Content-Type・サイズ・SHA-256不一致、target欠損、名前競合、危険なパスのいずれでも、検証が完了するまで既存出力を変更しません。</p>
-            <p>3成果物は同じ出力ディレクトリ内の一時領域で生成・検証します。確定時は既存3成果物をロールバック領域へ移してから新成果物へ置き換え、途中で失敗した場合は新成果物を除去して旧成果物を復元します。<code>.＜出力名＞.rollback-*</code>が残っている場合は、前回処理が中断した可能性があるため自動上書きせず停止します。内容を確認して旧成果物を復元した後に再実行します。</p>
-            <p>パッケージに問題がある場合、消費側はGitタグ指定とlockfileを直前の検証済み版へ戻します。このビルダーは通常の本体ビルドへ直接組み込まれていないため、本体配布処理を変更せず切り戻せます。</p>
-          </section>
-        </section>
-        <section class="level3">
-          <h3 id="17-成果物プロファイル">1.7 成果物プロファイル</h3>
-          <p>紙芝居アプリのSB3は、台本と物語固有アセットをどこに保持するかにより、<code>generic</code>、<code>editor</code>、<code>player</code>の3プロファイルに分けます。プロファイルは用途と生成契約を表すものであり、SB3をTurboWarp Editorで編集できるかどうかを制限するアクセス権ではありません。そのため、<code>player</code>は「再生専用」ではなく「再生用」と表記します。</p>
-          <table>
-            <thead>
-              <tr>
-                <th>プロファイル</th>
-                <th>ファイル名の例</th>
-                <th>台本</th>
-                <th>物語固有アセット</th>
-                <th>主な用途</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>generic</code></td>
-                <td><code>kamishibai.sb3</code></td>
-                <td>非埋め込み</td>
-                <td>非埋め込み</td>
-                <td>汎用の物語作成・再生用雛形</td>
-              </tr>
-              <tr>
-                <td><code>editor</code></td>
-                <td><code>_urashima.sb3</code></td>
-                <td>非埋め込み</td>
-                <td>埋め込み</td>
-                <td>物語作成者による台本編集・動作確認</td>
-              </tr>
-              <tr>
-                <td><code>player</code></td>
-                <td><code>urashima.sb3</code></td>
-                <td>埋め込み</td>
-                <td>埋め込み</td>
-                <td>配布・再生、PackagerによるWeb版生成</td>
-              </tr>
-            </tbody>
-          </table>
-          <section class="level4">
-            <h4 id="generic-汎用雛形"><code>generic</code>: 汎用雛形</h4>
-            <p><code>generic</code>は本体リポジトリが<code>app/</code>から生成する<code>kamishibai.sb3</code>です。公開する物語の台本、背景、キャラクター画像、効果音、BGMを含めません。利用者または物語作成者が台本を開き、台本の<code>asset=</code>定義に従ってアセットを読み込む従来の作成・再生フローを提供します。</p>
-            <p><code>generic</code>はサンプル変換ビルダーの出力ではなく、<code>editor</code>と<code>player</code>を生成するためのベースアプリでもあります。本体リポジトリでは、特定の物語を追加せず、この汎用性を配布テストで維持します。</p>
-          </section>
-          <section class="level4">
-            <h4 id="editor-物語作成者向け"><code>editor</code>: 物語作成者向け</h4>
-            <p><code>editor</code>は特定の物語で使用する画像・音声をSB3へ組み込みますが、台本は組み込みません。浦島太郎では<code>_urashima.sb3</code>を使用し、物語作成者が外部の<code>urashima.txt</code>を開いて編集・再読込しながら動作を確認します。台本を変更してもアセットを再取得する必要がないため、台本の反復編集とデバッグに使用できます。</p>
-            <p>ファイル名先頭の<code>_</code>は、物語作成者が内部的に使用する編集用成果物であることをコンパクトに示します。隠しファイル、非公開ファイル、または一時ファイルであることは意味しません。一般利用者向けの主導線とは分けますが、必要に応じて開発者向けページから取得できるようにします。</p>
-          </section>
-          <section class="level4">
-            <h4 id="player-配布再生用"><code>player</code>: 配布・再生用</h4>
-            <p><code>player</code>は、<code>editor</code>と同じ画像・音声に加えて、同時生成した変換済み台本をSB3内へ組み込みます。浦島太郎では<code>urashima.sb3</code>を使用します。アプリ起動後に表示されるタイトル画面をクリックすると、組み込み台本をランタイム変数<code>script</code>へ設定し、ファイル選択を行わずに<code>startStory</code>を実行します。台本固有の画像・音声も同じSB3から解決し、アセット配信サーバから取得しません。</p>
-            <p>この保証は台本と物語固有アセットを対象とします。TMPoseモデル、カメラ、その他の外部サービスなど、別途オンライン利用を前提とする機能まで完全にオフライン化するものではありません。オンライン依存は成果物manifestと公開ページへ明記します。</p>
-            <p>TurboWarp PackagerでHTMLを生成する場合は、<code>player</code>だけを入力にします。<code>editor</code>をWeb版へ変換して、実行時に台本ファイル選択を要求する構成にはしません。サンプル一覧ではWeb版と<code>player</code>を一般向けに案内し、<code>editor</code>は物語作成者向けの導線へ分離します。</p>
-          </section>
-          <section class="level4">
-            <h4 id="生成と検証の契約">生成と検証の契約</h4>
-            <ul>
-              <li><code>generic</code>は本体リポジトリで生成し、公開サンプルの台本・固有アセットを含めません。</li>
-              <li><code>editor</code>と<code>player</code>はサンプルリポジトリで、固定バージョンの本体ビルダー、同じビルド元台本、アセットロック、名前対応表から生成します。</li>
-              <li>生成設定とmanifestへ<code>profile</code>を記録し、入力台本、アセット、ベースSB3、各成果物のSHA-256を対応付けます。</li>
-              <li><code>editor</code>の外部台本と<code>player</code>へ組み込む台本は同じ変換結果を使用します。内容またはアセット参照がプロファイル間で分岐してはいけません。</li>
-              <li>同じ入力と固定依存から各プロファイルを再生成した場合、SB3、台本、manifestのハッシュが一致しなければなりません。</li>
-              <li><code>player</code>は、タイトルクリック後にファイル選択を開かず最初のシーンへ進み、台本固有アセットのHTTP取得を行わないことをVMテストとブラウザテストで確認します。</li>
-            </ul>
-            <p>このプロファイル契約は導入済みです。本体の台本組み込みとタイトルクリック開始は完了済みの<a href="https://github.com/kubohiroya/tmpose-kamishibai/issues/60">Issue #60</a>、浦島太郎の<code>editor</code>／<code>player</code>生成は完了済みの<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/2"><code>tmpose-kamishibai-samples</code> Issue #2</a>、Packager Web版は完了済みの同<a href="https://github.com/kubohiroya/tmpose-kamishibai-samples/issues/7">Issue #7</a>に実装履歴を記録しています。現在の公開物は、上記の生成と検証の契約を満たすものとしてビルド・検証します。</p>
-            <p>問題が見つかった場合、Web版と<code>player</code>の公開を停止し、台本を外部から開く<code>editor</code>へ切り戻します。ビルダーの不具合では固定依存を直前の検証済みバージョンへ戻します。サンプル固有ファイルを本体リポジトリへコピーしてロールバックしてはいけません。</p>
-          </section>
-        </section>
-      </section>
-      <section class="level2">
-        <h2 id="2-内部仕様-skipmode-と-skipcontext">2. 内部仕様: <code>skipMode</code> と <code>skipContext</code></h2>
-        <p><code>skipMode</code> はタイトル表示状態または未処理の進行要求を保持し、<code>skipContext</code> はキー入力を受け付けてよい実行文脈を示します。どちらもTemporary Variables拡張のランタイム変数です。要求と実行文脈を分けることで、停止中の入力やアクション間の右矢印が、次の処理へ持ち越されることを防ぎます。</p>
-        <section class="level3">
-          <h3 id="21-変数の表現">2.1 変数の表現</h3>
-          <p>通常状態は、<code>skipMode</code> が<strong>存在しない状態</strong>で表します。通常状態用の文字列は使いません。廃止済みの <code>none</code> を設定または比較してはいけません。</p>
-          <table>
-            <thead>
-              <tr>
-                <th>変数</th>
-                <th>値</th>
-                <th>意味</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>skipMode</code></td>
-                <td>変数なし</td>
-                <td>未処理の要求なし</td>
-              </tr>
-              <tr>
-                <td><code>skipMode</code></td>
-                <td><code>title</code></td>
-                <td>タイトルを表示中</td>
-              </tr>
-              <tr>
-                <td><code>skipMode</code></td>
-                <td><code>pose</code></td>
-                <td>現在のポーズ1件を完了する要求</td>
-              </tr>
-              <tr>
-                <td><code>skipMode</code></td>
-                <td><code>action</code></td>
-                <td>現在のアクションを完了する要求</td>
-              </tr>
-              <tr>
-                <td><code>skipMode</code></td>
-                <td><code>scene</code></td>
-                <td>現在のシーンを完了する要求</td>
-              </tr>
-              <tr>
-                <td><code>skipContext</code></td>
-                <td>変数なし</td>
-                <td>タイトル、表紙、停止中など、シーン外</td>
-              </tr>
-              <tr>
-                <td><code>skipContext</code></td>
-                <td><code>scene</code></td>
-                <td>シーンの準備またはコマンド解析中</td>
-              </tr>
-              <tr>
-                <td><code>skipContext</code></td>
-                <td><code>betweenActions</code></td>
-                <td>アクション列の実行中だが、個別アクションの外側</td>
-              </tr>
-              <tr>
-                <td><code>skipContext</code></td>
-                <td><code>action</code></td>
-                <td>個別アクションの実行中</td>
-              </tr>
-              <tr>
-                <td><code>skipContext</code></td>
-                <td><code>pose</code></td>
-                <td>ポーズ待ちの実行中</td>
-              </tr>
-            </tbody>
-          </table>
-          <p>通常状態へ戻すときは、<code>skipMode</code> を削除します。空文字列や通常状態用の値を代入しません。<code>skipContext</code> は処理の入口で設定し、表紙、タイトル、シーン終了時に削除します。</p>
-        </section>
-        <section class="level3">
-          <h3 id="22-入力の受理">2.2 入力の受理</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>文脈</th>
-                <th>スペース</th>
-                <th>右矢印</th>
-                <th>下矢印</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>タイトル表示中</td>
-                <td><code>title</code> を削除して表紙へ進む</td>
-                <td>無視</td>
-                <td>無視</td>
-              </tr>
-              <tr>
-                <td>ポーズ待ち中</td>
-                <td><code>pose</code> を設定</td>
-                <td><code>action</code> を設定</td>
-                <td><code>scene</code> を設定</td>
-              </tr>
-              <tr>
-                <td>ポーズ以外のアクション実行中</td>
-                <td>無視</td>
-                <td><code>action</code> を設定</td>
-                <td><code>scene</code> を設定</td>
-              </tr>
-              <tr>
-                <td>アクション間</td>
-                <td>無視</td>
-                <td>無視</td>
-                <td><code>scene</code> を設定</td>
-              </tr>
-              <tr>
-                <td>シーンの準備・解析中</td>
-                <td>無視</td>
-                <td>無視</td>
-                <td><code>scene</code> を設定</td>
-              </tr>
-              <tr>
-                <td>シーン外・停止中</td>
-                <td>無視</td>
-                <td>無視</td>
-                <td>無視</td>
-              </tr>
-            </tbody>
-          </table>
-          <p>入力ハンドラは、<code>skipMode</code> が存在しない場合だけ要求を設定します。したがって、最初に受理した要求が消費されるまで、後続入力による上書きや <code>pose</code> から <code>action</code>／<code>scene</code> への格上げは行いません。</p>
-        </section>
-        <section class="level3">
-          <h3 id="23-要求の消費と伝播">2.3 要求の消費と伝播</h3>
-          <p><code>pose</code> は現在のポーズ処理だけが消費し、同じposeアクション内の次のポーズへ進みます。<code>action</code> と <code>scene</code> はポーズ処理では削除せず、外側へ伝播します。<code>action</code> は現在のアクションが完了状態になった後にアクション列が削除し、次のアクションを実行します。<code>scene</code> はアクション列を抜け、シーン終了処理の後にシーン境界で削除します。</p>
-          <p>時間を伴う処理は、要求を受けると次の完了状態へ移してから外側へ戻ります。</p>
-          <table>
-            <thead>
-              <tr>
-                <th>処理</th>
-                <th>中断後の完了状態</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>wait</code></td>
-                <td>待機を終了</td>
-              </tr>
-              <tr>
-                <td>秒数付き<code>say</code>／<code>think</code></td>
-                <td>吹き出しを消す</td>
-              </tr>
-              <tr>
-                <td><code>moveTo</code></td>
-                <td>指定した目的座標へ移動</td>
-              </tr>
-              <tr>
-                <td><code>transition:fadeOut</code></td>
-                <td>明るさを <code>-100</code> にする</td>
-              </tr>
-              <tr>
-                <td><code>transition:fadeUp</code></td>
-                <td>明るさを <code>0</code> にする</td>
-              </tr>
-              <tr>
-                <td>バックグラウンド実行中の<code>sequence</code></td>
-                <td>最後の画像を適用して一回再生を終了</td>
-              </tr>
-              <tr>
-                <td><code>sound</code></td>
-                <td><code>actionParam</code> が示す対象音声だけを停止</td>
-              </tr>
-            </tbody>
-          </table>
-          <p><code>sequence</code> は開始後すぐ次のアクションへ進むため、その後のアクション中に右矢印または下矢印が受理された場合も、実行中の一回再生を最終画像へ確定します。<code>loop</code> は継続演出なので、この確定処理の対象外です。</p>
-          <p>右矢印は現在の <code>sound</code> だけを停止します。<code>bgm</code> やほかの音声は、別のアクションを右矢印で完了しても停止しません。下矢印でシーンを終了する場合は、そのシーンで再生中の音声をすべて停止します。</p>
-          <p>緑の旗、停止、表紙開始、ストーリー開始、シーン開始・終了では、前の <code>skipMode</code> を残しません。表紙、タイトル、シーン終了時には <code>skipContext</code> も削除します。</p>
-        </section>
-        <section class="level3">
-          <h3 id="24-実装上の不変条件">2.4 実装上の不変条件</h3>
-          <ol>
-            <li>通常状態は <code>skipMode</code> が存在しない状態だけで表す。</li>
-            <li><code>skipMode</code> に設定する値は <code>title</code>、<code>pose</code>、<code>action</code>、<code>scene</code> だけにする。</li>
-            <li><code>skipContext</code> に設定する値は <code>scene</code>、<code>betweenActions</code>、<code>action</code>、<code>pose</code> だけにする。</li>
-            <li>入力受理時は <code>skipMode</code> の不在と <code>skipContext</code> の値を両方確認する。</li>
-            <li><code>pose</code> だけをポーズ処理内で消費し、<code>action</code> と <code>scene</code> はそれぞれの外側の境界へ伝播する。</li>
-            <li>完了状態を持つ時間処理は、その状態を適用してから要求を外側へ返す。</li>
-            <li>表紙、タイトル、シーン境界で、消費済みの要求と実行文脈を残さない。</li>
-          </ol>
-        </section>
-        <section class="level3">
-          <h3 id="25-テスト方針">2.5 テスト方針</h3>
-          <p><code>test/skip-mode.test.mjs</code> は生成SB3のScratchブロックグラフを検査し、許可値、存在判定、要求の削除などの構造上の不変条件を確認します。ブロックIDは固定せず、オペコード、入力値、カスタムブロック名、親子関係を使います。</p>
-          <p><code>test/turbowarp-vm.test.mjs</code> は <code>pretest</code> が <code>app/</code> から生成した <code>tmp/kamishibai.sb3</code> を、固定コミット <code>c4823421cb7c17d8d8a89878851ce1668c26a21f</code> のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える<code>0 / N</code>から<code>N / N</code>までの進捗、複数画像の循環、完了後の非表示を検証します。</p>
-          <p>外部URLの機能拡張、カメラ、ネットワーク、音声出力は決定的なテストダブルへ置き換えます。テスト中に外部通信は行いません。VM内部APIへの依存は <code>test/helpers/turbowarp-vm.mjs</code> に隔離します。</p>
-          <p>通常のテストは次のコマンドで実行します。</p>
-          <pre class="language-sh"><code class="language-sh">pnpm test</code></pre>
-          <p>別のSB3を構造検査するときは、対象を環境変数で指定できます。</p>
-          <pre class="language-sh"><code class="language-sh">KAMISHIBAI_SB3_PATH=/path/to/project.sb3 node --test test/skip-mode.test.mjs</code></pre>
-        </section>
-        <section class="level3">
-          <h3 id="26-wait-のタイマー制御">2.6 <code>wait</code> のタイマー制御</h3>
-          <p><code>wait</code> アクションはTurboWarp標準のMore Timers拡張を使用します。同拡張のタイマーは <code>start/reset timer</code> で0に戻り、その後は経過秒数が増加します。そのため、待機中の継続条件は「タイマー値が指定秒数未満」でなければなりません。</p>
-          <p>実装はタイマーをリセットしてから、タイマー値が指定秒数未満であり、かつ <code>nextSceneLabel</code> と <code>skipMode</code> のどちらも存在しない間だけ短時間のyieldを繰り返します。ループを抜けた後はタイマーを削除します。指定秒数を設定した直後にリセットする実装や、<code>timer &gt; 0</code> を継続条件にする実装は使用しません。</p>
-          <p><code>test/wait-action.test.mjs</code> は、生成SB3のブロックグラフから、このカウント方向、終了値、シーン移動・スキップ用ガード、タイマー削除を検査します。</p>
-        </section>
-      </section>
-      <section class="level2">
-        <h2 id="3-関連ライブラリ">3. 関連ライブラリ</h2>
-        <p>tmpose-kamishibaiの動作基盤として開発したもののうち、他のプロジェクトでも使えるものとして抽出し、オープンソースライセンス(MPL2.0)で公開しているライブラリを以下に列挙します。</p>
-        <section class="level3">
-          <h3 id="31-viteプラグイン">3.1 Viteプラグイン</h3>
-          <ul>
-            <li>vite-plugin-turbowarp-extension: A Vite plugin for building TypeScript projects as single-file TurboWarp extensions.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/vite-plugin-turbowarp-extension">https://github.com/kubohiroya/vite-plugin-turbowarp-extension</a></li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-        <section class="level3">
-          <h3 id="32-turbowarp-機能拡張開発用テンプレート">3.2 TurboWarp 機能拡張開発用テンプレート</h3>
-          <ul>
-            <li>turbowarp-extension-template: A reusable TypeScript template for developing, testing, building, and releasing TurboWarp extensions with Vite.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-extension-template">https://github.com/kubohiroya/turbowarp-extension-template</a></li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-        <section class="level3">
-          <h3 id="33-turbowarp-機能拡張">3.3 TurboWarp 機能拡張</h3>
-          <ul>
-            <li>tmpose.js: A TurboWarp extension for camera-based pose recognition using Teachable Machine Pose models.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-tmpose">https://github.com/kubohiroya/turbowarp-tmpose</a></li>
-              </ul>
-            </li>
-            <li>text-lines.js: A TurboWarp extension for counting, reading, and splitting text by lines.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-text-lines">https://github.com/kubohiroya/turbowarp-text-lines</a></li>
-              </ul>
-            </li>
-            <li>asset-manager.js: An IndexedDB-backed image and audio asset manager for TurboWarp projects. It can also register costumes, stage backdrops, and sounds already stored in the current .sb3 project.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-asset-manager">https://github.com/kubohiroya/turbowarp-asset-manager</a></li>
-              </ul>
-            </li>
-            <li>async-input.js: A target-scoped asynchronous keyboard, pointer, and accumulated pose input extension for TurboWarp Temporary Variables.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-async-input">https://github.com/kubohiroya/turbowarp-async-input</a></li>
-              </ul>
-            </li>
-            <li>runtime-expression.js: A safe JavaScript-like condition evaluator and conditional broadcast monitor for TurboWarp Temporary Variables runtime variables.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/turbowarp-runtime-expression">https://github.com/kubohiroya/turbowarp-runtime-expression</a></li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-        <section class="level3">
-          <h3 id="34-その他のライブラリ">3.4 その他のライブラリ</h3>
-          <ul>
-            <li>rubygana.js: A node.js library for converting Japanese text to kana.
-              <ul>
-                <li><a href="https://github.com/kubohiroya/rubygana">https://github.com/kubohiroya/rubygana</a></li>
-              </ul>
-            </li>
-          </ul>
-        </section>
-      </section>
-      <section class="level2">
-        <h2 id="4-関連ドキュメント">4. 関連ドキュメント</h2>
+        <h2 id="1-管理範囲と責務を理解する">1. 管理範囲と責務を理解する</h2>
+        <p>このリポジトリが管理するものは次のとおりです。</p>
         <ul>
-          <li><code>01-user-guide.md</code>: 紙芝居アプリの操作方法と用途別成果物の使い分け</li>
-          <li><code>02-dsl-manual.md</code>: 紙芝居DSLファイルの作り方</li>
-          <li><code>03-command-reference.md</code>: コマンドとアクションの詳細仕様</li>
-          <li><code>history.md</code>: 紙芝居DSL 2.0から3.1への変更履歴</li>
+          <li>物語固有の台本やアセットを含まない、汎用の紙芝居アプリ</li>
+          <li>アプリSB3の展開ソースと、配布用SB3を生成する設定</li>
+          <li>台本と画像・音声をSB3へ組み込むnpmパッケージ</li>
+          <li>GitHub Pagesへ公開するWebサイトと一般向けドキュメント</li>
+          <li>上記を検証する自動テスト</li>
+        </ul>
+        <p>関連プロジェクトとの境界は次のとおりです。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>対象</th>
+              <th>管理場所</th>
+              <th>このリポジトリとの関係</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SB3の展開・検証・決定的再構築</td>
+              <td><a href="https://github.com/kubohiroya/sb3-toolchain"><code>kubohiroya/sb3-toolchain</code></a></td>
+              <td>固定依存として利用する。共通仕様は<a href="#91-sb3-toolchain">9.1</a>参照</td>
+            </tr>
+            <tr>
+              <td>浦島太郎などの公開用物語</td>
+              <td><a href="https://github.com/kubohiroya/tmpose-kamishibai-samples"><code>kubohiroya/tmpose-kamishibai-samples</code></a></td>
+              <td><code>stories/urashima/</code>で台本、固有アセット、生成物を管理する</td>
+            </tr>
+            <tr>
+              <td>埋め込み機能拡張</td>
+              <td>各機能拡張のGitHubリポジトリ</td>
+              <td><code>app/</code>には検証済み成果物と由来情報だけを同期する</td>
+            </tr>
+            <tr>
+              <td>TurboWarp Extension Galleryの機能拡張</td>
+              <td>Galleryの公開URL</td>
+              <td>SB3から外部URLを参照する</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">公開サンプル</a>
+          の固有ファイルを本体へコピーしません。本体の汎用性と、サンプルの独立した更新・配布を
+          維持します。
+        </p>
+        <p>
+          依存バージョン、スクリプト、公開対象の正本は<code>package.json</code>と<code>pnpm-lock.yaml</code>です。
+          文書には特定commitを転記せず、必要なときに確認します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> why @kubohiroya/sb3-toolchain
+<span class="token function">git</span> <span class="token function">diff</span> -- package.json pnpm-lock.yaml</code></pre>
+      </section>
+      <section class="level2">
+        <h2 id="2-開発環境を準備する">2. 開発環境を準備する</h2>
+        <section class="level3">
+          <h3 id="必要な環境">必要な環境</h3>
+          <ul>
+            <li>Node.js 22.12.0以上</li>
+            <li>pnpm 11</li>
+            <li>PDF生成に利用できるChromeまたはChromium</li>
+            <li>Gitと、GitHub操作に利用するGitHub CLI</li>
+          </ul>
+          <pre class="language-bash"><code class="language-bash">corepack <span class="token builtin class-name">enable</span>
+<span class="token function">pnpm</span> <span class="token function">install</span></code></pre>
+          <p>CIではlockfile以外の依存解決を許可しません。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token function">install</span> --frozen-lockfile</code></pre>
+          <p>初回セットアップ後は、展開SB3ソースとテスト用SB3を確認します。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:check
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span></code></pre>
+          <p>
+            macOSでは通常のGoogle ChromeをPDF生成に自動利用します。別のブラウザを使う環境では、
+            <code>VIVLIOSTYLE_CHROME_PATH</code>へ実行ファイルの絶対パスを設定します。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="3-リポジトリ構成を把握する">3. リポジトリ構成を把握する</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>パス</th>
+              <th>役割</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>app/</code></td>
+              <td>紙芝居アプリSB3のGit管理上の正本</td>
+            </tr>
+            <tr>
+              <td><code>app/project.source.json</code></td>
+              <td>整形済みScratchプロジェクト</td>
+            </tr>
+            <tr>
+              <td><code>app/assets/</code></td>
+              <td>汎用アプリ自身が使用する画像・音声</td>
+            </tr>
+            <tr>
+              <td><code>app/extensions/</code></td>
+              <td>埋め込み機能拡張の同期済みJavaScript</td>
+            </tr>
+            <tr>
+              <td><code>app/embedded-extensions.json</code></td>
+              <td>埋め込み機能拡張の管理情報</td>
+            </tr>
+            <tr>
+              <td><code>app/sb3-source.json</code></td>
+              <td>SB3展開ソースのマニフェスト</td>
+            </tr>
+            <tr>
+              <td><code>src/builder/</code></td>
+              <td>npmで公開するSB3・台本変換API</td>
+            </tr>
+            <tr>
+              <td><code>bin/</code></td>
+              <td>npm CLIのエントリーポイント</td>
+            </tr>
+            <tr>
+              <td><code>scripts/</code></td>
+              <td>サイト、ドキュメント、配布物のビルドと検証</td>
+            </tr>
+            <tr>
+              <td><code>docs/general/</code></td>
+              <td>一般向け・開発者向けの文書原稿</td>
+            </tr>
+            <tr>
+              <td><code>docs/workshops/</code></td>
+              <td>日付付き体験会資料</td>
+            </tr>
+            <tr>
+              <td><code>site/</code></td>
+              <td>GitHub Pagesの静的入力</td>
+            </tr>
+            <tr>
+              <td><code>test/</code></td>
+              <td>ビルダー、SB3、VM、ドキュメント、公開契約のテスト</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>次の場所は生成物であり、Git管理上の正本ではありません。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>パス</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>tmp/kamishibai.sb3</code></td>
+              <td>TurboWarp編集と自動テストに使うSB3</td>
+            </tr>
+            <tr>
+              <td><code>dist/</code></td>
+              <td>GitHub Pagesへ公開するサイト、HTML/PDF、配布用SB3</td>
+            </tr>
+            <tr>
+              <td><code>output/pdf/</code></td>
+              <td>印刷用PDFのローカル確認先</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="level2">
+        <h2 id="4-共通の開発フローに従う">4. 共通の開発フローに従う</h2>
+        <p>
+          すべての変更はGitHub Issueへ受け入れ基準とロールバック手順を記録し、小さなブランチと
+          PRへ分けます。
+        </p>
+        <ol>
+          <li>最新の<code>main</code>から作業ブランチを作る。</li>
+          <li><code>pnpm install --frozen-lockfile</code>で依存を復元する。</li>
+          <li>変更対象に近いテストを先に実行する。</li>
+          <li>生成物ではなく正本を変更する。</li>
+          <li>差分と生成結果を確認する。</li>
+          <li>標準チェックと必要な手動確認を行う。</li>
+          <li>Issueの運用ログとDoDを更新してPRを作成する。</li>
+        </ol>
+        <p>
+          無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
+          置換を行う前には、必ず<code>git status</code>と対象パスの差分を確認します。変更対象ごとの
+          テストと公開前チェックは<a href="07-internal-specification.md#8-%E6%A4%9C%E8%A8%BC">内部仕様書の検証</a>を
+          参照してください。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="5-アプリsb3を変更する">5. アプリSB3を変更する</h2>
+        <p>
+          このリポジトリでは<code>app/</code>をアプリSB3の正本とし、固定した<code>sb3-toolchain</code>を
+          <code>pnpm sb3:*</code>スクリプトから利用します。展開ソース形式、importとbuildの上書き保護、
+          決定的出力の共通仕様は
+          <a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のSB3ソース管理ワークフロー</a>
+          を参照してください。
+        </p>
+        <p><code>app/</code>から編集用SB3を生成します。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:build</code></pre>
+        <p><code>tmp/kamishibai.sb3</code>をTurboWarpで編集し、別の明示的なパスへ保存してから取り込みます。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:import -- /path/to/edited-kamishibai.sb3
+<span class="token function">git</span> <span class="token function">diff</span> -- app
+<span class="token function">pnpm</span> sb3:check
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span>
+<span class="token function">pnpm</span> run build</code></pre>
+        <p><code>app/project.source.json</code>は次の不変条件を維持します。</p>
+        <ul>
+          <li>浦島太郎などの公開サンプル固有ターゲット、画像、音声を含めない</li>
+          <li>台本解析・実行用リストを空の初期状態で保持する</li>
+          <li>組み込み台本用の予約変数を一意に保持する</li>
+        </ul>
+        <p>
+          展開形式とアセット・拡張の整合性は<code>pnpm sb3:check</code>で検証します。toolchainの共通
+          検証項目を本ガイドへ重複して列挙しません。
+        </p>
+        <p>
+          DSL、Loading表示、入力、分岐、テキスト、画面遷移などの振る舞いを変更するときは、
+          同じPRで<a href="04-dsl-manual.md">DSL資料</a>、<a href="05-command-reference.md">コマンド資料</a>、
+          <a href="07-internal-specification.md">内部仕様書</a>、VMまたはブロック構造のテストを更新します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="6-埋め込み機能拡張を更新する">6. 埋め込み機能拡張を更新する</h2>
+        <p>
+          <code>app/extensions/</code>のJavaScriptは同期済み成果物です。バグ修正や機能追加は、
+          <code>app/embedded-extensions.json</code>に記録された上流リポジトリで行い、レビュー済みの
+          成果物だけを本リポジトリへ取り込みます。
+        </p>
+        <p>
+          <code>status</code>、<code>sync</code>、<code>update</code>の意味、由来情報の形式、transactionalな更新、ID移行の
+          対象schemaは、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のSB3ソース管理ワークフロー</a>と
+          <a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/extension-id-migration.md"><code>埋め込み拡張IDの移行</code></a>
+          を正本とします。ここでは紙芝居アプリへ反映する手順だけを示します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:extensions:status
+<span class="token function">pnpm</span> sb3:extensions:sync
+<span class="token function">pnpm</span> sb3:extensions:update -- EXTENSION_ID</code></pre>
+        <p>上流で拡張IDが変更された場合は、toolchainのID移行を伴う更新を使います。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:extensions:update -- OLD_ID --migrate-id NEW_ID</code></pre>
+        <p>
+          上流の成果物パスも変わった場合だけ<code>--artifact PATH</code>を追加します。更新後は必ず
+          <code>git diff -- app</code>、<code>pnpm sb3:check</code>、<code>pnpm test</code>、<code>pnpm run build</code>を確認し、
+          生成したSB3をTurboWarpで開いて対象拡張の主要機能を確認します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="7-ビルダーを変更する">7. ビルダーを変更する</h2>
+        <p>
+          公開APIは<code>src/builder/index.js</code>、CLIは<code>src/builder/cli.js</code>と<code>bin/</code>、仕様テストは
+          <code>test/builder.test.mjs</code>にあります。公開API、CLI、アセットマニフェスト、決定的生成、
+          transactional更新の現行仕様は
+          <a href="07-internal-specification.md#3-sb3%E5%8F%B0%E6%9C%AC%E5%A4%89%E6%8F%9B%E3%83%93%E3%83%AB%E3%83%80%E3%83%BC">内部仕様書のSB3・台本変換ビルダー</a>
+          を参照してください。
+        </p>
+        <p>APIまたはCLIを変更するときは次を同じ変更に含めます。</p>
+        <ul>
+          <li>API入力、返り値、エラーの後方互換性の判断</li>
+          <li>CLIの<code>--help</code>と引数検証</li>
+          <li>アセットマニフェストと出力manifestの形式</li>
+          <li>決定的生成とtransactional更新のテスト</li>
+          <li>内部仕様書のAPI／CLI例</li>
+          <li>破壊的変更の場合は新しいメジャーバージョン</li>
+        </ul>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">node</span> --test test/builder.test.mjs
+<span class="token function">node</span> bin/tmpose-kamishibai.mjs --help
+<span class="token function">pnpm</span> typecheck
+<span class="token function">pnpm</span> pack:check</code></pre>
+      </section>
+      <section class="level2">
+        <h2 id="8-ドキュメントとサイトを変更する">8. ドキュメントとサイトを変更する</h2>
+        <p>
+          一般文書は<code>docs/general/</code>、体験会資料は<code>docs/workshops/&lt;日付&gt;/</code>、公開入口は<code>site/</code>を
+          正本とします。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> run preview:docs
+<span class="token function">pnpm</span> run preview:workshop
+<span class="token function">pnpm</span> run preview:staff</code></pre>
+        <p>
+          子供向け概要書と参加者向け体験会資料だけにrubyganaを適用します。確認する学年を
+          変更する場合は1から6を指定します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">RUBYGANA_GRADE</span><span class="token operator">=</span><span class="token number">4</span> <span class="token function">pnpm</span> run build</code></pre>
+        <p>
+          <code>pnpm run build</code>はHTML、PDF、目次、画像参照、しおり、favicon、ライセンス、配布SB3を
+          まとめて検証します。Markdownだけを確認して完了にせず、生成されたHTML/PDFも確認します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="9-関連プロジェクトを確認する">9. 関連プロジェクトを確認する</h2>
+        <p>
+          TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境でも利用できるものを
+          各リポジトリで公開しています。各プロジェクトの仕様、開発手順、リリースはリンク先を
+          正本とします。
+        </p>
+        <section class="level3">
+          <h3 id="91-sb3-toolchain">9.1 sb3-toolchain</h3>
+          <p>
+            <a href="https://github.com/kubohiroya/sb3-toolchain"><code>sb3-toolchain</code></a>は、SB3をGit差分可能な
+            展開ソースとして管理し、検証して決定的に再構築するためのCLI／JavaScript APIです。
+            このリポジトリでは固定依存として利用し、<code>app/</code>のimport、検証、build、埋め込み
+            機能拡張の同期とID移行を担います。
+          </p>
+          <ul>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md">SB3ソース管理ワークフロー</a></li>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/source-format-v1.md">SB3展開ソース形式 v1</a></li>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/extension-id-migration.md">埋め込み拡張IDの移行</a></li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="92-viteプラグイン">9.2 Viteプラグイン</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/vite-plugin-turbowarp-extension"><code>vite-plugin-turbowarp-extension</code></a>:
+              TypeScriptプロジェクトを単一ファイルのTurboWarp機能拡張としてbuildするViteプラグイン
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="93-turbowarp-機能拡張開発用テンプレート">9.3 TurboWarp 機能拡張開発用テンプレート</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-extension-template"><code>turbowarp-extension-template</code></a>:
+              Viteを使ったTurboWarp機能拡張の開発、テスト、build、リリース用テンプレート
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="94-turbowarp-機能拡張">9.4 TurboWarp 機能拡張</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-tmpose"><code>turbowarp-tmpose</code></a>:
+              Teachable Machine Poseモデルを利用したカメラ姿勢認識
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-text-lines"><code>turbowarp-text-lines</code></a>:
+              テキストの行数取得、行単位の読み出し・分割
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-asset-manager"><code>turbowarp-asset-manager</code></a>:
+              IndexedDBとSB3内の画像・音声を扱うアセット管理
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-async-input"><code>turbowarp-async-input</code></a>:
+              キーボード、ポインター、姿勢入力を対象ごとに扱う非同期入力
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-runtime-expression"><code>turbowarp-runtime-expression</code></a>:
+              runtime変数を使う条件式の安全な評価とbroadcast監視
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="95-その他のライブラリ">9.5 その他のライブラリ</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/rubygana"><code>rubygana</code></a>:
+              日本語テキストの読み仮名を生成するNode.jsライブラリ
+            </li>
+          </ul>
+          <div class="print-page-break" aria-hidden="true"></div>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="10-関連ドキュメントを確認する">10. 関連ドキュメントを確認する</h2>
+        <ul>
+          <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
+          <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>
+          <li><a href="05-command-reference.md"><code>05-command-reference.md</code></a>: コマンドとアクションの仕様</li>
+          <li><a href="07-internal-specification.md"><code>07-internal-specification.md</code></a>: アプリ内部構造、成果物、検証、公開</li>
+          <li><a href="history.md"><code>history.md</code></a>: DSLとアプリの変更履歴</li>
+          <li><a href="../../README.md"><code>README.md</code></a>: プロジェクト全体の入口と主要コマンド</li>
         </ul>
       </section>
     </section>
