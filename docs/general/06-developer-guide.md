@@ -1,5 +1,7 @@
 # 紙芝居アプリ ソフトウェア開発者向け資料
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 この資料は、TMPose紙芝居を構成するアプリと、開発に関連するライブラリをソフトウェア開発者向けにまとめたものです。
 
 対象アプリ／DSL: `kamishibai=3.1`
@@ -12,8 +14,10 @@
 
 3.1では、Asset Managerによるプロジェクト内／外部アセットとテキストアセットの統合、Temporary Variablesによる状態管理、Runtime Expressionによる条件評価、Async Inputによる入力待ち、TMPoseによるポーズ認識を組み合わせてDSLを実行します。
 
-- tmpose-kamishibai: アプリ本体・ドキュメント・汎用ビルドツール
+- tmpose-kamishibai: アプリ本体・ドキュメント・TMPose紙芝居用ビルダー
   - [https://github.com/kubohiroya/tmpose-kamishibai](https://github.com/kubohiroya/tmpose-kamishibai)
+- sb3-toolchain: SB3の展開ソース管理・検証・決定的ビルド
+  - [https://github.com/kubohiroya/sb3-toolchain](https://github.com/kubohiroya/sb3-toolchain)
 - tmpose-kamishibai-samples: 公開用台本・サンプル固有アセット
   - [https://kubohiroya.github.io/tmpose-kamishibai-samples/](https://kubohiroya.github.io/tmpose-kamishibai-samples/)
   - [https://github.com/kubohiroya/tmpose-kamishibai-samples](https://github.com/kubohiroya/tmpose-kamishibai-samples)
@@ -24,6 +28,7 @@
 
 - Animated TextやTemporary Variablesなど、`extensions.turbowarp.org` で提供されるTurboWarp Extension Gallery採用済みの機能拡張は、外部URLを参照します。本資料では、これらをTurboWarp標準の機能拡張と呼びます。
 - Asset Manager、TMPose、Text Lines、Runtime Expression、Async Inputなど、tmpose-kamishibai固有の非サンドボックス機能拡張は、JavaScriptをbase64データURLに変換して `kamishibai.sb3` 内へ格納します。
+- 埋め込む機能拡張はGitHub上の正本、追跡ref、固定commit、成果物パス、SHA-256を記録し、固定commitから再現できる状態で管理します。
 - 台本で使用する画像・音声アセットは `kamishibai.sb3` に組み込まず、台本ファイルの `asset=` 行から外部URLを参照します。
 - TurboWarp標準の機能拡張と外部アセットは、提供元が内容とURLを安定して維持することを前提に利用します。SHA-3などのハッシュ値による独自の完全性検証は行いません。
 
@@ -38,12 +43,24 @@
 `app/` の主な内容は次のとおりです。
 
 - `project.source.json`: 整形済みのScratchプロジェクトJSON
-- `embedded-extensions.json`: 埋め込み拡張のID、ファイル、データURL符号化方式
+- `embedded-extensions.json`: 埋め込み拡張のID、ファイル、データURL符号化方式、GitHub由来とintegrity
 - `extensions/`: 個別ファイルへ復号したカスタム機能拡張
 - `assets/`: 汎用実行環境自体が参照する画像・音声
 - `sb3-source.json`: ZIPエントリの順序を含む展開ソースのマニフェスト
 
 `app/project.source.json` の台本解析・実行用リストは空の初期状態で管理し、浦島太郎固有のターゲット、背景、コスチューム、音声は含めません。この不変条件は配布テストで検査します。
+
+展開ソース形式、安全なimport、検証、決定的ビルドには、MPL-2.0の
+`@kubohiroya/sb3-toolchain`を使用します。このリポジトリでは浮動`main`ではなく、
+検証済みコミットを`package.json`と`pnpm-lock.yaml`へ固定します。
+
+```json
+{
+  "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb"
+  }
+}
+```
 
 SB3は用途ごとに次の場所へ生成します。どちらもGit管理対象ではありません。
 
@@ -52,7 +69,18 @@ SB3は用途ごとに次の場所へ生成します。どちらもGit管理対�
 | TurboWarpでの再編集、ローカルテスト | `tmp/kamishibai.sb3`            | `pnpm sb3:build` |
 | GitHub Pagesでの配布                | `dist/downloads/kamishibai.sb3` | `pnpm run build` |
 
-生成処理はZIPエントリ順とタイムスタンプを固定します。同じ `app/` から生成したSB3はbit-for-bitで一致します。`pnpm sb3:check` は、アセット参照とMD5、マニフェストの不足・余剰、埋め込み拡張の対応関係を検証します。
+生成処理はZIPエントリ順とタイムスタンプを固定します。同じ `app/` から生成したSB3はbit-for-bitで一致します。`pnpm sb3:check` は、アセット参照とMD5、マニフェストの不足・余剰、埋め込み拡張の対応関係に加えて、管理対象拡張のSHA-256と宣言IDをネットワークなしで検証します。
+
+管理対象拡張の状態確認と固定commitからの復元は次のコマンドで行います。
+
+```sh
+pnpm sb3:extensions:status
+pnpm sb3:extensions:sync
+```
+
+`status`だけが追跡refの現在位置を確認し、`sync`はmutableなrefを使わず
+`resolvedCommit`から同一成果物を復元します。追跡refを新commitへ進めるときだけ
+`pnpm sb3:extensions:update -- [EXTENSION_ID]`を使用します。
 
 ### 1.4 TurboWarpで編集した内容を取り込む
 
@@ -74,7 +102,12 @@ pnpm run build
 
 importは、入力SB3から作成した候補と既存の `app/` を比較します。内容が同一なら書き換えません。相違がある場合、Git管理外の出力や未コミット差分を既定では置換しません。Git管理済みでcleanな差分の確認だけを省略するときは `--yes`、未コミット差分も意図的に破棄するときだけ `--discard-local-changes` を追加します。後者は別指定であり、`--yes` だけでは未コミット差分を破棄できません。
 
-カスタム機能拡張だけを修正する場合は、`app/extensions/` のJavaScriptを直接編集できます。手作業でもコーディングエージェントでも、編集後は同じ3つの検証コマンドを実行します。TurboWarp GUIで行った変更とソースファイルへの部分修正を同時に取り込む場合は、先にimportを完了してGit差分を確認してから、部分修正を重ねます。
+カスタム機能拡張を修正する場合は、`app/extensions/` の生成JavaScriptを直接編集せず、
+`embedded-extensions.json`の`source.repository`が示す正本リポジトリでsource、tests、
+生成distを更新します。その固定commitを`sb3:extensions:update`で取り込み、`git diff -- app`
+と上記3つの検証コマンドを確認します。拡張IDを変更する場合は、上流の新成果物と
+sb3-toolchainの`extensions update --migrate-id`を同じ変更として扱い、block opcode、
+manifest、URL mapping、成果物名をschema-awareに移行します。
 
 ### 1.5 配布確認とロールバック
 
@@ -89,11 +122,15 @@ importは、入力SB3から作成した候補と既存の `app/` を比較しま
 
 ソース更新を戻す場合は、該当コミットを `git revert` してから `pnpm sb3:build` と `pnpm run build` を再実行します。未コミットの `app/` を戻す操作は差分を失うため、先に `git diff -- app` を確認し、必要ならコミットまたはstashします。
 
+SB3ツールチェーン更新を戻す場合は、`package.json`と`pnpm-lock.yaml`の
+`@kubohiroya/sb3-toolchain`を直前の検証済みコミットへ戻します。展開形式または生成SB3の
+意図しない差分がある版へタグを移動してはいけません。
+
 importまたはbuildの途中で `.app.rollback-*` や `.kamishibai.sb3.rollback-*` が残った場合は、自動削除や再実行をせず、中身と元の出力を比較します。復旧対象を確定した後で元の場所へ戻し、通常の検証を実行します。配布に問題が見つかった場合は、GitHub Pagesを直前の検証済みコミットから再構築できます。SB3バイナリを正本としてリポジトリへ戻す必要はありません。
 
 #### Loading表示とアセット読込順
 
-汎用SB3は、アセット読込専用の組み込みスプライト`Loading`と組み込みコスチューム`loading`を持ちます。従来名称`Hatching`（旧SB3データ上は`Hatchling`）は使用しません。
+汎用SB3は、アセット読込専用の組み込みスプライト`Loading`と組み込みコスチューム`loading`を持ちます。進捗吹き出しは、skinを切り替えない内部スプライト`LoadingBubbleAnchor`から表示します。アンカーは固定座標と固定コスチュームを持つため、`Loading`へ適用する画像の描画境界が変わっても吹き出し位置は変化しません。従来名称`Hatching`（旧SB3データ上は`Hatchling`）は使用しません。
 
 台本の`setLoadingCostume=名前1,名前2,...`は、`asset=`で登録する画像アセット名のリストです。ランタイムはストーリー開始時に前回の設定を空へ戻し、scene 0の全コマンドを解析した後で次の順序を確定します。このため、`setLoadingCostume`と対象`asset=`の記述順には依存しません。
 
@@ -103,7 +140,7 @@ importまたはbuildの途中で `.app.rollback-*` や `.kamishibai.sb3.rollback
 4. Loading用アセットをすべて登録してから、残りの通常アセットを登録する。
 5. 通常アセットの読込開始前と完了後に、Loading用アセットを除いた`完了数 / 総数`を通知する。
 6. 通常アセットの1始まりの読込番号をLoading用画像数で循環させ、`Loading`スプライトへ適用する。
-7. 全アセット完了後に吹き出しと`Loading`スプライトを非表示にする。
+7. `LoadingBubbleAnchor`から進捗を表示し、全アセット完了後に空の`say`で吹き出しを消して、アンカーと`Loading`スプライトを非表示にする。
 
 Asset Managerの内部ブロック`setLoadingCostumes`、`prepareLoadingAssets`、`loadingAssetCount`、`loadingCostumeAt`が、設定の正規化、安定した優先順、除外件数、循環選択を担当します。これらはSB3内のランタイム実装用で、台本作者が直接呼び出すブロックではありません。`setLoadingCostume`がない場合、循環対象名は空となり、組み込みコスチュームをそのまま表示します。
 
@@ -121,26 +158,17 @@ Asset Managerの内部ブロック`setLoadingCostumes`、`prepareLoadingAssets`�
 
 ビルダーはステージ背景、スプライトのコスチューム、ステージ音、スプライト音を追加します。ベースSB3にあるブロック、拡張機能、変数、モニター、既存アセットは保持し、入力SB3と入力台本は書き換えません。台本は行単位で解析し、有効な`asset=`コマンドだけを変換します。コメント、他のコマンド、本文、行順、改行コードは保持します。
 
+コスチューム参照は、アセット名・スプライト名・コスチューム名から最短の等価表記へ正規化します。3つが同じ場合は`costume`、コスチューム名だけがアセット名と同じ場合は`costume:<スプライト名>`、それ以外は`costume:<スプライト名>:<コスチューム名>`を生成します。
+
 #### 固定バージョンでの導入
 
-消費側は浮動`main`へ依存せず、検証済みのGitタグを`package.json`へ固定します。現在のリポジトリ間依存ではnpmレジストリ公開を前提にしません。
+消費側は浮動`main`へ依存せず、npmへ公開された検証済みバージョンを固定します。
 
-```json
-{
-  "dependencies": {
-    "@kubohiroya/tmpose-kamishibai": "github:kubohiroya/tmpose-kamishibai#v3.1.0"
-  }
-}
+```bash
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
 ```
 
-pnpm 11はGit依存パッケージの準備スクリプトを既定で拒否します。消費側の`pnpm-workspace.yaml`で、このパッケージだけを信頼対象として明示します。全依存のスクリプトを一括許可してはいけません。
-
-```yaml
-allowBuilds:
-  '@kubohiroya/tmpose-kamishibai': true
-```
-
-初回は`pnpm install`を実行し、生成された`pnpm-lock.yaml`を`package.json`、`pnpm-workspace.yaml`とともにコミットします。lockfileはGitタグを具体的なコミットSHAと取得元tarballへ解決します。CIでは`pnpm install --frozen-lockfile`を使用し、lockfileにない依存更新を拒否します。
+初回は`pnpm install`を実行し、生成されたlockfileを`package.json`とともにコミットします。CIでは`pnpm install --frozen-lockfile`を使用し、lockfileにない依存更新を拒否します。
 
 リリースでは`package.json`のバージョン`3.1.0`とGitタグ`v3.1.0`を対応させ、公開後のタグを移動・削除しません。公開前のパッケージ内容は次のコマンドでtarball化して確認できます。
 
@@ -148,7 +176,7 @@ allowBuilds:
 pnpm pack
 ```
 
-npmレジストリ公開は、リポジトリ間の固定依存を成立させるための必須条件ではありません。不特定の外部利用者へ標準的なSemVerパッケージとして提供する場合は、別のリリースIssueで公開とprovenanceを管理します。
+リリース時は`package.json`、npmの公開バージョン、Gitタグを同じ`3.1.0`へ揃えます。公開済みのバージョンとタグは移動・再利用しません。
 
 #### JavaScript API
 
@@ -388,7 +416,7 @@ TurboWarp PackagerでHTMLを生成する場合は、`player`だけを入力に�
 
 `test/skip-mode.test.mjs` は生成SB3のScratchブロックグラフを検査し、許可値、存在判定、要求の削除などの構造上の不変条件を確認します。ブロックIDは固定せず、オペコード、入力値、カスタムブロック名、親子関係を使います。
 
-`test/turbowarp-vm.test.mjs` は `pretest` が `app/` から生成した `tmp/kamishibai.sb3` を、固定コミット `c4823421cb7c17d8d8a89878851ce1668c26a21f` のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える`0 / N`から`N / N`までの進捗、複数画像の循環、完了後の非表示を検証します。
+`test/turbowarp-vm.test.mjs` は `pretest` が `app/` から生成した `tmp/kamishibai.sb3` を、固定コミット `c4823421cb7c17d8d8a89878851ce1668c26a21f` のTurboWarp VMへ読み込みます。緑の旗とキー入力をVMへ送り、入力文脈、最初の要求の保持、ポーズからの伝播、シーン境界、待機、吹き出し、移動先、フェード最終値、画像列、対象音声の停止、BGMの継続を実行結果から検証します。Loadingについては、指定アセットの優先登録順、通常アセットだけを数える`0 / N`から`N / N`までの進捗、複数画像の循環、`Loading`ではなく固定アンカーからの吹き出し表示、完了後の消去と非表示を検証します。
 
 外部URLの機能拡張、カメラ、ネットワーク、音声出力は決定的なテストダブルへ置き換えます。テスト中に外部通信は行いません。VM内部APIへの依存は `test/helpers/turbowarp-vm.mjs` に隔離します。
 

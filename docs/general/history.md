@@ -1,5 +1,7 @@
 # 紙芝居DSL 2.0から3.1への変更履歴
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 対象DSL: `kamishibai=2.0` → `kamishibai=3.1`\
 文書化日: 2026年7月27日
 

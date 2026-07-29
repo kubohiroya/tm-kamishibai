@@ -1,5 +1,7 @@
 # 紙芝居アプリ 概要説明書 大人向け
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 対象アプリ／DSL: `kamishibai=3.1`
 
 ## 1. 概要

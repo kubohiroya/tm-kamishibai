@@ -8,6 +8,7 @@ import {clearTimeout, setTimeout} from 'node:timers';
 import {fileURLToPath} from 'node:url';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
 import {installBundleTransactionally} from '../src/builder/atomic-output.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
@@ -17,8 +18,8 @@ import {
   validateAssetManifest,
   validateBundle,
 } from '../src/builder/index.js';
-import {createDeterministicSb3} from '../scripts/sb3/source.mjs';
 import {embeddedScriptVariableId, embeddedScriptVariableName} from '../src/builder/constants.js';
+import {createEmbeddedReference} from '../src/builder/script.js';
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -86,6 +87,36 @@ function soundEntry({name, uri, kind, target, sb3Name, contents}) {
     metadata: {format: '', rate: 48000, sampleCount: 1123},
   };
 }
+
+test('serializes embedded costume references with the shortest equivalent form', () => {
+  assert.equal(
+    createEmbeddedReference({
+      kind: 'costume',
+      name: 'Princess',
+      target: 'Princess',
+      sb3Name: 'Princess',
+    }),
+    'costume',
+  );
+  assert.equal(
+    createEmbeddedReference({
+      kind: 'costume',
+      name: 'p1',
+      target: 'Princess',
+      sb3Name: 'p1',
+    }),
+    'costume:Princess',
+  );
+  assert.equal(
+    createEmbeddedReference({
+      kind: 'costume',
+      name: 'hero-front',
+      target: '人物',
+      sb3Name: '通常',
+    }),
+    'costume:人物:通常',
+  );
+});
 
 async function writeFileFixture(directory) {
   const inputDirectory = path.join(directory, 'input');
@@ -894,5 +925,5 @@ test('exposes one CLI contract and a fixed installable package version', async (
   assert.equal(packageJson.version, '3.1.0');
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
-  assert.equal(packageJson.bin['tmpose-kamishibai'], './bin/tmpose-kamishibai.mjs');
+  assert.equal(packageJson.bin['tmpose-kamishibai'], 'bin/tmpose-kamishibai.mjs');
 });

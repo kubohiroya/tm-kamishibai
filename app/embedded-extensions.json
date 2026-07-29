@@ -2,39 +2,79 @@
   "formatVersion": 1,
   "extensions": [
     {
-      "id": "twAssetManager",
-      "path": "extensions/twAssetManager.js",
+      "id": "kubohiroyaassetmanager",
+      "path": "extensions/kubohiroyaassetmanager.js",
       "mediaType": "text/javascript",
       "parameters": [],
-      "encoding": "base64"
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "kubohiroya/turbowarp-asset-manager",
+        "ref": "main",
+        "resolvedCommit": "8e7660fc3f544cd589a70fd0f23d6a274e48ce47",
+        "artifact": "dist/asset-manager.js",
+        "integrity": "sha256-ezV5HJ/T1GnZot2QXRNcMUNKPERj0x2ZDJXfq8WU98Y="
+      }
     },
     {
       "id": "tmpose",
       "path": "extensions/tmpose.js",
       "mediaType": "text/javascript",
       "parameters": [],
-      "encoding": "base64"
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "kubohiroya/turbowarp-tmpose",
+        "ref": "main",
+        "resolvedCommit": "ff63d78004e23e3ab4380e46fa5dc82aeb36fa8a",
+        "artifact": "dist/tmpose.js",
+        "integrity": "sha256-Hpldh5FslEjteWu+TDuEDAVuUE+yM73/gpFy0DkkBI0="
+      }
     },
     {
       "id": "kubohiroyatextlines",
       "path": "extensions/kubohiroyatextlines.js",
       "mediaType": "text/javascript",
       "parameters": [],
-      "encoding": "base64"
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "kubohiroya/turbowarp-text-lines",
+        "ref": "main",
+        "resolvedCommit": "477acf6f430dc2b23ca0520958a171863366e782",
+        "artifact": "dist/text-lines.js",
+        "integrity": "sha256-jFmcPhNsbGDq9vFUfDHWyUG4xy0epDyN2u90FQiBu7E="
+      }
     },
     {
-      "id": "twRuntimeExpression",
-      "path": "extensions/twRuntimeExpression.js",
+      "id": "kubohiroyaruntimeexpression",
+      "path": "extensions/kubohiroyaruntimeexpression.js",
       "mediaType": "text/javascript",
       "parameters": [],
-      "encoding": "base64"
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "kubohiroya/turbowarp-runtime-expression",
+        "ref": "main",
+        "resolvedCommit": "7c39ed9996f9a34fb3e038844646ff9ce361cd8d",
+        "artifact": "dist/runtime-expression.js",
+        "integrity": "sha256-P2gBufIdthFIMutT3Sb4MpeXLHq7k4NhUNEHpqFjms0="
+      }
     },
     {
-      "id": "twAsyncInput",
-      "path": "extensions/twAsyncInput.js",
+      "id": "kubohiroyaasyncinput",
+      "path": "extensions/kubohiroyaasyncinput.js",
       "mediaType": "text/javascript",
       "parameters": [],
-      "encoding": "base64"
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "kubohiroya/turbowarp-async-input",
+        "ref": "main",
+        "resolvedCommit": "6b806bca9163f3b62d61457381f02af16a2a443e",
+        "artifact": "dist/async-input.js",
+        "integrity": "sha256-v3WTD7pisLDgiVgtcXwRXS7tIj6tQEdw85yhSFXn58s="
+      }
     }
   ]
 }

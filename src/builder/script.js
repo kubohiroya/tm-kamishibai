@@ -32,10 +32,14 @@ export function collectAssetLines(source) {
   return assets;
 }
 
-/** @param {{kind: string, target: string, sb3Name: string}} entry */
+/** @param {{kind: string, name: string, target: string, sb3Name: string}} entry */
 export function createEmbeddedReference(entry) {
   if (entry.kind === 'backdrop') return `backdrop:${entry.sb3Name}`;
-  if (entry.kind === 'costume') return `costume:${entry.target}:${entry.sb3Name}`;
+  if (entry.kind === 'costume') {
+    if (entry.target === entry.name && entry.sb3Name === entry.name) return 'costume';
+    if (entry.sb3Name === entry.name) return `costume:${entry.target}`;
+    return `costume:${entry.target}:${entry.sb3Name}`;
+  }
   if (entry.kind === 'stageSound') return `sound:@stage:${entry.sb3Name}`;
   if (entry.kind === 'spriteSound') return `sound:${entry.target}:${entry.sb3Name}`;
   throw new Sb3BuilderError(`Unsupported asset kind: ${entry.kind}`, {stage: 'transform-script'});

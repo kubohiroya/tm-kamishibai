@@ -230,6 +230,19 @@ RUBYGANA_GRADE=4 pnpm run deploy
 
 ## SB3の開発と配布
 
+SB3の展開ソース形式、安全なimport、検証、決定的ビルドは、MPL-2.0で公開する
+[`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain)を利用します。
+このリポジトリでは、検証済みコミットを固定依存として指定し、`pnpm-lock.yaml`で解決先を
+固定します。
+
+```json
+{
+  "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb"
+  }
+}
+```
+
 ローカル編集用SB3は次のコマンドで `tmp/kamishibai.sb3` へ生成します。
 
 ```bash
@@ -245,13 +258,29 @@ pnpm test
 pnpm run build
 ```
 
+埋め込み拡張はGitHubリポジトリ、追跡ref、固定commit、成果物パス、SHA-256を
+`app/embedded-extensions.json`へ記録します。状態確認と固定commitからの再同期は次の
+コマンドで行います。
+
+```bash
+pnpm sb3:extensions:status
+pnpm sb3:extensions:sync
+```
+
+上流refを新commitへ進める操作は`pnpm sb3:extensions:update -- [EXTENSION_ID]`として
+明示的に実行します。取得したJavaScriptを実行せず、IDとintegrityを検証してから
+transactionalに置換します。
+
 `pnpm run build` は配布用 `dist/downloads/kamishibai.sb3` を同じ正本から生成します。通常手順、置換時の安全判定、手動確認、ロールバックについては [`docs/general/06-developer-guide.md`](docs/general/06-developer-guide.md) を参照してください。
+
+ツールチェーン更新に問題がある場合は、`package.json`と`pnpm-lock.yaml`を直前の検証済み
+コミットへ戻します。`app/`の正本と生成SB3の形式を変更せずに切り戻せます。
 
 浦島太郎の台本、専用スプライト、背景、画像、音声、組み込み済みSB3は、[サンプルサイト](https://kubohiroya.github.io/tmpose-kamishibai-samples/) で配信し、別リポジトリ [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) で管理します。本体リポジトリの `pnpm run build` では、浦島太郎固有コンテンツを生成・公開しません。
 
 ## Loading表示のカスタマイズ
 
-アセット読込中は、組み込みスプライト`Loading`が、Loading用アセットを除いた通常アセットの進捗を`完了数 / 総数`の吹き出しで表示します。台本でLoading用の画像アセットを複数指定すると、それらを通常アセットより先に読み込み、通常アセットの読込番号に合わせて循環表示します。
+アセット読込中は、組み込みスプライト`Loading`のそばに、Loading用アセットを除いた通常アセットの進捗を`完了数 / 総数`の吹き出しで表示します。台本でLoading用の画像アセットを複数指定すると、それらを通常アセットより先に読み込み、通常アセットの読込番号に合わせて循環表示します。吹き出しは固定アンカーから表示するため、画像の外形が異なっても位置は変わりません。
 
 ```text
 asset=loading1,https://example.com/loading/loading1.png
@@ -266,24 +295,13 @@ setLoadingCostume=loading1,loading2,loading3
 
 `@kubohiroya/tmpose-kamishibai`は、外部画像・音声をベースSB3へ組み込み、台本の`asset=`行をプロジェクト内参照へ変換するJavaScript APIとCLIを提供します。消費側では浮動ブランチではなく、検証済みバージョンを固定します。
 
-現在の固定配布経路はGitHubタグです。消費側の`package.json`でタグを指定します。
+npmで検証済みバージョンを固定して導入します。
 
-```json
-{
-  "dependencies": {
-    "@kubohiroya/tmpose-kamishibai": "github:kubohiroya/tmpose-kamishibai#v3.1.0"
-  }
-}
+```bash
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
 ```
 
-pnpm 11ではGit依存の準備スクリプトを明示的に許可します。`pnpm-workspace.yaml`の`allowBuilds`はこのパッケージだけを対象にします。
-
-```yaml
-allowBuilds:
-  '@kubohiroya/tmpose-kamishibai': true
-```
-
-初回の`pnpm install`で生成した`pnpm-lock.yaml`をコミットし、CIでは固定コミットからだけ復元します。
+初回の`pnpm install`で生成したlockfileをコミットし、CIでは固定バージョンからだけ復元します。
 
 ```bash
 pnpm install
@@ -301,6 +319,18 @@ tmpose-kamishibai build-sb3 \
 
 ## バージョン
 
-既存の開発履歴を引き継ぎ、汎用ビルダーを公開するパッケージ版は`3.1.0`とします。`package.json`のバージョンとGitタグ`v3.1.0`を一致させ、公開済みタグは移動・削除しません。リポジトリ間の固定依存にはGitタグとlockfileを使用するため、npmレジストリ公開は必須ではありません。将来、不特定の外部利用者向けにnpm公開する場合は別のリリース作業として扱います。
+既存の開発履歴を引き継ぎ、汎用ビルダーを公開する最初のnpmパッケージ版は`3.1.0`とします。`package.json`のバージョン、npmの公開バージョン、Gitタグ`v3.1.0`を一致させ、公開済みバージョンとタグは移動・削除しません。
 
 紙芝居アプリの配布SB3は、kamishibai 3.1の展開ソースからビルド時に生成します。
+
+## ライセンス
+
+著作権とライセンスは対象ごとに区分します。
+
+- `docs/general/**`: CC BY-SA 4.0
+- `docs/workshops/**`: Copyright © 2026 Hiroya Kubo. All rights reserved.
+- 上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアおよび素材:
+  MPL-2.0
+
+詳細と第三者著作物の扱いは[`LICENSES.md`](LICENSES.md)を参照してください。npmパッケージに
+含まれるCLIとbuilder APIにはMPL-2.0を適用します。

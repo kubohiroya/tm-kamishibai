@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 async function loadAsyncInput() {
   const source = await readFile(
-    new URL('../app/extensions/twAsyncInput.js', import.meta.url),
+    new URL('../app/extensions/kubohiroyaasyncinput.js', import.meta.url),
     'utf8',
   );
   const variables = Object.create(null);
@@ -57,7 +57,7 @@ async function loadAsyncInput() {
     addEventListener: (name, listener) => windowListeners.set(name, listener),
     removeEventListener: (name) => windowListeners.delete(name),
   };
-  vm.runInNewContext(source, {console, Scratch, window}, {filename: 'twAsyncInput.js'});
+  vm.runInNewContext(source, {console, Scratch, window}, {filename: 'kubohiroyaasyncinput.js'});
   return {
     actor,
     broadcasts,

@@ -1,7 +1,12 @@
+import path from 'node:path';
 import process from 'node:process';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
-import {buildSb3} from './build.mjs';
+import {buildSb3} from '@kubohiroya/sb3-toolchain';
+
+const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+const defaultSourceDirectory = path.join(projectRoot, 'app');
+const defaultOutputPath = path.join(projectRoot, 'tmp', 'kamishibai.sb3');
 
 export async function prepareTestSb3({
   build = buildSb3,
@@ -14,7 +19,11 @@ export async function prepareTestSb3({
     };
   }
   return {
-    ...await build({yes: true}),
+    ...await build({
+      outputPath: defaultOutputPath,
+      sourceDirectory: defaultSourceDirectory,
+      yes: true,
+    }),
     configured: false,
   };
 }

@@ -93,6 +93,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'reloadButton',
       'showTitleButton',
       'Loading',
+      'LoadingBubbleAnchor',
     ],
   );
   for (const name of [
@@ -145,11 +146,62 @@ test('prioritizes configured loading costumes and reports only regular asset pro
       .map(({value}) => value),
     ['0 / 3', '1 / 3', '1 / 3', '2 / 3', '2 / 3', '3 / 3'],
   );
-  assert.equal(
-    harness.getSprite('Loading').getCustomState('Scratch.looks')?.text,
-    '3 / 3',
+  assert.deepEqual(
+    harness.extensionState.bubbleUpdates
+      .filter(({targetName}) => (
+        targetName === 'Loading' || targetName === 'LoadingBubbleAnchor'
+      )),
+    [
+      {targetName: 'LoadingBubbleAnchor', text: '0 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '3 / 3', type: 'say'},
+      {targetName: 'LoadingBubbleAnchor', text: '', type: 'say'},
+    ],
   );
+  const loadingBubbleAnchor = harness.getSprite('LoadingBubbleAnchor');
+  assert.equal(loadingBubbleAnchor.getCustomState('Scratch.looks')?.text, '');
+  assert.equal(
+    loadingBubbleAnchor.getCostumes()[loadingBubbleAnchor.currentCostume]?.name,
+    'loading-bubble-anchor',
+  );
+  assert.deepEqual([loadingBubbleAnchor.x, loadingBubbleAnchor.y], [1, -20]);
+  assert.equal(loadingBubbleAnchor.visible, false);
+  assert.equal(harness.getSprite('Loading').getCustomState('Scratch.looks')?.text ?? '', '');
   assert.equal(harness.getSprite('Loading').visible, false);
+});
+
+test('keeps the built-in Loading costume separate from the fixed bubble anchor', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=wait:30',
+  ].join('\n'));
+
+  const loading = harness.getSprite('Loading');
+  assert.equal(loading.getCostumes()[loading.currentCostume]?.name, 'loading');
+  assert.equal(
+    harness.extensionState.displayedAssetHistory.some(({targetName}) => (
+      targetName === 'Loading'
+    )),
+    false,
+  );
+  assert.deepEqual(
+    harness.extensionState.bubbleUpdates
+      .filter(({targetName}) => targetName === 'LoadingBubbleAnchor')
+      .map(({text}) => text),
+    ['0 / 2', '1 / 2', '1 / 2', '2 / 2', ''],
+  );
 });
 
 for (const branchCase of [

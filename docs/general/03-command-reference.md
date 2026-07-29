@@ -1,5 +1,7 @@
 # 紙芝居DSL コマンドリファレンス
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 対象DSL: `kamishibai=3.1`\
 対象読者: 台本作者、教材作成者、開発者
 
@@ -209,6 +211,8 @@ setLoadingCostume=loading1,loading2,loading3
 | アニメーション | 通常アセットの1始まりの読込番号で指定画像を循環選択する |
 
 たとえば3画像を指定した場合、通常アセット1、2、3、4件目には、それぞれ`loading1`、`loading2`、`loading3`、`loading1`が表示されます。カンマ前後の空白は無視され、重複名は1件として扱われます。指定した名前が`asset`で定義されていない場合は読込エラーになります。
+
+進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。指定画像の大きさや非透明部分の外形は、吹き出し位置に影響しません。
 
 ### 2.4 `actor`
 

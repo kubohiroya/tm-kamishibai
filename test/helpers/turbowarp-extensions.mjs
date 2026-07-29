@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const BlockType = require('scratch-vm/src/extension-support/block-type');
 const Cast = require('scratch-vm/src/util/cast');
 const assetManagerSource = readFileSync(
-  new URL('../../app/extensions/twAssetManager.js', import.meta.url),
+  new URL('../../app/extensions/kubohiroyaassetmanager.js', import.meta.url),
   'utf8',
 );
 
@@ -90,6 +90,7 @@ export function registerKamishibaiTestExtensions(
     assetRegistrations: [],
     asyncInput: null,
     assets: new Map(),
+    bubbleUpdates: [],
     consoleErrors: [],
     displayedAssets: new Map(),
     displayedAssetHistory: [],
@@ -108,6 +109,13 @@ export function registerKamishibaiTestExtensions(
     textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
   };
+  vm.runtime.on('SAY', (target, type, text) => {
+    state.bubbleUpdates.push({
+      targetName: target.getName(),
+      text: Cast.toString(text),
+      type,
+    });
+  });
 
   class ConsoleExtension {
     getInfo() {
@@ -268,7 +276,7 @@ export function registerKamishibaiTestExtensions(
       runtime.on('PROJECT_STOP_ALL', resetState);
     }
     getInfo() {
-      return extensionInfo('twAssetManager', [
+      return extensionInfo('kubohiroyaassetmanager', [
         block('isLoaded', BlockType.BOOLEAN, ['NAME']),
         block('playSound', BlockType.COMMAND, ['NAME']),
         block('playSoundUntilDone', BlockType.COMMAND, ['NAME']),
@@ -518,7 +526,7 @@ export function registerKamishibaiTestExtensions(
       this.runtime = runtime;
     }
     getInfo() {
-      return extensionInfo('twRuntimeExpression', [
+      return extensionInfo('kubohiroyaruntimeexpression', [
         block('runtimeCondition', BlockType.BOOLEAN, ['EXPRESSION']),
       ]);
     }
@@ -544,7 +552,7 @@ export function registerKamishibaiTestExtensions(
       runtime.on('PROJECT_STOP_ALL', reset);
     }
     getInfo() {
-      return extensionInfo('twAsyncInput', [
+      return extensionInfo('kubohiroyaasyncinput', [
         block('listenForKeyAndBroadcast', BlockType.COMMAND, [
           'KEY_ID', 'RUNTIME_VAR', 'VALUE', 'MESSAGE',
         ]),
@@ -671,7 +679,7 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'strings', StringsExtension);
   register(
     vm,
-    'twAssetManager',
+    'kubohiroyaassetmanager',
     productionAssetManager
       ? createProductionAssetManagerClass(vm, (extension) => {
         state.assetManager = extension;
@@ -681,8 +689,8 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);
-  register(vm, 'twRuntimeExpression', RuntimeExpressionExtension);
-  register(vm, 'twAsyncInput', AsyncInputExtension);
+  register(vm, 'kubohiroyaruntimeexpression', RuntimeExpressionExtension);
+  register(vm, 'kubohiroyaasyncinput', AsyncInputExtension);
   register(vm, 'lmsTimers', TimersExtension);
   register(vm, 'files', FilesExtension);
   register(vm, 'text', TextExtension);
