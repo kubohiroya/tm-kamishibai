@@ -264,9 +264,23 @@ SB3内のcostume、backdrop、sound、textや、外部URLの画像・音声を�
 したがって、このアプリ全体は、紙芝居DSLを解析・実行する処理系であり、その実行基盤
 （runtime）でもあります。
 
+#### 台本からActor actionまでのシーケンス
+
+台本ファイルからActor内の処理までを、データの変換と実行の順に並べると次のようになります。
+外部ファイルだけでなく、再生用SB3へ組み込んだ台本も`script`へ入った後は同じ経路を通ります。
+
+![台本ファイルからアクターでの命令実行までのシーケンス](../images/internal-script-execution-sequence.svg)
+
+`create sceneList`は`script`をscene単位に分けます。`exec scene # %s with %s`は現在のsceneを
+行単位の`commandList`に分け、`exec command %s %s`でcommandを順に処理します。このうち
+`action=`の値を`actionList`へ集め、`exec actionList`が各actionを`exec action %s`へ渡します。
+Stage actionはStage内で実行され、Actor actionだけがaction envelopeとmessageを経由します。
+messageはすべての`Actor` cloneが受け取りますが、実際に処理するのは宛先に一致した
+アクターだけです。
+
 ### 4.3 target間の責務
 
-`Stage`は台本を行へ分解し、`commandList`、`sceneList`、`actionList`へ段階的に変換します。
+`Stage`は台本を`sceneList`、`commandList`、`actionList`へ段階的に変換します。
 さらにsceneと共有runtime状態を管理し、Stage actionを実行します。`Actor` cloneの責務は、
 4.2で配送されたActor actionのうち自分を対象とするものを実行することです。
 

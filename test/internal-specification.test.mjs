@@ -8,12 +8,20 @@ import {generalDocumentConfig} from '../docs/config.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
-const [projectSource, specification, developerGuide, docsIndex, stateDiagram] = await Promise.all([
+const [
+  projectSource,
+  specification,
+  developerGuide,
+  docsIndex,
+  stateDiagram,
+  scriptExecutionSequence,
+] = await Promise.all([
   readFile(path.join(projectRoot, 'app/project.source.json'), 'utf8').then(JSON.parse),
   readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
   readFile(path.join(projectRoot, 'site/docs/index.html'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-state-transition.svg'), 'utf8'),
+  readFile(path.join(projectRoot, 'docs/images/internal-script-execution-sequence.svg'), 'utf8'),
 ]);
 
 const normalizedSpecification = specification.replaceAll('&#96;', '`').replaceAll('&#124;', '|');
@@ -72,6 +80,33 @@ test('explains the actor command architecture and asset separation', () => {
   assert.match(section, /アクタースプライトと、実際に使う画像・音声を分けて/u);
   assert.match(section, /紙芝居DSLを解析・実行する処理系/u);
   assert.match(section, /実行基盤\s*（runtime）/u);
+  assert.match(
+    section,
+    /!\[台本ファイルからアクターでの命令実行までのシーケンス\]\(\.\.\/images\/internal-script-execution-sequence\.svg\)/u,
+  );
+  assert.match(section, /Stage actionはStage内で実行され/u);
+  assert.match(section, /Actor actionだけがaction envelopeとmessageを経由/u);
+
+  assert.match(
+    scriptExecutionSequence,
+    /<title id="title">台本ファイルからアクターでの命令実行までのシーケンス<\/title>/u,
+  );
+  const stepIds = [...scriptExecutionSequence.matchAll(/<g id="(step-[^"]+)"/gu)].map(
+    ([, id]) => id,
+  );
+  assert.deepEqual(stepIds, [
+    'step-file-script',
+    'step-script-scene-list',
+    'step-scene-list-scene',
+    'step-scene-command-list',
+    'step-command-list-command',
+    'step-command-action-list',
+    'step-action-list-action',
+    'step-action-envelope',
+    'step-envelope-message',
+    'step-actor-receive',
+    'step-actor-process',
+  ]);
 });
 
 test('documents invalidScript as a terminal error instead of a pose transition', () => {
