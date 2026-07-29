@@ -27,9 +27,9 @@
   "packageManager": "pnpm@11.11.0",
   "scripts": {
     "build": "node scripts/build-site.mjs",
-    "sb3:build": "node scripts/sb3/build.mjs",
-    "sb3:check": "node scripts/sb3/check.mjs",
-    "sb3:import": "node scripts/sb3/import.mjs",
+    "sb3:build": "sb3-toolchain build app --output tmp/kamishibai.sb3",
+    "sb3:check": "sb3-toolchain check app",
+    "sb3:import": "sb3-toolchain import --output app",
     "lint": "eslint src/builder bin test/builder.test.mjs",
     "format": "prettier --check package.json src/builder bin test/builder.test.mjs docs/general/06-developer-guide.md README.md",
     "typecheck": "tsc --project tsconfig.builder.json",
@@ -56,6 +56,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d",
     "@types/node": "^24.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@vivliostyle/cli": "11.1.0",

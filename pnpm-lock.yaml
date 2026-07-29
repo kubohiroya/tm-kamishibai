@@ -15,6 +15,9 @@ importers:
         specifier: 0.8.3
         version: 0.8.3
     devDependencies:
+      '@kubohiroya/sb3-toolchain':
+        specifier: github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d
+        version: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/d5ee417227d30f9dac7bdf0b6da9686606d2e07d
       '@turbowarp/scratch-svg-renderer':
         specifier: 1.1.0
         version: 1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)
@@ -194,6 +197,12 @@ packages:
     resolution: {gitHosted: true, integrity: sha512-jG3LQHDlQMjTrp/UM3JmTln0eTk/cB1ykQHMAcXvlHdAcYSubmh+OZqaDtE5XHEyArT7WTAdVvQLqFJ0GRFRAQ==, tarball: https://codeload.github.com/kubohiroya/rubygana/tar.gz/a24b8a699a1b033546f4d1a47a63005f7af95735}
     version: 0.9.0
     engines: {node: '>=20.18.1'}
+    hasBin: true
+
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/d5ee417227d30f9dac7bdf0b6da9686606d2e07d':
+    resolution: {gitHosted: true, integrity: sha512-NiKWdZQS1V6BrSSR2B76Wkgr6UcKRcHo7g7maW2RR8k5iC8I37/y7VGLY+HGNTcMi+RFA2QSkZY2WjmxybYMnw==, tarball: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/d5ee417227d30f9dac7bdf0b6da9686606d2e07d}
+    version: 0.1.0
+    engines: {node: '>=22.12.0'}
     hasBin: true
 
   '@napi-rs/canvas-android-arm64@0.1.69':
@@ -4231,6 +4240,10 @@ snapshots:
       cheerio: 1.2.0
       kuromoji: 0.1.2
       marked: 15.0.12
+
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/d5ee417227d30f9dac7bdf0b6da9686606d2e07d':
+    dependencies:
+      fflate: 0.8.3
 
   '@napi-rs/canvas-android-arm64@0.1.69':
     optional: true

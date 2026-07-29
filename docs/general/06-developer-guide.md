@@ -12,8 +12,10 @@
 
 3.1では、Asset Managerによるプロジェクト内／外部アセットとテキストアセットの統合、Temporary Variablesによる状態管理、Runtime Expressionによる条件評価、Async Inputによる入力待ち、TMPoseによるポーズ認識を組み合わせてDSLを実行します。
 
-- tmpose-kamishibai: アプリ本体・ドキュメント・汎用ビルドツール
+- tmpose-kamishibai: アプリ本体・ドキュメント・TMPose紙芝居用ビルダー
   - [https://github.com/kubohiroya/tmpose-kamishibai](https://github.com/kubohiroya/tmpose-kamishibai)
+- sb3-toolchain: SB3の展開ソース管理・検証・決定的ビルド
+  - [https://github.com/kubohiroya/sb3-toolchain](https://github.com/kubohiroya/sb3-toolchain)
 - tmpose-kamishibai-samples: 公開用台本・サンプル固有アセット
   - [https://kubohiroya.github.io/tmpose-kamishibai-samples/](https://kubohiroya.github.io/tmpose-kamishibai-samples/)
   - [https://github.com/kubohiroya/tmpose-kamishibai-samples](https://github.com/kubohiroya/tmpose-kamishibai-samples)
@@ -44,6 +46,18 @@
 - `sb3-source.json`: ZIPエントリの順序を含む展開ソースのマニフェスト
 
 `app/project.source.json` の台本解析・実行用リストは空の初期状態で管理し、浦島太郎固有のターゲット、背景、コスチューム、音声は含めません。この不変条件は配布テストで検査します。
+
+展開ソース形式、安全なimport、検証、決定的ビルドには、MPL-2.0の
+`@kubohiroya/sb3-toolchain`を使用します。このリポジトリでは浮動`main`ではなく、
+検証済みコミットを`package.json`と`pnpm-lock.yaml`へ固定します。
+
+```json
+{
+  "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d"
+  }
+}
+```
 
 SB3は用途ごとに次の場所へ生成します。どちらもGit管理対象ではありません。
 
@@ -88,6 +102,10 @@ importは、入力SB3から作成した候補と既存の `app/` を比較しま
 - スペースキー、右矢印キー、下矢印キーの進行操作が機能する。
 
 ソース更新を戻す場合は、該当コミットを `git revert` してから `pnpm sb3:build` と `pnpm run build` を再実行します。未コミットの `app/` を戻す操作は差分を失うため、先に `git diff -- app` を確認し、必要ならコミットまたはstashします。
+
+SB3ツールチェーン更新を戻す場合は、`package.json`と`pnpm-lock.yaml`の
+`@kubohiroya/sb3-toolchain`を直前の検証済みコミットへ戻します。展開形式または生成SB3の
+意図しない差分がある版へタグを移動してはいけません。
 
 importまたはbuildの途中で `.app.rollback-*` や `.kamishibai.sb3.rollback-*` が残った場合は、自動削除や再実行をせず、中身と元の出力を比較します。復旧対象を確定した後で元の場所へ戻し、通常の検証を実行します。配布に問題が見つかった場合は、GitHub Pagesを直前の検証済みコミットから再構築できます。SB3バイナリを正本としてリポジトリへ戻す必要はありません。
 

@@ -46,6 +46,14 @@ test('links and documents the generated downloadable SB3', async () => {
     assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
   }
   assert.match(developerGuide, /`app\/`[^\n]*正本/u);
+  for (const document of [developerGuide, readme]) {
+    assert.match(document, /github\.com\/kubohiroya\/sb3-toolchain/u);
+    assert.match(
+      document,
+      /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u,
+      'SB3 toolchain dependency must use a fixed commit.',
+    );
+  }
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
   assert.match(readme, /`dist\/downloads\/kamishibai\.sb3`/u);
