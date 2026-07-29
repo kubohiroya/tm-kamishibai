@@ -60,6 +60,74 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
 });
 
+test('provides the terminology before the numbered specification', () => {
+  const glossary = specification.match(
+    /^## この文書で使う用語$(?<body>[\s\S]*?)(?=^## 1\. 文書の範囲と実装基準$)/mu,
+  )?.groups?.body;
+
+  assert(glossary, 'Internal specification is missing its terminology.');
+  assert(
+    specification.indexOf('## この文書で使う用語') <
+      specification.indexOf('## 1. 文書の範囲と実装基準'),
+  );
+  assert.match(
+    glossary,
+    /表中の等幅書体（`Stage`、`script`、`action=`など）は、target名、変数名、DSL記法として\s*実装に現れる正確な綴り/u,
+  );
+  assert.match(glossary, /通常書体の用語は、概念または分類名/u);
+  assert.match(glossary, /^### Scratch／TurboWarpのproject構造$/mu);
+  assert.match(glossary, /^### cloneとActor$/mu);
+  assert.match(glossary, /^### 紙芝居DSLと実行$/mu);
+  assert.match(glossary, /^### 変数とblock$/mu);
+  for (const term of [
+    'project',
+    'SB3',
+    'target',
+    '`Stage`',
+    'sprite',
+    'clone',
+    '`Actor` target／アクタースプライト',
+    'アクター',
+    'asset',
+    '紙芝居DSL／台本ファイル',
+    '`script`',
+    'scene',
+    'command',
+    'action',
+    'action envelope',
+    'message／broadcast',
+    'Scratch変数／list',
+    'runtime variable',
+    'thread variable',
+    'event hat／hat block',
+    'カスタムブロック',
+    'block ID',
+  ]) {
+    assert(glossary.includes(`| ${term}`), `Terminology is missing ${term}.`);
+  }
+  assert.match(glossary, /`Stage`\s+\| projectに1つだけある舞台のtarget/u);
+  assert.match(glossary, /`Actor` targetから作られ、`actorName`で区別/u);
+  assert.match(glossary, /Actor actionの宛先、command、引数/u);
+});
+
+test('defines Stage before listing the SB3 targets', () => {
+  const sectionIntroduction = specification.match(
+    /^## 4\. SB3の構成$(?<body>[\s\S]*?)(?=^### 4\.1 target一覧$)/mu,
+  )?.groups?.body;
+
+  assert(sectionIntroduction, 'Internal specification is missing the section 4 introduction.');
+  assert.match(sectionIntroduction, /1つの\*\*Stage（ステージ）\*\* target/u);
+  assert.match(sectionIntroduction, /背景（backdrop）を表示/u);
+  assert.match(sectionIntroduction, /Stage自身にblock、variable、listを持てます/u);
+  assert.match(
+    sectionIntroduction,
+    /座標を変えて動かしたり、\s*cloneを作ったりする対象ではありません/u,
+  );
+  assert.match(sectionIntroduction, /Stage targetを舞台の表示だけでなく、紙芝居全体の制御役/u);
+  assert.match(sectionIntroduction, /台本の読込・解析、assetとactorの生成/u);
+  assert.match(sectionIntroduction, /このStage targetとそこに置かれた\s*制御用block群を指します/u);
+});
+
 test('explains the actor command architecture and asset separation', () => {
   const section = specification.match(
     /^### 4\.2 アクターへ命令を届けるしくみ$(?<body>[\s\S]*?)(?=^### 4\.3 )/mu,
