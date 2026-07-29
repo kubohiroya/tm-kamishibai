@@ -226,12 +226,63 @@ DSL名、同一target内のSB3名、既存SB3のアセット名は重複でき�
 `Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
 Asset Managerへ登録します。
 
-### 4.2 target間の責務
+### 4.2 アクターへ命令を届けるしくみ
 
-`Stage`は台本を行へ分解し、`commandList`、`sceneList`、`actionList`へ段階的に変換します。
-Stage actionは自分で実行し、Actor actionは共有runtime variableへ引数を置いて
-`execActorAction`をbroadcastします。`Actor` cloneは自分の`actorName`と
-`actionTarget`を照合し、対象になったcloneだけがactionを実行します。
+Scratch／TurboWarpで1つのspriteから複数の登場人物を作る場合、cloneごとに
+スプライトローカル変数の識別子を持たせれば、同じblockを共有しながら個体を区別できます。
+このアプリはその考え方を、cloneへ命令を届けるところまで拡張しています。
+
+本書では、cloneの雛形として使う`Actor` targetを**アクタースプライト**、そこから作られ、
+スプライトローカル変数の`actorName`を割り当てられた各cloneを**アクター**と呼びます。
+アクタースプライトの本体は表示せず、物語の登場人物として表示するのはアクターだけです。
+すべてのアクターは同じblock定義を共有し、`actorName`によって互いを区別します。
+
+Stageからアクターへ命令を届ける流れは次のとおりです。
+
+1. StageがDSLのActor actionを、宛先となるアクター名、command、引数に分解する
+2. `actionTarget`、`actionCommand`、`actionParam`、`actionParam2`というruntime variableへ
+   それぞれを格納する。このまとまりを本書では**action envelope**と呼ぶ
+3. Stageが`execActorAction`をbroadcastする
+4. すべての`Actor` cloneがmessageを受け取り、自分の`actorName`が`actionTarget`の
+   対象に含まれるかを調べる
+5. 対象になったアクターだけが、`actionCommand`を入れ子の条件分岐で振り分け、
+   移動、見た目、音、時間に関する処理を実行する
+
+つまり、action envelopeが「誰に・何を・どの引数で実行させるか」を表し、broadcastが
+その命令を全アクターへ配送します。ここでいうcommandは、アクターに対する
+メソッドに相当しますが、TurboWarp上ではカスタムブロックと条件分岐で実装されています。
+
+通常のScratch projectではcostumeやsoundはspriteに属します。このアプリでは
+[TurboWarp Asset Manager](https://github.com/kubohiroya/turbowarp-asset-manager)を使い、
+SB3内のcostume、backdrop、sound、textや、外部URLの画像・音声を、名前を持つassetとして
+登録します。アクターの見た目や音のactionはこのasset名を参照するため、振る舞いを実装する
+アクタースプライトと、実際に使う画像・音声を分けて組み合わせられます。
+
+台本DSLは、このassetの定義、アクターの定義、sceneごとにアクターへ送るactionの定義を
+テキストで記述するための言語です。TurboWarpで作られたこのアプリはDSLを解析し、assetを
+読み込み、アクターを生成し、action envelopeとbroadcastを使って命令を実行します。
+したがって、このアプリ全体は、紙芝居DSLを解析・実行する処理系であり、その実行基盤
+（runtime）でもあります。
+
+#### 台本からActor actionまでのシーケンス
+
+台本ファイルからActor内の処理までを、データの変換と実行の順に並べると次のようになります。
+外部ファイルだけでなく、再生用SB3へ組み込んだ台本も`script`へ入った後は同じ経路を通ります。
+
+![台本ファイルからアクターでの命令実行までのシーケンス](../images/internal-script-execution-sequence.svg)
+
+`create sceneList`は`script`をscene単位に分けます。`exec scene # %s with %s`は現在のsceneを
+行単位の`commandList`に分け、`exec command %s %s`でcommandを順に処理します。このうち
+`action=`の値を`actionList`へ集め、`exec actionList`が各actionを`exec action %s`へ渡します。
+Stage actionはStage内で実行され、Actor actionだけがaction envelopeとmessageを経由します。
+messageはすべての`Actor` cloneが受け取りますが、実際に処理するのは宛先に一致した
+アクターだけです。
+
+### 4.3 target間の責務
+
+`Stage`は台本を`sceneList`、`commandList`、`actionList`へ段階的に変換します。
+さらにsceneと共有runtime状態を管理し、Stage actionを実行します。`Actor` cloneの責務は、
+4.2で配送されたActor actionのうち自分を対象とするものを実行することです。
 
 UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
 Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ

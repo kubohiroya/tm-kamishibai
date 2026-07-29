@@ -8,12 +8,20 @@ import {generalDocumentConfig} from '../docs/config.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
-const [projectSource, specification, developerGuide, docsIndex, stateDiagram] = await Promise.all([
+const [
+  projectSource,
+  specification,
+  developerGuide,
+  docsIndex,
+  stateDiagram,
+  scriptExecutionSequence,
+] = await Promise.all([
   readFile(path.join(projectRoot, 'app/project.source.json'), 'utf8').then(JSON.parse),
   readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
   readFile(path.join(projectRoot, 'site/docs/index.html'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-state-transition.svg'), 'utf8'),
+  readFile(path.join(projectRoot, 'docs/images/internal-script-execution-sequence.svg'), 'utf8'),
 ]);
 
 const normalizedSpecification = specification.replaceAll('&#96;', '`').replaceAll('&#124;', '|');
@@ -50,6 +58,55 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(docsIndex, /general\/07-internal-specification\.html/u);
   assert.match(docsIndex, /general\/07-internal-specification\.pdf/u);
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
+});
+
+test('explains the actor command architecture and asset separation', () => {
+  const section = specification.match(
+    /^### 4\.2 アクターへ命令を届けるしくみ$(?<body>[\s\S]*?)(?=^### 4\.3 )/mu,
+  )?.groups?.body;
+
+  assert(section, 'Internal specification is missing the actor architecture overview.');
+  assert.match(section, /`Actor` targetを\*\*アクタースプライト\*\*/u);
+  assert.match(section, /`actorName`を割り当てられた各cloneを\*\*アクター\*\*/u);
+  for (const variable of ['actionTarget', 'actionCommand', 'actionParam', 'actionParam2']) {
+    assert(section.includes(`\`${variable}\``), `Actor overview is missing ${variable}.`);
+  }
+  assert.match(section, /`execActorAction`をbroadcast/u);
+  assert.match(section, /自分の`actorName`が`actionTarget`の\s*対象に含まれるか/u);
+  assert.match(
+    section,
+    /\[TurboWarp Asset Manager\]\(https:\/\/github\.com\/kubohiroya\/turbowarp-asset-manager\)/u,
+  );
+  assert.match(section, /アクタースプライトと、実際に使う画像・音声を分けて/u);
+  assert.match(section, /紙芝居DSLを解析・実行する処理系/u);
+  assert.match(section, /実行基盤\s*（runtime）/u);
+  assert.match(
+    section,
+    /!\[台本ファイルからアクターでの命令実行までのシーケンス\]\(\.\.\/images\/internal-script-execution-sequence\.svg\)/u,
+  );
+  assert.match(section, /Stage actionはStage内で実行され/u);
+  assert.match(section, /Actor actionだけがaction envelopeとmessageを経由/u);
+
+  assert.match(
+    scriptExecutionSequence,
+    /<title id="title">台本ファイルからアクターでの命令実行までのシーケンス<\/title>/u,
+  );
+  const stepIds = [...scriptExecutionSequence.matchAll(/<g id="(step-[^"]+)"/gu)].map(
+    ([, id]) => id,
+  );
+  assert.deepEqual(stepIds, [
+    'step-file-script',
+    'step-script-scene-list',
+    'step-scene-list-scene',
+    'step-scene-command-list',
+    'step-command-list-command',
+    'step-command-action-list',
+    'step-action-list-action',
+    'step-action-envelope',
+    'step-envelope-message',
+    'step-actor-receive',
+    'step-actor-process',
+  ]);
 });
 
 test('documents invalidScript as a terminal error instead of a pose transition', () => {
