@@ -8,7 +8,7 @@
   "name": "紙芝居DSL コマンドリファレンス",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-29T17:18:20.019Z",
+  "dateModified": "2026-07-29T18:01:43.546Z",
   "readingOrder": [
     {
       "url": "index.html",
@@ -100,8 +100,6 @@
     "images/image65.png",
     "images/image66.png",
     "images/internal-actor-clone-sequence.svg",
-    "images/internal-architecture-layers.svg",
-    "images/internal-runtime-architecture.svg",
     "images/internal-script-execution-sequence.svg",
     "images/internal-state-transition.svg",
     "images/model-upload.png",

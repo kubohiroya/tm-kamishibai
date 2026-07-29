@@ -5,10 +5,10 @@
   ],
   "type": "Book",
   "conformsTo": "https://github.com/vivliostyle/vivliostyle-cli",
-  "name": "紙芝居アプリ ソフトウェアメンテナンスガイド",
+  "name": "紙芝居アプリ ソフトウェア開発者向け資料",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-29T17:18:27.437Z",
+  "dateModified": "2026-07-29T18:01:50.833Z",
   "readingOrder": [
     {
       "url": "index.html",
@@ -18,7 +18,7 @@
     },
     {
       "url": "document.html",
-      "name": "紙芝居アプリ ソフトウェアメンテナンスガイド"
+      "name": "紙芝居アプリ ソフトウェア開発者向け資料"
     }
   ],
   "resources": [
@@ -100,8 +100,6 @@
     "images/image65.png",
     "images/image66.png",
     "images/internal-actor-clone-sequence.svg",
-    "images/internal-architecture-layers.svg",
-    "images/internal-runtime-architecture.svg",
     "images/internal-script-execution-sequence.svg",
     "images/internal-state-transition.svg",
     "images/model-upload.png",
