@@ -11,9 +11,11 @@ import {
   resolveLearnedThroughGrade,
   staffDocumentConfig,
 } from '../docs/config.mjs';
+import {siteVersionPlaceholder} from './site-version.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
+const packageJsonPath = path.join(projectRoot, 'package.json');
 const require = createRequire(import.meta.url);
 const vivliostyleRequire = createRequire(require.resolve('@vivliostyle/cli/package.json'));
 const {
@@ -157,6 +159,7 @@ async function verifySiteIndex() {
     readFile(heroImageSourcePath),
     readFile(heroImagePath),
   ]);
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
 
   assert(images.includes('images/image01.png'),
     'The top page does not reference the configured hero image.');
@@ -176,6 +179,17 @@ async function verifySiteIndex() {
     assert(html.includes(`<span class="card-icon" aria-hidden="true">${icon}</span>`),
       `The top-page card icon ${icon} is missing.`);
   }
+  assert(
+    html.includes(
+      `TurboWarpで編集・実行できるkamishibai ${packageJson.version}`
+        + 'のSB3ファイルをダウンロードできます。',
+    ),
+    'The top-page download card does not use the package version.',
+  );
+  assert(
+    !html.includes(siteVersionPlaceholder) && !html.includes('kamishibai 3.1a1'),
+    'The top-page download card contains an unresolved or retired version.',
+  );
   assert(!html.includes('class="actions"')
       && !html.includes('docs/workshops/2026-08-01/tmpose-kamishibai-20260801.pdf'),
   'The retired standalone top-page button group remains.');

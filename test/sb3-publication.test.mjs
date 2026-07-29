@@ -4,6 +4,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
+
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
 test('keeps static distribution sources free of SB3 binaries', async () => {
@@ -123,6 +125,35 @@ test('links and documents the generated downloadable SB3', async () => {
   }
   assert.match(readme, /\[開発者ガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
+});
+
+test('renders the top-page download version from package metadata', async () => {
+  const [siteIndex, packageJson] = await Promise.all([
+    readFile(path.join(projectRoot, 'site/index.html'), 'utf8'),
+    readFile(path.join(projectRoot, 'package.json'), 'utf8').then(JSON.parse),
+  ]);
+
+  assert.equal(siteIndex.split(siteVersionPlaceholder).length - 1, 1);
+  assert.doesNotMatch(siteIndex, /kamishibai \d/u);
+
+  const rendered = renderSiteVersion(siteIndex, packageJson.version);
+  assert.match(
+    rendered,
+    new RegExp(`kamishibai ${packageJson.version.replaceAll('.', '\\.')}のSB3ファイル`, 'u'),
+  );
+  assert(!rendered.includes(siteVersionPlaceholder));
+  assert.throws(
+    () => renderSiteVersion(siteIndex.replace(siteVersionPlaceholder, ''), packageJson.version),
+    /Expected exactly one/u,
+  );
+  assert.throws(
+    () =>
+      renderSiteVersion(
+        `${siteIndex}\n${siteVersionPlaceholder}`,
+        packageJson.version,
+      ),
+    /found 2/u,
+  );
 });
 
 test('links the public sample site without restoring the retired local page', async () => {
