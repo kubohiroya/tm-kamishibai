@@ -5,8 +5,8 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 この文書は、TMPose紙芝居の汎用アプリSB3、成果物、SB3・台本変換ビルダー、検証、
 公開の内部仕様を、現在の実装に対応させて記録します。アプリを変更する手順は
 [ソフトウェア開発者向け資料](06-developer-guide.md)、台本の外部仕様は
-[台本DSLマニュアル](02-dsl-manual.md)と
-[コマンドリファレンス](03-command-reference.md)を参照してください。
+[台本DSLマニュアル](04-dsl-manual.md)と
+[コマンドリファレンス](05-command-reference.md)を参照してください。
 
 対象アプリ／DSL: `kamishibai=3.1`
 
@@ -632,9 +632,9 @@ token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本�
 
 ## 12. 関連ドキュメント
 
-- [`01-user-guide.md`](01-user-guide.md): アプリの利用方法と成果物の使い分け
-- [`02-dsl-manual.md`](02-dsl-manual.md): 台本の構造と書き方
-- [`03-command-reference.md`](03-command-reference.md): コマンドとactionの外部仕様
+- [`03-user-guide.md`](03-user-guide.md): アプリの利用方法と成果物の使い分け
+- [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
+- [`05-command-reference.md`](05-command-reference.md): コマンドとactionの外部仕様
 - [`06-developer-guide.md`](06-developer-guide.md): setupと変更手順
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口

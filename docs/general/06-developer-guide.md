@@ -5,7 +5,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 このガイドは、TMPose紙芝居のアプリ、SB3ソース、ビルダー、Webサイト、ドキュメントを
 変更する開発者向けの入口です。アプリの内部構造、成果物、ビルダー仕様、検証、公開は
 [紙芝居アプリ内部仕様書](07-internal-specification.md)、台本の書式とコマンド仕様は
-[台本DSLマニュアル](02-dsl-manual.md)と[コマンドリファレンス](03-command-reference.md)
+[台本DSLマニュアル](04-dsl-manual.md)と[コマンドリファレンス](05-command-reference.md)
 を正本とします。
 
 対象アプリ／DSL: `kamishibai=3.1`
@@ -163,7 +163,7 @@ pnpm run build
 検証項目を本ガイドへ重複して列挙しません。
 
 DSL、Loading表示、入力、分岐、テキスト、画面遷移などの振る舞いを変更するときは、
-同じPRで[DSL資料](02-dsl-manual.md)、[コマンド資料](03-command-reference.md)、
+同じPRで[DSL資料](04-dsl-manual.md)、[コマンド資料](05-command-reference.md)、
 [内部仕様書](07-internal-specification.md)、VMまたはブロック構造のテストを更新します。
 
 ## 6. 埋め込み機能拡張を更新する
@@ -287,9 +287,9 @@ TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境�
 
 ## 10. 関連ドキュメントを確認する
 
-- [`01-user-guide.md`](01-user-guide.md): アプリの利用方法と成果物の使い分け
-- [`02-dsl-manual.md`](02-dsl-manual.md): 台本の構造と書き方
-- [`03-command-reference.md`](03-command-reference.md): コマンドとアクションの仕様
+- [`03-user-guide.md`](03-user-guide.md): アプリの利用方法と成果物の使い分け
+- [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
+- [`05-command-reference.md`](05-command-reference.md): コマンドとアクションの仕様
 - [`07-internal-specification.md`](07-internal-specification.md): アプリ内部構造、成果物、検証、公開
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口と主要コマンド

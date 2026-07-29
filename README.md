@@ -80,10 +80,13 @@ pnpm install
 
 ## ドキュメント
 
-- [利用者ガイド](docs/general/01-user-guide.md)
-- [台本DSLマニュアル](docs/general/02-dsl-manual.md)
-- [コマンドリファレンス](docs/general/03-command-reference.md)
+- [概要説明書（大人向け）](docs/general/01-executive-summary-adult.md)
+- [概要説明書（子供向け）](docs/general/02-executive-summary-kids.md)
+- [利用者ガイド](docs/general/03-user-guide.md)
+- [台本DSLマニュアル](docs/general/04-dsl-manual.md)
+- [コマンドリファレンス](docs/general/05-command-reference.md)
 - [開発者ガイド](docs/general/06-developer-guide.md)
+- [内部仕様書](docs/general/07-internal-specification.md)
 - [変更履歴](docs/general/history.md)
 - [公開ドキュメント一覧](https://kubohiroya.github.io/tmpose-kamishibai/docs/)
 

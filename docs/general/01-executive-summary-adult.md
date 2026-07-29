@@ -160,10 +160,10 @@ TurboWarp紙芝居アプリ／Web版
 
 ## 11. 関連ドキュメント
 
-- `01-user-guide.md`: 実際にアプリを操作する人向けの説明
-- `02-dsl-manual.md`: 紙芝居DSLファイルを作る人向けの説明
-- `03-command-reference.md`: コマンド・アクションの詳細仕様
-- `05-executive-summary-kids.md`: 子供向けの概要説明
+- `03-user-guide.md`: 実際にアプリを操作する人向けの説明
+- `04-dsl-manual.md`: 紙芝居DSLファイルを作る人向けの説明
+- `05-command-reference.md`: コマンド・アクションの詳細仕様
+- `02-executive-summary-kids.md`: 子供向けの概要説明
 - `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
 - `07-internal-specification.md`: アプリ内部構造、成果物、検証、公開の仕様
 - `history.md`: 紙芝居DSL 2.0から3.1への変更履歴
