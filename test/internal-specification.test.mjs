@@ -14,6 +14,7 @@ const [
   developerGuide,
   docsIndex,
   stateDiagram,
+  actorCloneSequence,
   scriptExecutionSequence,
 ] = await Promise.all([
   readFile(path.join(projectRoot, 'app/project.source.json'), 'utf8').then(JSON.parse),
@@ -21,6 +22,7 @@ const [
   readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
   readFile(path.join(projectRoot, 'site/docs/index.html'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-state-transition.svg'), 'utf8'),
+  readFile(path.join(projectRoot, 'docs/images/internal-actor-clone-sequence.svg'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-script-execution-sequence.svg'), 'utf8'),
 ]);
 
@@ -175,6 +177,94 @@ test('explains the actor command architecture and asset separation', () => {
     'step-actor-receive',
     'step-actor-process',
   ]);
+});
+
+test('documents actor clone creation before actor action delivery', () => {
+  const section = specification.match(
+    /^#### 台本からアクターclone生成までのシーケンス$(?<body>[\s\S]*?)(?=^#### 台本からActor actionまでのシーケンス$)/mu,
+  )?.groups?.body;
+
+  assert(section, 'Internal specification is missing the actor clone sequence.');
+  assert.match(
+    section,
+    /!\[台本のactor定義からアクターcloneを生成するシーケンス\]\(\.\.\/images\/internal-actor-clone-sequence\.svg\)/u,
+  );
+  assert.match(section, /`actor=`の値を`actorList`へ追加/u);
+  assert.match(section, /`アクター名,初期skin名`/u);
+  assert.match(section, /thread variableの`name`と`skin`へ分け/u);
+  assert.match(section, /`actionTarget`へ`name`、`actionParam`へ`skin`を設定/u);
+  assert.match(section, /`Actor` targetのclone/u);
+  assert.match(
+    section,
+    /スプライトローカル変数`actorName`へ保存し、\s*`actionParam`をTurboWarp Asset Managerへ渡して初期skin/u,
+  );
+  assert.match(section, /0\.1秒待ち/u);
+  assert.match(section, /共有runtime variableを次の\s*アクター用の値で上書き/u);
+  assert.match(section, /clone生成時には`execActorAction`をbroadcastしません/u);
+  assert.match(section, /`Actor` target本体はcloneの雛形として非表示/u);
+  assert.match(section, /生成直後も非表示/u);
+  assert.match(section, /後続のActor action/u);
+
+  assert.match(
+    actorCloneSequence,
+    /<title id="title">台本のactor定義からアクターcloneを生成するシーケンス<\/title>/u,
+  );
+  const stepIds = [...actorCloneSequence.matchAll(/<g id="(step-[^"]+)"/gu)].map(([, id]) => id);
+  assert.deepEqual(stepIds, [
+    'step-actor-command-register',
+    'step-create-actor-loop',
+    'step-split-actor-definition',
+    'step-set-clone-initializers',
+    'step-create-actor-clone',
+    'step-clone-start',
+    'step-clone-read-name',
+    'step-clone-set-skin',
+    'step-wait-before-next-actor',
+  ]);
+
+  const stage = projectSource.targets.find(({isStage}) => isStage);
+  const actor = projectSource.targets.find(({name}) => name === 'Actor');
+  const stageBlocks = Object.values(stage.blocks);
+  const actorBlocks = Object.values(actor.blocks);
+
+  assert(
+    stageBlocks.some(
+      (block) => block.opcode === 'data_addtolist' && block.fields?.LIST?.[0] === 'actorList',
+    ),
+    'Stage does not register actor commands in actorList.',
+  );
+  const createClone = stageBlocks.find(
+    (block) =>
+      block.opcode === 'control_create_clone_of' &&
+      stage.blocks[inputBlockId(block.inputs?.CLONE_OPTION)]?.fields?.CLONE_OPTION?.[0] === 'Actor',
+  );
+  assert(createClone, 'Stage does not create Actor clones.');
+
+  const setActionParam = stage.blocks[createClone.parent];
+  const setActionTarget = stage.blocks[setActionParam.parent];
+  const cloneWait = stage.blocks[createClone.next];
+  assert.equal(setActionTarget.opcode, 'lmsTempVars2_setRuntimeVariable');
+  assert.equal(literalString(setActionTarget.inputs?.VAR), 'actionTarget');
+  assert.equal(setActionParam.opcode, 'lmsTempVars2_setRuntimeVariable');
+  assert.equal(literalString(setActionParam.inputs?.VAR), 'actionParam');
+  assert.equal(cloneWait.opcode, 'control_wait');
+  assert.deepEqual(cloneWait.inputs?.DURATION, [1, [5, '0.1']]);
+
+  assert.equal(actor.visible, false);
+  const cloneStart = actorBlocks.find((block) => block.opcode === 'control_start_as_clone');
+  const setActorName = actor.blocks[cloneStart.next];
+  const setInitialSkin = actor.blocks[setActorName.next];
+  assert.equal(setActorName.opcode, 'data_setvariableto');
+  assert.equal(setActorName.fields?.VARIABLE?.[0], 'actorName');
+  assert.equal(
+    actor.blocks[inputBlockId(setActorName.inputs?.VALUE)]?.inputs?.VAR?.[1]?.[1],
+    'actionTarget',
+  );
+  assert.equal(setInitialSkin.opcode, 'kubohiroyaassetmanager_setThisSpriteSkin');
+  assert.equal(
+    actor.blocks[inputBlockId(setInitialSkin.inputs?.NAME)]?.inputs?.VAR?.[1]?.[1],
+    'actionParam',
+  );
 });
 
 test('documents invalidScript as a terminal error instead of a pose transition', () => {
