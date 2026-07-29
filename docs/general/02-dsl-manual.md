@@ -736,4 +736,5 @@ abc
 - `04-executive-summary-adult.md`: 大人向け概要説明
 - `05-executive-summary-kids.md`: 子供向け概要説明
 - `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
+- `07-internal-specification.md`: アプリ内部構造、成果物、検証、公開の仕様
 - `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

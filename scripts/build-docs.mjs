@@ -127,6 +127,13 @@ export function normalizeWorkshopImagePaths(source) {
     );
 }
 
+export function normalizeGeneralImagePaths(source) {
+  return source.replace(
+    /(<img\b[^>]*\bsrc=")\.\.\/images\//giu,
+    '$1images/',
+  );
+}
+
 function baseBuildInfo(details = {}) {
   return {
     htmlAndPdfGenerator: 'Vivliostyle CLI 11.1.0',
@@ -314,6 +321,7 @@ export async function buildDocs({
       const pdfFilename = generalDocument.sourceFilename.replace(/\.md$/u, '.pdf');
       const htmlPath = path.join(generalDirectory, htmlFilename);
       const pdfPath = path.join(pdfDirectory, generalDocumentConfig.outputDirectory, pdfFilename);
+      await writeFile(htmlPath, normalizeGeneralImagePaths(await readFile(htmlPath, 'utf8')));
       if (generalDocument.addFurigana === true) {
         await prepareGeneralFuriganaHtml(htmlPath, grade);
         await applyRubygana(htmlPath, grade);

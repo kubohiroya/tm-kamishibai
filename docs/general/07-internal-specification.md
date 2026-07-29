@@ -1,0 +1,640 @@
+# 紙芝居アプリ内部仕様書
+
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
+この文書は、TMPose紙芝居の汎用アプリSB3、成果物、SB3・台本変換ビルダー、検証、
+公開の内部仕様を、現在の実装に対応させて記録します。アプリを変更する手順は
+[ソフトウェア開発者向け資料](06-developer-guide.md)、台本の外部仕様は
+[台本DSLマニュアル](02-dsl-manual.md)と
+[コマンドリファレンス](03-command-reference.md)を参照してください。
+
+対象アプリ／DSL: `kamishibai=3.1`
+
+過去のバージョンからの変更は[`history.md`](history.md)を参照してください。
+
+## 1. 文書の範囲と実装基準
+
+アプリ内部構造の正本は`app/project.source.json`です。本書のtarget、変数、list、
+broadcast、hat、カスタムブロック定義は、このファイルから抽出した現在の構造を
+記載しています。配布用`kamishibai.sb3`は`app/`から生成する成果物であり、本書の
+調査元にはしません。
+
+### 1.1 実装スナップショット
+
+| 項目                     | 件数 |
+| ------------------------ | ---: |
+| target（Stageを含む）    |    8 |
+| block                    | 1444 |
+| event hat                |   39 |
+| カスタムブロック定義     |   40 |
+| Scratch変数              |    6 |
+| Scratch list             |   11 |
+| broadcast message        |   18 |
+| 静的なruntime variable名 |   16 |
+| 静的なthread variable名  |   36 |
+| TurboWarp機能拡張        |   12 |
+
+block IDは展開ソース内の対応箇所を特定するために掲載します。TurboWarpでブロックを
+作り直すとIDは変わり得るため、外部仕様や永続IDとして使用しません。
+
+### 1.2 使用する機能拡張
+
+| ID                            | 役割                                     | 取得形態 |
+| ----------------------------- | ---------------------------------------- | -------- |
+| `sipcconsole`                 | デバッグ用console                        | Gallery  |
+| `lmsTempVars2`                | runtime variable／thread variable        | Gallery  |
+| `strings`                     | 文字列処理                               | Gallery  |
+| `kubohiroyaassetmanager`      | 画像・音声の登録とLoading進捗            | 埋め込み |
+| `tmpose`                      | カメラ姿勢認識                           | 埋め込み |
+| `localstorage`                | 台本のローカル保存                       | Gallery  |
+| `kubohiroyatextlines`         | 行単位の台本処理                         | 埋め込み |
+| `kubohiroyaruntimeexpression` | 分岐条件式の評価                         | 埋め込み |
+| `kubohiroyaasyncinput`        | key／touch入力とscene移動                | 埋め込み |
+| `lmsTimers`                   | `wait`と時間ベースactor actionのタイマー | Gallery  |
+| `files`                       | 外部台本ファイルの選択                   | Gallery  |
+| `text`                        | テキスト描画・アニメーション             | Gallery  |
+
+埋め込み拡張の由来、固定commit、SHA-256は`app/embedded-extensions.json`を正本とし、
+更新方法は[`sb3-toolchain`のワークフロー](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md)
+に従います。
+
+## 2. 成果物プロファイル
+
+紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。
+
+| プロファイル | 例               | 台本       | 物語固有アセット | 主な用途                   |
+| ------------ | ---------------- | ---------- | ---------------- | -------------------------- |
+| `generic`    | `kamishibai.sb3` | 非埋め込み | 非埋め込み       | 本体が配布する汎用雛形     |
+| `editor`     | `_urashima.sb3`  | 非埋め込み | 埋め込み         | 物語作成者の編集・動作確認 |
+| `player`     | `urashima.sb3`   | 埋め込み   | 埋め込み         | 配布・再生、Packager Web版 |
+
+`generic`は`app/`から生成し、特定の物語を含めません。builder APIとCLIが受け付ける
+`profile`は`editor`または`player`です。
+
+`editor`と`player`は同じベースSB3、台本、アセットロックから生成します。両者の
+変換済み台本とアセット参照を分岐させません。`player`は組み込み台本を予約変数へ保存し、
+タイトル操作後にファイル選択なしで開始します。
+
+`player`へ台本とアセットを組み込んでも、TMPoseモデル、カメラ、外部サービスまで
+自動的にオフライン化されるわけではありません。残るオンライン依存は成果物manifestと
+公開ページへ明記します。
+
+## 3. SB3・台本変換ビルダー
+
+### 3.1 導入
+
+利用可能なバージョンを確認し、消費側で明示的に固定します。
+
+```bash
+npm view @kubohiroya/tmpose-kamishibai version
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@<VERSION>
+```
+
+生成したlockfileをcommitし、CIでは`pnpm install --frozen-lockfile`を使います。
+
+### 3.2 CLI
+
+```bash
+pnpm exec tmpose-kamishibai build-sb3 \
+  --base kamishibai.sb3 \
+  --script source.txt \
+  --assets assets.lock.json \
+  --output dist/sample \
+  --profile editor
+```
+
+`--output`は拡張子を含まないベース名です。次の3ファイルを同じtransactionとして
+生成します。
+
+```text
+dist/sample.sb3
+dist/sample.txt
+dist/sample.manifest.json
+```
+
+| オプション              | 意味                                      |
+| ----------------------- | ----------------------------------------- |
+| `--allow-file-root DIR` | `file:`の許可ルートを追加。複数回指定可能 |
+| `--allow-http`          | 平文HTTPを明示的に許可                    |
+| `--timeout-ms N`        | 1リクエストのタイムアウト                 |
+| `--max-asset-bytes N`   | 1アセットの最大バイト数                   |
+| `--max-script-bytes N`  | 組み込み台本の最大バイト数                |
+| `--max-redirects N`     | HTTPリダイレクト上限                      |
+
+完全な一覧は`pnpm exec tmpose-kamishibai --help`で確認します。
+
+### 3.3 JavaScript API
+
+```js
+import {
+  Sb3BuilderError,
+  buildSb3Bundle,
+  validateAssetManifest,
+  validateBundle,
+} from '@kubohiroya/tmpose-kamishibai/builder';
+
+const result = await buildSb3Bundle({
+  baseSb3: 'kamishibai.sb3',
+  sourceScript: 'source.txt',
+  assetManifest: 'assets.lock.json',
+  outputDirectory: 'dist',
+  outputName: 'sample',
+  profile: 'editor',
+});
+
+console.log(result.outputPaths);
+```
+
+`baseSb3`と`sourceScript`にはファイルパスまたは`file:` URLを指定できます。
+`assetManifest`にはファイルパス、`file:` URL、または検証対象のJavaScriptオブジェクトを
+指定できます。相対`file:`を含むオブジェクトでは`manifestBaseDirectory`も指定します。
+
+ネットワーク・ファイル取得は`allowedFileRoots`、`allowHttp`、`requestTimeoutMs`、
+`maxAssetBytes`、`maxRedirects`で制限できます。`player`の組み込み台本上限は
+`maxEmbeddedScriptBytes`で変更できます。
+
+`buildSb3Bundle`は`manifest`と`outputPaths`を返します。入力・アセット・出力の問題は
+`Sb3BuilderError`として処理段階とアセット情報を保持します。
+
+### 3.4 アセットマニフェスト
+
+入力manifestは`formatVersion: 1`と1件以上の`assets`を持ちます。
+
+```json
+{
+  "formatVersion": 1,
+  "assets": [
+    {
+      "name": "forest",
+      "uri": "file:assets/forest.svg",
+      "kind": "backdrop",
+      "target": "@stage",
+      "sb3Name": "森",
+      "contentType": "image/svg+xml",
+      "dataFormat": "svg",
+      "size": 1234,
+      "sha256": "<64文字の16進数>",
+      "license": "CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/",
+      "metadata": {
+        "bitmapResolution": 1,
+        "rotationCenterX": 240,
+        "rotationCenterY": 180
+      }
+    }
+  ]
+}
+```
+
+| `kind`        | `target`     | 変換後の台本参照             |
+| ------------- | ------------ | ---------------------------- |
+| `backdrop`    | `@stage`     | `backdrop:<sb3Name>`         |
+| `costume`     | スプライト名 | `costume:<target>:<sb3Name>` |
+| `stageSound`  | `@stage`     | `sound:@stage:<sb3Name>`     |
+| `spriteSound` | スプライト名 | `sound:<target>:<sb3Name>`   |
+
+DSL名、同一target内のSB3名、既存SB3のアセット名は重複できません。`license`には素材の
+ライセンスまたは利用条件の識別情報と参照先を記録します。
+
+### 3.5 安全性と再現性
+
+- `file:`は既定でmanifestのディレクトリ以下だけを許可し、`..`やsymlinkによる脱出を拒否する
+- HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する
+- Content-Type、実サイズ、ロック済みサイズ、SHA-256、timeout、redirectを検証する
+- ZIP entry順、timestamp、圧縮設定、JSON表現を固定する
+- SB3、変換済み台本、出力manifestの対応を確定前に再検証する
+- 3成果物を一時領域で生成し、すべて成功した場合だけ置換する
+- 失敗時は既存成果物を保持または復元する
+
+同じ入力、固定依存、設定から生成したSB3、台本、manifestはbit-for-bitで一致しなければ
+なりません。
+
+## 4. SB3の構成
+
+### 4.1 target一覧
+
+| target                | 種別       | 役割                                                                | 初期costume／sound      |
+| --------------------- | ---------- | ------------------------------------------------------------------- | ----------------------- |
+| `Stage`               | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `Stars`        |
+| `Actor`               | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／`pop`        |
+| `prompt`              | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`        |
+| `openButton`          | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`        |
+| `reloadButton`        | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`        |
+| `showTitleButton`     | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`        |
+| `Loading`             | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／`Chirp`      |
+| `LoadingBubbleAnchor` | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor` |
+
+`Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、3つのmenu button、
+`Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
+Asset Managerへ登録します。
+
+### 4.2 target間の責務
+
+`Stage`は台本を行へ分解し、`commandList`、`sceneList`、`actionList`へ段階的に変換します。
+Stage actionは自分で実行し、Actor actionは共有runtime variableへ引数を置いて
+`execActorAction`をbroadcastします。`Actor` cloneは自分の`actorName`と
+`actionTarget`を照合し、対象になったcloneだけがactionを実行します。
+
+UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
+Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ
+複製せず、Stageを状態の所有者とします。
+
+## 5. 変数とlist
+
+変数は、SB3へ永続化されるScratch変数／list、threadごとの一時値、project全体で共有する
+runtime variableの3種類に分けます。
+
+### 5.1 Scratch変数
+
+| 所有者  | 変数                       | 初期値       | 役割                                   |
+| ------- | -------------------------- | ------------ | -------------------------------------- |
+| `Stage` | `ポーズ認識`               | `0`          | pose認識中の表示・互換用状態           |
+| `Stage` | `チャージ`                 | `0`          | pose成立までのcharge表示・互換用状態   |
+| `Stage` | `actionIndex`              | `1`          | 現在処理する`actionList`の位置         |
+| `Stage` | `poseIndex`                | `1`          | 現在処理する`poseList`の位置           |
+| `Stage` | `__tmpose_embedded_script` | 空文字       | `player` profileの組み込み台本予約領域 |
+| `Actor` | `actorName`                | `_template_` | cloneが担当する台本上のactor名         |
+
+`__tmpose_embedded_script`はStageに一つだけ存在し、monitorを持ちません。`generic`と
+`editor`では空、`player`ではbuilderが変換済み台本を設定します。
+
+### 5.2 Scratch list
+
+すべてStage所有で、汎用SB3では空の初期状態です。
+
+| list             | 役割                           |
+| ---------------- | ------------------------------ |
+| `skinList`       | actor action中のcostume候補    |
+| `poseList`       | pose action中の認識label候補   |
+| `soundList`      | actor action中のsound候補      |
+| `actionList`     | 現在sceneのaction列            |
+| `sceneList`      | 台本から抽出したscene block    |
+| `commandList`    | sceneの前に評価する設定command |
+| `actorList`      | 台本から生成するactor定義      |
+| `assetList`      | 登録するasset定義              |
+| `durationList`   | pose候補ごとの継続時間         |
+| `sceneLabelList` | scene labelとindexの対応       |
+| `lines`          | Text Linesで分割した台本行     |
+
+### 5.3 runtime variable
+
+静的な名前を持つruntime variableは次の16個です。
+
+| 変数                                                           | 生存期間／役割                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `script`                                                       | 読み込んだ変換済み台本。title、reload、`startStory`間で共有      |
+| `version`                                                      | 台本の`kamishibai` version                                       |
+| `startSceneIndex`                                              | 台本で指定した開始scene                                          |
+| `sceneIndex`                                                   | 現在実行中のscene index                                          |
+| `actionTarget`, `actionCommand`, `actionParam`, `actionParam2` | StageからActor cloneへ渡すaction envelope                        |
+| `nextSceneLabel`                                               | key／touch入力が要求した遷移先scene label                        |
+| `skipMode`                                                     | `Space`、`Right`、`Down`による未消費の進行要求                   |
+| `skipContext`                                                  | `title`、`action`、`pose`、`scene`のどの境界が要求を消費できるか |
+| `poseRecog`, `poseCharge`, `poseIdle`                          | pose認識のしきい値、charge時間、idle時間                         |
+| `loadingCostume`                                               | Loading spriteへ適用するcostume名                                |
+| `message`                                                      | Loading bubbleへ表示する現在の進捗文言                           |
+
+このほか、`exec command %s %s`はDSLで指定されたruntime variable名を動的に設定します。
+分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
+静的な16個には数えません。
+
+### 5.4 thread variable
+
+カスタムブロック呼出しごとに分離され、呼出し終了後に共有状態として残さない値です。
+
+| 用途                  | 名前                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| 共通loop・文字列処理  | `index`, `length`, `line`, `lineIndex`, `name`, `value`, `key`, `keyValue`             |
+| 台本解析              | `sceneBlock`, `sceneLabel`, `sceneLabelList`, `condition`, `conditionList`             |
+| asset／actor生成      | `asset`, `assetList`, `resourceId`, `actor`, `actorName`, `skin`                       |
+| action実行            | `action`, `actionResult`, `actionListResult`, `stageActionResult`, `actorActionResult` |
+| command／branch／入力 | `commandIndex`, `branchIndex`, `keyId`, `hasRead`                                      |
+| cover                 | `cover`, `coverBackground`, `coverBgm`                                                 |
+| Actor clone           | `x`, `y`, `scale`                                                                      |
+| その他                | `durationList`, `sceneIndex`                                                           |
+
+runtime variableと同名の`sceneIndex` thread variableは、カスタムブロック内の局所的な
+引数・計算値です。project全体の現在sceneはruntime variable側だけを正本とします。
+
+## 6. event、カスタムブロック、呼出し関係
+
+### 6.1 event hat一覧
+
+`procedures_definition`と、接続されていないreporter blockはevent hatに含めません。
+「直接の下流」はhatから到達するカスタムブロック呼出しとbroadcastです。
+
+#### Stage
+
+| ID   | trigger               | 直接の下流                                                                                    |
+| ---- | --------------------- | --------------------------------------------------------------------------------------------- |
+| `iM` | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
+| `i;` | key `space`           | `showCover`送信                                                                               |
+| `i}` | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
+| `jb` | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
+| `jX` | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
+| `j/` | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
+| `j?` | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
+| `kD` | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
+| `l=` | Stage click           | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
+| `l[` | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
+| `m~` | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
+| `nx` | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
+
+#### Actor
+
+| ID               | trigger                      | 直接の下流                                              |
+| ---------------- | ---------------------------- | ------------------------------------------------------- |
+| `nY`             | `execActorAction`受信        | `isTimeBasedAction`, `wait for actor action %s seconds` |
+| `oH`             | `deleteAllActors`受信        | cloneを削除                                             |
+| `oJ`             | clone開始                    | `actorName`、位置、scaleをruntime envelopeから初期化    |
+| `actorFinishHat` | `finishTimedActorAction`受信 | 対象actorと`skipMode`を照合して時間actionを完了         |
+
+#### UI sprite
+
+| target                | ID                       | trigger                     | 直接の下流                                 |
+| --------------------- | ------------------------ | --------------------------- | ------------------------------------------ |
+| `prompt`              | `oS`                     | `showPrompt`受信            | 案内costumeを表示                          |
+| `prompt`              | `oV`                     | `hidePrompt`受信            | 非表示                                     |
+| `prompt`              | `oX`                     | `invalidScript`受信         | エラーcostumeを表示                        |
+| `openButton`          | `o!`                     | green flag                  | 非表示                                     |
+| `openButton`          | `o%`                     | sprite click                | file選択後に`hideMenu`, `startStory`送信   |
+| `openButton`          | `o*`                     | `hideMenu`受信              | 非表示                                     |
+| `openButton`          | `o,`                     | `showMenu`受信              | `ui.open` skinで表示                       |
+| `reloadButton`        | `o.`                     | green flag                  | 非表示                                     |
+| `reloadButton`        | `o:`                     | `hideMenu`受信              | 非表示                                     |
+| `reloadButton`        | `o=`                     | sprite click                | 保存済み台本で`hideMenu`, `startStory`送信 |
+| `reloadButton`        | `o[`                     | `showMenu`受信              | 台本が保存済みなら表示                     |
+| `showTitleButton`     | <code>o&#96;</code>      | green flag                  | 非表示                                     |
+| `showTitleButton`     | <code>o&#124;</code>     | `hideMenu`受信              | 非表示                                     |
+| `showTitleButton`     | `o~`                     | sprite click                | `hideMenu`, `showTitle`送信                |
+| `showTitleButton`     | `pb`                     | `showMenu`受信              | title以外なら表示                          |
+| `Loading`             | `pf`                     | green flag                  | 非表示                                     |
+| `Loading`             | `pm`                     | `assetLoadingStarted`受信   | Loading costumeを表示                      |
+| `Loading`             | `pj`                     | `assetLoadingProgress`受信  | costumeを循環                              |
+| `Loading`             | `ph`                     | `assetLoadingCompleted`受信 | 非表示、完了sound                          |
+| `LoadingBubbleAnchor` | `loadingBubbleFlag`      | green flag                  | 非表示、bubbleをclear                      |
+| `LoadingBubbleAnchor` | `loadingBubbleStarted`   | `assetLoadingStarted`受信   | anchorを表示                               |
+| `LoadingBubbleAnchor` | `loadingBubbleProgress`  | `assetLoadingProgress`受信  | runtime variable `message`をsay            |
+| `LoadingBubbleAnchor` | `loadingBubbleCompleted` | `assetLoadingCompleted`受信 | bubbleをclearして非表示                    |
+
+### 6.2 カスタムブロック定義一覧
+
+引数名はprototypeの`argumentnames`、warpはprototypeの`mutation.warp`から取得します。
+「直接の呼出し」には定義内で呼ぶ別のカスタムブロックだけを示し、broadcastは明記します。
+
+#### 初期化・parse・共通処理
+
+| target  | ID   | 定義                                       | 引数                         | warp | 直接の呼出し／broadcast                                                                                      |
+| ------- | ---- | ------------------------------------------ | ---------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `Stage` | `c:` | `init skinList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage` | `c_` | `init poseList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage` | `dc` | `init soundList with %s`                   | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage` | `gH` | `init durationList with %s`                | `commaSeparatedText`         | no   | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage` | `eM` | `selectValue # %s separated by %s from %s` | `index`, `separator`, `text` | yes  | —                                                                                                            |
+| `Stage` | `hl` | `substr of %s after %s`                    | `text`, `firstDelim`         | no   | —                                                                                                            |
+| `Stage` | `dL` | `min %s %s`                                | `valueA`, `valueB`           | yes  | —                                                                                                            |
+| `Stage` | `d)` | `exec command %s %s`                       | `key`, `value`               | no   | `substr of %s after %s`, `selectValue # %s separated by %s from %s`, `setTMPoseURL with %s`; `invalidScript` |
+| `Stage` | `e+` | `create sceneList`                         | —                            | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage` | `fe` | `create asset`                             | —                            | no   | `selectValue...`; `assetLoadingStarted/Progress/Completed`                                                   |
+| `Stage` | `fv` | `create actor`                             | —                            | no   | `selectValue # %s separated by %s from %s`                                                                   |
+
+#### camera・pose
+
+| target  | ID   | 定義                   | 引数        | warp | 直接の呼出し／broadcast                                                                                                          |
+| ------- | ---- | ---------------------- | ----------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Stage` | `dQ` | `setTMPoseURL with %s` | `URL`       | no   | —                                                                                                                                |
+| `Stage` | `dU` | `start camera`         | —           | no   | —                                                                                                                                |
+| `Stage` | `dX` | `stop camera`          | —           | no   | —                                                                                                                                |
+| `Stage` | `eD` | `start pose recog`     | —           | no   | —                                                                                                                                |
+| `Stage` | `dG` | `stop pose recog`      | —           | no   | —                                                                                                                                |
+| `Stage` | `dY` | `rate of pose recog`   | —           | no   | —                                                                                                                                |
+| `Stage` | `d!` | `label of pose recog`  | —           | no   | —                                                                                                                                |
+| `Stage` | `d%` | `start camera preview` | —           | no   | —                                                                                                                                |
+| `Stage` | `d(` | `stop camera preview`  | —           | no   | —                                                                                                                                |
+| `Stage` | `dk` | `exec pose action %s`  | `actorName` | no   | `start camera preview`, `start pose recog`, `exec pose %s`, `stop pose recog`, `stop camera preview`; `showPrompt`, `hidePrompt` |
+| `Stage` | `f[` | `exec pose %s`         | `actorName` | no   | `change skin...`, `min...`, `rate of pose recog`                                                                                 |
+
+#### scene・action・actor
+
+| target  | ID             | 定義                               | 引数                      | warp | 直接の呼出し／broadcast                                                                                                                          |
+| ------- | -------------- | ---------------------------------- | ------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Stage` | `fB`           | `exec scene # %s with %s`          | `sceneIndex`, `sceneData` | no   | `selectValue # %s separated by %s from %s`, `substr of %s after %s`, `exec command %s %s`, `exec actionList`, `hide all actors`; `invalidScript` |
+| `Stage` | `e=`           | `exec actionList`                  | —                         | no   | `exec action %s`                                                                                                                                 |
+| `Stage` | `f(`           | `exec action %s`                   | `action`                  | no   | `exec stage action %s`, `exec actor action %s`                                                                                                   |
+| `Stage` | `gP`           | `exec stage action %s`             | `action`                  | no   | `touchInputToChangeScene %s %s`, `exec keyInputToChangeScene %s %s`, `exec branch action %s`, `exec transition action %s`, `wait %s seconds`     |
+| `Stage` | `gp`           | `exec actor action %s`             | `action`                  | no   | `selectValue # %s separated by %s from %s`, 3つのlist初期化、`exec pose action %s`; `execActorAction`                                            |
+| `Stage` | `ee`           | `hide all actors`                  | —                         | no   | `execActorAction`                                                                                                                                |
+| `Stage` | `eh`           | `change skin of %s to %s`          | `actorName`, `skinName`   | no   | `execActorAction`                                                                                                                                |
+| `Stage` | `eR`           | `show cover`                       | —                         | no   | `selectValue # %s separated by %s from %s`; `showMenu`                                                                                           |
+| `Actor` | `it`           | `isTimeBasedAction`                | —                         | no   | —                                                                                                                                                |
+| `Actor` | `actorWaitDef` | `wait for actor action %s seconds` | `seconds`                 | no   | —                                                                                                                                                |
+
+#### transition・branch・input
+
+| target  | ID   | 定義                               | 引数                              | warp | 直接の呼出し                                                                 |
+| ------- | ---- | ---------------------------------- | --------------------------------- | ---- | ---------------------------------------------------------------------------- |
+| `Stage` | `ga` | `exec transition action %s`        | `transitionName`                  | no   | `exec transition reset`, `exec transition fadeUp`, `exec transition fadeOut` |
+| `Stage` | `gf` | `exec transition fadeOut`          | —                                 | no   | —                                                                            |
+| `Stage` | `gh` | `exec transition fadeUp`           | —                                 | no   | —                                                                            |
+| `Stage` | `gj` | `exec transition reset`            | —                                 | no   | —                                                                            |
+| `Stage` | `g]` | `exec branch action %s`            | `branchName`                      | no   | `selectValue...`                                                             |
+| `Stage` | `hq` | `exec keyInputToChangeScene %s %s` | `keyIdList`, `sceneLabelList`     | no   | Async Input                                                                  |
+| `Stage` | `hu` | `touchInputToChangeScene %s %s`    | `actorNameList`, `sceneLabelList` | no   | Async Input                                                                  |
+| `Stage` | `hy` | `wait %s seconds`                  | `seconds`                         | no   | More Timers                                                                  |
+
+### 6.3 主要な呼出し経路
+
+| 起点         | 経路                                                                                |
+| ------------ | ----------------------------------------------------------------------------------- |
+| green flag   | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                               |
+| `startStory` | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`        |
+| scene実行    | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`             |
+| Stage action | branch、transition、key／touch入力、`wait`などへdispatch                            |
+| Actor action | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action |
+| pose action  | camera preview／pose認識開始 → `exec pose %s`反復 →認識停止 → prompt非表示          |
+| 終了         | `stopStory` → camera／pose停止 → actor削除 → cover → menu                           |
+
+## 7. broadcastと状態遷移
+
+### 7.1 message一覧
+
+| message                  | 主な送信者                            | 受信者                           | 役割                         |
+| ------------------------ | ------------------------------------- | -------------------------------- | ---------------------------- |
+| `showPrompt`             | `Stage`                               | `prompt`                         | 操作・pose案内を表示         |
+| `hidePrompt`             | `Stage`                               | `prompt`                         | 案内を非表示                 |
+| `invalidScript`          | `Stage`                               | `prompt`                         | 台本エラーを表示             |
+| `hideMenu`               | 3つのmenu button                      | 3つのmenu button                 | menuを一括非表示             |
+| `showMenu`               | `Stage`                               | 3つのmenu button                 | 利用可能なmenuを表示         |
+| `startStory`             | `Stage`, `openButton`, `reloadButton` | `Stage`                          | 台本の解析・実行を開始       |
+| `stopStory`              | `Stage`                               | `Stage`                          | 実行を停止しcoverへ戻す      |
+| `showCover`              | `Stage`                               | `Stage`                          | coverを構築してmenuを表示    |
+| `showTitle`              | `Stage`, `showTitleButton`            | `Stage`                          | title状態へ戻す              |
+| `execActorAction`        | `Stage`                               | `Actor`                          | action envelopeをcloneへ通知 |
+| `deleteAllActors`        | `Stage`                               | `Actor`                          | 全cloneを削除                |
+| `assetLoadingStarted`    | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を開始            |
+| `assetLoadingProgress`   | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | 進捗costumeとmessageを更新   |
+| `assetLoadingCompleted`  | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を終了            |
+| `stopKeyInput`           | Async Input                           | `Stage`                          | key listenerを停止           |
+| `stopTouchInput`         | Async Input                           | `Stage`                          | touch listenerを停止         |
+| `finishTimedActorAction` | `Stage`のRight／Down key hat          | `Actor`                          | 時間actionを確定状態へ進める |
+| `debugTestCamera`        | TurboWarp editorからの手動送信        | `Stage`                          | camera previewの診断         |
+
+`stopKeyInput`と`stopTouchInput`は標準broadcast blockではなく、Async Inputへ渡した
+callback messageです。`debugTestCamera`は通常フローに送信元を持たない診断用messageです。
+
+### 7.2 状態遷移
+
+![紙芝居アプリの主要状態遷移](../images/internal-state-transition.svg)
+
+主要状態はStageが所有します。UI表示そのものを状態の正本にせず、runtime variable、
+broadcast、実行中のcustom blockから導出します。
+
+| 状態          | 入口                         | 主な出口                                                   |
+| ------------- | ---------------------------- | ---------------------------------------------------------- |
+| 初期化        | green flag                   | `showTitle`                                                |
+| title         | `showTitle`                  | 組み込み台本ならStage clickで`startStory`、それ以外はcover |
+| cover／menu   | `showCover`または`stopStory` | open／reloadで`startStory`、title buttonで`showTitle`      |
+| 台本準備      | `startStory`                 | 正常ならasset loadingとscene実行、異常なら`invalidScript`  |
+| asset loading | `create asset`               | `assetLoadingCompleted`後にscene実行                       |
+| scene実行     | `exec scene # %s with %s`    | 次scene／branch、または最終sceneで`stopStory`              |
+| action実行    | `exec actionList`            | Rightでaction境界、Downでscene境界、完了で次action         |
+| pose待機      | `exec pose action %s`        | pose成立、Right／Down、エラーでaction実行へ戻る            |
+
+`skipMode`は要求、`skipContext`は消費可能な境界です。要求はtitle、action、pose、sceneの
+該当境界だけが消費し、scene開始、cover、stopでclearします。`nextSceneLabel`はkey／touch
+listenerが設定し、scene loopがlabelをindexへ解決したあと削除します。
+
+## 8. 検証
+
+### 8.1 変更対象ごとのテスト
+
+| 変更対象               | 主なテスト                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| builder API／CLI       | `test/builder.test.mjs`                                                                         |
+| 展開SB3の構造          | `test/sb3-project.test.mjs`、`test/skip-mode.test.mjs`                                          |
+| 内部仕様書の構造一覧   | `test/internal-specification.test.mjs`                                                          |
+| TurboWarp実行結果      | `test/turbowarp-vm.test.mjs`                                                                    |
+| 入力、分岐、wait       | `test/async-input.test.mjs`、`test/register-branch.test.mjs`、`test/wait-action.test.mjs`       |
+| 文書、画像、ライセンス | `test/docs-config.test.mjs`、`test/docs-images.test.mjs`、`test/documentation-license.test.mjs` |
+| 公開物と汎用性         | `test/sb3-publication.test.mjs`、`test/build-freshness.test.mjs`                                |
+
+### 8.2 標準チェック
+
+```bash
+pnpm lint
+pnpm format
+pnpm typecheck
+pnpm test
+pnpm run build
+```
+
+GitHub ActionsはcleanなLinux環境で`pnpm install --frozen-lockfile`、`pnpm test`、
+`pnpm build`を実行します。ローカルで成功しても、未追跡ファイルや既存生成物へ依存して
+いないことをCIで確認します。
+
+`pnpm run build`は少なくとも次を生成・検証します。
+
+- `dist/downloads/kamishibai.sb3`
+- 一般文書のHTML/PDF
+- 参加者向け・スタッフ向け体験会資料
+- 公開サイトのリンク、画像、目次、PDF bookmark、favicon
+
+SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて次を手動確認します。
+
+- 読込エラーがない
+- green flagでtitleとmenuが表示される
+- 外部台本と組み込み台本の対象フローが開始できる
+- pause、Space、Right、Downの進行が意図どおり動く
+- Loading、画像、音声、テキストが正しく表示・再生される
+
+内部構造を変更したPRでは、`app/project.source.json`と本書のtarget、変数、message、
+hat、custom block一覧を同時に更新します。
+
+## 9. 公開
+
+### 9.1 GitHub Pages
+
+```bash
+pnpm run deploy
+```
+
+`predeploy`がフルbuildを行い、成功した`dist/`だけを`gh-pages`へ公開します。公開後は
+top page、文書一覧、HTML/PDF、SB3 downloadを実際のURLから確認します。
+
+問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
+deployします。生成済み`dist/`だけを手作業で修正しません。
+
+### 9.2 npmパッケージ
+
+公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。
+
+1. `package.json`、lockfile、`src/builder/constants.js`、READMEの導入例を同じversionへ更新する。
+2. cleanなcommitで標準チェック、フルbuild、公開内容のdry-runを実行する。
+
+```bash
+pnpm release:check
+```
+
+3. tarballのファイル一覧、license、size、CLI/APIを確認する。
+4. Git worktreeではなく通常のclean cloneから公開する。
+5. WebAuthnなどの認証を完了してpublic packageとして公開する。
+
+```bash
+npm publish --access public
+```
+
+6. registry反映後にmetadataを確認する。
+
+```bash
+npm view @kubohiroya/tmpose-kamishibai@<VERSION> \
+  version license dist-tags.latest dist.integrity --json
+```
+
+7. 一時ディレクトリへ公開版を導入し、CLIの`--version`と
+   `@kubohiroya/tmpose-kamishibai/builder`のimportを確認する。
+8. 公開に使った確定commitへannotated tagを作り、GitHub Releaseを作成する。
+
+公開後に問題が見つかった場合は対象versionを`npm deprecate`し、修正版を新しいpatch
+versionとして公開します。公開済みtarballやtagを差し替えません。
+
+## 10. トラブルシューティング
+
+| 症状                                              | 確認と対応                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sb3:import`が置換を拒否する                      | `git status`と`git diff -- app`を確認し、[toolchainの手順](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#既存ソースへの再import)に従う |
+| `.app.rollback-*`や`.＜出力名＞.rollback-*`が残る | 削除前に元出力と比較し、[toolchainの失敗時の扱い](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#失敗時の扱い)に従う                    |
+| 埋め込み拡張が追跡refと異なる                     | `pnpm sb3:extensions:status`で確認し、固定commitへ戻すなら`sync`、更新するなら`update`を使う                                                                     |
+| PDF生成browserが見つからない                      | Chrome/Chromiumを導入し、必要なら`VIVLIOSTYLE_CHROME_PATH`を設定する                                                                                             |
+| ローカルだけtestが通る                            | 生成物と未追跡ファイルを確認し、clean cloneと`pnpm install --frozen-lockfile`で再現する                                                                          |
+| builderが既存出力を更新しない                     | エラーの`stage`、asset名、URIを確認する。rollback領域が残っていないか確認する                                                                                    |
+| 公開直後にnpm registryが404になる                 | 同じversionを再publishせず、npm公開pageとregistryの反映を待って確認する                                                                                          |
+
+復旧でGit履歴を破壊しません。公開済み変更は`git revert`または新しい修正PRで戻し、tagを
+移動しません。
+
+## 11. ライセンスと秘密情報
+
+| 対象                                                                     | ライセンス                                         |
+| ------------------------------------------------------------------------ | -------------------------------------------------- |
+| `docs/general/**`                                                        | CC BY-SA 4.0                                       |
+| `docs/workshops/**`                                                      | Copyright © 2026 Hiroya Kubo. All rights reserved. |
+| 上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材 | MPL-2.0                                            |
+
+詳細は[`LICENSES.md`](../../LICENSES.md)、[`docs/general/LICENSE.md`](LICENSE.md)、
+[`docs/workshops/LICENSE.md`](../workshops/LICENSE.md)を参照してください。
+
+第三者の画像、音声、font、model、機能拡張には個別のlicenseまたは利用条件が適用されます。
+builderで組み込む素材はasset manifestの`license`へ由来を記録します。許諾が確認できない
+素材を本体またはsampleへ追加しません。
+
+token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本、manifest、生成HTMLへ
+記録しません。認証情報は環境変数、OSのkeychain、GitHub Secretsなど、公開物へ含まれない
+仕組みで渡します。
+
+## 12. 関連ドキュメント
+
+- [`01-user-guide.md`](01-user-guide.md): アプリの利用方法と成果物の使い分け
+- [`02-dsl-manual.md`](02-dsl-manual.md): 台本の構造と書き方
+- [`03-command-reference.md`](03-command-reference.md): コマンドとactionの外部仕様
+- [`06-developer-guide.md`](06-developer-guide.md): setupと変更手順
+- [`history.md`](history.md): DSLとアプリの変更履歴
+- [`README.md`](../../README.md): プロジェクト全体の入口
