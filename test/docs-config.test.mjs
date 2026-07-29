@@ -139,20 +139,40 @@ test('publishes the current software developer guide', () => {
     new URL(`../docs/${generalDocumentConfig.sourceDirectory}/${developerDocument.sourceFilename}`, import.meta.url),
     'utf8',
   );
+  const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
   assert.match(source, /^# 紙芝居アプリ ソフトウェア開発者向け資料$/mu);
   for (const heading of [
-    '1. 対象と責務',
-    '2. セットアップ',
-    '3. リポジトリ構成',
-    '4. 基本開発フロー',
+    '1. 管理範囲と責務を理解する',
+    '2. 開発環境を準備する',
+    '3. リポジトリ構成を把握する',
+    '4. 共通の開発フローに従う',
     '5. アプリSB3を変更する',
     '6. 埋め込み機能拡張を更新する',
     '7. ビルダーを変更する',
     '8. ドキュメントとサイトを変更する',
-    '9. 関連プロジェクト',
-    '10. 関連ドキュメント',
+    '9. 関連プロジェクトを確認する',
+    '10. 関連ドキュメントを確認する',
   ]) {
     assert.match(source, new RegExp(`^## ${heading}$`, 'mu'));
+  }
+  assert.match(source, /\| 導入\s+\| 第1〜4章\s+\| 初めて開発するときに、この順に読む/u);
+  assert.match(
+    source,
+    /\| 変更対象別手順\s+\| 第5〜8章\s+\| 変更対象に応じて、必要な章だけを読む/u,
+  );
+  assert.match(source, /\| 参照\s+\| 第9〜10章\s+\| 関連プロジェクトや資料を探すときに参照する/u);
+  assert.match(source, /第5〜8章は、この順に実施する一連の工程ではなく、/u);
+  assert.match(source, /第9〜10章は作業手順ではありません/u);
+  assert.match(source, /<div class="print-page-break" aria-hidden="true"><\/div>/u);
+  assert.match(generalTheme, /\.print-page-break\s*\{\s*break-before:\s*page;/u);
+  const chapterHeadings = [...source.matchAll(/^## [0-9]+\. (.+)$/gmu)].map(([, heading]) => heading);
+  assert.equal(chapterHeadings.length, 10);
+  for (const heading of chapterHeadings) {
+    assert.match(
+      heading,
+      /(?:理解する|準備する|把握する|従う|変更する|更新する|確認する)$/u,
+      `Chapter heading is not action-oriented: ${heading}`,
+    );
   }
   let previousRelatedProjectIndex = -1;
   for (const heading of [
