@@ -31,28 +31,28 @@
         <tbody>
           <tr>
             <td>導入</td>
-            <td>第1〜4章</td>
+            <td>管理範囲の理解から共通の開発フローまで</td>
             <td>初めて開発するときに、この順に読む</td>
           </tr>
           <tr>
             <td>変更対象別手順</td>
-            <td>第5〜8章</td>
+            <td>アプリSB3、機能拡張、ビルダー、文書とサイト</td>
             <td>変更対象に応じて、必要な章だけを読む</td>
           </tr>
           <tr>
             <td>参照</td>
-            <td>第9〜10章</td>
+            <td>関連プロジェクトと関連ドキュメント</td>
             <td>関連プロジェクトや資料を探すときに参照する</td>
           </tr>
         </tbody>
       </table>
       <p>
-        第1〜4章では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
-        開発フローへ進みます。第5〜8章は、この順に実施する一連の工程ではなく、
-        変更対象ごとに独立した手順です。第9〜10章は作業手順ではありません。
+        「導入」では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
+        開発フローへ進みます。「変更対象別手順」は、この順に実施する一連の工程ではなく、
+        変更対象ごとに独立した手順です。「参照」は作業手順ではありません。
       </p>
       <section class="level2">
-        <h2 id="1-管理範囲と責務を理解する">1. 管理範囲と責務を理解する</h2>
+        <h2 id="管理範囲と責務を理解する">管理範囲と責務を理解する</h2>
         <p>このリポジトリが管理するものは次のとおりです。</p>
         <ul>
           <li>物語固有の台本やアセットを含まない、汎用の紙芝居アプリ</li>
@@ -74,7 +74,7 @@
             <tr>
               <td>SB3の展開・検証・決定的再構築</td>
               <td><a href="https://github.com/kubohiroya/sb3-toolchain"><code>kubohiroya/sb3-toolchain</code></a></td>
-              <td>固定依存として利用する。共通仕様は<a href="#91-sb3-toolchain">9.1</a>参照</td>
+              <td>固定依存として利用する。<a href="#sb3-toolchain" data-ref="section">「sb3-toolchain」</a>を参照</td>
             </tr>
             <tr>
               <td>浦島太郎などの公開用物語</td>
@@ -106,7 +106,7 @@
 <span class="token function">git</span> <span class="token function">diff</span> -- package.json pnpm-lock.yaml</code></pre>
       </section>
       <section class="level2">
-        <h2 id="2-開発環境を準備する">2. 開発環境を準備する</h2>
+        <h2 id="開発環境を準備する">開発環境を準備する</h2>
         <section class="level3">
           <h3 id="必要な環境">必要な環境</h3>
           <ul>
@@ -129,7 +129,7 @@
         </section>
       </section>
       <section class="level2">
-        <h2 id="3-リポジトリ構成を把握する">3. リポジトリ構成を把握する</h2>
+        <h2 id="リポジトリ構成を把握する">リポジトリ構成を把握する</h2>
         <table>
           <thead>
             <tr>
@@ -217,7 +217,7 @@
         </table>
       </section>
       <section class="level2">
-        <h2 id="4-共通の開発フローに従う">4. 共通の開発フローに従う</h2>
+        <h2 id="共通の開発フローに従う">共通の開発フローに従う</h2>
         <p>
           すべての変更はGitHub Issueへ受け入れ基準とロールバック手順を記録し、小さなブランチと
           PRへ分けます。
@@ -234,12 +234,12 @@
         <p>
           無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
           置換を行う前には、必ず<code>git status</code>と対象パスの差分を確認します。変更対象ごとの
-          テストと公開前チェックは<a href="07-internal-specification.md#8-%E6%A4%9C%E8%A8%BC">内部仕様書の検証</a>を
+          テストと公開前チェックは<a href="07-internal-specification.md#verification">内部仕様書の検証</a>を
           参照してください。
         </p>
       </section>
       <section class="level2">
-        <h2 id="5-アプリsb3を変更する">5. アプリSB3を変更する</h2>
+        <h2 id="アプリsb3を変更する">アプリSB3を変更する</h2>
         <p>
           このリポジトリでは<code>app/</code>をアプリSB3の正本とし、固定した<code>sb3-toolchain</code>を
           <code>pnpm sb3:*</code>スクリプトから利用します。展開ソース形式、importとbuildの上書き保護、
@@ -272,7 +272,7 @@
         </p>
       </section>
       <section class="level2">
-        <h2 id="6-埋め込み機能拡張を更新する">6. 埋め込み機能拡張を更新する</h2>
+        <h2 id="埋め込み機能拡張を更新する">埋め込み機能拡張を更新する</h2>
         <p>
           <code>app/extensions/</code>のJavaScriptは同期済み成果物です。バグ修正や機能追加は、
           <code>app/embedded-extensions.json</code>に記録された上流リポジトリで行い、レビュー済みの
@@ -296,12 +296,12 @@
         </p>
       </section>
       <section class="level2">
-        <h2 id="7-ビルダーを変更する">7. ビルダーを変更する</h2>
+        <h2 id="ビルダーを変更する">ビルダーを変更する</h2>
         <p>
           公開APIは<code>src/builder/index.js</code>、CLIは<code>src/builder/cli.js</code>と<code>bin/</code>、仕様テストは
           <code>test/builder.test.mjs</code>にあります。公開API、CLI、アセットマニフェスト、決定的生成、
           transactional更新の現行仕様は
-          <a href="07-internal-specification.md#3-sb3%E5%8F%B0%E6%9C%AC%E5%A4%89%E6%8F%9B%E3%83%93%E3%83%AB%E3%83%80%E3%83%BC">内部仕様書のSB3・台本変換ビルダー</a>
+          <a href="07-internal-specification.md#sb3-script-builder">内部仕様書のSB3・台本変換ビルダー</a>
           を参照してください。
         </p>
         <p>APIまたはCLIを変更するときは次を同じ変更に含めます。</p>
@@ -319,7 +319,7 @@
 <span class="token function">pnpm</span> pack:check</code></pre>
       </section>
       <section class="level2">
-        <h2 id="8-ドキュメントとサイトを変更する">8. ドキュメントとサイトを変更する</h2>
+        <h2 id="ドキュメントとサイトを変更する">ドキュメントとサイトを変更する</h2>
         <p>
           一般文書は<code>docs/general/</code>、体験会資料は<code>docs/workshops/&lt;日付&gt;/</code>、公開入口は<code>site/</code>を
           正本とします。
@@ -333,19 +333,28 @@
         </p>
         <pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">RUBYGANA_GRADE</span><span class="token operator">=</span><span class="token number">4</span> <span class="token function">pnpm</span> run build</code></pre>
         <p>
-          <code>pnpm run build</code>はHTML、PDF、目次、画像参照、しおり、favicon、ライセンス、配布SB3を
+          <code>pnpm run build</code>は一般文書ごとにWeb Publicationを構築し、Vivliostyle CLIの<code>toc</code>設定で
+          <code>h2</code>・<code>h3</code>までを含む目次を生成します。目次をMarkdownへ重複して記述しません。HTML、
+          Vivliostyle Viewer、PDF、文書横断目次、画像参照、しおり、favicon、ライセンス、配布SB3を
           まとめて検証します。Markdownだけを確認して完了にせず、生成されたHTML/PDFも確認します。
+        </p>
+        <p>
+          Markdownの見出しには章・節番号を書きません。<code>h1</code>は番号なしの文書名、<code>h2</code>と<code>h3</code>は
+          本文と目次で自動採番します。用語集などの前付けを採番しない場合は、見出しへ
+          <code>{.unnumbered}</code>を付けます。本文から見出しを参照するときは、番号ではなく意味の変わらない
+          IDを付けてリンクし、組版結果にも現在の章・節番号を表示する場合は、リンクへ
+          <code>{data-ref="chapter"}</code>または<code>{data-ref="section"}</code>を付けます。
         </p>
       </section>
       <section class="level2">
-        <h2 id="9-関連プロジェクトを確認する">9. 関連プロジェクトを確認する</h2>
+        <h2 id="関連プロジェクトを確認する">関連プロジェクトを確認する</h2>
         <p>
           TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境でも利用できるものを
           各リポジトリで公開しています。各プロジェクトの仕様、開発手順、リリースはリンク先を
           正本とします。
         </p>
         <section class="level3">
-          <h3 id="91-sb3-toolchain">9.1 sb3-toolchain</h3>
+          <h3 id="sb3-toolchain">sb3-toolchain</h3>
           <p>
             <a href="https://github.com/kubohiroya/sb3-toolchain"><code>sb3-toolchain</code></a>は、SB3をGit差分可能な
             展開ソースとして管理し、検証して決定的に再構築するためのCLI／JavaScript APIです。
@@ -359,7 +368,7 @@
           </ul>
         </section>
         <section class="level3">
-          <h3 id="92-viteプラグイン">9.2 Viteプラグイン</h3>
+          <h3 id="viteプラグイン">Viteプラグイン</h3>
           <ul>
             <li>
               <a href="https://github.com/kubohiroya/vite-plugin-turbowarp-extension"><code>vite-plugin-turbowarp-extension</code></a>:
@@ -368,7 +377,7 @@
           </ul>
         </section>
         <section class="level3">
-          <h3 id="93-turbowarp-機能拡張開発用テンプレート">9.3 TurboWarp 機能拡張開発用テンプレート</h3>
+          <h3 id="turbowarp-機能拡張開発用テンプレート">TurboWarp 機能拡張開発用テンプレート</h3>
           <ul>
             <li>
               <a href="https://github.com/kubohiroya/turbowarp-extension-template"><code>turbowarp-extension-template</code></a>:
@@ -377,7 +386,7 @@
           </ul>
         </section>
         <section class="level3">
-          <h3 id="94-turbowarp-機能拡張">9.4 TurboWarp 機能拡張</h3>
+          <h3 id="turbowarp-機能拡張">TurboWarp 機能拡張</h3>
           <ul>
             <li>
               <a href="https://github.com/kubohiroya/turbowarp-tmpose"><code>turbowarp-tmpose</code></a>:
@@ -402,7 +411,7 @@
           </ul>
         </section>
         <section class="level3">
-          <h3 id="95-その他のライブラリ">9.5 その他のライブラリ</h3>
+          <h3 id="その他のライブラリ">その他のライブラリ</h3>
           <ul>
             <li>
               <a href="https://github.com/kubohiroya/rubygana"><code>rubygana</code></a>:
@@ -413,7 +422,7 @@
         </section>
       </section>
       <section class="level2">
-        <h2 id="10-関連ドキュメントを確認する">10. 関連ドキュメントを確認する</h2>
+        <h2 id="関連ドキュメントを確認する">関連ドキュメントを確認する</h2>
         <ul>
           <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
           <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>

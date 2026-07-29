@@ -12,12 +12,12 @@
       <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
       <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
       <section class="level2">
-        <h2 id="1-概要">1. 概要</h2>
+        <h2 id="概要">概要</h2>
         <p>この紙芝居アプリは、TurboWarp上で動作する、参加型デジタル紙芝居プレイヤーです。紙芝居の内容は <code>.txt</code> の台本ファイルを正本として作成し、画像、音声、登場人物、セリフ、移動、ポーズ認識を台本から制御できます。汎用SB3と編集用SB3では台本を外部ファイルとして読み込み、再生用SB3とWeb版では同じ台本を作品内へ組み込んで配布します。</p>
         <p>従来の紙芝居が「読み手が見せ、聞き手が見る」形式であるのに対し、このアプリは、参加者がカメラの前でポーズを取ることで物語の進行に関われる点が特徴です。教材、発表、ワークショップ、創作活動に向いた、紙芝居とプログラミング的表現の中間にあるツールです。</p>
       </section>
       <section class="level2">
-        <h2 id="2-このアプリの価値">2. このアプリの価値</h2>
+        <h2 id="このアプリの価値">このアプリの価値</h2>
         <p>このアプリの価値は、次の3点に集約できます。</p>
         <ol>
           <li>
@@ -32,7 +32,7 @@
         </ol>
       </section>
       <section class="level2">
-        <h2 id="3-主な機能">3. 主な機能</h2>
+        <h2 id="主な機能">主な機能</h2>
         <table>
           <thead>
             <tr>
@@ -125,9 +125,9 @@
         </table>
       </section>
       <section class="level2">
-        <h2 id="4-典型的な利用シナリオ">4. 典型的な利用シナリオ</h2>
+        <h2 id="典型的な利用シナリオ">典型的な利用シナリオ</h2>
         <section class="level3">
-          <h3 id="41-授業での利用">4.1 授業での利用</h3>
+          <h3 id="授業での利用">授業での利用</h3>
           <p>教師または児童生徒が紙芝居台本を作成し、教室の大型画面で再生します。物語の節目で代表者が前に出てポーズを取り、全員で応援しながら物語を進めます。</p>
           <p>適した活動:</p>
           <ul>
@@ -140,17 +140,17 @@
           </ul>
         </section>
         <section class="level3">
-          <h3 id="42-ワークショップでの利用">4.2 ワークショップでの利用</h3>
+          <h3 id="ワークショップでの利用">ワークショップでの利用</h3>
           <p>参加者がグループに分かれて、短い物語、背景、登場人物、音、ポーズを設計します。最後に各グループが作品を発表します。</p>
           <p>この形式では、プログラムを書き換える代わりに台本DSLを編集するため、プログラミング未経験者でも構造化されたデジタル表現に参加できます。</p>
         </section>
         <section class="level3">
-          <h3 id="43-研究教材開発での利用">4.3 研究・教材開発での利用</h3>
+          <h3 id="研究教材開発での利用">研究・教材開発での利用</h3>
           <p>身体動作を含むインタラクティブ教材、物語理解、共同創作、創作支援、STEAM教育などの題材として利用できます。台本がテキスト形式で残るため、作品分析や教材改善の履歴管理にも向いています。</p>
         </section>
       </section>
       <section class="level2">
-        <h2 id="5-仕組みの概要">5. 仕組みの概要</h2>
+        <h2 id="仕組みの概要">仕組みの概要</h2>
         <p>このアプリは、以下のような構成で動作します。</p>
         <pre class="language-text"><code class="language-text">紙芝居DSLファイル (.txt)
         ↓
@@ -170,7 +170,7 @@ TurboWarp紙芝居アプリ／Web版
         <p>用途別成果物のうち、<code>generic</code>は汎用の作成・再生用雛形、<code>editor</code>はアセット組み込み済み・台本外部読込の編集用SB3、<code>player</code>は台本とアセットを組み込んだ再生用SB3です。Web版は<code>player</code>から生成します。</p>
       </section>
       <section class="level2">
-        <h2 id="6-urashimatxt-の位置づけ">6. <code>urashima.txt</code> の位置づけ</h2>
+        <h2 id="urashimatxt-の位置づけ"><code>urashima.txt</code> の位置づけ</h2>
         <p>公開中の<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt"><code>urashima.txt</code></a>は、浦島太郎を題材にしたサンプル台本です。<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>では、Web版、再生用SB3、編集用SB3も利用できます。次の要素を含んでいるため、教材・デモ・テンプレートとして有用です。</p>
         <ul>
           <li>背景画像の切り替え</li>
@@ -188,7 +188,7 @@ TurboWarp紙芝居アプリ／Web版
         <p>特に、カメを助ける、カメに乗る、踊る、玉手箱を開ける、絶望する、といった身体動作が物語上の意味と結びついている点が重要です。</p>
       </section>
       <section class="level2">
-        <h2 id="7-運用上の要件">7. 運用上の要件</h2>
+        <h2 id="運用上の要件">運用上の要件</h2>
         <table>
           <thead>
             <tr>
@@ -225,7 +225,7 @@ TurboWarp紙芝居アプリ／Web版
         </table>
       </section>
       <section class="level2">
-        <h2 id="8-制作フロー">8. 制作フロー</h2>
+        <h2 id="制作フロー">制作フロー</h2>
         <ol>
           <li>物語をシーンに分ける</li>
           <li>各シーンの背景、登場人物、セリフ、音を決める</li>
@@ -240,13 +240,13 @@ TurboWarp紙芝居アプリ／Web版
         </ol>
       </section>
       <section class="level2">
-        <h2 id="9-教育的な意義">9. 教育的な意義</h2>
+        <h2 id="教育的な意義">教育的な意義</h2>
         <p>このアプリは、単なる再生ツールではなく、物語を構造化して設計する活動を支援します。</p>
         <p>学習者は、物語を「シーン」「登場人物」「アクション」「条件」「反応」に分解します。これは、プログラミング的思考、メディア表現、物語理解、協働制作を自然に結びつけます。</p>
         <p>また、ポーズ認識により、画面内の出来事と身体動作が結びつきます。これにより、受け身の鑑賞ではなく、参加型の発表や共同体験を作れます。</p>
       </section>
       <section class="level2">
-        <h2 id="10-現時点での注意点">10. 現時点での注意点</h2>
+        <h2 id="現時点での注意点">現時点での注意点</h2>
         <ul>
           <li>台本文法は区切り文字ベースです。行内の最初の <code>=</code> はキーと値を、半角 <code>:</code> はアクションの要素を、半角 <code>,</code> はリストや座標を分けます。2個目以降の <code>=</code> は値として保持されます。</li>
           <li>分岐条件で参照するランタイム変数と、移動先の <code>sceneLabel</code> は綴りを一致させる必要があります。</li>
@@ -257,7 +257,7 @@ TurboWarp紙芝居アプリ／Web版
         </ul>
       </section>
       <section class="level2">
-        <h2 id="11-関連ドキュメント">11. 関連ドキュメント</h2>
+        <h2 id="関連ドキュメント">関連ドキュメント</h2>
         <ul>
           <li><code>03-user-guide.md</code>: 実際にアプリを操作する人向けの説明</li>
           <li><code>04-dsl-manual.md</code>: 紙芝居DSLファイルを作る人向けの説明</li>

@@ -13,7 +13,7 @@
       <p>対象DSL: <code>kamishibai=2.0</code> → <code>kamishibai=3.1</code><br>文書化日: 2026年7月27日</p>
       <p>この文書は、2.0向けの旧ドキュメントと3.1の現行仕様を比較し、台本作者・教材作成者・開発者が把握すべき差分をまとめたものです。中間バージョンごとの導入時期は区別せず、2.0から3.1までの累積差分として記載します。</p>
       <section class="level2">
-        <h2 id="1-変更の概要">1. 変更の概要</h2>
+        <h2 id="変更の概要">変更の概要</h2>
         <p>2.0は、シーンを先頭から順番に再生し、背景、登場人物、セリフ、音、移動、ポーズ認識を組み合わせる構成でした。</p>
         <p>3.1では、この基本機能を維持しながら、次の機能を追加・拡張しました。</p>
         <table>
@@ -74,27 +74,27 @@
         </table>
       </section>
       <section class="level2">
-        <h2 id="2-追加したトップレベルコマンド">2. 追加したトップレベルコマンド</h2>
+        <h2 id="追加したトップレベルコマンド">追加したトップレベルコマンド</h2>
         <section class="level3">
-          <h3 id="21-setruntimevariable">2.1 <code>setRuntimeVariable</code></h3>
+          <h3 id="setruntimevariable"><code>setRuntimeVariable</code></h3>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=変数名:値</code></pre>
           <p>Temporary Variablesのランタイム変数を台本から設定できるようにしました。開始シーンを指定する予約変数 <code>startSceneIndex</code> や、条件分岐で参照する状態の初期化に使います。</p>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=startSceneIndex:1
 setRuntimeVariable=takeSeaRoute:true</code></pre>
         </section>
         <section class="level3">
-          <h3 id="22-registerbranch">2.2 <code>registerBranch</code></h3>
+          <h3 id="registerbranch"><code>registerBranch</code></h3>
           <pre class="language-text"><code class="language-text">registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>Runtime Expressionで評価する条件と移動先を登録できるようにしました。条件は左から順に評価され、最初に真になった条件と同じ位置のシーンラベルが選ばれます。</p>
           <pre class="language-text"><code class="language-text">registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
         </section>
         <section class="level3">
-          <h3 id="23-scenelabel">2.3 <code>sceneLabel</code></h3>
+          <h3 id="scenelabel"><code>sceneLabel</code></h3>
           <pre class="language-text"><code class="language-text">sceneLabel=シーンラベル</code></pre>
           <p>シーンへ一意の名前を付けられるようにしました。条件分岐、キー入力、タッチ入力の移動先として使います。</p>
         </section>
         <section class="level3">
-          <h3 id="24-scene-0のtext">2.4 scene 0の<code>text</code></h3>
+          <h3 id="scene-0のtext">scene 0の<code>text</code></h3>
           <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
 text=ui.invalidScript:エラー：不正な台本ファイル
 text=ui.open:ファイルをひらく
@@ -104,15 +104,15 @@ text=ui.about:このアプリについて</code></pre>
           <p>シーン直下の<code>text=テキストアセット名:文字列</code>も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の<code>action=text:...</code>を使用します。</p>
         </section>
         <section class="level3">
-          <h3 id="25-setloadingcostume">2.5 <code>setLoadingCostume</code></h3>
+          <h3 id="setloadingcostume"><code>setLoadingCostume</code></h3>
           <pre class="language-text"><code class="language-text">setLoadingCostume=loading1,loading2,loading3</code></pre>
           <p>アセット読込中に表示する画像アセットを複数指定できるようにしました。指定アセットを通常アセットより先に読み込み、通常アセットの読込番号に応じて循環表示します。吹き出しの<code>完了数 / 総数</code>からLoading用アセット自身は除外します。省略した台本は組み込みのLoadingコスチュームを使います。</p>
         </section>
       </section>
       <section class="level2">
-        <h2 id="3-追加したアクション">3. 追加したアクション</h2>
+        <h2 id="追加したアクション">追加したアクション</h2>
         <section class="level3">
-          <h3 id="31-グローバルアクション">3.1 グローバルアクション</h3>
+          <h3 id="グローバルアクション">グローバルアクション</h3>
           <table>
             <thead>
               <tr>
@@ -154,7 +154,7 @@ text=ui.about:このアプリについて</code></pre>
           <p>キー入力とタッチ入力はバックグラウンドで待機します。入力項目と移動先ラベルは、同じ個数を同じ順番で指定します。</p>
         </section>
         <section class="level3">
-          <h3 id="32-アクターアクション">3.2 アクターアクション</h3>
+          <h3 id="アクターアクション">アクターアクション</h3>
           <table>
             <thead>
               <tr>
@@ -177,9 +177,9 @@ text=ui.about:このアプリについて</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="4-変更拡張した既存仕様">4. 変更・拡張した既存仕様</h2>
+        <h2 id="変更拡張した既存仕様">変更・拡張した既存仕様</h2>
         <section class="level3">
-          <h3 id="41-アセット識別子">4.1 アセット識別子</h3>
+          <h3 id="アセット識別子">アセット識別子</h3>
           <p>3.1では、プロジェクト内アセットを短く指定できるようにし、ステージ背景の識別子を <code>backdrop</code> に統一しました。また、ランタイムテキストをアセットとして扱えるようにしました。</p>
           <table>
             <thead>
@@ -225,7 +225,7 @@ text=ui.about:このアプリについて</code></pre>
           <p>短縮指定では、アセット名と同名のコスチューム、背景、音、テキストを参照します。</p>
         </section>
         <section class="level3">
-          <h3 id="42-show">4.2 <code>show</code></h3>
+          <h3 id="show"><code>show</code></h3>
           <p>従来の書式に加え、スキン名を省略して初期スキンまたは現在のスキンを使えるようにしました。</p>
           <pre class="language-text"><code class="language-text"># 2.0から継続する書式
 action=Hero:show:Hero-normal:0,-60,30
@@ -234,12 +234,12 @@ action=Hero:show:Hero-normal:0,-60,30
 action=Hero:show:0,-60,30</code></pre>
         </section>
         <section class="level3">
-          <h3 id="43-setskin">4.3 <code>setSkin</code></h3>
+          <h3 id="setskin"><code>setSkin</code></h3>
           <p>スキン切り替えと同時にサイズを変更できる書式を追加しました。</p>
           <pre class="language-text"><code class="language-text">action=Hero:setSkin:Hero-surprised:45</code></pre>
         </section>
         <section class="level3">
-          <h3 id="44-シーンの実行モデル">4.4 シーンの実行モデル</h3>
+          <h3 id="シーンの実行モデル">シーンの実行モデル</h3>
           <p>2.0の記述順による進行を維持しつつ、3.1では次の仕組みで任意のシーンへ移動できるようにしました。</p>
           <ul>
             <li><code>startSceneIndex</code>による開始シーン指定</li>
@@ -251,7 +251,7 @@ action=Hero:show:0,-60,30</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="5-廃止置換した記法">5. 廃止・置換した記法</h2>
+        <h2 id="廃止置換した記法">廃止・置換した記法</h2>
         <table>
           <thead>
             <tr>
@@ -281,9 +281,9 @@ action=Hero:show:0,-60,30</code></pre>
         <p><code>actor</code>、<code>cover</code>、<code>TMPoseURL</code>、<code>stage</code>、<code>wait</code>、<code>bgm</code>、<code>sound</code>、<code>hide</code>、<code>say</code>、<code>think</code>、<code>setScale</code>、<code>setPosition</code>、<code>moveTo</code>、<code>setLayer</code>、<code>pose</code>の基本的な役割は3.1でも継続しています。</p>
       </section>
       <section class="level2">
-        <h2 id="6-移行例">6. 移行例</h2>
+        <h2 id="移行例">移行例</h2>
         <section class="level3">
-          <h3 id="61-20">6.1 2.0</h3>
+          <h3 id="20">2.0</h3>
           <pre class="language-text"><code class="language-text">kamishibai=2.0
 asset=Beach,background:beach
 asset=Hero,costume:Hero:normal
@@ -297,7 +297,7 @@ action=Hero:show:Hero:0,-60,30
 action=Hero:say:こんにちは！:2</code></pre>
         </section>
         <section class="level3">
-          <h3 id="62-31">6.2 3.1</h3>
+          <h3 id="31">3.1</h3>
           <pre class="language-text"><code class="language-text">kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
 setRuntimeVariable=takeSeaRoute:true
@@ -338,7 +338,7 @@ action=stage:Home</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="7-20台本の移行チェックリスト">7. 2.0台本の移行チェックリスト</h2>
+        <h2 id="20台本の移行チェックリスト">2.0台本の移行チェックリスト</h2>
         <ul class="contains-task-list">
           <li class="task-list-item"><input type="checkbox" disabled=""> 先頭を<code>kamishibai=3.1</code>へ変更した</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> <code>background:</code>を<code>backdrop:</code>へ変更した</li>
@@ -356,7 +356,7 @@ action=stage:Home</code></pre>
         </ul>
       </section>
       <section class="level2">
-        <h2 id="8-一般ドキュメントで修正した範囲">8. 一般ドキュメントで修正した範囲</h2>
+        <h2 id="一般ドキュメントで修正した範囲">一般ドキュメントで修正した範囲</h2>
         <p>3.1への更新では、DSL仕様だけでなく、一般ドキュメント全体の説明も次のように修正しました。</p>
         <table>
           <thead>

@@ -24,7 +24,14 @@
       "title": "紙芝居アプリ 概要説明書 大人向け",
       "htmlFilename": "01-executive-summary-adult.html",
       "pdfFilename": "01-executive-summary-adult.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "01-executive-summary-adult",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "02-executive-summary-kids.md",
@@ -32,6 +39,13 @@
       "htmlFilename": "02-executive-summary-kids.html",
       "pdfFilename": "02-executive-summary-kids.pdf",
       "rubyApplied": true,
+      "webPublicationDirectory": "02-executive-summary-kids",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      },
       "learnedThroughGrade": 3
     },
     {
@@ -39,42 +53,84 @@
       "title": "紙芝居アプリ 操作説明書",
       "htmlFilename": "03-user-guide.html",
       "pdfFilename": "03-user-guide.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "03-user-guide",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "04-dsl-manual.md",
       "title": "紙芝居DSLファイル作成マニュアル",
       "htmlFilename": "04-dsl-manual.html",
       "pdfFilename": "04-dsl-manual.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "04-dsl-manual",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "05-command-reference.md",
       "title": "紙芝居DSL コマンドリファレンス",
       "htmlFilename": "05-command-reference.html",
       "pdfFilename": "05-command-reference.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "05-command-reference",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "06-developer-guide.md",
       "title": "紙芝居アプリ ソフトウェア開発者向け資料",
       "htmlFilename": "06-developer-guide.html",
       "pdfFilename": "06-developer-guide.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "06-developer-guide",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "07-internal-specification.md",
       "title": "紙芝居アプリ内部仕様書",
       "htmlFilename": "07-internal-specification.html",
       "pdfFilename": "07-internal-specification.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "07-internal-specification",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     },
     {
       "sourceFilename": "history.md",
       "title": "紙芝居DSL 2.0から3.1への変更履歴",
       "htmlFilename": "history.html",
       "pdfFilename": "history.pdf",
-      "rubyApplied": false
+      "rubyApplied": false,
+      "webPublicationDirectory": "history",
+      "webPublicationManifestFilename": "publication.json",
+      "generatedTableOfContents": {
+        "title": "目次",
+        "htmlFilename": "index.html",
+        "sectionDepth": 3
+      }
     }
   ]
 }

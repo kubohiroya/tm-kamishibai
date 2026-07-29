@@ -1,0 +1,9 @@
+@charset "UTF-8";
+
+@page {
+  @top-left {
+    content: "体験会スタッフ向け資料 2026/08/01";
+    color: #756960;
+    font-size: 8.5pt;
+  }
+}

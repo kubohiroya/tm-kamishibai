@@ -20,7 +20,156 @@
       <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
       <p>過去のバージョンからの変更は<a href="history.md"><code>history.md</code></a>を参照してください。</p>
       <section class="level2">
-        <h2 id="1-文書の範囲と実装基準">1. 文書の範囲と実装基準</h2>
+        <h2 id="terminology" class="unnumbered">この文書で使う用語</h2>
+        <p>
+          本書ではScratch／TurboWarpの用語と、このアプリ固有の用語を次の意味で使います。
+          表中の等幅書体（<code>Stage</code>、<code>script</code>、<code>action=</code>など）は、target名、変数名、DSL記法として
+          実装に現れる正確な綴りを表します。通常書体の用語は、概念または分類名を表します。
+          詳細なデータ構造や処理は、表に示した後続の章で説明します。
+        </p>
+        <section class="level3">
+          <h3 id="scratchturbowarpのproject構造">Scratch／TurboWarpのproject構造</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>用語</th>
+                <th>この文書での意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>project</td>
+                <td>Stage、sprite、block、変数、画像、音声などをまとめたScratch／TurboWarp作品全体</td>
+              </tr>
+              <tr>
+                <td>SB3</td>
+                <td>projectを1ファイルに格納するScratch 3形式。このリポジトリではbuildによって生成する成果物</td>
+              </tr>
+              <tr>
+                <td>target</td>
+                <td>project内でblock、変数、costumeなどを所有する実行単位。1つのStage targetと、0個以上のsprite targetがある</td>
+              </tr>
+              <tr>
+                <td><code>Stage</code></td>
+                <td>projectに1つだけある舞台のtarget。このアプリでは背景表示に加え、台本解析と実行状態の統括を担う。詳細は<a href="#sb3-structure" data-ref="chapter">「SB3の構成」</a>を参照</td>
+              </tr>
+              <tr>
+                <td>sprite</td>
+                <td>舞台上に表示・移動でき、costume、sound、block、変数を持てるtarget</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="cloneとactor">cloneとActor</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>用語</th>
+                <th>この文書での意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>clone</td>
+                <td>実行中にspriteから作る複製。同じblockを共有する一方、スプライトローカル変数にはcloneごとの値を持てる</td>
+              </tr>
+              <tr>
+                <td><code>Actor</code> target／アクタースプライト</td>
+                <td>アクターをcloneとして生成するためのsprite雛形。このprojectではtarget名が<code>Actor</code></td>
+              </tr>
+              <tr>
+                <td>アクター</td>
+                <td><code>Actor</code> targetから作られ、<code>actorName</code>で区別される個々のclone。物語上の登場人物としてactionを実行する</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="紙芝居dslと実行">紙芝居DSLと実行</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>用語</th>
+                <th>この文書での意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>asset</td>
+                <td>Asset Managerへ名前付きで登録する画像、音声、text。SB3内のcostumeなどと外部URLのresourceを同じ方法で参照できる</td>
+              </tr>
+              <tr>
+                <td>紙芝居DSL／台本ファイル</td>
+                <td>asset、アクター、scene、actionなどをテキストで定義する言語と、その言語で記述したファイル</td>
+              </tr>
+              <tr>
+                <td><code>script</code></td>
+                <td>読み込んだ台本を保持するruntime variable。外部ファイルと組み込み台本は、ここから同じ処理経路へ入る</td>
+              </tr>
+              <tr>
+                <td>scene</td>
+                <td>台本を<code>---</code>で区切った実行単位。内部では最初の区切りより前をscene 0として扱う</td>
+              </tr>
+              <tr>
+                <td>command</td>
+                <td>台本の<code>key=value</code>形式の1行。<code>exec command %s %s</code>がkeyに応じて設定、定義、action登録などを行う</td>
+              </tr>
+              <tr>
+                <td>action</td>
+                <td>scene内で順番に実行する演出命令。Stageが実行するStage actionと、アクターへ送るActor actionがある</td>
+              </tr>
+              <tr>
+                <td>action envelope</td>
+                <td>Actor actionの宛先、command、引数を入れる<code>actionTarget</code>、<code>actionCommand</code>、<code>actionParam</code>、<code>actionParam2</code>のまとまり</td>
+              </tr>
+              <tr>
+                <td>message／broadcast</td>
+                <td>Scratch／TurboWarpのevent配送機構。broadcastすると、そのmessageに対応するhat blockがあるtargetやcloneで処理が始まる</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="変数とblock">変数とblock</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>用語</th>
+                <th>この文書での意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Scratch変数／list</td>
+                <td>SB3に保存され、Stageまたはspriteが所有する値と配列</td>
+              </tr>
+              <tr>
+                <td>runtime variable</td>
+                <td>Runtime Variables機能拡張が保持し、project全体から参照する共有値</td>
+              </tr>
+              <tr>
+                <td>thread variable</td>
+                <td>Thread Variables機能拡張が、カスタムブロック呼出し単位で保持する一時値</td>
+              </tr>
+              <tr>
+                <td>event hat／hat block</td>
+                <td>green flag、broadcast受信、clickなどのeventを受けて処理を開始する、stack最上部のblock</td>
+              </tr>
+              <tr>
+                <td>カスタムブロック</td>
+                <td>project内で定義し、名前と引数によって呼び出す処理。一般的なプログラミング言語のprocedureに相当する</td>
+              </tr>
+              <tr>
+                <td>block ID</td>
+                <td>SB3の<code>targets[].blocks</code>内でblockを識別するkey。実装スナップショット内の調査にだけ使い、版をまたぐ永続IDとしては扱わない。詳細は<a href="#events-custom-blocks-call-graph" data-ref="chapter">「event、カスタムブロック、呼出し関係」</a>を参照</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="文書の範囲と実装基準">文書の範囲と実装基準</h2>
         <p>
           アプリ内部構造の正本は<code>app/project.source.json</code>です。本書のtarget、変数、list、
           broadcast、hat、カスタムブロック定義は、このファイルから抽出した現在の構造を
@@ -28,7 +177,7 @@
           調査元にはしません。
         </p>
         <section class="level3">
-          <h3 id="11-実装スナップショット">1.1 実装スナップショット</h3>
+          <h3 id="実装スナップショット">実装スナップショット</h3>
           <table>
             <thead>
               <tr>
@@ -80,12 +229,12 @@
             </tbody>
           </table>
           <p>
-            block IDは展開ソース内の対応箇所を特定するために掲載します。TurboWarpでブロックを
-            作り直すとIDは変わり得るため、外部仕様や永続IDとして使用しません。
+            本書に掲載するblock IDの意味と安定性は
+            <a href="#events-custom-blocks-call-graph" data-ref="chapter">「event、カスタムブロック、呼出し関係」</a>で説明します。
           </p>
         </section>
         <section class="level3">
-          <h3 id="12-使用する機能拡張">1.2 使用する機能拡張</h3>
+          <h3 id="使用する機能拡張">使用する機能拡張</h3>
           <table>
             <thead>
               <tr>
@@ -165,7 +314,7 @@
         </section>
       </section>
       <section class="level2">
-        <h2 id="2-成果物プロファイル">2. 成果物プロファイル</h2>
+        <h2 id="成果物プロファイル">成果物プロファイル</h2>
         <p>紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。</p>
         <table>
           <thead>
@@ -217,16 +366,16 @@
         </p>
       </section>
       <section class="level2">
-        <h2 id="3-sb3台本変換ビルダー">3. SB3・台本変換ビルダー</h2>
+        <h2 id="sb3-script-builder">SB3・台本変換ビルダー</h2>
         <section class="level3">
-          <h3 id="31-導入">3.1 導入</h3>
+          <h3 id="導入">導入</h3>
           <p>利用可能なバージョンを確認し、消費側で明示的に固定します。</p>
           <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> view @kubohiroya/tmpose-kamishibai version
 <span class="token function">pnpm</span> <span class="token function">add</span> --save-exact @kubohiroya/tmpose-kamishibai@<span class="token operator">&lt;</span>VERSION<span class="token operator">&gt;</span></code></pre>
           <p>生成したlockfileをcommitし、CIでは<code>pnpm install --frozen-lockfile</code>を使います。</p>
         </section>
         <section class="level3">
-          <h3 id="32-cli">3.2 CLI</h3>
+          <h3 id="cli">CLI</h3>
           <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token builtin class-name">exec</span> tmpose-kamishibai build-sb3 <span class="token punctuation">\</span>
   --base kamishibai.sb3 <span class="token punctuation">\</span>
   --script source.txt <span class="token punctuation">\</span>
@@ -277,7 +426,7 @@ dist/sample.manifest.json</code></pre>
           <p>完全な一覧は<code>pnpm exec tmpose-kamishibai --help</code>で確認します。</p>
         </section>
         <section class="level3">
-          <h3 id="33-javascript-api">3.3 JavaScript API</h3>
+          <h3 id="javascript-api">JavaScript API</h3>
           <pre class="language-js"><code class="language-js"><span class="token keyword module">import</span> <span class="token punctuation">{</span>
   <span class="token known-class-name class-name">Sb3BuilderError</span><span class="token punctuation">,</span>
   buildSb3Bundle<span class="token punctuation">,</span>
@@ -311,7 +460,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="34-アセットマニフェスト">3.4 アセットマニフェスト</h3>
+          <h3 id="アセットマニフェスト">アセットマニフェスト</h3>
           <p>入力manifestは<code>formatVersion: 1</code>と1件以上の<code>assets</code>を持ちます。</p>
           <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
   <span class="token property">"formatVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
@@ -372,7 +521,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="35-安全性と再現性">3.5 安全性と再現性</h3>
+          <h3 id="安全性と再現性">安全性と再現性</h3>
           <ul>
             <li><code>file:</code>は既定でmanifestのディレクトリ以下だけを許可し、<code>..</code>やsymlinkによる脱出を拒否する</li>
             <li>HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する</li>
@@ -389,9 +538,22 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="4-sb3の構成">4. SB3の構成</h2>
+        <h2 id="sb3-structure">SB3の構成</h2>
+        <p>
+          Scratch／TurboWarpのprojectは、1つの<strong>Stage（ステージ）</strong> targetと、0個以上のsprite targetから
+          構成されます。Stage targetはproject全体の舞台を表し、背景（backdrop）を表示します。
+          Stage自身にblock、variable、listを持てますが、spriteのように座標を変えて動かしたり、
+          cloneを作ったりする対象ではありません。
+        </p>
+        <p>
+          このアプリでは、Stage targetを舞台の表示だけでなく、紙芝居全体の制御役として使います。
+          Stageに置かれたblock群が、台本の読込・解析、assetとactorの生成、sceneとactionの実行、
+          カメラと入力、画面遷移、共有runtime状態を統括します。したがって、本書やシーケンス図で
+          <code>Stage</code>と書いた場合は、画面に見える舞台だけでなく、このStage targetとそこに置かれた
+          制御用block群を指します。
+        </p>
         <section class="level3">
-          <h3 id="41-target一覧">4.1 target一覧</h3>
+          <h3 id="target一覧">target一覧</h3>
           <table>
             <thead>
               <tr>
@@ -459,12 +621,110 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="42-target間の責務">4.2 target間の責務</h3>
+          <h3 id="actor-message-delivery">アクターへ命令を届けるしくみ</h3>
           <p>
-            <code>Stage</code>は台本を行へ分解し、<code>commandList</code>、<code>sceneList</code>、<code>actionList</code>へ段階的に変換します。
-            Stage actionは自分で実行し、Actor actionは共有runtime variableへ引数を置いて
-            <code>execActorAction</code>をbroadcastします。<code>Actor</code> cloneは自分の<code>actorName</code>と
-            <code>actionTarget</code>を照合し、対象になったcloneだけがactionを実行します。
+            Scratch／TurboWarpで1つのspriteから複数の登場人物を作る場合、cloneごとに
+            スプライトローカル変数の識別子を持たせれば、同じblockを共有しながら個体を区別できます。
+            このアプリはその考え方を、cloneへ命令を届けるところまで拡張しています。
+          </p>
+          <p>
+            本書では、cloneの雛形として使う<code>Actor</code> targetを<strong>アクタースプライト</strong>、そこから作られ、
+            スプライトローカル変数の<code>actorName</code>を割り当てられた各cloneを<strong>アクター</strong>と呼びます。
+            アクタースプライトの本体は表示せず、物語の登場人物として表示するのはアクターだけです。
+            すべてのアクターは同じblock定義を共有し、<code>actorName</code>によって互いを区別します。
+          </p>
+          <p>Stageからアクターへ命令を届ける流れは次のとおりです。</p>
+          <ol>
+            <li>StageがDSLのActor actionを、宛先となるアクター名、command、引数に分解する</li>
+            <li>
+              <code>actionTarget</code>、<code>actionCommand</code>、<code>actionParam</code>、<code>actionParam2</code>というruntime variableへ
+              それぞれを格納する。このまとまりを本書では<strong>action envelope</strong>と呼ぶ
+            </li>
+            <li>Stageが<code>execActorAction</code>をbroadcastする</li>
+            <li>
+              すべての<code>Actor</code> cloneがmessageを受け取り、自分の<code>actorName</code>が<code>actionTarget</code>の
+              対象に含まれるかを調べる
+            </li>
+            <li>
+              対象になったアクターだけが、<code>actionCommand</code>を入れ子の条件分岐で振り分け、
+              移動、見た目、音、時間に関する処理を実行する
+            </li>
+          </ol>
+          <p>
+            つまり、action envelopeが「誰に・何を・どの引数で実行させるか」を表し、broadcastが
+            その命令を全アクターへ配送します。ここでいうcommandは、アクターに対する
+            メソッドに相当しますが、TurboWarp上ではカスタムブロックと条件分岐で実装されています。
+          </p>
+          <p>
+            通常のScratch projectではcostumeやsoundはspriteに属します。このアプリでは
+            <a href="https://github.com/kubohiroya/turbowarp-asset-manager">TurboWarp Asset Manager</a>を使い、
+            SB3内のcostume、backdrop、sound、textや、外部URLの画像・音声を、名前を持つassetとして
+            登録します。アクターの見た目や音のactionはこのasset名を参照するため、振る舞いを実装する
+            アクタースプライトと、実際に使う画像・音声を分けて組み合わせられます。
+          </p>
+          <p>
+            台本DSLは、このassetの定義、アクターの定義、sceneごとにアクターへ送るactionの定義を
+            テキストで記述するための言語です。TurboWarpで作られたこのアプリはDSLを解析し、assetを
+            読み込み、アクターを生成し、action envelopeとbroadcastを使って命令を実行します。
+            したがって、このアプリ全体は、紙芝居DSLを解析・実行する処理系であり、その実行基盤
+            （runtime）でもあります。
+          </p>
+          <section class="level4">
+            <h4 id="台本からアクターclone生成までのシーケンス">台本からアクターclone生成までのシーケンス</h4>
+            <p>
+              アクターは、台本準備時に<code>actor=</code> commandから生成します。これは生成済みのアクターへ
+              Actor actionを送る処理とは実行時期もデータの渡し方も異なるため、別の図に示します。
+            </p>
+            <figure>
+              <img src="images/internal-actor-clone-sequence.svg" alt="台本のactor定義からアクターcloneを生成するシーケンス">
+              <figcaption aria-hidden="true">台本のactor定義からアクターcloneを生成するシーケンス</figcaption>
+            </figure>
+            <p>
+              <code>exec command %s %s</code>は<code>actor=</code>の値を<code>actorList</code>へ追加します。各値は
+              <code>アクター名,初期skin名</code>の形式です。その後、Stageの<code>create actor</code>が<code>actorList</code>を順に読み、
+              各値をthread variableの<code>name</code>と<code>skin</code>へ分けます。Stageは共有runtime variableの
+              <code>actionTarget</code>へ<code>name</code>、<code>actionParam</code>へ<code>skin</code>を設定してから、<code>Actor</code> targetのcloneを
+              作ります。
+            </p>
+            <p>
+              clone開始hatは、<code>actionTarget</code>をそのcloneのスプライトローカル変数<code>actorName</code>へ保存し、
+              <code>actionParam</code>をTurboWarp Asset Managerへ渡して初期skinを設定します。Stageはcloneを
+              作るたびに0.1秒待ち、この初期化が走る機会を設けてから、共有runtime variableを次の
+              アクター用の値で上書きします。clone生成時には<code>execActorAction</code>をbroadcastしません。
+            </p>
+            <p>
+              <code>Actor</code> target本体はcloneの雛形として非表示です。cloneはこの表示状態を引き継ぐため、
+              生成直後も非表示であり、sceneの後続のActor actionによって必要な時点で表示されます。
+            </p>
+          </section>
+          <section class="level4">
+            <h4 id="台本からactor-actionまでのシーケンス">台本からActor actionまでのシーケンス</h4>
+            <p>
+              台本ファイルからActor内の処理までを、データの変換と実行の順に並べると次のようになります。
+              外部ファイルだけでなく、再生用SB3へ組み込んだ台本も<code>script</code>へ入った後は同じ経路を通ります。
+            </p>
+            <figure>
+              <img src="images/internal-script-execution-sequence.svg" alt="台本ファイルからアクターでの命令実行までのシーケンス">
+              <figcaption aria-hidden="true">台本ファイルからアクターでの命令実行までのシーケンス</figcaption>
+            </figure>
+            <p>
+              <code>create sceneList</code>は<code>script</code>をscene単位に分けます。<code>exec scene # %s with %s</code>は現在のsceneを
+              行単位の<code>commandList</code>に分け、<code>exec command %s %s</code>でcommandを順に処理します。このうち
+              <code>action=</code>の値を<code>actionList</code>へ集め、<code>exec actionList</code>が各actionを<code>exec action %s</code>へ渡します。
+              Stage actionはStage内で実行され、Actor actionだけがaction envelopeとmessageを経由します。
+              messageはすべての<code>Actor</code> cloneが受け取りますが、実際に処理するのは宛先に一致した
+              アクターだけです。
+            </p>
+          </section>
+        </section>
+        <section class="level3">
+          <h3 id="target間の責務">target間の責務</h3>
+          <p>
+            <code>Stage</code>は台本を<code>sceneList</code>、<code>commandList</code>、<code>actionList</code>へ段階的に変換します。
+            さらにsceneと共有runtime状態を管理し、Stage actionを実行します。<code>Actor</code> cloneの責務は、
+            生成時に自分の<code>actorName</code>と初期skinを確定し、その後、
+            <a href="#actor-message-delivery" data-ref="section">「アクターへ命令を届けるしくみ」</a>で配送されたActor actionのうち
+            自分を対象とするものを実行することです。
           </p>
           <p>
             UI spriteは表示状態を<code>showMenu</code>／<code>hideMenu</code>、<code>showPrompt</code>／<code>hidePrompt</code>、
@@ -474,13 +734,13 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="5-変数とlist">5. 変数とlist</h2>
+        <h2 id="変数とlist">変数とlist</h2>
         <p>
           変数は、SB3へ永続化されるScratch変数／list、threadごとの一時値、project全体で共有する
           runtime variableの3種類に分けます。
         </p>
         <section class="level3">
-          <h3 id="51-scratch変数">5.1 Scratch変数</h3>
+          <h3 id="scratch変数">Scratch変数</h3>
           <table>
             <thead>
               <tr>
@@ -535,7 +795,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="52-scratch-list">5.2 Scratch list</h3>
+          <h3 id="scratch-list">Scratch list</h3>
           <p>すべてStage所有で、汎用SB3では空の初期状態です。</p>
           <table>
             <thead>
@@ -593,7 +853,7 @@ dist/sample.manifest.json</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="53-runtime-variable">5.3 runtime variable</h3>
+          <h3 id="runtime-variable">runtime variable</h3>
           <p>静的な名前を持つruntime variableは次の16個です。</p>
           <table>
             <thead>
@@ -656,7 +916,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="54-thread-variable">5.4 thread variable</h3>
+          <h3 id="thread-variable">thread variable</h3>
           <p>カスタムブロック呼出しごとに分離され、呼出し終了後に共有状態として残さない値です。</p>
           <table>
             <thead>
@@ -707,80 +967,108 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="6-eventカスタムブロック呼出し関係">6. event、カスタムブロック、呼出し関係</h2>
+        <h2 id="events-custom-blocks-call-graph">event、カスタムブロック、呼出し関係</h2>
+        <p>
+          表の<code>target</code>はblockを所有するStageまたはsprite、<code>ID</code>はそのtargetの<code>blocks</code>
+          objectにあるkeyです。SB3内では<code>project.json</code>の<code>targets[].blocks</code>、このリポジトリ
+          では<code>app/project.source.json</code>の同じ位置に保存されます。IDはopcodeや表示名ではなく、
+          この実装スナップショット内のblockを特定するための内部識別子です。
+        </p>
+        <p>
+          <code>sb3-toolchain</code>のbuildとimportはblock IDを新規採番せず、入力に含まれるIDを保持します。
+          既存blockを再生成しないTurboWarp上の編集・保存でも通常は保持されます。一方、blockの
+          削除と再作成、複製やcopy &amp; pasteによる新しいblockの作成、target／projectのimportなどで
+          blockが再生成されるとIDは変わります。したがって、IDは外部仕様、永続ID、他の版をまたぐ
+          参照には使いません。アプリを編集してIDが変わった場合は、本章も現在の
+          <code>app/project.source.json</code>に合わせて更新します。
+        </p>
         <section class="level3">
-          <h3 id="61-event-hat一覧">6.1 event hat一覧</h3>
+          <h3 id="event-hat一覧">event hat一覧</h3>
           <p>
             <code>procedures_definition</code>と、接続されていないreporter blockはevent hatに含めません。
-            「直接の下流」はhatから到達するカスタムブロック呼出しとbroadcastです。
+            「実行される内容」はhatを起点とする主要なカスタムブロック呼出し、broadcast、状態変更、
+            表示操作を要約したもので、標準blockを含む全処理の逐語的な列挙ではありません。
           </p>
           <section class="level4">
             <h4 id="stage">Stage</h4>
             <table>
               <thead>
                 <tr>
+                  <th>target</th>
                   <th>ID</th>
                   <th>trigger</th>
-                  <th>直接の下流</th>
+                  <th>実行される内容</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>iM</code></td>
                   <td>green flag</td>
                   <td><code>stop camera preview</code>, <code>stop pose recog</code>, <code>stop camera</code>, <code>hide all actors</code>; <code>showTitle</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>i;</code></td>
                   <td>key <code>space</code></td>
                   <td><code>showCover</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>i}</code></td>
                   <td>key <code>down arrow</code></td>
                   <td><code>finishTimedActorAction</code>送信、<code>skipMode=Down</code></td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>jb</code></td>
                   <td>key <code>right arrow</code></td>
                   <td><code>finishTimedActorAction</code>送信、<code>skipMode=Right</code></td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>jX</code></td>
                   <td><code>startStory</code>受信</td>
                   <td><code>start camera</code>, <code>create sceneList</code>, <code>exec scene # %s with %s</code>, <code>create asset</code>, <code>create actor</code></td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>j/</code></td>
                   <td><code>stopStory</code>受信</td>
                   <td><code>stop camera</code>, <code>stop pose recog</code>, <code>show cover</code>; <code>deleteAllActors</code>, <code>showMenu</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>j?</code></td>
                   <td><code>debugTestCamera</code>受信</td>
                   <td>TMPoseのcamera previewを直接確認</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>kD</code></td>
                   <td><code>showCover</code>受信</td>
                   <td><code>show cover</code>; <code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>l=</code></td>
                   <td>Stage click</td>
                   <td>組み込み台本の有無に応じて<code>showCover</code>または<code>startStory</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>l[</code></td>
                   <td><code>showTitle</code>受信</td>
                   <td>実行contextをclearし、<code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>m~</code></td>
                   <td><code>stopKeyInput</code>受信</td>
                   <td>Async Inputの全listenerを停止</td>
                 </tr>
                 <tr>
+                  <td><code>Stage</code></td>
                   <td><code>nx</code></td>
                   <td><code>stopTouchInput</code>受信</td>
                   <td>Async Inputの全listenerを停止</td>
@@ -793,28 +1081,33 @@ dist/sample.manifest.json</code></pre>
             <table>
               <thead>
                 <tr>
+                  <th>target</th>
                   <th>ID</th>
                   <th>trigger</th>
-                  <th>直接の下流</th>
+                  <th>実行される内容</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
+                  <td><code>Actor</code></td>
                   <td><code>nY</code></td>
                   <td><code>execActorAction</code>受信</td>
                   <td><code>isTimeBasedAction</code>, <code>wait for actor action %s seconds</code></td>
                 </tr>
                 <tr>
+                  <td><code>Actor</code></td>
                   <td><code>oH</code></td>
                   <td><code>deleteAllActors</code>受信</td>
                   <td>cloneを削除</td>
                 </tr>
                 <tr>
+                  <td><code>Actor</code></td>
                   <td><code>oJ</code></td>
                   <td>clone開始</td>
                   <td><code>actorName</code>、位置、scaleをruntime envelopeから初期化</td>
                 </tr>
                 <tr>
+                  <td><code>Actor</code></td>
                   <td><code>actorFinishHat</code></td>
                   <td><code>finishTimedActorAction</code>受信</td>
                   <td>対象actorと<code>skipMode</code>を照合して時間actionを完了</td>
@@ -830,7 +1123,7 @@ dist/sample.manifest.json</code></pre>
                   <th>target</th>
                   <th>ID</th>
                   <th>trigger</th>
-                  <th>直接の下流</th>
+                  <th>実行される内容</th>
                 </tr>
               </thead>
               <tbody>
@@ -977,10 +1270,11 @@ dist/sample.manifest.json</code></pre>
           </section>
         </section>
         <section class="level3">
-          <h3 id="62-カスタムブロック定義一覧">6.2 カスタムブロック定義一覧</h3>
+          <h3 id="カスタムブロック定義一覧">カスタムブロック定義一覧</h3>
           <p>
             引数名はprototypeの<code>argumentnames</code>、warpはprototypeの<code>mutation.warp</code>から取得します。
-            「直接の呼出し」には定義内で呼ぶ別のカスタムブロックだけを示し、broadcastは明記します。
+            「呼び出す処理／送信するmessage」には定義内で呼ぶ別のカスタムブロックや機能拡張の
+            処理を示し、broadcast messageは送信する名前を明記します。
           </p>
           <section class="level4">
             <h4 id="初期化parse共通処理">初期化・parse・共通処理</h4>
@@ -992,7 +1286,7 @@ dist/sample.manifest.json</code></pre>
                   <th>定義</th>
                   <th>引数</th>
                   <th>warp</th>
-                  <th>直接の呼出し／broadcast</th>
+                  <th>呼び出す処理／送信するmessage</th>
                 </tr>
               </thead>
               <tbody>
@@ -1097,7 +1391,7 @@ dist/sample.manifest.json</code></pre>
                   <th>定義</th>
                   <th>引数</th>
                   <th>warp</th>
-                  <th>直接の呼出し／broadcast</th>
+                  <th>呼び出す処理／送信するmessage</th>
                 </tr>
               </thead>
               <tbody>
@@ -1202,7 +1496,7 @@ dist/sample.manifest.json</code></pre>
                   <th>定義</th>
                   <th>引数</th>
                   <th>warp</th>
-                  <th>直接の呼出し／broadcast</th>
+                  <th>呼び出す処理／送信するmessage</th>
                 </tr>
               </thead>
               <tbody>
@@ -1299,7 +1593,7 @@ dist/sample.manifest.json</code></pre>
                   <th>定義</th>
                   <th>引数</th>
                   <th>warp</th>
-                  <th>直接の呼出し</th>
+                  <th>呼び出す処理／送信するmessage</th>
                 </tr>
               </thead>
               <tbody>
@@ -1372,7 +1666,7 @@ dist/sample.manifest.json</code></pre>
           </section>
         </section>
         <section class="level3">
-          <h3 id="63-主要な呼出し経路">6.3 主要な呼出し経路</h3>
+          <h3 id="主要な呼出し経路">主要な呼出し経路</h3>
           <table>
             <thead>
               <tr>
@@ -1414,9 +1708,9 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="7-broadcastと状態遷移">7. broadcastと状態遷移</h2>
+        <h2 id="broadcastと状態遷移">broadcastと状態遷移</h2>
         <section class="level3">
-          <h3 id="71-message一覧">7.1 message一覧</h3>
+          <h3 id="message一覧">message一覧</h3>
           <table>
             <thead>
               <tr>
@@ -1543,7 +1837,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="72-状態遷移">7.2 状態遷移</h3>
+          <h3 id="状態遷移">状態遷移</h3>
           <figure>
             <img src="images/internal-state-transition.svg" alt="紙芝居アプリの主要状態遷移">
             <figcaption aria-hidden="true">紙芝居アプリの主要状態遷移</figcaption>
@@ -1579,7 +1873,7 @@ dist/sample.manifest.json</code></pre>
               <tr>
                 <td>台本準備</td>
                 <td><code>startStory</code></td>
-                <td>正常ならasset loadingとscene実行、異常なら<code>invalidScript</code></td>
+                <td>正常ならasset loadingとscene実行、検証異常なら<code>invalidScript</code></td>
               </tr>
               <tr>
                 <td>asset loading</td>
@@ -1589,7 +1883,7 @@ dist/sample.manifest.json</code></pre>
               <tr>
                 <td>scene実行</td>
                 <td><code>exec scene # %s with %s</code></td>
-                <td>次scene／branch、または最終sceneで<code>stopStory</code></td>
+                <td>次scene／branch、最終sceneで<code>stopStory</code>、解析異常で<code>invalidScript</code></td>
               </tr>
               <tr>
                 <td>action実行</td>
@@ -1599,10 +1893,20 @@ dist/sample.manifest.json</code></pre>
               <tr>
                 <td>pose待機</td>
                 <td><code>exec pose action %s</code></td>
-                <td>pose成立、Right／Down、エラーでaction実行へ戻る</td>
+                <td>pose成立、Right／Downでaction実行へ戻る</td>
+              </tr>
+              <tr>
+                <td>台本エラー表示・実行停止</td>
+                <td>台本・command・scene解析エラー時の<code>invalidScript</code></td>
+                <td><code>prompt</code>が<code>ui.invalidScript</code>を表示し、送信元の<code>stop all</code>で実行を停止</td>
               </tr>
             </tbody>
           </table>
+          <p>
+            <code>invalidScript</code>はpose待機への遷移ではありません。Stageは台本検証、command解析、
+            scene解析のエラー時にこのmessageを送信し、各送信箇所の直後に<code>stop all</code>を実行します。
+            <code>prompt</code>はmessageを受信すると<code>ui.invalidScript</code>のskinを設定して表示します。
+          </p>
           <p>
             <code>skipMode</code>は要求、<code>skipContext</code>は消費可能な境界です。要求はtitle、action、pose、sceneの
             該当境界だけが消費し、scene開始、cover、stopでclearします。<code>nextSceneLabel</code>はkey／touch
@@ -1611,9 +1915,9 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="8-検証">8. 検証</h2>
+        <h2 id="verification">検証</h2>
         <section class="level3">
-          <h3 id="81-変更対象ごとのテスト">8.1 変更対象ごとのテスト</h3>
+          <h3 id="変更対象ごとのテスト">変更対象ごとのテスト</h3>
           <table>
             <thead>
               <tr>
@@ -1654,7 +1958,7 @@ dist/sample.manifest.json</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="82-標準チェック">8.2 標準チェック</h3>
+          <h3 id="標準チェック">標準チェック</h3>
           <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> lint
 <span class="token function">pnpm</span> <span class="token function">format</span>
 <span class="token function">pnpm</span> typecheck
@@ -1668,7 +1972,7 @@ dist/sample.manifest.json</code></pre>
           <p><code>pnpm run build</code>は少なくとも次を生成・検証します。</p>
           <ul>
             <li><code>dist/downloads/kamishibai.sb3</code></li>
-            <li>一般文書のHTML/PDF</li>
+            <li>一般文書ごとのWeb Publication、HTML/PDF、Vivliostyle CLIが<code>h2</code>・<code>h3</code>までから生成する目次</li>
             <li>参加者向け・スタッフ向け体験会資料</li>
             <li>公開サイトのリンク、画像、目次、PDF bookmark、favicon</li>
           </ul>
@@ -1687,13 +1991,14 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="9-公開">9. 公開</h2>
+        <h2 id="公開">公開</h2>
         <section class="level3">
-          <h3 id="91-github-pages">9.1 GitHub Pages</h3>
+          <h3 id="github-pages">GitHub Pages</h3>
           <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> run deploy</code></pre>
           <p>
             <code>predeploy</code>がフルbuildを行い、成功した<code>dist/</code>だけを<code>gh-pages</code>へ公開します。公開後は
-            top page、文書一覧、HTML/PDF、SB3 downloadを実際のURLから確認します。
+            top page、文書一覧、各カードのHTML／Vivliostyle Viewer／PDF、SB3 downloadを実際の
+            URLから確認します。
           </p>
           <p>
             問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
@@ -1701,7 +2006,7 @@ dist/sample.manifest.json</code></pre>
           </p>
         </section>
         <section class="level3">
-          <h3 id="92-npmパッケージ">9.2 npmパッケージ</h3>
+          <h3 id="npmパッケージ">npmパッケージ</h3>
           <p>公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。</p>
           <ol>
             <li><code>package.json</code>、lockfile、<code>src/builder/constants.js</code>、READMEの導入例を同じversionへ更新する。</li>
@@ -1733,7 +2038,7 @@ dist/sample.manifest.json</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="10-トラブルシューティング">10. トラブルシューティング</h2>
+        <h2 id="トラブルシューティング">トラブルシューティング</h2>
         <table>
           <thead>
             <tr>
@@ -1778,7 +2083,7 @@ dist/sample.manifest.json</code></pre>
         </p>
       </section>
       <section class="level2">
-        <h2 id="11-ライセンスと秘密情報">11. ライセンスと秘密情報</h2>
+        <h2 id="ライセンスと秘密情報">ライセンスと秘密情報</h2>
         <table>
           <thead>
             <tr>
@@ -1817,7 +2122,7 @@ dist/sample.manifest.json</code></pre>
         </p>
       </section>
       <section class="level2">
-        <h2 id="12-関連ドキュメント">12. 関連ドキュメント</h2>
+        <h2 id="関連ドキュメント">関連ドキュメント</h2>
         <ul>
           <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
           <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>

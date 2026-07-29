@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1040" role="img" aria-labelledby="title desc">
+  <title id="title">台本ファイルからアクターでの命令実行までのシーケンス</title>
+  <desc id="desc">
+    台本ファイルをscriptへ読み込み、sceneListからsceneを取り出し、commandListのcommandを処理してactionListを作り、各actionを実行する。Actor actionではStageがaction envelopeを設定してexecActorActionをbroadcastし、Actor cloneが宛先を照合してcommandを実行する。
+  </desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7b3f32"/>
+    </marker>
+    <style>
+      .participant {
+        fill: #fffaf4;
+        stroke: #9e4635;
+        stroke-width: 2.5;
+        rx: 14;
+      }
+      .participant-main {
+        fill: #f8e2d6;
+      }
+      .participant-label {
+        fill: #2f2926;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 21px;
+        font-weight: 700;
+        text-anchor: middle;
+      }
+      .lifeline {
+        fill: none;
+        stroke: #9b8e87;
+        stroke-width: 1.8;
+        stroke-dasharray: 7 7;
+      }
+      .activation {
+        fill: #f6d7c8;
+        stroke: #9e4635;
+        stroke-width: 1.8;
+      }
+      .message {
+        fill: none;
+        stroke: #7b3f32;
+        stroke-width: 2.2;
+        marker-end: url(#arrow);
+      }
+      .message-dashed {
+        stroke-dasharray: 8 5;
+      }
+      .message-label {
+        fill: #3f3531;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 16px;
+        text-anchor: middle;
+      }
+      .message-label-end {
+        text-anchor: end;
+      }
+      .code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+      .frame {
+        fill: #fffaf4;
+        fill-opacity: 0.35;
+        stroke: #b69b8f;
+        stroke-width: 1.8;
+        rx: 8;
+      }
+      .frame-tab {
+        fill: #f2e6df;
+        stroke: #b69b8f;
+        stroke-width: 1.8;
+      }
+      .frame-label {
+        fill: #5f3329;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .note {
+        fill: #f5f1eb;
+        stroke: #b69b8f;
+        stroke-width: 1.5;
+        rx: 8;
+      }
+      .note-text {
+        fill: #554b46;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+        font-size: 15px;
+        text-anchor: middle;
+      }
+    </style>
+  </defs>
+
+  <rect class="participant" x="30" y="25" width="190" height="68"/>
+  <text class="participant-label" x="125" y="67">台本ファイル</text>
+
+  <rect class="participant participant-main" x="295" y="25" width="190" height="68"/>
+  <text class="participant-label" x="390" y="67">Stage</text>
+
+  <rect class="participant" x="540" y="25" width="220" height="68"/>
+  <text class="participant-label" x="650" y="54">Stage内の</text>
+  <text class="participant-label" x="650" y="79">変数・list</text>
+
+  <rect class="participant participant-main" x="795" y="25" width="180" height="68"/>
+  <text class="participant-label" x="885" y="54">Actor</text>
+  <text class="participant-label" x="885" y="79">clone群</text>
+
+  <path class="lifeline" d="M 125 93 L 125 965"/>
+  <path class="lifeline" d="M 390 93 L 390 965"/>
+  <path class="lifeline" d="M 650 93 L 650 965"/>
+  <path class="lifeline" d="M 885 93 L 885 965"/>
+
+  <rect class="frame" x="170" y="315" width="600" height="360"/>
+  <path class="frame-tab" d="M 170 315 H 350 L 370 338 H 170 z"/>
+  <text class="frame-label" x="185" y="333">sceneごとに反復</text>
+
+  <rect class="frame" x="170" y="690" width="790" height="280"/>
+  <path class="frame-tab" d="M 170 690 H 350 L 370 713 H 170 z"/>
+  <text class="frame-label" x="185" y="708">Actor actionの場合</text>
+
+  <rect class="activation" x="382" y="125" width="16" height="690"/>
+  <rect class="activation" x="642" y="195" width="16" height="455"/>
+  <rect class="activation" x="877" y="765" width="16" height="195"/>
+
+  <g id="step-file-script" aria-label="台本ファイルをscriptへ読み込む">
+    <path class="message" d="M 125 145 L 382 145"/>
+    <text class="message-label" x="254" y="130">台本を読み込む</text>
+    <path class="message" d="M 398 210 L 642 210"/>
+    <text class="message-label" x="520" y="195">
+      runtime variable <tspan class="code">script</tspan>へ保存
+    </text>
+  </g>
+
+  <g id="step-script-scene-list" aria-label="scriptからsceneListを作る">
+    <path class="message" d="M 398 275 L 642 275"/>
+    <text class="message-label" x="520" y="260">
+      <tspan class="code">create sceneList</tspan> → <tspan class="code">sceneList</tspan>
+    </text>
+  </g>
+
+  <g id="step-scene-list-scene" aria-label="sceneListからsceneを取り出す">
+    <path class="message message-dashed" d="M 642 360 L 398 360"/>
+    <text class="message-label" x="520" y="345">
+      <tspan class="code">sceneList</tspan>から次の<tspan class="code">scene</tspan>を取得
+    </text>
+  </g>
+
+  <g id="step-scene-command-list" aria-label="sceneからcommandListを作る">
+    <path class="message" d="M 398 430 L 642 430"/>
+    <text class="message-label" x="520" y="415">
+      <tspan class="code">scene</tspan>を<tspan class="code">commandList</tspan>へ分解
+    </text>
+  </g>
+
+  <g id="step-command-list-command" aria-label="commandListからcommandを順に実行する">
+    <path class="message message-dashed" d="M 642 500 L 398 500"/>
+    <text class="message-label" x="520" y="485">
+      <tspan class="code">command</tspan>ごとに<tspan class="code">exec command</tspan>
+    </text>
+  </g>
+
+  <g id="step-command-action-list" aria-label="action commandからactionListを作る">
+    <path class="message" d="M 398 570 L 642 570"/>
+    <text class="message-label" x="520" y="555">
+      <tspan class="code">action=</tspan>の値を<tspan class="code">actionList</tspan>へ追加
+    </text>
+  </g>
+
+  <g id="step-action-list-action" aria-label="actionListからactionを順に実行する">
+    <path class="message message-dashed" d="M 642 640 L 398 640"/>
+    <text class="message-label" x="520" y="625">
+      <tspan class="code">action</tspan>ごとに<tspan class="code">exec action</tspan>
+    </text>
+  </g>
+
+  <g id="step-action-envelope" aria-label="Actor actionをaction envelopeへ変換する">
+    <path class="message" d="M 398 735 H 515 V 770 H 405"/>
+    <text class="message-label" x="515" y="725">
+      <tspan class="code">Actor action</tspan>を解析
+    </text>
+    <text class="message-label" x="515" y="747">
+      <tspan class="code">action envelope</tspan>を設定
+    </text>
+  </g>
+
+  <g id="step-envelope-message" aria-label="action envelopeをexecActorAction messageでActorへ送る">
+    <path class="message" d="M 398 800 L 877 800"/>
+    <text class="message-label" x="637" y="785">
+      <tspan class="code">execActorAction</tspan>をbroadcast
+    </text>
+  </g>
+
+  <g id="step-actor-receive" aria-label="Actor cloneがmessageを受信する">
+    <path class="message" d="M 877 840 H 770 V 875 H 870"/>
+    <text class="message-label" x="823" y="827">messageを受信</text>
+  </g>
+
+  <g id="step-actor-process" aria-label="Actor cloneが宛先を照合してcommandを実行する">
+    <path class="message" d="M 877 940 H 685 V 960 H 870"/>
+    <text class="message-label message-label-end" x="865" y="900">
+      <tspan class="code">actorName</tspan>と<tspan class="code">actionTarget</tspan>を照合
+    </text>
+    <text class="message-label message-label-end" x="865" y="923">
+      <tspan class="code">actionCommand</tspan>を分岐して処理を実行
+    </text>
+  </g>
+
+  <rect class="note" x="250" y="985" width="710" height="42"/>
+  <text class="note-text" x="605" y="1012">
+    Stage actionはActorへmessageを送らず、Stage内の対応する処理へ進む
+  </text>
+</svg>

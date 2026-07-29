@@ -12,15 +12,15 @@
       <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
       <p>対象DSL: <code>kamishibai=3.1</code><br>対象読者: 台本作者、教材作成者、開発者</p>
       <section class="level2">
-        <h2 id="1-記法の基本">1. 記法の基本</h2>
+        <h2 id="記法の基本">記法の基本</h2>
         <section class="level3">
-          <h3 id="11-コマンド行">1.1 コマンド行</h3>
+          <h3 id="コマンド行">コマンド行</h3>
           <pre class="language-text"><code class="language-text">キー=値</code></pre>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">asset=Beach1,backdrop</code></pre>
         </section>
         <section class="level3">
-          <h3 id="12-アクション行">1.2 アクション行</h3>
+          <h3 id="アクション行">アクション行</h3>
           <pre class="language-text"><code class="language-text">action=対象:命令:値
 action=対象:命令:値:追加値</code></pre>
           <p>例:</p>
@@ -28,17 +28,17 @@ action=対象:命令:値:追加値</code></pre>
 action=stage:Beach1</code></pre>
         </section>
         <section class="level3">
-          <h3 id="13-シーン区切り">1.3 シーン区切り</h3>
+          <h3 id="シーン区切り">シーン区切り</h3>
           <pre class="language-text"><code class="language-text">---</code></pre>
           <p><code>---</code> でシーンを区切ります。</p>
         </section>
         <section class="level3">
-          <h3 id="14-コメント">1.4 コメント</h3>
+          <h3 id="コメント">コメント</h3>
           <pre class="language-text"><code class="language-text"># ここはコメント</code></pre>
           <p><code>#</code> で始まる行はコメントです。</p>
         </section>
         <section class="level3">
-          <h3 id="15-区切り文字">1.5 区切り文字</h3>
+          <h3 id="区切り文字">区切り文字</h3>
           <table>
             <thead>
               <tr>
@@ -74,9 +74,9 @@ action=stage:Beach1</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="2-トップレベルコマンド">2. トップレベルコマンド</h2>
+        <h2 id="トップレベルコマンド">トップレベルコマンド</h2>
         <section class="level3">
-          <h3 id="21-kamishibai">2.1 <code>kamishibai</code></h3>
+          <h3 id="kamishibai"><code>kamishibai</code></h3>
           <pre class="language-text"><code class="language-text">kamishibai=3.1</code></pre>
           <table>
             <thead>
@@ -106,7 +106,7 @@ action=stage:Beach1</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="22-asset画像音声テキストアセットの登録">2.2 <code>asset</code>：画像・音声・テキストアセットの登録</h3>
+          <h3 id="asset画像音声テキストアセットの登録"><code>asset</code>：画像・音声・テキストアセットの登録</h3>
           <section class="level4">
             <h4 id="書式">書式</h4>
             <pre class="language-text"><code class="language-text">asset=&lt;アセット名&gt;,&lt;リソース識別子&gt;</code></pre>
@@ -223,7 +223,7 @@ asset=main-caption,text:Narration</code></pre>
           </section>
         </section>
         <section class="level3">
-          <h3 id="23-setloadingcostume">2.3 <code>setLoadingCostume</code></h3>
+          <h3 id="setloadingcostume"><code>setLoadingCostume</code></h3>
           <pre class="language-text"><code class="language-text">setLoadingCostume=Loading用アセット名1,Loading用アセット名2,...</code></pre>
           <p>アセット読込中に特別な組み込みスプライト<code>Loading</code>へ表示する画像アセットを指定します。</p>
           <pre class="language-text"><code class="language-text">asset=loading1,https://example.com/loading/loading1.png
@@ -268,7 +268,7 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
           <p>進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。指定画像の大きさや非透明部分の外形は、吹き出し位置に影響しません。</p>
         </section>
         <section class="level3">
-          <h3 id="24-actor">2.4 <code>actor</code></h3>
+          <h3 id="actor"><code>actor</code></h3>
           <pre class="language-text"><code class="language-text">actor=アクター名,初期スキン名</code></pre>
           <table>
             <thead>
@@ -301,7 +301,7 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
 actor=Turtle,Turtle</code></pre>
         </section>
         <section class="level3">
-          <h3 id="25-cover">2.5 <code>cover</code></h3>
+          <h3 id="cover"><code>cover</code></h3>
           <pre class="language-text"><code class="language-text">cover=背景アセット名,音声アセット名</code></pre>
           <table>
             <thead>
@@ -333,7 +333,7 @@ actor=Turtle,Turtle</code></pre>
           <pre class="language-text"><code class="language-text">cover=Beach1,OceanWave</code></pre>
         </section>
         <section class="level3">
-          <h3 id="26-setruntimevariable">2.6 <code>setRuntimeVariable</code></h3>
+          <h3 id="setruntimevariable"><code>setRuntimeVariable</code></h3>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=変数名:値</code></pre>
           <p>Temporary Variables拡張のランタイム変数へ値を設定します。ヘッダまたはシーン内で使用できます。</p>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=startSceneIndex:1
@@ -341,7 +341,7 @@ setRuntimeVariable=takeSeaRoute:true</code></pre>
           <p><code>startSceneIndex</code> は最初に実行するシーン番号です。条件分岐で参照する変数もこのコマンドで初期化できます。</p>
         </section>
         <section class="level3">
-          <h3 id="27-registerbranch">2.7 <code>registerBranch</code></h3>
+          <h3 id="registerbranch"><code>registerBranch</code></h3>
           <pre class="language-text"><code class="language-text">registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>Runtime Expressionで評価する条件と、移動先シーンラベルの組を登録します。条件は左から評価され、最初に真になった条件と同じ位置のラベルが選ばれます。</p>
           <pre class="language-text"><code class="language-text">registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
@@ -353,7 +353,7 @@ registerBranch=chooseByName:route === "ocean",true:ocean,home</code></pre>
           <p>等価比較演算子は <code>==</code>、<code>!=</code>、<code>===</code>、<code>!==</code> です。単独の <code>=</code> は代入記号であり、条件式の演算子としては使用できません。条件数とラベル数はそろえてください。最後の条件に <code>true</code> を置くと既定の移動先になります。登録した分岐は <code>action=branch:分岐名</code> で実行します。</p>
         </section>
         <section class="level3">
-          <h3 id="28-scenelabel">2.8 <code>sceneLabel</code></h3>
+          <h3 id="scenelabel"><code>sceneLabel</code></h3>
           <pre class="language-text"><code class="language-text">sceneLabel=シーンラベル</code></pre>
           <p><code>---</code> で区切られたシーンへ一意の名前を付けます。<code>branch</code>、<code>keyInputToChangeScene</code>、<code>touchInputToChangeScene</code> はこのラベルを移動先として使います。</p>
           <pre class="language-text"><code class="language-text">---
@@ -361,7 +361,7 @@ sceneLabel=ocean
 action=stage:Ocean</code></pre>
         </section>
         <section class="level3">
-          <h3 id="29-tmposeurl">2.9 <code>TMPoseURL</code></h3>
+          <h3 id="tmposeurl"><code>TMPoseURL</code></h3>
           <pre class="language-text"><code class="language-text">TMPoseURL=ポーズモデルURL</code></pre>
           <table>
             <thead>
@@ -393,7 +393,7 @@ action=stage:Ocean</code></pre>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/kamishibai/pose-model/</code></pre>
         </section>
         <section class="level3">
-          <h3 id="210-textscene-0-のui文言">2.10 <code>text</code>：scene 0 のUI文言</h3>
+          <h3 id="textscene-0-のui文言"><code>text</code>：scene 0 のUI文言</h3>
           <pre class="language-text"><code class="language-text">text=予約済みUIテキストアセット名:文字列</code></pre>
           <p>プロンプト／メニューの文言は、scene 0（最初の <code>---</code> より前）で定義します。次の5アセットはランタイムが自動登録するため、<code>asset=</code> による登録は不要です。</p>
           <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
@@ -441,24 +441,24 @@ text=ui.about:このアプリについて</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="3-グローバルアクション">3. グローバルアクション</h2>
+        <h2 id="グローバルアクション">グローバルアクション</h2>
         <p>グローバルアクションは、特定のアクターではなく、ステージ、音、時間を操作します。</p>
         <section class="level3">
-          <h3 id="31-stage">3.1 <code>stage</code></h3>
+          <h3 id="stage"><code>stage</code></h3>
           <pre class="language-text"><code class="language-text">action=stage:背景アセット名</code></pre>
           <p>背景を指定アセットに切り替えます。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=stage:Beach1</code></pre>
         </section>
         <section class="level3">
-          <h3 id="32-wait">3.2 <code>wait</code></h3>
+          <h3 id="wait"><code>wait</code></h3>
           <pre class="language-text"><code class="language-text">action=wait:秒数</code></pre>
           <p>指定秒数だけ待ちます。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=wait:1.5</code></pre>
         </section>
         <section class="level3">
-          <h3 id="33-bgm">3.3 <code>bgm</code></h3>
+          <h3 id="bgm"><code>bgm</code></h3>
           <pre class="language-text"><code class="language-text">action=bgm:音声アセット名</code></pre>
           <p>音声アセットを再生し、再生完了を待たずに次のアクションへ進みます。</p>
           <p>例:</p>
@@ -466,7 +466,7 @@ text=ui.about:このアプリについて</code></pre>
           <p>補足: <code>bgm</code> はループ再生しません。再生開始後すぐに次のアクションへ進み、シーン終了時に停止します。</p>
         </section>
         <section class="level3">
-          <h3 id="34-sound">3.4 <code>sound</code></h3>
+          <h3 id="sound"><code>sound</code></h3>
           <pre class="language-text"><code class="language-text">action=sound:音声アセット名</code></pre>
           <p>音声アセットを再生し、再生完了まで待ちます。</p>
           <p>例:</p>
@@ -474,7 +474,7 @@ text=ui.about:このアプリについて</code></pre>
           <p>効果音の演出を確実に聞かせたい場面や、音が終わってから次の場面へ進めたい場合に使います。</p>
         </section>
         <section class="level3">
-          <h3 id="35-text">3.5 <code>text</code></h3>
+          <h3 id="text"><code>text</code></h3>
           <pre class="language-text"><code class="language-text">action=text:テキストアセット名:文字列</code></pre>
           <p><code>asset=名前,text</code> で登録したテキストアセットの内容を、アクション列のその位置で更新します。<code>wait</code> と組み合わせると、内容を時系列に沿って順次変更できます。空文字列で内容を消せます。</p>
           <pre class="language-text"><code class="language-text">action=text:Narration:むかし
@@ -485,7 +485,7 @@ action=text:Narration:</code></pre>
           <p>シーン直下の <code>text=...</code> も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には <code>action=text:...</code> を使用してください。予約済みの <code>ui.*</code> 文言だけは初期設定としてscene 0の <code>text=...</code> を使用します。</p>
         </section>
         <section class="level3">
-          <h3 id="36-transition">3.6 <code>transition</code></h3>
+          <h3 id="transition"><code>transition</code></h3>
           <pre class="language-text"><code class="language-text">action=transition:fadeOut
 action=transition:fadeUp
 action=transition:reset</code></pre>
@@ -514,29 +514,29 @@ action=transition:reset</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="37-branch">3.7 <code>branch</code></h3>
+          <h3 id="branch"><code>branch</code></h3>
           <pre class="language-text"><code class="language-text">action=branch:分岐名</code></pre>
           <p><code>registerBranch</code> で登録した条件を評価し、選ばれた <code>sceneLabel</code> へ移動します。真になる条件がなければ、そのまま次のアクション／シーンへ進みます。</p>
         </section>
         <section class="level3">
-          <h3 id="38-keyinputtochangescene">3.8 <code>keyInputToChangeScene</code></h3>
+          <h3 id="keyinputtochangescene"><code>keyInputToChangeScene</code></h3>
           <pre class="language-text"><code class="language-text">action=keyInputToChangeScene:キーID1,キーID2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>物理キーの入力をバックグラウンドで待ち、押されたキーと同じ位置のシーンラベルへ移動します。</p>
           <pre class="language-text"><code class="language-text">action=keyInputToChangeScene:ArrowLeft,ArrowRight:leftRoute,rightRoute</code></pre>
           <p>キーIDは <code>KeyA</code>、<code>Space</code>、<code>ArrowLeft</code> などのコードを使います。キーID数とラベル数はそろえてください。</p>
         </section>
         <section class="level3">
-          <h3 id="39-touchinputtochangescene">3.9 <code>touchInputToChangeScene</code></h3>
+          <h3 id="touchinputtochangescene"><code>touchInputToChangeScene</code></h3>
           <pre class="language-text"><code class="language-text">action=touchInputToChangeScene:アクター名1,アクター名2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>指定アクターへのポインター／タッチ入力を待ち、選ばれたアクターと同じ位置のシーンラベルへ移動します。アクター数とラベル数はそろえてください。</p>
         </section>
       </section>
       <section class="level2">
-        <h2 id="4-アクターアクション">4. アクターアクション</h2>
+        <h2 id="アクターアクション">アクターアクション</h2>
         <p>アクターアクションは、<code>actor=</code> で登録した登場人物に対して実行します。</p>
         <pre class="language-text"><code class="language-text">action=アクター名:命令:値</code></pre>
         <section class="level3">
-          <h3 id="41-対象指定">4.1 対象指定</h3>
+          <h3 id="対象指定">対象指定</h3>
           <table>
             <thead>
               <tr>
@@ -569,7 +569,7 @@ action=*:hide</code></pre>
           <p>複数指定や <code>*</code> は実装上サポートされていますが、台本の読みやすさを優先するなら、通常は単独指定をおすすめします。</p>
         </section>
         <section class="level3">
-          <h3 id="42-show">4.2 <code>show</code></h3>
+          <h3 id="show"><code>show</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:show:スキン名:x,y,サイズ
 action=アクター名:show:x,y,サイズ</code></pre>
           <p>アクターのスキン、位置、サイズを指定して表示します。</p>
@@ -604,14 +604,14 @@ action=アクター名:show:x,y,サイズ</code></pre>
           <p>スキン名を省略した書式では、<code>actor</code> で指定した初期スキンまたは現在のスキンを使います。</p>
         </section>
         <section class="level3">
-          <h3 id="43-hide">4.3 <code>hide</code></h3>
+          <h3 id="hide"><code>hide</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:hide</code></pre>
           <p>アクターを非表示にします。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=Princess:hide</code></pre>
         </section>
         <section class="level3">
-          <h3 id="44-say">4.4 <code>say</code></h3>
+          <h3 id="say"><code>say</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:say:セリフ
 action=アクター名:say:セリフ:秒数</code></pre>
           <p>セリフ吹き出しを表示します。</p>
@@ -621,7 +621,7 @@ action=アクター名:say:セリフ:秒数</code></pre>
           <pre class="language-text"><code class="language-text">action=Urashima:say:</code></pre>
         </section>
         <section class="level3">
-          <h3 id="45-think">4.5 <code>think</code></h3>
+          <h3 id="think"><code>think</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:think:文章
 action=アクター名:think:文章:秒数</code></pre>
           <p>思考吹き出しを表示します。</p>
@@ -629,7 +629,7 @@ action=アクター名:think:文章:秒数</code></pre>
           <pre class="language-text"><code class="language-text">action=Urashima:think:あっという間におじいさんになってしまった…:3</code></pre>
         </section>
         <section class="level3">
-          <h3 id="46-setskin">4.6 <code>setSkin</code></h3>
+          <h3 id="setskin"><code>setSkin</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:setSkin:スキン名
 action=アクター名:setSkin:スキン名:サイズ</code></pre>
           <p>アクターのスキンを、登録済みアセットに切り替えます。</p>
@@ -638,28 +638,28 @@ action=アクター名:setSkin:スキン名:サイズ</code></pre>
 action=Urashima:setSkin:Urashima-surprised:45</code></pre>
         </section>
         <section class="level3">
-          <h3 id="47-setscale">4.7 <code>setScale</code></h3>
+          <h3 id="setscale"><code>setScale</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:setScale:サイズ</code></pre>
           <p>アクターのサイズを変更します。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=Urashima:setScale:30</code></pre>
         </section>
         <section class="level3">
-          <h3 id="48-setposition">4.8 <code>setPosition</code></h3>
+          <h3 id="setposition"><code>setPosition</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:setPosition:x,y</code></pre>
           <p>アクターを指定位置へ瞬時に移動します。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=Urashima:setPosition:0,-57</code></pre>
         </section>
         <section class="level3">
-          <h3 id="49-moveto">4.9 <code>moveTo</code></h3>
+          <h3 id="moveto"><code>moveTo</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:moveTo:x,y,秒数</code></pre>
           <p>指定秒数をかけて、アクターを指定位置へ移動します。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=Urashima:moveTo:40,-57,1.5</code></pre>
         </section>
         <section class="level3">
-          <h3 id="410-setlayer">4.10 <code>setLayer</code></h3>
+          <h3 id="setlayer"><code>setLayer</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:setLayer:front
 action=アクター名:setLayer:back
 action=アクター名:setLayer:数値</code></pre>
@@ -695,29 +695,29 @@ action=アクター名:setLayer:数値</code></pre>
 action=Turtle:setLayer:back</code></pre>
         </section>
         <section class="level3">
-          <h3 id="411-loop">4.11 <code>loop</code></h3>
+          <h3 id="loop"><code>loop</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:loop:アセット1,アセット2,...:秒数1,秒数2,...</code></pre>
           <p>画像または音声アセットをバックグラウンドで繰り返します。秒数は各アセットの開始から次のアセット開始までの間隔で、アセット数と同じ個数を指定します。最後の秒数の後に先頭へ戻ります。</p>
           <pre class="language-text"><code class="language-text">action=Fish:loop:Fish1,Fish2:1,1</code></pre>
           <p>秒数 <code>0</code> で複数アセットを同時に開始できます。同時グループに複数の画像がある場合は最後の画像が表示されます。</p>
         </section>
         <section class="level3">
-          <h3 id="412-sequence">4.12 <code>sequence</code></h3>
+          <h3 id="sequence"><code>sequence</code></h3>
           <pre class="language-text"><code class="language-text">action=アクター名:sequence:アセット1,アセット2,...:秒数1,秒数2,...</code></pre>
           <p>画像または音声アセットをバックグラウンドで一回だけ順番に再生します。秒数はアセット数より1つ少なくします。コマンド自体は完了を待たず、次のアクションへ進みます。</p>
           <pre class="language-text"><code class="language-text">action=Hero:sequence:Hero1,StepSound,Hero2:0,0.5</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="5-ポーズ認識アクション">5. ポーズ認識アクション</h2>
+        <h2 id="ポーズ認識アクション">ポーズ認識アクション</h2>
         <section class="level3">
-          <h3 id="51-基本形">5.1 基本形</h3>
+          <h3 id="基本形">基本形</h3>
           <pre class="language-text"><code class="language-text">action=アクター名:pose:スキン名リスト:ポーズ名リスト:効果音リスト</code></pre>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=Urashima:pose:Urashima-help-1:help:SquishPop</code></pre>
         </section>
         <section class="level3">
-          <h3 id="52-複数ポーズ">5.2 複数ポーズ</h3>
+          <h3 id="複数ポーズ">複数ポーズ</h3>
           <pre class="language-text"><code class="language-text">action=Urashima:pose:Skin1,Skin2,Skin3:pose1,pose2,pose3:Sound1,Sound2,Sound3</code></pre>
           <p>処理回数はポーズ名の個数で決まります。各回では、同じ位置のスキンと効果音を参照します。対応する項目がない場合は空文字列になり、ポーズ名より後ろにある余分なスキンや効果音は参照されません。そのため、各ポーズに対応するスキンと効果音を1つずつ指定します。</p>
           <table>
@@ -744,7 +744,7 @@ action=Turtle:setLayer:back</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="53-実行時の流れ">5.3 実行時の流れ</h3>
+          <h3 id="実行時の流れ">実行時の流れ</h3>
           <ol>
             <li>カメラプレビューを表示します。</li>
             <li>ポーズ認識を開始します。</li>
@@ -759,7 +759,7 @@ action=Turtle:setLayer:back</code></pre>
           </ol>
         </section>
         <section class="level3">
-          <h3 id="54-認識パラメータの実装値">5.4 認識パラメータの実装値</h3>
+          <h3 id="認識パラメータの実装値">認識パラメータの実装値</h3>
           <p>現在の配布用アプリは、起動時に <code>poseRecog=0.5</code>、<code>poseCharge=10</code>、<code>poseIdle=0.1</code> を設定し、次の計算で進行します。</p>
           <table>
             <thead>
@@ -790,7 +790,7 @@ action=Turtle:setLayer:back</code></pre>
           <p>しきい値未満でも対象ポーズのスコアに応じてチャージは増えますが、認識中の100分の1の係数です。このため、短い一致よりもポーズを保った場合の方が早く成功条件へ到達します。</p>
         </section>
         <section class="level3">
-          <h3 id="55-ポーズ設計のコツ">5.5 ポーズ設計のコツ</h3>
+          <h3 id="ポーズ設計のコツ">ポーズ設計のコツ</h3>
           <table>
             <thead>
               <tr>
@@ -820,7 +820,7 @@ action=Turtle:setLayer:back</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="6-座標とサイズ">6. 座標とサイズ</h2>
+        <h2 id="座標とサイズ">座標とサイズ</h2>
         <p>TurboWarpのステージ座標は、中央が <code>(0, 0)</code> です。</p>
         <table>
           <thead>
@@ -853,7 +853,7 @@ action=Turtle:setLayer:back</code></pre>
         <p>これは、浦島を中央やや下に、サイズ30で表示します。</p>
       </section>
       <section class="level2">
-        <h2 id="7-シーン終了時の挙動">7. シーン終了時の挙動</h2>
+        <h2 id="シーン終了時の挙動">シーン終了時の挙動</h2>
         <p>各シーン終了時に、アプリは次の処理を行います。</p>
         <ul>
           <li>アクションリストをクリアする</li>
@@ -864,44 +864,44 @@ action=Turtle:setLayer:back</code></pre>
         <p>通常は次のシーン番号へ進みます。<code>branch</code> またはキー／タッチ入力が <code>nextSceneLabel</code> を設定した場合は、<code>sceneLabelList</code>から同名ラベルを探し、そのシーンへ移動します。</p>
       </section>
       <section class="level2">
-        <h2 id="8-台本エラーになりやすい例">8. 台本エラーになりやすい例</h2>
+        <h2 id="台本エラーになりやすい例">台本エラーになりやすい例</h2>
         <section class="level3">
-          <h3 id="81-未対応コマンド">8.1 未対応コマンド</h3>
+          <h3 id="未対応コマンド">未対応コマンド</h3>
           <pre class="language-text"><code class="language-text">background=Beach1</code></pre>
           <p><code>background</code> は未対応です。正しくは次のように書きます。</p>
           <pre class="language-text"><code class="language-text">action=stage:Beach1</code></pre>
         </section>
         <section class="level3">
-          <h3 id="82--がない">8.2 <code>=</code> がない</h3>
+          <h3 id="-がない"><code>=</code> がない</h3>
           <pre class="language-text"><code class="language-text">asset Beach1,https://example.com/Beach1.png</code></pre>
           <p>正しくは次のように書きます。</p>
           <pre class="language-text"><code class="language-text">asset=Beach1,https://example.com/Beach1.png</code></pre>
         </section>
         <section class="level3">
-          <h3 id="83--が不足している">8.3 <code>:</code> が不足している</h3>
+          <h3 id="-が不足している"><code>:</code> が不足している</h3>
           <pre class="language-text"><code class="language-text">action=Urashima say こんにちは</code></pre>
           <p>正しくは次のように書きます。</p>
           <pre class="language-text"><code class="language-text">action=Urashima:say:こんにちは:2</code></pre>
         </section>
         <section class="level3">
-          <h3 id="84-未登録アセットを参照する">8.4 未登録アセットを参照する</h3>
+          <h3 id="未登録アセットを参照する">未登録アセットを参照する</h3>
           <pre class="language-text"><code class="language-text">action=stage:Beach99</code></pre>
           <p><code>Beach99</code> を使うなら、ヘッダで定義しておく必要があります。</p>
           <pre class="language-text"><code class="language-text">asset=Beach99,https://example.com/Beach99.png</code></pre>
         </section>
         <section class="level3">
-          <h3 id="85-存在しないシーンラベルを参照する">8.5 存在しないシーンラベルを参照する</h3>
+          <h3 id="存在しないシーンラベルを参照する">存在しないシーンラベルを参照する</h3>
           <pre class="language-text"><code class="language-text">action=keyInputToChangeScene:ArrowRight:missingScene</code></pre>
           <p>移動先には、いずれかのシーンで定義した <code>sceneLabel</code> を指定します。ラベルは大文字・小文字や空白も含めて一致させてください。</p>
         </section>
         <section class="level3">
-          <h3 id="86-対応リストの個数が違う">8.6 対応リストの個数が違う</h3>
+          <h3 id="対応リストの個数が違う">対応リストの個数が違う</h3>
           <pre class="language-text"><code class="language-text">registerBranch=route:routeA,routeB:sceneA</code></pre>
           <p>条件とラベル、キーIDとラベル、タッチ対象とラベル、<code>loop</code>のアセットと秒数は、それぞれ必要な個数をそろえます。</p>
         </section>
       </section>
       <section class="level2">
-        <h2 id="9-リハーサル用キー">9. リハーサル用キー</h2>
+        <h2 id="リハーサル用キー">リハーサル用キー</h2>
         <table>
           <thead>
             <tr>
@@ -932,9 +932,9 @@ action=Turtle:setLayer:back</code></pre>
         <p>本番運用では誤操作に注意してください。</p>
       </section>
       <section class="level2">
-        <h2 id="10-チートシート">10. チートシート</h2>
+        <h2 id="チートシート">チートシート</h2>
         <section class="level3">
-          <h3 id="101-ヘッダ">10.1 ヘッダ</h3>
+          <h3 id="ヘッダ">ヘッダ</h3>
           <pre class="language-text"><code class="language-text">kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
 asset=Backdrop,backdrop
@@ -950,7 +950,7 @@ cover=CoverBackground,CoverSound
 registerBranch=route:flag,true:sceneA,sceneB</code></pre>
         </section>
         <section class="level3">
-          <h3 id="102-シーン">10.2 シーン</h3>
+          <h3 id="シーン">シーン</h3>
           <pre class="language-text"><code class="language-text">---
 # scene 1
 sceneLabel=opening
@@ -966,7 +966,7 @@ action=Actor:pose:Skin1,Skin2:pose1,pose2:Sound1,Sound2
 action=branch:route</code></pre>
         </section>
         <section class="level3">
-          <h3 id="103-よく使うアクション">10.3 よく使うアクション</h3>
+          <h3 id="よく使うアクション">よく使うアクション</h3>
           <pre class="language-text"><code class="language-text">action=stage:Beach1
 action=wait:1.5
 action=bgm:Music
@@ -985,7 +985,7 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="11-推奨命名規則">11. 推奨命名規則</h2>
+        <h2 id="推奨命名規則">推奨命名規則</h2>
         <table>
           <thead>
             <tr>
@@ -1022,11 +1022,11 @@ action=keyInputToChangeScene:ArrowLeft,ArrowRight:left,right</code></pre>
         </table>
       </section>
       <section class="level2">
-        <h2 id="12-互換性メモ">12. 互換性メモ</h2>
+        <h2 id="互換性メモ">互換性メモ</h2>
         <p>このリファレンスは、提供されたTurboWarpプロジェクトの <code>kamishibai=3.1</code> 実装を前提にしています。3.1より前の台本では、アセット識別子、シーンラベル、分岐、入力、トランジション、アニメーション、テキストが異なる、または利用できない場合があります。台本を配布する場合は、台本ファイルと対応するアプリのバージョンを一緒に管理してください。</p>
       </section>
       <section class="level2">
-        <h2 id="13-関連ドキュメント">13. 関連ドキュメント</h2>
+        <h2 id="関連ドキュメント">関連ドキュメント</h2>
         <ul>
           <li><code>03-user-guide.md</code>: 紙芝居アプリの操作方法</li>
           <li><code>04-dsl-manual.md</code>: 紙芝居DSLファイルの作り方</li>

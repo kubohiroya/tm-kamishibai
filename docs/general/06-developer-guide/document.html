@@ -1,0 +1,438 @@
+<!DOCTYPE html><html lang="ja"><head>
+  <link rel="icon" type="image/png" sizes="256x256" href="../../../favicon.png">
+    <meta charset="utf-8">
+    <title>紙芝居アプリ ソフトウェア開発者向け資料</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="theme.css">
+    <link rel="stylesheet" type="text/css" href="general-theme.css">
+  </head>
+  <body>
+    <section class="level1">
+      <h1 id="紙芝居アプリ-ソフトウェア開発者向け資料">紙芝居アプリ ソフトウェア開発者向け資料</h1>
+      <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
+      <p>
+        このガイドは、TMPose紙芝居のアプリ、SB3ソース、ビルダー、Webサイト、ドキュメントを
+        変更する開発者向けの入口です。アプリの内部構造、成果物、ビルダー仕様、検証、公開は
+        <a href="07-internal-specification.md">紙芝居アプリ内部仕様書</a>、台本の書式とコマンド仕様は
+        <a href="04-dsl-manual.md">台本DSLマニュアル</a>と<a href="05-command-reference.md">コマンドリファレンス</a>
+        を正本とします。
+      </p>
+      <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
+      <p>過去のバージョンからの変更は<a href="history.md"><code>history.md</code></a>を参照してください。</p>
+      <p>このガイドの章は、次の3つの区分で並んでいます。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>区分</th>
+            <th>対象</th>
+            <th>読み方</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>導入</td>
+            <td>管理範囲の理解から共通の開発フローまで</td>
+            <td>初めて開発するときに、この順に読む</td>
+          </tr>
+          <tr>
+            <td>変更対象別手順</td>
+            <td>アプリSB3、機能拡張、ビルダー、文書とサイト</td>
+            <td>変更対象に応じて、必要な章だけを読む</td>
+          </tr>
+          <tr>
+            <td>参照</td>
+            <td>関連プロジェクトと関連ドキュメント</td>
+            <td>関連プロジェクトや資料を探すときに参照する</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        「導入」では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
+        開発フローへ進みます。「変更対象別手順」は、この順に実施する一連の工程ではなく、
+        変更対象ごとに独立した手順です。「参照」は作業手順ではありません。
+      </p>
+      <section class="level2">
+        <h2 id="管理範囲と責務を理解する">管理範囲と責務を理解する</h2>
+        <p>このリポジトリが管理するものは次のとおりです。</p>
+        <ul>
+          <li>物語固有の台本やアセットを含まない、汎用の紙芝居アプリ</li>
+          <li>アプリSB3の展開ソースと、配布用SB3を生成する設定</li>
+          <li>台本と画像・音声をSB3へ組み込むnpmパッケージ</li>
+          <li>GitHub Pagesへ公開するWebサイトと一般向けドキュメント</li>
+          <li>上記を検証する自動テスト</li>
+        </ul>
+        <p>関連プロジェクトとの境界は次のとおりです。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>対象</th>
+              <th>管理場所</th>
+              <th>このリポジトリとの関係</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SB3の展開・検証・決定的再構築</td>
+              <td><a href="https://github.com/kubohiroya/sb3-toolchain"><code>kubohiroya/sb3-toolchain</code></a></td>
+              <td>固定依存として利用する。<a href="#sb3-toolchain" data-ref="section">「sb3-toolchain」</a>を参照</td>
+            </tr>
+            <tr>
+              <td>浦島太郎などの公開用物語</td>
+              <td><a href="https://github.com/kubohiroya/tmpose-kamishibai-samples"><code>kubohiroya/tmpose-kamishibai-samples</code></a></td>
+              <td><code>stories/urashima/</code>で台本、固有アセット、生成物を管理する</td>
+            </tr>
+            <tr>
+              <td>埋め込み機能拡張</td>
+              <td>各機能拡張のGitHubリポジトリ</td>
+              <td><code>app/</code>には検証済み成果物と由来情報だけを同期する</td>
+            </tr>
+            <tr>
+              <td>TurboWarp Extension Galleryの機能拡張</td>
+              <td>Galleryの公開URL</td>
+              <td>SB3から外部URLを参照する</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">公開サンプル</a>
+          の固有ファイルを本体へコピーしません。本体の汎用性と、サンプルの独立した更新・配布を
+          維持します。
+        </p>
+        <p>
+          依存バージョン、スクリプト、公開対象の正本は<code>package.json</code>と<code>pnpm-lock.yaml</code>です。
+          文書には特定commitを転記せず、必要なときに確認します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> why @kubohiroya/sb3-toolchain
+<span class="token function">git</span> <span class="token function">diff</span> -- package.json pnpm-lock.yaml</code></pre>
+      </section>
+      <section class="level2">
+        <h2 id="開発環境を準備する">開発環境を準備する</h2>
+        <section class="level3">
+          <h3 id="必要な環境">必要な環境</h3>
+          <ul>
+            <li>Node.js 22.12.0以上</li>
+            <li>pnpm 11</li>
+            <li>PDF生成に利用できるChromeまたはChromium</li>
+            <li>Gitと、GitHub操作に利用するGitHub CLI</li>
+          </ul>
+          <pre class="language-bash"><code class="language-bash">corepack <span class="token builtin class-name">enable</span>
+<span class="token function">pnpm</span> <span class="token function">install</span></code></pre>
+          <p>CIではlockfile以外の依存解決を許可しません。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token function">install</span> --frozen-lockfile</code></pre>
+          <p>初回セットアップ後は、展開SB3ソースとテスト用SB3を確認します。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:check
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span></code></pre>
+          <p>
+            macOSでは通常のGoogle ChromeをPDF生成に自動利用します。別のブラウザを使う環境では、
+            <code>VIVLIOSTYLE_CHROME_PATH</code>へ実行ファイルの絶対パスを設定します。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="リポジトリ構成を把握する">リポジトリ構成を把握する</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>パス</th>
+              <th>役割</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>app/</code></td>
+              <td>紙芝居アプリSB3のGit管理上の正本</td>
+            </tr>
+            <tr>
+              <td><code>app/project.source.json</code></td>
+              <td>整形済みScratchプロジェクト</td>
+            </tr>
+            <tr>
+              <td><code>app/assets/</code></td>
+              <td>汎用アプリ自身が使用する画像・音声</td>
+            </tr>
+            <tr>
+              <td><code>app/extensions/</code></td>
+              <td>埋め込み機能拡張の同期済みJavaScript</td>
+            </tr>
+            <tr>
+              <td><code>app/embedded-extensions.json</code></td>
+              <td>埋め込み機能拡張の管理情報</td>
+            </tr>
+            <tr>
+              <td><code>app/sb3-source.json</code></td>
+              <td>SB3展開ソースのマニフェスト</td>
+            </tr>
+            <tr>
+              <td><code>src/builder/</code></td>
+              <td>npmで公開するSB3・台本変換API</td>
+            </tr>
+            <tr>
+              <td><code>bin/</code></td>
+              <td>npm CLIのエントリーポイント</td>
+            </tr>
+            <tr>
+              <td><code>scripts/</code></td>
+              <td>サイト、ドキュメント、配布物のビルドと検証</td>
+            </tr>
+            <tr>
+              <td><code>docs/general/</code></td>
+              <td>一般向け・開発者向けの文書原稿</td>
+            </tr>
+            <tr>
+              <td><code>docs/workshops/</code></td>
+              <td>日付付き体験会資料</td>
+            </tr>
+            <tr>
+              <td><code>site/</code></td>
+              <td>GitHub Pagesの静的入力</td>
+            </tr>
+            <tr>
+              <td><code>test/</code></td>
+              <td>ビルダー、SB3、VM、ドキュメント、公開契約のテスト</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>次の場所は生成物であり、Git管理上の正本ではありません。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>パス</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>tmp/kamishibai.sb3</code></td>
+              <td>TurboWarp編集と自動テストに使うSB3</td>
+            </tr>
+            <tr>
+              <td><code>dist/</code></td>
+              <td>GitHub Pagesへ公開するサイト、HTML/PDF、配布用SB3</td>
+            </tr>
+            <tr>
+              <td><code>output/pdf/</code></td>
+              <td>印刷用PDFのローカル確認先</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="level2">
+        <h2 id="共通の開発フローに従う">共通の開発フローに従う</h2>
+        <p>
+          すべての変更はGitHub Issueへ受け入れ基準とロールバック手順を記録し、小さなブランチと
+          PRへ分けます。
+        </p>
+        <ol>
+          <li>最新の<code>main</code>から作業ブランチを作る。</li>
+          <li><code>pnpm install --frozen-lockfile</code>で依存を復元する。</li>
+          <li>変更対象に近いテストを先に実行する。</li>
+          <li>生成物ではなく正本を変更する。</li>
+          <li>差分と生成結果を確認する。</li>
+          <li>標準チェックと必要な手動確認を行う。</li>
+          <li>Issueの運用ログとDoDを更新してPRを作成する。</li>
+        </ol>
+        <p>
+          無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
+          置換を行う前には、必ず<code>git status</code>と対象パスの差分を確認します。変更対象ごとの
+          テストと公開前チェックは<a href="07-internal-specification.md#verification">内部仕様書の検証</a>を
+          参照してください。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="アプリsb3を変更する">アプリSB3を変更する</h2>
+        <p>
+          このリポジトリでは<code>app/</code>をアプリSB3の正本とし、固定した<code>sb3-toolchain</code>を
+          <code>pnpm sb3:*</code>スクリプトから利用します。展開ソース形式、importとbuildの上書き保護、
+          決定的出力の共通仕様は
+          <a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のSB3ソース管理ワークフロー</a>
+          を参照してください。
+        </p>
+        <p><code>app/</code>から編集用SB3を生成します。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:build</code></pre>
+        <p><code>tmp/kamishibai.sb3</code>をTurboWarpで編集し、別の明示的なパスへ保存してから取り込みます。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:import -- /path/to/edited-kamishibai.sb3
+<span class="token function">git</span> <span class="token function">diff</span> -- app
+<span class="token function">pnpm</span> sb3:check
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span>
+<span class="token function">pnpm</span> run build</code></pre>
+        <p><code>app/project.source.json</code>は次の不変条件を維持します。</p>
+        <ul>
+          <li>浦島太郎などの公開サンプル固有ターゲット、画像、音声を含めない</li>
+          <li>台本解析・実行用リストを空の初期状態で保持する</li>
+          <li>組み込み台本用の予約変数を一意に保持する</li>
+        </ul>
+        <p>
+          展開形式とアセット・拡張の整合性は<code>pnpm sb3:check</code>で検証します。toolchainの共通
+          検証項目を本ガイドへ重複して列挙しません。
+        </p>
+        <p>
+          DSL、Loading表示、入力、分岐、テキスト、画面遷移などの振る舞いを変更するときは、
+          同じPRで<a href="04-dsl-manual.md">DSL資料</a>、<a href="05-command-reference.md">コマンド資料</a>、
+          <a href="07-internal-specification.md">内部仕様書</a>、VMまたはブロック構造のテストを更新します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="埋め込み機能拡張を更新する">埋め込み機能拡張を更新する</h2>
+        <p>
+          <code>app/extensions/</code>のJavaScriptは同期済み成果物です。バグ修正や機能追加は、
+          <code>app/embedded-extensions.json</code>に記録された上流リポジトリで行い、レビュー済みの
+          成果物だけを本リポジトリへ取り込みます。
+        </p>
+        <p>
+          <code>status</code>、<code>sync</code>、<code>update</code>の意味、由来情報の形式、transactionalな更新、ID移行の
+          対象schemaは、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のSB3ソース管理ワークフロー</a>と
+          <a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/extension-id-migration.md"><code>埋め込み拡張IDの移行</code></a>
+          を正本とします。ここでは紙芝居アプリへ反映する手順だけを示します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:extensions:status
+<span class="token function">pnpm</span> sb3:extensions:sync
+<span class="token function">pnpm</span> sb3:extensions:update -- EXTENSION_ID</code></pre>
+        <p>上流で拡張IDが変更された場合は、toolchainのID移行を伴う更新を使います。</p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:extensions:update -- OLD_ID --migrate-id NEW_ID</code></pre>
+        <p>
+          上流の成果物パスも変わった場合だけ<code>--artifact PATH</code>を追加します。更新後は必ず
+          <code>git diff -- app</code>、<code>pnpm sb3:check</code>、<code>pnpm test</code>、<code>pnpm run build</code>を確認し、
+          生成したSB3をTurboWarpで開いて対象拡張の主要機能を確認します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="ビルダーを変更する">ビルダーを変更する</h2>
+        <p>
+          公開APIは<code>src/builder/index.js</code>、CLIは<code>src/builder/cli.js</code>と<code>bin/</code>、仕様テストは
+          <code>test/builder.test.mjs</code>にあります。公開API、CLI、アセットマニフェスト、決定的生成、
+          transactional更新の現行仕様は
+          <a href="07-internal-specification.md#sb3-script-builder">内部仕様書のSB3・台本変換ビルダー</a>
+          を参照してください。
+        </p>
+        <p>APIまたはCLIを変更するときは次を同じ変更に含めます。</p>
+        <ul>
+          <li>API入力、返り値、エラーの後方互換性の判断</li>
+          <li>CLIの<code>--help</code>と引数検証</li>
+          <li>アセットマニフェストと出力manifestの形式</li>
+          <li>決定的生成とtransactional更新のテスト</li>
+          <li>内部仕様書のAPI／CLI例</li>
+          <li>破壊的変更の場合は新しいメジャーバージョン</li>
+        </ul>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">node</span> --test test/builder.test.mjs
+<span class="token function">node</span> bin/tmpose-kamishibai.mjs --help
+<span class="token function">pnpm</span> typecheck
+<span class="token function">pnpm</span> pack:check</code></pre>
+      </section>
+      <section class="level2">
+        <h2 id="ドキュメントとサイトを変更する">ドキュメントとサイトを変更する</h2>
+        <p>
+          一般文書は<code>docs/general/</code>、体験会資料は<code>docs/workshops/&lt;日付&gt;/</code>、公開入口は<code>site/</code>を
+          正本とします。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> run preview:docs
+<span class="token function">pnpm</span> run preview:workshop
+<span class="token function">pnpm</span> run preview:staff</code></pre>
+        <p>
+          子供向け概要書と参加者向け体験会資料だけにrubyganaを適用します。確認する学年を
+          変更する場合は1から6を指定します。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">RUBYGANA_GRADE</span><span class="token operator">=</span><span class="token number">4</span> <span class="token function">pnpm</span> run build</code></pre>
+        <p>
+          <code>pnpm run build</code>は一般文書ごとにWeb Publicationを構築し、Vivliostyle CLIの<code>toc</code>設定で
+          <code>h2</code>・<code>h3</code>までを含む目次を生成します。目次をMarkdownへ重複して記述しません。HTML、
+          Vivliostyle Viewer、PDF、文書横断目次、画像参照、しおり、favicon、ライセンス、配布SB3を
+          まとめて検証します。Markdownだけを確認して完了にせず、生成されたHTML/PDFも確認します。
+        </p>
+        <p>
+          Markdownの見出しには章・節番号を書きません。<code>h1</code>は番号なしの文書名、<code>h2</code>と<code>h3</code>は
+          本文と目次で自動採番します。用語集などの前付けを採番しない場合は、見出しへ
+          <code>{.unnumbered}</code>を付けます。本文から見出しを参照するときは、番号ではなく意味の変わらない
+          IDを付けてリンクし、組版結果にも現在の章・節番号を表示する場合は、リンクへ
+          <code>{data-ref="chapter"}</code>または<code>{data-ref="section"}</code>を付けます。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="関連プロジェクトを確認する">関連プロジェクトを確認する</h2>
+        <p>
+          TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境でも利用できるものを
+          各リポジトリで公開しています。各プロジェクトの仕様、開発手順、リリースはリンク先を
+          正本とします。
+        </p>
+        <section class="level3">
+          <h3 id="sb3-toolchain">sb3-toolchain</h3>
+          <p>
+            <a href="https://github.com/kubohiroya/sb3-toolchain"><code>sb3-toolchain</code></a>は、SB3をGit差分可能な
+            展開ソースとして管理し、検証して決定的に再構築するためのCLI／JavaScript APIです。
+            このリポジトリでは固定依存として利用し、<code>app/</code>のimport、検証、build、埋め込み
+            機能拡張の同期とID移行を担います。
+          </p>
+          <ul>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md">SB3ソース管理ワークフロー</a></li>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/source-format-v1.md">SB3展開ソース形式 v1</a></li>
+            <li><a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/extension-id-migration.md">埋め込み拡張IDの移行</a></li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="viteプラグイン">Viteプラグイン</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/vite-plugin-turbowarp-extension"><code>vite-plugin-turbowarp-extension</code></a>:
+              TypeScriptプロジェクトを単一ファイルのTurboWarp機能拡張としてbuildするViteプラグイン
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="turbowarp-機能拡張開発用テンプレート">TurboWarp 機能拡張開発用テンプレート</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-extension-template"><code>turbowarp-extension-template</code></a>:
+              Viteを使ったTurboWarp機能拡張の開発、テスト、build、リリース用テンプレート
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="turbowarp-機能拡張">TurboWarp 機能拡張</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-tmpose"><code>turbowarp-tmpose</code></a>:
+              Teachable Machine Poseモデルを利用したカメラ姿勢認識
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-text-lines"><code>turbowarp-text-lines</code></a>:
+              テキストの行数取得、行単位の読み出し・分割
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-asset-manager"><code>turbowarp-asset-manager</code></a>:
+              IndexedDBとSB3内の画像・音声を扱うアセット管理
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-async-input"><code>turbowarp-async-input</code></a>:
+              キーボード、ポインター、姿勢入力を対象ごとに扱う非同期入力
+            </li>
+            <li>
+              <a href="https://github.com/kubohiroya/turbowarp-runtime-expression"><code>turbowarp-runtime-expression</code></a>:
+              runtime変数を使う条件式の安全な評価とbroadcast監視
+            </li>
+          </ul>
+        </section>
+        <section class="level3">
+          <h3 id="その他のライブラリ">その他のライブラリ</h3>
+          <ul>
+            <li>
+              <a href="https://github.com/kubohiroya/rubygana"><code>rubygana</code></a>:
+              日本語テキストの読み仮名を生成するNode.jsライブラリ
+            </li>
+          </ul>
+          <div class="print-page-break" aria-hidden="true"></div>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="関連ドキュメントを確認する">関連ドキュメントを確認する</h2>
+        <ul>
+          <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
+          <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>
+          <li><a href="05-command-reference.md"><code>05-command-reference.md</code></a>: コマンドとアクションの仕様</li>
+          <li><a href="07-internal-specification.md"><code>07-internal-specification.md</code></a>: アプリ内部構造、成果物、検証、公開</li>
+          <li><a href="history.md"><code>history.md</code></a>: DSLとアプリの変更履歴</li>
+          <li><a href="../../README.md"><code>README.md</code></a>: プロジェクト全体の入口と主要コマンド</li>
+        </ul>
+      </section>
+    </section>
+  
+
+</body></html>

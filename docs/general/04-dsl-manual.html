@@ -12,13 +12,13 @@
       <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
       <p>対象: 台本作者、教材作成者、授業設計者、開発者<br>対象DSL: <code>kamishibai=3.1</code></p>
       <section class="level2">
-        <h2 id="1-紙芝居dslとは">1. 紙芝居DSLとは</h2>
+        <h2 id="紙芝居dslとは">紙芝居DSLとは</h2>
         <p>紙芝居DSLは、紙芝居アプリに読み込ませるためのテキスト形式の台本です。背景、登場人物、画面上のテキスト、セリフ、音、移動、アニメーション、ポーズ認識、シーン分岐などを、1行ずつ書きます。</p>
         <p>DSLは「Domain Specific Language」の略です。ここでは「紙芝居を作るための専用の書き方」という意味で使います。</p>
         <p>このDSLの大きな特徴は、紙芝居の演出だけでなく、TMPoseモデルを使ったポーズ認識を物語進行に組み込めることです。</p>
       </section>
       <section class="level2">
-        <h2 id="2-ファイルの基本構造">2. ファイルの基本構造</h2>
+        <h2 id="ファイルの基本構造">ファイルの基本構造</h2>
         <p>紙芝居DSLファイルは、次のような構造です。</p>
         <pre class="language-text"><code class="language-text">kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
@@ -71,7 +71,7 @@ action=演出</code></pre>
         </table>
       </section>
       <section class="level2">
-        <h2 id="3-最小サンプル">3. 最小サンプル</h2>
+        <h2 id="最小サンプル">最小サンプル</h2>
         <p>まずは、背景を出し、登場人物にセリフを言わせるだけの最小例です。</p>
         <pre class="language-text"><code class="language-text">kamishibai=3.1
 asset=Beach,backdrop
@@ -95,14 +95,14 @@ action=wait:1</code></pre>
         </ol>
       </section>
       <section class="level2">
-        <h2 id="4-ヘッダ部を書く">4. ヘッダ部を書く</h2>
+        <h2 id="ヘッダ部を書く">ヘッダ部を書く</h2>
         <section class="level3">
-          <h3 id="41-バージョン行">4.1 バージョン行</h3>
+          <h3 id="バージョン行">バージョン行</h3>
           <pre class="language-text"><code class="language-text">kamishibai=3.1</code></pre>
           <p>台本の先頭に書きます。このアプリは <code>kamishibai=3.1</code> の台本として読み込みます。2.0の台本を流用する場合も、追加仕様とアセット識別子を確認してから3.1へ更新してください。</p>
         </section>
         <section class="level3">
-          <h3 id="42-アセット定義">4.2 アセット定義</h3>
+          <h3 id="アセット定義">アセット定義</h3>
           <pre class="language-text"><code class="language-text">asset=アセット名,URL</code></pre>
           <p>画像、音声、テキストを登録します。外部URLのほか、<code>.sb3</code>内のコスチューム、背景、音も利用できます。</p>
           <p>例:</p>
@@ -136,7 +136,7 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
           </section>
         </section>
         <section class="level3">
-          <h3 id="43-アクター定義">4.3 アクター定義</h3>
+          <h3 id="アクター定義">アクター定義</h3>
           <pre class="language-text"><code class="language-text">actor=アクター名,初期スキン名</code></pre>
           <p>登場人物を登録します。</p>
           <p>例:</p>
@@ -146,7 +146,7 @@ actor=Princess,Princess</code></pre>
           <p><code>action=Urashima:say:...</code> のように、アクションの対象として使う名前がアクター名です。</p>
         </section>
         <section class="level3">
-          <h3 id="44-表紙定義">4.4 表紙定義</h3>
+          <h3 id="表紙定義">表紙定義</h3>
           <pre class="language-text"><code class="language-text">cover=背景アセット名,音声アセット名</code></pre>
           <p>アプリ起動時や物語終了後に表示する表紙画面を指定します。</p>
           <p>例:</p>
@@ -155,7 +155,7 @@ actor=Princess,Princess</code></pre>
           <pre class="language-text"><code class="language-text">cover=Beach1,</code></pre>
         </section>
         <section class="level3">
-          <h3 id="45-ランタイム変数">4.5 ランタイム変数</h3>
+          <h3 id="ランタイム変数">ランタイム変数</h3>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=変数名:値</code></pre>
           <p>紙芝居の実行中に参照する変数へ初期値を設定します。3.1では、開始シーンや条件分岐の状態を台本から用意できます。</p>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=startSceneIndex:1
@@ -163,7 +163,7 @@ setRuntimeVariable=takeSeaRoute:true</code></pre>
           <p><code>startSceneIndex</code> は、最初に実行するシーン番号を指定するための予約された変数です。通常は <code>1</code> にします。</p>
         </section>
         <section class="level3">
-          <h3 id="46-条件分岐の登録">4.6 条件分岐の登録</h3>
+          <h3 id="条件分岐の登録">条件分岐の登録</h3>
           <pre class="language-text"><code class="language-text">registerBranch=分岐名:条件1,条件2,...:シーンラベル1,シーンラベル2,...</code></pre>
           <p>条件と移動先の組を登録します。条件はRuntime Expressionの式として上から順に評価され、最初に真になった条件と同じ位置のシーンラベルが選ばれます。</p>
           <pre class="language-text"><code class="language-text">setRuntimeVariable=takeSeaRoute:true
@@ -174,7 +174,7 @@ registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
 registerBranch=chooseRoute:score == 1,true:ocean,home</code></pre>
         </section>
         <section class="level3">
-          <h3 id="47-プロンプトメニュー文言">4.7 プロンプト／メニュー文言</h3>
+          <h3 id="プロンプトメニュー文言">プロンプト／メニュー文言</h3>
           <p>ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の <code>---</code> より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、<code>asset=</code> は不要です。</p>
           <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
 text=ui.invalidScript:エラー：不正な台本ファイル
@@ -215,7 +215,7 @@ text=ui.about:このアプリについて</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="5-シーンを書く">5. シーンを書く</h2>
+        <h2 id="シーンを書く">シーンを書く</h2>
         <p>シーンは <code>---</code> で区切ります。</p>
         <pre class="language-text"><code class="language-text">---
 # scene 1
@@ -226,7 +226,7 @@ action=wait:1
 action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Urashima:say:今日は浜辺を散歩しよう。:2</code></pre>
         <section class="level3">
-          <h3 id="51-シーンの基本方針">5.1 シーンの基本方針</h3>
+          <h3 id="シーンの基本方針">シーンの基本方針</h3>
           <p>シーンごとに、必要な背景、登場人物、音、セリフを改めて指定します。アプリはシーン終了時にアクターを隠し、音を止めるため、前のシーンの表示状態は次のシーンへ引き継がれません。</p>
           <p>よい書き方:</p>
           <pre class="language-text"><code class="language-text">---
@@ -240,19 +240,19 @@ action=bgm:Odesong</code></pre>
 # 背景やアクターを出さず、前シーンから残っている前提で書く</code></pre>
         </section>
         <section class="level3">
-          <h3 id="52-コメント行">5.2 コメント行</h3>
+          <h3 id="コメント行">コメント行</h3>
           <p><code>#</code> で始まる行はコメントです。</p>
           <pre class="language-text"><code class="language-text"># scene 1
 # ここでカメを助けるポーズを入れる</code></pre>
           <p>コメントは、シーン名、演出意図、修正メモに使うと便利です。</p>
         </section>
         <section class="level3">
-          <h3 id="53-シーンラベル">5.3 シーンラベル</h3>
+          <h3 id="シーンラベル">シーンラベル</h3>
           <pre class="language-text"><code class="language-text">sceneLabel=opening</code></pre>
           <p>シーンへ一意の名前を付けます。<code>branch</code>、<code>keyInputToChangeScene</code>、<code>touchInputToChangeScene</code> の移動先として使います。分岐を使う台本では、すべてのシーンに重複しないラベルを付けることをおすすめします。</p>
         </section>
         <section class="level3">
-          <h3 id="54-tmposeurl">5.4 TMPoseURL</h3>
+          <h3 id="tmposeurl">TMPoseURL</h3>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/model/</code></pre>
           <p>ポーズ認識モデルのURLを指定します。ポーズ認識を使うシーンでは、原則としてそのシーン内に <code>TMPoseURL</code> を書きます。</p>
           <p><code>TMPoseURL</code> は、シーン内のアクション実行前に読み込まれます。そのため、次のように <code>action=stage</code> より後に書いても、実際のアクション実行前にはモデル読み込みが終わります。ただし、人間が読むときの分かりやすさを優先して、シーン冒頭に書くことをおすすめします。</p>
@@ -264,37 +264,37 @@ action=Urashima:pose:Urashima-open-1,Urashima-open-2:open1,open2:OpenSound,OpenS
         </section>
       </section>
       <section class="level2">
-        <h2 id="6-アクションを書く">6. アクションを書く</h2>
+        <h2 id="アクションを書く">アクションを書く</h2>
         <p>アクションは <code>action=</code> で書きます。</p>
         <pre class="language-text"><code class="language-text">action=対象:命令:値
 action=対象:命令:値:追加値</code></pre>
         <p>大きく分けると、背景・音・待機のアクションと、アクターに対するアクションがあります。</p>
         <section class="level3">
-          <h3 id="61-背景を変える">6.1 背景を変える</h3>
+          <h3 id="背景を変える">背景を変える</h3>
           <pre class="language-text"><code class="language-text">action=stage:Beach1</code></pre>
           <p><code>Beach1</code> は <code>asset=Beach1,...</code> で登録済みの背景画像です。</p>
         </section>
         <section class="level3">
-          <h3 id="62-待つ">6.2 待つ</h3>
+          <h3 id="待つ">待つ</h3>
           <pre class="language-text"><code class="language-text">action=wait:1.5</code></pre>
           <p>指定秒数だけ待ちます。</p>
         </section>
         <section class="level3">
-          <h3 id="63-音を鳴らす">6.3 音を鳴らす</h3>
+          <h3 id="音を鳴らす">音を鳴らす</h3>
           <pre class="language-text"><code class="language-text">action=bgm:GuitarChords2
 action=sound:Gong</code></pre>
           <p><code>bgm</code> は音を鳴らして次のアクションへ進みます。<code>sound</code> は音の再生が終わるまで待ちます。</p>
           <p>名前は <code>BGM</code> ですが、実装上は「待たずに鳴らす音」と考えると分かりやすいです。ループ再生専用ではありません。</p>
         </section>
         <section class="level3">
-          <h3 id="64-画面をフェードさせる">6.4 画面をフェードさせる</h3>
+          <h3 id="画面をフェードさせる">画面をフェードさせる</h3>
           <pre class="language-text"><code class="language-text">action=transition:fadeOut
 action=stage:次の背景
 action=transition:fadeUp</code></pre>
           <p><code>fadeOut</code> はステージを暗くし、<code>fadeUp</code> は明るく戻します。<code>reset</code> は明るさ効果を標準値へ戻します。背景切り替えの前後に置くと場面転換を滑らかに見せられます。</p>
         </section>
         <section class="level3">
-          <h3 id="65-アクターを表示する">6.5 アクターを表示する</h3>
+          <h3 id="アクターを表示する">アクターを表示する</h3>
           <pre class="language-text"><code class="language-text">action=Urashima:show:Urashima-walk-1:172,-77,25</code></pre>
           <p>意味:</p>
           <ul>
@@ -310,14 +310,14 @@ action=transition:fadeUp</code></pre>
           <pre class="language-text"><code class="language-text">action=Fish:show:-130,-27,70</code></pre>
         </section>
         <section class="level3">
-          <h3 id="66-アクターを移動する">6.6 アクターを移動する</h3>
+          <h3 id="アクターを移動する">アクターを移動する</h3>
           <pre class="language-text"><code class="language-text">action=Urashima:moveTo:40,-57,1.5</code></pre>
           <p><code>x,y,秒数</code> を指定します。指定秒数でその位置へ滑らかに移動します。</p>
           <p>すぐに移動したい場合は <code>setPosition</code> を使います。</p>
           <pre class="language-text"><code class="language-text">action=Urashima:setPosition:40,-57</code></pre>
         </section>
         <section class="level3">
-          <h3 id="67-セリフと思考吹き出し">6.7 セリフと思考吹き出し</h3>
+          <h3 id="セリフと思考吹き出し">セリフと思考吹き出し</h3>
           <pre class="language-text"><code class="language-text">action=Princess:say:ようこそ竜宮城へ。:2.5
 action=Urashima:think:あっという間におじいさんになってしまった…:3</code></pre>
           <p>秒数を省略すると、次に変更されるまで表示されます。</p>
@@ -326,14 +326,14 @@ action=Urashima:think:あっという間におじいさんになってしまっ�
 action=Princess:think:</code></pre>
         </section>
         <section class="level3">
-          <h3 id="68-スキンを変える">6.8 スキンを変える</h3>
+          <h3 id="スキンを変える">スキンを変える</h3>
           <pre class="language-text"><code class="language-text">action=Urashima:setSkin:Urashima-surprised</code></pre>
           <p>登録済みアセットの画像に切り替えます。表情やポーズ違いの画像を用意しておくと、紙芝居らしい演出ができます。</p>
           <p>サイズも同時に変える場合は、4つ目の要素に指定します。</p>
           <pre class="language-text"><code class="language-text">action=Urashima:setSkin:Urashima-surprised:45</code></pre>
         </section>
         <section class="level3">
-          <h3 id="69-画像や音を連続再生する">6.9 画像や音を連続再生する</h3>
+          <h3 id="画像や音を連続再生する">画像や音を連続再生する</h3>
           <p>繰り返し再生:</p>
           <pre class="language-text"><code class="language-text">action=Fish:loop:Fish1,Fish2:1,1</code></pre>
           <p>一回だけ再生:</p>
@@ -341,7 +341,7 @@ action=Princess:think:</code></pre>
           <p><code>loop</code> はアセット数と待ち時間の数を同じにします。最後の待ち時間の後は先頭へ戻ります。<code>sequence</code> は一回だけバックグラウンド再生し、待ち時間はアセット数より1つ少なくします。待ち時間 <code>0</code> を使うと、画像と音などを同時に開始できます。</p>
         </section>
         <section class="level3">
-          <h3 id="610-テキストアセットを表示更新する">6.10 テキストアセットを表示・更新する</h3>
+          <h3 id="テキストアセットを表示更新する">テキストアセットを表示・更新する</h3>
           <p>ヘッダでテキストアセットとアクターを登録し、通常の <code>show</code> で表示します。</p>
           <pre class="language-text"><code class="language-text">asset=Narration,text
 actor=Narration,Narration
@@ -357,7 +357,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <p>シーン直下の <code>text=...</code> も互換性のため読み込めますが、アクション列より先に処理されます。新しい台本や順次更新には <code>action=text:...</code> を使用してください。ただし、予約済みの <code>ui.*</code> 文言は時系列の演出ではなく初期設定なので、scene 0 の <code>text=...</code> で定義します。</p>
         </section>
         <section class="level3">
-          <h3 id="611-シーンを分岐させる">6.11 シーンを分岐させる</h3>
+          <h3 id="シーンを分岐させる">シーンを分岐させる</h3>
           <p>登録済みの条件分岐を評価する場合:</p>
           <pre class="language-text"><code class="language-text">action=branch:chooseRoute</code></pre>
           <p>キー入力で移動先を選ぶ場合:</p>
@@ -367,7 +367,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <p>キー／アクターのリストとシーンラベルのリストは、同じ個数を同じ順番で書きます。入力待ちは登録後も他のアクションと並行して続き、入力されると指定ラベルのシーンへ移動します。</p>
         </section>
         <section class="level3">
-          <h3 id="612-ポーズ認識を入れる">6.12 ポーズ認識を入れる</h3>
+          <h3 id="ポーズ認識を入れる">ポーズ認識を入れる</h3>
           <p>基本形:</p>
           <pre class="language-text"><code class="language-text">action=アクター名:pose:スキン名リスト:ポーズ名リスト:効果音リスト</code></pre>
           <p>例:</p>
@@ -421,7 +421,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="7-urashimatxt-の構成例">7. <code>urashima.txt</code> の構成例</h2>
+        <h2 id="urashimatxt-の構成例"><code>urashima.txt</code> の構成例</h2>
         <p>公開中の<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/urashima.txt"><code>urashima.txt</code></a>は、次のような構成になっています。Web版と用途別SB3は、<a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/">浦島太郎の公開ページ</a>から利用できます。</p>
         <table>
           <thead>
@@ -492,9 +492,9 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
         <p>この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の<code>action=text:</code>、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。</p>
       </section>
       <section class="level2">
-        <h2 id="8-紙芝居dslの作成手順">8. 紙芝居DSLの作成手順</h2>
+        <h2 id="紙芝居dslの作成手順">紙芝居DSLの作成手順</h2>
         <section class="level3">
-          <h3 id="81-物語をシーンに分ける">8.1 物語をシーンに分ける</h3>
+          <h3 id="物語をシーンに分ける">物語をシーンに分ける</h3>
           <p>最初に、物語を5〜10個程度のシーンに分けます。</p>
           <p>例:</p>
           <ol>
@@ -507,7 +507,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <p>各シーンで、背景、登場人物、セリフ、音、参加者の動作を決めます。</p>
         </section>
         <section class="level3">
-          <h3 id="82-必要なアセットを洗い出す">8.2 必要なアセットを洗い出す</h3>
+          <h3 id="必要なアセットを洗い出す">必要なアセットを洗い出す</h3>
           <p>次の一覧を作ります。</p>
           <table>
             <thead>
@@ -541,7 +541,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           </table>
         </section>
         <section class="level3">
-          <h3 id="83-アセット名を決める">8.3 アセット名を決める</h3>
+          <h3 id="アセット名を決める">アセット名を決める</h3>
           <p>おすすめの命名規則:</p>
           <pre class="language-text"><code class="language-text">背景: Beach1, Ocean, Castle
 人物: Hero-walk-1, Hero-happy, Hero-open-1
@@ -549,7 +549,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <p>この例では、参照箇所を見分けやすくするため英数字、ハイフン、アンダースコアを使用しています。名前は文字列として照合されるため、定義箇所と参照箇所で同じ表記を使います。アクション要素として使う名前に半角 <code>:</code> があると別の要素に分割され、リスト要素として使う名前に半角 <code>,</code> があると別の項目に分割されます。</p>
         </section>
         <section class="level3">
-          <h3 id="84-ヘッダを書く">8.4 ヘッダを書く</h3>
+          <h3 id="ヘッダを書く">ヘッダを書く</h3>
           <p>すべてのアセットを <code>asset</code> で登録し、登場人物を <code>actor</code> で登録します。</p>
           <pre class="language-text"><code class="language-text">kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
@@ -560,7 +560,7 @@ actor=Hero,Hero
 cover=Beach,OceanWave</code></pre>
         </section>
         <section class="level3">
-          <h3 id="85-各シーンを書く">8.5 各シーンを書く</h3>
+          <h3 id="各シーンを書く">各シーンを書く</h3>
           <p>シーンごとに、背景、表示、セリフ、移動、待機を順番に書きます。</p>
           <pre class="language-text"><code class="language-text">---
 # scene 1
@@ -572,7 +572,7 @@ action=Hero:say:冒険に出発だ！:2
 action=wait:1</code></pre>
         </section>
         <section class="level3">
-          <h3 id="86-ポーズ認識を追加する">8.6 ポーズ認識を追加する</h3>
+          <h3 id="ポーズ認識を追加する">ポーズ認識を追加する</h3>
           <p>ポーズを使うシーンには、まず <code>TMPoseURL</code> を書きます。</p>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/pose-model/</code></pre>
           <p>次に <code>pose</code> アクションを書きます。</p>
@@ -582,7 +582,7 @@ action=wait:1</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="9-書き方の注意">9. 書き方の注意</h2>
+        <h2 id="書き方の注意">書き方の注意</h2>
         <table>
           <thead>
             <tr>
@@ -639,9 +639,9 @@ action=wait:1</code></pre>
         </table>
       </section>
       <section class="level2">
-        <h2 id="10-テスト方法">10. テスト方法</h2>
+        <h2 id="テスト方法">テスト方法</h2>
         <section class="level3">
-          <h3 id="101-まず文法を確認する">10.1 まず文法を確認する</h3>
+          <h3 id="まず文法を確認する">まず文法を確認する</h3>
           <ul>
             <li><code>kamishibai=3.1</code> がある</li>
             <li><code>asset</code>, <code>actor</code>, <code>cover</code> が正しく書かれている</li>
@@ -651,7 +651,7 @@ action=wait:1</code></pre>
           </ul>
         </section>
         <section class="level3">
-          <h3 id="102-次にアセットを確認する">10.2 次にアセットを確認する</h3>
+          <h3 id="次にアセットを確認する">次にアセットを確認する</h3>
           <ul>
             <li>URLをブラウザで開ける</li>
             <li>画像が表示される</li>
@@ -660,7 +660,7 @@ action=wait:1</code></pre>
           </ul>
         </section>
         <section class="level3">
-          <h3 id="103-最後に演出を確認する">10.3 最後に演出を確認する</h3>
+          <h3 id="最後に演出を確認する">最後に演出を確認する</h3>
           <ul>
             <li>背景が意図通りに切り替わる</li>
             <li>アクターの位置とサイズが適切</li>
@@ -672,13 +672,13 @@ action=wait:1</code></pre>
         </section>
       </section>
       <section class="level2">
-        <h2 id="11-改善しやすい台本にするコツ">11. 改善しやすい台本にするコツ</h2>
+        <h2 id="改善しやすい台本にするコツ">改善しやすい台本にするコツ</h2>
         <section class="level3">
-          <h3 id="111-シーン番号をコメントで書く">11.1 シーン番号をコメントで書く</h3>
+          <h3 id="シーン番号をコメントで書く">シーン番号をコメントで書く</h3>
           <pre class="language-text"><code class="language-text"># scene 1: 浜辺でカメと出会う</code></pre>
         </section>
         <section class="level3">
-          <h3 id="112-演出のまとまりごとに空行を入れる">11.2 演出のまとまりごとに空行を入れる</h3>
+          <h3 id="演出のまとまりごとに空行を入れる">演出のまとまりごとに空行を入れる</h3>
           <pre class="language-text"><code class="language-text">action=stage:Beach1
 action=wait:1
 
@@ -686,7 +686,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Urashima:say:今日は浜辺を散歩しよう。:2</code></pre>
         </section>
         <section class="level3">
-          <h3 id="113-ポーズの意味が分かる名前を使う">11.3 ポーズの意味が分かる名前を使う</h3>
+          <h3 id="ポーズの意味が分かる名前を使う">ポーズの意味が分かる名前を使う</h3>
           <p>よい例:</p>
           <pre class="language-text"><code class="language-text">help
 open1
@@ -698,12 +698,12 @@ pose2
 abc</code></pre>
         </section>
         <section class="level3">
-          <h3 id="114-長い物語は小さく作る">11.4 長い物語は小さく作る</h3>
+          <h3 id="長い物語は小さく作る">長い物語は小さく作る</h3>
           <p>最初に1シーンだけ作って動かし、確認後に2シーン目を足すと、文法エラーや不足アセットをシーン単位で特定できます。紙芝居制作は、料理でいえば味見しながら作るタイプです。いきなり鍋いっぱいにしないのがコツです。</p>
         </section>
       </section>
       <section class="level2">
-        <h2 id="12-作成チェックリスト">12. 作成チェックリスト</h2>
+        <h2 id="作成チェックリスト">作成チェックリスト</h2>
         <ul class="contains-task-list">
           <li class="task-list-item"><input type="checkbox" disabled=""> 物語をシーンに分けた</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> 背景画像を用意した</li>
@@ -723,7 +723,7 @@ abc</code></pre>
         </ul>
       </section>
       <section class="level2">
-        <h2 id="13-関連ドキュメント">13. 関連ドキュメント</h2>
+        <h2 id="関連ドキュメント">関連ドキュメント</h2>
         <ul>
           <li><code>03-user-guide.md</code>: 紙芝居アプリの操作方法</li>
           <li><code>05-command-reference.md</code>: コマンドとアクションの詳細仕様</li>

@@ -1,0 +1,269 @@
+@charset "UTF-8";
+
+:root {
+  --ink: #302823;
+  --muted: #756960;
+  --paper: #fffdf8;
+  --canvas: #f4eadc;
+  --accent: #9a3f2f;
+  --accent-soft: #f5dfd4;
+  --line: #d8c7b8;
+  --code: #f5efe8;
+  font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", sans-serif;
+  color: var(--ink);
+  line-height: 1.82;
+  font-size: 16px;
+}
+
+@page {
+  size: A4;
+  margin: 18mm 17mm 20mm;
+
+  @bottom-right {
+    content: counter(page);
+    color: #756960;
+    font-size: 8.5pt;
+    vertical-align: bottom;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--canvas);
+}
+
+body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3.5rem clamp(1.25rem, 5vw, 4.5rem) 5rem;
+  background: var(--paper);
+  box-shadow: 0 12px 44px rgb(89 61 43 / 12%);
+}
+
+body[data-publication-section="cover"] {
+  page: cover;
+}
+
+.cover-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 2rem;
+}
+
+.cover-navigation a {
+  display: inline-block;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.35rem;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.38;
+  break-after: avoid;
+}
+
+h1 {
+  margin: 0 0 2.6rem;
+  padding: 1.8rem 0 1.2rem;
+  border-top: 8px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+  font-size: clamp(2rem, 6vw, 3.45rem);
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  margin-top: 3.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--accent);
+  font-size: 1.65rem;
+}
+
+h3 {
+  margin-top: 2.2rem;
+  color: var(--accent);
+  font-size: 1.18rem;
+}
+
+p,
+li,
+table,
+blockquote,
+pre {
+  orphans: 3;
+  widows: 3;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+blockquote {
+  margin: 1.8rem 0;
+  padding: 0.85rem 1.2rem;
+  border-left: 5px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+blockquote > :first-child {
+  margin-top: 0;
+}
+
+blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+table {
+  width: 100%;
+  margin: 1.35rem 0 1.8rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  break-inside: avoid;
+}
+
+th,
+td {
+  padding: 0.58rem 0.68rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+code,
+pre {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.25em;
+  background: var(--code);
+  font-size: 0.88em;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--code);
+  line-height: 1.58;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  break-inside: avoid;
+}
+
+pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+
+rt,
+rp {
+  font-size: 0.52em;
+  font-weight: 500;
+}
+
+.furigana-build-note {
+  margin: -1.45rem 0 2.4rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+hr {
+  margin: 3rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+@media print {
+  @page cover {
+    @top-left {
+      content: none;
+    }
+
+    @bottom-right {
+      content: none;
+    }
+  }
+
+  .cover-navigation {
+    display: none;
+  }
+
+  body[data-publication-section="body"] > section.level1 + section.level1 {
+    break-before: page;
+  }
+
+  :root {
+    font-size: 10.2pt;
+  }
+
+  html,
+  body {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: white;
+    box-shadow: none;
+  }
+
+  h1 {
+    margin-top: 0;
+    font-size: 25pt;
+  }
+
+  h2 {
+    margin-top: 2.4rem;
+    font-size: 16pt;
+  }
+
+  h3 {
+    font-size: 12pt;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  img {
+    max-height: 235mm;
+    object-fit: contain;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    padding-top: 1.5rem;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    font-size: 0.84rem;
+  }
+}
