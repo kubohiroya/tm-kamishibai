@@ -230,9 +230,11 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     assert(history.includes(feature), `history.md does not document the ${feature} migration.`);
   }
 
-  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /setLoadingCostume=loading1,loading2,loading3/u);
-  assert.match(readme, /Loading用.*分子・分母/u);
+  assert.match(
+    sources.get('03-command-reference.md'),
+    /setLoadingCostume=loading1,loading2,loading3/u,
+  );
+  assert.match(sources.get('01-user-guide.md'), /Loading.*分子・分母/u);
 });
 
 test('keeps general guides aligned with artifact modes, UI text, and public samples', () => {

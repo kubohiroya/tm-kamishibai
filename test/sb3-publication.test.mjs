@@ -26,12 +26,20 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
 });
 
 test('links and documents the generated downloadable SB3', async () => {
-  const [downloadPage, developerGuide, readme, userGuide] = await Promise.all([
+  const [
+    downloadPage,
+    developerGuide,
+    readme,
+    userGuide,
+    packageJsonSource,
+  ] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/01-user-guide.md'), 'utf8'),
+    readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
+  const packageJson = JSON.parse(packageJsonSource);
 
   assert.match(downloadPage, /href="kamishibai\.sb3" download/u);
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
@@ -46,17 +54,18 @@ test('links and documents the generated downloadable SB3', async () => {
     assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
   }
   assert.match(developerGuide, /`app\/`[^\n]*正本/u);
-  for (const document of [developerGuide, readme]) {
-    assert.match(document, /github\.com\/kubohiroya\/sb3-toolchain/u);
-    assert.match(
-      document,
-      /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u,
-      'SB3 toolchain dependency must use a fixed commit.',
-    );
-  }
+  assert.match(developerGuide, /github\.com\/kubohiroya\/sb3-toolchain/u);
+  assert.match(developerGuide, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
+  assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
+  assert.match(
+    packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
+    /^github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}$/u,
+    'SB3 toolchain dependency must use a fixed commit.',
+  );
+  assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(readme, /`dist\/downloads\/kamishibai\.sb3`/u);
+  assert.match(developerGuide, /`dist\/downloads\/kamishibai\.sb3`/u);
   assert.match(userGuide, /kubohiroya\.github\.io\/tmpose-kamishibai\/downloads\//u);
   assert.match(
     userGuide,
@@ -68,7 +77,6 @@ test('links and documents the generated downloadable SB3', async () => {
       /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.1/u,
       'Builder installation must use the fixed npm version.',
     );
-    assert.match(document, /pnpm install --frozen-lockfile/u);
     assert.doesNotMatch(
       document,
       /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
@@ -78,6 +86,9 @@ test('links and documents the generated downloadable SB3', async () => {
     assert.match(document, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
     assert.match(document, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
   }
+  assert.match(developerGuide, /pnpm install --frozen-lockfile/u);
+  assert.match(readme, /\[開発者ガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
+  assert.doesNotMatch(readme, /setLoadingCostume=/u);
 });
 
 test('links the public sample site without restoring the retired local page', async () => {
