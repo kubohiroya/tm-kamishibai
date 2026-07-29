@@ -488,16 +488,21 @@ callback messageです。`debugTestCamera`は通常フローに送信元を持�
 主要状態はStageが所有します。UI表示そのものを状態の正本にせず、runtime variable、
 broadcast、実行中のcustom blockから導出します。
 
-| 状態          | 入口                         | 主な出口                                                   |
-| ------------- | ---------------------------- | ---------------------------------------------------------- |
-| 初期化        | green flag                   | `showTitle`                                                |
-| title         | `showTitle`                  | 組み込み台本ならStage clickで`startStory`、それ以外はcover |
-| cover／menu   | `showCover`または`stopStory` | open／reloadで`startStory`、title buttonで`showTitle`      |
-| 台本準備      | `startStory`                 | 正常ならasset loadingとscene実行、異常なら`invalidScript`  |
-| asset loading | `create asset`               | `assetLoadingCompleted`後にscene実行                       |
-| scene実行     | `exec scene # %s with %s`    | 次scene／branch、または最終sceneで`stopStory`              |
-| action実行    | `exec actionList`            | Rightでaction境界、Downでscene境界、完了で次action         |
-| pose待機      | `exec pose action %s`        | pose成立、Right／Down、エラーでaction実行へ戻る            |
+| 状態                     | 入口                                              | 主な出口                                                             |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------------- |
+| 初期化                   | green flag                                        | `showTitle`                                                          |
+| title                    | `showTitle`                                       | 組み込み台本ならStage clickで`startStory`、それ以外はcover           |
+| cover／menu              | `showCover`または`stopStory`                      | open／reloadで`startStory`、title buttonで`showTitle`                |
+| 台本準備                 | `startStory`                                      | 正常ならasset loadingとscene実行、検証異常なら`invalidScript`        |
+| asset loading            | `create asset`                                    | `assetLoadingCompleted`後にscene実行                                 |
+| scene実行                | `exec scene # %s with %s`                         | 次scene／branch、最終sceneで`stopStory`、解析異常で`invalidScript`   |
+| action実行               | `exec actionList`                                 | Rightでaction境界、Downでscene境界、完了で次action                   |
+| pose待機                 | `exec pose action %s`                             | pose成立、Right／Downでaction実行へ戻る                              |
+| 台本エラー表示・実行停止 | 台本・command・scene解析エラー時の`invalidScript` | `prompt`が`ui.invalidScript`を表示し、送信元の`stop all`で実行を停止 |
+
+`invalidScript`はpose待機への遷移ではありません。Stageは台本検証、command解析、
+scene解析のエラー時にこのmessageを送信し、各送信箇所の直後に`stop all`を実行します。
+`prompt`はmessageを受信すると`ui.invalidScript`のskinを設定して表示します。
 
 `skipMode`は要求、`skipContext`は消費可能な境界です。要求はtitle、action、pose、sceneの
 該当境界だけが消費し、scene開始、cover、stopでclearします。`nextSceneLabel`はkey／touch
