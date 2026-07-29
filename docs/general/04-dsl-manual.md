@@ -731,10 +731,10 @@ abc
 
 ## 13. 関連ドキュメント
 
-- `01-user-guide.md`: 紙芝居アプリの操作方法
-- `03-command-reference.md`: コマンドとアクションの詳細仕様
-- `04-executive-summary-adult.md`: 大人向け概要説明
-- `05-executive-summary-kids.md`: 子供向け概要説明
+- `03-user-guide.md`: 紙芝居アプリの操作方法
+- `05-command-reference.md`: コマンドとアクションの詳細仕様
+- `01-executive-summary-adult.md`: 大人向け概要説明
+- `02-executive-summary-kids.md`: 子供向け概要説明
 - `06-developer-guide.md`: アプリ本体と関連ライブラリの開発者向け情報
 - `07-internal-specification.md`: アプリ内部構造、成果物、検証、公開の仕様
 - `history.md`: 紙芝居DSL 2.0から3.1への変更履歴

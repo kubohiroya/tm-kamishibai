@@ -38,7 +38,7 @@ test('links and documents the generated downloadable SB3', async () => {
     readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
-    readFile(path.join(projectRoot, 'docs/general/01-user-guide.md'), 'utf8'),
+    readFile(path.join(projectRoot, 'docs/general/03-user-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);

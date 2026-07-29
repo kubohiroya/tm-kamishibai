@@ -151,10 +151,10 @@ action=Urashima:pose:Urashima-help-1:help:SquishPop
 
 ## 11. もっとくわしく知りたいとき
 
-- `01-user-guide.md`: アプリの使い方
-- `02-dsl-manual.md`: 台本の作り方
-- `03-command-reference.md`: 使える命令の一覧
-- `04-executive-summary-adult.md`: 大人向けの説明
+- `03-user-guide.md`: アプリの使い方
+- `04-dsl-manual.md`: 台本の作り方
+- `05-command-reference.md`: 使える命令の一覧
+- `01-executive-summary-adult.md`: 大人向けの説明
 - `06-developer-guide.md`: アプリを開発する人向けの説明
 - `07-internal-specification.md`: アプリの中のしくみを調べる人向けの説明
 - `history.md`: 紙しばいDSL 2.0から3.1への変わり方

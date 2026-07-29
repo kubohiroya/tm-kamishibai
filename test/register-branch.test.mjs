@@ -8,10 +8,10 @@ import {loadKamishibaiProject} from './helpers/sb3-project.mjs';
 const project = loadKamishibaiProject();
 const stage = project.targets.find((target) => target.isStage);
 const relatedDocumentation = [
-  '01-user-guide.md',
-  '02-dsl-manual.md',
-  '03-command-reference.md',
-  '04-executive-summary-adult.md',
+  '03-user-guide.md',
+  '04-dsl-manual.md',
+  '05-command-reference.md',
+  '01-executive-summary-adult.md',
 ].map((filename) => ({
   filename,
   source: readFileSync(new URL(`../docs/general/${filename}`, import.meta.url), 'utf8'),
@@ -108,7 +108,7 @@ test('documents equality comparisons as supported syntax', () => {
     );
   }
 
-  for (const filename of ['02-dsl-manual.md', '03-command-reference.md']) {
+  for (const filename of ['04-dsl-manual.md', '05-command-reference.md']) {
     const source = relatedDocumentation.find((document) => document.filename === filename).source;
     for (const operator of ['==', '!=', '===', '!==']) {
       assert(source.includes(`\`${operator}\``), `${filename} does not document ${operator}.`);

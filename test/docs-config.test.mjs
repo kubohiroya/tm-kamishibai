@@ -202,10 +202,23 @@ test('defines the general documents with furigana only for the kids summary', ()
   assert.equal(generalDocumentConfig.outputDirectory, 'general');
   assert.equal(generalDocumentConfig.documents.length, 8);
   assert.deepEqual(
+    generalDocumentConfig.documents.map(({sourceFilename}) => sourceFilename),
+    [
+      '01-executive-summary-adult.md',
+      '02-executive-summary-kids.md',
+      '03-user-guide.md',
+      '04-dsl-manual.md',
+      '05-command-reference.md',
+      '06-developer-guide.md',
+      '07-internal-specification.md',
+      'history.md',
+    ],
+  );
+  assert.deepEqual(
     generalDocumentConfig.documents
       .filter(({addFurigana}) => addFurigana === true)
       .map(({sourceFilename}) => sourceFilename),
-    ['05-executive-summary-kids.md'],
+    ['02-executive-summary-kids.md'],
   );
   assert.equal(generalVivliostyleConfig.viewerParam, 'bookMode=true');
   assert.deepEqual(
@@ -222,6 +235,13 @@ test('defines the general documents with furigana only for the kids summary', ()
       'utf8',
     );
     assert.match(source, new RegExp(`^# ${title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
+  }
+
+  const docsIndex = readFileSync(new URL('../site/docs/index.html', import.meta.url), 'utf8');
+  for (const {sourceFilename} of generalDocumentConfig.documents) {
+    const basename = sourceFilename.replace(/\.md$/u, '');
+    assert.match(docsIndex, new RegExp(`general/${basename}\\.html`, 'u'));
+    assert.match(docsIndex, new RegExp(`general/${basename}\\.pdf`, 'u'));
   }
 });
 
@@ -246,7 +266,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     assert(source.includes('Loading'), `${sourceFilename} does not document Loading.`);
   }
 
-  for (const sourceFilename of ['02-dsl-manual.md', '03-command-reference.md']) {
+  for (const sourceFilename of ['04-dsl-manual.md', '05-command-reference.md']) {
     const source = sources.get(sourceFilename);
     for (const feature of [
       'setLoadingCostume',
@@ -292,10 +312,10 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   }
 
   assert.match(
-    sources.get('03-command-reference.md'),
+    sources.get('05-command-reference.md'),
     /setLoadingCostume=loading1,loading2,loading3/u,
   );
-  assert.match(sources.get('01-user-guide.md'), /Loading.*分子・分母/u);
+  assert.match(sources.get('03-user-guide.md'), /Loading.*分子・分母/u);
 });
 
 test('keeps general guides aligned with artifact modes, UI text, and public samples', () => {
@@ -311,27 +331,27 @@ test('keeps general guides aligned with artifact modes, UI text, and public samp
       ),
     ]),
   );
-  const userGuide = sources.get('01-user-guide.md');
+  const userGuide = sources.get('03-user-guide.md');
   const developerGuide = sources.get('06-developer-guide.md');
   const internalSpecification = sources.get('07-internal-specification.md');
 
   for (const artifactMode of ['Web版', '`player`', '`editor`', '`generic`']) {
     assert(
       userGuide.includes(artifactMode),
-      `01-user-guide.md does not document the ${artifactMode} artifact mode.`,
+      `03-user-guide.md does not document the ${artifactMode} artifact mode.`,
     );
   }
   for (const uiText of ['ui.prompt', 'ui.invalidScript', 'Pose!', 'Invalid script']) {
     assert(
       userGuide.includes(uiText),
-      `01-user-guide.md does not document the ${uiText} UI text behavior.`,
+      `03-user-guide.md does not document the ${uiText} UI text behavior.`,
     );
   }
 
   for (const sourceFilename of [
-    '01-user-guide.md',
-    '02-dsl-manual.md',
-    '04-executive-summary-adult.md',
+    '03-user-guide.md',
+    '04-dsl-manual.md',
+    '01-executive-summary-adult.md',
     '06-developer-guide.md',
   ]) {
     assert.match(
