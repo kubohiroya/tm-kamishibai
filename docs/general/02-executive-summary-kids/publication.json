@@ -8,7 +8,7 @@
   "name": "紙芝居アプリ 概要説明書 子供向け",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-29T18:01:27.690Z",
+  "dateModified": "2026-07-29T18:25:50.628Z",
   "readingOrder": [
     {
       "url": "index.html",
@@ -100,6 +100,8 @@
     "images/image65.png",
     "images/image66.png",
     "images/internal-actor-clone-sequence.svg",
+    "images/internal-architecture-layers.svg",
+    "images/internal-runtime-architecture.svg",
     "images/internal-script-execution-sequence.svg",
     "images/internal-state-transition.svg",
     "images/model-upload.png",

@@ -2,6 +2,10 @@ const topRevealOffset = 8;
 const downwardThreshold = 24;
 const upwardThreshold = 12;
 
+export function shouldHideAppBarForFragment({hash, isDocumentPage}) {
+  return isDocumentPage && hash.length > 1 && hash !== '#main-content';
+}
+
 export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
   const currentY = Math.max(0, scrollY);
   const delta = currentY - state.lastY;
@@ -33,10 +37,15 @@ export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}
 }
 
 function initializeSiteAppBar(header) {
+  const shouldHideForCurrentFragment = () =>
+    shouldHideAppBarForFragment({
+      hash: window.location.hash,
+      isDocumentPage: document.body.classList.contains('site-document'),
+    });
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,
-    hidden: false,
+    hidden: shouldHideForCurrentFragment(),
   };
   let frameRequested = false;
 
@@ -51,6 +60,22 @@ function initializeSiteAppBar(header) {
       hidden: false,
     };
     render();
+  };
+  const conceal = () => {
+    state = {
+      ...state,
+      lastY: Math.max(0, window.scrollY),
+      accumulatedDelta: 0,
+      hidden: true,
+    };
+    render();
+  };
+  const synchronizeFragmentVisibility = () => {
+    if (shouldHideForCurrentFragment()) {
+      conceal();
+      return;
+    }
+    reveal();
   };
   const update = () => {
     frameRequested = false;
@@ -69,7 +94,8 @@ function initializeSiteAppBar(header) {
   };
 
   window.addEventListener('scroll', requestUpdate, {passive: true});
-  window.addEventListener('pageshow', reveal);
+  window.addEventListener('pageshow', synchronizeFragmentVisibility);
+  window.addEventListener('hashchange', synchronizeFragmentVisibility);
   header.addEventListener('focusin', reveal);
   render();
 }
