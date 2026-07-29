@@ -29,12 +29,14 @@ test('links and documents the generated downloadable SB3', async () => {
   const [
     downloadPage,
     developerGuide,
+    internalSpecification,
     readme,
     userGuide,
     packageJsonSource,
   ] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
+    readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/01-user-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
@@ -65,7 +67,7 @@ test('links and documents the generated downloadable SB3', async () => {
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(developerGuide, /`dist\/downloads\/kamishibai\.sb3`/u);
+  assert.match(internalSpecification, /`dist\/downloads\/kamishibai\.sb3`/u);
   assert.match(userGuide, /kubohiroya\.github\.io\/tmpose-kamishibai\/downloads\//u);
   assert.match(
     userGuide,
@@ -77,17 +79,19 @@ test('links and documents the generated downloadable SB3', async () => {
     'README installation must use the current fixed npm version.',
   );
   assert.match(
-    developerGuide,
+    internalSpecification,
     /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u,
   );
-  assert.match(developerGuide, /npm view @kubohiroya\/tmpose-kamishibai version/u);
-  for (const document of [developerGuide, readme]) {
+  assert.match(internalSpecification, /npm view @kubohiroya\/tmpose-kamishibai version/u);
+  for (const document of [developerGuide, internalSpecification, readme]) {
     assert.doesNotMatch(
       document,
       /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
       'Documentation must not use the retired Git tag installation path.',
     );
     assert.doesNotMatch(document, /allowBuilds/u);
+  }
+  for (const document of [developerGuide, readme]) {
     assert.match(document, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
     assert.match(document, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
   }
@@ -97,10 +101,14 @@ test('links and documents the generated downloadable SB3', async () => {
     'pnpm sb3:extensions:sync',
     'pnpm sb3:extensions:update -- OLD_ID --migrate-id NEW_ID',
     'pnpm run preview:docs',
-    'pnpm release:check',
-    'npm publish --access public',
   ]) {
     assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
+  }
+  for (const command of ['pnpm release:check', 'npm publish --access public']) {
+    assert(
+      internalSpecification.includes(command),
+      `Internal specification is missing: ${command}`,
+    );
   }
   for (const exportedName of [
     'buildSb3Bundle',
@@ -108,7 +116,10 @@ test('links and documents the generated downloadable SB3', async () => {
     'validateAssetManifest',
     'validateBundle',
   ]) {
-    assert(developerGuide.includes(exportedName), `Developer guide is missing: ${exportedName}`);
+    assert(
+      internalSpecification.includes(exportedName),
+      `Internal specification is missing: ${exportedName}`,
+    );
   }
   assert.match(readme, /\[開発者ガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
@@ -131,15 +142,15 @@ test('links the public sample site without restoring the retired local page', as
 });
 
 test('documents the generic, editor, and player artifact profiles', async () => {
-  const developerGuide = await readFile(
-    path.join(projectRoot, 'docs/general/06-developer-guide.md'),
+  const internalSpecification = await readFile(
+    path.join(projectRoot, 'docs/general/07-internal-specification.md'),
     'utf8',
   );
-  const profileSection = developerGuide.match(
-    /^### 2\.1 成果物プロファイル$(?<section>[\s\S]*?)(?=^### 2\.2 )/mu,
+  const profileSection = internalSpecification.match(
+    /^## 2\. 成果物プロファイル$(?<section>[\s\S]*?)(?=^## 3\. )/mu,
   )?.groups?.section;
 
-  assert(profileSection, 'Developer guide is missing the artifact profile section.');
+  assert(profileSection, 'Internal specification is missing the artifact profile section.');
   for (const profile of ['`generic`', '`editor`', '`player`']) {
     assert(profileSection.includes(profile), `Artifact profile is missing: ${profile}`);
   }
@@ -149,8 +160,11 @@ test('documents the generic, editor, and player artifact profiles', async () => 
   assert.match(profileSection, /`generic`[^\n]*`kamishibai\.sb3`[^\n]*非埋め込み[^\n]*非埋め込み/u);
   assert.match(profileSection, /`editor`[^\n]*`_urashima\.sb3`[^\n]*非埋め込み[^\n]*埋め込み/u);
   assert.match(profileSection, /`player`[^\n]*`urashima\.sb3`[^\n]*埋め込み[^\n]*埋め込み/u);
-  assert.match(profileSection, /builder APIとCLIが受け付ける`profile`は`editor`または`player`/u);
-  assert.match(profileSection, /`player`[^\n]*ファイル選択なし/u);
+  assert.match(
+    profileSection,
+    /builder APIとCLIが受け付ける\s*`profile`は`editor`または`player`/u,
+  );
+  assert.match(profileSection, /`player`[\s\S]*ファイル選択なし/u);
   assert.match(profileSection, /オンライン依存[^\n]*成果物manifest/u);
 });
 
