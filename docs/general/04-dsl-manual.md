@@ -356,6 +356,16 @@ action=transition:fadeUp
 
 `fadeOut` はステージを暗くし、`fadeUp` は明るく戻します。`reset` は明るさ効果を標準値へ戻します。背景切り替えの前後に置くと場面転換を滑らかに見せられます。
 
+白く飛ばしてから背景を切り替える場合は、次のように記述します。
+
+```text
+action=transition:fadeToWhite
+action=stage:次の背景
+action=transition:fadeFromWhite
+```
+
+`fadeToWhite`はステージの明るさを`+100`まで上げ、その状態を保持します。白飛び中に背景を切り替えたあと、`fadeFromWhite`で明るさを`0`へ戻すと、切替後の背景が徐々に見えるようになります。
+
 ### アクターを表示する
 
 ```text
