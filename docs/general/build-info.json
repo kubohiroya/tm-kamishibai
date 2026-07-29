@@ -92,7 +92,7 @@
     },
     {
       "sourceFilename": "06-developer-guide.md",
-      "title": "紙芝居アプリ ソフトウェア開発者向け資料",
+      "title": "紙芝居アプリ ソフトウェアメンテナンスガイド",
       "htmlFilename": "06-developer-guide.html",
       "pdfFilename": "06-developer-guide.pdf",
       "rubyApplied": false,

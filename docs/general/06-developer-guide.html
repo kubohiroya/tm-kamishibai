@@ -1,25 +1,36 @@
 <!DOCTYPE html><html lang="ja"><head>
   <link rel="icon" type="image/png" sizes="256x256" href="../../favicon.png">
     <meta charset="utf-8">
-    <title>紙芝居アプリ ソフトウェア開発者向け資料</title>
+    <title>紙芝居アプリ ソフトウェアメンテナンスガイド</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="theme.css">
     <link rel="stylesheet" type="text/css" href="general-theme.css">
   </head>
   <body>
     <section class="level1">
-      <h1 id="紙芝居アプリ-ソフトウェア開発者向け資料">紙芝居アプリ ソフトウェア開発者向け資料</h1>
+      <h1 id="紙芝居アプリ-ソフトウェアメンテナンスガイド">紙芝居アプリ ソフトウェアメンテナンスガイド</h1>
       <p>Copyright © 2026 Hiroya Kubo. この文書は<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>で提供します。</p>
       <p>
-        このガイドは、TMPose紙芝居のアプリ、SB3ソース、ビルダー、Webサイト、ドキュメントを
-        変更する開発者向けの入口です。アプリの内部構造、成果物、ビルダー仕様、検証、公開は
-        <a href="07-internal-specification.md">紙芝居アプリ内部仕様書</a>、台本の書式とコマンド仕様は
-        <a href="04-dsl-manual.md">台本DSLマニュアル</a>と<a href="05-command-reference.md">コマンドリファレンス</a>
-        を正本とします。
+        このガイドは、TMPose紙芝居の成果物とビルダーを利用し、アプリ、SB3ソース、
+        ビルダー、Webサイト、ドキュメントを変更・検証・公開するソフトウェア開発者向けの
+        作業資料です。次を本書の責務とします。
+      </p>
+      <ul>
+        <li>成果物プロファイルとSB3・台本変換ビルダーの外部契約</li>
+        <li>リポジトリの開発環境、構成、共通フロー、変更対象別手順</li>
+        <li>テスト、成果物検証、GitHub Pagesとnpmの公開手順</li>
+        <li>開発時のトラブルシューティング、ライセンス、秘密情報の扱い</li>
+      </ul>
+      <p>
+        汎用アプリSB3のtarget、変数、event、custom block、呼出し関係、状態遷移は
+        <a href="07-internal-specification.md">紙芝居アプリ内部仕様書</a>を正本とします。台本の書式と
+        コマンド仕様は<a href="04-dsl-manual.md">台本DSLマニュアル</a>と
+        <a href="05-command-reference.md">コマンドリファレンス</a>を参照してください。本書には、
+        これらの内部構造やDSL項目を重複して列挙しません。
       </p>
       <p>対象アプリ／DSL: <code>kamishibai=3.1</code></p>
       <p>過去のバージョンからの変更は<a href="history.md"><code>history.md</code></a>を参照してください。</p>
-      <p>このガイドの章は、次の3つの区分で並んでいます。</p>
+      <p>このガイドの章は、次の5つの区分で並んでいます。</p>
       <table>
         <thead>
           <tr>
@@ -31,25 +42,36 @@
         <tbody>
           <tr>
             <td>導入</td>
-            <td>管理範囲の理解から共通の開発フローまで</td>
+            <td>管理範囲、開発環境、リポジトリ構成、共通フロー</td>
             <td>初めて開発するときに、この順に読む</td>
           </tr>
           <tr>
+            <td>利用契約</td>
+            <td>成果物プロファイル、ビルダーのCLI／API／manifest</td>
+            <td>成果物を生成・利用するときに参照する</td>
+          </tr>
+          <tr>
             <td>変更対象別手順</td>
-            <td>アプリSB3、機能拡張、ビルダー、文書とサイト</td>
+            <td>アプリSB3、機能拡張、ビルダー実装、文書とサイト</td>
             <td>変更対象に応じて、必要な章だけを読む</td>
           </tr>
           <tr>
+            <td>検証と公開</td>
+            <td>自動・手動検証、GitHub Pages、npm、障害時の扱い</td>
+            <td>PRとリリースの完了条件として読む</td>
+          </tr>
+          <tr>
             <td>参照</td>
-            <td>関連プロジェクトと関連ドキュメント</td>
-            <td>関連プロジェクトや資料を探すときに参照する</td>
+            <td>関連プロジェクト、ライセンス、秘密情報、関連ドキュメント</td>
+            <td>関連する規約や資料を探すときに参照する</td>
           </tr>
         </tbody>
       </table>
       <p>
         「導入」では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
-        開発フローへ進みます。「変更対象別手順」は、この順に実施する一連の工程ではなく、
-        変更対象ごとに独立した手順です。「参照」は作業手順ではありません。
+        開発フローへ進みます。「利用契約」はビルダー実装の変更手順ではありません。
+        「変更対象別手順」は、この順に実施する一連の工程ではなく、変更対象ごとに独立した
+        手順です。「検証と公開」は対象変更に必要な確認を選び、標準チェックへ合流します。
       </p>
       <section class="level2">
         <h2 id="管理範囲と責務を理解する">管理範囲と責務を理解する</h2>
@@ -234,9 +256,238 @@
         <p>
           無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
           置換を行う前には、必ず<code>git status</code>と対象パスの差分を確認します。変更対象ごとの
-          テストと公開前チェックは<a href="07-internal-specification.md#verification">内部仕様書の検証</a>を
+          テストと公開前チェックは<a href="#verification" data-ref="chapter">「変更を検証する」</a>を
           参照してください。
         </p>
+      </section>
+      <section class="level2">
+        <h2 id="artifact-profiles">成果物プロファイルを理解する</h2>
+        <p>紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>プロファイル</th>
+              <th>例</th>
+              <th>台本</th>
+              <th>物語固有アセット</th>
+              <th>主な用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>generic</code></td>
+              <td><code>kamishibai.sb3</code></td>
+              <td>非埋め込み</td>
+              <td>非埋め込み</td>
+              <td>本体が配布する汎用雛形</td>
+            </tr>
+            <tr>
+              <td><code>editor</code></td>
+              <td><code>_urashima.sb3</code></td>
+              <td>非埋め込み</td>
+              <td>埋め込み</td>
+              <td>物語作成者の編集・動作確認</td>
+            </tr>
+            <tr>
+              <td><code>player</code></td>
+              <td><code>urashima.sb3</code></td>
+              <td>埋め込み</td>
+              <td>埋め込み</td>
+              <td>配布・再生、Packager Web版</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <code>generic</code>は<code>app/</code>から生成し、特定の物語を含めません。builder APIとCLIが受け付ける
+          <code>profile</code>は<code>editor</code>または<code>player</code>です。
+        </p>
+        <p>
+          <code>editor</code>と<code>player</code>は同じベースSB3、台本、アセットロックから生成します。両者の
+          変換済み台本とアセット参照を分岐させません。<code>player</code>は組み込み台本を予約変数へ保存し、
+          タイトル操作後にファイル選択なしで開始します。
+        </p>
+        <p>
+          <code>player</code>へ台本とアセットを組み込んでも、TMPoseモデル、カメラ、外部サービスまで
+          自動的にオフライン化されるわけではありません。残るオンライン依存は成果物manifestと
+          公開ページへ明記します。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="sb3-script-builder">SB3・台本変換ビルダーを利用する</h2>
+        <p>
+          この章はビルダー利用者に対する外部契約を示します。ビルダーの実装を変更する手順は
+          <a href="#builder-implementation" data-ref="chapter">「ビルダーの実装を変更する」</a>を
+          参照してください。汎用アプリSB3の内部構造は本章の対象外です。
+        </p>
+        <section class="level3">
+          <h3 id="導入">導入</h3>
+          <p>利用可能なバージョンを確認し、消費側で明示的に固定します。</p>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> view @kubohiroya/tmpose-kamishibai version
+<span class="token function">pnpm</span> <span class="token function">add</span> --save-exact @kubohiroya/tmpose-kamishibai@<span class="token operator">&lt;</span>VERSION<span class="token operator">&gt;</span></code></pre>
+          <p>生成したlockfileをcommitし、CIでは<code>pnpm install --frozen-lockfile</code>を使います。</p>
+        </section>
+        <section class="level3">
+          <h3 id="cli">CLI</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> <span class="token builtin class-name">exec</span> tmpose-kamishibai build-sb3 <span class="token punctuation">\</span>
+  --base kamishibai.sb3 <span class="token punctuation">\</span>
+  --script source.txt <span class="token punctuation">\</span>
+  --assets assets.lock.json <span class="token punctuation">\</span>
+  --output dist/sample <span class="token punctuation">\</span>
+  --profile editor</code></pre>
+          <p>
+            <code>--output</code>は拡張子を含まないベース名です。次の3ファイルを同じtransactionとして
+            生成します。
+          </p>
+          <pre class="language-text"><code class="language-text">dist/sample.sb3
+dist/sample.txt
+dist/sample.manifest.json</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>オプション</th>
+                <th>意味</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>--allow-file-root DIR</code></td>
+                <td><code>file:</code>の許可ルートを追加。複数回指定可能</td>
+              </tr>
+              <tr>
+                <td><code>--allow-http</code></td>
+                <td>平文HTTPを明示的に許可</td>
+              </tr>
+              <tr>
+                <td><code>--timeout-ms N</code></td>
+                <td>1リクエストのタイムアウト</td>
+              </tr>
+              <tr>
+                <td><code>--max-asset-bytes N</code></td>
+                <td>1アセットの最大バイト数</td>
+              </tr>
+              <tr>
+                <td><code>--max-script-bytes N</code></td>
+                <td>組み込み台本の最大バイト数</td>
+              </tr>
+              <tr>
+                <td><code>--max-redirects N</code></td>
+                <td>HTTPリダイレクト上限</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>完全な一覧は<code>pnpm exec tmpose-kamishibai --help</code>で確認します。</p>
+        </section>
+        <section class="level3">
+          <h3 id="javascript-api">JavaScript API</h3>
+          <pre class="language-js"><code class="language-js"><span class="token keyword module">import</span> <span class="token punctuation">{</span>
+  <span class="token known-class-name class-name">Sb3BuilderError</span><span class="token punctuation">,</span>
+  buildSb3Bundle<span class="token punctuation">,</span>
+  validateAssetManifest<span class="token punctuation">,</span>
+  validateBundle<span class="token punctuation">,</span>
+<span class="token punctuation">}</span> <span class="token keyword module">from</span> <span class="token string">'@kubohiroya/tmpose-kamishibai/builder'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword control-flow">await</span> <span class="token function">buildSb3Bundle</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  <span class="token literal-property property">baseSb3</span><span class="token operator">:</span> <span class="token string">'kamishibai.sb3'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">sourceScript</span><span class="token operator">:</span> <span class="token string">'source.txt'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">assetManifest</span><span class="token operator">:</span> <span class="token string">'assets.lock.json'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">outputDirectory</span><span class="token operator">:</span> <span class="token string">'dist'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">outputName</span><span class="token operator">:</span> <span class="token string">'sample'</span><span class="token punctuation">,</span>
+  <span class="token literal-property property">profile</span><span class="token operator">:</span> <span class="token string">'editor'</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token console class-name">console</span><span class="token punctuation">.</span><span class="token method function property-access">log</span><span class="token punctuation">(</span>result<span class="token punctuation">.</span><span class="token property-access">outputPaths</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
+          <p>
+            <code>baseSb3</code>と<code>sourceScript</code>にはファイルパスまたは<code>file:</code> URLを指定できます。
+            <code>assetManifest</code>にはファイルパス、<code>file:</code> URL、または検証対象のJavaScriptオブジェクトを
+            指定できます。相対<code>file:</code>を含むオブジェクトでは<code>manifestBaseDirectory</code>も指定します。
+          </p>
+          <p>
+            ネットワーク・ファイル取得は<code>allowedFileRoots</code>、<code>allowHttp</code>、<code>requestTimeoutMs</code>、
+            <code>maxAssetBytes</code>、<code>maxRedirects</code>で制限できます。<code>player</code>の組み込み台本上限は
+            <code>maxEmbeddedScriptBytes</code>で変更できます。
+          </p>
+          <p>
+            <code>buildSb3Bundle</code>は<code>manifest</code>と<code>outputPaths</code>を返します。入力・アセット・出力の問題は
+            <code>Sb3BuilderError</code>として処理段階とアセット情報を保持します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="アセットマニフェスト">アセットマニフェスト</h3>
+          <p>入力manifestは<code>formatVersion: 1</code>と1件以上の<code>assets</code>を持ちます。</p>
+          <pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"formatVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+  <span class="token property">"assets"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span>
+      <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"forest"</span><span class="token punctuation">,</span>
+      <span class="token property">"uri"</span><span class="token operator">:</span> <span class="token string">"file:assets/forest.svg"</span><span class="token punctuation">,</span>
+      <span class="token property">"kind"</span><span class="token operator">:</span> <span class="token string">"backdrop"</span><span class="token punctuation">,</span>
+      <span class="token property">"target"</span><span class="token operator">:</span> <span class="token string">"@stage"</span><span class="token punctuation">,</span>
+      <span class="token property">"sb3Name"</span><span class="token operator">:</span> <span class="token string">"森"</span><span class="token punctuation">,</span>
+      <span class="token property">"contentType"</span><span class="token operator">:</span> <span class="token string">"image/svg+xml"</span><span class="token punctuation">,</span>
+      <span class="token property">"dataFormat"</span><span class="token operator">:</span> <span class="token string">"svg"</span><span class="token punctuation">,</span>
+      <span class="token property">"size"</span><span class="token operator">:</span> <span class="token number">1234</span><span class="token punctuation">,</span>
+      <span class="token property">"sha256"</span><span class="token operator">:</span> <span class="token string">"&lt;64文字の16進数&gt;"</span><span class="token punctuation">,</span>
+      <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/"</span><span class="token punctuation">,</span>
+      <span class="token property">"metadata"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        <span class="token property">"bitmapResolution"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+        <span class="token property">"rotationCenterX"</span><span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
+        <span class="token property">"rotationCenterY"</span><span class="token operator">:</span> <span class="token number">180</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span>
+<span class="token punctuation">}</span></code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th><code>kind</code></th>
+                <th><code>target</code></th>
+                <th>変換後の台本参照</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>backdrop</code></td>
+                <td><code>@stage</code></td>
+                <td><code>backdrop:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>costume</code></td>
+                <td>スプライト名</td>
+                <td><code>costume:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>stageSound</code></td>
+                <td><code>@stage</code></td>
+                <td><code>sound:@stage:&lt;sb3Name&gt;</code></td>
+              </tr>
+              <tr>
+                <td><code>spriteSound</code></td>
+                <td>スプライト名</td>
+                <td><code>sound:&lt;target&gt;:&lt;sb3Name&gt;</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            DSL名、同一target内のSB3名、既存SB3のアセット名は重複できません。<code>license</code>には素材の
+            ライセンスまたは利用条件の識別情報と参照先を記録します。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="安全性と再現性">安全性と再現性</h3>
+          <ul>
+            <li><code>file:</code>は既定でmanifestのディレクトリ以下だけを許可し、<code>..</code>やsymlinkによる脱出を拒否する</li>
+            <li>HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する</li>
+            <li>Content-Type、実サイズ、ロック済みサイズ、SHA-256、timeout、redirectを検証する</li>
+            <li>ZIP entry順、timestamp、圧縮設定、JSON表現を固定する</li>
+            <li>SB3、変換済み台本、出力manifestの対応を確定前に再検証する</li>
+            <li>3成果物を一時領域で生成し、すべて成功した場合だけ置換する</li>
+            <li>失敗時は既存成果物を保持または復元する</li>
+          </ul>
+          <p>
+            同じ入力、固定依存、設定から生成したSB3、台本、manifestはbit-for-bitで一致しなければ
+            なりません。
+          </p>
+        </section>
       </section>
       <section class="level2">
         <h2 id="アプリsb3を変更する">アプリSB3を変更する</h2>
@@ -296,13 +547,14 @@
         </p>
       </section>
       <section class="level2">
-        <h2 id="ビルダーを変更する">ビルダーを変更する</h2>
+        <h2 id="builder-implementation">ビルダーの実装を変更する</h2>
         <p>
           公開APIは<code>src/builder/index.js</code>、CLIは<code>src/builder/cli.js</code>と<code>bin/</code>、仕様テストは
           <code>test/builder.test.mjs</code>にあります。公開API、CLI、アセットマニフェスト、決定的生成、
           transactional更新の現行仕様は
-          <a href="07-internal-specification.md#sb3-script-builder">内部仕様書のSB3・台本変換ビルダー</a>
-          を参照してください。
+          <a href="#sb3-script-builder" data-ref="chapter">「SB3・台本変換ビルダーを利用する」</a>を
+          参照してください。この章では仕様そのものを繰り返さず、実装変更時の確認事項だけを
+          扱います。
         </p>
         <p>APIまたはCLIを変更するときは次を同じ変更に含めます。</p>
         <ul>
@@ -344,6 +596,213 @@
           <code>{.unnumbered}</code>を付けます。本文から見出しを参照するときは、番号ではなく意味の変わらない
           IDを付けてリンクし、組版結果にも現在の章・節番号を表示する場合は、リンクへ
           <code>{data-ref="chapter"}</code>または<code>{data-ref="section"}</code>を付けます。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="verification">変更を検証する</h2>
+        <section class="level3">
+          <h3 id="変更対象ごとのテスト">変更対象ごとのテスト</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>変更対象</th>
+                <th>主なテスト</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>builder API／CLI</td>
+                <td><code>test/builder.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>展開SB3の構造</td>
+                <td><code>test/sb3-project.test.mjs</code>、<code>test/skip-mode.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>内部仕様書の構造一覧</td>
+                <td><code>test/internal-specification.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>TurboWarp実行結果</td>
+                <td><code>test/turbowarp-vm.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>入力、分岐、wait</td>
+                <td><code>test/async-input.test.mjs</code>、<code>test/register-branch.test.mjs</code>、<code>test/wait-action.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>文書、画像、ライセンス</td>
+                <td><code>test/docs-config.test.mjs</code>、<code>test/docs-images.test.mjs</code>、<code>test/documentation-license.test.mjs</code></td>
+              </tr>
+              <tr>
+                <td>公開物と汎用性</td>
+                <td><code>test/sb3-publication.test.mjs</code>、<code>test/build-freshness.test.mjs</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="level3">
+          <h3 id="標準チェック">標準チェック</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> lint
+<span class="token function">pnpm</span> <span class="token function">format</span>
+<span class="token function">pnpm</span> typecheck
+<span class="token function">pnpm</span> <span class="token builtin class-name">test</span>
+<span class="token function">pnpm</span> run build</code></pre>
+          <p>
+            GitHub ActionsはcleanなLinux環境で<code>pnpm install --frozen-lockfile</code>、<code>pnpm test</code>、
+            <code>pnpm build</code>を実行します。ローカルで成功しても、未追跡ファイルや既存生成物へ依存して
+            いないことをCIで確認します。
+          </p>
+          <p><code>pnpm run build</code>は少なくとも次を生成・検証します。</p>
+          <ul>
+            <li><code>dist/downloads/kamishibai.sb3</code></li>
+            <li>一般文書ごとのWeb Publication、HTML/PDF、Vivliostyle CLIが<code>h2</code>・<code>h3</code>までから生成する目次</li>
+            <li>参加者向け・スタッフ向け体験会資料</li>
+            <li>公開サイトのリンク、画像、目次、PDF bookmark、favicon</li>
+          </ul>
+          <p>SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて次を手動確認します。</p>
+          <ul>
+            <li>読込エラーがない</li>
+            <li>green flagでtitleとmenuが表示される</li>
+            <li>外部台本と組み込み台本の対象フローが開始できる</li>
+            <li>pause、Space、Right、Downの進行が意図どおり動く</li>
+            <li>Loading、画像、音声、テキストが正しく表示・再生される</li>
+          </ul>
+          <p>
+            内部構造を変更したPRでは、<code>app/project.source.json</code>と内部仕様書のtarget、変数、message、
+            hat、custom block一覧を同時に更新します。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="publication">公開する</h2>
+        <section class="level3">
+          <h3 id="github-pages">GitHub Pages</h3>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> run deploy</code></pre>
+          <p>
+            <code>predeploy</code>がフルbuildを行い、成功した<code>dist/</code>だけを<code>gh-pages</code>へ公開します。公開後は
+            top page、文書一覧、各カードのHTML／Vivliostyle Viewer／PDF、SB3 downloadを実際の
+            URLから確認します。
+          </p>
+          <p>
+            問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
+            deployします。生成済み<code>dist/</code>だけを手作業で修正しません。
+          </p>
+        </section>
+        <section class="level3">
+          <h3 id="npmパッケージ">npmパッケージ</h3>
+          <p>公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。</p>
+          <ol>
+            <li><code>package.json</code>、lockfile、<code>src/builder/constants.js</code>、READMEの導入例を同じversionへ更新する。</li>
+            <li>cleanなcommitで標準チェック、フルbuild、公開内容のdry-runを実行する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> release:check</code></pre>
+          <ol start="3">
+            <li>tarballのファイル一覧、license、size、CLI/APIを確認する。</li>
+            <li>Git worktreeではなく通常のclean cloneから公開する。</li>
+            <li>WebAuthnなどの認証を完了してpublic packageとして公開する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> publish --access public</code></pre>
+          <ol start="6">
+            <li>registry反映後にmetadataを確認する。</li>
+          </ol>
+          <pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> view @kubohiroya/tmpose-kamishibai@<span class="token operator">&lt;</span>VERSION<span class="token operator">&gt;</span> <span class="token punctuation">\</span>
+  version license dist-tags.latest dist.integrity --json</code></pre>
+          <ol start="7">
+            <li>
+              一時ディレクトリへ公開版を導入し、CLIの<code>--version</code>と
+              <code>@kubohiroya/tmpose-kamishibai/builder</code>のimportを確認する。
+            </li>
+            <li>公開に使った確定commitへannotated tagを作り、GitHub Releaseを作成する。</li>
+          </ol>
+          <p>
+            公開後に問題が見つかった場合は対象versionを<code>npm deprecate</code>し、修正版を新しいpatch
+            versionとして公開します。公開済みtarballやtagを差し替えません。
+          </p>
+        </section>
+      </section>
+      <section class="level2">
+        <h2 id="開発上の問題を解決する">開発上の問題を解決する</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>症状</th>
+              <th>確認と対応</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>sb3:import</code>が置換を拒否する</td>
+              <td><code>git status</code>と<code>git diff -- app</code>を確認し、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#%E6%97%A2%E5%AD%98%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%B8%E3%81%AE%E5%86%8Dimport">toolchainの手順</a>に従う</td>
+            </tr>
+            <tr>
+              <td><code>.app.rollback-*</code>や<code>.＜出力名＞.rollback-*</code>が残る</td>
+              <td>削除前に元出力と比較し、<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md#%E5%A4%B1%E6%95%97%E6%99%82%E3%81%AE%E6%89%B1%E3%81%84">toolchainの失敗時の扱い</a>に従う</td>
+            </tr>
+            <tr>
+              <td>埋め込み拡張が追跡refと異なる</td>
+              <td><code>pnpm sb3:extensions:status</code>で確認し、固定commitへ戻すなら<code>sync</code>、更新するなら<code>update</code>を使う</td>
+            </tr>
+            <tr>
+              <td>PDF生成browserが見つからない</td>
+              <td>Chrome/Chromiumを導入し、必要なら<code>VIVLIOSTYLE_CHROME_PATH</code>を設定する</td>
+            </tr>
+            <tr>
+              <td>ローカルだけtestが通る</td>
+              <td>生成物と未追跡ファイルを確認し、clean cloneと<code>pnpm install --frozen-lockfile</code>で再現する</td>
+            </tr>
+            <tr>
+              <td>builderが既存出力を更新しない</td>
+              <td>エラーの<code>stage</code>、asset名、URIを確認する。rollback領域が残っていないか確認する</td>
+            </tr>
+            <tr>
+              <td>公開直後にnpm registryが404になる</td>
+              <td>同じversionを再publishせず、npm公開pageとregistryの反映を待って確認する</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          復旧でGit履歴を破壊しません。公開済み変更は<code>git revert</code>または新しい修正PRで戻し、tagを
+          移動しません。
+        </p>
+      </section>
+      <section class="level2">
+        <h2 id="ライセンスと秘密情報を扱う">ライセンスと秘密情報を扱う</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>対象</th>
+              <th>ライセンス</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>docs/general/**</code></td>
+              <td>CC BY-SA 4.0</td>
+            </tr>
+            <tr>
+              <td><code>docs/workshops/**</code></td>
+              <td>Copyright © 2026 Hiroya Kubo. All rights reserved.</td>
+            </tr>
+            <tr>
+              <td>上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアと素材</td>
+              <td>MPL-2.0</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          詳細は<a href="../../LICENSES.md"><code>LICENSES.md</code></a>、<a href="LICENSE.md"><code>docs/general/LICENSE.md</code></a>、
+          <a href="../workshops/LICENSE.md"><code>docs/workshops/LICENSE.md</code></a>を参照してください。
+        </p>
+        <p>
+          第三者の画像、音声、font、model、機能拡張には個別のlicenseまたは利用条件が適用されます。
+          builderで組み込む素材はasset manifestの<code>license</code>へ由来を記録します。許諾が確認できない
+          素材を本体またはsampleへ追加しません。
+        </p>
+        <p>
+          token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本、manifest、生成HTMLへ
+          記録しません。認証情報は環境変数、OSのkeychain、GitHub Secretsなど、公開物へ含まれない
+          仕組みで渡します。
         </p>
       </section>
       <section class="level2">
@@ -427,7 +886,7 @@
           <li><a href="03-user-guide.md"><code>03-user-guide.md</code></a>: アプリの利用方法と成果物の使い分け</li>
           <li><a href="04-dsl-manual.md"><code>04-dsl-manual.md</code></a>: 台本の構造と書き方</li>
           <li><a href="05-command-reference.md"><code>05-command-reference.md</code></a>: コマンドとアクションの仕様</li>
-          <li><a href="07-internal-specification.md"><code>07-internal-specification.md</code></a>: アプリ内部構造、成果物、検証、公開</li>
+          <li><a href="07-internal-specification.md"><code>07-internal-specification.md</code></a>: 汎用アプリSB3の内部構造、呼出し関係、状態遷移</li>
           <li><a href="history.md"><code>history.md</code></a>: DSLとアプリの変更履歴</li>
           <li><a href="../../README.md"><code>README.md</code></a>: プロジェクト全体の入口と主要コマンド</li>
         </ul>

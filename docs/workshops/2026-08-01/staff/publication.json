@@ -8,7 +8,7 @@
   "name": "親子AIプログラミング体験会スタッフ向け資料2026年8月1日版",
   "author": "Hiroya Kubo",
   "inLanguage": "ja",
-  "dateModified": "2026-07-29T13:57:51.234Z",
+  "dateModified": "2026-07-29T17:15:44.240Z",
   "readingOrder": [
     {
       "url": "index.html",
@@ -94,6 +94,7 @@
     "images/image65.png",
     "images/image66.png",
     "images/internal-actor-clone-sequence.svg",
+    "images/internal-architecture-layers.svg",
     "images/internal-script-execution-sequence.svg",
     "images/internal-state-transition.svg",
     "images/model-upload.png",
