@@ -324,6 +324,27 @@ SB3内のcostume、backdrop、sound、textや、外部URLの画像・音声を�
 したがって、このアプリ全体は、紙芝居DSLを解析・実行する処理系であり、その実行基盤
 （runtime）でもあります。
 
+#### 台本からアクターclone生成までのシーケンス
+
+アクターは、台本準備時に`actor=` commandから生成します。これは生成済みのアクターへ
+Actor actionを送る処理とは実行時期もデータの渡し方も異なるため、別の図に示します。
+
+![台本のactor定義からアクターcloneを生成するシーケンス](../images/internal-actor-clone-sequence.svg)
+
+`exec command %s %s`は`actor=`の値を`actorList`へ追加します。各値は
+`アクター名,初期skin名`の形式です。その後、Stageの`create actor`が`actorList`を順に読み、
+各値をthread variableの`name`と`skin`へ分けます。Stageは共有runtime variableの
+`actionTarget`へ`name`、`actionParam`へ`skin`を設定してから、`Actor` targetのcloneを
+作ります。
+
+clone開始hatは、`actionTarget`をそのcloneのスプライトローカル変数`actorName`へ保存し、
+`actionParam`をTurboWarp Asset Managerへ渡して初期skinを設定します。Stageはcloneを
+作るたびに0.1秒待ち、この初期化が走る機会を設けてから、共有runtime variableを次の
+アクター用の値で上書きします。clone生成時には`execActorAction`をbroadcastしません。
+
+`Actor` target本体はcloneの雛形として非表示です。cloneはこの表示状態を引き継ぐため、
+生成直後も非表示であり、sceneの後続のActor actionによって必要な時点で表示されます。
+
 #### 台本からActor actionまでのシーケンス
 
 台本ファイルからActor内の処理までを、データの変換と実行の順に並べると次のようになります。
@@ -342,7 +363,8 @@ messageはすべての`Actor` cloneが受け取りますが、実際に処理す
 
 `Stage`は台本を`sceneList`、`commandList`、`actionList`へ段階的に変換します。
 さらにsceneと共有runtime状態を管理し、Stage actionを実行します。`Actor` cloneの責務は、
-4.2で配送されたActor actionのうち自分を対象とするものを実行することです。
+生成時に自分の`actorName`と初期skinを確定し、その後、4.2で配送されたActor actionのうち
+自分を対象とするものを実行することです。
 
 UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
 Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ
