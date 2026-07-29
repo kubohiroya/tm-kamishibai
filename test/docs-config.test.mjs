@@ -192,43 +192,55 @@ test('publishes the current software developer guide', () => {
     'utf8',
   );
   const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
-  assert.match(source, /^# 紙芝居アプリ ソフトウェア開発者向け資料$/mu);
+  assert.match(source, /^# 紙芝居アプリ ソフトウェアメンテナンスガイド$/mu);
   for (const heading of [
     '管理範囲と責務を理解する',
     '開発環境を準備する',
     'リポジトリ構成を把握する',
     '共通の開発フローに従う',
+    '成果物プロファイルを理解する {#artifact-profiles}',
+    'SB3・台本変換ビルダーを利用する {#sb3-script-builder}',
     'アプリSB3を変更する',
     '埋め込み機能拡張を更新する',
-    'ビルダーを変更する',
+    'ビルダーの実装を変更する {#builder-implementation}',
     'ドキュメントとサイトを変更する',
+    '変更を検証する {#verification}',
+    '公開する {#publication}',
+    '開発上の問題を解決する',
+    'ライセンスと秘密情報を扱う',
     '関連プロジェクトを確認する',
     '関連ドキュメントを確認する',
   ]) {
-    assert.match(source, new RegExp(`^## ${heading}$`, 'mu'));
+    const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    assert.match(source, new RegExp(`^## ${escapedHeading}$`, 'mu'));
   }
   assert.match(
     source,
-    /\| 導入\s+\| 管理範囲の理解から共通の開発フローまで\s+\| 初めて開発するときに、この順に読む/u,
+    /\| 導入\s+\| 管理範囲、開発環境、リポジトリ構成、共通フロー\s+\| 初めて開発するときに、この順に読む/u,
   );
   assert.match(
     source,
-    /\| 変更対象別手順\s+\| アプリSB3、機能拡張、ビルダー、文書とサイト\s+\| 変更対象に応じて、必要な章だけを読む/u,
+    /\| 利用契約\s+\| 成果物プロファイル、ビルダーのCLI／API／manifest\s+\| 成果物を生成・利用するときに参照する/u,
   );
   assert.match(
     source,
-    /\| 参照\s+\| 関連プロジェクトと関連ドキュメント\s+\| 関連プロジェクトや資料を探すときに参照する/u,
+    /\| 変更対象別手順\s+\| アプリSB3、機能拡張、ビルダー実装、文書とサイト\s+\| 変更対象に応じて、必要な章だけを読む/u,
   );
+  assert.match(
+    source,
+    /\| 検証と公開\s+\| 自動・手動検証、GitHub Pages、npm、障害時の扱い\s+\| PRとリリースの完了条件として読む/u,
+  );
+  assert.match(source, /「利用契約」はビルダー実装の変更手順ではありません/u);
   assert.match(source, /「変更対象別手順」は、この順に実施する一連の工程ではなく、/u);
-  assert.match(source, /「参照」は作業手順ではありません/u);
   assert.match(source, /<div class="print-page-break" aria-hidden="true"><\/div>/u);
   assert.match(generalTheme, /\.print-page-break\s*\{\s*break-before:\s*page;/u);
   const chapterHeadings = [...source.matchAll(/^## (.+)$/gmu)].map(([, heading]) => heading);
-  assert.equal(chapterHeadings.length, 10);
+  assert.equal(chapterHeadings.length, 16);
   for (const heading of chapterHeadings) {
+    const plainHeading = heading.replace(/\s+\{#[^}]+\}$/u, '');
     assert.match(
-      heading,
-      /(?:理解する|準備する|把握する|従う|変更する|更新する|確認する)$/u,
+      plainHeading,
+      /(?:理解する|準備する|把握する|従う|利用する|変更する|更新する|検証する|公開する|解決する|扱う|確認する)$/u,
       `Chapter heading is not action-oriented: ${heading}`,
     );
   }
@@ -437,7 +449,12 @@ test('keeps general guides aligned with artifact modes, UI text, and public samp
 
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(internalSpecification, /^## 成果物プロファイル$/mu);
+  assert.match(developerGuide, /^## 成果物プロファイルを理解する \{#artifact-profiles\}$/mu);
+  assert.match(developerGuide, /^## SB3・台本変換ビルダーを利用する \{#sb3-script-builder\}$/mu);
+  assert.doesNotMatch(internalSpecification, /^## 成果物プロファイル/mu);
+  assert.doesNotMatch(internalSpecification, /^## SB3・台本変換ビルダー/mu);
+  assert.doesNotMatch(internalSpecification, /^## 検証/mu);
+  assert.doesNotMatch(internalSpecification, /^## 公開/mu);
 
   for (const [sourceFilename, source] of sources) {
     if (sourceFilename === 'history.md') continue;

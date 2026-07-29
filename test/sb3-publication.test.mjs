@@ -69,7 +69,7 @@ test('links and documents the generated downloadable SB3', async () => {
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(internalSpecification, /`dist\/downloads\/kamishibai\.sb3`/u);
+  assert.match(developerGuide, /`dist\/downloads\/kamishibai\.sb3`/u);
   assert.match(userGuide, /kubohiroya\.github\.io\/tmpose-kamishibai\/downloads\//u);
   assert.match(
     userGuide,
@@ -81,10 +81,10 @@ test('links and documents the generated downloadable SB3', async () => {
     'README installation must use the current fixed npm version.',
   );
   assert.match(
-    internalSpecification,
+    developerGuide,
     /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u,
   );
-  assert.match(internalSpecification, /npm view @kubohiroya\/tmpose-kamishibai version/u);
+  assert.match(developerGuide, /npm view @kubohiroya\/tmpose-kamishibai version/u);
   for (const document of [developerGuide, internalSpecification, readme]) {
     assert.doesNotMatch(
       document,
@@ -107,10 +107,7 @@ test('links and documents the generated downloadable SB3', async () => {
     assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
   }
   for (const command of ['pnpm release:check', 'npm publish --access public']) {
-    assert(
-      internalSpecification.includes(command),
-      `Internal specification is missing: ${command}`,
-    );
+    assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
   }
   for (const exportedName of [
     'buildSb3Bundle',
@@ -118,12 +115,9 @@ test('links and documents the generated downloadable SB3', async () => {
     'validateAssetManifest',
     'validateBundle',
   ]) {
-    assert(
-      internalSpecification.includes(exportedName),
-      `Internal specification is missing: ${exportedName}`,
-    );
+    assert(developerGuide.includes(exportedName), `Developer guide is missing: ${exportedName}`);
   }
-  assert.match(readme, /\[開発者ガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
+  assert.match(readme, /\[メンテナンスガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
 });
 
@@ -173,15 +167,15 @@ test('links the public sample site without restoring the retired local page', as
 });
 
 test('documents the generic, editor, and player artifact profiles', async () => {
-  const internalSpecification = await readFile(
-    path.join(projectRoot, 'docs/general/07-internal-specification.md'),
+  const developerGuide = await readFile(
+    path.join(projectRoot, 'docs/general/06-developer-guide.md'),
     'utf8',
   );
-  const profileSection = internalSpecification.match(
-    /^## 成果物プロファイル$(?<section>[\s\S]*?)(?=^## SB3・台本変換ビルダー \{#sb3-script-builder\}$)/mu,
+  const profileSection = developerGuide.match(
+    /^## 成果物プロファイルを理解する \{#artifact-profiles\}$(?<section>[\s\S]*?)(?=^## SB3・台本変換ビルダーを利用する \{#sb3-script-builder\}$)/mu,
   )?.groups?.section;
 
-  assert(profileSection, 'Internal specification is missing the artifact profile section.');
+  assert(profileSection, 'Developer guide is missing the artifact profile section.');
   for (const profile of ['`generic`', '`editor`', '`player`']) {
     assert(profileSection.includes(profile), `Artifact profile is missing: ${profile}`);
   }

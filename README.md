@@ -31,7 +31,7 @@ pnpm exec tmpose-kamishibai build-sb3 \
   --profile editor
 ```
 
-API、アセットマニフェスト、安全設定、出力形式については[開発者ガイド](docs/general/06-developer-guide.md)を参照してください。
+API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](docs/general/06-developer-guide.md)を参照してください。
 
 ## このリポジトリを開発する
 
@@ -85,7 +85,7 @@ pnpm install
 - [利用者ガイド](docs/general/03-user-guide.md)
 - [台本DSLマニュアル](docs/general/04-dsl-manual.md)
 - [コマンドリファレンス](docs/general/05-command-reference.md)
-- [開発者ガイド](docs/general/06-developer-guide.md)
+- [メンテナンスガイド](docs/general/06-developer-guide.md)
 - [内部仕様書](docs/general/07-internal-specification.md)
 - [変更履歴](docs/general/history.md)
 - [公開ドキュメント一覧](https://kubohiroya.github.io/tmpose-kamishibai/docs/)

@@ -13,6 +13,8 @@ const [
   specification,
   developerGuide,
   docsIndex,
+  architectureLayers,
+  runtimeArchitecture,
   stateDiagram,
   actorCloneSequence,
   scriptExecutionSequence,
@@ -21,6 +23,8 @@ const [
   readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
   readFile(path.join(projectRoot, 'site/docs/index.html'), 'utf8'),
+  readFile(path.join(projectRoot, 'docs/images/internal-architecture-layers.svg'), 'utf8'),
+  readFile(path.join(projectRoot, 'docs/images/internal-runtime-architecture.svg'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-state-transition.svg'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-actor-clone-sequence.svg'), 'utf8'),
   readFile(path.join(projectRoot, 'docs/images/internal-script-execution-sequence.svg'), 'utf8'),
@@ -56,9 +60,36 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(specification, /^# 紙芝居アプリ内部仕様書$/mu);
   assert.match(specification, /\[CC BY-SA 4\.0\]/u);
   assert.match(developerGuide, /\[紙芝居アプリ内部仕様書\]\(07-internal-specification\.md\)/u);
-  assert.doesNotMatch(developerGuide, /^## 2\. 成果物プロファイル$/mu);
+  assert.match(
+    specification,
+    /本書は「アプリが内部でどのように動くか」を扱い、「リポジトリをどう変更・公開するか」\s*や「ビルダーをどう利用するか」は扱いません/u,
+  );
+  for (const movedHeading of [
+    '成果物プロファイル',
+    'SB3・台本変換ビルダー',
+    '検証',
+    '公開',
+    'トラブルシューティング',
+    'ライセンスと秘密情報',
+  ]) {
+    assert.doesNotMatch(
+      specification,
+      new RegExp(`^## ${movedHeading}`, 'mu'),
+      `Internal specification still owns ${movedHeading}.`,
+    );
+  }
   assert.match(docsIndex, /general\/07-internal-specification\//u);
   assert.match(docsIndex, /general\/07-internal-specification\.pdf/u);
+  assert.match(
+    specification,
+    /!\[紙芝居アプリ内部構造のレイヤー\]\(\.\.\/images\/internal-architecture-layers\.svg\)/u,
+  );
+  assert.match(architectureLayers, /<title id="title">紙芝居アプリ内部構造のレイヤー<\/title>/u);
+  assert.match(
+    specification,
+    /!\[紙芝居アプリの実行アーキテクチャ\]\(\.\.\/images\/internal-runtime-architecture\.svg\)/u,
+  );
+  assert.match(runtimeArchitecture, /<title id="title">紙芝居アプリの実行アーキテクチャ<\/title>/u);
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
 });
 
@@ -454,7 +485,7 @@ test('keeps the implementation snapshot aligned with the current SB3 source', ()
 test('lists every target, variable, list, extension, message, hat, and custom block', () => {
   for (const target of projectSource.targets) {
     assertCodeValue(target.name, 'target');
-    for (const [, variableName] of Object.values(target.variables ?? {})) {
+    for (const [variableName] of Object.values(target.variables ?? {})) {
       assertCodeValue(variableName, 'Scratch variable');
     }
     for (const [listName] of Object.values(target.lists ?? {})) {
