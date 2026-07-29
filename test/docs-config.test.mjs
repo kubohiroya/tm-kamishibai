@@ -129,8 +129,23 @@ test('delegates each general document table of contents to Vivliostyle', () => {
 test('prints Vivliostyle-generated general document tables of contents with page numbers', () => {
   const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
 
+  assert.match(generalTheme, /counter-reset:\s*general-chapter;/u);
+  assert.match(generalTheme, /counter-increment:\s*general-section;/u);
+  assert.match(generalTheme, /counter-increment:\s*general-toc-chapter;/u);
+  assert.match(generalTheme, /counter-increment:\s*general-toc-section;/u);
+  assert.match(generalTheme, /target-counter\(attr\(href\), general-chapter\)/u);
+  assert.match(generalTheme, /target-counter\(attr\(href\), general-section\)/u);
   assert.match(generalTheme, /#toc\s*\{/u);
   assert.match(generalTheme, /#toc li\s*\{[\s\S]*list-style:\s*none;/u);
+  assert.match(
+    generalTheme,
+    /#toc > ol > li\[data-section-level="1"\]:only-child > a\s*\{\s*display:\s*none;/u,
+  );
+  assert.match(
+    generalTheme,
+    /#toc > ol > li\[data-section-level="1"\]:only-child > ol\s*\{\s*padding-left:\s*0;/u,
+  );
+  assert.match(generalTheme, /grid-template-columns:\s*max-content minmax\(0, 1fr\);/u);
   assert.match(generalTheme, /#toc li a\s*\{/u);
   assert.match(
     generalTheme,
@@ -179,30 +194,36 @@ test('publishes the current software developer guide', () => {
   const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
   assert.match(source, /^# 紙芝居アプリ ソフトウェア開発者向け資料$/mu);
   for (const heading of [
-    '1. 管理範囲と責務を理解する',
-    '2. 開発環境を準備する',
-    '3. リポジトリ構成を把握する',
-    '4. 共通の開発フローに従う',
-    '5. アプリSB3を変更する',
-    '6. 埋め込み機能拡張を更新する',
-    '7. ビルダーを変更する',
-    '8. ドキュメントとサイトを変更する',
-    '9. 関連プロジェクトを確認する',
-    '10. 関連ドキュメントを確認する',
+    '管理範囲と責務を理解する',
+    '開発環境を準備する',
+    'リポジトリ構成を把握する',
+    '共通の開発フローに従う',
+    'アプリSB3を変更する',
+    '埋め込み機能拡張を更新する',
+    'ビルダーを変更する',
+    'ドキュメントとサイトを変更する',
+    '関連プロジェクトを確認する',
+    '関連ドキュメントを確認する',
   ]) {
     assert.match(source, new RegExp(`^## ${heading}$`, 'mu'));
   }
-  assert.match(source, /\| 導入\s+\| 第1〜4章\s+\| 初めて開発するときに、この順に読む/u);
   assert.match(
     source,
-    /\| 変更対象別手順\s+\| 第5〜8章\s+\| 変更対象に応じて、必要な章だけを読む/u,
+    /\| 導入\s+\| 管理範囲の理解から共通の開発フローまで\s+\| 初めて開発するときに、この順に読む/u,
   );
-  assert.match(source, /\| 参照\s+\| 第9〜10章\s+\| 関連プロジェクトや資料を探すときに参照する/u);
-  assert.match(source, /第5〜8章は、この順に実施する一連の工程ではなく、/u);
-  assert.match(source, /第9〜10章は作業手順ではありません/u);
+  assert.match(
+    source,
+    /\| 変更対象別手順\s+\| アプリSB3、機能拡張、ビルダー、文書とサイト\s+\| 変更対象に応じて、必要な章だけを読む/u,
+  );
+  assert.match(
+    source,
+    /\| 参照\s+\| 関連プロジェクトと関連ドキュメント\s+\| 関連プロジェクトや資料を探すときに参照する/u,
+  );
+  assert.match(source, /「変更対象別手順」は、この順に実施する一連の工程ではなく、/u);
+  assert.match(source, /「参照」は作業手順ではありません/u);
   assert.match(source, /<div class="print-page-break" aria-hidden="true"><\/div>/u);
   assert.match(generalTheme, /\.print-page-break\s*\{\s*break-before:\s*page;/u);
-  const chapterHeadings = [...source.matchAll(/^## [0-9]+\. (.+)$/gmu)].map(([, heading]) => heading);
+  const chapterHeadings = [...source.matchAll(/^## (.+)$/gmu)].map(([, heading]) => heading);
   assert.equal(chapterHeadings.length, 10);
   for (const heading of chapterHeadings) {
     assert.match(
@@ -213,13 +234,13 @@ test('publishes the current software developer guide', () => {
   }
   let previousRelatedProjectIndex = -1;
   for (const heading of [
-    '9.1 sb3-toolchain',
-    '9.2 Viteプラグイン',
-    '9.3 TurboWarp 機能拡張開発用テンプレート',
-    '9.4 TurboWarp 機能拡張',
-    '9.5 その他のライブラリ',
+    'sb3-toolchain {#sb3-toolchain}',
+    'Viteプラグイン',
+    'TurboWarp 機能拡張開発用テンプレート',
+    'TurboWarp 機能拡張',
+    'その他のライブラリ',
   ]) {
-    const headingIndex = source.indexOf(`### ${heading}`);
+    const headingIndex = source.indexOf(`### ${heading}\n`);
     assert(headingIndex > previousRelatedProjectIndex, `${heading} is missing or out of order.`);
     previousRelatedProjectIndex = headingIndex;
   }
@@ -273,6 +294,8 @@ test('defines the general documents with furigana only for the kids summary', ()
     );
     assert.match(source, new RegExp(`^# ${title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
     assert.doesNotMatch(source, /^## 目次$/mu);
+    assert.doesNotMatch(source, /^#{2,3} [0-9]+(?:\.[0-9]+)*\.? /mu);
+    assert.doesNotMatch(source, /\]\([^)\n]*#[0-9]/u);
     if (sourceFilename === '02-executive-summary-kids.md') {
       assert.doesNotMatch(source, /忍者.*銅像/u);
     }
@@ -405,7 +428,7 @@ test('keeps general guides aligned with artifact modes, UI text, and public samp
 
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(internalSpecification, /^## 2\. 成果物プロファイル$/mu);
+  assert.match(internalSpecification, /^## 成果物プロファイル$/mu);
 
   for (const [sourceFilename, source] of sources) {
     if (sourceFilename === 'history.md') continue;

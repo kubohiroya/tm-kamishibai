@@ -12,7 +12,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 過去のバージョンからの変更は[`history.md`](history.md)を参照してください。
 
-## この文書で使う用語
+## この文書で使う用語 {#terminology .unnumbered}
 
 本書ではScratch／TurboWarpの用語と、このアプリ固有の用語を次の意味で使います。
 表中の等幅書体（`Stage`、`script`、`action=`など）は、target名、変数名、DSL記法として
@@ -21,13 +21,13 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 ### Scratch／TurboWarpのproject構造
 
-| 用語    | この文書での意味                                                                                                |
-| ------- | --------------------------------------------------------------------------------------------------------------- |
-| project | Stage、sprite、block、変数、画像、音声などをまとめたScratch／TurboWarp作品全体                                  |
-| SB3     | projectを1ファイルに格納するScratch 3形式。このリポジトリではbuildによって生成する成果物                        |
-| target  | project内でblock、変数、costumeなどを所有する実行単位。1つのStage targetと、0個以上のsprite targetがある        |
-| `Stage` | projectに1つだけある舞台のtarget。このアプリでは背景表示に加え、台本解析と実行状態の統括を担う。詳細は4章を参照 |
-| sprite  | 舞台上に表示・移動でき、costume、sound、block、変数を持てるtarget                                               |
+| 用語    | この文書での意味                                                                                                                                                |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| project | Stage、sprite、block、変数、画像、音声などをまとめたScratch／TurboWarp作品全体                                                                                  |
+| SB3     | projectを1ファイルに格納するScratch 3形式。このリポジトリではbuildによって生成する成果物                                                                        |
+| target  | project内でblock、変数、costumeなどを所有する実行単位。1つのStage targetと、0個以上のsprite targetがある                                                        |
+| `Stage` | projectに1つだけある舞台のtarget。このアプリでは背景表示に加え、台本解析と実行状態の統括を担う。詳細は[「SB3の構成」](#sb3-structure){data-ref="chapter"}を参照 |
+| sprite  | 舞台上に表示・移動でき、costume、sound、block、変数を持てるtarget                                                                                               |
 
 ### cloneとActor
 
@@ -52,23 +52,23 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 ### 変数とblock
 
-| 用語                 | この文書での意味                                                                                                                         |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Scratch変数／list    | SB3に保存され、Stageまたはspriteが所有する値と配列                                                                                       |
-| runtime variable     | Runtime Variables機能拡張が保持し、project全体から参照する共有値                                                                         |
-| thread variable      | Thread Variables機能拡張が、カスタムブロック呼出し単位で保持する一時値                                                                   |
-| event hat／hat block | green flag、broadcast受信、clickなどのeventを受けて処理を開始する、stack最上部のblock                                                    |
-| カスタムブロック     | project内で定義し、名前と引数によって呼び出す処理。一般的なプログラミング言語のprocedureに相当する                                       |
-| block ID             | SB3の`targets[].blocks`内でblockを識別するkey。実装スナップショット内の調査にだけ使い、版をまたぐ永続IDとしては扱わない。詳細は6章を参照 |
+| 用語                 | この文書での意味                                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Scratch変数／list    | SB3に保存され、Stageまたはspriteが所有する値と配列                                                                                                                                                                                   |
+| runtime variable     | Runtime Variables機能拡張が保持し、project全体から参照する共有値                                                                                                                                                                     |
+| thread variable      | Thread Variables機能拡張が、カスタムブロック呼出し単位で保持する一時値                                                                                                                                                               |
+| event hat／hat block | green flag、broadcast受信、clickなどのeventを受けて処理を開始する、stack最上部のblock                                                                                                                                                |
+| カスタムブロック     | project内で定義し、名前と引数によって呼び出す処理。一般的なプログラミング言語のprocedureに相当する                                                                                                                                   |
+| block ID             | SB3の`targets[].blocks`内でblockを識別するkey。実装スナップショット内の調査にだけ使い、版をまたぐ永続IDとしては扱わない。詳細は[「event、カスタムブロック、呼出し関係」](#events-custom-blocks-call-graph){data-ref="chapter"}を参照 |
 
-## 1. 文書の範囲と実装基準
+## 文書の範囲と実装基準
 
 アプリ内部構造の正本は`app/project.source.json`です。本書のtarget、変数、list、
 broadcast、hat、カスタムブロック定義は、このファイルから抽出した現在の構造を
 記載しています。配布用`kamishibai.sb3`は`app/`から生成する成果物であり、本書の
 調査元にはしません。
 
-### 1.1 実装スナップショット
+### 実装スナップショット
 
 | 項目                     | 件数 |
 | ------------------------ | ---: |
@@ -83,9 +83,10 @@ broadcast、hat、カスタムブロック定義は、このファイルから�
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   12 |
 
-本書に掲載するblock IDの意味と安定性は6章で説明します。
+本書に掲載するblock IDの意味と安定性は
+[「event、カスタムブロック、呼出し関係」](#events-custom-blocks-call-graph){data-ref="chapter"}で説明します。
 
-### 1.2 使用する機能拡張
+### 使用する機能拡張
 
 | ID                            | 役割                                     | 取得形態 |
 | ----------------------------- | ---------------------------------------- | -------- |
@@ -106,7 +107,7 @@ broadcast、hat、カスタムブロック定義は、このファイルから�
 更新方法は[`sb3-toolchain`のワークフロー](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md)
 に従います。
 
-## 2. 成果物プロファイル
+## 成果物プロファイル
 
 紙芝居の成果物は、台本と物語固有アセットをどこに保持するかで分けます。
 
@@ -127,9 +128,9 @@ broadcast、hat、カスタムブロック定義は、このファイルから�
 自動的にオフライン化されるわけではありません。残るオンライン依存は成果物manifestと
 公開ページへ明記します。
 
-## 3. SB3・台本変換ビルダー
+## SB3・台本変換ビルダー {#sb3-script-builder}
 
-### 3.1 導入
+### 導入
 
 利用可能なバージョンを確認し、消費側で明示的に固定します。
 
@@ -140,7 +141,7 @@ pnpm add --save-exact @kubohiroya/tmpose-kamishibai@<VERSION>
 
 生成したlockfileをcommitし、CIでは`pnpm install --frozen-lockfile`を使います。
 
-### 3.2 CLI
+### CLI
 
 ```bash
 pnpm exec tmpose-kamishibai build-sb3 \
@@ -171,7 +172,7 @@ dist/sample.manifest.json
 
 完全な一覧は`pnpm exec tmpose-kamishibai --help`で確認します。
 
-### 3.3 JavaScript API
+### JavaScript API
 
 ```js
 import {
@@ -204,7 +205,7 @@ console.log(result.outputPaths);
 `buildSb3Bundle`は`manifest`と`outputPaths`を返します。入力・アセット・出力の問題は
 `Sb3BuilderError`として処理段階とアセット情報を保持します。
 
-### 3.4 アセットマニフェスト
+### アセットマニフェスト
 
 入力manifestは`formatVersion: 1`と1件以上の`assets`を持ちます。
 
@@ -243,7 +244,7 @@ console.log(result.outputPaths);
 DSL名、同一target内のSB3名、既存SB3のアセット名は重複できません。`license`には素材の
 ライセンスまたは利用条件の識別情報と参照先を記録します。
 
-### 3.5 安全性と再現性
+### 安全性と再現性
 
 - `file:`は既定でmanifestのディレクトリ以下だけを許可し、`..`やsymlinkによる脱出を拒否する
 - HTTPSを既定とし、平文HTTPは明示的に許可した場合だけ取得する
@@ -256,7 +257,7 @@ DSL名、同一target内のSB3名、既存SB3のアセット名は重複でき�
 同じ入力、固定依存、設定から生成したSB3、台本、manifestはbit-for-bitで一致しなければ
 なりません。
 
-## 4. SB3の構成
+## SB3の構成 {#sb3-structure}
 
 Scratch／TurboWarpのprojectは、1つの**Stage（ステージ）** targetと、0個以上のsprite targetから
 構成されます。Stage targetはproject全体の舞台を表し、背景（backdrop）を表示します。
@@ -269,7 +270,7 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 `Stage`と書いた場合は、画面に見える舞台だけでなく、このStage targetとそこに置かれた
 制御用block群を指します。
 
-### 4.1 target一覧
+### target一覧
 
 | target                | 種別       | 役割                                                                | 初期costume／sound      |
 | --------------------- | ---------- | ------------------------------------------------------------------- | ----------------------- |
@@ -286,7 +287,7 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 `Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
 Asset Managerへ登録します。
 
-### 4.2 アクターへ命令を届けるしくみ
+### アクターへ命令を届けるしくみ {#actor-message-delivery}
 
 Scratch／TurboWarpで1つのspriteから複数の登場人物を作る場合、cloneごとに
 スプライトローカル変数の識別子を持たせれば、同じblockを共有しながら個体を区別できます。
@@ -359,23 +360,24 @@ Stage actionはStage内で実行され、Actor actionだけがaction envelopeと
 messageはすべての`Actor` cloneが受け取りますが、実際に処理するのは宛先に一致した
 アクターだけです。
 
-### 4.3 target間の責務
+### target間の責務
 
 `Stage`は台本を`sceneList`、`commandList`、`actionList`へ段階的に変換します。
 さらにsceneと共有runtime状態を管理し、Stage actionを実行します。`Actor` cloneの責務は、
-生成時に自分の`actorName`と初期skinを確定し、その後、4.2で配送されたActor actionのうち
+生成時に自分の`actorName`と初期skinを確定し、その後、
+[「アクターへ命令を届けるしくみ」](#actor-message-delivery){data-ref="section"}で配送されたActor actionのうち
 自分を対象とするものを実行することです。
 
 UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
 Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ
 複製せず、Stageを状態の所有者とします。
 
-## 5. 変数とlist
+## 変数とlist
 
 変数は、SB3へ永続化されるScratch変数／list、threadごとの一時値、project全体で共有する
 runtime variableの3種類に分けます。
 
-### 5.1 Scratch変数
+### Scratch変数
 
 | 所有者  | 変数                       | 初期値       | 役割                                   |
 | ------- | -------------------------- | ------------ | -------------------------------------- |
@@ -389,7 +391,7 @@ runtime variableの3種類に分けます。
 `__tmpose_embedded_script`はStageに一つだけ存在し、monitorを持ちません。`generic`と
 `editor`では空、`player`ではbuilderが変換済み台本を設定します。
 
-### 5.2 Scratch list
+### Scratch list
 
 すべてStage所有で、汎用SB3では空の初期状態です。
 
@@ -407,7 +409,7 @@ runtime variableの3種類に分けます。
 | `sceneLabelList` | scene labelとindexの対応       |
 | `lines`          | Text Linesで分割した台本行     |
 
-### 5.3 runtime variable
+### runtime variable
 
 静的な名前を持つruntime variableは次の16個です。
 
@@ -429,7 +431,7 @@ runtime variableの3種類に分けます。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
 静的な16個には数えません。
 
-### 5.4 thread variable
+### thread variable
 
 カスタムブロック呼出しごとに分離され、呼出し終了後に共有状態として残さない値です。
 
@@ -447,7 +449,7 @@ runtime variableの3種類に分けます。
 runtime variableと同名の`sceneIndex` thread variableは、カスタムブロック内の局所的な
 引数・計算値です。project全体の現在sceneはruntime variable側だけを正本とします。
 
-## 6. event、カスタムブロック、呼出し関係
+## event、カスタムブロック、呼出し関係 {#events-custom-blocks-call-graph}
 
 表の`target`はblockを所有するStageまたはsprite、`ID`はそのtargetの`blocks`
 objectにあるkeyです。SB3内では`project.json`の`targets[].blocks`、このリポジトリ
@@ -461,7 +463,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 参照には使いません。アプリを編集してIDが変わった場合は、本章も現在の
 `app/project.source.json`に合わせて更新します。
 
-### 6.1 event hat一覧
+### event hat一覧
 
 `procedures_definition`と、接続されていないreporter blockはevent hatに含めません。
 「実行される内容」はhatを起点とする主要なカスタムブロック呼出し、broadcast、状態変更、
@@ -521,7 +523,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `LoadingBubbleAnchor` | `loadingBubbleProgress`  | `assetLoadingProgress`受信  | runtime variable `message`をsay            |
 | `LoadingBubbleAnchor` | `loadingBubbleCompleted` | `assetLoadingCompleted`受信 | bubbleをclearして非表示                    |
 
-### 6.2 カスタムブロック定義一覧
+### カスタムブロック定義一覧
 
 引数名はprototypeの`argumentnames`、warpはprototypeの`mutation.warp`から取得します。
 「呼び出す処理／送信するmessage」には定義内で呼ぶ別のカスタムブロックや機能拡張の
@@ -587,7 +589,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `Stage` | `hu` | `touchInputToChangeScene %s %s`    | `actorNameList`, `sceneLabelList` | no   | Async Input                                                                  |
 | `Stage` | `hy` | `wait %s seconds`                  | `seconds`                         | no   | More Timers                                                                  |
 
-### 6.3 主要な呼出し経路
+### 主要な呼出し経路
 
 | 起点         | 経路                                                                                |
 | ------------ | ----------------------------------------------------------------------------------- |
@@ -599,9 +601,9 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | pose action  | camera preview／pose認識開始 → `exec pose %s`反復 →認識停止 → prompt非表示          |
 | 終了         | `stopStory` → camera／pose停止 → actor削除 → cover → menu                           |
 
-## 7. broadcastと状態遷移
+## broadcastと状態遷移
 
-### 7.1 message一覧
+### message一覧
 
 | message                  | 主な送信者                            | 受信者                           | 役割                         |
 | ------------------------ | ------------------------------------- | -------------------------------- | ---------------------------- |
@@ -627,7 +629,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 `stopKeyInput`と`stopTouchInput`は標準broadcast blockではなく、Async Inputへ渡した
 callback messageです。`debugTestCamera`は通常フローに送信元を持たない診断用messageです。
 
-### 7.2 状態遷移
+### 状態遷移
 
 ![紙芝居アプリの主要状態遷移](../images/internal-state-transition.svg)
 
@@ -654,9 +656,9 @@ scene解析のエラー時にこのmessageを送信し、各送信箇所の直�
 該当境界だけが消費し、scene開始、cover、stopでclearします。`nextSceneLabel`はkey／touch
 listenerが設定し、scene loopがlabelをindexへ解決したあと削除します。
 
-## 8. 検証
+## 検証 {#verification}
 
-### 8.1 変更対象ごとのテスト
+### 変更対象ごとのテスト
 
 | 変更対象               | 主なテスト                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
@@ -668,7 +670,7 @@ listenerが設定し、scene loopがlabelをindexへ解決したあと削除し�
 | 文書、画像、ライセンス | `test/docs-config.test.mjs`、`test/docs-images.test.mjs`、`test/documentation-license.test.mjs` |
 | 公開物と汎用性         | `test/sb3-publication.test.mjs`、`test/build-freshness.test.mjs`                                |
 
-### 8.2 標準チェック
+### 標準チェック
 
 ```bash
 pnpm lint
@@ -700,9 +702,9 @@ SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて�
 内部構造を変更したPRでは、`app/project.source.json`と本書のtarget、変数、message、
 hat、custom block一覧を同時に更新します。
 
-## 9. 公開
+## 公開
 
-### 9.1 GitHub Pages
+### GitHub Pages
 
 ```bash
 pnpm run deploy
@@ -715,7 +717,7 @@ URLから確認します。
 問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
 deployします。生成済み`dist/`だけを手作業で修正しません。
 
-### 9.2 npmパッケージ
+### npmパッケージ
 
 公開済みversionは変更・再利用できません。releaseごとに新しいversionとGit tagを使います。
 
@@ -748,7 +750,7 @@ npm view @kubohiroya/tmpose-kamishibai@<VERSION> \
 公開後に問題が見つかった場合は対象versionを`npm deprecate`し、修正版を新しいpatch
 versionとして公開します。公開済みtarballやtagを差し替えません。
 
-## 10. トラブルシューティング
+## トラブルシューティング
 
 | 症状                                              | 確認と対応                                                                                                                                                       |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -763,7 +765,7 @@ versionとして公開します。公開済みtarballやtagを差し替えませ
 復旧でGit履歴を破壊しません。公開済み変更は`git revert`または新しい修正PRで戻し、tagを
 移動しません。
 
-## 11. ライセンスと秘密情報
+## ライセンスと秘密情報
 
 | 対象                                                                     | ライセンス                                         |
 | ------------------------------------------------------------------------ | -------------------------------------------------- |
@@ -782,7 +784,7 @@ token、npm認証情報、秘密鍵、個人情報をrepository、SB3、台本�
 記録しません。認証情報は環境変数、OSのkeychain、GitHub Secretsなど、公開物へ含まれない
 仕組みで渡します。
 
-## 12. 関連ドキュメント
+## 関連ドキュメント
 
 - [`03-user-guide.md`](03-user-guide.md): アプリの利用方法と成果物の使い分け
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方

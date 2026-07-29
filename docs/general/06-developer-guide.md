@@ -14,17 +14,17 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 このガイドの章は、次の3つの区分で並んでいます。
 
-| 区分           | 対象      | 読み方                                     |
-| -------------- | --------- | ------------------------------------------ |
-| 導入           | 第1〜4章  | 初めて開発するときに、この順に読む         |
-| 変更対象別手順 | 第5〜8章  | 変更対象に応じて、必要な章だけを読む       |
-| 参照           | 第9〜10章 | 関連プロジェクトや資料を探すときに参照する |
+| 区分           | 対象                                        | 読み方                                     |
+| -------------- | ------------------------------------------- | ------------------------------------------ |
+| 導入           | 管理範囲の理解から共通の開発フローまで      | 初めて開発するときに、この順に読む         |
+| 変更対象別手順 | アプリSB3、機能拡張、ビルダー、文書とサイト | 変更対象に応じて、必要な章だけを読む       |
+| 参照           | 関連プロジェクトと関連ドキュメント          | 関連プロジェクトや資料を探すときに参照する |
 
-第1〜4章では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
-開発フローへ進みます。第5〜8章は、この順に実施する一連の工程ではなく、
-変更対象ごとに独立した手順です。第9〜10章は作業手順ではありません。
+「導入」では、管理範囲を確認し、開発環境とリポジトリを把握してから、共通の
+開発フローへ進みます。「変更対象別手順」は、この順に実施する一連の工程ではなく、
+変更対象ごとに独立した手順です。「参照」は作業手順ではありません。
 
-## 1. 管理範囲と責務を理解する
+## 管理範囲と責務を理解する
 
 このリポジトリが管理するものは次のとおりです。
 
@@ -36,12 +36,12 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 関連プロジェクトとの境界は次のとおりです。
 
-| 対象                                  | 管理場所                                                                                          | このリポジトリとの関係                                         |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| SB3の展開・検証・決定的再構築         | [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain)                         | 固定依存として利用する。共通仕様は[9.1](#91-sb3-toolchain)参照 |
-| 浦島太郎などの公開用物語              | [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) | `stories/urashima/`で台本、固有アセット、生成物を管理する      |
-| 埋め込み機能拡張                      | 各機能拡張のGitHubリポジトリ                                                                      | `app/`には検証済み成果物と由来情報だけを同期する               |
-| TurboWarp Extension Galleryの機能拡張 | Galleryの公開URL                                                                                  | SB3から外部URLを参照する                                       |
+| 対象                                  | 管理場所                                                                                          | このリポジトリとの関係                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| SB3の展開・検証・決定的再構築         | [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain)                         | 固定依存として利用する。[「sb3-toolchain」](#sb3-toolchain){data-ref="section"}を参照 |
+| 浦島太郎などの公開用物語              | [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) | `stories/urashima/`で台本、固有アセット、生成物を管理する                             |
+| 埋め込み機能拡張                      | 各機能拡張のGitHubリポジトリ                                                                      | `app/`には検証済み成果物と由来情報だけを同期する                                      |
+| TurboWarp Extension Galleryの機能拡張 | Galleryの公開URL                                                                                  | SB3から外部URLを参照する                                                              |
 
 [公開サンプル](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/)
 の固有ファイルを本体へコピーしません。本体の汎用性と、サンプルの独立した更新・配布を
@@ -55,7 +55,7 @@ pnpm why @kubohiroya/sb3-toolchain
 git diff -- package.json pnpm-lock.yaml
 ```
 
-## 2. 開発環境を準備する
+## 開発環境を準備する
 
 ### 必要な環境
 
@@ -85,7 +85,7 @@ pnpm test
 macOSでは通常のGoogle ChromeをPDF生成に自動利用します。別のブラウザを使う環境では、
 `VIVLIOSTYLE_CHROME_PATH`へ実行ファイルの絶対パスを設定します。
 
-## 3. リポジトリ構成を把握する
+## リポジトリ構成を把握する
 
 | パス                           | 役割                                              |
 | ------------------------------ | ------------------------------------------------- |
@@ -111,7 +111,7 @@ macOSでは通常のGoogle ChromeをPDF生成に自動利用します。別の�
 | `dist/`              | GitHub Pagesへ公開するサイト、HTML/PDF、配布用SB3 |
 | `output/pdf/`        | 印刷用PDFのローカル確認先                         |
 
-## 4. 共通の開発フローに従う
+## 共通の開発フローに従う
 
 すべての変更はGitHub Issueへ受け入れ基準とロールバック手順を記録し、小さなブランチと
 PRへ分けます。
@@ -126,10 +126,10 @@ PRへ分けます。
 
 無関係な変更や未追跡ファイルをまとめてコミットしません。SB3のimportや成果物の
 置換を行う前には、必ず`git status`と対象パスの差分を確認します。変更対象ごとの
-テストと公開前チェックは[内部仕様書の検証](07-internal-specification.md#8-検証)を
+テストと公開前チェックは[内部仕様書の検証](07-internal-specification.md#verification)を
 参照してください。
 
-## 5. アプリSB3を変更する
+## アプリSB3を変更する
 
 このリポジトリでは`app/`をアプリSB3の正本とし、固定した`sb3-toolchain`を
 `pnpm sb3:*`スクリプトから利用します。展開ソース形式、importとbuildの上書き保護、
@@ -166,7 +166,7 @@ DSL、Loading表示、入力、分岐、テキスト、画面遷移などの振�
 同じPRで[DSL資料](04-dsl-manual.md)、[コマンド資料](05-command-reference.md)、
 [内部仕様書](07-internal-specification.md)、VMまたはブロック構造のテストを更新します。
 
-## 6. 埋め込み機能拡張を更新する
+## 埋め込み機能拡張を更新する
 
 `app/extensions/`のJavaScriptは同期済み成果物です。バグ修正や機能追加は、
 `app/embedded-extensions.json`に記録された上流リポジトリで行い、レビュー済みの
@@ -193,12 +193,12 @@ pnpm sb3:extensions:update -- OLD_ID --migrate-id NEW_ID
 `git diff -- app`、`pnpm sb3:check`、`pnpm test`、`pnpm run build`を確認し、
 生成したSB3をTurboWarpで開いて対象拡張の主要機能を確認します。
 
-## 7. ビルダーを変更する
+## ビルダーを変更する
 
 公開APIは`src/builder/index.js`、CLIは`src/builder/cli.js`と`bin/`、仕様テストは
 `test/builder.test.mjs`にあります。公開API、CLI、アセットマニフェスト、決定的生成、
 transactional更新の現行仕様は
-[内部仕様書のSB3・台本変換ビルダー](07-internal-specification.md#3-sb3台本変換ビルダー)
+[内部仕様書のSB3・台本変換ビルダー](07-internal-specification.md#sb3-script-builder)
 を参照してください。
 
 APIまたはCLIを変更するときは次を同じ変更に含めます。
@@ -217,7 +217,7 @@ pnpm typecheck
 pnpm pack:check
 ```
 
-## 8. ドキュメントとサイトを変更する
+## ドキュメントとサイトを変更する
 
 一般文書は`docs/general/`、体験会資料は`docs/workshops/<日付>/`、公開入口は`site/`を
 正本とします。
@@ -240,13 +240,19 @@ RUBYGANA_GRADE=4 pnpm run build
 Vivliostyle Viewer、PDF、文書横断目次、画像参照、しおり、favicon、ライセンス、配布SB3を
 まとめて検証します。Markdownだけを確認して完了にせず、生成されたHTML/PDFも確認します。
 
-## 9. 関連プロジェクトを確認する
+Markdownの見出しには章・節番号を書きません。`h1`は番号なしの文書名、`h2`と`h3`は
+本文と目次で自動採番します。用語集などの前付けを採番しない場合は、見出しへ
+`{.unnumbered}`を付けます。本文から見出しを参照するときは、番号ではなく意味の変わらない
+IDを付けてリンクし、組版結果にも現在の章・節番号を表示する場合は、リンクへ
+`{data-ref="chapter"}`または`{data-ref="section"}`を付けます。
+
+## 関連プロジェクトを確認する
 
 TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境でも利用できるものを
 各リポジトリで公開しています。各プロジェクトの仕様、開発手順、リリースはリンク先を
 正本とします。
 
-### 9.1 sb3-toolchain
+### sb3-toolchain {#sb3-toolchain}
 
 [`sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain)は、SB3をGit差分可能な
 展開ソースとして管理し、検証して決定的に再構築するためのCLI／JavaScript APIです。
@@ -257,17 +263,17 @@ TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境�
 - [SB3展開ソース形式 v1](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/source-format-v1.md)
 - [埋め込み拡張IDの移行](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/extension-id-migration.md)
 
-### 9.2 Viteプラグイン
+### Viteプラグイン
 
 - [`vite-plugin-turbowarp-extension`](https://github.com/kubohiroya/vite-plugin-turbowarp-extension):
   TypeScriptプロジェクトを単一ファイルのTurboWarp機能拡張としてbuildするViteプラグイン
 
-### 9.3 TurboWarp 機能拡張開発用テンプレート
+### TurboWarp 機能拡張開発用テンプレート
 
 - [`turbowarp-extension-template`](https://github.com/kubohiroya/turbowarp-extension-template):
   Viteを使ったTurboWarp機能拡張の開発、テスト、build、リリース用テンプレート
 
-### 9.4 TurboWarp 機能拡張
+### TurboWarp 機能拡張
 
 - [`turbowarp-tmpose`](https://github.com/kubohiroya/turbowarp-tmpose):
   Teachable Machine Poseモデルを利用したカメラ姿勢認識
@@ -280,14 +286,14 @@ TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境�
 - [`turbowarp-runtime-expression`](https://github.com/kubohiroya/turbowarp-runtime-expression):
   runtime変数を使う条件式の安全な評価とbroadcast監視
 
-### 9.5 その他のライブラリ
+### その他のライブラリ
 
 - [`rubygana`](https://github.com/kubohiroya/rubygana):
   日本語テキストの読み仮名を生成するNode.jsライブラリ
 
 <div class="print-page-break" aria-hidden="true"></div>
 
-## 10. 関連ドキュメントを確認する
+## 関連ドキュメントを確認する
 
 - [`03-user-guide.md`](03-user-guide.md): アプリの利用方法と成果物の使い分け
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方

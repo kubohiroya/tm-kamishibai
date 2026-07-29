@@ -178,7 +178,7 @@ test('documents the generic, editor, and player artifact profiles', async () => 
     'utf8',
   );
   const profileSection = internalSpecification.match(
-    /^## 2\. 成果物プロファイル$(?<section>[\s\S]*?)(?=^## 3\. )/mu,
+    /^## 成果物プロファイル$(?<section>[\s\S]*?)(?=^## SB3・台本変換ビルダー \{#sb3-script-builder\}$)/mu,
   )?.groups?.section;
 
   assert(profileSection, 'Internal specification is missing the artifact profile section.');
