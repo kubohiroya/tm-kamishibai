@@ -925,5 +925,5 @@ test('exposes one CLI contract and a fixed installable package version', async (
   assert.equal(packageJson.version, '3.1.0');
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
-  assert.equal(packageJson.bin['tmpose-kamishibai'], './bin/tmpose-kamishibai.mjs');
+  assert.equal(packageJson.bin['tmpose-kamishibai'], 'bin/tmpose-kamishibai.mjs');
 });

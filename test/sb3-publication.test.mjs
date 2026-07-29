@@ -65,16 +65,16 @@ test('links and documents the generated downloadable SB3', async () => {
   for (const document of [developerGuide, readme]) {
     assert.match(
       document,
-      /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
-      'Builder installation must use the fixed GitHub tag.',
+      /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.0/u,
+      'Builder installation must use the fixed npm version.',
     );
-    assert.match(document, /allowBuilds/u);
     assert.match(document, /pnpm install --frozen-lockfile/u);
     assert.doesNotMatch(
       document,
-      /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.0/u,
-      'Documentation must not require the unpublished npm package.',
+      /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
+      'Documentation must not use the retired Git tag installation path.',
     );
+    assert.doesNotMatch(document, /allowBuilds/u);
     assert.match(document, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
     assert.match(document, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
   }

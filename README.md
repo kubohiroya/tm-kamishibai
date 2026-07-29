@@ -295,24 +295,13 @@ setLoadingCostume=loading1,loading2,loading3
 
 `@kubohiroya/tmpose-kamishibai`は、外部画像・音声をベースSB3へ組み込み、台本の`asset=`行をプロジェクト内参照へ変換するJavaScript APIとCLIを提供します。消費側では浮動ブランチではなく、検証済みバージョンを固定します。
 
-現在の固定配布経路はGitHubタグです。消費側の`package.json`でタグを指定します。
+npmで検証済みバージョンを固定して導入します。
 
-```json
-{
-  "dependencies": {
-    "@kubohiroya/tmpose-kamishibai": "github:kubohiroya/tmpose-kamishibai#v3.1.0"
-  }
-}
+```bash
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.0
 ```
 
-pnpm 11ではGit依存の準備スクリプトを明示的に許可します。`pnpm-workspace.yaml`の`allowBuilds`はこのパッケージだけを対象にします。
-
-```yaml
-allowBuilds:
-  '@kubohiroya/tmpose-kamishibai': true
-```
-
-初回の`pnpm install`で生成した`pnpm-lock.yaml`をコミットし、CIでは固定コミットからだけ復元します。
+初回の`pnpm install`で生成したlockfileをコミットし、CIでは固定バージョンからだけ復元します。
 
 ```bash
 pnpm install
@@ -330,6 +319,6 @@ tmpose-kamishibai build-sb3 \
 
 ## バージョン
 
-既存の開発履歴を引き継ぎ、汎用ビルダーを公開するパッケージ版は`3.1.0`とします。`package.json`のバージョンとGitタグ`v3.1.0`を一致させ、公開済みタグは移動・削除しません。リポジトリ間の固定依存にはGitタグとlockfileを使用するため、npmレジストリ公開は必須ではありません。将来、不特定の外部利用者向けにnpm公開する場合は別のリリース作業として扱います。
+既存の開発履歴を引き継ぎ、汎用ビルダーを公開する最初のnpmパッケージ版は`3.1.0`とします。`package.json`のバージョン、npmの公開バージョン、Gitタグ`v3.1.0`を一致させ、公開済みバージョンとタグは移動・削除しません。
 
 紙芝居アプリの配布SB3は、kamishibai 3.1の展開ソースからビルド時に生成します。
