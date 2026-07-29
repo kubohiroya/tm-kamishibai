@@ -230,6 +230,19 @@ RUBYGANA_GRADE=4 pnpm run deploy
 
 ## SB3の開発と配布
 
+SB3の展開ソース形式、安全なimport、検証、決定的ビルドは、MPL-2.0で公開する
+[`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain)を利用します。
+このリポジトリでは、検証済みコミットを固定依存として指定し、`pnpm-lock.yaml`で解決先を
+固定します。
+
+```json
+{
+  "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d"
+  }
+}
+```
+
 ローカル編集用SB3は次のコマンドで `tmp/kamishibai.sb3` へ生成します。
 
 ```bash
@@ -246,6 +259,9 @@ pnpm run build
 ```
 
 `pnpm run build` は配布用 `dist/downloads/kamishibai.sb3` を同じ正本から生成します。通常手順、置換時の安全判定、手動確認、ロールバックについては [`docs/general/06-developer-guide.md`](docs/general/06-developer-guide.md) を参照してください。
+
+ツールチェーン更新に問題がある場合は、`package.json`と`pnpm-lock.yaml`を直前の検証済み
+コミットへ戻します。`app/`の正本と生成SB3の形式を変更せずに切り戻せます。
 
 浦島太郎の台本、専用スプライト、背景、画像、音声、組み込み済みSB3は、[サンプルサイト](https://kubohiroya.github.io/tmpose-kamishibai-samples/) で配信し、別リポジトリ [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples) で管理します。本体リポジトリの `pnpm run build` では、浦島太郎固有コンテンツを生成・公開しません。
 

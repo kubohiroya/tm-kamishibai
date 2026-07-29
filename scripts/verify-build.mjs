@@ -3,13 +3,14 @@ import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
+
 import {
   documentConfig,
   generalDocumentConfig,
   resolveLearnedThroughGrade,
   staffDocumentConfig,
 } from '../docs/config.mjs';
-import {createDeterministicSb3} from './sb3/source.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');

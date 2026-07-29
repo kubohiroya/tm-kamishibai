@@ -68,7 +68,11 @@ test('prepares the generated default SB3 with explicit replacement authorization
     environment: {},
   });
 
-  assert.deepEqual(buildOptions, {yes: true});
+  assert.deepEqual(buildOptions, {
+    outputPath: defaultKamishibaiSb3Path,
+    sourceDirectory: path.resolve('app'),
+    yes: true,
+  });
   assert.deepEqual(result, {
     changed: true,
     configured: false,

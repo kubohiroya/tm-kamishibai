@@ -2,6 +2,8 @@ import {copyFile, cp, mkdir, readFile, readdir, rm, writeFile} from 'node:fs/pro
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {buildSb3} from '@kubohiroya/sb3-toolchain';
+
 import {
   documentConfig,
   generalDocumentConfig,
@@ -9,7 +11,6 @@ import {
 } from '../docs/config.mjs';
 import {buildDocs} from './build-docs.mjs';
 import {outdatedPublicationNames} from './build-freshness.mjs';
-import {buildSb3} from './sb3/build.mjs';
 import {verifyBuild} from './verify-build.mjs';
 
 const source = new URL('../site/', import.meta.url);
@@ -181,7 +182,10 @@ async function addFaviconLinks() {
 }
 
 await prepareOutputDirectory();
-const sb3Build = await buildSb3({outputPath: fileURLToPath(downloadSb3)});
+const sb3Build = await buildSb3({
+  outputPath: fileURLToPath(downloadSb3),
+  sourceDirectory: path.join(projectRoot, 'app'),
+});
 console.log(`Built downloadable SB3: ${sb3Build.outputPath}`);
 await mkdir(heroImageDirectory, {recursive: true});
 await copyFile(heroImageSource, new URL('image01.png', heroImageDirectory));

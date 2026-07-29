@@ -8,6 +8,7 @@ import {clearTimeout, setTimeout} from 'node:timers';
 import {fileURLToPath} from 'node:url';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
 import {installBundleTransactionally} from '../src/builder/atomic-output.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
@@ -17,7 +18,6 @@ import {
   validateAssetManifest,
   validateBundle,
 } from '../src/builder/index.js';
-import {createDeterministicSb3} from '../scripts/sb3/source.mjs';
 import {embeddedScriptVariableId, embeddedScriptVariableName} from '../src/builder/constants.js';
 import {createEmbeddedReference} from '../src/builder/script.js';
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
