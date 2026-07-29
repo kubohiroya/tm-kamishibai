@@ -65,7 +65,7 @@ test('links and documents the generated downloadable SB3', async () => {
   for (const document of [developerGuide, readme]) {
     assert.match(
       document,
-      /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.0/u,
+      /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.1/u,
       'Builder installation must use the fixed npm version.',
     );
     assert.match(document, /pnpm install --frozen-lockfile/u);
