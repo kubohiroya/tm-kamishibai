@@ -134,7 +134,9 @@ async function verifyLocalReferences(htmlPath, tagName, attributeName) {
 
   for (const reference of references) {
     const [relativePath, encodedFragment] = reference.split('#');
-    const targetPath = path.resolve(path.dirname(htmlPath), decodeURIComponent(relativePath));
+    const targetPath = relativePath
+      ? path.resolve(path.dirname(htmlPath), decodeURIComponent(relativePath))
+      : htmlPath;
     await access(targetPath);
 
     if (encodedFragment) {

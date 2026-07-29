@@ -1,0 +1,9 @@
+{
+  "sourceName": "Urashima-walk-1",
+  "sourceRepository": "kubohiroya/tmpose-kamishibai-samples",
+  "sourcePath": "stories/urashima/assets/images/963e926995791fde1b335fd4ba60d6d7.png",
+  "sourceSha256": "f66c89b710324a7ca0809ab8cdc5acdfff83e988828a199403b7104ade6ec2df",
+  "license": "MPL-2.0",
+  "derivedAsset": "favicon.png",
+  "derivation": "Transparent 256x256 crop centered on the head and upper body."
+}
