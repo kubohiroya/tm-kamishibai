@@ -685,7 +685,7 @@ GitHub ActionsはcleanなLinux環境で`pnpm install --frozen-lockfile`、`pnpm 
 `pnpm run build`は少なくとも次を生成・検証します。
 
 - `dist/downloads/kamishibai.sb3`
-- 一般文書のHTML/PDF
+- 一般文書ごとのWeb Publication、HTML/PDF、Vivliostyle CLIが`h2`・`h3`までから生成する目次
 - 参加者向け・スタッフ向け体験会資料
 - 公開サイトのリンク、画像、目次、PDF bookmark、favicon
 
@@ -709,7 +709,8 @@ pnpm run deploy
 ```
 
 `predeploy`がフルbuildを行い、成功した`dist/`だけを`gh-pages`へ公開します。公開後は
-top page、文書一覧、HTML/PDF、SB3 downloadを実際のURLから確認します。
+top page、文書一覧、各カードのHTML／Vivliostyle Viewer／PDF、SB3 downloadを実際の
+URLから確認します。
 
 問題がある場合は、直前の検証済みcommitをcheckoutしたcleanな環境から再度build・
 deployします。生成済み`dist/`だけを手作業で修正しません。

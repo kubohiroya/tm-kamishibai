@@ -13,10 +13,78 @@ body > h1:first-child {
   string-set: document-title content();
 }
 
+#toc {
+  margin: 2rem 0;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--accent-soft);
+}
+
+#toc > h2 {
+  margin-top: 0;
+  break-after: avoid;
+}
+
+#toc ol {
+  margin: 0;
+  padding-left: 0;
+}
+
+#toc li {
+  margin: 0.3rem 0;
+  list-style: none;
+  break-inside: avoid;
+}
+
+#toc li ol {
+  padding-left: 1.2rem;
+}
+
+#toc li a {
+  color: currentcolor;
+  text-decoration: none;
+}
+
+#toc li a:hover {
+  text-decoration: underline;
+}
+
 @media print {
   body > section.level1:first-child > h1:first-child,
   body > h1:first-child {
     margin-top: 0;
+  }
+
+  #toc {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 9pt;
+  }
+
+  #toc li a {
+    display: flex;
+    width: 100%;
+    align-items: baseline;
+  }
+
+  #toc li a::before {
+    flex: auto;
+    order: 1;
+    margin: 0 0.5em;
+    border-bottom: 1px dotted var(--muted);
+    content: "";
+  }
+
+  #toc li a::after {
+    flex: none;
+    order: 2;
+    align-self: flex-end;
+    min-width: 2em;
+    content: target-counter(attr(href), page);
+    text-align: right;
   }
 
   .print-page-break {

@@ -57,7 +57,7 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(specification, /\[CC BY-SA 4\.0\]/u);
   assert.match(developerGuide, /\[紙芝居アプリ内部仕様書\]\(07-internal-specification\.md\)/u);
   assert.doesNotMatch(developerGuide, /^## 2\. 成果物プロファイル$/mu);
-  assert.match(docsIndex, /general\/07-internal-specification\.html/u);
+  assert.match(docsIndex, /general\/07-internal-specification\//u);
   assert.match(docsIndex, /general\/07-internal-specification\.pdf/u);
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
 });

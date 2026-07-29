@@ -47,7 +47,7 @@ test('groups every general document into exactly one audience section', () => {
     for (const basename of expectedDocuments) {
       const expectedOccurrences = documents.includes(basename) ? 2 : 0;
       const actualOccurrences = (
-        section.match(new RegExp(`href="general/${basename}\\.(?:html|pdf)"`, 'gu')) ?? []
+        section.match(new RegExp(`href="general/${basename}(?:/|\\.pdf)"`, 'gu')) ?? []
       ).length;
       assert.equal(
         actualOccurrences,
@@ -59,8 +59,33 @@ test('groups every general document into exactly one audience section', () => {
 
   for (const basename of expectedDocuments) {
     const occurrences = (
-      docsIndex.match(new RegExp(`href="general/${basename}\\.(?:html|pdf)"`, 'gu')) ?? []
+      docsIndex.match(new RegExp(`href="general/${basename}(?:/|\\.pdf)"`, 'gu')) ?? []
     ).length;
     assert.equal(occurrences, 2, `${basename} must have exactly one HTML link and one PDF link.`);
+    assert.match(
+      docsIndex,
+      new RegExp(
+        `href="https://vivliostyle\\.org/viewer/#src=https://kubohiroya\\.github\\.io/tmpose-kamishibai/docs/general/${basename}/publication\\.json&amp;bookMode=true"`,
+        'u',
+      ),
+    );
+  }
+});
+
+test('offers HTML, Vivliostyle Viewer, and PDF on every document card', () => {
+  const actionGroups = [...docsIndex.matchAll(/<div class="actions">([\s\S]*?)<\/div>/gu)].map(
+    ([, actions]) => actions,
+  );
+
+  assert.equal(actionGroups.length, 10);
+  for (const actions of actionGroups) {
+    assert.deepEqual(
+      [...actions.matchAll(/<a\b[^>]*>([^<]+)<\/a>/gu)].map(([, label]) => label),
+      ['HTML', 'Vivliostyle Viewer', 'PDF'],
+    );
+    assert.match(
+      actions,
+      /href="https:\/\/vivliostyle\.org\/viewer\/#src=[^"]+&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer<\/a>/u,
+    );
   }
 });
