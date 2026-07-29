@@ -238,7 +238,7 @@ SB3の展開ソース形式、安全なimport、検証、決定的ビルドは�
 ```json
 {
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d"
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#51f26fcfd68ab39b12f329e86a89e9f306dd7bfb"
   }
 }
 ```
@@ -257,6 +257,19 @@ pnpm sb3:check
 pnpm test
 pnpm run build
 ```
+
+埋め込み拡張はGitHubリポジトリ、追跡ref、固定commit、成果物パス、SHA-256を
+`app/embedded-extensions.json`へ記録します。状態確認と固定commitからの再同期は次の
+コマンドで行います。
+
+```bash
+pnpm sb3:extensions:status
+pnpm sb3:extensions:sync
+```
+
+上流refを新commitへ進める操作は`pnpm sb3:extensions:update -- [EXTENSION_ID]`として
+明示的に実行します。取得したJavaScriptを実行せず、IDとintegrityを検証してから
+transactionalに置換します。
 
 `pnpm run build` は配布用 `dist/downloads/kamishibai.sb3` を同じ正本から生成します。通常手順、置換時の安全判定、手動確認、ロールバックについては [`docs/general/06-developer-guide.md`](docs/general/06-developer-guide.md) を参照してください。
 

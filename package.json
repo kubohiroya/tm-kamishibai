@@ -30,6 +30,9 @@
     "sb3:build": "sb3-toolchain build app --output tmp/kamishibai.sb3",
     "sb3:check": "sb3-toolchain check app",
     "sb3:import": "sb3-toolchain import --output app",
+    "sb3:extensions:status": "sb3-toolchain extensions status app",
+    "sb3:extensions:sync": "sb3-toolchain extensions sync app",
+    "sb3:extensions:update": "sb3-toolchain extensions update app",
     "lint": "eslint src/builder bin test/builder.test.mjs",
     "format": "prettier --check package.json src/builder bin test/builder.test.mjs docs/general/06-developer-guide.md README.md",
     "typecheck": "tsc --project tsconfig.builder.json",
@@ -56,7 +59,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#d5ee417227d30f9dac7bdf0b6da9686606d2e07d",
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#fa0d827a8ee0fe58436aa1e7a6c227e6ace44186",
     "@types/node": "^24.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@vivliostyle/cli": "11.1.0",

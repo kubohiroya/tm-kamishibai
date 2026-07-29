@@ -36,7 +36,7 @@ function findProcedureCall(proccode) {
 }
 
 function loadRuntimeExpression(runtimeVariables) {
-  const extensionUrl = project.extensionURLs.twRuntimeExpression;
+  const extensionUrl = project.extensionURLs.kubohiroyaruntimeexpression;
   assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
   const source = Buffer.from(extensionUrl.split(',', 2)[1], 'base64').toString('utf8');
   let extension;
