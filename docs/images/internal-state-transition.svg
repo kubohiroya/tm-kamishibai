@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 760" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 860" role="img" aria-labelledby="title desc">
   <title id="title">紙芝居アプリの主要状態遷移</title>
   <desc id="desc">
-    初期化、タイトル、表紙とメニュー、台本準備、アセット読込、シーン実行、アクション実行、ポーズ待機の状態遷移。
+    初期化、タイトル、表紙とメニュー、台本準備、アセット読込、シーン実行、アクション実行、ポーズ待機、台本エラー表示と実行停止の状態遷移。
   </desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
@@ -77,6 +77,12 @@
   <text class="label" x="195" y="491">ポーズ待機</text>
   <text class="detail" x="195" y="517">exec pose action</text>
 
+  <g id="state-script-error" aria-label="台本エラー表示・実行停止">
+    <rect class="state" x="75" y="630" width="240" height="82"/>
+    <text class="label" x="195" y="664">台本エラー表示</text>
+    <text class="detail" x="195" y="690">invalidScript / stop all</text>
+  </g>
+
   <path class="edge" d="M 500 99 L 500 145"/>
   <text class="edge-label" x="565" y="127">showTitle</text>
 
@@ -110,12 +116,19 @@
   <path class="edge" d="M 925 496 C 970 496 970 410 925 410 C 875 410 875 455 875 455"/>
   <text class="edge-label" x="946" y="438">branch</text>
 
-  <path class="edge" d="M 760 537 C 610 690 225 665 195 362"/>
-  <text class="edge-label" x="480" y="692">stopStory / 最終scene</text>
+  <path class="edge" d="M 760 537 C 760 805 30 805 30 321 L 75 321"/>
+  <text class="edge-label" x="500" y="830">stopStory / 最終scene</text>
 
   <path class="edge" d="M 195 280 C 195 125 355 125 410 162"/>
   <text class="edge-label" x="255" y="142">title button</text>
 
-  <path class="edge" d="M 420 340 C 335 390 280 405 220 455"/>
-  <text class="edge-label" x="315" y="400">invalidScript</text>
+  <g id="transition-invalid-script-from-preparation" aria-label="台本準備から台本エラー表示・実行停止">
+    <path class="edge" d="M 420 362 C 350 390 45 385 45 671 L 75 671"/>
+    <text class="edge-label" x="245" y="390">invalidScript</text>
+  </g>
+
+  <g id="transition-invalid-script-from-scene" aria-label="シーン実行から台本エラー表示・実行停止">
+    <path class="edge" d="M 705 520 C 610 600 430 610 315 671"/>
+    <text class="edge-label" x="510" y="600">invalidScript</text>
+  </g>
 </svg>

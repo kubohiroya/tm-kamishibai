@@ -52,6 +52,57 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
 });
 
+test('documents invalidScript as a terminal error instead of a pose transition', () => {
+  const invalidScriptSenders = projectSource.targets.flatMap((target) =>
+    Object.entries(target.blocks ?? {})
+      .filter(
+        ([, block]) =>
+          block.opcode === 'event_broadcast' &&
+          JSON.stringify(block.inputs?.BROADCAST_INPUT).includes('"invalidScript"'),
+      )
+      .map(([id, block]) => ({id, block, target})),
+  );
+
+  assert.equal(invalidScriptSenders.length, 3);
+  for (const {id, block, target} of invalidScriptSenders) {
+    const stopBlock = target.blocks[block.next];
+    assert.equal(
+      stopBlock?.opcode,
+      'control_stop',
+      `${target.name}:${id} is not followed by stop.`,
+    );
+    assert.equal(stopBlock.fields?.STOP_OPTION?.[0], 'all');
+  }
+
+  const prompt = projectSource.targets.find(({name}) => name === 'prompt');
+  const receiver = Object.values(prompt.blocks).find(
+    (block) =>
+      block.opcode === 'event_whenbroadcastreceived' &&
+      block.fields?.BROADCAST_OPTION?.[0] === 'invalidScript',
+  );
+  const setErrorSkin = prompt.blocks[receiver.next];
+  const showPrompt = prompt.blocks[setErrorSkin.next];
+
+  assert.equal(setErrorSkin.opcode, 'kubohiroyaassetmanager_setThisSpriteSkin');
+  assert.match(JSON.stringify(setErrorSkin.inputs?.NAME), /ui\.invalidScript/u);
+  assert.equal(showPrompt.opcode, 'looks_show');
+
+  assert.match(stateDiagram, /<g id="state-script-error" aria-label="台本エラー表示・実行停止">/u);
+  assert.match(
+    stateDiagram,
+    /<g id="transition-invalid-script-from-preparation" aria-label="台本準備から台本エラー表示・実行停止">/u,
+  );
+  assert.match(
+    stateDiagram,
+    /<g id="transition-invalid-script-from-scene" aria-label="シーン実行から台本エラー表示・実行停止">/u,
+  );
+  assert.match(specification, /`invalidScript`はpose待機への遷移ではありません/u);
+  assert.match(
+    specification,
+    /\| 台本エラー表示・実行停止\s+\| 台本・command・scene解析エラー時の`invalidScript`/u,
+  );
+});
+
 test('keeps the implementation snapshot aligned with the current SB3 source', () => {
   const blocks = projectSource.targets.flatMap((target) => Object.entries(target.blocks ?? {}));
   const eventHats = blocks.filter(
