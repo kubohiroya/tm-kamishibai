@@ -322,3 +322,15 @@ tmpose-kamishibai build-sb3 \
 既存の開発履歴を引き継ぎ、汎用ビルダーを公開する最初のnpmパッケージ版は`3.1.0`とします。`package.json`のバージョン、npmの公開バージョン、Gitタグ`v3.1.0`を一致させ、公開済みバージョンとタグは移動・削除しません。
 
 紙芝居アプリの配布SB3は、kamishibai 3.1の展開ソースからビルド時に生成します。
+
+## ライセンス
+
+著作権とライセンスは対象ごとに区分します。
+
+- `docs/general/**`: CC BY-SA 4.0
+- `docs/workshops/**`: Copyright © 2026 Hiroya Kubo. All rights reserved.
+- 上記以外で個別表示のない、本プロジェクトが著作権を持つソフトウェアおよび素材:
+  MPL-2.0
+
+詳細と第三者著作物の扱いは[`LICENSES.md`](LICENSES.md)を参照してください。npmパッケージに
+含まれるCLIとbuilder APIにはMPL-2.0を適用します。

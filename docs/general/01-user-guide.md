@@ -1,5 +1,7 @@
 # 紙芝居アプリ 操作説明書
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 対象: 紙芝居を再生する人、発表者、授業やワークショップで進行する人\
 対象アプリ: 紙芝居アプリ `kamishibai=3.1` のWeb版と用途別SB3
 

@@ -1,5 +1,7 @@
 # 紙芝居アプリ ソフトウェア開発者向け資料
 
+Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
+
 この資料は、TMPose紙芝居を構成するアプリと、開発に関連するライブラリをソフトウェア開発者向けにまとめたものです。
 
 対象アプリ／DSL: `kamishibai=3.1`
