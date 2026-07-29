@@ -52,6 +52,28 @@ test('publishes the internal specification as a general HTML/PDF document', () =
   assert.match(stateDiagram, /<title id="title">紙芝居アプリの主要状態遷移<\/title>/u);
 });
 
+test('explains the actor command architecture and asset separation', () => {
+  const section = specification.match(
+    /^### 4\.2 アクターへ命令を届けるしくみ$(?<body>[\s\S]*?)(?=^### 4\.3 )/mu,
+  )?.groups?.body;
+
+  assert(section, 'Internal specification is missing the actor architecture overview.');
+  assert.match(section, /`Actor` targetを\*\*アクタースプライト\*\*/u);
+  assert.match(section, /`actorName`を割り当てられた各cloneを\*\*アクター\*\*/u);
+  for (const variable of ['actionTarget', 'actionCommand', 'actionParam', 'actionParam2']) {
+    assert(section.includes(`\`${variable}\``), `Actor overview is missing ${variable}.`);
+  }
+  assert.match(section, /`execActorAction`をbroadcast/u);
+  assert.match(section, /自分の`actorName`が`actionTarget`の\s*対象に含まれるか/u);
+  assert.match(
+    section,
+    /\[TurboWarp Asset Manager\]\(https:\/\/github\.com\/kubohiroya\/turbowarp-asset-manager\)/u,
+  );
+  assert.match(section, /アクタースプライトと、実際に使う画像・音声を分けて/u);
+  assert.match(section, /紙芝居DSLを解析・実行する処理系/u);
+  assert.match(section, /実行基盤\s*（runtime）/u);
+});
+
 test('documents invalidScript as a terminal error instead of a pose transition', () => {
   const invalidScriptSenders = projectSource.targets.flatMap((target) =>
     Object.entries(target.blocks ?? {})
