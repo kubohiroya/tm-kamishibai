@@ -46,6 +46,7 @@ function sharedDocumentationInputs() {
     path.join(projectRoot, 'docs/config.mjs'),
     fileURLToPath(new URL('./build-docs.mjs', import.meta.url)),
     fileURLToPath(new URL('./build-freshness.mjs', import.meta.url)),
+    fileURLToPath(new URL('./site-appbar.mjs', import.meta.url)),
   ];
 }
 

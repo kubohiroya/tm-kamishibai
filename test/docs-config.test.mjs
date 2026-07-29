@@ -77,7 +77,11 @@ test('delegates the workshop table of contents to Vivliostyle', () => {
   assert.doesNotMatch(`${cover}\n${source}`, /^#{1,6}\s+!\[/mu);
   assert.equal((cover.match(/^#\s+/gmu) ?? []).length, 1);
   assert.doesNotMatch(cover, /^#{2,6}\s+/mu);
-  assert.match(cover, /vivliostyle\.org\/viewer\/#src=.*&amp;bookMode=true/u);
+  assert.match(
+    cover,
+    /<nav class="cover-navigation" aria-label="文書ナビゲーション"><a href="toc\.html">目次へ<\/a><\/nav>/u,
+  );
+  assert.doesNotMatch(cover, /vivliostyle\.org\/viewer\//u);
   assert.match(source, /^# 0\. この教材と体験会について$/mu);
   assert.doesNotMatch(source, /^# [ABC]\. 付録/mu);
   assert.match(source, /^\*\*うまく動かないとき\*\*$/mu);

@@ -11,6 +11,7 @@ import {
   resolveLearnedThroughGrade,
   staffDocumentConfig,
 } from '../docs/config.mjs';
+import {installSiteAppBars} from './site-appbar.mjs';
 
 const require = createRequire(import.meta.url);
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -447,6 +448,12 @@ export async function buildDocs({
       }),
     );
   }
+
+  const appBarResult = await installSiteAppBars(docsDirectory, distDirectory);
+  console.log(
+    `Installed the shared AppBar in ${appBarResult.installedCount} of `
+      + `${appBarResult.htmlCount} documentation HTML file(s).`,
+  );
 
   if (selectedPublications.has('general')) {
     console.log(
