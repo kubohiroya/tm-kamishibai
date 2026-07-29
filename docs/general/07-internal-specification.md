@@ -12,6 +12,55 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 
 過去のバージョンからの変更は[`history.md`](history.md)を参照してください。
 
+## この文書で使う用語
+
+本書ではScratch／TurboWarpの用語と、このアプリ固有の用語を次の意味で使います。
+表中の等幅書体（`Stage`、`script`、`action=`など）は、target名、変数名、DSL記法として
+実装に現れる正確な綴りを表します。通常書体の用語は、概念または分類名を表します。
+詳細なデータ構造や処理は、表に示した後続の章で説明します。
+
+### Scratch／TurboWarpのproject構造
+
+| 用語    | この文書での意味                                                                                                |
+| ------- | --------------------------------------------------------------------------------------------------------------- |
+| project | Stage、sprite、block、変数、画像、音声などをまとめたScratch／TurboWarp作品全体                                  |
+| SB3     | projectを1ファイルに格納するScratch 3形式。このリポジトリではbuildによって生成する成果物                        |
+| target  | project内でblock、変数、costumeなどを所有する実行単位。1つのStage targetと、0個以上のsprite targetがある        |
+| `Stage` | projectに1つだけある舞台のtarget。このアプリでは背景表示に加え、台本解析と実行状態の統括を担う。詳細は4章を参照 |
+| sprite  | 舞台上に表示・移動でき、costume、sound、block、変数を持てるtarget                                               |
+
+### cloneとActor
+
+| 用語                               | この文書での意味                                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| clone                              | 実行中にspriteから作る複製。同じblockを共有する一方、スプライトローカル変数にはcloneごとの値を持てる |
+| `Actor` target／アクタースプライト | アクターをcloneとして生成するためのsprite雛形。このprojectではtarget名が`Actor`                      |
+| アクター                           | `Actor` targetから作られ、`actorName`で区別される個々のclone。物語上の登場人物としてactionを実行する |
+
+### 紙芝居DSLと実行
+
+| 用語                    | この文書での意味                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| asset                   | Asset Managerへ名前付きで登録する画像、音声、text。SB3内のcostumeなどと外部URLのresourceを同じ方法で参照できる      |
+| 紙芝居DSL／台本ファイル | asset、アクター、scene、actionなどをテキストで定義する言語と、その言語で記述したファイル                            |
+| `script`                | 読み込んだ台本を保持するruntime variable。外部ファイルと組み込み台本は、ここから同じ処理経路へ入る                  |
+| scene                   | 台本を`---`で区切った実行単位。内部では最初の区切りより前をscene 0として扱う                                        |
+| command                 | 台本の`key=value`形式の1行。`exec command %s %s`がkeyに応じて設定、定義、action登録などを行う                       |
+| action                  | scene内で順番に実行する演出命令。Stageが実行するStage actionと、アクターへ送るActor actionがある                    |
+| action envelope         | Actor actionの宛先、command、引数を入れる`actionTarget`、`actionCommand`、`actionParam`、`actionParam2`のまとまり   |
+| message／broadcast      | Scratch／TurboWarpのevent配送機構。broadcastすると、そのmessageに対応するhat blockがあるtargetやcloneで処理が始まる |
+
+### 変数とblock
+
+| 用語                 | この文書での意味                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Scratch変数／list    | SB3に保存され、Stageまたはspriteが所有する値と配列                                                                                       |
+| runtime variable     | Runtime Variables機能拡張が保持し、project全体から参照する共有値                                                                         |
+| thread variable      | Thread Variables機能拡張が、カスタムブロック呼出し単位で保持する一時値                                                                   |
+| event hat／hat block | green flag、broadcast受信、clickなどのeventを受けて処理を開始する、stack最上部のblock                                                    |
+| カスタムブロック     | project内で定義し、名前と引数によって呼び出す処理。一般的なプログラミング言語のprocedureに相当する                                       |
+| block ID             | SB3の`targets[].blocks`内でblockを識別するkey。実装スナップショット内の調査にだけ使い、版をまたぐ永続IDとしては扱わない。詳細は6章を参照 |
+
 ## 1. 文書の範囲と実装基準
 
 アプリ内部構造の正本は`app/project.source.json`です。本書のtarget、変数、list、
@@ -208,6 +257,17 @@ DSL名、同一target内のSB3名、既存SB3のアセット名は重複でき�
 なりません。
 
 ## 4. SB3の構成
+
+Scratch／TurboWarpのprojectは、1つの**Stage（ステージ）** targetと、0個以上のsprite targetから
+構成されます。Stage targetはproject全体の舞台を表し、背景（backdrop）を表示します。
+Stage自身にblock、variable、listを持てますが、spriteのように座標を変えて動かしたり、
+cloneを作ったりする対象ではありません。
+
+このアプリでは、Stage targetを舞台の表示だけでなく、紙芝居全体の制御役として使います。
+Stageに置かれたblock群が、台本の読込・解析、assetとactorの生成、sceneとactionの実行、
+カメラと入力、画面遷移、共有runtime状態を統括します。したがって、本書やシーケンス図で
+`Stage`と書いた場合は、画面に見える舞台だけでなく、このStage targetとそこに置かれた
+制御用block群を指します。
 
 ### 4.1 target一覧
 
