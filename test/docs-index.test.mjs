@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import test from 'node:test';
+
+import {generalDocumentConfig} from '../docs/config.mjs';
+
+const docsIndex = readFileSync(new URL('../site/docs/index.html', import.meta.url), 'utf8');
+
+const audienceSections = [
+  {
+    id: 'general-documents',
+    title: '一般向けドキュメント',
+    documents: ['01-executive-summary-adult', '02-executive-summary-kids', '03-user-guide'],
+  },
+  {
+    id: 'dsl-author-documents',
+    title: '紙芝居DSL作成者向けドキュメント',
+    documents: ['04-dsl-manual', '05-command-reference', 'history'],
+  },
+  {
+    id: 'developer-documents',
+    title: '開発者向けドキュメント',
+    documents: ['06-developer-guide', '07-internal-specification'],
+  },
+];
+
+function sectionSource(id) {
+  const match = docsIndex.match(
+    new RegExp(`<section aria-labelledby="${id}">([\\s\\S]*?)\\n  </section>`, 'u'),
+  );
+  assert(match, `Documentation section is missing: ${id}`);
+  return match[1];
+}
+
+test('groups every general document into exactly one audience section', () => {
+  const expectedDocuments = generalDocumentConfig.documents.map(({sourceFilename}) =>
+    sourceFilename.replace(/\.md$/u, ''),
+  );
+  const groupedDocuments = audienceSections.flatMap(({documents}) => documents);
+
+  assert.deepEqual(groupedDocuments.toSorted(), expectedDocuments.toSorted());
+
+  for (const {id, title, documents} of audienceSections) {
+    const section = sectionSource(id);
+    assert.match(section, new RegExp(`<h2 id="${id}">${title}</h2>`, 'u'));
+
+    for (const basename of expectedDocuments) {
+      const expectedOccurrences = documents.includes(basename) ? 2 : 0;
+      const actualOccurrences = (
+        section.match(new RegExp(`href="general/${basename}\\.(?:html|pdf)"`, 'gu')) ?? []
+      ).length;
+      assert.equal(
+        actualOccurrences,
+        expectedOccurrences,
+        `${basename} is assigned incorrectly in ${id}.`,
+      );
+    }
+  }
+
+  for (const basename of expectedDocuments) {
+    const occurrences = (
+      docsIndex.match(new RegExp(`href="general/${basename}\\.(?:html|pdf)"`, 'gu')) ?? []
+    ).length;
+    assert.equal(occurrences, 2, `${basename} must have exactly one HTML link and one PDF link.`);
+  }
+});
