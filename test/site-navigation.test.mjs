@@ -5,7 +5,10 @@ import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {injectSiteAppBar} from '../scripts/site-appbar.mjs';
-import {updateAppBarScrollState} from '../site/site-shell.js';
+import {
+  shouldHideAppBarForFragment,
+  updateAppBarScrollState,
+} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
@@ -178,6 +181,37 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
     },
   );
   assert.equal(state.hidden, false);
+});
+
+test('starts hidden when a document opens at a heading fragment', () => {
+  assert.equal(
+    shouldHideAppBarForFragment({
+      hash: '#1-概要',
+      isDocumentPage: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldHideAppBarForFragment({
+      hash: '#main-content',
+      isDocumentPage: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldHideAppBarForFragment({
+      hash: '',
+      isDocumentPage: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldHideAppBarForFragment({
+      hash: '#1-概要',
+      isDocumentPage: false,
+    }),
+    false,
+  );
 });
 
 test('keeps only the table-of-contents button on the workshop cover', async () => {
