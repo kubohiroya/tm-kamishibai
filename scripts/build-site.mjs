@@ -11,12 +11,15 @@ import {
 } from '../docs/config.mjs';
 import {buildDocs} from './build-docs.mjs';
 import {outdatedPublicationNames} from './build-freshness.mjs';
+import {renderSiteVersion} from './site-version.mjs';
 import {verifyBuild} from './verify-build.mjs';
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../dist/', import.meta.url);
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputPath = fileURLToPath(output);
+const packageJsonPath = path.join(projectRoot, 'package.json');
+const siteIndexPath = path.join(outputPath, 'index.html');
 const faviconPath = path.join(outputPath, 'favicon.png');
 const heroImageSource = new URL('../docs/images/image01.png', import.meta.url);
 const heroImageDirectory = new URL('../dist/images/', import.meta.url);
@@ -146,6 +149,15 @@ async function prepareOutputDirectory() {
   await cp(source, output, {recursive: true});
 }
 
+async function renderSiteMetadata() {
+  const [sourceHtml, packageJsonSource] = await Promise.all([
+    readFile(siteIndexPath, 'utf8'),
+    readFile(packageJsonPath, 'utf8'),
+  ]);
+  const packageJson = JSON.parse(packageJsonSource);
+  await writeFile(siteIndexPath, renderSiteVersion(sourceHtml, packageJson.version));
+}
+
 async function findHtmlFiles(directory) {
   const entries = await readdir(directory, {withFileTypes: true});
   const nestedFiles = await Promise.all(entries.map(async (entry) => {
@@ -182,6 +194,7 @@ async function addFaviconLinks() {
 }
 
 await prepareOutputDirectory();
+await renderSiteMetadata();
 const sb3Build = await buildSb3({
   outputPath: fileURLToPath(downloadSb3),
   sourceDirectory: path.join(projectRoot, 'app'),
