@@ -350,6 +350,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   for (const sourceFilename of ['04-dsl-manual.md', '05-command-reference.md']) {
     const source = sources.get(sourceFilename);
     for (const feature of [
+      'setLoadingBackdrop',
       'setLoadingCostume',
       'setRuntimeVariable',
       'registerBranch',
@@ -378,6 +379,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   assert.doesNotMatch(history, /^### (?:2\.0|3\.1)$/mu);
   assert.doesNotMatch(history, /^## 2\.0台本の移行チェックリスト$/mu);
   for (const feature of [
+    'setLoadingBackdrop',
     'setLoadingCostume',
     'Loading',
     'setRuntimeVariable',
@@ -404,6 +406,10 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   assert.match(
     sources.get('05-command-reference.md'),
     /setLoadingCostume=loading1,loading2,loading3/u,
+  );
+  assert.match(
+    sources.get('05-command-reference.md'),
+    /setLoadingBackdrop=loadingBackground/u,
   );
   assert.match(sources.get('03-user-guide.md'), /Loading.*分子・分母/u);
 });

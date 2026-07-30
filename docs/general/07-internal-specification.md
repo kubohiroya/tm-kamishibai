@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1460 |
+| block                    | 1474 |
 | event hat                |   39 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
@@ -148,16 +148,16 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 
 ### target一覧
 
-| target                | 種別       | 役割                                                                | 初期costume／sound      |
-| --------------------- | ---------- | ------------------------------------------------------------------- | ----------------------- |
-| `Stage`               | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `Stars`        |
-| `Actor`               | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／`pop`        |
-| `prompt`              | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`        |
-| `openButton`          | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`        |
-| `reloadButton`        | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`        |
-| `showTitleButton`     | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`        |
-| `Loading`             | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／`Chirp`      |
-| `LoadingBubbleAnchor` | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor` |
+| target                | 種別       | 役割                                                                | 初期costume／sound                  |
+| --------------------- | ---------- | ------------------------------------------------------------------- | ----------------------------------- |
+| `Stage`               | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `Stars`, `LoadingBackdrop` |
+| `Actor`               | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／`pop`                    |
+| `prompt`              | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`                    |
+| `openButton`          | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                    |
+| `reloadButton`        | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                    |
+| `showTitleButton`     | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                    |
+| `Loading`             | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／`Chirp`                  |
+| `LoadingBubbleAnchor` | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`             |
 
 `Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、3つのmenu button、
 `Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
@@ -420,7 +420,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `Stage` | `dL` | `min %s %s`                                | `valueA`, `valueB`           | yes  | —                                                                                                            |
 | `Stage` | `d)` | `exec command %s %s`                       | `key`, `value`               | no   | `substr of %s after %s`, `selectValue # %s separated by %s from %s`, `setTMPoseURL with %s`; `invalidScript` |
 | `Stage` | `e+` | `create sceneList`                         | —                            | yes  | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `fe` | `create asset`                             | —                            | no   | `selectValue...`; `assetLoadingStarted/Progress/Completed`                                                   |
+| `Stage` | `fe` | `create asset`                             | —                            | no   | 組み込み`LoadingBackdrop`; Asset Manager; `assetLoadingStarted/Progress/Completed`                           |
 | `Stage` | `fv` | `create actor`                             | —                            | no   | `selectValue # %s separated by %s from %s`                                                                   |
 
 #### camera・pose
@@ -471,15 +471,16 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### 主要な呼出し経路
 
-| 起点         | 経路                                                                                |
-| ------------ | ----------------------------------------------------------------------------------- |
-| green flag   | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                               |
-| `startStory` | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`        |
-| scene実行    | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`             |
-| Stage action | branch、transition、key／touch入力、`wait`などへdispatch                            |
-| Actor action | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action |
-| pose action  | camera preview／pose認識開始 → `exec pose %s`反復 →認識停止 → prompt非表示          |
-| 終了         | `stopStory` → camera／pose停止 → actor削除 → cover → menu                           |
+| 起点          | 経路                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| green flag    | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                               |
+| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`        |
+| scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`             |
+| Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                            |
+| Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action |
+| pose action   | camera preview／pose認識開始 → `exec pose %s`反復 →認識停止 → prompt非表示          |
+| asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット      |
+| 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                           |
 
 ## broadcastと状態遷移
 

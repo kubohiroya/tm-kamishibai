@@ -74,6 +74,14 @@ text=ui.about:このアプリについて
 
 シーン直下の`text=テキストアセット名:文字列`も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の`action=text:...`を使用します。
 
+### `setLoadingBackdrop`
+
+```text
+setLoadingBackdrop=loadingBackground
+```
+
+アセット読込中のステージ背景を指定できるようにしました。指定背景を最初に読み込み、完了直後に表示します。Loading用背景は進捗の分子・分母から除外されます。省略時は組み込みの真っ黒な背景を表示し、タイトル画面をLoading中に残しません。
+
 ### `setLoadingCostume`
 
 ```text

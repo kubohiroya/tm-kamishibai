@@ -20,6 +20,7 @@ DSLは「Domain Specific Language」の略です。ここでは「紙芝居を�
 ```text
 kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
+setLoadingBackdrop=読み込み背景
 setLoadingCostume=読み込み画像1,読み込み画像2
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
@@ -126,12 +127,16 @@ asset=Narration,text
 asset=loading1,https://example.com/loading/loading1.png
 asset=loading2,https://example.com/loading/loading2.png
 asset=loading3,https://example.com/loading/loading3.png
+asset=loadingBackground,https://example.com/loading/background.png
+setLoadingBackdrop=loadingBackground
 setLoadingCostume=loading1,loading2,loading3
 ```
 
-`setLoadingCostume`には、`asset`で定義した画像アセット名をカンマ区切りで指定します。指定した画像は他のアセットより先に読み込まれ、その後の通常アセット読込中に、特別な組み込みスプライト`Loading`へ順番に表示されます。通常アセットの1件目では`loading1`、2件目では`loading2`、4件目では再び`loading1`というように循環します。
+`setLoadingBackdrop`にはLoading中に表示する背景アセット名を1件指定します。指定した背景は最初に読み込まれ、読み込み完了直後にステージへ表示されます。指定を省略した場合は、タイトル画像を残さず、組み込みの真っ黒な背景を表示します。
 
-Loading用アセットは、読込進捗の完了数と総数から除外されます。たとえばLoading用画像が3件、通常アセットが10件なら、吹き出しは`0 / 10`から`10 / 10`まで進みます。コマンドを省略した場合は、組み込みの`Loading`コスチュームを表示します。
+`setLoadingCostume`には、`asset`で定義した画像アセット名をカンマ区切りで指定します。指定した画像はLoading背景に続けて他のアセットより先に読み込まれ、その後の通常アセット読込中に、特別な組み込みスプライト`Loading`へ順番に表示されます。通常アセットの1件目では`loading1`、2件目では`loading2`、4件目では再び`loading1`というように循環します。
+
+Loading用の背景と画像は、読込進捗の完了数と総数から除外されます。たとえばLoading背景が1件、Loading用画像が3件、通常アセットが10件なら、吹き出しは`0 / 10`から`10 / 10`まで進みます。Loading画像の指定を省略した場合は、組み込みの`Loading`コスチュームを表示します。
 
 進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。このため、指定画像の大きさや非透明部分の外形が異なっても、画像の切替によって吹き出し位置は変わりません。
 
