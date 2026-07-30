@@ -248,7 +248,7 @@
               </tr>
               <tr>
                 <td>block</td>
-                <td align="right">1460</td>
+                <td align="right">1490</td>
               </tr>
               <tr>
                 <td>event hat</td>
@@ -272,7 +272,7 @@
               </tr>
               <tr>
                 <td>静的なruntime variable名</td>
-                <td align="right">16</td>
+                <td align="right">17</td>
               </tr>
               <tr>
                 <td>静的なthread variable名</td>
@@ -400,13 +400,13 @@
                 <td><code>Stage</code></td>
                 <td>Stage</td>
                 <td>初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括</td>
-                <td><code>Title</code>, <code>Stars</code></td>
+                <td><code>Title</code>, <code>Stars</code>, <code>LoadingBackdrop</code></td>
               </tr>
               <tr>
                 <td><code>Actor</code></td>
                 <td>sprite雛形</td>
                 <td>物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行</td>
-                <td><code>button1</code>／<code>pop</code></td>
+                <td><code>button1</code>／音声なし</td>
               </tr>
               <tr>
                 <td><code>prompt</code></td>
@@ -436,7 +436,7 @@
                 <td><code>Loading</code></td>
                 <td>UI sprite</td>
                 <td>Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示</td>
-                <td><code>loading</code>／<code>Chirp</code></td>
+                <td><code>loading</code>／音声なし</td>
               </tr>
               <tr>
                 <td><code>LoadingBubbleAnchor</code></td>
@@ -688,7 +688,7 @@
         </section>
         <section class="level3">
           <h3 id="runtime-variable">runtime variable</h3>
-          <p>静的な名前を持つruntime variableは次の16個です。</p>
+          <p>静的な名前を持つruntime variableは次の17個です。</p>
           <table>
             <thead>
               <tr>
@@ -734,6 +734,10 @@
                 <td>pose認識のしきい値、charge時間、idle時間</td>
               </tr>
               <tr>
+                <td><code>poseRecognitionSound</code></td>
+                <td><code>setPoseRecognitionSound</code>で指定した認識中の音声アセット名</td>
+              </tr>
+              <tr>
                 <td><code>loadingCostume</code></td>
                 <td>Loading spriteへ適用するcostume名</td>
               </tr>
@@ -746,7 +750,7 @@
           <p>
             このほか、<code>exec command %s %s</code>はDSLで指定されたruntime variable名を動的に設定します。
             分岐条件は<code>branch:&lt;branchName&gt;</code>という名前で保存します。この2系列は入力から名前が決まるため、
-            静的な16個には数えません。
+            静的な17個には数えません。
           </p>
         </section>
         <section class="level3">
@@ -1202,7 +1206,7 @@
                   <td><code>create asset</code></td>
                   <td>—</td>
                   <td>no</td>
-                  <td><code>selectValue...</code>; <code>assetLoadingStarted/Progress/Completed</code></td>
+                  <td>組み込み<code>LoadingBackdrop</code>; Asset Manager; <code>assetLoadingStarted/Progress/Completed</code></td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -1315,7 +1319,7 @@
                   <td><code>exec pose %s</code></td>
                   <td><code>actorName</code></td>
                   <td>no</td>
-                  <td><code>change skin...</code>, <code>min...</code>, <code>rate of pose recog</code></td>
+                  <td><code>change skin...</code>, Asset Managerの認識音再生／停止、<code>min...</code>, <code>rate of pose recog</code></td>
                 </tr>
               </tbody>
             </table>
@@ -1547,7 +1551,11 @@
               </tr>
               <tr>
                 <td>pose action</td>
-                <td>camera preview／pose認識開始 → <code>exec pose %s</code>反復 →認識停止 → prompt非表示</td>
+                <td>camera preview／pose認識開始 → <code>setPoseRecognitionSound</code>指定音を再生 → <code>exec pose %s</code>反復 →音声／認識停止 → prompt非表示</td>
+              </tr>
+              <tr>
+                <td>asset loading</td>
+                <td>組み込みの黒背景 → <code>setLoadingBackdrop</code>指定背景 → Loading用画像 → 通常アセット</td>
               </tr>
               <tr>
                 <td>終了</td>

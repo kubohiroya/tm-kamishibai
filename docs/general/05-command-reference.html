@@ -246,6 +246,44 @@ asset=main-caption,text:Narration</code></pre>
           </section>
         </section>
         <section class="level3">
+          <h3 id="setloadingbackdrop"><code>setLoadingBackdrop</code></h3>
+          <pre class="language-text"><code class="language-text">setLoadingBackdrop=Loading用背景アセット名</code></pre>
+          <p>アセット読込中にステージへ表示する背景アセットを1件指定します。</p>
+          <pre class="language-text"><code class="language-text">asset=loadingBackground,https://example.com/loading/background.png
+setLoadingBackdrop=loadingBackground</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th>内容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>役割</td>
+                <td>Loading用背景の最優先読込とステージ表示を設定する</td>
+              </tr>
+              <tr>
+                <td>必須</td>
+                <td>任意。省略時は組み込みの真っ黒な<code>LoadingBackdrop</code>を使う</td>
+              </tr>
+              <tr>
+                <td>値</td>
+                <td><code>asset</code>で定義した画像アセット名1件</td>
+              </tr>
+              <tr>
+                <td>読込順</td>
+                <td>Loading用背景、Loading用画像、通常アセットの順に読み込む</td>
+              </tr>
+              <tr>
+                <td>進捗</td>
+                <td>Loading用背景を除外した<code>完了数 / 総数</code>を吹き出しに表示する</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>指定名の前後の空白は無視されます。指定した名前が<code>asset</code>で定義されていない場合は読込エラーになります。読み込み開始時は組み込みの真っ黒な背景を即座に表示し、指定背景の読み込み完了後に差し替えます。</p>
+        </section>
+        <section class="level3">
           <h3 id="setloadingcostume"><code>setLoadingCostume</code></h3>
           <pre class="language-text"><code class="language-text">setLoadingCostume=Loading用アセット名1,Loading用アセット名2,...</code></pre>
           <p>アセット読込中に特別な組み込みスプライト<code>Loading</code>へ表示する画像アセットを指定します。</p>
@@ -275,7 +313,7 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
               </tr>
               <tr>
                 <td>読込順</td>
-                <td>指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む</td>
+                <td>Loading用背景に続けて、指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む</td>
               </tr>
               <tr>
                 <td>進捗</td>
@@ -289,6 +327,44 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
           </table>
           <p>たとえば3画像を指定した場合、通常アセット1、2、3、4件目には、それぞれ<code>loading1</code>、<code>loading2</code>、<code>loading3</code>、<code>loading1</code>が表示されます。カンマ前後の空白は無視され、重複名は1件として扱われます。指定した名前が<code>asset</code>で定義されていない場合は読込エラーになります。</p>
           <p>進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。指定画像の大きさや非透明部分の外形は、吹き出し位置に影響しません。</p>
+        </section>
+        <section class="level3">
+          <h3 id="setposerecognitionsound"><code>setPoseRecognitionSound</code></h3>
+          <pre class="language-text"><code class="language-text">setPoseRecognitionSound=ポーズ認識中の効果音アセット名</code></pre>
+          <p>各ポーズの認識中に再生する音声アセットを1件指定します。</p>
+          <pre class="language-text"><code class="language-text">asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
+setPoseRecognitionSound=Clock Ticking</code></pre>
+          <table>
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th>内容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>役割</td>
+                <td>ポーズ認識開始から終了までの効果音を設定する</td>
+              </tr>
+              <tr>
+                <td>必須</td>
+                <td>任意。省略時または空文字は無音</td>
+              </tr>
+              <tr>
+                <td>値</td>
+                <td><code>asset</code>で定義した音声アセット名1件</td>
+              </tr>
+              <tr>
+                <td>開始</td>
+                <td>各ポーズの認識開始時にAsset Manager経由で再生する</td>
+              </tr>
+              <tr>
+                <td>停止</td>
+                <td>認識成功、スペース／Right／Downによるスキップ、物語停止時に停止する</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。長いクリップは認識が先に終わると途中で停止します。複数のtick／tockを含むクリップを1アセットとして指定できます。</p>
         </section>
         <section class="level3">
           <h3 id="actor"><code>actor</code></h3>
@@ -976,7 +1052,11 @@ asset=Music,sound
 asset=Narration,text
 asset=Loading1,https://example.com/loading1.png
 asset=Loading2,https://example.com/loading2.png
+asset=LoadingBackground,https://example.com/loading-background.png
+asset=ClockTicking,https://example.com/clock-ticking.mp3
+setLoadingBackdrop=LoadingBackground
 setLoadingCostume=Loading1,Loading2
+setPoseRecognitionSound=ClockTicking
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound

@@ -36,6 +36,11 @@
       <p>対象DSL: <code>kamishibai=2.0</code> → <code>kamishibai=3.1</code><br>文書化日: 2026年7月27日</p>
       <p>この文書は、2.0向けの旧ドキュメントと3.1の現行仕様を比較し、台本作者・教材作成者・開発者が把握すべき差分をまとめたものです。中間バージョンごとの導入時期は区別せず、2.0から3.1までの累積差分として記載します。</p>
       <section class="level2">
+        <h2 id="314リリース">3.1.4リリース</h2>
+        <p>3.1.4では、アセット読込中の背景を指定する<code>setLoadingBackdrop</code>と、ポーズ認識中の効果音を指定する<code>setPoseRecognitionSound</code>を追加しました。Loading背景を省略した場合は組み込みの真っ黒な背景を表示し、アセット読込中にタイトル画面を残しません。</p>
+        <p>ポーズ認識音はAsset Managerへ登録した音声アセットを使います。認識開始時に再生し、認識成功またはスキップで停止します。台本を切り替えたときは設定をリセットし、次の台本へ効果音を持ち越しません。generic SB3に残っていた未使用の<code>Actor/pop</code>と<code>Loading/Chirp</code>は本番成果物から削除し、テスト専用fixtureへ移しました。</p>
+      </section>
+      <section class="level2">
         <h2 id="変更の概要">変更の概要</h2>
         <p>2.0は、シーンを先頭から順番に再生し、背景、登場人物、セリフ、音、移動、ポーズ認識を組み合わせる構成でした。</p>
         <p>3.1では、この基本機能を維持しながら、次の機能を追加・拡張しました。</p>
@@ -127,9 +132,19 @@ text=ui.about:このアプリについて</code></pre>
           <p>シーン直下の<code>text=テキストアセット名:文字列</code>も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の<code>action=text:...</code>を使用します。</p>
         </section>
         <section class="level3">
+          <h3 id="setloadingbackdrop"><code>setLoadingBackdrop</code></h3>
+          <pre class="language-text"><code class="language-text">setLoadingBackdrop=loadingBackground</code></pre>
+          <p>アセット読込中のステージ背景を指定できるようにしました。指定背景を最初に読み込み、完了直後に表示します。Loading用背景は進捗の分子・分母から除外されます。省略時は組み込みの真っ黒な背景を表示し、タイトル画面をLoading中に残しません。</p>
+        </section>
+        <section class="level3">
           <h3 id="setloadingcostume"><code>setLoadingCostume</code></h3>
           <pre class="language-text"><code class="language-text">setLoadingCostume=loading1,loading2,loading3</code></pre>
           <p>アセット読込中に表示する画像アセットを複数指定できるようにしました。指定アセットを通常アセットより先に読み込み、通常アセットの読込番号に応じて循環表示します。吹き出しの<code>完了数 / 総数</code>からLoading用アセット自身は除外します。省略した台本は組み込みのLoadingコスチュームを使います。</p>
+        </section>
+        <section class="level3">
+          <h3 id="setposerecognitionsound"><code>setPoseRecognitionSound</code></h3>
+          <pre class="language-text"><code class="language-text">setPoseRecognitionSound=Clock Ticking</code></pre>
+          <p>ポーズ認識開始から終了まで鳴らす音声アセットを台本から指定できるようにしました。省略時は無音です。generic SB3に残っていた未使用の<code>Actor/pop</code>と<code>Loading/Chirp</code>は本番成果物から削除し、テスト専用fixtureへ移しました。</p>
         </section>
       </section>
       <section class="level2">
