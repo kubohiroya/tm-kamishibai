@@ -93,7 +93,7 @@ TurboWarp紙芝居アプリ／Web版
 参加者のポーズ成功で次へ進む
 ```
 
-アプリ側では、`asset`、`setLoadingBackdrop`、`setLoadingCostume`、`actor`、`cover`、`setRuntimeVariable`、`registerBranch`、`sceneLabel`、`TMPoseURL`、`text`、`action` といったコマンドを解釈します。シーンは `---` で区切られ、通常は順番に、分岐が指定された場合は対応するラベルへ移動して実行されます。
+アプリ側では、`asset`、`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`、`actor`、`cover`、`setRuntimeVariable`、`registerBranch`、`sceneLabel`、`TMPoseURL`、`text`、`action` といったコマンドを解釈します。シーンは `---` で区切られ、通常は順番に、分岐が指定された場合は対応するラベルへ移動して実行されます。
 
 `setLoadingBackdrop`で指定した背景と`setLoadingCostume`で指定した画像アセットは、通常アセットより先に読み込まれます。その後、組み込みスプライト`Loading`が通常アセットだけを対象とした`完了数 / 総数`を吹き出しに表示し、指定画像を読込番号に応じて循環表示します。背景未指定時は真っ黒な組み込み背景を使うため、タイトル画面を残しません。
 

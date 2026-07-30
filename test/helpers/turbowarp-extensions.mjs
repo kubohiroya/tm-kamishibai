@@ -102,6 +102,8 @@ export function registerKamishibaiTestExtensions(
     loadingBackdrop: '',
     loadingCostumes: [],
     playingSounds: new Set(),
+    poseMatches: false,
+    poseScore: 0,
     runtimeVariableWrites: [],
     timers: new Map(),
     tempVariables: null,
@@ -484,12 +486,12 @@ export function registerKamishibaiTestExtensions(
     currentPoseReporter() { return ''; }
     hidePreview() {}
     isModelLoaded() { return true; }
-    isPoseWithThreshold() { return false; }
+    isPoseWithThreshold() { return state.poseMatches; }
     lastErrorReporter() { return ''; }
     loadModel() {}
     menu_positionMenu(args) { return args.positionMenu ?? 'top-left'; }
-    poseScoreReporter() { return 0; }
-    scoreReporter() { return 0; }
+    poseScoreReporter() { return state.poseScore; }
+    scoreReporter() { return state.poseScore; }
     setModelURL() {}
     setPreviewOpacity() {}
     setPreviewPosition() {}

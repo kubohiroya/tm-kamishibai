@@ -237,6 +237,29 @@ setLoadingCostume=loading1,loading2,loading3
 
 進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。指定画像の大きさや非透明部分の外形は、吹き出し位置に影響しません。
 
+### `setPoseRecognitionSound`
+
+```text
+setPoseRecognitionSound=ポーズ認識中の効果音アセット名
+```
+
+各ポーズの認識中に再生する音声アセットを1件指定します。
+
+```text
+asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
+setPoseRecognitionSound=Clock Ticking
+```
+
+| 項目 | 内容 |
+|---|---|
+| 役割 | ポーズ認識開始から終了までの効果音を設定する |
+| 必須 | 任意。省略時または空文字は無音 |
+| 値 | `asset`で定義した音声アセット名1件 |
+| 開始 | 各ポーズの認識開始時にAsset Manager経由で再生する |
+| 停止 | 認識成功、スペース／Right／Downによるスキップ、物語停止時に停止する |
+
+指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。長いクリップは認識が先に終わると途中で停止します。複数のtick／tockを含むクリップを1アセットとして指定できます。
+
 ### `actor`
 
 ```text
@@ -898,8 +921,10 @@ asset=Narration,text
 asset=Loading1,https://example.com/loading1.png
 asset=Loading2,https://example.com/loading2.png
 asset=LoadingBackground,https://example.com/loading-background.png
+asset=ClockTicking,https://example.com/clock-ticking.mp3
 setLoadingBackdrop=LoadingBackground
 setLoadingCostume=Loading1,Loading2
+setPoseRecognitionSound=ClockTicking
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound

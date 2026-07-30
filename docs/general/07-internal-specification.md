@@ -99,13 +99,13 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1474 |
+| block                    | 1490 |
 | event hat                |   39 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
 | Scratch list             |   11 |
 | broadcast message        |   18 |
-| 静的なruntime variable名 |   16 |
+| 静的なruntime variable名 |   17 |
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   12 |
 
@@ -151,12 +151,12 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 | target                | 種別       | 役割                                                                | 初期costume／sound                  |
 | --------------------- | ---------- | ------------------------------------------------------------------- | ----------------------------------- |
 | `Stage`               | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `Stars`, `LoadingBackdrop` |
-| `Actor`               | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／`pop`                    |
+| `Actor`               | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                 |
 | `prompt`              | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`                    |
 | `openButton`          | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                    |
 | `reloadButton`        | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                    |
 | `showTitleButton`     | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                    |
-| `Loading`             | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／`Chirp`                  |
+| `Loading`             | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                 |
 | `LoadingBubbleAnchor` | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`             |
 
 `Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、3つのmenu button、
@@ -289,7 +289,7 @@ runtime variableの3種類に分けます。
 
 ### runtime variable
 
-静的な名前を持つruntime variableは次の16個です。
+静的な名前を持つruntime variableは次の17個です。
 
 | 変数                                                           | 生存期間／役割                                                   |
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -302,12 +302,13 @@ runtime variableの3種類に分けます。
 | `skipMode`                                                     | `Space`、`Right`、`Down`による未消費の進行要求                   |
 | `skipContext`                                                  | `title`、`action`、`pose`、`scene`のどの境界が要求を消費できるか |
 | `poseRecog`, `poseCharge`, `poseIdle`                          | pose認識のしきい値、charge時間、idle時間                         |
+| `poseRecognitionSound`                                         | `setPoseRecognitionSound`で指定した認識中の音声アセット名        |
 | `loadingCostume`                                               | Loading spriteへ適用するcostume名                                |
 | `message`                                                      | Loading bubbleへ表示する現在の進捗文言                           |
 
 このほか、`exec command %s %s`はDSLで指定されたruntime variable名を動的に設定します。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
-静的な16個には数えません。
+静的な17個には数えません。
 
 ### thread variable
 
@@ -437,7 +438,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `Stage` | `d%` | `start camera preview` | —           | no   | —                                                                                                                                |
 | `Stage` | `d(` | `stop camera preview`  | —           | no   | —                                                                                                                                |
 | `Stage` | `dk` | `exec pose action %s`  | `actorName` | no   | `start camera preview`, `start pose recog`, `exec pose %s`, `stop pose recog`, `stop camera preview`; `showPrompt`, `hidePrompt` |
-| `Stage` | `f[` | `exec pose %s`         | `actorName` | no   | `change skin...`, `min...`, `rate of pose recog`                                                                                 |
+| `Stage` | `f[` | `exec pose %s`         | `actorName` | no   | `change skin...`, Asset Managerの認識音再生／停止、`min...`, `rate of pose recog`                                                |
 
 #### scene・action・actor
 
@@ -471,16 +472,16 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### 主要な呼出し経路
 
-| 起点          | 経路                                                                                |
-| ------------- | ----------------------------------------------------------------------------------- |
-| green flag    | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                               |
-| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`        |
-| scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`             |
-| Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                            |
-| Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action |
-| pose action   | camera preview／pose認識開始 → `exec pose %s`反復 →認識停止 → prompt非表示          |
-| asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット      |
-| 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                           |
+| 起点          | 経路                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| green flag    | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                                                                    |
+| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`                                             |
+| scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`                                                  |
+| Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                                                                 |
+| Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action                                      |
+| pose action   | camera preview／pose認識開始 → `setPoseRecognitionSound`指定音を再生 → `exec pose %s`反復 →音声／認識停止 → prompt非表示 |
+| asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                           |
+| 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                |
 
 ## broadcastと状態遷移
 
