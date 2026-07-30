@@ -114,6 +114,19 @@
   const blockDefinitions = definitions.blocks;
   blockDefinitions.unshift(
     {
+      opcode: "setLoadingBackdrop",
+      blockType: "COMMAND",
+      text: "set loading backdrop asset to [NAME]",
+      description: "Configures the image asset shown behind the loading indicator.",
+      arguments: {
+        NAME: {
+          type: "STRING",
+          defaultValue: "loadingBackdrop"
+        }
+      },
+      hideFromPalette: true
+    },
+    {
       opcode: "setLoadingCostumes",
       blockType: "COMMAND",
       text: "set loading costume assets to [NAMES]",
@@ -144,6 +157,14 @@
       blockType: "REPORTER",
       text: "loading asset count",
       description: "Returns the number of configured loading assets present in the prepared asset list.",
+      arguments: {},
+      hideFromPalette: true
+    },
+    {
+      opcode: "loadingBackdrop",
+      blockType: "REPORTER",
+      text: "loading backdrop asset",
+      description: "Returns the configured loading backdrop asset name.",
       arguments: {},
       hideFromPalette: true
     },
@@ -275,9 +296,14 @@
       __publicField(this, "displayedAssets", /* @__PURE__ */ new Map());
       __publicField(this, "playingAudio", /* @__PURE__ */ new Map());
       __publicField(this, "registrationVersions", /* @__PURE__ */ new Map());
+      __publicField(this, "loadingBackdropName", "");
       __publicField(this, "lastAssetErrorType", "");
       __publicField(this, "lastAssetErrorLabel", "");
       __publicField(this, "assetErrorVersion", 0);
+    }
+    setLoadingBackdrop(args) {
+      this.loadingBackdropName = normalizeName(args.NAME);
+      this.loadingAssetCountValue = 0;
     }
     setLoadingCostumes(args) {
       const seen = /* @__PURE__ */ new Set();
@@ -294,29 +320,41 @@
       if (!list || !Array.isArray(list.value)) {
         throw new Error(`Loading asset list not found: ${listName || "(empty)"}`);
       }
+      const loadingBackdrop = this.loadingBackdropName;
       const loadingCostumes = this.loadingCostumes ?? [];
-      const loadingNames = new Set(loadingCostumes);
+      const loadingCostumeNames = new Set(loadingCostumes);
+      const loadingNames = new Set(
+        [loadingBackdrop, ...loadingCostumes].filter((name) => name.length > 0)
+      );
       const entries = list.value.map((entry) => String(entry));
       const declaredNames = new Set(entries.map((entry) => {
         const separatorIndex = entry.indexOf(",");
         return normalizeName(separatorIndex < 0 ? entry : entry.slice(0, separatorIndex));
       }));
-      const missingNames = loadingCostumes.filter((name) => !declaredNames.has(name));
+      const missingNames = [...loadingNames].filter((name) => !declaredNames.has(name));
       if (missingNames.length > 0) {
         throw new Error(`Loading asset is not declared: ${missingNames.join(", ")}`);
       }
+      const backdropEntries = [];
       const prioritized = [];
       const regular = [];
       for (const entry of entries) {
         const separatorIndex = entry.indexOf(",");
         const assetName = normalizeName(separatorIndex < 0 ? entry : entry.slice(0, separatorIndex));
-        (loadingNames.has(assetName) ? prioritized : regular).push(entry);
+        if (loadingBackdrop && assetName === loadingBackdrop) {
+          backdropEntries.push(entry);
+        } else {
+          (loadingCostumeNames.has(assetName) ? prioritized : regular).push(entry);
+        }
       }
-      list.value.splice(0, list.value.length, ...prioritized, ...regular);
-      this.loadingAssetCountValue = prioritized.length;
+      list.value.splice(0, list.value.length, ...backdropEntries, ...prioritized, ...regular);
+      this.loadingAssetCountValue = backdropEntries.length + prioritized.length;
     }
     loadingAssetCount() {
       return this.loadingAssetCountValue ?? 0;
+    }
+    loadingBackdrop() {
+      return this.loadingBackdropName;
     }
     loadingCostumeAt(args) {
       const loadingCostumes = this.loadingCostumes ?? [];

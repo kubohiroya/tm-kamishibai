@@ -99,6 +99,7 @@ export function registerKamishibaiTestExtensions(
     keyInputBindings: new Map(),
     localStorage: new Map(),
     loadingAssetCount: 0,
+    loadingBackdrop: '',
     loadingCostumes: [],
     playingSounds: new Set(),
     runtimeVariableWrites: [],
@@ -269,6 +270,7 @@ export function registerKamishibaiTestExtensions(
         state.displayedAssets.clear();
         state.displayedAssetHistory.length = 0;
         state.loadingAssetCount = 0;
+        state.loadingBackdrop = '';
         state.loadingCostumes = [];
         state.playingSounds.clear();
       };
@@ -281,9 +283,11 @@ export function registerKamishibaiTestExtensions(
         block('playSound', BlockType.COMMAND, ['NAME']),
         block('playSoundUntilDone', BlockType.COMMAND, ['NAME']),
         block('registerAsset', BlockType.COMMAND, ['RESOURCE_ID', 'NAME']),
+        block('setLoadingBackdrop', BlockType.COMMAND, ['NAME']),
         block('setLoadingCostumes', BlockType.COMMAND, ['NAMES']),
         block('prepareLoadingAssets', BlockType.COMMAND, ['LIST']),
         block('loadingAssetCount', BlockType.REPORTER),
+        block('loadingBackdrop', BlockType.REPORTER),
         block('loadingCostumeAt', BlockType.REPORTER, ['INDEX']),
         block('setTextStyle', BlockType.COMMAND, ['NAME', 'PROPERTY', 'VALUE']),
         block('setTextValue', BlockType.COMMAND, ['NAME', 'VALUE']),
@@ -313,34 +317,45 @@ export function registerKamishibaiTestExtensions(
         });
       state.loadingAssetCount = 0;
     }
+    setLoadingBackdrop(args) {
+      state.loadingBackdrop = Cast.toString(args.NAME).trim();
+      state.loadingAssetCount = 0;
+    }
     prepareLoadingAssets(args, util) {
       const listName = Cast.toString(args.LIST).trim();
       const list = util.target.lookupVariableByNameAndType(listName, 'list');
       if (!list || !Array.isArray(list.value)) {
         throw new Error(`Loading asset list not found: ${listName || '(empty)'}`);
       }
-      const loadingNames = new Set(state.loadingCostumes);
+      const priorityNames = [state.loadingBackdrop, ...state.loadingCostumes]
+        .filter((name, index, values) => name && values.indexOf(name) === index);
+      const loadingNames = new Set(priorityNames);
       const entries = list.value.map((entry) => Cast.toString(entry));
       const declaredNames = new Set(entries.map((entry) => {
         const separatorIndex = entry.indexOf(',');
         return (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
       }));
-      const missingNames = state.loadingCostumes.filter((name) => !declaredNames.has(name));
+      const missingNames = priorityNames.filter((name) => !declaredNames.has(name));
       if (missingNames.length > 0) {
         throw new Error(`Loading asset is not declared: ${missingNames.join(', ')}`);
       }
-      const prioritized = [];
       const regular = [];
+      const prioritized = new Map(priorityNames.map((name) => [name, []]));
       for (const entry of entries) {
         const separatorIndex = entry.indexOf(',');
         const assetName = (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
-        (loadingNames.has(assetName) ? prioritized : regular).push(entry);
+        if (loadingNames.has(assetName)) prioritized.get(assetName).push(entry);
+        else regular.push(entry);
       }
-      list.value.splice(0, list.value.length, ...prioritized, ...regular);
-      state.loadingAssetCount = prioritized.length;
+      const prioritizedEntries = priorityNames.flatMap((name) => prioritized.get(name));
+      list.value.splice(0, list.value.length, ...prioritizedEntries, ...regular);
+      state.loadingAssetCount = prioritizedEntries.length;
     }
     loadingAssetCount() {
       return state.loadingAssetCount;
+    }
+    loadingBackdrop() {
+      return state.loadingBackdrop;
     }
     loadingCostumeAt(args) {
       if (state.loadingCostumes.length === 0) return '';

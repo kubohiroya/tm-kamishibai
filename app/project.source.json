@@ -3629,7 +3629,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "l"
+              "loadingCostumeCommandDispatch"
             ]
           },
           "fields": {},
@@ -3653,7 +3653,7 @@
               1,
               [
                 10,
-                "setLoadingCostume"
+                "setLoadingBackdrop"
               ]
             ]
           },
@@ -3676,11 +3676,11 @@
           "topLevel": false
         },
         "loadingCommandSet": {
-          "opcode": "kubohiroyaassetmanager_setLoadingCostumes",
+          "opcode": "kubohiroyaassetmanager_setLoadingBackdrop",
           "next": null,
           "parent": "loadingCommandDispatch",
           "inputs": {
-            "NAMES": [
+            "NAME": [
               3,
               "loadingCommandValue",
               [
@@ -3707,10 +3707,103 @@
           "shadow": false,
           "topLevel": false
         },
-        "l": {
+        "loadingCostumeCommandDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "loadingCommandDispatch",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingCostumeCommandMatches"
+            ],
+            "SUBSTACK": [
+              2,
+              "loadingCostumeCommandSet"
+            ],
+            "SUBSTACK2": [
+              2,
+              "l"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCostumeCommandMatches": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "loadingCostumeCommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingCostumeCommandKey",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "setLoadingCostume"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCostumeCommandKey": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "loadingCostumeCommandMatches",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCostumeCommandSet": {
+          "opcode": "kubohiroyaassetmanager_setLoadingCostumes",
+          "next": null,
+          "parent": "loadingCostumeCommandDispatch",
+          "inputs": {
+            "NAMES": [
+              3,
+              "loadingCostumeCommandValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingCostumeCommandValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "loadingCostumeCommandSet",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "l": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "loadingCostumeCommandDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -5290,7 +5383,7 @@
         },
         "loadingReset": {
           "opcode": "kubohiroyaassetmanager_setLoadingCostumes",
-          "next": "es",
+          "next": "loadingBackdropReset",
           "parent": "er",
           "inputs": {
             "NAMES": [
@@ -5305,10 +5398,27 @@
           "shadow": false,
           "topLevel": false
         },
+        "loadingBackdropReset": {
+          "opcode": "kubohiroyaassetmanager_setLoadingBackdrop",
+          "next": "es",
+          "parent": "loadingReset",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "es": {
           "opcode": "procedures_call",
           "next": "uiStoryDefaultValue1",
-          "parent": "loadingReset",
+          "parent": "loadingBackdropReset",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -8420,7 +8530,7 @@
         },
         "fe": {
           "opcode": "procedures_definition",
-          "next": "loadingPrepare",
+          "next": "loadingDefaultBackdrop",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -8452,10 +8562,38 @@
             "warp": "false"
           }
         },
+        "loadingDefaultBackdrop": {
+          "opcode": "looks_switchbackdropto",
+          "next": "loadingPrepare",
+          "parent": "fe",
+          "inputs": {
+            "BACKDROP": [
+              1,
+              "loadingDefaultBackdropMenu"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingDefaultBackdropMenu": {
+          "opcode": "looks_backdrops",
+          "next": null,
+          "parent": "loadingDefaultBackdrop",
+          "inputs": {},
+          "fields": {
+            "BACKDROP": [
+              "LoadingBackdrop",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
         "loadingPrepare": {
           "opcode": "kubohiroyaassetmanager_prepareLoadingAssets",
           "next": "ff",
-          "parent": "fe",
+          "parent": "loadingDefaultBackdrop",
           "inputs": {
             "LIST": [
               1,
@@ -9506,7 +9644,7 @@
         },
         "D": {
           "opcode": "control_repeat_until",
-          "next": "E",
+          "next": "loadingBackdropApplyIf",
           "parent": "loadingPreProgressIf",
           "inputs": {
             "CONDITION": [
@@ -9516,6 +9654,111 @@
             "SUBSTACK": [
               2,
               "F"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropApplyIf": {
+          "opcode": "control_if",
+          "next": "E",
+          "parent": "D",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "loadingBackdropMatches"
+            ],
+            "SUBSTACK": [
+              2,
+              "loadingBackdropApply"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropMatches": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "loadingBackdropApplyIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "loadingBackdropCurrentSkin",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              3,
+              "loadingBackdropName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropCurrentSkin": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingBackdropMatches",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skin"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropName": {
+          "opcode": "kubohiroyaassetmanager_loadingBackdrop",
+          "next": null,
+          "parent": "loadingBackdropMatches",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropApply": {
+          "opcode": "kubohiroyaassetmanager_setStageSkin",
+          "next": null,
+          "parent": "loadingBackdropApplyIf",
+          "inputs": {
+            "NAME": [
+              3,
+              "loadingBackdropApplyName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingBackdropApplyName": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingBackdropApply",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skin"
+              ]
             ]
           },
           "fields": {},
@@ -9661,7 +9904,7 @@
         "E": {
           "opcode": "control_if",
           "next": "k.",
-          "parent": "D",
+          "parent": "loadingBackdropApplyIf",
           "inputs": {
             "CONDITION": [
               2,
@@ -23479,6 +23722,15 @@
           "md5ext": "47282ff0f7047c6fab9c94b531abf721.png",
           "rotationCenterX": 480,
           "rotationCenterY": 360
+        },
+        {
+          "name": "LoadingBackdrop",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "5cd59f75ce1972df719e7cbd2e9cdeb7",
+          "md5ext": "5cd59f75ce1972df719e7cbd2e9cdeb7.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
         }
       ],
       "sounds": [],

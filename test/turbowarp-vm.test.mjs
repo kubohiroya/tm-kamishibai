@@ -96,6 +96,10 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'LoadingBubbleAnchor',
     ],
   );
+  assert.deepEqual(
+    harness.getStage().getCostumes().map((costume) => costume.name),
+    ['Title', 'Stars', 'LoadingBackdrop'],
+  );
   for (const name of [
     'prompt',
     'openButton',
@@ -110,17 +114,19 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   }
 });
 
-test('prioritizes configured loading costumes and reports only regular asset progress', async (context) => {
+test('prioritizes the loading backdrop and costumes and reports only regular asset progress', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
 
   startScript(harness, [
     'kamishibai=3.1',
     'asset=Title,backdrop',
+    'asset=LoadingBackground,backdrop:Title',
     'asset=loading1,costume:Loading:loading',
     'asset=Music,sound:Loading:Chirp',
     'asset=loading2,costume:Loading:loading',
     'asset=Stars,backdrop',
+    'setLoadingBackdrop=LoadingBackground',
     'setLoadingCostume=loading1, loading2',
     'cover=Title,',
     '---',
@@ -131,9 +137,14 @@ test('prioritizes configured loading costumes and reports only regular asset pro
 
   assert.deepEqual(
     harness.extensionState.assetRegistrations.filter((name) => (
-      ['Title', 'loading1', 'Music', 'loading2', 'Stars'].includes(name)
+      ['Title', 'LoadingBackground', 'loading1', 'Music', 'loading2', 'Stars'].includes(name)
     )),
-    ['loading1', 'loading2', 'Title', 'Music', 'Stars'],
+    ['LoadingBackground', 'loading1', 'loading2', 'Title', 'Music', 'Stars'],
+  );
+  assert.equal(
+    harness.extensionState.displayedAssetHistory
+      .find(({targetName}) => targetName === 'Stage')?.assetName,
+    'LoadingBackground',
   );
   const loadingHistory = harness.extensionState.displayedAssetHistory
     .filter(({targetName}) => targetName === 'Loading')
@@ -490,24 +501,28 @@ test('production Asset Manager prepares and cycles loading assets', async (conte
   const assetList = stage.lookupVariableByNameAndType('assetList', 'list');
   assetList.value = [
     'Title,backdrop',
+    'LoadingBackground,backdrop:Title',
     'loading1,costume:Loading:loading',
     'Music,sound:Loading:Chirp',
     'loading2,costume:Loading:loading',
   ];
 
+  manager.setLoadingBackdrop({NAME: 'LoadingBackground'});
   manager.setLoadingCostumes({NAMES: 'loading1, loading2, loading1'});
   manager.prepareLoadingAssets({LIST: 'assetList'}, {target: stage});
 
   assert.deepEqual(
     Array.from(assetList.value),
     [
+      'LoadingBackground,backdrop:Title',
       'loading1,costume:Loading:loading',
       'loading2,costume:Loading:loading',
       'Title,backdrop',
       'Music,sound:Loading:Chirp',
     ],
   );
-  assert.equal(manager.loadingAssetCount(), 2);
+  assert.equal(manager.loadingAssetCount(), 3);
+  assert.equal(manager.loadingBackdrop(), 'LoadingBackground');
   assert.equal(manager.loadingCostumeAt({INDEX: 1}), 'loading1');
   assert.equal(manager.loadingCostumeAt({INDEX: 2}), 'loading2');
   assert.equal(manager.loadingCostumeAt({INDEX: 3}), 'loading1');

@@ -186,6 +186,29 @@ asset=main-caption,text:Narration
 * 同じアセット名を再度登録した場合は、新しい登録内容で置き換えられます。
 * プロジェクト内のコスチューム、背景、音を使用する場合、それらのデータは`.sb3`ファイル内に保存されるため、外部の画像・音声サーバは必要ありません。
 
+### `setLoadingBackdrop`
+
+```text
+setLoadingBackdrop=Loading用背景アセット名
+```
+
+アセット読込中にステージへ表示する背景アセットを1件指定します。
+
+```text
+asset=loadingBackground,https://example.com/loading/background.png
+setLoadingBackdrop=loadingBackground
+```
+
+| 項目 | 内容 |
+|---|---|
+| 役割 | Loading用背景の最優先読込とステージ表示を設定する |
+| 必須 | 任意。省略時は組み込みの真っ黒な`LoadingBackdrop`を使う |
+| 値 | `asset`で定義した画像アセット名1件 |
+| 読込順 | Loading用背景、Loading用画像、通常アセットの順に読み込む |
+| 進捗 | Loading用背景を除外した`完了数 / 総数`を吹き出しに表示する |
+
+指定名の前後の空白は無視されます。指定した名前が`asset`で定義されていない場合は読込エラーになります。読み込み開始時は組み込みの真っ黒な背景を即座に表示し、指定背景の読み込み完了後に差し替えます。
+
 ### `setLoadingCostume`
 
 ```text
@@ -206,7 +229,7 @@ setLoadingCostume=loading1,loading2,loading3
 | 役割 | Loading用画像の優先読込と切替表示を設定する |
 | 必須 | 任意。省略時は組み込み`Loading`コスチュームを使う |
 | 値 | `asset`で定義した画像アセット名のカンマ区切りリスト |
-| 読込順 | 指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む |
+| 読込順 | Loading用背景に続けて、指定アセットを記述順のまま先に読み込み、その後に通常アセットを読み込む |
 | 進捗 | Loading用アセットを除外した`完了数 / 総数`を吹き出しに表示する |
 | アニメーション | 通常アセットの1始まりの読込番号で指定画像を循環選択する |
 
@@ -874,6 +897,8 @@ asset=Music,sound
 asset=Narration,text
 asset=Loading1,https://example.com/loading1.png
 asset=Loading2,https://example.com/loading2.png
+asset=LoadingBackground,https://example.com/loading-background.png
+setLoadingBackdrop=LoadingBackground
 setLoadingCostume=Loading1,Loading2
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
