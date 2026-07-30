@@ -90,6 +90,14 @@ setLoadingCostume=loading1,loading2,loading3
 
 アセット読込中に表示する画像アセットを複数指定できるようにしました。指定アセットを通常アセットより先に読み込み、通常アセットの読込番号に応じて循環表示します。吹き出しの`完了数 / 総数`からLoading用アセット自身は除外します。省略した台本は組み込みのLoadingコスチュームを使います。
 
+### `setPoseRecognitionSound`
+
+```text
+setPoseRecognitionSound=Clock Ticking
+```
+
+ポーズ認識開始から終了まで鳴らす音声アセットを台本から指定できるようにしました。省略時は無音です。generic SB3に残っていた未使用の`Actor/pop`と`Loading/Chirp`は本番成果物から削除し、テスト専用fixtureへ移しました。
+
 ## 追加したアクション
 
 ### グローバルアクション

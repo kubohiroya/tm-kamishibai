@@ -3722,7 +3722,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "l"
+              "poseRecognitionSoundCommandDispatch"
             ]
           },
           "fields": {},
@@ -3800,10 +3800,110 @@
           "shadow": false,
           "topLevel": false
         },
-        "l": {
+        "poseRecognitionSoundCommandDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "loadingCostumeCommandDispatch",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "poseRecognitionSoundCommandMatches"
+            ],
+            "SUBSTACK": [
+              2,
+              "poseRecognitionSoundCommandSet"
+            ],
+            "SUBSTACK2": [
+              2,
+              "l"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandMatches": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "poseRecognitionSoundCommandKey",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "setPoseRecognitionSound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandKey": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandMatches",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandSet": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandDispatch",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ],
+            "STRING": [
+              3,
+              "poseRecognitionSoundCommandValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandSet",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "l": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -5400,7 +5500,7 @@
         },
         "loadingBackdropReset": {
           "opcode": "kubohiroyaassetmanager_setLoadingBackdrop",
-          "next": "es",
+          "next": "poseRecognitionSoundReset",
           "parent": "loadingReset",
           "inputs": {
             "NAME": [
@@ -5415,10 +5515,27 @@
           "shadow": false,
           "topLevel": false
         },
+        "poseRecognitionSoundReset": {
+          "opcode": "lmsTempVars2_deleteRuntimeVariable",
+          "next": "es",
+          "parent": "loadingBackdropReset",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "es": {
           "opcode": "procedures_call",
           "next": "uiStoryDefaultValue1",
-          "parent": "loadingBackdropReset",
+          "parent": "poseRecognitionSoundReset",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -12910,7 +13027,7 @@
         },
         "N": {
           "opcode": "procedures_call",
-          "next": "O",
+          "next": "poseRecognitionSoundIf",
           "parent": "f[",
           "inputs": {
             "q?X#TnX0YF,0BpJEFIJ1": [
@@ -12985,7 +13102,7 @@
         "O": {
           "opcode": "control_while",
           "next": "lN",
-          "parent": "N",
+          "parent": "poseRecognitionSoundIf",
           "inputs": {
             "CONDITION": [
               2,
@@ -13237,7 +13354,7 @@
         },
         "bE": {
           "opcode": "data_changevariableby",
-          "next": "f`",
+          "next": null,
           "parent": "bC",
           "inputs": {
             "VALUE": [
@@ -13351,32 +13468,113 @@
           "shadow": false,
           "topLevel": false
         },
-        "f`": {
-          "opcode": "sound_play",
-          "next": null,
-          "parent": "bE",
+        "poseRecognitionSoundIf": {
+          "opcode": "control_if",
+          "next": "O",
+          "parent": "N",
           "inputs": {
-            "SOUND_MENU": [
-              1,
-              "lW"
+            "CONDITION": [
+              2,
+              "poseRecognitionSoundConfigured"
+            ],
+            "SUBSTACK": [
+              2,
+              "poseRecognitionSoundPlay"
             ]
           },
           "fields": {},
           "shadow": false,
           "topLevel": false
         },
-        "lW": {
-          "opcode": "sound_sounds_menu",
+        "poseRecognitionSoundConfigured": {
+          "opcode": "operator_not",
           "next": null,
-          "parent": "f`",
-          "inputs": {},
-          "fields": {
-            "SOUND_MENU": [
-              "Clock Ticking",
-              null
+          "parent": "poseRecognitionSoundIf",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "poseRecognitionSoundIsEmpty"
             ]
           },
-          "shadow": true,
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundIsEmpty": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "poseRecognitionSoundConfigured",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "poseRecognitionSoundValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSoundIsEmpty",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundPlay": {
+          "opcode": "kubohiroyaassetmanager_playSound",
+          "next": null,
+          "parent": "poseRecognitionSoundIf",
+          "inputs": {
+            "NAME": [
+              3,
+              "poseRecognitionSoundPlayName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundPlayName": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSoundPlay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
           "topLevel": false
         },
         "bD": {
@@ -13582,9 +13780,118 @@
         },
         "lN": {
           "opcode": "sound_stopallsounds",
-          "next": null,
+          "next": "poseRecognitionSoundStopIf",
           "parent": "O",
           "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStopIf": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "lN",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "poseRecognitionSoundStopConfigured"
+            ],
+            "SUBSTACK": [
+              2,
+              "poseRecognitionSoundStop"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStopConfigured": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "poseRecognitionSoundStopIf",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "poseRecognitionSoundStopIsEmpty"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStopIsEmpty": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "poseRecognitionSoundStopConfigured",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "poseRecognitionSoundStopValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStopValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSoundStopIsEmpty",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStop": {
+          "opcode": "kubohiroyaassetmanager_stopSound",
+          "next": null,
+          "parent": "poseRecognitionSoundStopIf",
+          "inputs": {
+            "NAME": [
+              3,
+              "poseRecognitionSoundStopName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundStopName": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSoundStop",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound"
+              ]
+            ]
+          },
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -28233,17 +28540,7 @@
           "rotationCenterY": 72
         }
       ],
-      "sounds": [
-        {
-          "name": "pop",
-          "assetId": "83a9787d4cb6f3b7632b4ddfebf74367",
-          "dataFormat": "wav",
-          "format": "",
-          "rate": 48000,
-          "sampleCount": 1123,
-          "md5ext": "83a9787d4cb6f3b7632b4ddfebf74367.wav"
-        }
-      ],
+      "sounds": [],
       "volume": 100,
       "layerOrder": 4,
       "visible": false,
@@ -29507,17 +29804,7 @@
           "rotationCenterY": 72
         }
       ],
-      "sounds": [
-        {
-          "name": "Chirp",
-          "assetId": "3b8236bbb288019d93ae38362e865972",
-          "dataFormat": "wav",
-          "format": "adpcm",
-          "rate": 22050,
-          "sampleCount": 6097,
-          "md5ext": "3b8236bbb288019d93ae38362e865972.wav"
-        }
-      ],
+      "sounds": [],
       "volume": 100,
       "layerOrder": 3,
       "visible": false,

@@ -100,6 +100,8 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
     harness.getStage().getCostumes().map((costume) => costume.name),
     ['Title', 'Stars', 'LoadingBackdrop'],
   );
+  assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
+  assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
   for (const name of [
     'prompt',
     'openButton',
@@ -123,7 +125,7 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
     'asset=Title,backdrop',
     'asset=LoadingBackground,backdrop:Title',
     'asset=loading1,costume:Loading:loading',
-    'asset=Music,sound:Loading:Chirp',
+    'asset=Music,https://example.com/test-music.mp3',
     'asset=loading2,costume:Loading:loading',
     'asset=Stars,backdrop',
     'setLoadingBackdrop=LoadingBackground',
@@ -503,7 +505,7 @@ test('production Asset Manager prepares and cycles loading assets', async (conte
     'Title,backdrop',
     'LoadingBackground,backdrop:Title',
     'loading1,costume:Loading:loading',
-    'Music,sound:Loading:Chirp',
+    'Music,https://example.com/test-music.mp3',
     'loading2,costume:Loading:loading',
   ];
 
@@ -518,7 +520,7 @@ test('production Asset Manager prepares and cycles loading assets', async (conte
       'loading1,costume:Loading:loading',
       'loading2,costume:Loading:loading',
       'Title,backdrop',
-      'Music,sound:Loading:Chirp',
+      'Music,https://example.com/test-music.mp3',
     ],
   );
   assert.equal(manager.loadingAssetCount(), 3);
@@ -668,6 +670,56 @@ test('consumes Space inside a pose action and continues with its next pose', asy
   assert.equal(harness.getBackdropName(), 'Stars');
 });
 
+test('plays the configured pose recognition sound and resets it for the next script', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Hero,costume:Loading:loading',
+    'asset=Tick,https://example.com/tick.mp3',
+    'setPoseRecognitionSound=Tick',
+    'actor=Hero,Hero',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=Hero:pose:Hero:pose1:',
+    'action=stage:Title',
+    'action=wait:30',
+  ].join('\n'));
+  harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
+  harness.extensionState.poseMatches = true;
+  harness.extensionState.poseScore = 1;
+  harness.runUntil(() => harness.isSoundPlaying('Tick'));
+
+  assert.equal(harness.getRuntimeVariable('poseRecognitionSound'), 'Tick');
+
+  harness.runUntil(() => harness.getBackdropName() === 'Title');
+  assert.equal(harness.isSoundPlaying('Tick'), false);
+
+  harness.extensionState.poseMatches = false;
+  harness.extensionState.poseScore = 0;
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Hero,costume:Loading:loading',
+    'actor=Hero,Hero',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=Hero:pose:Hero:pose1:',
+    'action=wait:30',
+  ].join('\n'));
+  harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
+
+  assert.equal(harness.hasRuntimeVariable('poseRecognitionSound'), false);
+  assert.equal(harness.extensionState.playingSounds.size, 0);
+});
+
 test('propagates Right from a pose to the action boundary', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
@@ -735,7 +787,7 @@ test('stops an asset sound when Right finishes sound-until-done', async (context
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Effect,sound:Loading:Chirp',
+    'asset=Effect,https://example.com/test-effect.mp3',
     'asset=Music,https://example.com/music.mp3',
     'cover=Title,',
     '---',
@@ -767,7 +819,7 @@ test('keeps BGM playing when Right finishes an unrelated wait', async (context) 
     'kamishibai=3.1',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
-    'asset=Music,sound:Loading:Chirp',
+    'asset=Music,https://example.com/test-music.mp3',
     'cover=Title,',
     '---',
     'sceneLabel=first',

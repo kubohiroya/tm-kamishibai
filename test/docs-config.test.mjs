@@ -352,6 +352,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     for (const feature of [
       'setLoadingBackdrop',
       'setLoadingCostume',
+      'setPoseRecognitionSound',
       'setRuntimeVariable',
       'registerBranch',
       'sceneLabel',
@@ -381,6 +382,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
   for (const feature of [
     'setLoadingBackdrop',
     'setLoadingCostume',
+    'setPoseRecognitionSound',
     'Loading',
     'setRuntimeVariable',
     'registerBranch',

@@ -24,7 +24,9 @@ import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const appDirectory = path.join(projectRoot, 'app');
-const existingSoundPath = path.join(appDirectory, 'assets', '83a9787d4cb6f3b7632b4ddfebf74367.wav');
+const fixtureAssetsDirectory = path.join(projectRoot, 'test', 'fixtures', 'assets');
+const actorPopFixturePath = path.join(fixtureAssetsDirectory, 'actor-pop.wav');
+const loadingChirpFixturePath = path.join(fixtureAssetsDirectory, 'loading-chirp.wav');
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -72,7 +74,7 @@ function imageEntry({name, uri, kind, target, sb3Name, contents}) {
   };
 }
 
-function soundEntry({name, uri, kind, target, sb3Name, contents}) {
+function soundEntry({name, uri, kind, target, sb3Name, contents, metadata}) {
   return {
     name,
     uri,
@@ -84,7 +86,7 @@ function soundEntry({name, uri, kind, target, sb3Name, contents}) {
     size: contents.length,
     sha256: sha256(contents),
     license: 'CC0-1.0',
-    metadata: {format: '', rate: 48000, sampleCount: 1123},
+    metadata,
   };
 }
 
@@ -129,12 +131,15 @@ async function writeFileFixture(directory) {
   const costume = Buffer.from(
     '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><circle cx="1" cy="1" r="1"/></svg>',
   );
-  const sound = await readFile(existingSoundPath);
+  const [stageSound, spriteSound] = await Promise.all([
+    readFile(actorPopFixturePath),
+    readFile(loadingChirpFixturePath),
+  ]);
   await Promise.all([
     writeFile(path.join(assetsDirectory, 'backdrop.svg'), backdrop),
     writeFile(path.join(assetsDirectory, 'costume.svg'), costume),
-    writeFile(path.join(assetsDirectory, 'stage.wav'), sound),
-    writeFile(path.join(assetsDirectory, 'sprite.wav'), sound),
+    writeFile(path.join(assetsDirectory, 'stage.wav'), stageSound),
+    writeFile(path.join(assetsDirectory, 'sprite.wav'), spriteSound),
   ]);
   const baseSb3Path = path.join(inputDirectory, 'base.sb3');
   const builtBase = await createDeterministicSb3(appDirectory);
@@ -183,7 +188,8 @@ async function writeFileFixture(directory) {
         kind: 'stageSound',
         target: '@stage',
         sb3Name: 'Builder Stage Audio',
-        contents: sound,
+        contents: stageSound,
+        metadata: {format: '', rate: 48000, sampleCount: 1123},
       }),
       soundEntry({
         name: 'ActorAudio',
@@ -191,7 +197,8 @@ async function writeFileFixture(directory) {
         kind: 'spriteSound',
         target: 'Actor',
         sb3Name: 'Builder Actor Audio',
-        contents: sound,
+        contents: spriteSound,
+        metadata: {format: 'adpcm', rate: 22050, sampleCount: 6097},
       }),
     ],
   };

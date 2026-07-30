@@ -22,6 +22,7 @@ kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
 setLoadingBackdrop=読み込み背景
 setLoadingCostume=読み込み画像1,読み込み画像2
+setPoseRecognitionSound=ポーズ認識中の効果音
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
 asset=音名,sound
@@ -141,6 +142,15 @@ Loading用の背景と画像は、読込進捗の完了数と総数から除外�
 進捗の吹き出しは、Loading画像とは別の固定アンカーから表示されます。このため、指定画像の大きさや非透明部分の外形が異なっても、画像の切替によって吹き出し位置は変わりません。
 
 指定名は画像アセットとして定義されている必要があります。未定義の名前を指定すると読込エラーになります。
+
+#### ポーズ認識中の効果音を変更する
+
+```text
+asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
+setPoseRecognitionSound=Clock Ticking
+```
+
+`setPoseRecognitionSound`には、`asset`で定義した音声アセット名を1件指定します。各ポーズの認識開始時にAsset Manager経由で再生し、認識成功またはスキップでそのポーズを終えると停止します。指定を省略するか空文字を指定した場合は無音です。
 
 ### アクター定義
 
