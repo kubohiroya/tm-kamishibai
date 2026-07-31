@@ -310,9 +310,10 @@ pnpm sb3:build
 ```
 
 生成時に、Title背景の`Version <version> (YYYY/MM/DD)`へ`package.json`の
-versionとAsia/Tokyoのビルド日を自動で埋め込みます。`app/`にはプレースホルダーを
-保持し、一時ソースでSVGの内容、MD5、`assetId`、`md5ext`、archive entryを同時に
-更新するため、ビルドで正本は変更されません。
+versionとAsia/Tokyoのビルド日を自動で埋め込みます。同時に、公式Webサイトボタンへ
+Webサイトのブランド画像の正本である`site/favicon.png`を埋め込みます。`app/`には
+プレースホルダーを保持し、一時ソースで2つのSVGの内容、MD5、`assetId`、`md5ext`、
+archive entryを同時に更新するため、ビルドで正本は変更されません。
 
 過去のリリースを同じ日付で再現するときは、日付を`YYYY-MM-DD`で明示します。不正な
 日付はエラーにし、暗黙に補正しません。

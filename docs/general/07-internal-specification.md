@@ -167,7 +167,8 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 `Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、3つのmenu button、
 `Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
 Asset Managerへ登録します。`officialWebsiteButton`と`closeTitleButton`はSB3に固定costumeを
-持ちます。公式Webボタンのリンク先には`package.json`の`homepage`を設定します。
+持ちます。公式Webボタンのリンク先には`package.json`の`homepage`を設定し、ビルド時に
+`site/favicon.png`をcostumeへ埋め込んでWebサイトと同じ浦島太郎のブランド画像を表示します。
 
 ### アクターへ命令を届けるしくみ {#actor-message-delivery}
 

@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
+export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
 
 function isLeapYear(year) {
@@ -64,7 +65,58 @@ async function readPackageVersion(packageJsonPath) {
   return packageJson.version;
 }
 
-async function stampTitleSource(sourceDirectory, metadata) {
+async function stampSvgAsset({
+  assetsDirectory,
+  costume,
+  description,
+  placeholder,
+  project,
+  replacement,
+  sourceManifest,
+}) {
+  assert.equal(costume.dataFormat, 'svg', `${description} must be an SVG asset.`);
+  const originalFilename = costume.md5ext;
+  const references = project.targets
+    .flatMap((target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
+    .filter((asset) => asset.md5ext === originalFilename);
+  assert.equal(
+    references.length,
+    1,
+    `${description} must have exactly one Scratch asset reference: ${originalFilename}`,
+  );
+
+  const originalAssetPath = path.join(assetsDirectory, originalFilename);
+  const originalSvg = await readFile(originalAssetPath, 'utf8');
+  assert.equal(
+    originalSvg.split(placeholder).length,
+    2,
+    `${description} must contain exactly one build placeholder.`,
+  );
+  const stampedSvg = originalSvg.replace(placeholder, replacement);
+  const assetId = createHash('md5').update(stampedSvg).digest('hex');
+  const filename = `${assetId}.svg`;
+
+  costume.assetId = assetId;
+  costume.md5ext = filename;
+  const archiveEntryIndexes = sourceManifest.archiveEntries
+    .map((entryName, index) => (entryName === originalFilename ? index : -1))
+    .filter((index) => index >= 0);
+  assert.equal(
+    archiveEntryIndexes.length,
+    1,
+    `The source manifest must contain ${description} exactly once: ${originalFilename}`,
+  );
+  sourceManifest.archiveEntries[archiveEntryIndexes[0]] = filename;
+
+  await writeFile(path.join(assetsDirectory, filename), stampedSvg);
+  if (filename !== originalFilename) {
+    await rm(originalAssetPath);
+  }
+
+  return Object.freeze({assetId, filename});
+}
+
+async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   const projectPath = path.join(sourceDirectory, 'project.source.json');
   const sourceManifestPath = path.join(sourceDirectory, 'sb3-source.json');
   const assetsDirectory = path.join(sourceDirectory, 'assets');
@@ -79,54 +131,50 @@ async function stampTitleSource(sourceDirectory, metadata) {
   const titleCostumes = stages[0].costumes.filter((costume) => costume.name === 'Title');
   assert.equal(titleCostumes.length, 1, 'The Stage must contain exactly one Title backdrop.');
   const [titleCostume] = titleCostumes;
-  assert.equal(titleCostume.dataFormat, 'svg', 'The Title backdrop must be an SVG asset.');
-
-  const originalFilename = titleCostume.md5ext;
-  const references = project.targets
-    .flatMap((target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
-    .filter((asset) => asset.md5ext === originalFilename);
+  const officialWebsiteTargets = project.targets.filter(
+    (target) => target.name === 'officialWebsiteButton',
+  );
   assert.equal(
-    references.length,
+    officialWebsiteTargets.length,
     1,
-    `The Title SVG must have exactly one Scratch asset reference: ${originalFilename}`,
+    'The app source must contain exactly one officialWebsiteButton target.',
   );
-
-  const originalAssetPath = path.join(assetsDirectory, originalFilename);
-  const originalSvg = await readFile(originalAssetPath, 'utf8');
-  assert.equal(
-    originalSvg.split(titleVersionPlaceholder).length,
-    2,
-    'The Title SVG must contain exactly one build metadata placeholder.',
+  const officialWebsiteCostumes = officialWebsiteTargets[0].costumes.filter(
+    (costume) => costume.name === 'official-website-button',
   );
-  const stampedSvg = originalSvg.replace(titleVersionPlaceholder, metadata.label);
-  const assetId = createHash('md5').update(stampedSvg).digest('hex');
-  const filename = `${assetId}.svg`;
-
-  titleCostume.assetId = assetId;
-  titleCostume.md5ext = filename;
-  const archiveEntryIndexes = sourceManifest.archiveEntries
-    .map((entryName, index) => (entryName === originalFilename ? index : -1))
-    .filter((index) => index >= 0);
   assert.equal(
-    archiveEntryIndexes.length,
+    officialWebsiteCostumes.length,
     1,
-    `The source manifest must contain the Title SVG exactly once: ${originalFilename}`,
+    'officialWebsiteButton must contain exactly one official-website-button costume.',
   );
-  sourceManifest.archiveEntries[archiveEntryIndexes[0]] = filename;
+  const favicon = await readFile(faviconPath);
+  const titleAsset = await stampSvgAsset({
+    assetsDirectory,
+    costume: titleCostume,
+    description: 'The Title backdrop SVG',
+    placeholder: titleVersionPlaceholder,
+    project,
+    replacement: metadata.label,
+    sourceManifest,
+  });
+  const officialWebsiteAsset = await stampSvgAsset({
+    assetsDirectory,
+    costume: officialWebsiteCostumes[0],
+    description: 'The official website button SVG',
+    placeholder: officialWebsiteFaviconPlaceholder,
+    project,
+    replacement: favicon.toString('base64'),
+    sourceManifest,
+  });
 
   await Promise.all([
     writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`),
     writeFile(sourceManifestPath, `${JSON.stringify(sourceManifest, null, 2)}\n`),
-    writeFile(path.join(assetsDirectory, filename), stampedSvg),
   ]);
-  if (filename !== originalFilename) {
-    await rm(originalAssetPath);
-  }
 
   return Object.freeze({
-    assetId,
-    filename,
-    label: metadata.label,
+    officialWebsiteAsset,
+    titleAsset: Object.freeze({...titleAsset, label: metadata.label}),
   });
 }
 
@@ -134,6 +182,7 @@ export async function withTitleBuildMetadataSource(
   {
     buildDate,
     environment = process.env,
+    faviconPath,
     now = new Date(),
     packageJsonPath,
     sourceDirectory,
@@ -143,6 +192,7 @@ export async function withTitleBuildMetadataSource(
 ) {
   assert(typeof sourceDirectory === 'string', 'The app source directory is required.');
   assert(typeof packageJsonPath === 'string', 'The package.json path is required.');
+  assert(typeof faviconPath === 'string', 'The site favicon path is required.');
   assert(typeof callback === 'function', 'A versioned source callback is required.');
   const resolvedVersion = version ?? (await readPackageVersion(packageJsonPath));
   const metadata = resolveTitleBuildMetadata({
@@ -156,9 +206,9 @@ export async function withTitleBuildMetadataSource(
 
   try {
     await cp(sourceDirectory, temporarySource, {recursive: true});
-    const titleAsset = await stampTitleSource(temporarySource, metadata);
+    const stampedAssets = await stampTitleSource(temporarySource, faviconPath, metadata);
     return await callback({
-      metadata: Object.freeze({...metadata, titleAsset}),
+      metadata: Object.freeze({...metadata, ...stampedAssets}),
       sourceDirectory: temporarySource,
     });
   } finally {

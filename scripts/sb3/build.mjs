@@ -9,12 +9,14 @@ import {withTitleBuildMetadataSource} from './title-build-metadata.mjs';
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 export const defaultKamishibaiSourceDirectory = path.join(projectRoot, 'app');
 export const defaultKamishibaiPackageJsonPath = path.join(projectRoot, 'package.json');
+export const defaultKamishibaiFaviconPath = path.join(projectRoot, 'site', 'favicon.png');
 export const defaultKamishibaiOutputPath = path.join(projectRoot, 'tmp', 'kamishibai.sb3');
 
 function titleSourceOptions(options) {
   return {
     buildDate: options.buildDate,
     environment: options.environment ?? process.env,
+    faviconPath: options.faviconPath ?? defaultKamishibaiFaviconPath,
     now: options.now ?? new Date(),
     packageJsonPath: options.packageJsonPath ?? defaultKamishibaiPackageJsonPath,
     sourceDirectory: options.sourceDirectory ?? defaultKamishibaiSourceDirectory,
