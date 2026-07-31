@@ -130,6 +130,11 @@ export class KamishibaiVmHarness {
     ));
   }
 
+  getSpriteCostumeName(name) {
+    const sprite = this.getSprite(name);
+    return sprite?.getCostumes()[sprite.currentCostume]?.name;
+  }
+
   getBubbleText(name) {
     return this.getActor(name)?.getCustomState('Scratch.looks')?.text ?? '';
   }
@@ -148,8 +153,10 @@ export class KamishibaiVmHarness {
 }
 
 export async function loadKamishibaiVm({
+  initialLocalStorage = {},
   sb3Path = defaultKamishibaiSb3Path,
   productionAssetManager = false,
+  viewerLanguage = 'English',
 } = {}) {
   const originalWarn = vmLog.warn;
   const originalWarning = vmLog.warning;
@@ -164,7 +171,9 @@ export async function loadKamishibaiVm({
   }
   const clock = {now: 0};
   const extensionState = registerKamishibaiTestExtensions(vm, clock, {
+    initialLocalStorage,
     productionAssetManager,
+    viewerLanguage,
   });
 
   vm.setCompatibilityMode(false);

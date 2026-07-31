@@ -230,27 +230,21 @@ setRuntimeVariable=score:1
 registerBranch=chooseRoute:score == 1,true:ocean,home
 ```
 
-### プロンプト／メニュー文言
+### ポーズ案内の文言
 
-ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の `---` より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、`asset=` は不要です。
+ポーズ案内は、scene 0（最初の `---` より前）で定義できます。`ui.prompt`はランタイムが自動登録する予約済みテキストアセットなので、`asset=`は不要です。
 
 ```text
 text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて
 ```
 
-| アセット名 | 表示場所 |
-|---|---|
+| アセット名  | 表示場所           |
+| ----------- | ------------------ |
 | `ui.prompt` | ポーズ認識中の案内 |
-| `ui.invalidScript` | 不正な台本を読み込んだときのエラー |
-| `ui.open` | 台本ファイルを選ぶメニュー |
-| `ui.reload` | 直前の台本をもう一度実行するメニュー |
-| `ui.about` | タイトル画面へ戻るメニュー |
 
-ランタイムは物語開始時に既定値へ戻してからscene 0を実行するため、別の言語の台本を続けて読み込んでも前の文言は残りません。台本をまだ読み込んでいない最初のメニューでは、ランタイムの既定値が表示されます。
+ランタイムは物語開始時に`Pose!`へ戻してからscene 0を実行するため、別の台本を続けて読み込んでも前の文言は残りません。
+
+`Open`、`Reload`、`About`、`Language`、台本エラー、タイトル画面は台本を読む前から必要なアプリUIです。これらは台本ではなくアプリの言語定義から表示し、標準の`（言語）`ブロックまたはメニューで選んだ日本語／英語に従います。旧台本に`text=ui.open:`、`text=ui.reload:`、`text=ui.about:`、`text=ui.invalidScript:`が残っていても、アプリUIの文言には適用されません。
 
 ## シーンを書く
 
@@ -557,7 +551,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 
 | シーン | 内容 | 主な機能 |
 |---|---|---|
-| ヘッダ | バージョン、初期変数、アセット、アクター、表紙、UI文言を定義 | `kamishibai`, `setRuntimeVariable`, `asset`, `actor`, `cover`, `text=ui.*` |
+| ヘッダ | バージョン、初期変数、アセット、アクター、表紙、ポーズ案内を定義 | `kamishibai`, `setRuntimeVariable`, `asset`, `actor`, `cover`, `text=ui.prompt` |
 | opening | 導入のナレーション | テキストアセット、フェード |
 | scene 1 | 浜辺で浦島がカメを助ける | 背景、セリフ、移動、ポーズ認識 |
 | scene 2 | カメに乗って海を進む | 移動、連続ポーズ、効果音 |
@@ -569,7 +563,7 @@ action=Urashima:pose:Urashima-ride-2,Urashima-ride-1,Urashima-ride-2,Urashima-ri
 | scene 8 | 竜宮城の別れ | 複数アクター表示、セリフ |
 | scene 9 | エンディング | 背景、完了音 |
 
-この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の`action=text:`、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。
+この例は、3.1のアセット形式、シーンラベル、scene 0のポーズ案内、時系列の`action=text:`、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。
 
 ## 紙芝居DSLの作成手順
 

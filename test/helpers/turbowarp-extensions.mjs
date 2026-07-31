@@ -81,7 +81,11 @@ function createProductionAssetManagerClass(vm, onCreate) {
 export function registerKamishibaiTestExtensions(
   vm,
   clock,
-  {productionAssetManager = false} = {},
+  {
+    initialLocalStorage = {},
+    productionAssetManager = false,
+    viewerLanguage = 'English',
+  } = {},
 ) {
   const state = {
     actorSequences: new Map(),
@@ -97,7 +101,7 @@ export function registerKamishibaiTestExtensions(
     displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
-    localStorage: new Map(),
+    localStorage: new Map(Object.entries(initialLocalStorage)),
     loadingAssetCount: 0,
     loadingBackdrop: '',
     loadingCostumes: [],
@@ -112,6 +116,7 @@ export function registerKamishibaiTestExtensions(
     textOutlineColors: new Map(),
     textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
+    viewerLanguage,
   };
   vm.runtime.on('SAY', (target, type, text) => {
     state.bubbleUpdates.push({
@@ -516,6 +521,15 @@ export function registerKamishibaiTestExtensions(
     setProjectId() {}
   }
 
+  class TranslateExtension {
+    getInfo() {
+      return extensionInfo('translate', [
+        block('getViewerLanguage', BlockType.REPORTER),
+      ]);
+    }
+    getViewerLanguage() { return state.viewerLanguage; }
+  }
+
   class TextLinesExtension {
     constructor(runtime) {
       this.runtime = runtime;
@@ -723,6 +737,7 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'lmsTimers', TimersExtension);
   register(vm, 'files', FilesExtension);
   register(vm, 'text', TextExtension);
+  register(vm, 'translate', TranslateExtension);
   register(vm, 'kubohiroyaweblink', WebLinkExtension);
 
   return state;

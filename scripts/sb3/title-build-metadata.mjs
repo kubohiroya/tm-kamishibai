@@ -6,10 +6,48 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {strFromU8, unzipSync} from 'fflate';
+import {
+  appShellCommon,
+  appShellLocales,
+  appShellProjectPlaceholders,
+} from './app-shell-locales.mjs';
 
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
 export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
+
+const titleCostumeNames = Object.freeze({en: 'Title-en', ja: 'Title'});
+const officialWebsiteCostumeNames = Object.freeze({
+  en: 'official-website-button-en',
+  ja: 'official-website-button',
+});
+
+function escapeXml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function replaceProjectPlaceholders(value) {
+  if (typeof value === 'string') {
+    return appShellProjectPlaceholders[value] ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(replaceProjectPlaceholders);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        replaceProjectPlaceholders(nestedValue),
+      ]),
+    );
+  }
+  return value;
+}
 
 function isLeapYear(year) {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -127,7 +165,7 @@ async function stampSvgAsset({
   assert.equal(
     originalSvg.split(placeholder).length,
     2,
-    `${description} must contain exactly one build placeholder.`,
+    `${description} must contain exactly one placeholder: ${placeholder}`,
   );
   const stampedSvg = originalSvg.replace(placeholder, replacement);
   const assetId = createHash('md5').update(stampedSvg).digest('hex');
@@ -161,13 +199,21 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     readFile(projectPath, 'utf8'),
     readFile(sourceManifestPath, 'utf8'),
   ]);
-  const project = JSON.parse(projectSource);
+  const project = replaceProjectPlaceholders(JSON.parse(projectSource));
   const sourceManifest = JSON.parse(sourceManifestSource);
   const stages = project.targets.filter((target) => target.isStage);
   assert.equal(stages.length, 1, 'The app source must contain exactly one Stage target.');
-  const titleCostumes = stages[0].costumes.filter((costume) => costume.name === 'Title');
-  assert.equal(titleCostumes.length, 1, 'The Stage must contain exactly one Title backdrop.');
-  const [titleCostume] = titleCostumes;
+  const titleCostumes = Object.fromEntries(
+    Object.entries(titleCostumeNames).map(([locale, costumeName]) => {
+      const matches = stages[0].costumes.filter((costume) => costume.name === costumeName);
+      assert.equal(
+        matches.length,
+        1,
+        `The Stage must contain exactly one ${costumeName} backdrop.`,
+      );
+      return [locale, matches[0]];
+    }),
+  );
   const officialWebsiteTargets = project.targets.filter(
     (target) => target.name === 'officialWebsiteButton',
   );
@@ -176,42 +222,87 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     1,
     'The app source must contain exactly one officialWebsiteButton target.',
   );
-  const officialWebsiteCostumes = officialWebsiteTargets[0].costumes.filter(
-    (costume) => costume.name === 'official-website-button',
-  );
-  assert.equal(
-    officialWebsiteCostumes.length,
-    1,
-    'officialWebsiteButton must contain exactly one official-website-button costume.',
+  const officialWebsiteCostumes = Object.fromEntries(
+    Object.entries(officialWebsiteCostumeNames).map(([locale, costumeName]) => {
+      const matches = officialWebsiteTargets[0].costumes.filter(
+        (costume) => costume.name === costumeName,
+      );
+      assert.equal(
+        matches.length,
+        1,
+        `officialWebsiteButton must contain exactly one ${costumeName} costume.`,
+      );
+      return [locale, matches[0]];
+    }),
   );
   const favicon = await readFile(faviconPath);
-  const titleAsset = await stampSvgAsset({
-    assetsDirectory,
-    costume: titleCostume,
-    description: 'The Title backdrop SVG',
-    placeholder: titleVersionPlaceholder,
-    project,
-    replacement: metadata.label,
-    sourceManifest,
-  });
-  const officialWebsiteAsset = await stampSvgAsset({
-    assetsDirectory,
-    costume: officialWebsiteCostumes[0],
-    description: 'The official website button SVG',
-    placeholder: officialWebsiteFaviconPlaceholder,
-    project,
-    replacement: favicon.toString('base64'),
-    sourceManifest,
-  });
+  const titleAssets = {};
+  const officialWebsiteAssets = {};
+
+  for (const locale of Object.keys(appShellLocales)) {
+    const localized = appShellLocales[locale];
+    const titleReplacements = [
+      [titleVersionPlaceholder, metadata.label],
+      ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
+      ['{{ABOUT_LICENSE_APP}}', escapeXml(localized.about.license.app)],
+      ['{{ABOUT_LICENSE_STORY}}', escapeXml(localized.about.license.story)],
+      ['{{ABOUT_AUTHOR_ORGANIZATION}}', escapeXml(localized.about.author.organization)],
+      ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
+      ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
+    ];
+    let titleAsset;
+    for (const [placeholder, replacement] of titleReplacements) {
+      titleAsset = await stampSvgAsset({
+        assetsDirectory,
+        costume: titleCostumes[locale],
+        description: `The ${titleCostumeNames[locale]} backdrop SVG`,
+        placeholder,
+        project,
+        replacement,
+        sourceManifest,
+      });
+    }
+    titleAssets[locale] = Object.freeze({...titleAsset, label: metadata.label});
+
+    let officialWebsiteAsset = await stampSvgAsset({
+      assetsDirectory,
+      costume: officialWebsiteCostumes[locale],
+      description: `The ${officialWebsiteCostumeNames[locale]} SVG`,
+      placeholder: officialWebsiteFaviconPlaceholder,
+      project,
+      replacement: favicon.toString('base64'),
+      sourceManifest,
+    });
+    officialWebsiteAsset = await stampSvgAsset({
+      assetsDirectory,
+      costume: officialWebsiteCostumes[locale],
+      description: `The ${officialWebsiteCostumeNames[locale]} SVG`,
+      placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+      project,
+      replacement: escapeXml(localized.about.officialWebsite.name),
+      sourceManifest,
+    });
+    officialWebsiteAssets[locale] = officialWebsiteAsset;
+  }
+
+  const resolvedProjectSource = `${JSON.stringify(project, null, 2)}\n`;
+  for (const placeholder of Object.keys(appShellProjectPlaceholders)) {
+    assert(
+      !resolvedProjectSource.includes(placeholder),
+      `The app project contains an unresolved app-shell placeholder: ${placeholder}`,
+    );
+  }
 
   await Promise.all([
-    writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`),
+    writeFile(projectPath, resolvedProjectSource),
     writeFile(sourceManifestPath, `${JSON.stringify(sourceManifest, null, 2)}\n`),
   ]);
 
   return Object.freeze({
-    officialWebsiteAsset,
-    titleAsset: Object.freeze({...titleAsset, label: metadata.label}),
+    officialWebsiteAsset: officialWebsiteAssets.ja,
+    officialWebsiteAssets: Object.freeze(officialWebsiteAssets),
+    titleAsset: titleAssets.ja,
+    titleAssets: Object.freeze(titleAssets),
   });
 }
 
