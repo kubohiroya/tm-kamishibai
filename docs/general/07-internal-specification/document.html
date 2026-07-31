@@ -244,15 +244,15 @@
             <tbody>
               <tr>
                 <td>target（Stageを含む）</td>
-                <td align="right">13</td>
+                <td align="right">20</td>
               </tr>
               <tr>
                 <td>block</td>
-                <td align="right">1636</td>
+                <td align="right">1751</td>
               </tr>
               <tr>
                 <td>event hat</td>
-                <td align="right">63</td>
+                <td align="right">98</td>
               </tr>
               <tr>
                 <td>カスタムブロック定義</td>
@@ -412,7 +412,7 @@
                 <td><code>Stage</code></td>
                 <td>Stage</td>
                 <td>初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括</td>
-                <td><code>Title</code>, <code>Title-en</code>, <code>Stars</code>, <code>LoadingBackdrop</code></td>
+                <td><code>Title</code>, <code>TitleRuntime</code>, <code>Stars</code>, <code>LoadingBackdrop</code></td>
               </tr>
               <tr>
                 <td><code>Actor</code></td>
@@ -463,10 +463,52 @@
                 <td><code>ui-placeholder</code></td>
               </tr>
               <tr>
+                <td><code>titleHeading</code></td>
+                <td>UI sprite</td>
+                <td><code>about.title</code>を実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>titleVersion</code></td>
+                <td>UI sprite</td>
+                <td>versionとbuild dateを実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>titleLicenseApp</code></td>
+                <td>UI sprite</td>
+                <td><code>about.license.app</code>を実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>titleLicenseStory</code></td>
+                <td>UI sprite</td>
+                <td><code>about.license.story</code>を実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>titleAuthorOrganization</code></td>
+                <td>UI sprite</td>
+                <td><code>about.author.organization</code>を実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>titleAuthorName</code></td>
+                <td>UI sprite</td>
+                <td><code>about.author.name</code>とemailを実行時SVGテキストとして表示</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>officialWebsiteLabel</code></td>
+                <td>UI sprite</td>
+                <td>公式Webサイト名を実行時SVGテキストとして表示し、押下時に開く</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
                 <td><code>officialWebsiteButton</code></td>
                 <td>UI sprite</td>
                 <td>titleの3行目から公式Webサイトを開く</td>
-                <td><code>official-website-button</code>, <code>official-website-button-en</code></td>
+                <td>初期表示用／実行時表示用の言語非依存costume</td>
               </tr>
               <tr>
                 <td><code>closeTitleButton</code></td>
@@ -489,8 +531,8 @@
             </tbody>
           </table>
           <p>
-            <code>Actor</code>の本体は非表示で、cloneだけを登場人物として表示します。<code>prompt</code>と6つのmenu／言語選択
-            sprite、<code>Loading</code>、<code>LoadingBubbleAnchor</code>の実画像は、Asset Managerへ登録します。台本が定義する
+            <code>Actor</code>の本体は非表示で、cloneだけを登場人物として表示します。<code>prompt</code>、menu／言語選択sprite、
+            title用テキストsprite、<code>Loading</code>、<code>LoadingBubbleAnchor</code>の実画像は、Asset Managerへ登録します。台本が定義する
             予約済みUIテキストは<code>ui.prompt</code>だけです。<code>ui.open</code>、<code>ui.reload</code>、<code>ui.about</code>、<code>ui.language</code>、
             <code>ui.invalidScript</code>はアプリの言語定義から設定します。
           </p>
@@ -498,10 +540,21 @@
             アプリUIの定義元は<code>scripts/sb3/app-shell-locales.mjs</code>です。ロケール別の<code>about.title</code>、
             <code>about.officialWebsite.name</code>、<code>about.license.app</code>、<code>about.license.story</code>、
             <code>about.author.organization</code>、<code>about.author.name</code>と、共通の<code>about.officialWebsite.url</code>、
-            <code>about.author.email</code>を、build時に日本語／英語のTitle背景と公式Webボタンcostumeへ埋め込みます。
-            公式Webボタンには<code>site/favicon.png</code>も埋め込み、Webサイトと同じ浦島太郎のブランド画像を
-            表示します。Title背景には、アプリのMPL-2.0と台本ファイル固有の利用条件を示す2行の
-            ライセンス案内を表示します。
+            <code>about.author.email</code>を、green flag後にAsset Managerの実行時SVGテキストとして表示します。
+            versionとbuild dateはbuild時に<code>about.version</code>へ設定します。言語変更時は表示中の同じspriteの
+            テキストskinを更新するため、ロケール別backdropは使用しません。
+          </p>
+          <p>
+            title用テキストの配置と文字サイズはScratch標準のStage解像度である480×360を基準にします。
+            長いライセンス文はロケール定義で明示的に2行へ分け、縮小表示に依存せず、タイトル、version、
+            公式Webサイト名、ライセンス、開発者情報を480×360の画面上で読める大きさに保ちます。
+          </p>
+          <p>
+            SB3読込直後からAsset Manager初期化完了まで、または初期化に失敗した場合にも画面を空に
+            しないため、<code>Title</code>と<code>official-website-button</code>には英語の固定フォールバックをbuild時に
+            埋め込みます。初期化が完了して<code>showTitle</code>を送ると、Stageは文字なしの<code>TitleRuntime</code>へ、
+            公式Webボタンは文字なしの実行時costumeへ切り替え、title用テキストspriteを重ねます。
+            公式Webボタンの両costumeには<code>site/favicon.png</code>を埋め込みます。
           </p>
           <p>
             green flag時はlocalStorageの<code>uiLanguage</code>が<code>ja</code>または<code>en</code>ならその値を優先します。未保存なら
@@ -970,7 +1023,7 @@
                   <td><code>Stage</code></td>
                   <td><code>l[</code></td>
                   <td><code>showTitle</code>受信</td>
-                  <td>実行contextをclearし、<code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
+                  <td><code>TitleRuntime</code>へ切替え、実行contextをclearし、<code>hidePrompt</code>, <code>deleteAllActors</code>送信</td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -988,7 +1041,7 @@
                   <td><code>Stage</code></td>
                   <td><code>uiLanguageChangedHat</code></td>
                   <td><code>languageChanged</code>受信</td>
-                  <td><code>ui.open</code>、<code>ui.reload</code>、<code>ui.about</code>、<code>ui.language</code>、<code>ui.invalidScript</code>を選択言語で更新</td>
+                  <td>menuと<code>about.*</code>の実行時SVGテキストを選択言語で更新</td>
                 </tr>
               </tbody>
             </table>
@@ -1207,10 +1260,52 @@
                   <td><code>uiLanguage=en</code>を保存・適用しmenuへ戻る</td>
                 </tr>
                 <tr>
+                  <td><code>titleHeading</code></td>
+                  <td><code>titleHeadingFlag</code>, <code>titleHeadingClick</code>, <code>titleHeadingShowTitle</code>, <code>titleHeadingHideMenu</code>, <code>titleHeadingStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td><code>about.title</code>を表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>titleVersion</code></td>
+                  <td><code>titleVersionFlag</code>, <code>titleVersionClick</code>, <code>titleVersionShowTitle</code>, <code>titleVersionHideMenu</code>, <code>titleVersionStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td><code>about.version</code>を表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>titleLicenseApp</code></td>
+                  <td><code>titleLicenseAppFlag</code>, <code>titleLicenseAppClick</code>, <code>titleLicenseAppShowTitle</code>, <code>titleLicenseAppHideMenu</code>, <code>titleLicenseAppStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td>アプリライセンスを表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>titleLicenseStory</code></td>
+                  <td><code>titleLicenseStoryFlag</code>, <code>titleLicenseStoryClick</code>, <code>titleLicenseStoryShowTitle</code>, <code>titleLicenseStoryHideMenu</code>, <code>titleLicenseStoryStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td>台本ライセンス案内を表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>titleAuthorOrganization</code></td>
+                  <td><code>titleAuthorOrganizationFlag</code>, <code>titleAuthorOrganizationClick</code>, <code>titleAuthorOrganizationShowTitle</code>, <code>titleAuthorOrganizationHideMenu</code>, <code>titleAuthorOrganizationStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td>開発者所属を表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>titleAuthorName</code></td>
+                  <td><code>titleAuthorNameFlag</code>, <code>titleAuthorNameClick</code>, <code>titleAuthorNameShowTitle</code>, <code>titleAuthorNameHideMenu</code>, <code>titleAuthorNameStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td>開発者氏名・emailを表示し、clickでは<code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteLabel</code></td>
+                  <td><code>officialWebsiteLabelFlag</code>, <code>officialWebsiteLabelClick</code>, <code>officialWebsiteLabelShowTitle</code>, <code>officialWebsiteLabelHideMenu</code>, <code>officialWebsiteLabelStartStory</code></td>
+                  <td>green flag／click／title・menu・story</td>
+                  <td>公式Webサイト名を表示し、clickではサイトを開く</td>
+                </tr>
+                <tr>
                   <td><code>officialWebsiteButton</code></td>
                   <td><code>officialWebsiteFlag</code></td>
                   <td>green flag</td>
-                  <td>非表示</td>
+                  <td>初期化前用の英語フォールバックを表示</td>
                 </tr>
                 <tr>
                   <td><code>officialWebsiteButton</code></td>
@@ -1222,7 +1317,7 @@
                   <td><code>officialWebsiteButton</code></td>
                   <td><code>officialWebsiteShowTitle</code></td>
                   <td><code>showTitle</code>受信</td>
-                  <td>選択言語のcostumeへ切り替えて表示</td>
+                  <td>文字なしの実行時costumeへ切り替えて表示</td>
                 </tr>
                 <tr>
                   <td><code>officialWebsiteButton</code></td>
