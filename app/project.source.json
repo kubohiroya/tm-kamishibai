@@ -95,7 +95,9 @@
         "pwe#tOp,Y8--.RyMz=P~": "stopKeyInput",
         "HCH~21s%Au+vmI33ZwE#": "stopTouchInput",
         "skipFinishTimedActor": "finishTimedActorAction",
-        "closeTitleMessage": "closeTitle"
+        "closeTitleMessage": "closeTitle",
+        "languageChangedMessage": "languageChanged",
+        "showLanguageMenuMessage": "showLanguageMenu"
       },
       "blocks": {
         "iM": {
@@ -316,7 +318,7 @@
         },
         "c/": {
           "opcode": "procedures_call",
-          "next": "uiFlagDefaultValue1",
+          "next": "uiStorageProjectId",
           "parent": "c.",
           "inputs": {},
           "fields": {},
@@ -5876,8 +5878,8 @@
         },
         "aK": {
           "opcode": "procedures_call",
-          "next": "et",
-          "parent": "uiStoryDefaultValue5",
+          "next": "uiStoryDefaultValue2",
+          "parent": "uiStoryDefaultValue1",
           "inputs": {
             "[`1{O5_LlbE0dC!htLSe": [
               1,
@@ -5931,7 +5933,7 @@
         "et": {
           "opcode": "procedures_call",
           "next": "uiStoryRegister1",
-          "parent": "aK",
+          "parent": "uiStoryDefaultValue2",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -5947,7 +5949,7 @@
         "eu": {
           "opcode": "procedures_call",
           "next": "aL",
-          "parent": "uiStoryRegister5",
+          "parent": "uiStoryDefaultValue5",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -15502,9 +15504,73 @@
           "topLevel": false
         },
         "bJ": {
-          "opcode": "looks_switchbackdropto",
+          "opcode": "control_if_else",
           "next": "gn",
           "parent": "gm",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "uiTitleLanguageEqualsJa"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiTitleSwitchJa"
+            ],
+            "SUBSTACK2": [
+              2,
+              "uiTitleSwitchEn"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiTitleLanguageEqualsJa": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "bJ",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiTitleLanguageGet",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiTitleLanguageGet": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "uiTitleLanguageEqualsJa",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiTitleSwitchJa": {
+          "opcode": "looks_switchbackdropto",
+          "next": null,
+          "parent": "bJ",
           "inputs": {
             "BACKDROP": [
               1,
@@ -15515,10 +15581,38 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiTitleSwitchEn": {
+          "opcode": "looks_switchbackdropto",
+          "next": null,
+          "parent": "bJ",
+          "inputs": {
+            "BACKDROP": [
+              1,
+              "uiTitleBackdropEn"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiTitleBackdropEn": {
+          "opcode": "looks_backdrops",
+          "next": null,
+          "parent": "uiTitleSwitchEn",
+          "inputs": {},
+          "fields": {
+            "BACKDROP": [
+              "Title-en",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
         "l]": {
           "opcode": "looks_backdrops",
           "next": null,
-          "parent": "bJ",
+          "parent": "uiTitleSwitchJa",
           "inputs": {},
           "fields": {
             "BACKDROP": [
@@ -21625,7 +21719,7 @@
         "ag": {
           "opcode": "files_setOpenMode",
           "next": "iN",
-          "parent": "uiFlagColor5",
+          "parent": "uiFlagColor8",
           "inputs": {
             "mode": [
               1,
@@ -23864,10 +23958,797 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiStorageProjectId": {
+          "opcode": "localstorage_setProjectId",
+          "next": "uiStoredJaIf",
+          "parent": "c/",
+          "inputs": {
+            "ID": [
+              1,
+              [
+                10,
+                "kamishibai"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredJaIf": {
+          "opcode": "control_if_else",
+          "next": "uiFlagDefaultValue1",
+          "parent": "uiStorageProjectId",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "uiStoredJaEquals"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiSetLanguageJaStored"
+            ],
+            "SUBSTACK2": [
+              2,
+              "uiStoredEnIf"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredJaEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiStoredJaIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiStoredJaGet",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredJaGet": {
+          "opcode": "localstorage_get",
+          "next": null,
+          "parent": "uiStoredJaEquals",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageJaStored": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "uiStoredJaIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredEnIf": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "uiStoredJaIf",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "uiStoredEnEquals"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiSetLanguageEnStored"
+            ],
+            "SUBSTACK2": [
+              2,
+              "uiDetectedJaIf"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredEnEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiStoredEnIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiStoredEnGet",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiStoredEnGet": {
+          "opcode": "localstorage_get",
+          "next": null,
+          "parent": "uiStoredEnEquals",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageEnStored": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "uiStoredEnIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaIf": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "uiStoredEnIf",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "uiDetectedJapaneseOrCode"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiSetLanguageJaDetected"
+            ],
+            "SUBSTACK2": [
+              2,
+              "uiSetLanguageEnDetected"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJapaneseOrCode": {
+          "opcode": "operator_or",
+          "next": null,
+          "parent": "uiDetectedJaIf",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "uiDetectedJaEquals"
+            ],
+            "OPERAND2": [
+              2,
+              "uiDetectedJaCodeOrRegion"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiDetectedJapaneseOrCode",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiDetectedLanguage",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "日本語"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedLanguage": {
+          "opcode": "translate_getViewerLanguage",
+          "next": null,
+          "parent": "uiDetectedJaEquals",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaCodeOrRegion": {
+          "opcode": "operator_or",
+          "next": null,
+          "parent": "uiDetectedJapaneseOrCode",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "uiDetectedJaCodeEquals"
+            ],
+            "OPERAND2": [
+              2,
+              "uiDetectedJaJpEquals"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaCodeEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiDetectedJaCodeOrRegion",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiDetectedJaCodeLanguage",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaCodeLanguage": {
+          "opcode": "translate_getViewerLanguage",
+          "next": null,
+          "parent": "uiDetectedJaCodeEquals",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaJpEquals": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiDetectedJaCodeOrRegion",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiDetectedJaJpLanguage",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja-JP"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiDetectedJaJpLanguage": {
+          "opcode": "translate_getViewerLanguage",
+          "next": null,
+          "parent": "uiDetectedJaJpEquals",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageJaDetected": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "uiDetectedJaIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageEnDetected": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "uiDetectedJaIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiApplyLanguageBroadcast": {
+          "opcode": "event_broadcastandwait",
+          "next": "uiFlagRegister1",
+          "parent": "uiFlagDefaultValue3",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "languageChanged",
+                "languageChangedMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiLanguageChangedHat": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "uiLanguageChangedIf",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "languageChanged",
+              "languageChangedMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 250,
+          "y": -4
+        },
+        "uiLanguageChangedIf": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "uiLanguageChangedHat",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "uiLanguageIsJa"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiFlagDefaultValue4"
+            ],
+            "SUBSTACK2": [
+              2,
+              "uiSetInvalidEn"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiLanguageIsJa": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "uiLanguageChangedIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "uiLanguageGet",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiLanguageGet": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "uiLanguageIsJa",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetReloadJa": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetAboutJa",
+          "parent": "uiFlagDefaultValue5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_RELOAD_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetAboutJa": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageLabelJa",
+          "parent": "uiSetReloadJa",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_ABOUT_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageLabelJa": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageChoiceJaSelected",
+          "parent": "uiSetAboutJa",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_LANGUAGE_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageChoiceJaSelected": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageChoiceEnPlain",
+          "parent": "uiSetLanguageLabelJa",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{LANGUAGE_NAME_JA_SELECTED}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageChoiceEnPlain": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": null,
+          "parent": "uiSetLanguageChoiceJaSelected",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{LANGUAGE_NAME_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetInvalidEn": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetOpenEn",
+          "parent": "uiLanguageChangedIf",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_INVALID_SCRIPT_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetOpenEn": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetReloadEn",
+          "parent": "uiSetInvalidEn",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_OPEN_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetReloadEn": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetAboutEn",
+          "parent": "uiSetOpenEn",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_RELOAD_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetAboutEn": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageLabelEn",
+          "parent": "uiSetReloadEn",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_ABOUT_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageLabelEn": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageChoiceJaPlain",
+          "parent": "uiSetAboutEn",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_LANGUAGE_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageChoiceJaPlain": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetLanguageChoiceEnSelected",
+          "parent": "uiSetLanguageLabelEn",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{LANGUAGE_NAME_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiSetLanguageChoiceEnSelected": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": null,
+          "parent": "uiSetLanguageChoiceJaPlain",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{LANGUAGE_NAME_EN_SELECTED}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagDefaultValue1": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
           "next": "uiFlagDefaultValue2",
-          "parent": "c/",
+          "parent": "uiStoredJaIf",
           "inputs": {
             "NAME": [
               1,
@@ -23897,14 +24778,14 @@
               1,
               [
                 10,
-                "ui.invalidScript"
+                "language.ja"
               ]
             ],
             "VALUE": [
               1,
               [
                 10,
-                "Invalid script"
+                "{{LANGUAGE_NAME_JA}}"
               ]
             ]
           },
@@ -23914,8 +24795,56 @@
         },
         "uiFlagDefaultValue3": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiFlagDefaultValue4",
+          "next": "uiApplyLanguageBroadcast",
           "parent": "uiFlagDefaultValue2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{LANGUAGE_NAME_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue4": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiFlagDefaultValue5",
+          "parent": "uiLanguageChangedIf",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.invalidScript"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{UI_INVALID_SCRIPT_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagDefaultValue5": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiSetReloadJa",
+          "parent": "uiFlagDefaultValue4",
           "inputs": {
             "NAME": [
               1,
@@ -23928,55 +24857,7 @@
               1,
               [
                 10,
-                "Open file"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiFlagDefaultValue4": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiFlagDefaultValue5",
-          "parent": "uiFlagDefaultValue3",
-          "inputs": {
-            "NAME": [
-              1,
-              [
-                10,
-                "ui.reload"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "Reload"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiFlagDefaultValue5": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiFlagRegister1",
-          "parent": "uiFlagDefaultValue4",
-          "inputs": {
-            "NAME": [
-              1,
-              [
-                10,
-                "ui.about"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "About"
+                "{{UI_OPEN_JA}}"
               ]
             ]
           },
@@ -23987,7 +24868,7 @@
         "uiFlagRegister1": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth1",
-          "parent": "uiFlagDefaultValue5",
+          "parent": "uiApplyLanguageBroadcast",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -24385,7 +25266,7 @@
         },
         "uiFlagColor5": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "ag",
+          "next": "uiFlagRegister6",
           "parent": "uiFlagWidth5",
           "inputs": {
             "NAME": [
@@ -24414,9 +25295,267 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagRegister6": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagWidth6",
+          "parent": "uiFlagColor5",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth6": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagColor6",
+          "parent": "uiFlagRegister6",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "220"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor6": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegister7",
+          "parent": "uiFlagWidth6",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister7": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagWidth7",
+          "parent": "uiFlagColor6",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth7": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagColor7",
+          "parent": "uiFlagRegister7",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "180"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor7": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegister8",
+          "parent": "uiFlagWidth7",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegister8": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagWidth8",
+          "parent": "uiFlagColor7",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagWidth8": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagColor8",
+          "parent": "uiFlagRegister8",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "180"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagColor8": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "ag",
+          "parent": "uiFlagWidth8",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#d85656"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiStoryDefaultValue1": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiStoryDefaultValue2",
+          "next": "aK",
           "parent": "es",
           "inputs": {
             "NAME": [
@@ -24439,22 +25578,16 @@
           "topLevel": false
         },
         "uiStoryDefaultValue2": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiStoryDefaultValue3",
-          "parent": "uiStoryDefaultValue1",
+          "opcode": "event_broadcastandwait",
+          "next": "et",
+          "parent": "aK",
           "inputs": {
-            "NAME": [
+            "BROADCAST_INPUT": [
               1,
               [
-                10,
-                "ui.invalidScript"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "Invalid script"
+                11,
+                "languageChanged",
+                "languageChangedMessage"
               ]
             ]
           },
@@ -24463,22 +25596,22 @@
           "topLevel": false
         },
         "uiStoryDefaultValue3": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryDefaultValue4",
-          "parent": "uiStoryDefaultValue2",
+          "parent": "uiStoryRegister5",
           "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
             "NAME": [
               1,
               [
                 10,
-                "ui.open"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "Open file"
+                "ui.language"
               ]
             ]
           },
@@ -24487,22 +25620,22 @@
           "topLevel": false
         },
         "uiStoryDefaultValue4": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiStoryDefaultValue5",
           "parent": "uiStoryDefaultValue3",
           "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
             "NAME": [
               1,
               [
                 10,
-                "ui.reload"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "Reload"
+                "language.ja"
               ]
             ]
           },
@@ -24511,22 +25644,22 @@
           "topLevel": false
         },
         "uiStoryDefaultValue5": {
-          "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "aK",
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "eu",
           "parent": "uiStoryDefaultValue4",
           "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
             "NAME": [
               1,
               [
                 10,
-                "ui.about"
-              ]
-            ],
-            "VALUE": [
-              1,
-              [
-                10,
-                "About"
+                "language.en"
               ]
             ]
           },
@@ -24632,7 +25765,7 @@
         },
         "uiStoryRegister5": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
-          "next": "eu",
+          "next": "uiStoryDefaultValue3",
           "parent": "uiStoryRegister4",
           "inputs": {
             "RESOURCE_ID": [
@@ -24699,8 +25832,17 @@
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "c7334c6a74860d5808c4962f250b52f2",
-          "md5ext": "c7334c6a74860d5808c4962f250b52f2.svg",
+          "assetId": "48fdbeb367aa87ae58976e9f85ac28f0",
+          "md5ext": "48fdbeb367aa87ae58976e9f85ac28f0.svg",
+          "rotationCenterX": 211.69123114420535,
+          "rotationCenterY": 92.66949826877153
+        },
+        {
+          "name": "Title-en",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "adf8160b04c3c672483e67e39dd73fb3",
+          "md5ext": "adf8160b04c3c672483e67e39dd73fb3.svg",
           "rotationCenterX": 211.69123114420535,
           "rotationCenterY": 92.66949826877153
         },
@@ -30273,6 +31415,636 @@
     },
     {
       "isStage": false,
+      "name": "languageButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "languageButtonFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "languageButtonFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "languageButtonFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "languageButtonFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "languageButtonMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "hideMenu",
+              "Pups#}akMo#d~p`[HCXt"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "languageButtonMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "languageButtonHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonShowMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "languageButtonSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "languageButtonSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "languageButtonMenuShow",
+          "parent": "languageButtonShowMenu",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonMenuShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "languageButtonSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "languageButtonHideMenuBroadcast",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "languageButtonHideMenuBroadcast": {
+          "opcode": "event_broadcastandwait",
+          "next": "languageButtonShowChoicesBroadcast",
+          "parent": "languageButtonClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonShowChoicesBroadcast": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "languageButtonHideMenuBroadcast",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showLanguageMenu",
+                "showLanguageMenuMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 12,
+      "visible": false,
+      "x": 2,
+      "y": -165,
+      "size": 65,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "japaneseLanguageButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "japaneseLanguageFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "japaneseLanguageFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "japaneseLanguageFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "japaneseLanguageFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "japaneseLanguageMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "hideMenu",
+              "Pups#}akMo#d~p`[HCXt"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "japaneseLanguageMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "japaneseLanguageHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageShowChoices": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "japaneseLanguageSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showLanguageMenu",
+              "showLanguageMenuMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "japaneseLanguageSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "japaneseLanguageShow",
+          "parent": "japaneseLanguageShowChoices",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "japaneseLanguageSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "japaneseLanguageSetRuntime",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "japaneseLanguageSetRuntime": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "japaneseLanguageSave",
+          "parent": "japaneseLanguageClick",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageSave": {
+          "opcode": "localstorage_set",
+          "next": "japaneseLanguageApply",
+          "parent": "japaneseLanguageSetRuntime",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageApply": {
+          "opcode": "event_broadcastandwait",
+          "next": "japaneseLanguageHideChoices",
+          "parent": "japaneseLanguageSave",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "languageChanged",
+                "languageChangedMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageHideChoices": {
+          "opcode": "event_broadcastandwait",
+          "next": "japaneseLanguageShowMenu",
+          "parent": "japaneseLanguageApply",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageShowMenu": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "japaneseLanguageHideChoices",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showMenu",
+                ":{;PJwcS%zS4ud[f.6}c"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 13,
+      "visible": false,
+      "x": 0,
+      "y": 35,
+      "size": 80,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "englishLanguageButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "englishLanguageFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "englishLanguageFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "englishLanguageFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "englishLanguageFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "englishLanguageMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "hideMenu",
+              "Pups#}akMo#d~p`[HCXt"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "englishLanguageMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "englishLanguageHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageShowChoices": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "englishLanguageSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showLanguageMenu",
+              "showLanguageMenuMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "englishLanguageSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "englishLanguageShow",
+          "parent": "englishLanguageShowChoices",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "englishLanguageSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "englishLanguageSetRuntime",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "englishLanguageSetRuntime": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "englishLanguageSave",
+          "parent": "englishLanguageClick",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageSave": {
+          "opcode": "localstorage_set",
+          "next": "englishLanguageApply",
+          "parent": "englishLanguageSetRuntime",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageApply": {
+          "opcode": "event_broadcastandwait",
+          "next": "englishLanguageHideChoices",
+          "parent": "englishLanguageSave",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "languageChanged",
+                "languageChangedMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageHideChoices": {
+          "opcode": "event_broadcastandwait",
+          "next": "englishLanguageShowMenu",
+          "parent": "englishLanguageApply",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageShowMenu": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "englishLanguageHideChoices",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showMenu",
+                ":{;PJwcS%zS4ud[f.6}c"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 14,
+      "visible": false,
+      "x": 0,
+      "y": -35,
+      "size": 80,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
       "name": "officialWebsiteButton",
       "variables": {},
       "lists": {},
@@ -30290,7 +32062,7 @@
           "y": 40
         },
         "officialWebsiteFlagShow": {
-          "opcode": "looks_show",
+          "opcode": "looks_hide",
           "next": null,
           "parent": "officialWebsiteFlag",
           "inputs": {},
@@ -30318,7 +32090,7 @@
               1,
               [
                 10,
-                "https://kubohiroya.github.io/tmpose-kamishibai/"
+            "{{ABOUT_OFFICIAL_WEBSITE_URL}}"
               ]
             ]
           },
@@ -30328,7 +32100,7 @@
         },
         "officialWebsiteShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "officialWebsiteTitleShow",
+          "next": "officialWebsiteLocaleIf",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -30345,10 +32117,130 @@
         "officialWebsiteTitleShow": {
           "opcode": "looks_show",
           "next": null,
-          "parent": "officialWebsiteShowTitle",
+          "parent": "officialWebsiteLocaleIf",
           "inputs": {},
           "fields": {},
           "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLocaleIf": {
+          "opcode": "control_if_else",
+          "next": "officialWebsiteTitleShow",
+          "parent": "officialWebsiteShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "officialWebsiteLanguageEqualsJa"
+            ],
+            "SUBSTACK": [
+              2,
+              "officialWebsiteSwitchJa"
+            ],
+            "SUBSTACK2": [
+              2,
+              "officialWebsiteSwitchEn"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLanguageEqualsJa": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "officialWebsiteLocaleIf",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "officialWebsiteLanguageGet",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLanguageGet": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "officialWebsiteLanguageEqualsJa",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteSwitchJa": {
+          "opcode": "looks_switchcostumeto",
+          "next": null,
+          "parent": "officialWebsiteLocaleIf",
+          "inputs": {
+            "COSTUME": [
+              1,
+              "officialWebsiteCostumeJa"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteCostumeJa": {
+          "opcode": "looks_costume",
+          "next": null,
+          "parent": "officialWebsiteSwitchJa",
+          "inputs": {},
+          "fields": {
+            "COSTUME": [
+              "official-website-button",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "officialWebsiteSwitchEn": {
+          "opcode": "looks_switchcostumeto",
+          "next": null,
+          "parent": "officialWebsiteLocaleIf",
+          "inputs": {
+            "COSTUME": [
+              1,
+              "officialWebsiteCostumeEn"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteCostumeEn": {
+          "opcode": "looks_costume",
+          "next": null,
+          "parent": "officialWebsiteSwitchEn",
+          "inputs": {},
+          "fields": {
+            "COSTUME": [
+              "official-website-button-en",
+              null
+            ]
+          },
+          "shadow": true,
           "topLevel": false
         },
         "officialWebsiteHideMenu": {
@@ -30409,8 +32301,17 @@
           "name": "official-website-button",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "219229644e41b20c4811dce46b3dfdd1",
-          "md5ext": "219229644e41b20c4811dce46b3dfdd1.svg",
+          "assetId": "40f446b284b37121ac7f31a5f645e62a",
+          "md5ext": "40f446b284b37121ac7f31a5f645e62a.svg",
+          "rotationCenterX": 58,
+          "rotationCenterY": 12
+        },
+        {
+          "name": "official-website-button-en",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "0ffa1c2dee55ace499d6a6bdb95ffbdd",
+          "md5ext": "0ffa1c2dee55ace499d6a6bdb95ffbdd.svg",
           "rotationCenterX": 58,
           "rotationCenterY": 12
         }
@@ -31154,6 +33055,7 @@
     "lmsTimers",
     "files",
     "text",
+    "translate",
     "kubohiroyaweblink"
   ],
   "extensionURLs": {

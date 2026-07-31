@@ -373,31 +373,25 @@ TMPoseURL=ポーズモデルURL
 TMPoseURL=https://example.com/kamishibai/pose-model/
 ```
 
-### `text`：scene 0 のUI文言
+### `text`：scene 0 のポーズ案内
 
 ```text
 text=予約済みUIテキストアセット名:文字列
 ```
 
-プロンプト／メニューの文言は、scene 0（最初の `---` より前）で定義します。次の5アセットはランタイムが自動登録するため、`asset=` による登録は不要です。
+ポーズ案内は、scene 0（最初の `---` より前）で定義します。`ui.prompt`はランタイムが自動登録するため、`asset=`による登録は不要です。
 
 ```text
 text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて
 ```
 
-| アセット名 | 用途 | 未定義時の既定値 |
-|---|---|---|
-| `ui.prompt` | ポーズ認識中の案内 | `Pose!` |
-| `ui.invalidScript` | 台本エラー | `Invalid script` |
-| `ui.open` | ファイル読込 | `Open file` |
-| `ui.reload` | 再読込 | `Reload` |
-| `ui.about` | タイトル表示 | `About` |
+| アセット名  | 用途               | 未定義時の既定値 |
+| ----------- | ------------------ | ---------------- |
+| `ui.prompt` | ポーズ認識中の案内 | `Pose!`          |
 
-有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。
+有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。
+
+ファイル読込、再読込、タイトル表示、言語選択、台本エラーの文言は台本コマンドではありません。アプリの言語定義と標準の`（言語）`ブロック、または利用者が保存した言語選択から決まります。旧台本の`text=ui.open:`、`text=ui.reload:`、`text=ui.about:`、`text=ui.invalidScript:`はアプリUIへ適用されません。
 
 ## グローバルアクション
 

@@ -33,7 +33,7 @@ Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecom
 | 状態管理 | DSLから利用する明示的な仕組みなし | ランタイム変数を追加 |
 | 画面効果 | 背景の即時切り替え | フェードアウト／フェードアップを追加 |
 | アニメーション | スキンの個別切り替え | 画像・音のループ／一回再生を追加 |
-| 画面上の文字 | 吹き出し中心 | テキストアセットの表示・時系列更新と、プロンプト／メニュー文言の台本定義を追加 |
+| 画面上の文字 | 吹き出し中心 | テキストアセットの表示・時系列更新と、ポーズ案内の台本定義を追加。アプリUIは日本語／英語を選択可能 |
 | アセット読込表示 | 固定のHatching画像（旧データ上は`Hatchling`） | `Loading`へ改名し、優先読込する複数画像と通常アセットだけの進捗表示を追加 |
 | アクター表示 | スキン、位置、サイズをすべて指定 | スキン省略形、スキンとサイズの同時変更を追加 |
 
@@ -76,13 +76,11 @@ sceneLabel=シーンラベル
 
 ```text
 text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて
 ```
 
-ポーズ案内、台本エラー、ファイル読込、再読込、タイトル表示の文言を台本から定義できるようにしました。これら5つはランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定の英語文言へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。
+ポーズ案内を台本から定義できるようにしました。`ui.prompt`はランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定値へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。
+
+ファイル読込、再読込、タイトル表示、言語選択、台本エラーとタイトル画面はアプリ側の日本語／英語定義から表示します。初回は標準の`（言語）`ブロックで判定し、メニューから選んだ言語はlocalStorageへ保存します。過去の資料に記載されていた`text=ui.open:`、`text=ui.reload:`、`text=ui.about:`、`text=ui.invalidScript:`は、台本読込前のUIには適用できないため現行仕様から除外しました。
 
 シーン直下の`text=テキストアセット名:文字列`も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の`action=text:...`を使用します。
 
@@ -230,10 +228,6 @@ asset=loading1,https://example.com/loading1.png
 asset=loading2,https://example.com/loading2.png
 setLoadingCostume=loading1,loading2
 text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて
 actor=Hero,Hero
 actor=Narration,Narration
 cover=Beach,Opening
@@ -264,7 +258,7 @@ action=stage:Home
 - [ ] `setCostume`を使っている箇所を`asset`と`setSkin`へ置き換えた
 - [ ] 必要なシーンへ重複しない`sceneLabel`を付けた
 - [ ] `startSceneIndex`の既定値`1`を確認し、別の開始シーンが必要な場合だけ設定した
-- [ ] 必要に応じてscene 0の`text=ui.*`でプロンプト／メニュー文言を定義した
+- [ ] 必要に応じてscene 0の`text=ui.prompt`でポーズ案内を定義した
 - [ ] シーン内の時系列テキスト更新を`action=text:...`で記述した
 - [ ] 分岐の条件数と移動先ラベル数をそろえた
 - [ ] キー／タッチ入力の項目数と移動先ラベル数をそろえた
@@ -277,9 +271,9 @@ action=stage:Home
 
 | 文書 | 主な修正内容 |
 |---|---|
-| `03-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト、Loading表示、用途別成果物、変更可能なUI文言を追加 |
-| `04-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、Loading設定、scene 0のUI文言、時系列テキスト、移行・テスト手順を追加 |
-| `05-command-reference.md` | アセット識別子、トップレベルコマンド、Loadingの優先読込と進捗、グローバル／アクターアクション、予約UI文言、エラー例を更新 |
+| `03-user-guide.md` | 3.1の分岐、入力、フェード、アニメーション、テキスト、Loading表示、用途別成果物、アプリUIの言語選択を追加 |
+| `04-dsl-manual.md` | 3.1のファイル構造、全追加コマンド、Loading設定、scene 0のポーズ案内、時系列テキスト、移行・テスト手順を追加 |
+| `05-command-reference.md` | アセット識別子、トップレベルコマンド、Loadingの優先読込と進捗、グローバル／アクターアクション、予約ポーズ案内、エラー例を更新 |
 | `01-executive-summary-adult.md` | 3.1の機能、状態管理、分岐、Loading表示、用途別成果物を利用者向けの説明へ反映 |
 | `02-executive-summary-kids.md` | アニメーション、文字表示、分かれ道、Loadingの数字、Web版とSB3の使い分けをやさしい説明で追加 |
 | `06-developer-guide.md` | Asset Manager、Loadingの実行順、Temporary Variables、Runtime Expression、Async Input、用途別成果物と公開構成を整理 |

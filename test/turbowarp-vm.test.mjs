@@ -6,6 +6,10 @@ import {
   loadKamishibaiVm,
   turbowarpVmCommit,
 } from './helpers/turbowarp-vm.mjs';
+import {
+  appShellLocales,
+  appShellSelectedLanguageNames,
+} from '../scripts/sb3/app-shell-locales.mjs';
 
 const runtimeFixtureUrl = new URL(
   './fixtures/runtime/skip-mode.txt',
@@ -95,6 +99,9 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'openButton',
       'reloadButton',
       'showTitleButton',
+      'languageButton',
+      'japaneseLanguageButton',
+      'englishLanguageButton',
       'officialWebsiteButton',
       'closeTitleButton',
       'Loading',
@@ -103,7 +110,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   );
   assert.deepEqual(
     harness.getStage().getCostumes().map((costume) => costume.name),
-    ['Title', 'Stars', 'LoadingBackdrop'],
+    ['Title', 'Title-en', 'Stars', 'LoadingBackdrop'],
   );
   assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
   assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
@@ -112,6 +119,9 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
     'openButton',
     'reloadButton',
     'showTitleButton',
+    'languageButton',
+    'japaneseLanguageButton',
+    'englishLanguageButton',
   ]) {
     assert.deepEqual(
       harness.getSprite(name).getCostumes().map((costume) => costume.name),
@@ -121,12 +131,125 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   }
   assert.deepEqual(
     harness.getSprite('officialWebsiteButton').getCostumes().map((costume) => costume.name),
-    ['official-website-button'],
+    ['official-website-button', 'official-website-button-en'],
   );
   assert.deepEqual(
     harness.getSprite('closeTitleButton').getCostumes().map((costume) => costume.name),
     ['title-close-button'],
   );
+});
+
+test('localizes the app shell from the standard viewer-language reporter', async (context) => {
+  for (const {locale, viewerLanguage, backdrop, buttonCostume} of [
+    {
+      locale: 'en',
+      viewerLanguage: 'English',
+      backdrop: 'Title-en',
+      buttonCostume: 'official-website-button-en',
+    },
+    {
+      locale: 'ja',
+      viewerLanguage: '日本語',
+      backdrop: 'Title',
+      buttonCostume: 'official-website-button',
+    },
+    {
+      locale: 'ja',
+      viewerLanguage: 'ja',
+      backdrop: 'Title',
+      buttonCostume: 'official-website-button',
+    },
+    {
+      locale: 'ja',
+      viewerLanguage: 'ja-JP',
+      backdrop: 'Title',
+      buttonCostume: 'official-website-button',
+    },
+  ]) {
+    const harness = await loadKamishibaiVm({viewerLanguage});
+    context.after(() => harness.quit());
+    const localized = appShellLocales[locale];
+
+    harness.greenFlag();
+    harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+    assert.equal(harness.getRuntimeVariable('uiLanguage'), locale);
+    assert.equal(harness.getBackdropName(), backdrop);
+    assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), buttonCostume);
+
+    harness.broadcast('showMenu');
+    harness.runUntil(() => harness.getSprite('languageButton').visible);
+    for (const [spriteName, label] of [
+      ['openButton', localized.ui.open],
+      ['reloadButton', localized.ui.reload],
+      ['showTitleButton', localized.ui.about],
+      ['languageButton', localized.ui.language],
+    ]) {
+      assert.equal(
+        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
+        label,
+      );
+    }
+  }
+});
+
+test('prefers a saved UI language and changes it from the Language menu', async (context) => {
+  const harness = await loadKamishibaiVm({
+    initialLocalStorage: {uiLanguage: 'en'},
+    viewerLanguage: '日本語',
+  });
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  assert.equal(harness.getRuntimeVariable('uiLanguage'), 'en');
+  assert.equal(harness.getBackdropName(), 'Title-en');
+
+  harness.broadcast('showMenu');
+  harness.runUntil(() => harness.getSprite('languageButton').visible);
+  harness.clickSprite('languageButton');
+  harness.runUntil(
+    () =>
+      harness.getSprite('japaneseLanguageButton').visible &&
+      harness.getSprite('englishLanguageButton').visible,
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    '日本語',
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    appShellSelectedLanguageNames.en,
+  );
+
+  harness.clickSprite('japaneseLanguageButton');
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('uiLanguage') === 'ja' &&
+      harness.getSprite('languageButton').visible,
+  );
+  assert.equal(harness.extensionState.localStorage.get('uiLanguage'), 'ja');
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('openButton').id),
+    appShellLocales.ja.ui.open,
+  );
+  assert.equal(harness.getSprite('japaneseLanguageButton').visible, false);
+  assert.equal(harness.getSprite('englishLanguageButton').visible, false);
+
+  harness.clickSprite('languageButton');
+  harness.runUntil(() => harness.getSprite('japaneseLanguageButton').visible);
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    appShellSelectedLanguageNames.ja,
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    'English',
+  );
+  harness.broadcast('hideMenu');
+
+  harness.broadcast('showTitle');
+  harness.runUntil(() => harness.getBackdropName() === 'Title');
+  assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), 'official-website-button');
 });
 
 test('shows the official website button only on Title and opens the package homepage', async (context) => {
@@ -411,7 +534,7 @@ test('keeps the external script flow when the embedded script slot is empty', as
   assert.equal(harness.hasRuntimeVariable('script'), false);
 });
 
-test('uses scene 0 text values for prompt and menu UI assets', async (context) => {
+test('keeps app-shell UI independent from scene 0 while allowing its pose prompt', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
 
@@ -421,65 +544,58 @@ test('uses scene 0 text values for prompt and menu UI assets', async (context) =
   harness.runUntil(() => harness.getSprite('openButton')?.visible === true);
 
   const openButton = harness.getSprite('openButton');
-  assert.equal(
-    harness.extensionState.displayedText.get(openButton.id),
-    'Open file',
-  );
+  assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
 
-  harness.setRuntimeVariable('script', [
-    'kamishibai=3.1',
-    'text=ui.prompt:ポーズをとろう！',
-    'text=ui.invalidScript:エラー：不正な台本ファイル',
-    'text=ui.open:ファイルをひらく',
-    'text=ui.reload:もういちど',
-    'text=ui.about:このアプリについて',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
+  harness.setRuntimeVariable(
+    'script',
+    [
+      'kamishibai=3.1',
+      'text=ui.prompt:ポーズをとろう！',
+      'text=ui.invalidScript:エラー：不正な台本ファイル',
+      'text=ui.open:ファイルをひらく',
+      'text=ui.reload:もういちど',
+      'text=ui.about:このアプリについて',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.broadcast('hideMenu');
   harness.broadcast('startStory');
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
 
   assert.equal(harness.getRuntimeVariable('text:ui.prompt'), 'ポーズをとろう！');
-  assert.equal(harness.getRuntimeVariable('text:ui.open'), 'ファイルをひらく');
+  assert.equal(harness.getRuntimeVariable('text:ui.open'), appShellLocales.en.ui.open);
 
   harness.broadcast('showPrompt');
   harness.runUntil(() => harness.getSprite('prompt')?.visible === true);
   const prompt = harness.getSprite('prompt');
-  assert.equal(
-    harness.extensionState.displayedText.get(prompt.id),
-    'ポーズをとろう！',
-  );
+  assert.equal(harness.extensionState.displayedText.get(prompt.id), 'ポーズをとろう！');
 
   harness.broadcast('invalidScript');
-  harness.runUntil(() => (
-    harness.extensionState.displayedText.get(prompt.id)
-      === 'エラー：不正な台本ファイル'
-  ));
+  harness.runUntil(
+    () =>
+      harness.extensionState.displayedText.get(prompt.id) === appShellLocales.en.ui.invalidScript,
+  );
 
   harness.broadcast('showMenu');
-  harness.runUntil(() => (
-    harness.getSprite('reloadButton')?.visible === true
-    && harness.getSprite('showTitleButton')?.visible === true
-  ));
-  assert.equal(
-    harness.extensionState.displayedText.get(openButton.id),
-    'ファイルをひらく',
+  harness.runUntil(
+    () =>
+      harness.getSprite('reloadButton')?.visible === true &&
+      harness.getSprite('showTitleButton')?.visible === true,
   );
+  assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
   assert.equal(
     harness.extensionState.displayedText.get(harness.getSprite('reloadButton').id),
-    'もういちど',
+    appShellLocales.en.ui.reload,
   );
   assert.equal(
-    harness.extensionState.displayedText.get(
-      harness.getSprite('showTitleButton').id,
-    ),
-    'このアプリについて',
+    harness.extensionState.displayedText.get(harness.getSprite('showTitleButton').id),
+    appShellLocales.en.ui.about,
   );
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
