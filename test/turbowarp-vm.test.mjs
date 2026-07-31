@@ -738,6 +738,115 @@ test('accepts Down during an action and advances to the next scene', async (cont
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
+test('preserves BGM and applies stateful tail actions when Down skips a scene', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Music,https://example.com/music.mp3',
+    'asset=NextMusic,https://example.com/next-music.mp3',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=bgm:Music',
+    'action=transition:fadeOut',
+    'action=stage:Title',
+    'action=wait:30',
+    'action=bgm:NextMusic',
+    'action=transition:fadeUp',
+    'action=stage:Title',
+    '---',
+    'sceneLabel=second',
+    'action=wait:30',
+  ].join('\n'));
+  harness.runUntil(() => {
+    const brightness = harness.getStageEffect('brightness');
+    return harness.isSoundPlaying('Music') && brightness > -100 && brightness < 0;
+  });
+
+  harness.pressKey('ArrowDown');
+  harness.runUntil(() => (
+    harness.getRuntimeVariable('sceneIndex') === 2
+    && !harness.hasRuntimeVariable('skipMode')
+  ));
+
+  assert.equal(harness.getStageEffect('brightness'), 0);
+  assert.equal(harness.getBackdropName(), 'Stars');
+  assert.equal(harness.isSoundPlaying('Music'), true);
+  assert.equal(harness.isSoundPlaying('NextMusic'), true);
+});
+
+test('stops only the current sound when Down skips a scene', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Music,https://example.com/music.mp3',
+    'asset=Effect,https://example.com/effect.mp3',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=bgm:Music',
+    'action=sound:Effect',
+    'action=wait:30',
+    '---',
+    'sceneLabel=second',
+    'action=wait:30',
+  ].join('\n'));
+  harness.runUntil(() => harness.isSoundPlaying('Effect'));
+
+  harness.pressKey('ArrowDown');
+  harness.runUntil(() => harness.getRuntimeVariable('sceneIndex') === 2);
+
+  assert.equal(harness.isSoundPlaying('Effect'), false);
+  assert.equal(harness.isSoundPlaying('Music'), true);
+  assert.equal(harness.hasRuntimeVariable('skipMode'), false);
+});
+
+test('applies stateful actions when Down interrupts scene parsing', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  const script = [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Music,https://example.com/music.mp3',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=bgm:Music',
+    'action=transition:fadeOut',
+    'action=stage:Stars',
+    '---',
+    'sceneLabel=second',
+    'action=wait:30',
+  ].join('\n');
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.setRuntimeVariable('script', script);
+  harness.broadcast('startStory');
+  harness.runUntil(() => harness.getRuntimeVariable('sceneIndex') === 1);
+  harness.setRuntimeVariable('skipContext', 'scene');
+
+  harness.pressKey('ArrowDown');
+  harness.runUntil(() => (
+    harness.getRuntimeVariable('sceneIndex') === 2
+    && !harness.hasRuntimeVariable('skipMode')
+  ));
+
+  assert.equal(harness.getStageEffect('brightness'), -100);
+  assert.equal(harness.getBackdropName(), 'LoadingBackdrop');
+  assert.equal(harness.isSoundPlaying('Music'), true);
+});
+
 test('consumes Space inside a pose action and continues with its next pose', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());

@@ -8332,7 +8332,7 @@
             ],
             "OPERAND2": [
               2,
-              "a,"
+              "e]"
             ]
           },
           "fields": {},
@@ -8408,28 +8408,10 @@
           "shadow": false,
           "topLevel": false
         },
-        "a,": {
-          "opcode": "operator_and",
-          "next": null,
-          "parent": "a*",
-          "inputs": {
-            "OPERAND1": [
-              2,
-              "e]"
-            ],
-            "OPERAND2": [
-              2,
-              "e^"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
         "e]": {
           "opcode": "operator_not",
           "next": null,
-          "parent": "a,",
+          "parent": "a*",
           "inputs": {
             "OPERAND": [
               2,
@@ -8450,45 +8432,6 @@
               [
                 10,
                 "nextSceneLabel"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "e^": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "a,",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "kJ"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "kJ": {
-          "opcode": "operator_equals",
-          "next": null,
-          "parent": "e^",
-          "inputs": {
-            "OPERAND1": [
-              3,
-              "ctxListSkipGet",
-              [
-                10,
-                ""
-              ]
-            ],
-            "OPERAND2": [
-              1,
-              [
-                10,
-                "scene"
               ]
             ]
           },
@@ -8550,7 +8493,7 @@
         },
         "a-": {
           "opcode": "control_if",
-          "next": null,
+          "next": "kR",
           "parent": "a+",
           "inputs": {
             "CONDITION": [
@@ -8567,9 +8510,27 @@
           "topLevel": false
         },
         "e_": {
-          "opcode": "operator_not",
+          "opcode": "operator_and",
           "next": null,
           "parent": "a-",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "actionNotComment"
+            ],
+            "OPERAND2": [
+              2,
+              "sceneSkipActionAllowed"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actionNotComment": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "e_",
           "inputs": {
             "OPERAND": [
               2,
@@ -8583,7 +8544,7 @@
         "a.": {
           "opcode": "strings_posWith",
           "next": null,
-          "parent": "e_",
+          "parent": "actionNotComment",
           "inputs": {
             "STRING": [
               3,
@@ -8630,6 +8591,218 @@
           "opcode": "strings_menu_positions",
           "next": null,
           "parent": "a.",
+          "inputs": {},
+          "fields": {
+            "positions": [
+              "starts",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "sceneSkipActionAllowed": {
+          "opcode": "operator_or",
+          "next": null,
+          "parent": "e_",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "sceneSkipNotActive"
+            ],
+            "OPERAND2": [
+              2,
+              "sceneSkipStatefulAction"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipNotActive": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "sceneSkipActionAllowed",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "sceneSkipIsActive"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipIsActive": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "sceneSkipNotActive",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "sceneSkipModeValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "scene"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipModeValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "sceneSkipIsActive",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skipMode"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipStatefulAction": {
+          "opcode": "operator_or",
+          "next": null,
+          "parent": "sceneSkipActionAllowed",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "sceneSkipBgm"
+            ],
+            "OPERAND2": [
+              2,
+              "sceneSkipTransition"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipBgm": {
+          "opcode": "strings_posWith",
+          "next": null,
+          "parent": "sceneSkipStatefulAction",
+          "inputs": {
+            "STRING": [
+              3,
+              "sceneSkipBgmValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "POSITION": [
+              1,
+              "sceneSkipBgmPosition"
+            ],
+            "SUBSTRING": [
+              1,
+              [
+                10,
+                "bgm:"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipBgmValue": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "sceneSkipBgm",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "action"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipBgmPosition": {
+          "opcode": "strings_menu_positions",
+          "next": null,
+          "parent": "sceneSkipBgm",
+          "inputs": {},
+          "fields": {
+            "positions": [
+              "starts",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "sceneSkipTransition": {
+          "opcode": "strings_posWith",
+          "next": null,
+          "parent": "sceneSkipStatefulAction",
+          "inputs": {
+            "STRING": [
+              3,
+              "sceneSkipTransitionValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "POSITION": [
+              1,
+              "sceneSkipTransitionPosition"
+            ],
+            "SUBSTRING": [
+              1,
+              [
+                10,
+                "transition:"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipTransitionValue": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "sceneSkipTransition",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "action"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSkipTransitionPosition": {
+          "opcode": "strings_menu_positions",
+          "next": null,
+          "parent": "sceneSkipTransition",
           "inputs": {},
           "fields": {
             "positions": [
@@ -8935,7 +9108,7 @@
         "kR": {
           "opcode": "data_changevariableby",
           "next": null,
-          "parent": "ctxActionDone",
+          "parent": "a-",
           "inputs": {
             "VALUE": [
               1,
@@ -11692,27 +11865,9 @@
           "topLevel": false
         },
         "bm": {
-          "opcode": "operator_and",
-          "next": null,
-          "parent": "H",
-          "inputs": {
-            "OPERAND1": [
-              2,
-              "bo"
-            ],
-            "OPERAND2": [
-              2,
-              "fI"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "bo": {
           "opcode": "operator_lt",
           "next": null,
-          "parent": "bm",
+          "parent": "H",
           "inputs": {
             "OPERAND1": [
               3,
@@ -11738,7 +11893,7 @@
         "lh": {
           "opcode": "lmsTempVars2_getThreadVariable",
           "next": null,
-          "parent": "bo",
+          "parent": "bm",
           "inputs": {
             "VAR": [
               1,
@@ -11755,7 +11910,7 @@
         "fJ": {
           "opcode": "operator_add",
           "next": null,
-          "parent": "bo",
+          "parent": "bm",
           "inputs": {
             "NUM1": [
               3,
@@ -11788,37 +11943,6 @@
               "?ZBHb1dE9N@(R;AqIbOj"
             ]
           },
-          "shadow": false,
-          "topLevel": false
-        },
-        "fI": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "bm",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "lj"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "lj": {
-          "opcode": "lmsTempVars2_runtimeVariableExists",
-          "next": null,
-          "parent": "fI",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "skipMode"
-              ]
-            ]
-          },
-          "fields": {},
           "shadow": false,
           "topLevel": false
         },
@@ -17583,9 +17707,27 @@
           "topLevel": false
         },
         "gX": {
-          "opcode": "operator_not",
+          "opcode": "operator_or",
           "next": null,
           "parent": "b!",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "bgmNoSkip"
+            ],
+            "OPERAND2": [
+              2,
+              "bgmSceneSkip"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "bgmNoSkip": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "gX",
           "inputs": {
             "OPERAND": [
               2,
@@ -17599,7 +17741,49 @@
         "mG": {
           "opcode": "lmsTempVars2_runtimeVariableExists",
           "next": null,
+          "parent": "bgmNoSkip",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skipMode"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "bgmSceneSkip": {
+          "opcode": "operator_equals",
+          "next": null,
           "parent": "gX",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "bgmSkipModeValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "scene"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "bgmSkipModeValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "bgmSceneSkip",
           "inputs": {
             "VAR": [
               1,
@@ -23126,23 +23310,6 @@
           "shadow": false,
           "topLevel": false
         },
-        "ctxListSkipGet": {
-          "opcode": "lmsTempVars2_getRuntimeVariable",
-          "next": null,
-          "parent": "kJ",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "skipMode"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
         "ctxActionSet": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "a:",
@@ -23246,7 +23413,7 @@
         },
         "ctxActionDone": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
-          "next": "kR",
+          "next": null,
           "parent": "ctxActionIf",
           "inputs": {
             "VAR": [
@@ -23400,10 +23567,96 @@
           "topLevel": false
         },
         "ctxDownStopSound": {
-          "opcode": "kubohiroyaassetmanager_stopAllSounds",
+          "opcode": "control_if",
           "next": "ctxDownFinishSequence",
           "parent": "i~",
-          "inputs": {},
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ctxDownIsSound"
+            ],
+            "SUBSTACK": [
+              2,
+              "ctxDownStopCurrentSound"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ctxDownIsSound": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ctxDownStopSound",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ctxDownActionCommand",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "sound"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ctxDownActionCommand": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ctxDownIsSound",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionCommand"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ctxDownStopCurrentSound": {
+          "opcode": "kubohiroyaassetmanager_stopSound",
+          "next": null,
+          "parent": "ctxDownStopSound",
+          "inputs": {
+            "NAME": [
+              3,
+              "ctxDownActionParam",
+              [
+                10,
+                "sound1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ctxDownActionParam": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ctxDownStopCurrentSound",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
           "fields": {},
           "shadow": false,
           "topLevel": false
