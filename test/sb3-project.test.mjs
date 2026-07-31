@@ -34,9 +34,12 @@ test('loads project.json from an SB3 archive', async () => {
   await withTemporaryDirectory(async (directory) => {
     const sb3Path = path.join(directory, 'project.sb3');
     const expectedProject = {targets: [], extensionURLs: {}};
-    await writeFile(sb3Path, zipSync({
-      'project.json': strToU8(JSON.stringify(expectedProject)),
-    }));
+    await writeFile(
+      sb3Path,
+      zipSync({
+        'project.json': strToU8(JSON.stringify(expectedProject)),
+      }),
+    );
 
     assert.deepEqual(loadKamishibaiProject(sb3Path), expectedProject);
   });
@@ -69,6 +72,7 @@ test('prepares the generated default SB3 with explicit replacement authorization
   });
 
   assert.deepEqual(buildOptions, {
+    environment: {},
     outputPath: defaultKamishibaiSb3Path,
     sourceDirectory: path.resolve('app'),
     yes: true,

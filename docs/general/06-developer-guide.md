@@ -309,6 +309,18 @@ DSL名、同一target内のSB3名、既存SB3のアセット名は重複でき�
 pnpm sb3:build
 ```
 
+生成時に、Title背景の`Version <version> (YYYY/MM/DD)`へ`package.json`の
+versionとAsia/Tokyoのビルド日を自動で埋め込みます。`app/`にはプレースホルダーを
+保持し、一時ソースでSVGの内容、MD5、`assetId`、`md5ext`、archive entryを同時に
+更新するため、ビルドで正本は変更されません。
+
+過去のリリースを同じ日付で再現するときは、日付を`YYYY-MM-DD`で明示します。不正な
+日付はエラーにし、暗黙に補正しません。
+
+```bash
+KAMISHIBAI_BUILD_DATE=2026-07-31 pnpm sb3:build
+```
+
 `tmp/kamishibai.sb3`をTurboWarpで編集し、別の明示的なパスへ保存してから取り込みます。
 
 ```bash
