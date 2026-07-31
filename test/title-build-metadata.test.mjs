@@ -10,6 +10,7 @@ import {strFromU8, unzipSync} from 'fflate';
 import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
 import {
   officialWebsiteFaviconPlaceholder,
+  readTitleBuildMetadataFromSb3,
   resolveTitleBuildMetadata,
   titleBuildDateEnvironmentVariable,
   titleVersionPlaceholder,
@@ -81,6 +82,11 @@ test('embeds Title metadata and the site favicon without changing app source', a
   const expectedLabel = `Version ${packageJson.version} (2026/07/31)`;
 
   assert.equal(built.titleBuildMetadata.label, expectedLabel);
+  assert.deepEqual(readTitleBuildMetadataFromSb3(built.archive), {
+    buildDate: '2026-07-31',
+    label: expectedLabel,
+    version: packageJson.version,
+  });
   assert(titleSvg.includes(expectedLabel));
   assert(!titleSvg.includes(titleVersionPlaceholder));
   assert.equal(

@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
+import {strFromU8, unzipSync} from 'fflate';
+
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
 export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
@@ -58,6 +60,41 @@ export function resolveTitleBuildMetadata({
     label: `Version ${version} (${displayDate})`,
     version,
   });
+}
+
+export function readTitleBuildMetadataFromSb3(archiveBytes) {
+  const archive = unzipSync(new Uint8Array(archiveBytes));
+  assert(archive['project.json'], 'The SB3 archive must contain project.json.');
+  const project = JSON.parse(strFromU8(archive['project.json']));
+  const stages = project.targets.filter((target) => target.isStage);
+  assert.equal(stages.length, 1, 'The SB3 archive must contain exactly one Stage target.');
+  const titleCostumes = stages[0].costumes.filter((costume) => costume.name === 'Title');
+  assert.equal(titleCostumes.length, 1, 'The Stage must contain exactly one Title backdrop.');
+  const titleCostume = titleCostumes[0];
+  assert.equal(titleCostume.dataFormat, 'svg', 'The Title backdrop must be an SVG asset.');
+  const titleAsset = archive[titleCostume.md5ext];
+  assert(titleAsset, `The SB3 archive is missing the Title asset: ${titleCostume.md5ext}`);
+  const titleSvg = strFromU8(titleAsset);
+  const metadataMatches = [
+    ...titleSvg.matchAll(/Version ([0-9A-Za-z.+-]+) \((\d{4}\/\d{2}\/\d{2})\)/gu),
+  ];
+  assert.equal(
+    metadataMatches.length,
+    1,
+    'The Title backdrop must contain exactly one stamped version and build date.',
+  );
+  const [, version, displayDate] = metadataMatches[0];
+  const metadata = resolveTitleBuildMetadata({
+    buildDate: displayDate.replaceAll('/', '-'),
+    environment: {},
+    version,
+  });
+  assert.equal(
+    metadata.label,
+    metadataMatches[0][0],
+    'The Title backdrop contains invalid build metadata.',
+  );
+  return metadata;
 }
 
 async function readPackageVersion(packageJsonPath) {

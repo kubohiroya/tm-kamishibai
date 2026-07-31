@@ -11,6 +11,7 @@ import {
 } from '../docs/config.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
 import {createKamishibaiSb3} from './sb3/build.mjs';
+import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
@@ -239,17 +240,27 @@ async function verifyDownloads(titleBuildMetadata) {
     publishedEntries,
     publishedArchive,
     archiveStat,
-    expectedBuild,
+    packageJsonSource,
   ] = await Promise.all([
     readdir(downloadSourceDirectory, {withFileTypes: true}),
     readdir(downloadDirectory, {withFileTypes: true}),
     readFile(downloadPath),
     stat(downloadPath),
-    createKamishibaiSb3({
-      buildDate: titleBuildMetadata?.buildDate,
-      version: titleBuildMetadata?.version,
-    }),
+    readFile(packageJsonPath, 'utf8'),
   ]);
+  const publishedMetadata = readTitleBuildMetadataFromSb3(publishedArchive);
+  const packageJson = JSON.parse(packageJsonSource);
+  assert(publishedMetadata.version === packageJson.version,
+    `The published SB3 version ${publishedMetadata.version} differs from package.json ${packageJson.version}.`);
+  if (titleBuildMetadata) {
+    assert(publishedMetadata.buildDate === titleBuildMetadata.buildDate
+        && publishedMetadata.version === titleBuildMetadata.version,
+    'The published SB3 metadata differs from the current build metadata.');
+  }
+  const expectedBuild = await createKamishibaiSb3({
+    buildDate: publishedMetadata.buildDate,
+    version: publishedMetadata.version,
+  });
   const sourceSb3Files = sourceEntries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sb3'))
     .map((entry) => entry.name);
