@@ -3863,7 +3863,7 @@
         },
         "poseRecognitionSoundCommandSet": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
-          "next": null,
+          "next": "poseRecognitionSound2CommandDispatch",
           "parent": "poseRecognitionSoundCommandDispatch",
           "inputs": {
             "VAR": [
@@ -3875,7 +3875,7 @@
             ],
             "STRING": [
               3,
-              "poseRecognitionSoundCommandValue",
+              "poseRecognitionSoundCommandPrimaryValue",
               [
                 10,
                 ""
@@ -3886,10 +3886,318 @@
           "shadow": false,
           "topLevel": false
         },
-        "poseRecognitionSoundCommandValue": {
-          "opcode": "argument_reporter_string_number",
+        "poseRecognitionSound2CommandDispatch": {
+          "opcode": "control_if_else",
           "next": null,
           "parent": "poseRecognitionSoundCommandSet",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "poseRecognitionSound2CommandCanSet"
+            ],
+            "SUBSTACK": [
+              2,
+              "poseRecognitionSound2CommandSet"
+            ],
+            "SUBSTACK2": [
+              2,
+              "poseRecognitionSound2CommandClear"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandCanSet": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "poseRecognitionSound2CommandHasSeparator"
+            ],
+            "OPERAND2": [
+              2,
+              "poseRecognitionSound2CommandValueConfigured"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandHasSeparator": {
+          "opcode": "operator_contains",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandCanSet",
+          "inputs": {
+            "STRING1": [
+              3,
+              "poseRecognitionSound2CommandSeparatorSource",
+              [
+                10,
+                ""
+              ]
+            ],
+            "STRING2": [
+              1,
+              [
+                10,
+                ","
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandValueConfigured": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandCanSet",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "poseRecognitionSound2CommandValueIsEmpty"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandValueIsEmpty": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandValueConfigured",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "poseRecognitionSound2CommandCheckValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandCheckValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandValueIsEmpty",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "2"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ","
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "poseRecognitionSound2CommandCheckSource",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "poseRecognitionSound2CommandCheckSource": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandCheckValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandSeparatorSource": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandHasSeparator",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandPrimaryValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandSet",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "1"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ","
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "poseRecognitionSoundCommandPrimarySource",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "poseRecognitionSoundCommandPrimarySource": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandPrimaryValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandSet": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandDispatch",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound2"
+              ]
+            ],
+            "STRING": [
+              3,
+              "poseRecognitionSoundCommandSecondaryValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2CommandClear": {
+          "opcode": "lmsTempVars2_deleteRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandDispatch",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSoundCommandSecondaryValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "poseRecognitionSound2CommandSet",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "2"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ","
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "poseRecognitionSoundCommandSecondarySource",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "poseRecognitionSoundCommandSecondarySource": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "poseRecognitionSoundCommandSecondaryValue",
           "inputs": {},
           "fields": {
             "VALUE": [
@@ -5517,7 +5825,7 @@
         },
         "poseRecognitionSoundReset": {
           "opcode": "lmsTempVars2_deleteRuntimeVariable",
-          "next": "es",
+          "next": "poseRecognitionSound2Reset",
           "parent": "loadingBackdropReset",
           "inputs": {
             "VAR": [
@@ -5532,10 +5840,27 @@
           "shadow": false,
           "topLevel": false
         },
+        "poseRecognitionSound2Reset": {
+          "opcode": "lmsTempVars2_deleteRuntimeVariable",
+          "next": "es",
+          "parent": "poseRecognitionSoundReset",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "es": {
           "opcode": "procedures_call",
           "next": "uiStoryDefaultValue1",
-          "parent": "poseRecognitionSoundReset",
+          "parent": "poseRecognitionSound2Reset",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -13206,7 +13531,7 @@
             ],
             "SUBSTACK": [
               2,
-              "bC"
+              "poseRecognitionSound2If"
             ],
             "SUBSTACK2": [
               2,
@@ -13287,10 +13612,80 @@
           "shadow": false,
           "topLevel": false
         },
+        "poseRecognitionSound2If": {
+          "opcode": "control_if",
+          "next": "bC",
+          "parent": "b",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "poseRecognitionSound2Configured"
+            ],
+            "SUBSTACK": [
+              2,
+              "poseRecognitionSound2Play"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2Configured": {
+          "opcode": "lmsTempVars2_runtimeVariableExists",
+          "next": null,
+          "parent": "poseRecognitionSound2If",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2Play": {
+          "opcode": "kubohiroyaassetmanager_playSound",
+          "next": null,
+          "parent": "poseRecognitionSound2If",
+          "inputs": {
+            "NAME": [
+              3,
+              "poseRecognitionSound2PlayName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "poseRecognitionSound2PlayName": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "poseRecognitionSound2Play",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "poseRecognitionSound2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "bC": {
           "opcode": "data_setvariableto",
           "next": "bE",
-          "parent": "b",
+          "parent": "poseRecognitionSound2If",
           "inputs": {
             "VALUE": [
               3,

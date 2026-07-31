@@ -380,6 +380,25 @@ test('documents invalidScript as a terminal error instead of a pose transition',
   );
 });
 
+test('plays the configured pose completion sound before updating the recognition value', () => {
+  const stage = projectSource.targets.find(({isStage}) => isStage);
+  const recognizedBranch = stage.blocks.b;
+  const completionSoundIf = stage.blocks[inputBlockId(recognizedBranch.inputs?.SUBSTACK)];
+  const completionSoundConfigured = stage.blocks[inputBlockId(completionSoundIf.inputs?.CONDITION)];
+  const setRecognitionValue = stage.blocks[completionSoundIf.next];
+  const playCompletionSound = stage.blocks[inputBlockId(completionSoundIf.inputs?.SUBSTACK)];
+  const completionSoundName = stage.blocks[inputBlockId(playCompletionSound.inputs?.NAME)];
+
+  assert.equal(completionSoundIf.opcode, 'control_if');
+  assert.equal(completionSoundConfigured.opcode, 'lmsTempVars2_runtimeVariableExists');
+  assert.equal(literalString(completionSoundConfigured.inputs?.VAR), 'poseRecognitionSound2');
+  assert.equal(playCompletionSound.opcode, 'kubohiroyaassetmanager_playSound');
+  assert.equal(completionSoundName.opcode, 'lmsTempVars2_getRuntimeVariable');
+  assert.equal(literalString(completionSoundName.inputs?.VAR), 'poseRecognitionSound2');
+  assert.equal(setRecognitionValue.opcode, 'data_setvariableto');
+  assert.equal(setRecognitionValue.fields?.VARIABLE?.[0], 'ポーズ認識');
+});
+
 test('explains block IDs and uses consistent section 6 table vocabulary', () => {
   const section = specification.match(
     /^## event、カスタムブロック、呼出し関係 \{#events-custom-blocks-call-graph\}$(?<body>[\s\S]*?)(?=^## broadcastと状態遷移$)/mu,

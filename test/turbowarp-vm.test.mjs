@@ -670,7 +670,7 @@ test('consumes Space inside a pose action and continues with its next pose', asy
   assert.equal(harness.getBackdropName(), 'Stars');
 });
 
-test('plays the configured pose recognition sound and resets it for the next script', async (context) => {
+test('plays configured pose recognition sounds and resets them for the next script', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   startScript(harness, [
@@ -679,7 +679,8 @@ test('plays the configured pose recognition sound and resets it for the next scr
     'asset=Stars,backdrop',
     'asset=Hero,costume:Loading:loading',
     'asset=Tick,https://example.com/tick.mp3',
-    'setPoseRecognitionSound=Tick',
+    'asset=Confirm,https://example.com/confirm.mp3',
+    'setPoseRecognitionSound=Tick,Confirm',
     'actor=Hero,Hero',
     'cover=Title,',
     '---',
@@ -690,11 +691,15 @@ test('plays the configured pose recognition sound and resets it for the next scr
     'action=wait:30',
   ].join('\n'));
   harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
+
+  assert.equal(harness.isSoundPlaying('Tick'), true);
+  assert.equal(harness.isSoundPlaying('Confirm'), false);
+  assert.equal(harness.getRuntimeVariable('poseRecognitionSound'), 'Tick');
+  assert.equal(harness.getRuntimeVariable('poseRecognitionSound2'), 'Confirm');
+
   harness.extensionState.poseMatches = true;
   harness.extensionState.poseScore = 1;
-  harness.runUntil(() => harness.isSoundPlaying('Tick'));
-
-  assert.equal(harness.getRuntimeVariable('poseRecognitionSound'), 'Tick');
+  harness.runUntil(() => harness.isSoundPlaying('Confirm'));
 
   harness.runUntil(() => harness.getBackdropName() === 'Title');
   assert.equal(harness.isSoundPlaying('Tick'), false);
@@ -717,7 +722,39 @@ test('plays the configured pose recognition sound and resets it for the next scr
   harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
 
   assert.equal(harness.hasRuntimeVariable('poseRecognitionSound'), false);
+  assert.equal(harness.hasRuntimeVariable('poseRecognitionSound2'), false);
   assert.equal(harness.extensionState.playingSounds.size, 0);
+});
+
+test('keeps a single pose recognition sound backward compatible', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(harness, [
+    'kamishibai=3.1',
+    'asset=Title,backdrop',
+    'asset=Stars,backdrop',
+    'asset=Hero,costume:Loading:loading',
+    'asset=Tick,https://example.com/tick.mp3',
+    'setPoseRecognitionSound=Tick',
+    'actor=Hero,Hero',
+    'cover=Title,',
+    '---',
+    'sceneLabel=first',
+    'action=stage:Stars',
+    'action=Hero:pose:Hero:pose1:',
+    'action=stage:Title',
+    'action=wait:30',
+  ].join('\n'));
+  harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
+
+  assert.equal(harness.getRuntimeVariable('poseRecognitionSound'), 'Tick');
+  assert.equal(harness.hasRuntimeVariable('poseRecognitionSound2'), false);
+  assert.equal(harness.isSoundPlaying('Tick'), true);
+  assert.equal(harness.isSoundPlaying(''), false);
+
+  harness.extensionState.poseMatches = true;
+  harness.extensionState.poseScore = 1;
+  harness.runUntil(() => harness.getBackdropName() === 'Title');
 });
 
 test('propagates Right from a pose to the action boundary', async (context) => {
