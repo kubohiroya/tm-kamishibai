@@ -22,7 +22,7 @@ kamishibai=3.1
 setRuntimeVariable=startSceneIndex:1
 setLoadingBackdrop=読み込み背景
 setLoadingCostume=読み込み画像1,読み込み画像2
-setPoseRecognitionSound=ポーズ認識中の効果音
+setPoseRecognitionSound=ポーズ認識中の効果音,認識成立時の効果音
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
 asset=音名,sound
@@ -147,10 +147,13 @@ Loading用の背景と画像は、読込進捗の完了数と総数から除外�
 
 ```text
 asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
-setPoseRecognitionSound=Clock Ticking
+asset=Sewing Machine,https://example.com/sounds/sewing-machine.mp3
+setPoseRecognitionSound=Clock Ticking,Sewing Machine
 ```
 
-`setPoseRecognitionSound`には、`asset`で定義した音声アセット名を1件指定します。各ポーズの認識開始時にAsset Manager経由で再生し、認識成功またはスキップでそのポーズを終えると停止します。指定を省略するか空文字を指定した場合は無音です。
+`setPoseRecognitionSound`には、`asset`で定義した音声アセット名を最大2件、カンマ区切りで指定します。第1音は各ポーズの認識開始時にAsset Manager経由で再生し、認識成功またはスキップでそのポーズを終えると停止します。第2音はポーズ条件が成立したとき、「ポーズ認識」の値を更新する直前に再生します。
+
+第2音は省略でき、従来の`setPoseRecognitionSound=Clock Ticking`も同じ動作を保ちます。コマンド自体を省略するか第1音に空文字を指定した場合、認識中の音は鳴りません。第2音が空文字の場合、認識成立時の音は鳴りません。
 
 ### アクター定義
 

@@ -240,25 +240,28 @@ setLoadingCostume=loading1,loading2,loading3
 ### `setPoseRecognitionSound`
 
 ```text
-setPoseRecognitionSound=ポーズ認識中の効果音アセット名
+setPoseRecognitionSound=ポーズ認識中の効果音アセット名,認識成立時の効果音アセット名
 ```
 
-各ポーズの認識中に再生する音声アセットを1件指定します。
+各ポーズの認識中に再生する音声アセットと、ポーズ条件の成立時に再生する音声アセットを指定します。
 
 ```text
 asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
-setPoseRecognitionSound=Clock Ticking
+asset=Sewing Machine,https://example.com/sounds/sewing-machine.mp3
+setPoseRecognitionSound=Clock Ticking,Sewing Machine
 ```
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | ポーズ認識開始から終了までの効果音を設定する |
-| 必須 | 任意。省略時または空文字は無音 |
-| 値 | `asset`で定義した音声アセット名1件 |
-| 開始 | 各ポーズの認識開始時にAsset Manager経由で再生する |
-| 停止 | 認識成功、スペース／Right／Downによるスキップ、物語停止時に停止する |
+| 役割 | ポーズ認識中の開始音と認識成立時の効果音を設定する |
+| 必須 | 任意。コマンド省略時または各値が空文字の場合は対応する音が無音 |
+| 値1 | `asset`で定義した認識中の音声アセット名 |
+| 値2 | `asset`で定義した認識成立時の音声アセット名。省略可 |
+| 第1音の開始 | 各ポーズの認識開始時にAsset Manager経由で再生する |
+| 第1音の停止 | 認識成功、スペース／Right／Downによるスキップ、物語停止時に停止する |
+| 第2音の開始 | ポーズ条件成立時、「ポーズ認識」の値を更新する直前に再生する |
 
-指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。長いクリップは認識が先に終わると途中で停止します。複数のtick／tockを含むクリップを1アセットとして指定できます。
+指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。第1音の長いクリップは認識が先に終わると途中で停止します。第2音は音声アセット自身の長さだけ再生されます。従来の1音指定はそのまま利用できます。
 
 ### `actor`
 
@@ -922,9 +925,10 @@ asset=Loading1,https://example.com/loading1.png
 asset=Loading2,https://example.com/loading2.png
 asset=LoadingBackground,https://example.com/loading-background.png
 asset=ClockTicking,https://example.com/clock-ticking.mp3
+asset=PoseRecognized,https://example.com/pose-recognized.mp3
 setLoadingBackdrop=LoadingBackground
 setLoadingCostume=Loading1,Loading2
-setPoseRecognitionSound=ClockTicking
+setPoseRecognitionSound=ClockTicking,PoseRecognized
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound

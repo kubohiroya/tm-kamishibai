@@ -99,13 +99,13 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1490 |
+| block                    | 1508 |
 | event hat                |   39 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
 | Scratch list             |   11 |
 | broadcast message        |   18 |
-| 静的なruntime variable名 |   17 |
+| 静的なruntime variable名 |   18 |
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   12 |
 
@@ -289,7 +289,7 @@ runtime variableの3種類に分けます。
 
 ### runtime variable
 
-静的な名前を持つruntime variableは次の17個です。
+静的な名前を持つruntime variableは次の18個です。
 
 | 変数                                                           | 生存期間／役割                                                   |
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -303,12 +303,13 @@ runtime variableの3種類に分けます。
 | `skipContext`                                                  | `title`、`action`、`pose`、`scene`のどの境界が要求を消費できるか |
 | `poseRecog`, `poseCharge`, `poseIdle`                          | pose認識のしきい値、charge時間、idle時間                         |
 | `poseRecognitionSound`                                         | `setPoseRecognitionSound`で指定した認識中の音声アセット名        |
+| `poseRecognitionSound2`                                        | `setPoseRecognitionSound`で指定した認識成立時の音声アセット名    |
 | `loadingCostume`                                               | Loading spriteへ適用するcostume名                                |
 | `message`                                                      | Loading bubbleへ表示する現在の進捗文言                           |
 
 このほか、`exec command %s %s`はDSLで指定されたruntime variable名を動的に設定します。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
-静的な17個には数えません。
+静的な18個には数えません。
 
 ### thread variable
 
@@ -472,16 +473,16 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### 主要な呼出し経路
 
-| 起点          | 経路                                                                                                                     |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| green flag    | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                                                                    |
-| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`                                             |
-| scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`                                                  |
-| Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                                                                 |
-| Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action                                      |
-| pose action   | camera preview／pose認識開始 → `setPoseRecognitionSound`指定音を再生 → `exec pose %s`反復 →音声／認識停止 → prompt非表示 |
-| asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                           |
-| 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                |
+| 起点          | 経路                                                                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| green flag    | 初期化 → camera／pose停止 → actor非表示 → `showTitle`                                                                                          |
+| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`                                                                   |
+| scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`                                                                        |
+| Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                                                                                       |
+| Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action                                                            |
+| pose action   | camera preview／pose認識開始 → 第1音を再生 → `exec pose %s`反復（条件成立時は第2音を「ポーズ認識」更新前に再生）→音声／認識停止 → prompt非表示 |
+| asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                                                 |
+| 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                                      |
 
 ## broadcastと状態遷移
 
