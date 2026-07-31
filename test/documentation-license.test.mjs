@@ -4,6 +4,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {documentConfig} from '../docs/config.mjs';
+
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const copyrightNotice = /Copyright © 2026 Hiroya Kubo\./u;
 
@@ -52,10 +54,16 @@ test('marks every general document as CC BY-SA 4.0', async () => {
   }
 });
 
-test('marks every workshop document as all rights reserved', async () => {
+test('keeps the workshop license notice outside the participant body', async () => {
   const workshopDirectory = path.join(projectRoot, 'docs/workshops');
+  const participantSourcePath = path.join(
+    projectRoot,
+    'docs',
+    documentConfig.sourceDirectory,
+    documentConfig.sourceFilename,
+  );
   const files = (await collectMarkdownFiles(workshopDirectory)).filter(
-    (filePath) => path.basename(filePath) !== 'LICENSE.md',
+    (filePath) => path.basename(filePath) !== 'LICENSE.md' && filePath !== participantSourcePath,
   );
   assert(files.length > 0);
 
@@ -64,4 +72,13 @@ test('marks every workshop document as all rights reserved', async () => {
     assert.match(source, copyrightNotice, filePath);
     assert.match(source, /All rights reserved\./u, filePath);
   }
+
+  const [licenseSource, participantSource] = await Promise.all([
+    readFile(path.join(workshopDirectory, 'LICENSE.md'), 'utf8'),
+    readFile(participantSourcePath, 'utf8'),
+  ]);
+  assert.match(licenseSource, copyrightNotice);
+  assert.match(licenseSource, /All rights reserved\./u);
+  assert.doesNotMatch(participantSource, copyrightNotice);
+  assert.doesNotMatch(participantSource, /All rights reserved\./u);
 });
