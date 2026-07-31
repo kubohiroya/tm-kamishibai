@@ -137,8 +137,8 @@ test('shows the official website button only on Title and opens the package home
   const button = harness.getSprite('officialWebsiteButton');
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   assert.equal(button.visible, true);
-  assert.equal(button.x, 142);
-  assert.equal(button.y, 0);
+  assert.equal(button.x, 0);
+  assert.equal(button.y, -34);
 
   harness.clickSprite('officialWebsiteButton');
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);

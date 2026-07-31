@@ -86,20 +86,28 @@ test('embeds Title metadata and the site favicon without changing app source', a
   assert.equal(
     [
       ...titleSvg.matchAll(
-        /<text transform="translate\((?:220\.36368,144\.13592|190\.11368,186)\)[^>]+text-anchor="middle">/gu,
+        /<text transform="translate\((?:220\.36368,144\.13592|240,186)\)[^>]+text-anchor="middle">/gu,
       ),
     ].length,
     2,
   );
+  assert.match(
+    titleSvg,
+    /<text transform="translate\(240,320\.97056\) scale\(0\.5,0\.5\)" font-size="36"[^>]+text-anchor="middle">/u,
+  );
+  assert(titleSvg.includes('久保 裕也 &lt;hiroya@cuc.ac.jp&gt;'));
+  assert(!titleSvg.includes('　　　久保 裕也'));
   assert.equal(createHash('md5').update(titleSvg).digest('hex'), titleCostume.assetId);
   assert.equal(titleCostume.md5ext, `${titleCostume.assetId}.svg`);
   assert(archive[titleCostume.md5ext]);
-  assert.equal(archive['1ae83bbde362a1bc85eea4d67263e794.svg'], undefined);
+  assert.equal(archive['4a945a1156103dccbbcc8c5623f195f0.svg'], undefined);
   assert.equal(
     built.titleBuildMetadata.officialWebsiteAsset.filename,
     officialWebsiteCostume.md5ext,
   );
   assert(!officialWebsiteSvg.includes(officialWebsiteFaviconPlaceholder));
+  assert(officialWebsiteSvg.includes('width="106" height="24" viewBox="0 0 106 24"'));
+  assert(officialWebsiteSvg.includes('x="0.75" y="0.75" width="104.5"'));
   assert(officialWebsiteSvg.includes('fill="#fff" stroke="#007f71"'));
   assert(officialWebsiteSvg.includes('fill="#007f71"'));
   const embeddedFavicon = officialWebsiteSvg.match(/data:image\/png;base64,([^"]+)/u)?.[1];
@@ -110,7 +118,7 @@ test('embeds Title metadata and the site favicon without changing app source', a
     officialWebsiteCostume.assetId,
   );
   assert.equal(officialWebsiteCostume.md5ext, `${officialWebsiteCostume.assetId}.svg`);
-  assert.equal(archive['2edba0af7984277b1611a8f687484361.svg'], undefined);
+  assert.equal(archive['5217cb9bd03009d871e97d292aaa4b88.svg'], undefined);
   await assert.rejects(access(built.source.resolvedSourceDirectory));
 
   const [projectSourceAfter, sourceManifestAfter, assetFilenamesAfter] = await Promise.all([

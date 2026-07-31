@@ -159,7 +159,7 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 | `openButton`            | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                    |
 | `reloadButton`          | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                    |
 | `showTitleButton`       | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                    |
-| `officialWebsiteButton` | UI sprite  | titleのバージョン表記右側から公式Webサイトを開く                    | `official-website-button`           |
+| `officialWebsiteButton` | UI sprite  | titleの3行目から公式Webサイトを開く                                 | `official-website-button`           |
 | `closeTitleButton`      | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                |
 | `Loading`               | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                 |
 | `LoadingBubbleAnchor`   | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`             |
