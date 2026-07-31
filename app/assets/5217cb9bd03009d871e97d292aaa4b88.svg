@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="106" height="24" viewBox="0 0 106 24">
-  <rect x="0.75" y="0.75" width="104.5" height="22.5" rx="11.25" fill="#fff" stroke="#007f71" stroke-width="1.5"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="4" y="2" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
-  <text x="61" y="15.25" fill="#007f71" font-family="sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">公式Webサイト</text>
-</svg>

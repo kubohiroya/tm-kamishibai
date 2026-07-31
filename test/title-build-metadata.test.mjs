@@ -106,8 +106,9 @@ test('embeds Title metadata and the site favicon without changing app source', a
     officialWebsiteCostume.md5ext,
   );
   assert(!officialWebsiteSvg.includes(officialWebsiteFaviconPlaceholder));
-  assert(officialWebsiteSvg.includes('width="106" height="24" viewBox="0 0 106 24"'));
-  assert(officialWebsiteSvg.includes('x="0.75" y="0.75" width="104.5"'));
+  assert(officialWebsiteSvg.includes('width="116" height="24" viewBox="0 0 116 24"'));
+  assert(officialWebsiteSvg.includes('x="0.75" y="0.75" width="114.5"'));
+  assert(officialWebsiteSvg.includes('x="17" y="5" width="14" height="14"'));
   assert(officialWebsiteSvg.includes('fill="#fff" stroke="#007f71"'));
   assert(officialWebsiteSvg.includes('fill="#007f71"'));
   const embeddedFavicon = officialWebsiteSvg.match(/data:image\/png;base64,([^"]+)/u)?.[1];
@@ -118,7 +119,7 @@ test('embeds Title metadata and the site favicon without changing app source', a
     officialWebsiteCostume.assetId,
   );
   assert.equal(officialWebsiteCostume.md5ext, `${officialWebsiteCostume.assetId}.svg`);
-  assert.equal(archive['5217cb9bd03009d871e97d292aaa4b88.svg'], undefined);
+  assert.equal(archive['219229644e41b20c4811dce46b3dfdd1.svg'], undefined);
   await assert.rejects(access(built.source.resolvedSourceDirectory));
 
   const [projectSourceAfter, sourceManifestAfter, assetFilenamesAfter] = await Promise.all([
