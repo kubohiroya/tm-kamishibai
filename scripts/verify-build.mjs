@@ -60,6 +60,7 @@ const outputPdfPath = path.join(
 );
 const buildInfoPath = path.join(workshopDirectory, 'build-info.json');
 const sampleSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-samples/';
+const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 const documentationCardIcons = [
   ['🕹️', '紙芝居アプリ 操作説明書'],
   ['✍️', '紙芝居DSLファイル作成マニュアル'],
@@ -205,8 +206,10 @@ async function verifySiteIndex() {
   assert(sourceImage.equals(publishedImage),
     'The published top-page hero image differs from docs/images/image01.png.');
   assert(cardCount === 4, `Expected four top-page content cards, found ${cardCount}.`);
-  assert(allLinks.includes('https://sqs.prof.cuc.ac.jp/kamishibai/'),
-    'The top page does not link to the published web app.');
+  assert(allLinks.includes(urashimaWebUrl),
+    'The top page does not link to the Urashima web sample.');
+  assert(!allLinks.includes('https://sqs.prof.cuc.ac.jp/kamishibai/'),
+    'The top page still links to the retired SQS web app.');
   for (const link of ['docs/', 'downloads/']) {
     assert(localLinks.includes(link), `The top-page card link ${link} is missing.`);
   }
