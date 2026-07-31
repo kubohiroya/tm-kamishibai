@@ -12,6 +12,7 @@ import {
   appShellCommon,
   appShellLocales,
   appShellProjectPlaceholders,
+  appShellTitleLines,
 } from '../scripts/sb3/app-shell-locales.mjs';
 import {
   officialWebsiteFaviconPlaceholder,
@@ -69,7 +70,7 @@ test('resolves the Title build date in Asia/Tokyo and accepts a reproducible ove
   );
 });
 
-test('embeds Title metadata and the site favicon without changing app source', async () => {
+test('embeds an initial Title fallback and runtime-localized app-shell text', async () => {
   const [packageJson, favicon, projectSourceBefore, sourceManifestBefore, assetFilenamesBefore] =
     await Promise.all([
       readFile(packageJsonPath, 'utf8').then(JSON.parse),
@@ -95,93 +96,119 @@ test('embeds Title metadata and the site favicon without changing app source', a
     label: expectedLabel,
     version: packageJson.version,
   });
-  const costumeNames = {
-    en: {
-      officialWebsite: 'official-website-button-en',
-      title: 'Title-en',
-    },
-    ja: {
-      officialWebsite: 'official-website-button',
-      title: 'Title',
-    },
-  };
-  for (const [locale, localized] of Object.entries(appShellLocales)) {
-    const titleCostume = stage.costumes.find(
-      (costume) => costume.name === costumeNames[locale].title,
-    );
-    const titleSvg = strFromU8(archive[titleCostume.md5ext]);
-    assert(titleSvg.includes(expectedLabel));
-    assert(titleSvg.includes(escapeXmlText(localized.about.title)));
-    assert(titleSvg.includes(escapeXmlText(localized.about.license.app)));
-    assert(titleSvg.includes(escapeXmlText(localized.about.license.story)));
-    assert(titleSvg.includes(escapeXmlText(localized.about.author.organization)));
-    assert(titleSvg.includes(escapeXmlText(localized.about.author.name)));
-    assert(titleSvg.includes(appShellCommon.about.author.email));
-    assert(!titleSvg.includes(titleVersionPlaceholder));
-    assert(!titleSvg.includes('{{'));
-    assert.match(titleSvg, /text-anchor="middle"/u);
-    assert.equal(createHash('md5').update(titleSvg).digest('hex'), titleCostume.assetId);
-    assert.equal(titleCostume.md5ext, `${titleCostume.assetId}.svg`);
-    assert.equal(built.titleBuildMetadata.titleAssets[locale].filename, titleCostume.md5ext);
-    if (locale === 'ja') {
-      assert.equal(
-        [
-          ...titleSvg.matchAll(
-            /<text transform="translate\((?:220\.36368,132\.13592|240,174)\)[^>]+text-anchor="middle">/gu,
-          ),
-        ].length,
-        2,
-      );
-      assert.match(
-        titleSvg,
-        /<text transform="translate\(240,320\.97056\) scale\(0\.5,0\.5\)" font-size="36"[^>]+text-anchor="middle">/u,
-      );
-      assert(titleSvg.includes('久保 裕也 &lt;hiroya@cuc.ac.jp&gt;'));
-      assert(!titleSvg.includes('　　　久保 裕也'));
-      assert.match(
-        titleSvg,
-        /<text transform="translate\(240,238\) scale\(0\.5,0\.5\)" font-size="16"[^>]+text-anchor="middle">/u,
-      );
-    }
+  assert.deepEqual(
+    stage.costumes.map((costume) => costume.name),
+    ['Title', 'TitleRuntime', 'Stars', 'LoadingBackdrop'],
+  );
+  const titleCostume = stage.costumes.find((costume) => costume.name === 'Title');
+  const titleSvg = strFromU8(archive[titleCostume.md5ext]);
+  const fallbackLocale = appShellLocales.en;
+  assert(titleSvg.includes(expectedLabel));
+  assert(titleSvg.includes(escapeXmlText(fallbackLocale.about.title)));
+  for (const line of [...appShellTitleLines.en.licenseApp, ...appShellTitleLines.en.licenseStory]) {
+    assert(titleSvg.includes(escapeXmlText(line)));
+  }
+  for (const line of appShellTitleLines.en.authorOrganization) {
+    assert(titleSvg.includes(escapeXmlText(line)));
+  }
+  assert(titleSvg.includes(escapeXmlText(fallbackLocale.about.author.name)));
+  assert(titleSvg.includes(appShellCommon.about.author.email));
+  assert(!titleSvg.includes(titleVersionPlaceholder));
+  assert(!titleSvg.includes('{{'));
+  assert.match(titleSvg, /text-anchor="middle"/u);
+  assert.equal(createHash('md5').update(titleSvg).digest('hex'), titleCostume.assetId);
+  assert.equal(titleCostume.md5ext, `${titleCostume.assetId}.svg`);
+  assert.equal(built.titleBuildMetadata.titleAsset.filename, titleCostume.md5ext);
 
-    const officialWebsiteCostume = officialWebsiteButton.costumes.find(
-      (costume) => costume.name === costumeNames[locale].officialWebsite,
+  const runtimeTitleCostume = stage.costumes.find((costume) => costume.name === 'TitleRuntime');
+  const runtimeTitleSvg = strFromU8(archive[runtimeTitleCostume.md5ext]);
+  assert(!runtimeTitleSvg.includes('<text'));
+  assert(!runtimeTitleSvg.includes('{{'));
+
+  const runtimeValues = new Map();
+  for (const block of Object.values(stage.blocks)) {
+    if (block.opcode !== 'kubohiroyaassetmanager_setTextValue') continue;
+    const name = block.inputs.NAME?.[1]?.[1];
+    const value = block.inputs.VALUE?.[1]?.[1];
+    if (typeof name !== 'string' || typeof value !== 'string') continue;
+    const values = runtimeValues.get(name) ?? new Set();
+    values.add(value);
+    runtimeValues.set(name, values);
+  }
+  assert.deepEqual([...runtimeValues.get('about.version')], [expectedLabel]);
+  const titleWidthStyle = Object.values(stage.blocks).find(
+    (block) =>
+      block.opcode === 'kubohiroyaassetmanager_setTextStyle' &&
+      block.inputs?.NAME?.[1]?.[1] === 'about.title' &&
+      block.inputs?.PROPERTY?.[1]?.[1] === 'width',
+  );
+  assert.equal(titleWidthStyle?.inputs?.VALUE?.[1]?.[1], '700');
+  for (const localized of Object.values(appShellLocales)) {
+    assert(runtimeValues.get('about.title').has(localized.about.title));
+    assert(runtimeValues.get('about.license.app').has(localized.about.license.app));
+    assert(runtimeValues.get('about.license.story').has(localized.about.license.story));
+    assert(
+      [...runtimeValues.get('about.author.organization')].some((value) =>
+        value.includes(localized.about.author.organization),
+      ),
     );
-    const officialWebsiteSvg = strFromU8(archive[officialWebsiteCostume.md5ext]);
-    assert(!officialWebsiteSvg.includes(officialWebsiteFaviconPlaceholder));
-    assert(!officialWebsiteSvg.includes('{{'));
-    assert(officialWebsiteSvg.includes(escapeXmlText(localized.about.officialWebsite.name)));
-    assert(officialWebsiteSvg.includes('width="116" height="24" viewBox="0 0 116 24"'));
-    assert(officialWebsiteSvg.includes('x="0.75" y="0.75" width="114.5"'));
-    assert(officialWebsiteSvg.includes('x="17" y="5" width="14" height="14"'));
-    assert(officialWebsiteSvg.includes('fill="#fff" stroke="#007f71"'));
-    assert(officialWebsiteSvg.includes('fill="#007f71"'));
-    const embeddedFavicon = officialWebsiteSvg.match(/data:image\/png;base64,([^"]+)/u)?.[1];
-    assert(embeddedFavicon, `${locale} official website button does not contain the favicon.`);
-    assert(Buffer.from(embeddedFavicon, 'base64').equals(favicon));
-    assert.equal(
-      createHash('md5').update(officialWebsiteSvg).digest('hex'),
-      officialWebsiteCostume.assetId,
+    assert(
+      [...runtimeValues.get('about.author.name')].some(
+        (value) =>
+          value.includes(localized.about.author.name) &&
+          value.includes(appShellCommon.about.author.email),
+      ),
     );
-    assert.equal(officialWebsiteCostume.md5ext, `${officialWebsiteCostume.assetId}.svg`);
-    assert.equal(
-      built.titleBuildMetadata.officialWebsiteAssets[locale].filename,
-      officialWebsiteCostume.md5ext,
+    assert(
+      runtimeValues.get('about.officialWebsite.name').has(localized.about.officialWebsite.name),
     );
   }
+
+  assert.deepEqual(
+    officialWebsiteButton.costumes.map((costume) => costume.name),
+    ['official-website-button', 'official-website-button-runtime'],
+  );
+  const fallbackWebsiteCostume = officialWebsiteButton.costumes[0];
+  const runtimeWebsiteCostume = officialWebsiteButton.costumes[1];
+  for (const [costume, expectedName] of [
+    [fallbackWebsiteCostume, fallbackLocale.about.officialWebsite.name],
+    [runtimeWebsiteCostume, null],
+  ]) {
+    const svg = strFromU8(archive[costume.md5ext]);
+    assert(!svg.includes(officialWebsiteFaviconPlaceholder));
+    assert(!svg.includes('{{'));
+    assert(svg.includes('width="150" height="32" viewBox="0 0 150 32"'));
+    assert(svg.includes('x="18" y="7" width="18" height="18"'));
+    assert(svg.includes('fill="#fff" stroke="#007f71"'));
+    if (expectedName) assert(svg.includes(escapeXmlText(expectedName)));
+    else assert(!svg.includes('<text'));
+    const embeddedFavicon = svg.match(/data:image\/png;base64,([^"]+)/u)?.[1];
+    assert(embeddedFavicon);
+    assert(Buffer.from(embeddedFavicon, 'base64').equals(favicon));
+    assert.equal(createHash('md5').update(svg).digest('hex'), costume.assetId);
+    assert.equal(costume.md5ext, `${costume.assetId}.svg`);
+  }
+  assert.equal(
+    built.titleBuildMetadata.officialWebsiteFallbackAsset.filename,
+    fallbackWebsiteCostume.md5ext,
+  );
+  assert.equal(
+    built.titleBuildMetadata.officialWebsiteAsset.filename,
+    runtimeWebsiteCostume.md5ext,
+  );
   const builtProjectSource = JSON.stringify(project);
   for (const placeholder of Object.keys(appShellProjectPlaceholders)) {
     assert(!builtProjectSource.includes(placeholder));
   }
   assert(builtProjectSource.includes(appShellCommon.about.officialWebsite.url));
   for (const sourceFilename of [
-    'adf8160b04c3c672483e67e39dd73fb3.svg',
-    '40f446b284b37121ac7f31a5f645e62a.svg',
-    '48fdbeb367aa87ae58976e9f85ac28f0.svg',
-    '0ffa1c2dee55ace499d6a6bdb95ffbdd.svg',
+    'd09cdbee37f6639281dc5cfb263cd417.svg',
+    '03f3c75c202a3c60e4ffae10cc32872a.svg',
+    'd6fd4b1b39db3992a003779ed13c404f.svg',
   ]) {
     assert.equal(archive[sourceFilename], undefined);
   }
+  assert(archive['c307dbe27e1733c95382d11de19ae476.svg']);
   assert.equal(archive['c7334c6a74860d5808c4962f250b52f2.svg'], undefined);
   assert.equal(archive['219229644e41b20c4811dce46b3dfdd1.svg'], undefined);
   await assert.rejects(access(built.source.resolvedSourceDirectory));

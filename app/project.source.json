@@ -15504,73 +15504,9 @@
           "topLevel": false
         },
         "bJ": {
-          "opcode": "control_if_else",
+          "opcode": "looks_switchbackdropto",
           "next": "gn",
           "parent": "gm",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "uiTitleLanguageEqualsJa"
-            ],
-            "SUBSTACK": [
-              2,
-              "uiTitleSwitchJa"
-            ],
-            "SUBSTACK2": [
-              2,
-              "uiTitleSwitchEn"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiTitleLanguageEqualsJa": {
-          "opcode": "operator_equals",
-          "next": null,
-          "parent": "bJ",
-          "inputs": {
-            "OPERAND1": [
-              3,
-              "uiTitleLanguageGet",
-              [
-                10,
-                ""
-              ]
-            ],
-            "OPERAND2": [
-              1,
-              [
-                10,
-                "ja"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiTitleLanguageGet": {
-          "opcode": "lmsTempVars2_getRuntimeVariable",
-          "next": null,
-          "parent": "uiTitleLanguageEqualsJa",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "uiLanguage"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiTitleSwitchJa": {
-          "opcode": "looks_switchbackdropto",
-          "next": null,
-          "parent": "bJ",
           "inputs": {
             "BACKDROP": [
               1,
@@ -15581,42 +15517,14 @@
           "shadow": false,
           "topLevel": false
         },
-        "uiTitleSwitchEn": {
-          "opcode": "looks_switchbackdropto",
-          "next": null,
-          "parent": "bJ",
-          "inputs": {
-            "BACKDROP": [
-              1,
-              "uiTitleBackdropEn"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "uiTitleBackdropEn": {
-          "opcode": "looks_backdrops",
-          "next": null,
-          "parent": "uiTitleSwitchEn",
-          "inputs": {},
-          "fields": {
-            "BACKDROP": [
-              "Title-en",
-              null
-            ]
-          },
-          "shadow": true,
-          "topLevel": false
-        },
         "l]": {
           "opcode": "looks_backdrops",
           "next": null,
-          "parent": "uiTitleSwitchJa",
+          "parent": "bJ",
           "inputs": {},
           "fields": {
             "BACKDROP": [
-              "Title",
+              "TitleRuntime",
               null
             ]
           },
@@ -21719,7 +21627,7 @@
         "ag": {
           "opcode": "files_setOpenMode",
           "next": "iN",
-          "parent": "uiFlagColor8",
+          "parent": "titleStyle74",
           "inputs": {
             "mode": [
               1,
@@ -24362,7 +24270,7 @@
         "uiApplyLanguageBroadcast": {
           "opcode": "event_broadcastandwait",
           "next": "uiFlagRegister1",
-          "parent": "uiFlagDefaultValue3",
+          "parent": "titleSetVersion",
           "inputs": {
             "BROADCAST_INPUT": [
               1,
@@ -24555,7 +24463,7 @@
         },
         "uiSetLanguageChoiceEnPlain": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": null,
+          "next": "titleSetJa1",
           "parent": "uiSetLanguageChoiceJaSelected",
           "inputs": {
             "NAME": [
@@ -24723,7 +24631,7 @@
         },
         "uiSetLanguageChoiceEnSelected": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": null,
+          "next": "titleSetEn1",
           "parent": "uiSetLanguageChoiceJaPlain",
           "inputs": {
             "NAME": [
@@ -24795,7 +24703,7 @@
         },
         "uiFlagDefaultValue3": {
           "opcode": "kubohiroyaassetmanager_setTextValue",
-          "next": "uiApplyLanguageBroadcast",
+          "next": "titleSetVersion",
           "parent": "uiFlagDefaultValue2",
           "inputs": {
             "NAME": [
@@ -25524,7 +25432,7 @@
         },
         "uiFlagColor8": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "ag",
+          "next": "titleRegister1",
           "parent": "uiFlagWidth8",
           "inputs": {
             "NAME": [
@@ -25786,6 +25694,1354 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleSetJa1": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetJa2",
+          "parent": "uiSetLanguageChoiceEnPlain",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_TITLE_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetJa2": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetJa3",
+          "parent": "titleSetJa1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_LICENSE_APP_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetJa3": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetJa4",
+          "parent": "titleSetJa2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_LICENSE_STORY_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetJa4": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetJa5",
+          "parent": "titleSetJa3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_AUTHOR_ORGANIZATION_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetJa5": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetJa6",
+          "parent": "titleSetJa4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_AUTHOR_NAME_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetJa6": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": null,
+          "parent": "titleSetJa5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_OFFICIAL_WEBSITE_NAME_JA}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn1": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetEn2",
+          "parent": "uiSetLanguageChoiceEnSelected",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_TITLE_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn2": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetEn3",
+          "parent": "titleSetEn1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_LICENSE_APP_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn3": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetEn4",
+          "parent": "titleSetEn2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_LICENSE_STORY_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn4": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetEn5",
+          "parent": "titleSetEn3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_AUTHOR_ORGANIZATION_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn5": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "titleSetEn6",
+          "parent": "titleSetEn4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_AUTHOR_NAME_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetEn6": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": null,
+          "parent": "titleSetEn5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "{{ABOUT_OFFICIAL_WEBSITE_NAME_EN}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleSetVersion": {
+          "opcode": "kubohiroyaassetmanager_setTextValue",
+          "next": "uiApplyLanguageBroadcast",
+          "parent": "uiFlagDefaultValue3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Version {{VERSION}} ({{BUILD_DATE}})"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister1": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle11",
+          "parent": "uiFlagColor8",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle11": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle12",
+          "parent": "titleRegister1",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle12": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle13",
+          "parent": "titleStyle11",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#009a71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle13": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle14",
+          "parent": "titleStyle12",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+            "700"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle14": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister2",
+          "parent": "titleStyle13",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister2": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle21",
+          "parent": "titleStyle14",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle21": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle22",
+          "parent": "titleRegister2",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle22": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle23",
+          "parent": "titleStyle21",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#009a79"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle23": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle24",
+          "parent": "titleStyle22",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "800"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle24": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister3",
+          "parent": "titleStyle23",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister3": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle31",
+          "parent": "titleStyle24",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle31": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle32",
+          "parent": "titleRegister3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle32": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle33",
+          "parent": "titleStyle31",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#007f71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle33": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle34",
+          "parent": "titleStyle32",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "1000"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle34": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister4",
+          "parent": "titleStyle33",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister4": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle41",
+          "parent": "titleStyle34",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle41": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle42",
+          "parent": "titleRegister4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle42": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle43",
+          "parent": "titleStyle41",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#007f71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle43": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle44",
+          "parent": "titleStyle42",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "1000"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle44": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister5",
+          "parent": "titleStyle43",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister5": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle51",
+          "parent": "titleStyle44",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle51": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle52",
+          "parent": "titleRegister5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle52": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle53",
+          "parent": "titleStyle51",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#007f71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle53": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle54",
+          "parent": "titleStyle52",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "2000"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle54": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister6",
+          "parent": "titleStyle53",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister6": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle61",
+          "parent": "titleStyle54",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle61": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle62",
+          "parent": "titleRegister6",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle62": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle63",
+          "parent": "titleStyle61",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#007f71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle63": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle64",
+          "parent": "titleStyle62",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "2000"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle64": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleRegister7",
+          "parent": "titleStyle63",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleRegister7": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "titleStyle71",
+          "parent": "titleStyle64",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "text"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle71": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle72",
+          "parent": "titleRegister7",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle72": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle73",
+          "parent": "titleStyle71",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "color"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "#007f71"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle73": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "titleStyle74",
+          "parent": "titleStyle72",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "width"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "340"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleStyle74": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "ag",
+          "parent": "titleStyle73",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "align"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "center"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {
@@ -25832,19 +27088,19 @@
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "48fdbeb367aa87ae58976e9f85ac28f0",
-          "md5ext": "48fdbeb367aa87ae58976e9f85ac28f0.svg",
+          "assetId": "03f3c75c202a3c60e4ffae10cc32872a",
+          "md5ext": "03f3c75c202a3c60e4ffae10cc32872a.svg",
           "rotationCenterX": 211.69123114420535,
           "rotationCenterY": 92.66949826877153
         },
         {
-          "name": "Title-en",
+          "name": "TitleRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "adf8160b04c3c672483e67e39dd73fb3",
-          "md5ext": "adf8160b04c3c672483e67e39dd73fb3.svg",
-          "rotationCenterX": 211.69123114420535,
-          "rotationCenterY": 92.66949826877153
+          "assetId": "c307dbe27e1733c95382d11de19ae476",
+          "md5ext": "c307dbe27e1733c95382d11de19ae476.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
         },
         {
           "name": "Stars",
@@ -32045,6 +33301,1216 @@
     },
     {
       "isStage": false,
+      "name": "titleHeading",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleHeadingFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleHeadingFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleHeadingFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleHeadingFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleHeadingCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleHeadingShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleHeadingSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleHeadingSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleHeadingShow",
+          "parent": "titleHeadingShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleHeadingSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleHeadingMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleHeadingMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleHeadingHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleHeadingStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleHeadingStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleHeadingStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleHeadingClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 6,
+      "visible": false,
+      "x": 0,
+      "y": 62,
+      "size": 140,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "titleVersion",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleVersionFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleVersionFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleVersionFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleVersionFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleVersionCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleVersionShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleVersionSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleVersionSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleVersionShow",
+          "parent": "titleVersionShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleVersionSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleVersionMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleVersionMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleVersionHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleVersionStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleVersionStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleVersionStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleVersionClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 7,
+      "visible": false,
+      "x": 0,
+      "y": 22,
+      "size": 80,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "titleLicenseApp",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleLicenseAppFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleLicenseAppFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleLicenseAppFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseAppFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleLicenseAppCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleLicenseAppShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseAppSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleLicenseAppSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleLicenseAppShow",
+          "parent": "titleLicenseAppShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleLicenseAppSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseAppMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleLicenseAppMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseAppHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseAppStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleLicenseAppStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseAppStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleLicenseAppClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 15,
+      "visible": false,
+      "x": 0,
+      "y": -55,
+      "size": 50,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "titleLicenseStory",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleLicenseStoryFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleLicenseStoryFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleLicenseStoryFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseStoryFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleLicenseStoryCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleLicenseStoryShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseStorySetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleLicenseStorySetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleLicenseStoryShow",
+          "parent": "titleLicenseStoryShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleLicenseStorySetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseStoryMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleLicenseStoryMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseStoryHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleLicenseStoryStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleLicenseStoryStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleLicenseStoryStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleLicenseStoryClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 16,
+      "visible": false,
+      "x": 0,
+      "y": -92,
+      "size": 50,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "titleAuthorOrganization",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleAuthorOrganizationFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleAuthorOrganizationFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleAuthorOrganizationFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorOrganizationFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleAuthorOrganizationCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleAuthorOrganizationShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorOrganizationSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleAuthorOrganizationSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleAuthorOrganizationShow",
+          "parent": "titleAuthorOrganizationShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleAuthorOrganizationSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorOrganizationMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleAuthorOrganizationMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorOrganizationHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorOrganizationStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleAuthorOrganizationStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorOrganizationStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleAuthorOrganizationClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 17,
+      "visible": false,
+      "x": 0,
+      "y": -135,
+      "size": 50,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "titleAuthorName",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleAuthorNameFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleAuthorNameFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "titleAuthorNameFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorNameFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "titleAuthorNameCloseTitle",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "titleAuthorNameShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorNameSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "titleAuthorNameSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "titleAuthorNameShow",
+          "parent": "titleAuthorNameShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "titleAuthorNameSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorNameMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "titleAuthorNameMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorNameHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleAuthorNameStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "titleAuthorNameStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "titleAuthorNameStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameCloseTitle": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleAuthorNameClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 18,
+      "visible": false,
+      "x": 0,
+      "y": -158,
+      "size": 50,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "officialWebsiteLabel",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "officialWebsiteLabelFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "officialWebsiteLabelFlagHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "officialWebsiteLabelFlagHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "officialWebsiteLabelFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "officialWebsiteLabelOpen",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "officialWebsiteLabelShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteLabelSetSkin",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "officialWebsiteLabelSetSkin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "officialWebsiteLabelShow",
+          "parent": "officialWebsiteLabelShowTitle",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "officialWebsiteLabelSetSkin",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteLabelMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "officialWebsiteLabelMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "officialWebsiteLabelHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteLabelStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "officialWebsiteLabelStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "officialWebsiteLabelStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelOpen": {
+          "opcode": "kubohiroyaweblink_openUrl",
+          "next": null,
+          "parent": "officialWebsiteLabelClick",
+          "inputs": {
+            "URL": [
+              1,
+              [
+                10,
+                "{{ABOUT_OFFICIAL_WEBSITE_URL}}"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
+          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+          "rotationCenterX": 1,
+          "rotationCenterY": 1
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 19,
+      "visible": false,
+      "x": 13,
+      "y": -16,
+      "size": 60,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
       "name": "officialWebsiteButton",
       "variables": {},
       "lists": {},
@@ -32062,7 +34528,7 @@
           "y": 40
         },
         "officialWebsiteFlagShow": {
-          "opcode": "looks_hide",
+          "opcode": "looks_show",
           "next": null,
           "parent": "officialWebsiteFlag",
           "inputs": {},
@@ -32090,7 +34556,7 @@
               1,
               [
                 10,
-            "{{ABOUT_OFFICIAL_WEBSITE_URL}}"
+                "{{ABOUT_OFFICIAL_WEBSITE_URL}}"
               ]
             ]
           },
@@ -32100,7 +34566,7 @@
         },
         "officialWebsiteShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "officialWebsiteLocaleIf",
+          "next": "officialWebsiteSwitchRuntime",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32117,130 +34583,10 @@
         "officialWebsiteTitleShow": {
           "opcode": "looks_show",
           "next": null,
-          "parent": "officialWebsiteLocaleIf",
+          "parent": "officialWebsiteSwitchRuntime",
           "inputs": {},
           "fields": {},
           "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteLocaleIf": {
-          "opcode": "control_if_else",
-          "next": "officialWebsiteTitleShow",
-          "parent": "officialWebsiteShowTitle",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "officialWebsiteLanguageEqualsJa"
-            ],
-            "SUBSTACK": [
-              2,
-              "officialWebsiteSwitchJa"
-            ],
-            "SUBSTACK2": [
-              2,
-              "officialWebsiteSwitchEn"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteLanguageEqualsJa": {
-          "opcode": "operator_equals",
-          "next": null,
-          "parent": "officialWebsiteLocaleIf",
-          "inputs": {
-            "OPERAND1": [
-              3,
-              "officialWebsiteLanguageGet",
-              [
-                10,
-                ""
-              ]
-            ],
-            "OPERAND2": [
-              1,
-              [
-                10,
-                "ja"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteLanguageGet": {
-          "opcode": "lmsTempVars2_getRuntimeVariable",
-          "next": null,
-          "parent": "officialWebsiteLanguageEqualsJa",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "uiLanguage"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteSwitchJa": {
-          "opcode": "looks_switchcostumeto",
-          "next": null,
-          "parent": "officialWebsiteLocaleIf",
-          "inputs": {
-            "COSTUME": [
-              1,
-              "officialWebsiteCostumeJa"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteCostumeJa": {
-          "opcode": "looks_costume",
-          "next": null,
-          "parent": "officialWebsiteSwitchJa",
-          "inputs": {},
-          "fields": {
-            "COSTUME": [
-              "official-website-button",
-              null
-            ]
-          },
-          "shadow": true,
-          "topLevel": false
-        },
-        "officialWebsiteSwitchEn": {
-          "opcode": "looks_switchcostumeto",
-          "next": null,
-          "parent": "officialWebsiteLocaleIf",
-          "inputs": {
-            "COSTUME": [
-              1,
-              "officialWebsiteCostumeEn"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteCostumeEn": {
-          "opcode": "looks_costume",
-          "next": null,
-          "parent": "officialWebsiteSwitchEn",
-          "inputs": {},
-          "fields": {
-            "COSTUME": [
-              "official-website-button-en",
-              null
-            ]
-          },
-          "shadow": true,
           "topLevel": false
         },
         "officialWebsiteHideMenu": {
@@ -32292,6 +34638,34 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "officialWebsiteSwitchRuntime": {
+          "opcode": "looks_switchcostumeto",
+          "next": "officialWebsiteTitleShow",
+          "parent": "officialWebsiteShowTitle",
+          "inputs": {
+            "COSTUME": [
+              1,
+              "officialWebsiteRuntimeCostume"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteRuntimeCostume": {
+          "opcode": "looks_costume",
+          "next": null,
+          "parent": "officialWebsiteSwitchRuntime",
+          "inputs": {},
+          "fields": {
+            "COSTUME": [
+              "official-website-button-runtime",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -32301,19 +34675,19 @@
           "name": "official-website-button",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "40f446b284b37121ac7f31a5f645e62a",
-          "md5ext": "40f446b284b37121ac7f31a5f645e62a.svg",
-          "rotationCenterX": 58,
-          "rotationCenterY": 12
+          "assetId": "d09cdbee37f6639281dc5cfb263cd417",
+          "md5ext": "d09cdbee37f6639281dc5cfb263cd417.svg",
+          "rotationCenterX": 75,
+          "rotationCenterY": 16
         },
         {
-          "name": "official-website-button-en",
+          "name": "official-website-button-runtime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "0ffa1c2dee55ace499d6a6bdb95ffbdd",
-          "md5ext": "0ffa1c2dee55ace499d6a6bdb95ffbdd.svg",
-          "rotationCenterX": 58,
-          "rotationCenterY": 12
+          "assetId": "d6fd4b1b39db3992a003779ed13c404f",
+          "md5ext": "d6fd4b1b39db3992a003779ed13c404f.svg",
+          "rotationCenterX": 75,
+          "rotationCenterY": 16
         }
       ],
       "sounds": [],
@@ -32321,7 +34695,7 @@
       "layerOrder": 10,
       "visible": true,
       "x": 0,
-      "y": -22,
+      "y": -16,
       "size": 100,
       "direction": 90,
       "draggable": false,

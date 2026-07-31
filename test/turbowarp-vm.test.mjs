@@ -2,23 +2,11 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
-import {
-  loadKamishibaiVm,
-  turbowarpVmCommit,
-} from './helpers/turbowarp-vm.mjs';
-import {
-  appShellLocales,
-  appShellSelectedLanguageNames,
-} from '../scripts/sb3/app-shell-locales.mjs';
+import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
+import {appShellLocales, appShellSelectedLanguageNames} from '../scripts/sb3/app-shell-locales.mjs';
 
-const runtimeFixtureUrl = new URL(
-  './fixtures/runtime/skip-mode.txt',
-  import.meta.url,
-);
-const poseFixtureUrl = new URL(
-  './fixtures/runtime/pose-skip-mode.txt',
-  import.meta.url,
-);
+const runtimeFixtureUrl = new URL('./fixtures/runtime/skip-mode.txt', import.meta.url);
+const poseFixtureUrl = new URL('./fixtures/runtime/pose-skip-mode.txt', import.meta.url);
 const officialWebsiteUrl = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ).homepage;
@@ -102,6 +90,13 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'languageButton',
       'japaneseLanguageButton',
       'englishLanguageButton',
+      'titleHeading',
+      'titleVersion',
+      'titleLicenseApp',
+      'titleLicenseStory',
+      'titleAuthorOrganization',
+      'titleAuthorName',
+      'officialWebsiteLabel',
       'officialWebsiteButton',
       'closeTitleButton',
       'Loading',
@@ -109,8 +104,11 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
     ],
   );
   assert.deepEqual(
-    harness.getStage().getCostumes().map((costume) => costume.name),
-    ['Title', 'Title-en', 'Stars', 'LoadingBackdrop'],
+    harness
+      .getStage()
+      .getCostumes()
+      .map((costume) => costume.name),
+    ['Title', 'TitleRuntime', 'Stars', 'LoadingBackdrop'],
   );
   assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
   assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
@@ -122,48 +120,78 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
     'languageButton',
     'japaneseLanguageButton',
     'englishLanguageButton',
+    'titleHeading',
+    'titleVersion',
+    'titleLicenseApp',
+    'titleLicenseStory',
+    'titleAuthorOrganization',
+    'titleAuthorName',
+    'officialWebsiteLabel',
   ]) {
     assert.deepEqual(
-      harness.getSprite(name).getCostumes().map((costume) => costume.name),
+      harness
+        .getSprite(name)
+        .getCostumes()
+        .map((costume) => costume.name),
       ['ui-placeholder'],
       `${name} still contains a localized costume`,
     );
   }
   assert.deepEqual(
-    harness.getSprite('officialWebsiteButton').getCostumes().map((costume) => costume.name),
-    ['official-website-button', 'official-website-button-en'],
+    harness
+      .getSprite('officialWebsiteButton')
+      .getCostumes()
+      .map((costume) => costume.name),
+    ['official-website-button', 'official-website-button-runtime'],
   );
   assert.deepEqual(
-    harness.getSprite('closeTitleButton').getCostumes().map((costume) => costume.name),
+    harness
+      .getSprite('closeTitleButton')
+      .getCostumes()
+      .map((costume) => costume.name),
     ['title-close-button'],
   );
+  for (const [name, size] of [
+    ['titleHeading', 140],
+    ['titleVersion', 80],
+    ['titleLicenseApp', 50],
+    ['titleLicenseStory', 50],
+    ['titleAuthorOrganization', 50],
+    ['titleAuthorName', 50],
+    ['officialWebsiteLabel', 60],
+  ]) {
+    assert.equal(harness.getSprite(name).size, size);
+  }
+});
+
+test('shows the built-in English Title fallback before runtime initialization', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  assert.equal(harness.getBackdropName(), 'Title');
+  assert.equal(harness.getSprite('officialWebsiteButton').visible, true);
+  assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), 'official-website-button');
+  assert.equal(harness.getSprite('closeTitleButton').visible, true);
+  assert.equal(harness.getSprite('titleHeading').visible, false);
 });
 
 test('localizes the app shell from the standard viewer-language reporter', async (context) => {
-  for (const {locale, viewerLanguage, backdrop, buttonCostume} of [
+  for (const {locale, viewerLanguage} of [
     {
       locale: 'en',
       viewerLanguage: 'English',
-      backdrop: 'Title-en',
-      buttonCostume: 'official-website-button-en',
     },
     {
       locale: 'ja',
       viewerLanguage: '日本語',
-      backdrop: 'Title',
-      buttonCostume: 'official-website-button',
     },
     {
       locale: 'ja',
       viewerLanguage: 'ja',
-      backdrop: 'Title',
-      buttonCostume: 'official-website-button',
     },
     {
       locale: 'ja',
       viewerLanguage: 'ja-JP',
-      backdrop: 'Title',
-      buttonCostume: 'official-website-button',
     },
   ]) {
     const harness = await loadKamishibaiVm({viewerLanguage});
@@ -173,8 +201,32 @@ test('localizes the app shell from the standard viewer-language reporter', async
     harness.greenFlag();
     harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
     assert.equal(harness.getRuntimeVariable('uiLanguage'), locale);
-    assert.equal(harness.getBackdropName(), backdrop);
-    assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), buttonCostume);
+    assert.equal(harness.getBackdropName(), 'TitleRuntime');
+    assert.equal(
+      harness.getSpriteCostumeName('officialWebsiteButton'),
+      'official-website-button-runtime',
+    );
+    for (const [spriteName, label] of [
+      ['titleHeading', localized.about.title],
+      ['titleLicenseApp', localized.about.license.app],
+      ['titleLicenseStory', localized.about.license.story],
+      ['officialWebsiteLabel', localized.about.officialWebsite.name],
+    ]) {
+      assert.equal(
+        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
+        label,
+      );
+    }
+    assert(
+      harness.extensionState.displayedText
+        .get(harness.getSprite('titleAuthorOrganization').id)
+        .includes(localized.about.author.organization),
+    );
+    assert(
+      harness.extensionState.displayedText
+        .get(harness.getSprite('titleAuthorName').id)
+        .includes(localized.about.author.name),
+    );
 
     harness.broadcast('showMenu');
     harness.runUntil(() => harness.getSprite('languageButton').visible);
@@ -202,7 +254,7 @@ test('prefers a saved UI language and changes it from the Language menu', async 
   harness.greenFlag();
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   assert.equal(harness.getRuntimeVariable('uiLanguage'), 'en');
-  assert.equal(harness.getBackdropName(), 'Title-en');
+  assert.equal(harness.getBackdropName(), 'TitleRuntime');
 
   harness.broadcast('showMenu');
   harness.runUntil(() => harness.getSprite('languageButton').visible);
@@ -248,8 +300,15 @@ test('prefers a saved UI language and changes it from the Language menu', async 
   harness.broadcast('hideMenu');
 
   harness.broadcast('showTitle');
-  harness.runUntil(() => harness.getBackdropName() === 'Title');
-  assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), 'official-website-button');
+  harness.runUntil(() => harness.getBackdropName() === 'TitleRuntime');
+  assert.equal(
+    harness.getSpriteCostumeName('officialWebsiteButton'),
+    'official-website-button-runtime',
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(harness.getSprite('titleHeading').id),
+    appShellLocales.ja.about.title,
+  );
 });
 
 test('shows the official website button only on Title and opens the package homepage', async (context) => {
@@ -261,10 +320,12 @@ test('shows the official website button only on Title and opens the package home
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   assert.equal(button.visible, true);
   assert.equal(button.x, 0);
-  assert.equal(button.y, -22);
+  assert.equal(button.y, -16);
 
   harness.clickSprite('officialWebsiteButton');
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);
+  harness.clickSprite('officialWebsiteLabel');
+  assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl, officialWebsiteUrl]);
 
   harness.broadcast('showMenu');
   harness.runUntil(() => !button.visible);
@@ -291,6 +352,19 @@ test('closes Title from the top-right close button using the same flow as a Stag
 
   assert.equal(closeButton.visible, false);
   assert.equal(harness.getSprite('officialWebsiteButton').visible, false);
+  assert.equal(harness.hasRuntimeVariable('skipMode'), false);
+});
+
+test('closes Title when runtime-generated Title text is clicked', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.clickSprite('titleHeading');
+  harness.runUntil(() => harness.getSprite('openButton').visible);
+
+  assert.equal(harness.getSprite('titleHeading').visible, false);
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
@@ -325,32 +399,35 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
 
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=LoadingBackground,backdrop:Title',
-    'asset=loading1,costume:Loading:loading',
-    'asset=Music,https://example.com/test-music.mp3',
-    'asset=loading2,costume:Loading:loading',
-    'asset=Stars,backdrop',
-    'setLoadingBackdrop=LoadingBackground',
-    'setLoadingCostume=loading1, loading2',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=LoadingBackground,backdrop:Title',
+      'asset=loading1,costume:Loading:loading',
+      'asset=Music,https://example.com/test-music.mp3',
+      'asset=loading2,costume:Loading:loading',
+      'asset=Stars,backdrop',
+      'setLoadingBackdrop=LoadingBackground',
+      'setLoadingCostume=loading1, loading2',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
 
   assert.deepEqual(
-    harness.extensionState.assetRegistrations.filter((name) => (
-      ['Title', 'LoadingBackground', 'loading1', 'Music', 'loading2', 'Stars'].includes(name)
-    )),
+    harness.extensionState.assetRegistrations.filter((name) =>
+      ['Title', 'LoadingBackground', 'loading1', 'Music', 'loading2', 'Stars'].includes(name),
+    ),
     ['LoadingBackground', 'loading1', 'loading2', 'Title', 'Music', 'Stars'],
   );
   assert.equal(
-    harness.extensionState.displayedAssetHistory
-      .find(({targetName}) => targetName === 'Stage')?.assetName,
+    harness.extensionState.displayedAssetHistory.find(({targetName}) => targetName === 'Stage')
+      ?.assetName,
     'LoadingBackground',
   );
   const loadingHistory = harness.extensionState.displayedAssetHistory
@@ -365,10 +442,9 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
     ['0 / 3', '1 / 3', '1 / 3', '2 / 3', '2 / 3', '3 / 3'],
   );
   assert.deepEqual(
-    harness.extensionState.bubbleUpdates
-      .filter(({targetName}) => (
-        targetName === 'Loading' || targetName === 'LoadingBubbleAnchor'
-      )),
+    harness.extensionState.bubbleUpdates.filter(
+      ({targetName}) => targetName === 'Loading' || targetName === 'LoadingBubbleAnchor',
+    ),
     [
       {targetName: 'LoadingBubbleAnchor', text: '0 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
@@ -395,23 +471,24 @@ test('keeps the built-in Loading costume separate from the fixed bubble anchor',
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
 
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
 
   const loading = harness.getSprite('Loading');
   assert.equal(loading.getCostumes()[loading.currentCostume]?.name, 'loading');
   assert.equal(
-    harness.extensionState.displayedAssetHistory.some(({targetName}) => (
-      targetName === 'Loading'
-    )),
+    harness.extensionState.displayedAssetHistory.some(({targetName}) => targetName === 'Loading'),
     false,
   );
   assert.deepEqual(
@@ -429,19 +506,19 @@ for (const branchCase of [
   test(`branches to the first true label when the first condition is ${branchCase.condition}`, async (context) => {
     const harness = await loadKamishibaiVm();
     context.after(() => harness.quit());
-    startScript(harness, sceneNavigationScript([
-      'wait:0.1',
-      'branch:chooseRoute',
-      'wait:30',
-    ], {
-      runtimeVariables: [`takeSeaRoute:${branchCase.condition}`],
-      branches: ['chooseRoute:takeSeaRoute,true:ocean,home'],
-    }));
+    startScript(
+      harness,
+      sceneNavigationScript(['wait:0.1', 'branch:chooseRoute', 'wait:30'], {
+        runtimeVariables: [`takeSeaRoute:${branchCase.condition}`],
+        branches: ['chooseRoute:takeSeaRoute,true:ocean,home'],
+      }),
+    );
 
-    harness.runUntil(() => (
-      Number(harness.getRuntimeVariable('sceneIndex')) === branchCase.expectedSceneIndex
-      && harness.getBackdropName() === branchCase.expectedBackdrop
-    ));
+    harness.runUntil(
+      () =>
+        Number(harness.getRuntimeVariable('sceneIndex')) === branchCase.expectedSceneIndex &&
+        harness.getBackdropName() === branchCase.expectedBackdrop,
+    );
     assert.equal(harness.getBackdropName(), branchCase.expectedBackdrop);
   });
 }
@@ -449,30 +526,29 @@ for (const branchCase of [
 test('continues the current scene when no registered branch condition is true', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, sceneNavigationScript([
-    'wait:0.1',
-    'branch:noRoute',
-    'stage:Title',
-    'wait:30',
-  ], {
-    branches: ['noRoute:false,false:ocean,home'],
-  }));
+  startScript(
+    harness,
+    sceneNavigationScript(['wait:0.1', 'branch:noRoute', 'stage:Title', 'wait:30'], {
+      branches: ['noRoute:false,false:ocean,home'],
+    }),
+  );
 
-  harness.runUntil(() => (
-    harness.getBackdropName() === 'Title'
-    && Number(harness.getRuntimeVariable('sceneIndex')) === 1
-    && harness.getRuntimeVariable('actionCommand') === 'wait'
-  ));
+  harness.runUntil(
+    () =>
+      harness.getBackdropName() === 'Title' &&
+      Number(harness.getRuntimeVariable('sceneIndex')) === 1 &&
+      harness.getRuntimeVariable('actionCommand') === 'wait',
+  );
   assert.equal(harness.hasRuntimeVariable('nextSceneLabel'), false);
 });
 
 test('changes scene from a registered physical key input', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, sceneNavigationScript([
-    'keyInputToChangeScene:ArrowLeft,ArrowRight:home,ocean',
-    'wait:30',
-  ]));
+  startScript(
+    harness,
+    sceneNavigationScript(['keyInputToChangeScene:ArrowLeft,ArrowRight:home,ocean', 'wait:30']),
+  );
   harness.runUntil(() => harness.extensionState.keyInputBindings.size === 2);
   assert.equal(harness.extensionState.keyInputBindings.get('ArrowLeft').VALUE, 'home');
   assert.equal(harness.extensionState.keyInputBindings.get('ArrowRight').VALUE, 'ocean');
@@ -487,12 +563,15 @@ test('changes scene from a registered physical key input', async (context) => {
 test('changes scene from a registered actor touch input', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, sceneNavigationScript([
-    'LeftDoor:show:LeftDoor:-100,0,50',
-    'RightDoor:show:RightDoor:100,0,50',
-    'touchInputToChangeScene:LeftDoor,RightDoor:home,ocean',
-    'wait:30',
-  ]));
+  startScript(
+    harness,
+    sceneNavigationScript([
+      'LeftDoor:show:LeftDoor:-100,0,50',
+      'RightDoor:show:RightDoor:100,0,50',
+      'touchInputToChangeScene:LeftDoor,RightDoor:home,ocean',
+      'wait:30',
+    ]),
+  );
   harness.runUntil(() => harness.extensionState.touchInputBindings.size === 2);
   assert.equal(harness.extensionState.touchInputBindings.get('LeftDoor').VALUE, 'home');
   assert.equal(harness.extensionState.touchInputBindings.get('RightDoor').VALUE, 'ocean');
@@ -603,41 +682,41 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
 test('updates and clears a registered text asset from ordered text actions', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Narration,text',
-    'actor=Narration,Narration',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=text:Narration:むかし',
-    'action=Narration:show:Narration:0,0,100',
-    'action=wait:0.2',
-    'action=text:Narration:むかし　むかし、',
-    'action=wait:0.2',
-    'action=text:Narration:',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Narration,text',
+      'actor=Narration,Narration',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=text:Narration:むかし',
+      'action=Narration:show:Narration:0,0,100',
+      'action=wait:0.2',
+      'action=text:Narration:むかし　むかし、',
+      'action=wait:0.2',
+      'action=text:Narration:',
+      'action=wait:30',
+    ].join('\n'),
+  );
 
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('text:Narration') === 'むかし'
-    && harness.getActor('Narration')?.visible === true
-  ));
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('text:Narration') === 'むかし' &&
+      harness.getActor('Narration')?.visible === true,
+  );
   assert.equal(harness.getActor('Narration')?.visible, true);
   assert.equal(harness.hasRuntimeVariable('Narration'), false);
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('text:Narration') === 'むかし　むかし、'
-  ));
+  harness.runUntil(() => harness.getRuntimeVariable('text:Narration') === 'むかし　むかし、');
   assert.equal(Number(harness.getRuntimeVariable('sceneIndex')), 1);
 
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('text:Narration') === ''
-  ));
+  harness.runUntil(() => harness.getRuntimeVariable('text:Narration') === '');
   assert.equal(harness.getBackdropName(), 'Stars');
   assert.equal(harness.getActor('Narration')?.visible, true);
   assert.deepEqual(harness.extensionState.consoleErrors, []);
@@ -646,9 +725,9 @@ test('updates and clears a registered text asset from ordered text actions', asy
 test('registers and displays a text asset through the production Asset Manager', async (context) => {
   const harness = await loadKamishibaiVm({productionAssetManager: true});
   context.after(() => harness.quit());
-  const actor = harness.vm.runtime.targets.find((target) => (
-    target.isOriginal && target.sprite?.name === 'Actor'
-  ));
+  const actor = harness.vm.runtime.targets.find(
+    (target) => target.isOriginal && target.sprite?.name === 'Actor',
+  );
   const util = {runtime: harness.vm.runtime, target: actor};
 
   await harness.extensionState.assetManager.registerAsset({
@@ -659,19 +738,10 @@ test('registers and displays a text asset through the production Asset Manager',
     NAME: 'Narration',
     VALUE: 'むかし',
   });
-  await harness.extensionState.assetManager.setThisSpriteSkin(
-    {NAME: 'Narration'},
-    util,
-  );
+  await harness.extensionState.assetManager.setThisSpriteSkin({NAME: 'Narration'}, util);
 
-  assert.equal(
-    harness.extensionState.assetManager?.isLoaded({NAME: 'Narration'}),
-    true,
-  );
-  assert.equal(
-    harness.extensionState.displayedText.get(actor.id),
-    'むかし',
-  );
+  assert.equal(harness.extensionState.assetManager?.isLoaded({NAME: 'Narration'}), true);
+  assert.equal(harness.extensionState.displayedText.get(actor.id), 'むかし');
   assert.equal(harness.extensionState.textColors.get(actor.id), '#ffffff');
   assert.equal(harness.extensionState.textOutlineWidths.get(actor.id), 2);
   assert.equal(harness.extensionState.textOutlineColors.get(actor.id), '#000000');
@@ -711,16 +781,13 @@ test('production Asset Manager prepares and cycles loading assets', async (conte
   manager.setLoadingCostumes({NAMES: 'loading1, loading2, loading1'});
   manager.prepareLoadingAssets({LIST: 'assetList'}, {target: stage});
 
-  assert.deepEqual(
-    Array.from(assetList.value),
-    [
-      'LoadingBackground,backdrop:Title',
-      'loading1,costume:Loading:loading',
-      'loading2,costume:Loading:loading',
-      'Title,backdrop',
-      'Music,https://example.com/test-music.mp3',
-    ],
-  );
+  assert.deepEqual(Array.from(assetList.value), [
+    'LoadingBackground,backdrop:Title',
+    'loading1,costume:Loading:loading',
+    'loading2,costume:Loading:loading',
+    'Title,backdrop',
+    'Music,https://example.com/test-music.mp3',
+  ]);
   assert.equal(manager.loadingAssetCount(), 3);
   assert.equal(manager.loadingBackdrop(), 'LoadingBackground');
   assert.equal(manager.loadingCostumeAt({INDEX: 1}), 'loading1');
@@ -764,20 +831,22 @@ test('clears pending input at project, cover, stop, and final scene boundaries',
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
   assert.equal(harness.hasRuntimeVariable('skipContext'), false);
 
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'cover=Title,',
-    '---',
-    'sceneLabel=only',
-    'action=stage:Stars',
-    'action=wait:0.1',
-  ].join('\n'));
-  harness.runUntil(() => (
-    harness.getBackdropName() === 'Title'
-    && !harness.hasRuntimeVariable('skipContext')
-  ));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=only',
+      'action=stage:Stars',
+      'action=wait:0.1',
+    ].join('\n'),
+  );
+  harness.runUntil(
+    () => harness.getBackdropName() === 'Title' && !harness.hasRuntimeVariable('skipContext'),
+  );
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
@@ -857,37 +926,39 @@ test('accepts Down during an action and advances to the next scene', async (cont
 test('preserves BGM and applies stateful tail actions when Down skips a scene', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Music,https://example.com/music.mp3',
-    'asset=NextMusic,https://example.com/next-music.mp3',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=bgm:Music',
-    'action=transition:fadeOut',
-    'action=stage:Title',
-    'action=wait:30',
-    'action=bgm:NextMusic',
-    'action=transition:fadeUp',
-    'action=stage:Title',
-    '---',
-    'sceneLabel=second',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Music,https://example.com/music.mp3',
+      'asset=NextMusic,https://example.com/next-music.mp3',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=bgm:Music',
+      'action=transition:fadeOut',
+      'action=stage:Title',
+      'action=wait:30',
+      'action=bgm:NextMusic',
+      'action=transition:fadeUp',
+      'action=stage:Title',
+      '---',
+      'sceneLabel=second',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => {
     const brightness = harness.getStageEffect('brightness');
     return harness.isSoundPlaying('Music') && brightness > -100 && brightness < 0;
   });
 
   harness.pressKey('ArrowDown');
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('sceneIndex') === 2
-    && !harness.hasRuntimeVariable('skipMode')
-  ));
+  harness.runUntil(
+    () => harness.getRuntimeVariable('sceneIndex') === 2 && !harness.hasRuntimeVariable('skipMode'),
+  );
 
   assert.equal(harness.getStageEffect('brightness'), 0);
   assert.equal(harness.getBackdropName(), 'Stars');
@@ -898,23 +969,26 @@ test('preserves BGM and applies stateful tail actions when Down skips a scene', 
 test('stops only the current sound when Down skips a scene', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Music,https://example.com/music.mp3',
-    'asset=Effect,https://example.com/effect.mp3',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=bgm:Music',
-    'action=sound:Effect',
-    'action=wait:30',
-    '---',
-    'sceneLabel=second',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Music,https://example.com/music.mp3',
+      'asset=Effect,https://example.com/effect.mp3',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=bgm:Music',
+      'action=sound:Effect',
+      'action=wait:30',
+      '---',
+      'sceneLabel=second',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => harness.isSoundPlaying('Effect'));
 
   harness.pressKey('ArrowDown');
@@ -953,10 +1027,9 @@ test('applies stateful actions when Down interrupts scene parsing', async (conte
   harness.setRuntimeVariable('skipContext', 'scene');
 
   harness.pressKey('ArrowDown');
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('sceneIndex') === 2
-    && !harness.hasRuntimeVariable('skipMode')
-  ));
+  harness.runUntil(
+    () => harness.getRuntimeVariable('sceneIndex') === 2 && !harness.hasRuntimeVariable('skipMode'),
+  );
 
   assert.equal(harness.getStageEffect('brightness'), -100);
   assert.equal(harness.getBackdropName(), 'LoadingBackdrop');
@@ -980,23 +1053,26 @@ test('consumes Space inside a pose action and continues with its next pose', asy
 test('plays configured pose recognition sounds and resets them for the next script', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Hero,costume:Loading:loading',
-    'asset=Tick,https://example.com/tick.mp3',
-    'asset=Confirm,https://example.com/confirm.mp3',
-    'setPoseRecognitionSound=Tick,Confirm',
-    'actor=Hero,Hero',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=Hero:pose:Hero:pose1:',
-    'action=stage:Title',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'asset=Tick,https://example.com/tick.mp3',
+      'asset=Confirm,https://example.com/confirm.mp3',
+      'setPoseRecognitionSound=Tick,Confirm',
+      'actor=Hero,Hero',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=Hero:pose:Hero:pose1:',
+      'action=stage:Title',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
 
   assert.equal(harness.isSoundPlaying('Tick'), true);
@@ -1013,19 +1089,22 @@ test('plays configured pose recognition sounds and resets them for the next scri
 
   harness.extensionState.poseMatches = false;
   harness.extensionState.poseScore = 0;
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Hero,costume:Loading:loading',
-    'actor=Hero,Hero',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=Hero:pose:Hero:pose1:',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'actor=Hero,Hero',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=Hero:pose:Hero:pose1:',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
 
   assert.equal(harness.hasRuntimeVariable('poseRecognitionSound'), false);
@@ -1036,22 +1115,25 @@ test('plays configured pose recognition sounds and resets them for the next scri
 test('keeps a single pose recognition sound backward compatible', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Hero,costume:Loading:loading',
-    'asset=Tick,https://example.com/tick.mp3',
-    'setPoseRecognitionSound=Tick',
-    'actor=Hero,Hero',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=Hero:pose:Hero:pose1:',
-    'action=stage:Title',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'asset=Tick,https://example.com/tick.mp3',
+      'setPoseRecognitionSound=Tick',
+      'actor=Hero,Hero',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=Hero:pose:Hero:pose1:',
+      'action=stage:Title',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
 
   assert.equal(harness.getRuntimeVariable('poseRecognitionSound'), 'Tick');
@@ -1108,13 +1190,17 @@ for (const command of ['say', 'think']) {
 test('moves an actor to the destination when Right finishes a glide', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, actorActionScript('Hero:moveTo:100,50,30', {
-    before: ['Hero:show:Hero:0,0,30'],
-  }));
-  harness.runUntil(() => (
-    harness.getRuntimeVariable('actionCommand') === 'moveTo'
-    && harness.getRuntimeVariable('skipContext') === 'action'
-  ));
+  startScript(
+    harness,
+    actorActionScript('Hero:moveTo:100,50,30', {
+      before: ['Hero:show:Hero:0,0,30'],
+    }),
+  );
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('actionCommand') === 'moveTo' &&
+      harness.getRuntimeVariable('skipContext') === 'action',
+  );
 
   harness.pressKey('ArrowRight');
   harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
@@ -1127,25 +1213,28 @@ test('moves an actor to the destination when Right finishes a glide', async (con
 test('stops an asset sound when Right finishes sound-until-done', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Effect,https://example.com/test-effect.mp3',
-    'asset=Music,https://example.com/music.mp3',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=bgm:Music',
-    'action=sound:Effect',
-    'action=stage:Title',
-    'action=wait:30',
-    '---',
-    'sceneLabel=second',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Effect,https://example.com/test-effect.mp3',
+      'asset=Music,https://example.com/music.mp3',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=bgm:Music',
+      'action=sound:Effect',
+      'action=stage:Title',
+      'action=wait:30',
+      '---',
+      'sceneLabel=second',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
   harness.runUntil(() => harness.isSoundPlaying('Effect'));
 
   harness.pressKey('ArrowRight');
@@ -1159,28 +1248,30 @@ test('stops an asset sound when Right finishes sound-until-done', async (context
 test('keeps BGM playing when Right finishes an unrelated wait', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Music,https://example.com/test-music.mp3',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=bgm:Music',
-    'action=wait:30',
-    'action=stage:Title',
-    'action=wait:30',
-    '---',
-    'sceneLabel=second',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
-  harness.runUntil(() => (
-    harness.isSoundPlaying('Music')
-    && harness.getRuntimeVariable('actionCommand') === 'wait'
-  ));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Music,https://example.com/test-music.mp3',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=bgm:Music',
+      'action=wait:30',
+      'action=stage:Title',
+      'action=wait:30',
+      '---',
+      'sceneLabel=second',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
+  harness.runUntil(
+    () => harness.isSoundPlaying('Music') && harness.getRuntimeVariable('actionCommand') === 'wait',
+  );
 
   harness.pressKey('ArrowRight');
   harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
@@ -1218,18 +1309,21 @@ for (const transition of [
   test(`applies the final brightness when ${transition.name} completes`, async (context) => {
     const harness = await loadKamishibaiVm();
     context.after(() => harness.quit());
-    startScript(harness, [
-      'kamishibai=3.1',
-      'asset=Title,backdrop',
-      'asset=Stars,backdrop',
-      'cover=Title,',
-      '---',
-      'sceneLabel=first',
-      'action=stage:Stars',
-      ...transition.before,
-      `action=transition:${transition.name}`,
-      'action=wait:30',
-    ].join('\n'));
+    startScript(
+      harness,
+      [
+        'kamishibai=3.1',
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        'action=stage:Stars',
+        ...transition.before,
+        `action=transition:${transition.name}`,
+        'action=wait:30',
+      ].join('\n'),
+    );
 
     harness.runUntil(() => harness.getRuntimeVariable('actionCommand') === 'wait');
 
@@ -1239,28 +1333,31 @@ for (const transition of [
   test(`applies the final brightness when Right finishes ${transition.name}`, async (context) => {
     const harness = await loadKamishibaiVm();
     context.after(() => harness.quit());
-    startScript(harness, [
-      'kamishibai=3.1',
-      'asset=Title,backdrop',
-      'asset=Stars,backdrop',
-      'cover=Title,',
-      '---',
-      'sceneLabel=first',
-      'action=stage:Stars',
-      ...transition.before,
-      `action=transition:${transition.name}`,
-      'action=stage:Title',
-      'action=wait:30',
-      '---',
-      'sceneLabel=second',
-      'action=stage:Stars',
-      'action=wait:30',
-    ].join('\n'));
+    startScript(
+      harness,
+      [
+        'kamishibai=3.1',
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        'action=stage:Stars',
+        ...transition.before,
+        `action=transition:${transition.name}`,
+        'action=stage:Title',
+        'action=wait:30',
+        '---',
+        'sceneLabel=second',
+        'action=stage:Stars',
+        'action=wait:30',
+      ].join('\n'),
+    );
     harness.runUntil(() => {
       const brightness = harness.getStageEffect('brightness');
       return (
-        harness.getRuntimeVariable('actionParam') === transition.name
-        && transition.isInProgress(brightness)
+        harness.getRuntimeVariable('actionParam') === transition.name &&
+        transition.isInProgress(brightness)
       );
     });
 
@@ -1275,30 +1372,34 @@ for (const transition of [
 test('applies the final image when a later Right input finishes a sequence', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
-  startScript(harness, [
-    'kamishibai=3.1',
-    'asset=Title,backdrop',
-    'asset=Stars,backdrop',
-    'asset=Hero,costume:Loading:loading',
-    'asset=Hero2,costume:Loading:loading',
-    'actor=Hero,Hero',
-    'cover=Title,',
-    '---',
-    'sceneLabel=first',
-    'action=stage:Stars',
-    'action=Hero:sequence:Hero,Hero2:30',
-    'action=wait:30',
-    'action=stage:Title',
-    'action=wait:30',
-    '---',
-    'sceneLabel=second',
-    'action=stage:Stars',
-    'action=wait:30',
-  ].join('\n'));
-  harness.runUntil(() => (
-    harness.getActorSkin('Hero') === 'Hero'
-    && harness.getRuntimeVariable('actionCommand') === 'wait'
-  ));
+  startScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'asset=Hero2,costume:Loading:loading',
+      'actor=Hero,Hero',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=Hero:sequence:Hero,Hero2:30',
+      'action=wait:30',
+      'action=stage:Title',
+      'action=wait:30',
+      '---',
+      'sceneLabel=second',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
+  harness.runUntil(
+    () =>
+      harness.getActorSkin('Hero') === 'Hero' &&
+      harness.getRuntimeVariable('actionCommand') === 'wait',
+  );
 
   harness.pressKey('ArrowRight');
   harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
