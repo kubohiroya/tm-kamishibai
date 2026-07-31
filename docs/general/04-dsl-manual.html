@@ -47,7 +47,7 @@
 setRuntimeVariable=startSceneIndex:1
 setLoadingBackdrop=読み込み背景
 setLoadingCostume=読み込み画像1,読み込み画像2
-setPoseRecognitionSound=ポーズ認識中の効果音
+setPoseRecognitionSound=ポーズ認識中の効果音,認識成立時の効果音
 asset=背景名,backdrop
 asset=アセット名,costume:スプライト名
 asset=音名,sound
@@ -165,8 +165,10 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
           <section class="level4">
             <h4 id="ポーズ認識中の効果音を変更する">ポーズ認識中の効果音を変更する</h4>
             <pre class="language-text"><code class="language-text">asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
-setPoseRecognitionSound=Clock Ticking</code></pre>
-            <p><code>setPoseRecognitionSound</code>には、<code>asset</code>で定義した音声アセット名を1件指定します。各ポーズの認識開始時にAsset Manager経由で再生し、認識成功またはスキップでそのポーズを終えると停止します。指定を省略するか空文字を指定した場合は無音です。</p>
+asset=Sewing Machine,https://example.com/sounds/sewing-machine.mp3
+setPoseRecognitionSound=Clock Ticking,Sewing Machine</code></pre>
+            <p><code>setPoseRecognitionSound</code>には、<code>asset</code>で定義した音声アセット名を最大2件、カンマ区切りで指定します。第1音は各ポーズの認識開始時にAsset Manager経由で再生し、認識成功またはスキップでそのポーズを終えると停止します。第2音はポーズ条件が成立したとき、「ポーズ認識」の値を更新する直前に再生します。</p>
+            <p>第2音は省略でき、従来の<code>setPoseRecognitionSound=Clock Ticking</code>も同じ動作を保ちます。コマンド自体を省略するか第1音に空文字を指定した場合、認識中の音は鳴りません。第2音が空文字の場合、認識成立時の音は鳴りません。</p>
           </section>
         </section>
         <section class="level3">
@@ -208,13 +210,9 @@ registerBranch=chooseRoute:takeSeaRoute,true:ocean,home</code></pre>
 registerBranch=chooseRoute:score == 1,true:ocean,home</code></pre>
         </section>
         <section class="level3">
-          <h3 id="プロンプトメニュー文言">プロンプト／メニュー文言</h3>
-          <p>ポーズ案内、台本エラー、メニューの表示文字列は、scene 0（最初の <code>---</code> より前）で定義します。次の5つはランタイムが自動登録する予約済みテキストアセットなので、<code>asset=</code> は不要です。</p>
-          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて</code></pre>
+          <h3 id="ポーズ案内の文言">ポーズ案内の文言</h3>
+          <p>ポーズ案内は、scene 0（最初の <code>---</code> より前）で定義できます。<code>ui.prompt</code>はランタイムが自動登録する予約済みテキストアセットなので、<code>asset=</code>は不要です。</p>
+          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！</code></pre>
           <table>
             <thead>
               <tr>
@@ -227,25 +225,10 @@ text=ui.about:このアプリについて</code></pre>
                 <td><code>ui.prompt</code></td>
                 <td>ポーズ認識中の案内</td>
               </tr>
-              <tr>
-                <td><code>ui.invalidScript</code></td>
-                <td>不正な台本を読み込んだときのエラー</td>
-              </tr>
-              <tr>
-                <td><code>ui.open</code></td>
-                <td>台本ファイルを選ぶメニュー</td>
-              </tr>
-              <tr>
-                <td><code>ui.reload</code></td>
-                <td>直前の台本をもう一度実行するメニュー</td>
-              </tr>
-              <tr>
-                <td><code>ui.about</code></td>
-                <td>タイトル画面へ戻るメニュー</td>
-              </tr>
             </tbody>
           </table>
-          <p>ランタイムは物語開始時に既定値へ戻してからscene 0を実行するため、別の言語の台本を続けて読み込んでも前の文言は残りません。台本をまだ読み込んでいない最初のメニューでは、ランタイムの既定値が表示されます。</p>
+          <p>ランタイムは物語開始時に<code>Pose!</code>へ戻してからscene 0を実行するため、別の台本を続けて読み込んでも前の文言は残りません。</p>
+          <p><code>Open</code>、<code>Reload</code>、<code>About</code>、<code>Language</code>、台本エラー、タイトル画面は台本を読む前から必要なアプリUIです。これらは台本ではなくアプリの言語定義から表示し、標準の<code>（言語）</code>ブロックまたはメニューで選んだ日本語／英語に従います。旧台本に<code>text=ui.open:</code>、<code>text=ui.reload:</code>、<code>text=ui.about:</code>、<code>text=ui.invalidScript:</code>が残っていても、アプリUIの文言には適用されません。</p>
         </section>
       </section>
       <section class="level2">
@@ -261,7 +244,7 @@ action=Urashima:show:Urashima-walk-1:172,-77,25
 action=Urashima:say:今日は浜辺を散歩しよう。:2</code></pre>
         <section class="level3">
           <h3 id="シーンの基本方針">シーンの基本方針</h3>
-          <p>シーンごとに、必要な背景、登場人物、音、セリフを改めて指定します。アプリはシーン終了時にアクターを隠し、音を止めるため、前のシーンの表示状態は次のシーンへ引き継がれません。</p>
+          <p>シーンごとに、必要な背景、登場人物、音、セリフを指定します。アプリはシーン終了時にアクターを隠しますが、背景、画面効果、再生中の<code>bgm</code>は次のシーンへ引き継ぎます。BGMを継続する場合は、次のシーンで同じ<code>bgm</code>を指定し直す必要はありません。背景や画面効果は、意図しない持ち越しを避けるため明示することを推奨します。</p>
           <p>よい書き方:</p>
           <pre class="language-text"><code class="language-text">---
 # scene 2
@@ -319,6 +302,7 @@ action=対象:命令:値:追加値</code></pre>
 action=sound:Gong</code></pre>
           <p><code>bgm</code> は音を鳴らして次のアクションへ進みます。<code>sound</code> は音の再生が終わるまで待ちます。</p>
           <p>名前は <code>BGM</code> ですが、実装上は「待たずに鳴らす音」と考えると分かりやすいです。ループ再生専用ではありません。</p>
+          <p>下矢印キーでシーンをスキップしても、すでに再生中の<code>bgm</code>は継続し、シーンの残りに書かれた<code>bgm</code>も再生を開始します。現在再生待ちの<code>sound</code>は停止します。</p>
         </section>
         <section class="level3">
           <h3 id="画面をフェードさせる">画面をフェードさせる</h3>
@@ -331,6 +315,7 @@ action=transition:fadeUp</code></pre>
 action=stage:次の背景
 action=transition:fadeFromWhite</code></pre>
           <p><code>fadeToWhite</code>はステージの明るさを<code>+100</code>まで上げ、その状態を保持します。白飛び中に背景を切り替えたあと、<code>fadeFromWhite</code>で明るさを<code>0</code>へ戻すと、切替後の背景が徐々に見えるようになります。</p>
+          <p>下矢印キーでシーンをスキップした場合、残りの<code>transition</code>はアニメーションを待たず、台本に書かれた順番で最終明るさだけを適用します。たとえば残りに<code>fadeOut</code>と<code>fadeUp</code>がある場合、最終状態は<code>fadeUp</code>の明るさ<code>0</code>です。</p>
         </section>
         <section class="level3">
           <h3 id="アクターを表示する">アクターを表示する</h3>
@@ -473,8 +458,8 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
           <tbody>
             <tr>
               <td>ヘッダ</td>
-              <td>バージョン、初期変数、アセット、アクター、表紙、UI文言を定義</td>
-              <td><code>kamishibai</code>, <code>setRuntimeVariable</code>, <code>asset</code>, <code>actor</code>, <code>cover</code>, <code>text=ui.*</code></td>
+              <td>バージョン、初期変数、アセット、アクター、表紙、ポーズ案内を定義</td>
+              <td><code>kamishibai</code>, <code>setRuntimeVariable</code>, <code>asset</code>, <code>actor</code>, <code>cover</code>, <code>text=ui.prompt</code></td>
             </tr>
             <tr>
               <td>opening</td>
@@ -528,7 +513,7 @@ action=text:Narration:むかし　むかし、あるところに...</code></pre>
             </tr>
           </tbody>
         </table>
-        <p>この例は、3.1のアセット形式、シーンラベル、scene 0のUI文言、時系列の<code>action=text:</code>、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。</p>
+        <p>この例は、3.1のアセット形式、シーンラベル、scene 0のポーズ案内、時系列の<code>action=text:</code>、フェード、ループアニメーション、ポーズ認識を組み合わせた教材として使いやすいです。</p>
       </section>
       <section class="level2">
         <h2 id="紙芝居dslの作成手順">紙芝居DSLの作成手順</h2>
@@ -667,8 +652,8 @@ action=wait:1</code></pre>
               <td>同じ位置の条件とラベルを対応させるためです。</td>
             </tr>
             <tr>
-              <td>各シーンで表示状態を作り直す</td>
-              <td>シーン終了時にアクターが隠れ、音が止まるためです。</td>
+              <td>各シーンで表示状態を明示する</td>
+              <td>アクターは隠れますが、背景、画面効果、BGMは意図的に変更するまで持ち越されるためです。</td>
             </tr>
             <tr>
               <td>音声ファイルは短めにする</td>

@@ -330,10 +330,11 @@ setLoadingCostume=loading1,loading2,loading3</code></pre>
         </section>
         <section class="level3">
           <h3 id="setposerecognitionsound"><code>setPoseRecognitionSound</code></h3>
-          <pre class="language-text"><code class="language-text">setPoseRecognitionSound=ポーズ認識中の効果音アセット名</code></pre>
-          <p>各ポーズの認識中に再生する音声アセットを1件指定します。</p>
+          <pre class="language-text"><code class="language-text">setPoseRecognitionSound=ポーズ認識中の効果音アセット名,認識成立時の効果音アセット名</code></pre>
+          <p>各ポーズの認識中に再生する音声アセットと、ポーズ条件の成立時に再生する音声アセットを指定します。</p>
           <pre class="language-text"><code class="language-text">asset=Clock Ticking,https://example.com/sounds/clock-ticking.mp3
-setPoseRecognitionSound=Clock Ticking</code></pre>
+asset=Sewing Machine,https://example.com/sounds/sewing-machine.mp3
+setPoseRecognitionSound=Clock Ticking,Sewing Machine</code></pre>
           <table>
             <thead>
               <tr>
@@ -344,27 +345,35 @@ setPoseRecognitionSound=Clock Ticking</code></pre>
             <tbody>
               <tr>
                 <td>役割</td>
-                <td>ポーズ認識開始から終了までの効果音を設定する</td>
+                <td>ポーズ認識中の開始音と認識成立時の効果音を設定する</td>
               </tr>
               <tr>
                 <td>必須</td>
-                <td>任意。省略時または空文字は無音</td>
+                <td>任意。コマンド省略時または各値が空文字の場合は対応する音が無音</td>
               </tr>
               <tr>
-                <td>値</td>
-                <td><code>asset</code>で定義した音声アセット名1件</td>
+                <td>値1</td>
+                <td><code>asset</code>で定義した認識中の音声アセット名</td>
               </tr>
               <tr>
-                <td>開始</td>
+                <td>値2</td>
+                <td><code>asset</code>で定義した認識成立時の音声アセット名。省略可</td>
+              </tr>
+              <tr>
+                <td>第1音の開始</td>
                 <td>各ポーズの認識開始時にAsset Manager経由で再生する</td>
               </tr>
               <tr>
-                <td>停止</td>
+                <td>第1音の停止</td>
                 <td>認識成功、スペース／Right／Downによるスキップ、物語停止時に停止する</td>
+              </tr>
+              <tr>
+                <td>第2音の開始</td>
+                <td>ポーズ条件成立時、「ポーズ認識」の値を更新する直前に再生する</td>
               </tr>
             </tbody>
           </table>
-          <p>指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。長いクリップは認識が先に終わると途中で停止します。複数のtick／tockを含むクリップを1アセットとして指定できます。</p>
+          <p>指定した名前が音声アセットとして定義されていない場合は、再生時にアセットエラーになります。第1音の長いクリップは認識が先に終わると途中で停止します。第2音は音声アセット自身の長さだけ再生されます。従来の1音指定はそのまま利用できます。</p>
         </section>
         <section class="level3">
           <h3 id="actor"><code>actor</code></h3>
@@ -492,14 +501,10 @@ action=stage:Ocean</code></pre>
           <pre class="language-text"><code class="language-text">TMPoseURL=https://example.com/kamishibai/pose-model/</code></pre>
         </section>
         <section class="level3">
-          <h3 id="textscene-0-のui文言"><code>text</code>：scene 0 のUI文言</h3>
+          <h3 id="textscene-0-のポーズ案内"><code>text</code>：scene 0 のポーズ案内</h3>
           <pre class="language-text"><code class="language-text">text=予約済みUIテキストアセット名:文字列</code></pre>
-          <p>プロンプト／メニューの文言は、scene 0（最初の <code>---</code> より前）で定義します。次の5アセットはランタイムが自動登録するため、<code>asset=</code> による登録は不要です。</p>
-          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて</code></pre>
+          <p>ポーズ案内は、scene 0（最初の <code>---</code> より前）で定義します。<code>ui.prompt</code>はランタイムが自動登録するため、<code>asset=</code>による登録は不要です。</p>
+          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！</code></pre>
           <table>
             <thead>
               <tr>
@@ -514,29 +519,10 @@ text=ui.about:このアプリについて</code></pre>
                 <td>ポーズ認識中の案内</td>
                 <td><code>Pose!</code></td>
               </tr>
-              <tr>
-                <td><code>ui.invalidScript</code></td>
-                <td>台本エラー</td>
-                <td><code>Invalid script</code></td>
-              </tr>
-              <tr>
-                <td><code>ui.open</code></td>
-                <td>ファイル読込</td>
-                <td><code>Open file</code></td>
-              </tr>
-              <tr>
-                <td><code>ui.reload</code></td>
-                <td>再読込</td>
-                <td><code>Reload</code></td>
-              </tr>
-              <tr>
-                <td><code>ui.about</code></td>
-                <td>タイトル表示</td>
-                <td><code>About</code></td>
-              </tr>
             </tbody>
           </table>
-          <p>有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。初回ファイル読込前や、予約名を定義しない既存台本では既定値を表示します。</p>
+          <p>有効な台本を開始するたびに、既定値へ戻した後でscene 0の定義を適用します。</p>
+          <p>ファイル読込、再読込、タイトル表示、言語選択、台本エラーの文言は台本コマンドではありません。アプリの言語定義と標準の<code>（言語）</code>ブロック、または利用者が保存した言語選択から決まります。旧台本の<code>text=ui.open:</code>、<code>text=ui.reload:</code>、<code>text=ui.about:</code>、<code>text=ui.invalidScript:</code>はアプリUIへ適用されません。</p>
         </section>
       </section>
       <section class="level2">
@@ -562,7 +548,7 @@ text=ui.about:このアプリについて</code></pre>
           <p>音声アセットを再生し、再生完了を待たずに次のアクションへ進みます。</p>
           <p>例:</p>
           <pre class="language-text"><code class="language-text">action=bgm:Odesong</code></pre>
-          <p>補足: <code>bgm</code> はループ再生しません。再生開始後すぐに次のアクションへ進み、シーン終了時に停止します。</p>
+          <p>補足: <code>bgm</code> はループ再生しません。再生開始後すぐに次のアクションへ進み、次のシーンに移っても音声自体の再生が終わるまで継続します。</p>
         </section>
         <section class="level3">
           <h3 id="sound"><code>sound</code></h3>
@@ -869,7 +855,7 @@ action=Turtle:setLayer:back</code></pre>
         </section>
         <section class="level3">
           <h3 id="認識パラメータの実装値">認識パラメータの実装値</h3>
-          <p>現在の配布用アプリは、起動時に <code>poseRecog=0.5</code>、<code>poseCharge=10</code>、<code>poseIdle=0.1</code> を設定し、次の計算で進行します。</p>
+          <p>現在の配布用アプリは、起動時に <code>poseRecog=0.5</code>、<code>poseCharge=10</code>、<code>poseIdle=0</code> を設定し、次の計算で進行します。</p>
           <table>
             <thead>
               <tr>
@@ -888,7 +874,7 @@ action=Turtle:setLayer:back</code></pre>
               </tr>
               <tr>
                 <td>非認識中</td>
-                <td>反復ごとに <code>min(対象ポーズのスコア × 0.1, 100)</code> をチャージへ加える</td>
+                <td><code>poseIdle=0</code> のためチャージを増やさない</td>
               </tr>
               <tr>
                 <td>成功条件</td>
@@ -896,7 +882,7 @@ action=Turtle:setLayer:back</code></pre>
               </tr>
             </tbody>
           </table>
-          <p>しきい値未満でも対象ポーズのスコアに応じてチャージは増えますが、認識中の100分の1の係数です。このため、短い一致よりもポーズを保った場合の方が早く成功条件へ到達します。</p>
+          <p>しきい値未満ではチャージは増えません。認識中は対象ポーズのスコアに応じてチャージが増えるため、ポーズを保つと成功条件へ到達します。</p>
         </section>
         <section class="level3">
           <h3 id="ポーズ設計のコツ">ポーズ設計のコツ</h3>
@@ -967,9 +953,10 @@ action=Turtle:setLayer:back</code></pre>
         <ul>
           <li>アクションリストをクリアする</li>
           <li>すべてのアクターを隠す</li>
-          <li>すべての音を止める</li>
+          <li>背景と画面効果を現在値のまま保持する</li>
+          <li><code>bgm</code>で開始した再生を止めず、音声自体の終了まで継続する</li>
         </ul>
-        <p>したがって、次のシーンでは、背景、アクター表示、音を必要に応じて書き直します。</p>
+        <p>したがって、次のシーンでは背景とアクター表示を必要に応じて書き直します。同じBGMを継続する場合は、<code>bgm</code>を指定し直しません。</p>
         <p>通常は次のシーン番号へ進みます。<code>branch</code> またはキー／タッチ入力が <code>nextSceneLabel</code> を設定した場合は、<code>sceneLabelList</code>から同名ラベルを探し、そのシーンへ移動します。</p>
       </section>
       <section class="level2">
@@ -1038,6 +1025,7 @@ action=Turtle:setLayer:back</code></pre>
           </tbody>
         </table>
         <p>スペースはポーズ待ち中、右矢印はアクション実行中、下矢印はシーン実行中だけ受け付けます。未処理の入力要求がある間は後続キーで上書きしません。タイトル画面ではスペースまたは画面クリックだけが有効です。</p>
+        <p>下矢印では、現在実行中とシーン残部の<code>transition</code>を待ち時間なしで最終状態まで適用し、シーン残部の<code>bgm</code>を再生開始します。再生中のBGMは維持し、現在実行中の<code>sound</code>だけを停止します。残りのその他のアクションは実行しません。</p>
         <p>本番運用では誤操作に注意してください。</p>
       </section>
       <section class="level2">
@@ -1054,9 +1042,10 @@ asset=Loading1,https://example.com/loading1.png
 asset=Loading2,https://example.com/loading2.png
 asset=LoadingBackground,https://example.com/loading-background.png
 asset=ClockTicking,https://example.com/clock-ticking.mp3
+asset=PoseRecognized,https://example.com/pose-recognized.mp3
 setLoadingBackdrop=LoadingBackground
 setLoadingCostume=Loading1,Loading2
-setPoseRecognitionSound=ClockTicking
+setPoseRecognitionSound=ClockTicking,PoseRecognized
 text=ui.prompt:ポーズをとろう！
 actor=ActorName,InitialSkin
 cover=CoverBackground,CoverSound

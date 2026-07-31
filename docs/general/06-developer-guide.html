@@ -523,6 +523,18 @@ dist/sample.manifest.json</code></pre>
         </p>
         <p><code>app/</code>から編集用SB3を生成します。</p>
         <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:build</code></pre>
+        <p>
+          生成時に、Title背景の<code>Version &lt;version&gt; (YYYY/MM/DD)</code>へ<code>package.json</code>の
+          versionとAsia/Tokyoのビルド日を自動で埋め込みます。同時に、公式Webサイトボタンへ
+          Webサイトのブランド画像の正本である<code>site/favicon.png</code>を埋め込みます。<code>app/</code>には
+          プレースホルダーを保持し、一時ソースで2つのSVGの内容、MD5、<code>assetId</code>、<code>md5ext</code>、
+          archive entryを同時に更新するため、ビルドで正本は変更されません。
+        </p>
+        <p>
+          過去のリリースを同じ日付で再現するときは、日付を<code>YYYY-MM-DD</code>で明示します。不正な
+          日付はエラーにし、暗黙に補正しません。
+        </p>
+        <pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">KAMISHIBAI_BUILD_DATE</span><span class="token operator">=</span><span class="token number">2026</span>-07-31 <span class="token function">pnpm</span> sb3:build</code></pre>
         <p><code>tmp/kamishibai.sb3</code>をTurboWarpで編集し、別の明示的なパスへ保存してから取り込みます。</p>
         <pre class="language-bash"><code class="language-bash"><span class="token function">pnpm</span> sb3:import -- /path/to/edited-kamishibai.sb3
 <span class="token function">git</span> <span class="token function">diff</span> -- app
@@ -689,6 +701,7 @@ dist/sample.manifest.json</code></pre>
             <li>green flagでtitleとmenuが表示される</li>
             <li>外部台本と組み込み台本の対象フローが開始できる</li>
             <li>pause、Space、Right、Downの進行が意図どおり動く</li>
+            <li>Downでシーンを飛ばしてもBGMが継続し、残りのtransitionが最終状態になる</li>
             <li>Loading、画像、音声、テキストが正しく表示・再生される</li>
           </ul>
           <p>

@@ -36,6 +36,17 @@
       <p>対象DSL: <code>kamishibai=2.0</code> → <code>kamishibai=3.1</code><br>文書化日: 2026年7月27日</p>
       <p>この文書は、2.0向けの旧ドキュメントと3.1の現行仕様を比較し、台本作者・教材作成者・開発者が把握すべき差分をまとめたものです。中間バージョンごとの導入時期は区別せず、2.0から3.1までの累積差分として記載します。</p>
       <section class="level2">
+        <h2 id="316リリース">3.1.6リリース</h2>
+        <p>3.1.6では、Title画面へパッケージversionとビルド日を自動的に埋め込み、公式Webサイトへの導線、ライセンス、開発者情報を整理しました。アプリ固有のOpen、Reload、About、LanguageとTitle／About画面は、Scratch／TurboWarp標準の表示言語を初期値として日本語と英語を切り替えられます。Languageメニューで選んだ言語は保存され、次回起動時に優先されます。</p>
+        <p>矢印キーでシーンやactionをスキップした場合も、フェード、画像、移動など状態を持つactionは最終状態を反映してから次へ進みます。別のactionで開始したBGMは、無関係な待機actionをスキップしても継続します。</p>
+        <p>ポーズ認識の待機率を表すランタイム変数<code>poseIdle</code>の既定値は、不要な待機を挟まない<code>0</code>へ変更しました。</p>
+      </section>
+      <section class="level2">
+        <h2 id="315リリース">3.1.5リリース</h2>
+        <p>3.1.5では、<code>setPoseRecognitionSound=認識中の音,認識成立時の音</code>のように、ポーズ認識中の音に加えて認識成立時の音を指定できるようにしました。2つ目の音はランタイム変数<code>poseRecognitionSound2</code>へ保存され、ポーズが成立したときにScratch変数「ポーズ認識」を更新する直前に再生されます。</p>
+        <p>2つ目の音を省略する従来の書式も引き続き利用できます。その場合は<code>poseRecognitionSound2</code>を削除し、前の台本の設定を持ち越しません。</p>
+      </section>
+      <section class="level2">
         <h2 id="314リリース">3.1.4リリース</h2>
         <p>3.1.4では、アセット読込中の背景を指定する<code>setLoadingBackdrop</code>と、ポーズ認識中の効果音を指定する<code>setPoseRecognitionSound</code>を追加しました。Loading背景を省略した場合は組み込みの真っ黒な背景を表示し、アセット読込中にタイトル画面を残しません。</p>
         <p>ポーズ認識音はAsset Managerへ登録した音声アセットを使います。認識開始時に再生し、認識成功またはスキップで停止します。台本を切り替えたときは設定をリセットし、次の台本へ効果音を持ち越しません。generic SB3に残っていた未使用の<code>Actor/pop</code>と<code>Loading/Chirp</code>は本番成果物から削除し、テスト専用fixtureへ移しました。</p>
@@ -86,7 +97,7 @@
             <tr>
               <td>画面上の文字</td>
               <td>吹き出し中心</td>
-              <td>テキストアセットの表示・時系列更新と、プロンプト／メニュー文言の台本定義を追加</td>
+              <td>テキストアセットの表示・時系列更新と、ポーズ案内の台本定義を追加。アプリUIは日本語／英語を選択可能</td>
             </tr>
             <tr>
               <td>アセット読込表示</td>
@@ -123,12 +134,9 @@ setRuntimeVariable=takeSeaRoute:true</code></pre>
         </section>
         <section class="level3">
           <h3 id="scene-0のtext">scene 0の<code>text</code></h3>
-          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて</code></pre>
-          <p>ポーズ案内、台本エラー、ファイル読込、再読込、タイトル表示の文言を台本から定義できるようにしました。これら5つはランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定の英語文言へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。</p>
+          <pre class="language-text"><code class="language-text">text=ui.prompt:ポーズをとろう！</code></pre>
+          <p>ポーズ案内を台本から定義できるようにしました。<code>ui.prompt</code>はランタイムが自動登録する予約済みテキストアセットです。物語開始時に既定値へ戻してからscene 0の定義を適用するため、前に実行した台本の文言は残りません。</p>
+          <p>ファイル読込、再読込、タイトル表示、言語選択、台本エラーとタイトル画面はアプリ側の日本語／英語定義から表示します。初回は標準の<code>（言語）</code>ブロックで判定し、メニューから選んだ言語はlocalStorageへ保存します。過去の資料に記載されていた<code>text=ui.open:</code>、<code>text=ui.reload:</code>、<code>text=ui.about:</code>、<code>text=ui.invalidScript:</code>は、台本読込前のUIには適用できないため現行仕様から除外しました。</p>
           <p>シーン直下の<code>text=テキストアセット名:文字列</code>も互換性のため利用できますが、アクション列より先に処理されます。時系列に沿ったテキスト更新には、次節の<code>action=text:...</code>を使用します。</p>
         </section>
         <section class="level3">
@@ -358,10 +366,6 @@ asset=loading1,https://example.com/loading1.png
 asset=loading2,https://example.com/loading2.png
 setLoadingCostume=loading1,loading2
 text=ui.prompt:ポーズをとろう！
-text=ui.invalidScript:エラー：不正な台本ファイル
-text=ui.open:ファイルをひらく
-text=ui.reload:もういちど
-text=ui.about:このアプリについて
 actor=Hero,Hero
 actor=Narration,Narration
 cover=Beach,Opening
@@ -393,7 +397,7 @@ action=stage:Home</code></pre>
           <li class="task-list-item"><input type="checkbox" disabled=""> <code>setCostume</code>を使っている箇所を<code>asset</code>と<code>setSkin</code>へ置き換えた</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> 必要なシーンへ重複しない<code>sceneLabel</code>を付けた</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> <code>startSceneIndex</code>の既定値<code>1</code>を確認し、別の開始シーンが必要な場合だけ設定した</li>
-          <li class="task-list-item"><input type="checkbox" disabled=""> 必要に応じてscene 0の<code>text=ui.*</code>でプロンプト／メニュー文言を定義した</li>
+          <li class="task-list-item"><input type="checkbox" disabled=""> 必要に応じてscene 0の<code>text=ui.prompt</code>でポーズ案内を定義した</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> シーン内の時系列テキスト更新を<code>action=text:...</code>で記述した</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> 分岐の条件数と移動先ラベル数をそろえた</li>
           <li class="task-list-item"><input type="checkbox" disabled=""> キー／タッチ入力の項目数と移動先ラベル数をそろえた</li>
@@ -414,15 +418,15 @@ action=stage:Home</code></pre>
           <tbody>
             <tr>
               <td><code>03-user-guide.md</code></td>
-              <td>3.1の分岐、入力、フェード、アニメーション、テキスト、Loading表示、用途別成果物、変更可能なUI文言を追加</td>
+              <td>3.1の分岐、入力、フェード、アニメーション、テキスト、Loading表示、用途別成果物、アプリUIの言語選択を追加</td>
             </tr>
             <tr>
               <td><code>04-dsl-manual.md</code></td>
-              <td>3.1のファイル構造、全追加コマンド、Loading設定、scene 0のUI文言、時系列テキスト、移行・テスト手順を追加</td>
+              <td>3.1のファイル構造、全追加コマンド、Loading設定、scene 0のポーズ案内、時系列テキスト、移行・テスト手順を追加</td>
             </tr>
             <tr>
               <td><code>05-command-reference.md</code></td>
-              <td>アセット識別子、トップレベルコマンド、Loadingの優先読込と進捗、グローバル／アクターアクション、予約UI文言、エラー例を更新</td>
+              <td>アセット識別子、トップレベルコマンド、Loadingの優先読込と進捗、グローバル／アクターアクション、予約ポーズ案内、エラー例を更新</td>
             </tr>
             <tr>
               <td><code>01-executive-summary-adult.md</code></td>

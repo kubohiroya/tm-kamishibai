@@ -244,15 +244,15 @@
             <tbody>
               <tr>
                 <td>target（Stageを含む）</td>
-                <td align="right">8</td>
+                <td align="right">13</td>
               </tr>
               <tr>
                 <td>block</td>
-                <td align="right">1490</td>
+                <td align="right">1636</td>
               </tr>
               <tr>
                 <td>event hat</td>
-                <td align="right">39</td>
+                <td align="right">63</td>
               </tr>
               <tr>
                 <td>カスタムブロック定義</td>
@@ -268,11 +268,11 @@
               </tr>
               <tr>
                 <td>broadcast message</td>
-                <td align="right">18</td>
+                <td align="right">21</td>
               </tr>
               <tr>
                 <td>静的なruntime variable名</td>
-                <td align="right">17</td>
+                <td align="right">19</td>
               </tr>
               <tr>
                 <td>静的なthread variable名</td>
@@ -280,7 +280,7 @@
               </tr>
               <tr>
                 <td>TurboWarp機能拡張</td>
-                <td align="right">12</td>
+                <td align="right">14</td>
               </tr>
             </tbody>
           </table>
@@ -327,7 +327,7 @@
               </tr>
               <tr>
                 <td><code>localstorage</code></td>
-                <td>台本のローカル保存</td>
+                <td>台本と選択UI言語のローカル保存</td>
                 <td>Gallery</td>
               </tr>
               <tr>
@@ -360,12 +360,24 @@
                 <td>テキスト描画・アニメーション</td>
                 <td>Gallery</td>
               </tr>
+              <tr>
+                <td><code>translate</code></td>
+                <td>Scratch／TurboWarpの表示言語を取得</td>
+                <td>標準</td>
+              </tr>
+              <tr>
+                <td><code>kubohiroyaweblink</code></td>
+                <td>HTTPSの公式Webサイトを新しいタブで開く</td>
+                <td>埋め込み</td>
+              </tr>
             </tbody>
           </table>
           <p>
-            埋め込み拡張の由来、固定commit、SHA-256は<code>app/embedded-extensions.json</code>を正本とし、
-            更新方法は<a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のワークフロー</a>
-            に従います。
+            GitHub由来の管理対象となる埋め込み拡張では、由来、固定commit、SHA-256を
+            <code>app/embedded-extensions.json</code>の<code>source</code>に記録します。更新方法は
+            <a href="https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md"><code>sb3-toolchain</code>のワークフロー</a>
+            に従います。<code>kubohiroyaweblink</code>はこのproject内で管理する小規模な拡張なので、
+            <code>source</code>を持ちません。
           </p>
         </section>
       </section>
@@ -400,7 +412,7 @@
                 <td><code>Stage</code></td>
                 <td>Stage</td>
                 <td>初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括</td>
-                <td><code>Title</code>, <code>Stars</code>, <code>LoadingBackdrop</code></td>
+                <td><code>Title</code>, <code>Title-en</code>, <code>Stars</code>, <code>LoadingBackdrop</code></td>
               </tr>
               <tr>
                 <td><code>Actor</code></td>
@@ -433,6 +445,36 @@
                 <td><code>ui-placeholder</code></td>
               </tr>
               <tr>
+                <td><code>languageButton</code></td>
+                <td>UI sprite</td>
+                <td>menu末尾から言語選択画面を開く</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>japaneseLanguageButton</code></td>
+                <td>UI sprite</td>
+                <td>UI言語を日本語に変更して保存</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>englishLanguageButton</code></td>
+                <td>UI sprite</td>
+                <td>UI言語を英語に変更して保存</td>
+                <td><code>ui-placeholder</code></td>
+              </tr>
+              <tr>
+                <td><code>officialWebsiteButton</code></td>
+                <td>UI sprite</td>
+                <td>titleの3行目から公式Webサイトを開く</td>
+                <td><code>official-website-button</code>, <code>official-website-button-en</code></td>
+              </tr>
+              <tr>
+                <td><code>closeTitleButton</code></td>
+                <td>UI sprite</td>
+                <td>title右上の閉じるボタンからStage clickと同じ遷移を実行する</td>
+                <td><code>title-close-button</code></td>
+              </tr>
+              <tr>
                 <td><code>Loading</code></td>
                 <td>UI sprite</td>
                 <td>Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示</td>
@@ -447,9 +489,26 @@
             </tbody>
           </table>
           <p>
-            <code>Actor</code>の本体は非表示で、cloneだけを登場人物として表示します。<code>prompt</code>、3つのmenu button、
-            <code>Loading</code>、<code>LoadingBubbleAnchor</code>の実画像は、台本の<code>ui.*</code>設定または組み込みfallbackから
-            Asset Managerへ登録します。
+            <code>Actor</code>の本体は非表示で、cloneだけを登場人物として表示します。<code>prompt</code>と6つのmenu／言語選択
+            sprite、<code>Loading</code>、<code>LoadingBubbleAnchor</code>の実画像は、Asset Managerへ登録します。台本が定義する
+            予約済みUIテキストは<code>ui.prompt</code>だけです。<code>ui.open</code>、<code>ui.reload</code>、<code>ui.about</code>、<code>ui.language</code>、
+            <code>ui.invalidScript</code>はアプリの言語定義から設定します。
+          </p>
+          <p>
+            アプリUIの定義元は<code>scripts/sb3/app-shell-locales.mjs</code>です。ロケール別の<code>about.title</code>、
+            <code>about.officialWebsite.name</code>、<code>about.license.app</code>、<code>about.license.story</code>、
+            <code>about.author.organization</code>、<code>about.author.name</code>と、共通の<code>about.officialWebsite.url</code>、
+            <code>about.author.email</code>を、build時に日本語／英語のTitle背景と公式Webボタンcostumeへ埋め込みます。
+            公式Webボタンには<code>site/favicon.png</code>も埋め込み、Webサイトと同じ浦島太郎のブランド画像を
+            表示します。Title背景には、アプリのMPL-2.0と台本ファイル固有の利用条件を示す2行の
+            ライセンス案内を表示します。
+          </p>
+          <p>
+            green flag時はlocalStorageの<code>uiLanguage</code>が<code>ja</code>または<code>en</code>ならその値を優先します。未保存なら
+            標準<code>translate</code>機能拡張の<code>（言語）</code> reporterが<code>日本語</code>、<code>ja</code>、<code>ja-JP</code>のいずれかを返す場合は
+            日本語、それ以外は英語を選びます。menuの<code>languageButton</code>から選び直した値はlocalStorageへ
+            保存し、<code>languageChanged</code>でアプリUIのテキストを即時更新します。言語選択画面では現在値に
+            <code>✓</code>を付けます。台本のUTF-8本文には翻訳や言語切替を適用しません。
           </p>
         </section>
         <section class="level3">
@@ -688,7 +747,7 @@
         </section>
         <section class="level3">
           <h3 id="runtime-variable">runtime variable</h3>
-          <p>静的な名前を持つruntime variableは次の17個です。</p>
+          <p>静的な名前を持つruntime variableは次の19個です。</p>
           <table>
             <thead>
               <tr>
@@ -731,11 +790,15 @@
               </tr>
               <tr>
                 <td><code>poseRecog</code>, <code>poseCharge</code>, <code>poseIdle</code></td>
-                <td>pose認識のしきい値、charge時間、idle時間</td>
+                <td>pose認識のしきい値、charge時間、idle時間。既定値は<code>0.5</code>、<code>10</code>、<code>0</code></td>
               </tr>
               <tr>
                 <td><code>poseRecognitionSound</code></td>
                 <td><code>setPoseRecognitionSound</code>で指定した認識中の音声アセット名</td>
+              </tr>
+              <tr>
+                <td><code>poseRecognitionSound2</code></td>
+                <td><code>setPoseRecognitionSound</code>で指定した認識成立時の音声アセット名</td>
               </tr>
               <tr>
                 <td><code>loadingCostume</code></td>
@@ -745,12 +808,16 @@
                 <td><code>message</code></td>
                 <td>Loading bubbleへ表示する現在の進捗文言</td>
               </tr>
+              <tr>
+                <td><code>uiLanguage</code></td>
+                <td>アプリUIの表示言語。<code>ja</code>または<code>en</code></td>
+              </tr>
             </tbody>
           </table>
           <p>
             このほか、<code>exec command %s %s</code>はDSLで指定されたruntime variable名を動的に設定します。
             分岐条件は<code>branch:&lt;branchName&gt;</code>という名前で保存します。この2系列は入力から名前が決まるため、
-            静的な17個には数えません。
+            静的な19個には数えません。
           </p>
         </section>
         <section class="level3">
@@ -843,7 +910,7 @@
                   <td><code>Stage</code></td>
                   <td><code>iM</code></td>
                   <td>green flag</td>
-                  <td><code>stop camera preview</code>, <code>stop pose recog</code>, <code>stop camera</code>, <code>hide all actors</code>; <code>showTitle</code>送信</td>
+                  <td>UI言語を保存値／標準<code>（言語）</code>から決定後、camera／pose／actorを初期化し<code>showTitle</code>送信</td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -855,13 +922,13 @@
                   <td><code>Stage</code></td>
                   <td><code>i}</code></td>
                   <td>key <code>down arrow</code></td>
-                  <td><code>finishTimedActorAction</code>送信、<code>skipMode=Down</code></td>
+                  <td>現在の<code>sound</code>停止、sequence終端化、<code>finishTimedActorAction</code>送信、<code>skipMode=scene</code></td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
                   <td><code>jb</code></td>
                   <td>key <code>right arrow</code></td>
-                  <td><code>finishTimedActorAction</code>送信、<code>skipMode=Right</code></td>
+                  <td>現在の<code>sound</code>停止、sequence終端化、<code>finishTimedActorAction</code>送信、<code>skipMode=action</code></td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -891,6 +958,12 @@
                   <td><code>Stage</code></td>
                   <td><code>l=</code></td>
                   <td>Stage click</td>
+                  <td><code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>titleCloseHat</code></td>
+                  <td><code>closeTitle</code>受信</td>
                   <td>組み込み台本の有無に応じて<code>showCover</code>または<code>startStory</code>送信</td>
                 </tr>
                 <tr>
@@ -910,6 +983,12 @@
                   <td><code>nx</code></td>
                   <td><code>stopTouchInput</code>受信</td>
                   <td>Async Inputの全listenerを停止</td>
+                </tr>
+                <tr>
+                  <td><code>Stage</code></td>
+                  <td><code>uiLanguageChangedHat</code></td>
+                  <td><code>languageChanged</code>受信</td>
+                  <td><code>ui.open</code>、<code>ui.reload</code>、<code>ui.about</code>、<code>ui.language</code>、<code>ui.invalidScript</code>を選択言語で更新</td>
                 </tr>
               </tbody>
             </table>
@@ -1054,6 +1133,138 @@
                   <td><code>pb</code></td>
                   <td><code>showMenu</code>受信</td>
                   <td>title以外なら表示</td>
+                </tr>
+                <tr>
+                  <td><code>languageButton</code></td>
+                  <td><code>languageButtonFlag</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>languageButton</code></td>
+                  <td><code>languageButtonHideMenu</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>languageButton</code></td>
+                  <td><code>languageButtonShowMenu</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td><code>ui.language</code> skinで表示</td>
+                </tr>
+                <tr>
+                  <td><code>languageButton</code></td>
+                  <td><code>languageButtonClick</code></td>
+                  <td>sprite click</td>
+                  <td><code>hideMenu</code>後に<code>showLanguageMenu</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>japaneseLanguageButton</code></td>
+                  <td><code>japaneseLanguageFlag</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>japaneseLanguageButton</code></td>
+                  <td><code>japaneseLanguageHideMenu</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>japaneseLanguageButton</code></td>
+                  <td><code>japaneseLanguageShowChoices</code></td>
+                  <td><code>showLanguageMenu</code>受信</td>
+                  <td>現在値なら<code>✓ 日本語</code>、それ以外は<code>日本語</code>を表示</td>
+                </tr>
+                <tr>
+                  <td><code>japaneseLanguageButton</code></td>
+                  <td><code>japaneseLanguageClick</code></td>
+                  <td>sprite click</td>
+                  <td><code>uiLanguage=ja</code>を保存・適用しmenuへ戻る</td>
+                </tr>
+                <tr>
+                  <td><code>englishLanguageButton</code></td>
+                  <td><code>englishLanguageFlag</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>englishLanguageButton</code></td>
+                  <td><code>englishLanguageHideMenu</code></td>
+                  <td><code>hideMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>englishLanguageButton</code></td>
+                  <td><code>englishLanguageShowChoices</code></td>
+                  <td><code>showLanguageMenu</code>受信</td>
+                  <td>現在値なら<code>✓ English</code>、それ以外は<code>English</code>を表示</td>
+                </tr>
+                <tr>
+                  <td><code>englishLanguageButton</code></td>
+                  <td><code>englishLanguageClick</code></td>
+                  <td>sprite click</td>
+                  <td><code>uiLanguage=en</code>を保存・適用しmenuへ戻る</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteButton</code></td>
+                  <td><code>officialWebsiteFlag</code></td>
+                  <td>green flag</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteButton</code></td>
+                  <td><code>officialWebsiteClick</code></td>
+                  <td>sprite click</td>
+                  <td>公式Webサイトを新しいタブで開く</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteButton</code></td>
+                  <td><code>officialWebsiteShowTitle</code></td>
+                  <td><code>showTitle</code>受信</td>
+                  <td>選択言語のcostumeへ切り替えて表示</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteButton</code></td>
+                  <td><code>officialWebsiteHideMenu</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>officialWebsiteButton</code></td>
+                  <td><code>officialWebsiteStartStory</code></td>
+                  <td><code>startStory</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>closeTitleButton</code></td>
+                  <td><code>closeTitleFlag</code></td>
+                  <td>green flag</td>
+                  <td>右上に表示</td>
+                </tr>
+                <tr>
+                  <td><code>closeTitleButton</code></td>
+                  <td><code>closeTitleClick</code></td>
+                  <td>sprite click</td>
+                  <td><code>closeTitle</code>送信</td>
+                </tr>
+                <tr>
+                  <td><code>closeTitleButton</code></td>
+                  <td><code>closeTitleShowTitle</code></td>
+                  <td><code>showTitle</code>受信</td>
+                  <td>表示</td>
+                </tr>
+                <tr>
+                  <td><code>closeTitleButton</code></td>
+                  <td><code>closeTitleHideMenu</code></td>
+                  <td><code>showMenu</code>受信</td>
+                  <td>非表示</td>
+                </tr>
+                <tr>
+                  <td><code>closeTitleButton</code></td>
+                  <td><code>closeTitleStartStory</code></td>
+                  <td><code>startStory</code>受信</td>
+                  <td>非表示</td>
                 </tr>
                 <tr>
                   <td><code>Loading</code></td>
@@ -1344,7 +1555,7 @@
                   <td><code>exec scene # %s with %s</code></td>
                   <td><code>sceneIndex</code>, <code>sceneData</code></td>
                   <td>no</td>
-                  <td><code>selectValue # %s separated by %s from %s</code>, <code>substr of %s after %s</code>, <code>exec command %s %s</code>, <code>exec actionList</code>, <code>hide all actors</code>; <code>invalidScript</code></td>
+                  <td>scene skip中もcommandを末尾まで解析し、<code>exec actionList</code>、<code>hide all actors</code>; <code>invalidScript</code></td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -1352,7 +1563,7 @@
                   <td><code>exec actionList</code></td>
                   <td>—</td>
                   <td>no</td>
-                  <td><code>exec action %s</code></td>
+                  <td>通常は<code>exec action %s</code>、scene skip中は<code>bgm</code>と<code>transition</code>だけを台本順に実行</td>
                 </tr>
                 <tr>
                   <td><code>Stage</code></td>
@@ -1531,7 +1742,7 @@
             <tbody>
               <tr>
                 <td>green flag</td>
-                <td>初期化 → camera／pose停止 → actor非表示 → <code>showTitle</code></td>
+                <td>保存済みUI言語または標準<code>（言語）</code>を判定 → app shell文言初期化 → camera／pose停止 → actor非表示 → <code>showTitle</code></td>
               </tr>
               <tr>
                 <td><code>startStory</code></td>
@@ -1551,7 +1762,7 @@
               </tr>
               <tr>
                 <td>pose action</td>
-                <td>camera preview／pose認識開始 → <code>setPoseRecognitionSound</code>指定音を再生 → <code>exec pose %s</code>反復 →音声／認識停止 → prompt非表示</td>
+                <td>camera preview／pose認識開始 → 第1音を再生 → <code>exec pose %s</code>反復（条件成立時は第2音を「ポーズ認識」更新前に再生）→音声／認識停止 → prompt非表示</td>
               </tr>
               <tr>
                 <td>asset loading</td>
@@ -1599,21 +1810,33 @@
               </tr>
               <tr>
                 <td><code>hideMenu</code></td>
-                <td>3つのmenu button</td>
-                <td>3つのmenu button</td>
-                <td>menuを一括非表示</td>
+                <td>menu／言語選択button</td>
+                <td>menu／言語選択button</td>
+                <td>menuと選択肢を一括非表示</td>
               </tr>
               <tr>
                 <td><code>showMenu</code></td>
+                <td><code>Stage</code>、言語選択button</td>
+                <td>4つのmenu button、Title用2ボタン</td>
+                <td>利用可能なmenuを表示しTitle用ボタンを隠す</td>
+              </tr>
+              <tr>
+                <td><code>showLanguageMenu</code></td>
+                <td><code>languageButton</code></td>
+                <td>2つの言語選択button</td>
+                <td><code>日本語</code>と<code>English</code>の選択肢を表示</td>
+              </tr>
+              <tr>
+                <td><code>languageChanged</code></td>
+                <td><code>Stage</code>、2つの言語選択button</td>
                 <td><code>Stage</code></td>
-                <td>3つのmenu button</td>
-                <td>利用可能なmenuを表示</td>
+                <td>app shellの予約済みテキストを選択言語へ更新</td>
               </tr>
               <tr>
                 <td><code>startStory</code></td>
                 <td><code>Stage</code>, <code>openButton</code>, <code>reloadButton</code></td>
-                <td><code>Stage</code></td>
-                <td>台本の解析・実行を開始</td>
+                <td><code>Stage</code>、Title用2ボタン</td>
+                <td>台本の解析・実行を開始しTitle用ボタンを隠す</td>
               </tr>
               <tr>
                 <td><code>stopStory</code></td>
@@ -1630,8 +1853,14 @@
               <tr>
                 <td><code>showTitle</code></td>
                 <td><code>Stage</code>, <code>showTitleButton</code></td>
+                <td><code>Stage</code>、Title用2ボタン</td>
+                <td>title状態へ戻しTitle用ボタンを表示する</td>
+              </tr>
+              <tr>
+                <td><code>closeTitle</code></td>
+                <td><code>Stage</code>, <code>closeTitleButton</code></td>
                 <td><code>Stage</code></td>
-                <td>title状態へ戻す</td>
+                <td>Stage clickと閉じるボタンの遷移を共通化する</td>
               </tr>
               <tr>
                 <td><code>execActorAction</code></td>
@@ -1721,7 +1950,7 @@
               <tr>
                 <td>title</td>
                 <td><code>showTitle</code></td>
-                <td>組み込み台本ならStage clickで<code>startStory</code>、それ以外はcover</td>
+                <td>Stage clickまたは右上の閉じるボタン。組み込み台本なら<code>startStory</code>、それ以外はcover</td>
               </tr>
               <tr>
                 <td>cover／menu</td>
@@ -1769,6 +1998,13 @@
             <code>skipMode</code>は要求、<code>skipContext</code>は消費可能な境界です。要求はtitle、action、pose、sceneの
             該当境界だけが消費し、scene開始、cover、stopでclearします。<code>nextSceneLabel</code>はkey／touch
             listenerが設定し、scene loopがlabelをindexへ解決したあと削除します。
+          </p>
+          <p>
+            <code>skipMode=scene</code>では、scene parserは残りのcommandを解析してaction listを完成させます。
+            action loopは<code>bgm</code>と<code>transition</code>だけを選択して台本順に高速実行し、それ以外を読み飛ばします。
+            transitionの反復待ちは<code>skipMode</code>の存在で終了しますが、最後の明るさ設定は必ず実行します。
+            <code>bgm</code>はscene skip中も開始でき、down arrow handlerは全音声を停止せず、現在の<code>sound</code>だけを
+            停止します。これにより、すでに再生中またはシーン残部で開始したBGMを次sceneへ引き継ぎます。
           </p>
         </section>
       </section>
