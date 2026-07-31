@@ -98,13 +98,13 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 
 | 項目                     | 件数 |
 | ------------------------ | ---: |
-| target（Stageを含む）    |    9 |
-| block                    | 1518 |
-| event hat                |   44 |
+| target（Stageを含む）    |   10 |
+| block                    | 1530 |
+| event hat                |   50 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
 | Scratch list             |   11 |
-| broadcast message        |   18 |
+| broadcast message        |   19 |
 | 静的なruntime variable名 |   18 |
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   13 |
@@ -160,13 +160,14 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 | `reloadButton`          | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                    |
 | `showTitleButton`       | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                    |
 | `officialWebsiteButton` | UI sprite  | titleのバージョン表記右側から公式Webサイトを開く                    | `official-website-button`           |
+| `closeTitleButton`      | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                |
 | `Loading`               | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                 |
 | `LoadingBubbleAnchor`   | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`             |
 
 `Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、3つのmenu button、
 `Loading`、`LoadingBubbleAnchor`の実画像は、台本の`ui.*`設定または組み込みfallbackから
-Asset Managerへ登録します。`officialWebsiteButton`はSB3に固定costumeを持ち、クリック時の
-リンク先には`package.json`の`homepage`を設定します。
+Asset Managerへ登録します。`officialWebsiteButton`と`closeTitleButton`はSB3に固定costumeを
+持ちます。公式Webボタンのリンク先には`package.json`の`homepage`を設定します。
 
 ### アクターへ命令を届けるしくみ {#actor-message-delivery}
 
@@ -356,20 +357,21 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### Stage
 
-| target  | ID   | trigger               | 実行される内容                                                                                |
-| ------- | ---- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `Stage` | `iM` | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
-| `Stage` | `i;` | key `space`           | `showCover`送信                                                                               |
-| `Stage` | `i}` | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
-| `Stage` | `jb` | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
-| `Stage` | `jX` | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
-| `Stage` | `j/` | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
-| `Stage` | `j?` | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
-| `Stage` | `kD` | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
-| `Stage` | `l=` | Stage click           | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
-| `Stage` | `l[` | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
-| `Stage` | `m~` | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
-| `Stage` | `nx` | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
+| target  | ID              | trigger               | 実行される内容                                                                                |
+| ------- | --------------- | --------------------- | --------------------------------------------------------------------------------------------- |
+| `Stage` | `iM`            | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
+| `Stage` | `i;`            | key `space`           | `showCover`送信                                                                               |
+| `Stage` | `i}`            | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
+| `Stage` | `jb`            | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
+| `Stage` | `jX`            | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
+| `Stage` | `j/`            | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
+| `Stage` | `j?`            | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
+| `Stage` | `kD`            | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
+| `Stage` | `l=`            | Stage click           | `closeTitle`送信                                                                              |
+| `Stage` | `titleCloseHat` | `closeTitle`受信      | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
+| `Stage` | `l[`            | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
+| `Stage` | `m~`            | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
+| `Stage` | `nx`            | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
 
 #### Actor
 
@@ -404,6 +406,11 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `officialWebsiteButton` | `officialWebsiteShowTitle`  | `showTitle`受信             | 表示                                       |
 | `officialWebsiteButton` | `officialWebsiteHideMenu`   | `showMenu`受信              | 非表示                                     |
 | `officialWebsiteButton` | `officialWebsiteStartStory` | `startStory`受信            | 非表示                                     |
+| `closeTitleButton`      | `closeTitleFlag`            | green flag                  | 右上に表示                                 |
+| `closeTitleButton`      | `closeTitleClick`           | sprite click                | `closeTitle`送信                           |
+| `closeTitleButton`      | `closeTitleShowTitle`       | `showTitle`受信             | 表示                                       |
+| `closeTitleButton`      | `closeTitleHideMenu`        | `showMenu`受信              | 非表示                                     |
+| `closeTitleButton`      | `closeTitleStartStory`      | `startStory`受信            | 非表示                                     |
 | `Loading`               | `pf`                        | green flag                  | 非表示                                     |
 | `Loading`               | `pm`                        | `assetLoadingStarted`受信   | Loading costumeを表示                      |
 | `Loading`               | `pj`                        | `assetLoadingProgress`受信  | costumeを循環                              |
@@ -498,26 +505,27 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### message一覧
 
-| message                  | 主な送信者                            | 受信者                                    | 役割                                        |
-| ------------------------ | ------------------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `showPrompt`             | `Stage`                               | `prompt`                                  | 操作・pose案内を表示                        |
-| `hidePrompt`             | `Stage`                               | `prompt`                                  | 案内を非表示                                |
-| `invalidScript`          | `Stage`                               | `prompt`                                  | 台本エラーを表示                            |
-| `hideMenu`               | 3つのmenu button                      | 3つのmenu button                          | menuを一括非表示                            |
-| `showMenu`               | `Stage`                               | 3つのmenu button、`officialWebsiteButton` | 利用可能なmenuを表示し公式Webボタンを隠す   |
-| `startStory`             | `Stage`, `openButton`, `reloadButton` | `Stage`, `officialWebsiteButton`          | 台本の解析・実行を開始し公式Webボタンを隠す |
-| `stopStory`              | `Stage`                               | `Stage`                                   | 実行を停止しcoverへ戻す                     |
-| `showCover`              | `Stage`                               | `Stage`                                   | coverを構築してmenuを表示                   |
-| `showTitle`              | `Stage`, `showTitleButton`            | `Stage`, `officialWebsiteButton`          | title状態へ戻し公式Webボタンを表示する      |
-| `execActorAction`        | `Stage`                               | `Actor`                                   | action envelopeをcloneへ通知                |
-| `deleteAllActors`        | `Stage`                               | `Actor`                                   | 全cloneを削除                               |
-| `assetLoadingStarted`    | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor`          | Loading表示を開始                           |
-| `assetLoadingProgress`   | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor`          | 進捗costumeとmessageを更新                  |
-| `assetLoadingCompleted`  | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor`          | Loading表示を終了                           |
-| `stopKeyInput`           | Async Input                           | `Stage`                                   | key listenerを停止                          |
-| `stopTouchInput`         | Async Input                           | `Stage`                                   | touch listenerを停止                        |
-| `finishTimedActorAction` | `Stage`のRight／Down key hat          | `Actor`                                   | 時間actionを確定状態へ進める                |
-| `debugTestCamera`        | TurboWarp editorからの手動送信        | `Stage`                                   | camera previewの診断                        |
+| message                  | 主な送信者                            | 受信者                           | 役割                                        |
+| ------------------------ | ------------------------------------- | -------------------------------- | ------------------------------------------- |
+| `showPrompt`             | `Stage`                               | `prompt`                         | 操作・pose案内を表示                        |
+| `hidePrompt`             | `Stage`                               | `prompt`                         | 案内を非表示                                |
+| `invalidScript`          | `Stage`                               | `prompt`                         | 台本エラーを表示                            |
+| `hideMenu`               | 3つのmenu button                      | 3つのmenu button                 | menuを一括非表示                            |
+| `showMenu`               | `Stage`                               | 3つのmenu button、Title用2ボタン | 利用可能なmenuを表示しTitle用ボタンを隠す   |
+| `startStory`             | `Stage`, `openButton`, `reloadButton` | `Stage`、Title用2ボタン          | 台本の解析・実行を開始しTitle用ボタンを隠す |
+| `stopStory`              | `Stage`                               | `Stage`                          | 実行を停止しcoverへ戻す                     |
+| `showCover`              | `Stage`                               | `Stage`                          | coverを構築してmenuを表示                   |
+| `showTitle`              | `Stage`, `showTitleButton`            | `Stage`、Title用2ボタン          | title状態へ戻しTitle用ボタンを表示する      |
+| `closeTitle`             | `Stage`, `closeTitleButton`           | `Stage`                          | Stage clickと閉じるボタンの遷移を共通化する |
+| `execActorAction`        | `Stage`                               | `Actor`                          | action envelopeをcloneへ通知                |
+| `deleteAllActors`        | `Stage`                               | `Actor`                          | 全cloneを削除                               |
+| `assetLoadingStarted`    | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を開始                           |
+| `assetLoadingProgress`   | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | 進捗costumeとmessageを更新                  |
+| `assetLoadingCompleted`  | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を終了                           |
+| `stopKeyInput`           | Async Input                           | `Stage`                          | key listenerを停止                          |
+| `stopTouchInput`         | Async Input                           | `Stage`                          | touch listenerを停止                        |
+| `finishTimedActorAction` | `Stage`のRight／Down key hat          | `Actor`                          | 時間actionを確定状態へ進める                |
+| `debugTestCamera`        | TurboWarp editorからの手動送信        | `Stage`                          | camera previewの診断                        |
 
 `stopKeyInput`と`stopTouchInput`は標準broadcast blockではなく、Async Inputへ渡した
 callback messageです。`debugTestCamera`は通常フローに送信元を持たない診断用messageです。
@@ -529,17 +537,17 @@ callback messageです。`debugTestCamera`は通常フローに送信元を持�
 主要状態はStageが所有します。UI表示そのものを状態の正本にせず、runtime variable、
 broadcast、実行中のcustom blockから導出します。
 
-| 状態                     | 入口                                              | 主な出口                                                             |
-| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------------- |
-| 初期化                   | green flag                                        | `showTitle`                                                          |
-| title                    | `showTitle`                                       | 組み込み台本ならStage clickで`startStory`、それ以外はcover           |
-| cover／menu              | `showCover`または`stopStory`                      | open／reloadで`startStory`、title buttonで`showTitle`                |
-| 台本準備                 | `startStory`                                      | 正常ならasset loadingとscene実行、検証異常なら`invalidScript`        |
-| asset loading            | `create asset`                                    | `assetLoadingCompleted`後にscene実行                                 |
-| scene実行                | `exec scene # %s with %s`                         | 次scene／branch、最終sceneで`stopStory`、解析異常で`invalidScript`   |
-| action実行               | `exec actionList`                                 | Rightでaction境界、Downでscene境界、完了で次action                   |
-| pose待機                 | `exec pose action %s`                             | pose成立、Right／Downでaction実行へ戻る                              |
-| 台本エラー表示・実行停止 | 台本・command・scene解析エラー時の`invalidScript` | `prompt`が`ui.invalidScript`を表示し、送信元の`stop all`で実行を停止 |
+| 状態                     | 入口                                              | 主な出口                                                                           |
+| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 初期化                   | green flag                                        | `showTitle`                                                                        |
+| title                    | `showTitle`                                       | Stage clickまたは右上の閉じるボタン。組み込み台本なら`startStory`、それ以外はcover |
+| cover／menu              | `showCover`または`stopStory`                      | open／reloadで`startStory`、title buttonで`showTitle`                              |
+| 台本準備                 | `startStory`                                      | 正常ならasset loadingとscene実行、検証異常なら`invalidScript`                      |
+| asset loading            | `create asset`                                    | `assetLoadingCompleted`後にscene実行                                               |
+| scene実行                | `exec scene # %s with %s`                         | 次scene／branch、最終sceneで`stopStory`、解析異常で`invalidScript`                 |
+| action実行               | `exec actionList`                                 | Rightでaction境界、Downでscene境界、完了で次action                                 |
+| pose待機                 | `exec pose action %s`                             | pose成立、Right／Downでaction実行へ戻る                                            |
+| 台本エラー表示・実行停止 | 台本・command・scene解析エラー時の`invalidScript` | `prompt`が`ui.invalidScript`を表示し、送信元の`stop all`で実行を停止               |
 
 `invalidScript`はpose待機への遷移ではありません。Stageは台本検証、command解析、
 scene解析のエラー時にこのmessageを送信し、各送信箇所の直後に`stop all`を実行します。

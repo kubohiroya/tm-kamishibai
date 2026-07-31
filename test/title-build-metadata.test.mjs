@@ -76,7 +76,7 @@ test('embeds package version and build date into the Title SVG without changing 
   assert.equal(
     [
       ...titleSvg.matchAll(
-        /<text transform="translate\((?:220\.36368,144\.13592|234\.61368,186)\)[^>]+text-anchor="middle">/gu,
+        /<text transform="translate\((?:220\.36368,144\.13592|190\.11368,186)\)[^>]+text-anchor="middle">/gu,
       ),
     ].length,
     2,
@@ -84,7 +84,7 @@ test('embeds package version and build date into the Title SVG without changing 
   assert.equal(createHash('md5').update(titleSvg).digest('hex'), titleCostume.assetId);
   assert.equal(titleCostume.md5ext, `${titleCostume.assetId}.svg`);
   assert(archive[titleCostume.md5ext]);
-  assert.equal(archive['a6def471fe6d8cc332d331c56a0b2483.svg'], undefined);
+  assert.equal(archive['1ae83bbde362a1bc85eea4d67263e794.svg'], undefined);
   await assert.rejects(access(built.source.resolvedSourceDirectory));
 
   const [projectSourceAfter, sourceManifestAfter, assetFilenamesAfter] = await Promise.all([

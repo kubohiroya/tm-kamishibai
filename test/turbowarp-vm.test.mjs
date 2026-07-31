@@ -96,6 +96,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'reloadButton',
       'showTitleButton',
       'officialWebsiteButton',
+      'closeTitleButton',
       'Loading',
       'LoadingBubbleAnchor',
     ],
@@ -122,6 +123,10 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
     harness.getSprite('officialWebsiteButton').getCostumes().map((costume) => costume.name),
     ['official-website-button'],
   );
+  assert.deepEqual(
+    harness.getSprite('closeTitleButton').getCostumes().map((costume) => costume.name),
+    ['title-close-button'],
+  );
 });
 
 test('shows the official website button only on Title and opens the package homepage', async (context) => {
@@ -130,8 +135,9 @@ test('shows the official website button only on Title and opens the package home
 
   harness.greenFlag();
   const button = harness.getSprite('officialWebsiteButton');
-  harness.runUntil(() => button.visible);
-  assert.equal(button.x, 186);
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  assert.equal(button.visible, true);
+  assert.equal(button.x, 142);
   assert.equal(button.y, 0);
 
   harness.clickSprite('officialWebsiteButton');
@@ -144,6 +150,25 @@ test('shows the official website button only on Title and opens the package home
 
   await startFixture(harness);
   assert.equal(button.visible, false);
+});
+
+test('closes Title from the top-right close button using the same flow as a Stage click', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  const closeButton = harness.getSprite('closeTitleButton');
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  assert.equal(closeButton.visible, true);
+  assert.equal(closeButton.x, 220);
+  assert.equal(closeButton.y, 160);
+
+  harness.clickSprite('closeTitleButton');
+  harness.runUntil(() => harness.getSprite('openButton').visible);
+
+  assert.equal(closeButton.visible, false);
+  assert.equal(harness.getSprite('officialWebsiteButton').visible, false);
+  assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
 test('prioritizes the loading backdrop and costumes and reports only regular asset progress', async (context) => {

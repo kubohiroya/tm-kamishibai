@@ -94,7 +94,8 @@
         "BRhWRQ@e}Fz5h^/o!V%x": "showTitle",
         "pwe#tOp,Y8--.RyMz=P~": "stopKeyInput",
         "HCH~21s%Au+vmI33ZwE#": "stopTouchInput",
-        "skipFinishTimedActor": "finishTimedActorAction"
+        "skipFinishTimedActor": "finishTimedActorAction",
+        "closeTitleMessage": "closeTitle"
       },
       "blocks": {
         "iM": {
@@ -15081,7 +15082,7 @@
         },
         "l=": {
           "opcode": "event_whenstageclicked",
-          "next": "bI",
+          "next": "titleStageClickClose",
           "parent": null,
           "inputs": {},
           "fields": {},
@@ -15090,10 +15091,44 @@
           "x": 3210,
           "y": 1532
         },
+        "titleStageClickClose": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "l=",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleCloseHat": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "bI",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "closeTitle",
+              "closeTitleMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 3480,
+          "y": 1532
+        },
         "bI": {
           "opcode": "control_if",
           "next": null,
-          "parent": "l=",
+          "parent": "titleCloseHat",
           "inputs": {
             "CONDITION": [
               2,
@@ -24411,8 +24446,8 @@
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "a6def471fe6d8cc332d331c56a0b2483",
-          "md5ext": "a6def471fe6d8cc332d331c56a0b2483.svg",
+          "assetId": "1ae83bbde362a1bc85eea4d67263e794",
+          "md5ext": "1ae83bbde362a1bc85eea4d67263e794.svg",
           "rotationCenterX": 211.69123114420535,
           "rotationCenterY": 92.66949826877153
         },
@@ -30131,8 +30166,164 @@
       "volume": 100,
       "layerOrder": 10,
       "visible": true,
-      "x": 186,
+      "x": 142,
       "y": 0,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "closeTitleButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "closeTitleFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "closeTitleFlagShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "closeTitleFlagShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "closeTitleFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "closeTitleClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "closeTitleBroadcast",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "closeTitleBroadcast": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "closeTitleClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "closeTitleShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "closeTitleTitleShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "closeTitleTitleShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "closeTitleShowTitle",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "closeTitleHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "closeTitleMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "closeTitleMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "closeTitleHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "closeTitleStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "closeTitleStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "closeTitleStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "closeTitleStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "title-close-button",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "1d2c326092fa3c0521eeb6008c3c4c87",
+          "md5ext": "1d2c326092fa3c0521eeb6008c3c4c87.svg",
+          "rotationCenterX": 15,
+          "rotationCenterY": 15
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 11,
+      "visible": true,
+      "x": 220,
+      "y": 160,
       "size": 100,
       "direction": 90,
       "draggable": false,
