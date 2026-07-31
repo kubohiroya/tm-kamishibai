@@ -3,8 +3,6 @@ import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
-import {createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
-
 import {
   documentConfig,
   generalDocumentConfig,
@@ -12,6 +10,8 @@ import {
   staffDocumentConfig,
 } from '../docs/config.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
+import {createKamishibaiSb3} from './sb3/build.mjs';
+import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
@@ -35,7 +35,6 @@ const downloadSourceDirectory = path.join(projectRoot, 'site/downloads');
 const downloadDirectory = path.join(projectRoot, 'dist/downloads');
 const downloadIndexPath = path.join(downloadDirectory, 'index.html');
 const downloadPath = path.join(downloadDirectory, downloadFilename);
-const sb3SourceDirectory = path.join(projectRoot, 'app');
 const docsIndexPath = path.join(docsDirectory, 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
@@ -233,7 +232,7 @@ async function verifySiteIndex() {
   'The retired standalone top-page button group remains.');
 }
 
-async function verifyDownloads() {
+async function verifyDownloads(titleBuildMetadata) {
   const html = await readFile(downloadIndexPath, 'utf8');
   const links = await verifyLocalReferences(downloadIndexPath, 'a', 'href');
   const [
@@ -241,14 +240,27 @@ async function verifyDownloads() {
     publishedEntries,
     publishedArchive,
     archiveStat,
-    expectedBuild,
+    packageJsonSource,
   ] = await Promise.all([
     readdir(downloadSourceDirectory, {withFileTypes: true}),
     readdir(downloadDirectory, {withFileTypes: true}),
     readFile(downloadPath),
     stat(downloadPath),
-    createDeterministicSb3(sb3SourceDirectory),
+    readFile(packageJsonPath, 'utf8'),
   ]);
+  const publishedMetadata = readTitleBuildMetadataFromSb3(publishedArchive);
+  const packageJson = JSON.parse(packageJsonSource);
+  assert(publishedMetadata.version === packageJson.version,
+    `The published SB3 version ${publishedMetadata.version} differs from package.json ${packageJson.version}.`);
+  if (titleBuildMetadata) {
+    assert(publishedMetadata.buildDate === titleBuildMetadata.buildDate
+        && publishedMetadata.version === titleBuildMetadata.version,
+    'The published SB3 metadata differs from the current build metadata.');
+  }
+  const expectedBuild = await createKamishibaiSb3({
+    buildDate: publishedMetadata.buildDate,
+    version: publishedMetadata.version,
+  });
   const sourceSb3Files = sourceEntries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sb3'))
     .map((entry) => entry.name);
@@ -599,7 +611,7 @@ async function verifyStaffDocument() {
   return {imageCount: contentImages.length, pageCount};
 }
 
-export async function verifyBuild() {
+export async function verifyBuild({titleBuildMetadata} = {}) {
   const grade = resolveLearnedThroughGrade();
   const buildInfo = JSON.parse(await readFile(buildInfoPath, 'utf8'));
   const publicationManifest = JSON.parse(await readFile(publicationManifestPath, 'utf8'));
@@ -632,7 +644,7 @@ export async function verifyBuild() {
     () => false,
   );
   await verifySiteIndex();
-  const downloadResults = await verifyDownloads();
+  const downloadResults = await verifyDownloads(titleBuildMetadata);
   const generalResults = await verifyGeneralDocuments(grade);
   const staffResults = await verifyStaffDocument();
   const faviconHtmlCount = await verifyFavicon();

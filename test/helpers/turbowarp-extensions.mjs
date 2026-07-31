@@ -101,6 +101,7 @@ export function registerKamishibaiTestExtensions(
     loadingAssetCount: 0,
     loadingBackdrop: '',
     loadingCostumes: [],
+    openedUrls: [],
     playingSounds: new Set(),
     poseMatches: false,
     poseScore: 0,
@@ -691,6 +692,17 @@ export function registerKamishibaiTestExtensions(
     }
   }
 
+  class WebLinkExtension {
+    getInfo() {
+      return extensionInfo('kubohiroyaweblink', [
+        block('openUrl', BlockType.COMMAND, ['URL']),
+      ]);
+    }
+    openUrl(args) {
+      state.openedUrls.push(Cast.toString(args.URL));
+    }
+  }
+
   register(vm, 'sipcconsole', ConsoleExtension);
   register(vm, 'lmsTempVars2', TempVariablesExtension);
   register(vm, 'strings', StringsExtension);
@@ -711,6 +723,7 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'lmsTimers', TimersExtension);
   register(vm, 'files', FilesExtension);
   register(vm, 'text', TextExtension);
+  register(vm, 'kubohiroyaweblink', WebLinkExtension);
 
   return state;
 }

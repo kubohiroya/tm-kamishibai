@@ -75,6 +75,13 @@
         "artifact": "dist/async-input.js",
         "integrity": "sha256-v3WTD7pisLDgiVgtcXwRXS7tIj6tQEdw85yhSFXn58s="
       }
+    },
+    {
+      "id": "kubohiroyaweblink",
+      "path": "extensions/kubohiroyaweblink.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64"
     }
   ]
 }

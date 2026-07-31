@@ -55,6 +55,13 @@ export class KamishibaiVmHarness {
     this.step();
   }
 
+  clickSprite(name) {
+    const sprite = this.getSprite(name);
+    if (!sprite) throw new Error(`Sprite not found: ${name}`);
+    this.vm.runtime.startHats('event_whenthisspriteclicked', null, sprite);
+    this.step();
+  }
+
   triggerAsyncKey(keyId) {
     this.extensionState.asyncInput.emitKey(keyId);
     this.step();
