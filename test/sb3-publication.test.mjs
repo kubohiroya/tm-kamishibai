@@ -77,7 +77,7 @@ test('links and documents the generated downloadable SB3', async () => {
   );
   assert.match(
     readme,
-    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.4/u,
+    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.5/u,
     'README installation must use the current fixed npm version.',
   );
   assert.match(
