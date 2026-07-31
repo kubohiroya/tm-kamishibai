@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const urashimaWebUrl =
+  'https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/';
 
 test('keeps static distribution sources free of SB3 binaries', async () => {
   const downloadEntries = await readdir(path.join(projectRoot, 'site/downloads'));
@@ -148,6 +150,17 @@ test('renders the top-page download version from package metadata', async () => 
       ),
     /found 2/u,
   );
+});
+
+test('opens the Urashima web sample from the top-page Web card', async () => {
+  const siteIndex = await readFile(path.join(projectRoot, 'site/index.html'), 'utf8');
+  const webCard = siteIndex.match(
+    /<a class="content-card" href="([^"]+)">\s*<h3 class="card-heading">[\s\S]*?Web版を開く<\/h3>/u,
+  );
+
+  assert(webCard, 'The top-page Web card is missing.');
+  assert.equal(webCard[1], urashimaWebUrl);
+  assert.doesNotMatch(siteIndex, /https:\/\/sqs\.prof\.cuc\.ac\.jp\/kamishibai\//u);
 });
 
 test('links the public sample site without restoring the retired local page', async () => {
