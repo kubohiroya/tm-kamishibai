@@ -98,9 +98,9 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 
 | 項目                     | 件数 |
 | ------------------------ | ---: |
-| target（Stageを含む）    |   13 |
-| block                    | 1636 |
-| event hat                |   63 |
+| target（Stageを含む）    |   20 |
+| block                    | 1751 |
+| event hat                |   98 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
 | Scratch list             |   11 |
@@ -152,34 +152,50 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 
 ### target一覧
 
-| target                   | 種別       | 役割                                                                | 初期costume／sound                                      |
-| ------------------------ | ---------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
-| `Stage`                  | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `Title-en`, `Stars`, `LoadingBackdrop`         |
-| `Actor`                  | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                                     |
-| `prompt`                 | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`                                        |
-| `openButton`             | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                                        |
-| `reloadButton`           | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                                        |
-| `showTitleButton`        | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                                        |
-| `languageButton`         | UI sprite  | menu末尾から言語選択画面を開く                                      | `ui-placeholder`                                        |
-| `japaneseLanguageButton` | UI sprite  | UI言語を日本語に変更して保存                                        | `ui-placeholder`                                        |
-| `englishLanguageButton`  | UI sprite  | UI言語を英語に変更して保存                                          | `ui-placeholder`                                        |
-| `officialWebsiteButton`  | UI sprite  | titleの3行目から公式Webサイトを開く                                 | `official-website-button`, `official-website-button-en` |
-| `closeTitleButton`       | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                                    |
-| `Loading`                | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                                     |
-| `LoadingBubbleAnchor`    | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`                                 |
+| target                    | 種別       | 役割                                                                | 初期costume／sound                                  |
+| ------------------------- | ---------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `Stage`                   | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `TitleRuntime`, `Stars`, `LoadingBackdrop` |
+| `Actor`                   | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                                 |
+| `prompt`                  | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`                                    |
+| `openButton`              | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                                    |
+| `reloadButton`            | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                                    |
+| `showTitleButton`         | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                                    |
+| `languageButton`          | UI sprite  | menu末尾から言語選択画面を開く                                      | `ui-placeholder`                                    |
+| `japaneseLanguageButton`  | UI sprite  | UI言語を日本語に変更して保存                                        | `ui-placeholder`                                    |
+| `englishLanguageButton`   | UI sprite  | UI言語を英語に変更して保存                                          | `ui-placeholder`                                    |
+| `titleHeading`            | UI sprite  | `about.title`を実行時SVGテキストとして表示                          | `ui-placeholder`                                    |
+| `titleVersion`            | UI sprite  | versionとbuild dateを実行時SVGテキストとして表示                    | `ui-placeholder`                                    |
+| `titleLicenseApp`         | UI sprite  | `about.license.app`を実行時SVGテキストとして表示                    | `ui-placeholder`                                    |
+| `titleLicenseStory`       | UI sprite  | `about.license.story`を実行時SVGテキストとして表示                  | `ui-placeholder`                                    |
+| `titleAuthorOrganization` | UI sprite  | `about.author.organization`を実行時SVGテキストとして表示            | `ui-placeholder`                                    |
+| `titleAuthorName`         | UI sprite  | `about.author.name`とemailを実行時SVGテキストとして表示             | `ui-placeholder`                                    |
+| `officialWebsiteLabel`    | UI sprite  | 公式Webサイト名を実行時SVGテキストとして表示し、押下時に開く        | `ui-placeholder`                                    |
+| `officialWebsiteButton`   | UI sprite  | titleの3行目から公式Webサイトを開く                                 | 初期表示用／実行時表示用の言語非依存costume         |
+| `closeTitleButton`        | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                                |
+| `Loading`                 | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                                 |
+| `LoadingBubbleAnchor`     | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`                             |
 
-`Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`と6つのmenu／言語選択
-sprite、`Loading`、`LoadingBubbleAnchor`の実画像は、Asset Managerへ登録します。台本が定義する
+`Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、menu／言語選択sprite、
+title用テキストsprite、`Loading`、`LoadingBubbleAnchor`の実画像は、Asset Managerへ登録します。台本が定義する
 予約済みUIテキストは`ui.prompt`だけです。`ui.open`、`ui.reload`、`ui.about`、`ui.language`、
 `ui.invalidScript`はアプリの言語定義から設定します。
 
 アプリUIの定義元は`scripts/sb3/app-shell-locales.mjs`です。ロケール別の`about.title`、
 `about.officialWebsite.name`、`about.license.app`、`about.license.story`、
 `about.author.organization`、`about.author.name`と、共通の`about.officialWebsite.url`、
-`about.author.email`を、build時に日本語／英語のTitle背景と公式Webボタンcostumeへ埋め込みます。
-公式Webボタンには`site/favicon.png`も埋め込み、Webサイトと同じ浦島太郎のブランド画像を
-表示します。Title背景には、アプリのMPL-2.0と台本ファイル固有の利用条件を示す2行の
-ライセンス案内を表示します。
+`about.author.email`を、green flag後にAsset Managerの実行時SVGテキストとして表示します。
+versionとbuild dateはbuild時に`about.version`へ設定します。言語変更時は表示中の同じspriteの
+テキストskinを更新するため、ロケール別backdropは使用しません。
+
+title用テキストの配置と文字サイズはScratch標準のStage解像度である480×360を基準にします。
+長いライセンス文はロケール定義で明示的に2行へ分け、縮小表示に依存せず、タイトル、version、
+公式Webサイト名、ライセンス、開発者情報を480×360の画面上で読める大きさに保ちます。
+
+SB3読込直後からAsset Manager初期化完了まで、または初期化に失敗した場合にも画面を空に
+しないため、`Title`と`official-website-button`には英語の固定フォールバックをbuild時に
+埋め込みます。初期化が完了して`showTitle`を送ると、Stageは文字なしの`TitleRuntime`へ、
+公式Webボタンは文字なしの実行時costumeへ切り替え、title用テキストspriteを重ねます。
+公式Webボタンの両costumeには`site/favicon.png`を埋め込みます。
 
 green flag時はlocalStorageの`uiLanguage`が`ja`または`en`ならその値を優先します。未保存なら
 標準`translate`機能拡張の`（言語）` reporterが`日本語`、`ja`、`ja-JP`のいずれかを返す場合は
@@ -388,10 +404,10 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `Stage` | `kD`                   | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
 | `Stage` | `l=`                   | Stage click           | `closeTitle`送信                                                                              |
 | `Stage` | `titleCloseHat`        | `closeTitle`受信      | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
-| `Stage` | `l[`                   | `showTitle`受信       | 実行contextをclearし、`hidePrompt`, `deleteAllActors`送信                                     |
+| `Stage` | `l[`                   | `showTitle`受信       | `TitleRuntime`へ切替え、実行contextをclearし、`hidePrompt`, `deleteAllActors`送信             |
 | `Stage` | `m~`                   | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
 | `Stage` | `nx`                   | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
-| `Stage` | `uiLanguageChangedHat` | `languageChanged`受信 | `ui.open`、`ui.reload`、`ui.about`、`ui.language`、`ui.invalidScript`を選択言語で更新         |
+| `Stage` | `uiLanguageChangedHat` | `languageChanged`受信 | menuと`about.*`の実行時SVGテキストを選択言語で更新                                            |
 
 #### Actor
 
@@ -404,53 +420,60 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### UI sprite
 
-| target                   | ID                            | trigger                     | 実行される内容                                   |
-| ------------------------ | ----------------------------- | --------------------------- | ------------------------------------------------ |
-| `prompt`                 | `oS`                          | `showPrompt`受信            | 案内costumeを表示                                |
-| `prompt`                 | `oV`                          | `hidePrompt`受信            | 非表示                                           |
-| `prompt`                 | `oX`                          | `invalidScript`受信         | エラーcostumeを表示                              |
-| `openButton`             | `o!`                          | green flag                  | 非表示                                           |
-| `openButton`             | `o%`                          | sprite click                | file選択後に`hideMenu`, `startStory`送信         |
-| `openButton`             | `o*`                          | `hideMenu`受信              | 非表示                                           |
-| `openButton`             | `o,`                          | `showMenu`受信              | `ui.open` skinで表示                             |
-| `reloadButton`           | `o.`                          | green flag                  | 非表示                                           |
-| `reloadButton`           | `o:`                          | `hideMenu`受信              | 非表示                                           |
-| `reloadButton`           | `o=`                          | sprite click                | 保存済み台本で`hideMenu`, `startStory`送信       |
-| `reloadButton`           | `o[`                          | `showMenu`受信              | 台本が保存済みなら表示                           |
-| `showTitleButton`        | <code>o&#96;</code>           | green flag                  | 非表示                                           |
-| `showTitleButton`        | <code>o&#124;</code>          | `hideMenu`受信              | 非表示                                           |
-| `showTitleButton`        | `o~`                          | sprite click                | `hideMenu`, `showTitle`送信                      |
-| `showTitleButton`        | `pb`                          | `showMenu`受信              | title以外なら表示                                |
-| `languageButton`         | `languageButtonFlag`          | green flag                  | 非表示                                           |
-| `languageButton`         | `languageButtonHideMenu`      | `hideMenu`受信              | 非表示                                           |
-| `languageButton`         | `languageButtonShowMenu`      | `showMenu`受信              | `ui.language` skinで表示                         |
-| `languageButton`         | `languageButtonClick`         | sprite click                | `hideMenu`後に`showLanguageMenu`送信             |
-| `japaneseLanguageButton` | `japaneseLanguageFlag`        | green flag                  | 非表示                                           |
-| `japaneseLanguageButton` | `japaneseLanguageHideMenu`    | `hideMenu`受信              | 非表示                                           |
-| `japaneseLanguageButton` | `japaneseLanguageShowChoices` | `showLanguageMenu`受信      | 現在値なら`✓ 日本語`、それ以外は`日本語`を表示   |
-| `japaneseLanguageButton` | `japaneseLanguageClick`       | sprite click                | `uiLanguage=ja`を保存・適用しmenuへ戻る          |
-| `englishLanguageButton`  | `englishLanguageFlag`         | green flag                  | 非表示                                           |
-| `englishLanguageButton`  | `englishLanguageHideMenu`     | `hideMenu`受信              | 非表示                                           |
-| `englishLanguageButton`  | `englishLanguageShowChoices`  | `showLanguageMenu`受信      | 現在値なら`✓ English`、それ以外は`English`を表示 |
-| `englishLanguageButton`  | `englishLanguageClick`        | sprite click                | `uiLanguage=en`を保存・適用しmenuへ戻る          |
-| `officialWebsiteButton`  | `officialWebsiteFlag`         | green flag                  | 非表示                                           |
-| `officialWebsiteButton`  | `officialWebsiteClick`        | sprite click                | 公式Webサイトを新しいタブで開く                  |
-| `officialWebsiteButton`  | `officialWebsiteShowTitle`    | `showTitle`受信             | 選択言語のcostumeへ切り替えて表示                |
-| `officialWebsiteButton`  | `officialWebsiteHideMenu`     | `showMenu`受信              | 非表示                                           |
-| `officialWebsiteButton`  | `officialWebsiteStartStory`   | `startStory`受信            | 非表示                                           |
-| `closeTitleButton`       | `closeTitleFlag`              | green flag                  | 右上に表示                                       |
-| `closeTitleButton`       | `closeTitleClick`             | sprite click                | `closeTitle`送信                                 |
-| `closeTitleButton`       | `closeTitleShowTitle`         | `showTitle`受信             | 表示                                             |
-| `closeTitleButton`       | `closeTitleHideMenu`          | `showMenu`受信              | 非表示                                           |
-| `closeTitleButton`       | `closeTitleStartStory`        | `startStory`受信            | 非表示                                           |
-| `Loading`                | `pf`                          | green flag                  | 非表示                                           |
-| `Loading`                | `pm`                          | `assetLoadingStarted`受信   | Loading costumeを表示                            |
-| `Loading`                | `pj`                          | `assetLoadingProgress`受信  | costumeを循環                                    |
-| `Loading`                | `ph`                          | `assetLoadingCompleted`受信 | 非表示、完了sound                                |
-| `LoadingBubbleAnchor`    | `loadingBubbleFlag`           | green flag                  | 非表示、bubbleをclear                            |
-| `LoadingBubbleAnchor`    | `loadingBubbleStarted`        | `assetLoadingStarted`受信   | anchorを表示                                     |
-| `LoadingBubbleAnchor`    | `loadingBubbleProgress`       | `assetLoadingProgress`受信  | runtime variable `message`をsay                  |
-| `LoadingBubbleAnchor`    | `loadingBubbleCompleted`      | `assetLoadingCompleted`受信 | bubbleをclearして非表示                          |
+| target                    | ID                                                                                                                                                                        | trigger                               | 実行される内容                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `prompt`                  | `oS`                                                                                                                                                                      | `showPrompt`受信                      | 案内costumeを表示                                     |
+| `prompt`                  | `oV`                                                                                                                                                                      | `hidePrompt`受信                      | 非表示                                                |
+| `prompt`                  | `oX`                                                                                                                                                                      | `invalidScript`受信                   | エラーcostumeを表示                                   |
+| `openButton`              | `o!`                                                                                                                                                                      | green flag                            | 非表示                                                |
+| `openButton`              | `o%`                                                                                                                                                                      | sprite click                          | file選択後に`hideMenu`, `startStory`送信              |
+| `openButton`              | `o*`                                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
+| `openButton`              | `o,`                                                                                                                                                                      | `showMenu`受信                        | `ui.open` skinで表示                                  |
+| `reloadButton`            | `o.`                                                                                                                                                                      | green flag                            | 非表示                                                |
+| `reloadButton`            | `o:`                                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
+| `reloadButton`            | `o=`                                                                                                                                                                      | sprite click                          | 保存済み台本で`hideMenu`, `startStory`送信            |
+| `reloadButton`            | `o[`                                                                                                                                                                      | `showMenu`受信                        | 台本が保存済みなら表示                                |
+| `showTitleButton`         | <code>o&#96;</code>                                                                                                                                                       | green flag                            | 非表示                                                |
+| `showTitleButton`         | <code>o&#124;</code>                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
+| `showTitleButton`         | `o~`                                                                                                                                                                      | sprite click                          | `hideMenu`, `showTitle`送信                           |
+| `showTitleButton`         | `pb`                                                                                                                                                                      | `showMenu`受信                        | title以外なら表示                                     |
+| `languageButton`          | `languageButtonFlag`                                                                                                                                                      | green flag                            | 非表示                                                |
+| `languageButton`          | `languageButtonHideMenu`                                                                                                                                                  | `hideMenu`受信                        | 非表示                                                |
+| `languageButton`          | `languageButtonShowMenu`                                                                                                                                                  | `showMenu`受信                        | `ui.language` skinで表示                              |
+| `languageButton`          | `languageButtonClick`                                                                                                                                                     | sprite click                          | `hideMenu`後に`showLanguageMenu`送信                  |
+| `japaneseLanguageButton`  | `japaneseLanguageFlag`                                                                                                                                                    | green flag                            | 非表示                                                |
+| `japaneseLanguageButton`  | `japaneseLanguageHideMenu`                                                                                                                                                | `hideMenu`受信                        | 非表示                                                |
+| `japaneseLanguageButton`  | `japaneseLanguageShowChoices`                                                                                                                                             | `showLanguageMenu`受信                | 現在値なら`✓ 日本語`、それ以外は`日本語`を表示        |
+| `japaneseLanguageButton`  | `japaneseLanguageClick`                                                                                                                                                   | sprite click                          | `uiLanguage=ja`を保存・適用しmenuへ戻る               |
+| `englishLanguageButton`   | `englishLanguageFlag`                                                                                                                                                     | green flag                            | 非表示                                                |
+| `englishLanguageButton`   | `englishLanguageHideMenu`                                                                                                                                                 | `hideMenu`受信                        | 非表示                                                |
+| `englishLanguageButton`   | `englishLanguageShowChoices`                                                                                                                                              | `showLanguageMenu`受信                | 現在値なら`✓ English`、それ以外は`English`を表示      |
+| `englishLanguageButton`   | `englishLanguageClick`                                                                                                                                                    | sprite click                          | `uiLanguage=en`を保存・適用しmenuへ戻る               |
+| `titleHeading`            | `titleHeadingFlag`, `titleHeadingClick`, `titleHeadingShowTitle`, `titleHeadingHideMenu`, `titleHeadingStartStory`                                                        | green flag／click／title・menu・story | `about.title`を表示し、clickでは`closeTitle`送信      |
+| `titleVersion`            | `titleVersionFlag`, `titleVersionClick`, `titleVersionShowTitle`, `titleVersionHideMenu`, `titleVersionStartStory`                                                        | green flag／click／title・menu・story | `about.version`を表示し、clickでは`closeTitle`送信    |
+| `titleLicenseApp`         | `titleLicenseAppFlag`, `titleLicenseAppClick`, `titleLicenseAppShowTitle`, `titleLicenseAppHideMenu`, `titleLicenseAppStartStory`                                         | green flag／click／title・menu・story | アプリライセンスを表示し、clickでは`closeTitle`送信   |
+| `titleLicenseStory`       | `titleLicenseStoryFlag`, `titleLicenseStoryClick`, `titleLicenseStoryShowTitle`, `titleLicenseStoryHideMenu`, `titleLicenseStoryStartStory`                               | green flag／click／title・menu・story | 台本ライセンス案内を表示し、clickでは`closeTitle`送信 |
+| `titleAuthorOrganization` | `titleAuthorOrganizationFlag`, `titleAuthorOrganizationClick`, `titleAuthorOrganizationShowTitle`, `titleAuthorOrganizationHideMenu`, `titleAuthorOrganizationStartStory` | green flag／click／title・menu・story | 開発者所属を表示し、clickでは`closeTitle`送信         |
+| `titleAuthorName`         | `titleAuthorNameFlag`, `titleAuthorNameClick`, `titleAuthorNameShowTitle`, `titleAuthorNameHideMenu`, `titleAuthorNameStartStory`                                         | green flag／click／title・menu・story | 開発者氏名・emailを表示し、clickでは`closeTitle`送信  |
+| `officialWebsiteLabel`    | `officialWebsiteLabelFlag`, `officialWebsiteLabelClick`, `officialWebsiteLabelShowTitle`, `officialWebsiteLabelHideMenu`, `officialWebsiteLabelStartStory`                | green flag／click／title・menu・story | 公式Webサイト名を表示し、clickではサイトを開く        |
+| `officialWebsiteButton`   | `officialWebsiteFlag`                                                                                                                                                     | green flag                            | 初期化前用の英語フォールバックを表示                  |
+| `officialWebsiteButton`   | `officialWebsiteClick`                                                                                                                                                    | sprite click                          | 公式Webサイトを新しいタブで開く                       |
+| `officialWebsiteButton`   | `officialWebsiteShowTitle`                                                                                                                                                | `showTitle`受信                       | 文字なしの実行時costumeへ切り替えて表示               |
+| `officialWebsiteButton`   | `officialWebsiteHideMenu`                                                                                                                                                 | `showMenu`受信                        | 非表示                                                |
+| `officialWebsiteButton`   | `officialWebsiteStartStory`                                                                                                                                               | `startStory`受信                      | 非表示                                                |
+| `closeTitleButton`        | `closeTitleFlag`                                                                                                                                                          | green flag                            | 右上に表示                                            |
+| `closeTitleButton`        | `closeTitleClick`                                                                                                                                                         | sprite click                          | `closeTitle`送信                                      |
+| `closeTitleButton`        | `closeTitleShowTitle`                                                                                                                                                     | `showTitle`受信                       | 表示                                                  |
+| `closeTitleButton`        | `closeTitleHideMenu`                                                                                                                                                      | `showMenu`受信                        | 非表示                                                |
+| `closeTitleButton`        | `closeTitleStartStory`                                                                                                                                                    | `startStory`受信                      | 非表示                                                |
+| `Loading`                 | `pf`                                                                                                                                                                      | green flag                            | 非表示                                                |
+| `Loading`                 | `pm`                                                                                                                                                                      | `assetLoadingStarted`受信             | Loading costumeを表示                                 |
+| `Loading`                 | `pj`                                                                                                                                                                      | `assetLoadingProgress`受信            | costumeを循環                                         |
+| `Loading`                 | `ph`                                                                                                                                                                      | `assetLoadingCompleted`受信           | 非表示、完了sound                                     |
+| `LoadingBubbleAnchor`     | `loadingBubbleFlag`                                                                                                                                                       | green flag                            | 非表示、bubbleをclear                                 |
+| `LoadingBubbleAnchor`     | `loadingBubbleStarted`                                                                                                                                                    | `assetLoadingStarted`受信             | anchorを表示                                          |
+| `LoadingBubbleAnchor`     | `loadingBubbleProgress`                                                                                                                                                   | `assetLoadingProgress`受信            | runtime variable `message`をsay                       |
+| `LoadingBubbleAnchor`     | `loadingBubbleCompleted`                                                                                                                                                  | `assetLoadingCompleted`受信           | bubbleをclearして非表示                               |
 
 ### カスタムブロック定義一覧
 
