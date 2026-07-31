@@ -171,6 +171,33 @@ test('closes Title from the top-right close button using the same flow as a Stag
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
+test('initializes the idle pose charge rate to zero', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+
+  assert.equal(harness.getRuntimeVariable('poseRecog'), '0.5');
+  assert.equal(harness.getRuntimeVariable('poseCharge'), '10');
+  assert.equal(harness.getRuntimeVariable('poseIdle'), '0');
+});
+
+test('does not add idle charge below the recognition threshold by default', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  await startFixture(harness, poseFixtureUrl);
+  harness.runUntil(() => harness.getRuntimeVariable('skipContext') === 'pose');
+
+  harness.extensionState.poseMatches = false;
+  harness.extensionState.poseScore = 1;
+  const initialCharge = harness.getStageVariable('チャージ');
+  harness.step({milliseconds: 100, count: 20});
+
+  assert.equal(harness.getStageVariable('チャージ'), initialCharge);
+  assert.equal(harness.getStageVariable('poseIndex'), '1');
+});
+
 test('prioritizes the loading backdrop and costumes and reports only regular asset progress', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());

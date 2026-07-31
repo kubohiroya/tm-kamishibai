@@ -300,21 +300,21 @@ runtime variableの3種類に分けます。
 
 静的な名前を持つruntime variableは次の18個です。
 
-| 変数                                                           | 生存期間／役割                                                   |
-| -------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `script`                                                       | 読み込んだ変換済み台本。title、reload、`startStory`間で共有      |
-| `version`                                                      | 台本の`kamishibai` version                                       |
-| `startSceneIndex`                                              | 台本で指定した開始scene                                          |
-| `sceneIndex`                                                   | 現在実行中のscene index                                          |
-| `actionTarget`, `actionCommand`, `actionParam`, `actionParam2` | StageからActor cloneへ渡すaction envelope                        |
-| `nextSceneLabel`                                               | key／touch入力が要求した遷移先scene label                        |
-| `skipMode`                                                     | `Space`、`Right`、`Down`による未消費の進行要求                   |
-| `skipContext`                                                  | `title`、`action`、`pose`、`scene`のどの境界が要求を消費できるか |
-| `poseRecog`, `poseCharge`, `poseIdle`                          | pose認識のしきい値、charge時間、idle時間                         |
-| `poseRecognitionSound`                                         | `setPoseRecognitionSound`で指定した認識中の音声アセット名        |
-| `poseRecognitionSound2`                                        | `setPoseRecognitionSound`で指定した認識成立時の音声アセット名    |
-| `loadingCostume`                                               | Loading spriteへ適用するcostume名                                |
-| `message`                                                      | Loading bubbleへ表示する現在の進捗文言                           |
+| 変数                                                           | 生存期間／役割                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `script`                                                       | 読み込んだ変換済み台本。title、reload、`startStory`間で共有        |
+| `version`                                                      | 台本の`kamishibai` version                                         |
+| `startSceneIndex`                                              | 台本で指定した開始scene                                            |
+| `sceneIndex`                                                   | 現在実行中のscene index                                            |
+| `actionTarget`, `actionCommand`, `actionParam`, `actionParam2` | StageからActor cloneへ渡すaction envelope                          |
+| `nextSceneLabel`                                               | key／touch入力が要求した遷移先scene label                          |
+| `skipMode`                                                     | `Space`、`Right`、`Down`による未消費の進行要求                     |
+| `skipContext`                                                  | `title`、`action`、`pose`、`scene`のどの境界が要求を消費できるか   |
+| `poseRecog`, `poseCharge`, `poseIdle`                          | pose認識のしきい値、charge時間、idle時間。既定値は`0.5`、`10`、`0` |
+| `poseRecognitionSound`                                         | `setPoseRecognitionSound`で指定した認識中の音声アセット名          |
+| `poseRecognitionSound2`                                        | `setPoseRecognitionSound`で指定した認識成立時の音声アセット名      |
+| `loadingCostume`                                               | Loading spriteへ適用するcostume名                                  |
+| `message`                                                      | Loading bubbleへ表示する現在の進捗文言                             |
 
 このほか、`exec command %s %s`はDSLで指定されたruntime variable名を動的に設定します。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
