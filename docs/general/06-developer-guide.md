@@ -467,6 +467,7 @@ SB3またはruntimeを変更した場合は、生成SB3をTurboWarpで開いて�
 - green flagでtitleとmenuが表示される
 - 外部台本と組み込み台本の対象フローが開始できる
 - pause、Space、Right、Downの進行が意図どおり動く
+- Downでシーンを飛ばしてもBGMが継続し、残りのtransitionが最終状態になる
 - Loading、画像、音声、テキストが正しく表示・再生される
 
 内部構造を変更したPRでは、`app/project.source.json`と内部仕様書のtarget、変数、message、

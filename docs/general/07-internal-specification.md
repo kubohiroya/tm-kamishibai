@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |   10 |
-| block                    | 1530 |
+| block                    | 1542 |
 | event hat                |   50 |
 | カスタムブロック定義     |   42 |
 | Scratch変数              |    6 |
@@ -364,8 +364,8 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | ------- | --------------- | --------------------- | --------------------------------------------------------------------------------------------- |
 | `Stage` | `iM`            | green flag            | `stop camera preview`, `stop pose recog`, `stop camera`, `hide all actors`; `showTitle`送信   |
 | `Stage` | `i;`            | key `space`           | `showCover`送信                                                                               |
-| `Stage` | `i}`            | key `down arrow`      | `finishTimedActorAction`送信、`skipMode=Down`                                                 |
-| `Stage` | `jb`            | key `right arrow`     | `finishTimedActorAction`送信、`skipMode=Right`                                                |
+| `Stage` | `i}`            | key `down arrow`      | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=scene`             |
+| `Stage` | `jb`            | key `right arrow`     | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=action`            |
 | `Stage` | `jX`            | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
 | `Stage` | `j/`            | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
 | `Stage` | `j?`            | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
@@ -463,18 +463,18 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### scene・action・actor
 
-| target  | ID             | 定義                               | 引数                      | warp | 呼び出す処理／送信するmessage                                                                                                                    |
-| ------- | -------------- | ---------------------------------- | ------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Stage` | `fB`           | `exec scene # %s with %s`          | `sceneIndex`, `sceneData` | no   | `selectValue # %s separated by %s from %s`, `substr of %s after %s`, `exec command %s %s`, `exec actionList`, `hide all actors`; `invalidScript` |
-| `Stage` | `e=`           | `exec actionList`                  | —                         | no   | `exec action %s`                                                                                                                                 |
-| `Stage` | `f(`           | `exec action %s`                   | `action`                  | no   | `exec stage action %s`, `exec actor action %s`                                                                                                   |
-| `Stage` | `gP`           | `exec stage action %s`             | `action`                  | no   | `touchInputToChangeScene %s %s`, `exec keyInputToChangeScene %s %s`, `exec branch action %s`, `exec transition action %s`, `wait %s seconds`     |
-| `Stage` | `gp`           | `exec actor action %s`             | `action`                  | no   | `selectValue # %s separated by %s from %s`, 3つのlist初期化、`exec pose action %s`; `execActorAction`                                            |
-| `Stage` | `ee`           | `hide all actors`                  | —                         | no   | `execActorAction`                                                                                                                                |
-| `Stage` | `eh`           | `change skin of %s to %s`          | `actorName`, `skinName`   | no   | `execActorAction`                                                                                                                                |
-| `Stage` | `eR`           | `show cover`                       | —                         | no   | `selectValue # %s separated by %s from %s`; `showMenu`                                                                                           |
-| `Actor` | `it`           | `isTimeBasedAction`                | —                         | no   | —                                                                                                                                                |
-| `Actor` | `actorWaitDef` | `wait for actor action %s seconds` | `seconds`                 | no   | —                                                                                                                                                |
+| target  | ID             | 定義                               | 引数                      | warp | 呼び出す処理／送信するmessage                                                                                                                |
+| ------- | -------------- | ---------------------------------- | ------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Stage` | `fB`           | `exec scene # %s with %s`          | `sceneIndex`, `sceneData` | no   | scene skip中もcommandを末尾まで解析し、`exec actionList`、`hide all actors`; `invalidScript`                                                 |
+| `Stage` | `e=`           | `exec actionList`                  | —                         | no   | 通常は`exec action %s`、scene skip中は`bgm`と`transition`だけを台本順に実行                                                                  |
+| `Stage` | `f(`           | `exec action %s`                   | `action`                  | no   | `exec stage action %s`, `exec actor action %s`                                                                                               |
+| `Stage` | `gP`           | `exec stage action %s`             | `action`                  | no   | `touchInputToChangeScene %s %s`, `exec keyInputToChangeScene %s %s`, `exec branch action %s`, `exec transition action %s`, `wait %s seconds` |
+| `Stage` | `gp`           | `exec actor action %s`             | `action`                  | no   | `selectValue # %s separated by %s from %s`, 3つのlist初期化、`exec pose action %s`; `execActorAction`                                        |
+| `Stage` | `ee`           | `hide all actors`                  | —                         | no   | `execActorAction`                                                                                                                            |
+| `Stage` | `eh`           | `change skin of %s to %s`          | `actorName`, `skinName`   | no   | `execActorAction`                                                                                                                            |
+| `Stage` | `eR`           | `show cover`                       | —                         | no   | `selectValue # %s separated by %s from %s`; `showMenu`                                                                                       |
+| `Actor` | `it`           | `isTimeBasedAction`                | —                         | no   | —                                                                                                                                            |
+| `Actor` | `actorWaitDef` | `wait for actor action %s seconds` | `seconds`                 | no   | —                                                                                                                                            |
 
 #### transition・branch・input
 
@@ -559,6 +559,12 @@ scene解析のエラー時にこのmessageを送信し、各送信箇所の直�
 `skipMode`は要求、`skipContext`は消費可能な境界です。要求はtitle、action、pose、sceneの
 該当境界だけが消費し、scene開始、cover、stopでclearします。`nextSceneLabel`はkey／touch
 listenerが設定し、scene loopがlabelをindexへ解決したあと削除します。
+
+`skipMode=scene`では、scene parserは残りのcommandを解析してaction listを完成させます。
+action loopは`bgm`と`transition`だけを選択して台本順に高速実行し、それ以外を読み飛ばします。
+transitionの反復待ちは`skipMode`の存在で終了しますが、最後の明るさ設定は必ず実行します。
+`bgm`はscene skip中も開始でき、down arrow handlerは全音声を停止せず、現在の`sound`だけを
+停止します。これにより、すでに再生中またはシーン残部で開始したBGMを次sceneへ引き継ぎます。
 
 ## 関連ドキュメント
 
