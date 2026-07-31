@@ -15,6 +15,9 @@ const poseFixtureUrl = new URL(
   './fixtures/runtime/pose-skip-mode.txt',
   import.meta.url,
 );
+const officialWebsiteUrl = JSON.parse(
+  await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+).homepage;
 
 async function startFixture(harness, fixtureUrl = runtimeFixtureUrl) {
   const script = await readFile(fixtureUrl, 'utf8');
@@ -92,6 +95,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'openButton',
       'reloadButton',
       'showTitleButton',
+      'officialWebsiteButton',
       'Loading',
       'LoadingBubbleAnchor',
     ],
@@ -114,6 +118,32 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       `${name} still contains a localized costume`,
     );
   }
+  assert.deepEqual(
+    harness.getSprite('officialWebsiteButton').getCostumes().map((costume) => costume.name),
+    ['official-website-button'],
+  );
+});
+
+test('shows the official website button only on Title and opens the package homepage', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  const button = harness.getSprite('officialWebsiteButton');
+  harness.runUntil(() => button.visible);
+  assert.equal(button.x, 186);
+  assert.equal(button.y, 0);
+
+  harness.clickSprite('officialWebsiteButton');
+  assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);
+
+  harness.broadcast('showMenu');
+  harness.runUntil(() => !button.visible);
+  harness.broadcast('showTitle');
+  harness.runUntil(() => button.visible);
+
+  await startFixture(harness);
+  assert.equal(button.visible, false);
 });
 
 test('prioritizes the loading backdrop and costumes and reports only regular asset progress', async (context) => {

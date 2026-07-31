@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="24" viewBox="0 0 96 24">
+  <rect x="0.5" y="0.5" width="95" height="23" rx="11.5" fill="#007f71" stroke="#005f55"/>
+  <text x="39" y="15.25" fill="#fff" font-family="sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">公式Webサイト</text>
+  <path d="M80 7h7v7m0-7-8 8m5 0h-6V9" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

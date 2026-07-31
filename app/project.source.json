@@ -29985,6 +29985,161 @@
     },
     {
       "isStage": false,
+      "name": "officialWebsiteButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "officialWebsiteFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "officialWebsiteFlagShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "officialWebsiteFlagShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "officialWebsiteFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "officialWebsiteOpen",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "officialWebsiteOpen": {
+          "opcode": "kubohiroyaweblink_openUrl",
+          "next": null,
+          "parent": "officialWebsiteClick",
+          "inputs": {
+            "URL": [
+              1,
+              [
+                10,
+                "https://kubohiroya.github.io/tmpose-kamishibai/"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteShowTitle": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteTitleShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 280
+        },
+        "officialWebsiteTitleShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "officialWebsiteShowTitle",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteHideMenu": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteMenuHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 400
+        },
+        "officialWebsiteMenuHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "officialWebsiteHideMenu",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteStartStory": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "officialWebsiteStoryHide",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 520
+        },
+        "officialWebsiteStoryHide": {
+          "opcode": "looks_hide",
+          "next": null,
+          "parent": "officialWebsiteStartStory",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "official-website-button",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "78ee8a5dce6ab578ecd2f477f187a179",
+          "md5ext": "78ee8a5dce6ab578ecd2f477f187a179.svg",
+          "rotationCenterX": 48,
+          "rotationCenterY": 12
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 10,
+      "visible": true,
+      "x": 186,
+      "y": 0,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
       "name": "Loading",
       "variables": {},
       "lists": {},
@@ -30554,7 +30709,8 @@
     "kubohiroyaasyncinput",
     "lmsTimers",
     "files",
-    "text"
+    "text",
+    "kubohiroyaweblink"
   ],
   "extensionURLs": {
     "sipcconsole": "https://extensions.turbowarp.org/-SIPC-/consoles.js",
@@ -30568,7 +30724,8 @@
     "kubohiroyaasyncinput": "embedded-extension:extensions/kubohiroyaasyncinput.js",
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",
-    "text": "https://extensions.turbowarp.org/lab/text.js"
+    "text": "https://extensions.turbowarp.org/lab/text.js",
+    "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js"
   },
   "meta": {
     "semver": "3.0.0",
