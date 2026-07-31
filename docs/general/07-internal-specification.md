@@ -169,6 +169,8 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 Asset Managerへ登録します。`officialWebsiteButton`と`closeTitleButton`はSB3に固定costumeを
 持ちます。公式Webボタンのリンク先には`package.json`の`homepage`を設定し、ビルド時に
 `site/favicon.png`をcostumeへ埋め込んでWebサイトと同じ浦島太郎のブランド画像を表示します。
+Title背景には、ソースコードがMPL-2.0で提供されることと、台本ファイルには各ファイル記載の
+ライセンス・利用条件が適用されることを示す2行のライセンス案内を表示します。
 
 ### アクターへ命令を届けるしくみ {#actor-message-delivery}
 

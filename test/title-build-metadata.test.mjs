@@ -86,7 +86,7 @@ test('embeds Title metadata and the site favicon without changing app source', a
   assert.equal(
     [
       ...titleSvg.matchAll(
-        /<text transform="translate\((?:220\.36368,144\.13592|240,186)\)[^>]+text-anchor="middle">/gu,
+        /<text transform="translate\((?:220\.36368,132\.13592|240,174)\)[^>]+text-anchor="middle">/gu,
       ),
     ].length,
     2,
@@ -97,10 +97,22 @@ test('embeds Title metadata and the site favicon without changing app source', a
   );
   assert(titleSvg.includes('久保 裕也 &lt;hiroya@cuc.ac.jp&gt;'));
   assert(!titleSvg.includes('　　　久保 裕也'));
+  assert.match(
+    titleSvg,
+    /<text transform="translate\(240,238\) scale\(0\.5,0\.5\)" font-size="16"[^>]+text-anchor="middle">/u,
+  );
+  assert(
+    titleSvg.includes(
+      '本アプリのソースコードはMozilla Public License 2.0（MPL-2.0）で提供されています。',
+    ),
+  );
+  assert(
+    titleSvg.includes('台本ファイルには、各ファイル記載のライセンス・利用条件が適用されます。'),
+  );
   assert.equal(createHash('md5').update(titleSvg).digest('hex'), titleCostume.assetId);
   assert.equal(titleCostume.md5ext, `${titleCostume.assetId}.svg`);
   assert(archive[titleCostume.md5ext]);
-  assert.equal(archive['4a945a1156103dccbbcc8c5623f195f0.svg'], undefined);
+  assert.equal(archive['c7334c6a74860d5808c4962f250b52f2.svg'], undefined);
   assert.equal(
     built.titleBuildMetadata.officialWebsiteAsset.filename,
     officialWebsiteCostume.md5ext,
