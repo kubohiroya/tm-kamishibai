@@ -8,6 +8,7 @@ const projectRoot = new URL('../', import.meta.url);
 const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 const firstPartyFiles = [
   'app/extensions/kubohiroyaweblink.js',
+  'bin/tmpose-kamishibai.mjs',
   'docs/config.mjs',
   'eslint.config.mjs',
   'scripts/build-site.mjs',
@@ -31,6 +32,18 @@ test('applies static quality rules to every first-party code area', async () => 
       assert.equal(config.rules[rule][0], 2, `${rule} is not enabled for ${filename}`);
     }
   }
+});
+
+test('rejects undefined and unused variables in newly added first-party code', async () => {
+  const eslint = new ESLint({cwd: new URL('.', projectRoot).pathname});
+  const [result] = await eslint.lintText('const unused = 1; missingFunction();\n', {
+    filePath: 'scripts/static-quality-contract-probe.mjs',
+  });
+
+  assert.deepEqual(result.messages.map(({ruleId}) => ruleId).sort(), [
+    'no-undef',
+    'no-unused-vars',
+  ]);
 });
 
 test('excludes only upstream-synchronized extension artifacts from local linting', async () => {
