@@ -5,7 +5,7 @@
 - 対象Issue: [#201](https://github.com/kubohiroya/tmpose-kamishibai/issues/201)
 - 実装Issue: [#198](https://github.com/kubohiroya/tmpose-kamishibai/issues/198)
 - 親Issue: [#200](https://github.com/kubohiroya/tmpose-kamishibai/issues/200)
-- 状態: レビュー案。本文の「提案」は承認前の仕様であり、実装を許可するものではない
+- 状態: 2026-08-03承認済み。本文の「提案」は#198の実装仕様として採用する
 - 対象バージョン: kamishibai DSL 3.1
 
 この文書は、#198ですでに存在する未コミット差分を含め、DSL 3.1の台本診断をどこまでJavaScript機能拡張へ担当させるかを実装前に決めるためのものです。
@@ -348,15 +348,19 @@ SVG skin生成と停止処理は、validation成功・失敗が確定した後�
 - Asset Manager／Runtime Expressionへ追加するsyntax-only APIは後方互換の追加APIとし、Kamishibai側revert後も既存blockへ影響させない
 - 3.1.8公開後に重大な問題が見つかった場合は、3.1.8を上書きせずdeprecateし、修正版を新しいpatch versionで公開する
 
-## 15. レビューで承認が必要な判断
+## 15. レビュー結果
 
-1. 選択肢C「限定preflight + 既存Scratch parser」を採用するか
-2. 3.1では最初のfatal diagnostic一つだけを表示するか
-3. command/action/ref位置の限定的重複を`dsl31Contract`と同期テストで許容するか
-4. Asset Managerへ副作用のないproject-local address検証APIを追加するか、共有fixture付きfallbackを使うか
-5. Runtime Expressionへsyntax-only APIを追加するか
-6. 3.1専用app-local extension `kubohiroyakamishibairuntime`の追加を許容するか
-7. error表示を日本語・英語の両方で提供するか
-8. 上記承認後、現在の#198差分を修正ベースとして使うか、作り直すか
+2026-08-03に次の8項目を承認しました。この決定をもって#201のレビューゲートを解除し、#198は以下の制約内で再開できます。
 
-この8点が承認されるまで、#198の実装・SB3変更を再開しません。
+| #   | 判断                                                           | 承認結果                                                                                                                                                    |
+| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 選択肢C「限定preflight + 既存Scratch parser」                  | 採用する。JavaScript側は実行用データを生成しない                                                                                                            |
+| 2   | 最初のfatal diagnostic一つだけを表示                           | 採用する。修正後の再実行で次のerrorを表示する                                                                                                               |
+| 3   | command/action/ref位置の限定的重複                             | `dsl31Contract`と同期テストを条件に許容する                                                                                                                 |
+| 4   | Asset Managerのproject-local address検証                       | 独立したAsset Managerモジュールへ副作用のないAPIを追加する。Kamishibai内の独自parserを恒久採用せず、共有fixture付きfallbackも今回の正規経路にはしない       |
+| 5   | Runtime Expressionのsyntax検証                                 | 独立したRuntime Expressionモジュールへsyntax-only APIを追加する。式を実評価する検証は採用しない                                                             |
+| 6   | 3.1専用app-local extension `kubohiroyakamishibairuntime`の追加 | 許容する。既定OFFの起動時固定flagで導入し、4.0の汎用基盤には流用しない                                                                                      |
+| 7   | error表示言語                                                  | 日本語・英語の両方を提供する                                                                                                                                |
+| 8   | 現在の#198未コミット差分の扱い                                 | 修正ベースとして利用する。表12の採用候補だけを残し、独自asset address parser、式の実評価、cleanup不足、散在するcommand/action定義は承認済み設計へ置き換える |
+
+実装中にこの責務境界を変更する必要が生じた場合は、#198へ理由と代替案を記録し、実装を進める前に本設計を再レビューします。
