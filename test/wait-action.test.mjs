@@ -61,41 +61,32 @@ test('waits until the count-up timer reaches the requested duration', () => {
   const blocks = descendants(target, block.next);
 
   assert(
-    [...blocks.values()].some((candidate) => (
-      candidate.opcode === 'lmsTimers_startResetTimer'
-      && literalString(candidate.inputs.TIMER) === 'timer'
-    )),
+    [...blocks.values()].some(
+      (candidate) =>
+        candidate.opcode === 'lmsTimers_startResetTimer' &&
+        literalString(candidate.inputs.TIMER) === 'timer',
+    ),
     'The wait action does not reset its timer to zero before waiting.',
   );
   assert.equal(
-    [...blocks.values()].filter((candidate) => (
-      candidate.opcode === 'lmsTimers_setTimer'
-    )).length,
+    [...blocks.values()].filter((candidate) => candidate.opcode === 'lmsTimers_setTimer').length,
     0,
     'The wait action sets an initial value that start/reset immediately discards.',
   );
 
   const loop = [...blocks.values()].find((candidate) => candidate.opcode === 'control_while');
   assert(loop, 'The wait action loop is missing.');
-  const conditionBlocks = descendants(
-    target,
-    referencedBlockIds(loop.inputs.CONDITION)[0],
+  const conditionBlocks = descendants(target, referencedBlockIds(loop.inputs.CONDITION)[0]);
+  const durationComparison = [...conditionBlocks.values()].find(
+    (candidate) =>
+      candidate.opcode === 'operator_lt' &&
+      inputBlock(target, candidate, 'OPERAND1')?.opcode === 'lmsTimers_valueOfTimer' &&
+      inputBlock(target, candidate, 'OPERAND2')?.opcode === 'argument_reporter_string_number' &&
+      inputBlock(target, candidate, 'OPERAND2')?.fields.VALUE?.[0] === 'seconds',
   );
-  const durationComparison = [...conditionBlocks.values()].find((candidate) => (
-    candidate.opcode === 'operator_lt'
-    && inputBlock(target, candidate, 'OPERAND1')?.opcode === 'lmsTimers_valueOfTimer'
-    && inputBlock(target, candidate, 'OPERAND2')?.opcode
-      === 'argument_reporter_string_number'
-    && inputBlock(target, candidate, 'OPERAND2')?.fields.VALUE?.[0] === 'seconds'
-  ));
-  assert(
-    durationComparison,
-    'The wait action does not continue while timer < requested seconds.',
-  );
+  assert(durationComparison, 'The wait action does not continue while timer < requested seconds.');
   assert.equal(
-    [...conditionBlocks.values()].filter((candidate) => (
-      candidate.opcode === 'operator_gt'
-    )).length,
+    [...conditionBlocks.values()].filter((candidate) => candidate.opcode === 'operator_gt').length,
     0,
     'The wait action still uses the invalid timer > 0 continuation condition.',
   );
@@ -106,10 +97,7 @@ test('keeps scene-change and skip guards and removes the timer', () => {
   const blocks = descendants(target, block.next);
   const loop = [...blocks.values()].find((candidate) => candidate.opcode === 'control_while');
   assert(loop, 'The wait action loop is missing.');
-  const conditionBlocks = descendants(
-    target,
-    referencedBlockIds(loop.inputs.CONDITION)[0],
-  );
+  const conditionBlocks = descendants(target, referencedBlockIds(loop.inputs.CONDITION)[0]);
 
   for (const variableName of ['nextSceneLabel', 'skipMode']) {
     assert(
@@ -118,18 +106,21 @@ test('keeps scene-change and skip guards and removes the timer', () => {
           return false;
         }
         const exists = inputBlock(target, candidate, 'OPERAND');
-        return exists?.opcode === 'lmsTempVars2_runtimeVariableExists'
-          && literalString(exists.inputs.VAR) === variableName;
+        return (
+          exists?.opcode === 'lmsTempVars2_runtimeVariableExists' &&
+          literalString(exists.inputs.VAR) === variableName
+        );
       }),
       `The wait action does not stop when ${variableName} exists.`,
     );
   }
 
   assert(
-    [...blocks.values()].some((candidate) => (
-      candidate.opcode === 'lmsTimers_removeTimer'
-      && literalString(candidate.inputs.TIMER) === 'timer'
-    )),
+    [...blocks.values()].some(
+      (candidate) =>
+        candidate.opcode === 'lmsTimers_removeTimer' &&
+        literalString(candidate.inputs.TIMER) === 'timer',
+    ),
     'The wait action does not remove its timer after completion.',
   );
 });

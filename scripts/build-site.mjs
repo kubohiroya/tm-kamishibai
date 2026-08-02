@@ -2,11 +2,7 @@ import {copyFile, cp, mkdir, readFile, readdir, rm, writeFile} from 'node:fs/pro
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {
-  documentConfig,
-  generalDocumentConfig,
-  staffDocumentConfig,
-} from '../docs/config.mjs';
+import {documentConfig, generalDocumentConfig, staffDocumentConfig} from '../docs/config.mjs';
 import {buildDocs} from './build-docs.mjs';
 import {outdatedPublicationNames} from './build-freshness.mjs';
 import {renderSiteVersion} from './site-version.mjs';
@@ -143,9 +139,11 @@ async function prepareOutputDirectory() {
   await mkdir(output, {recursive: true});
   const entries = await readdir(outputPath, {withFileTypes: true});
 
-  await Promise.all(entries
-    .filter((entry) => entry.name !== 'docs')
-    .map((entry) => rm(path.join(outputPath, entry.name), {recursive: true, force: true})));
+  await Promise.all(
+    entries
+      .filter((entry) => entry.name !== 'docs')
+      .map((entry) => rm(path.join(outputPath, entry.name), {recursive: true, force: true})),
+  );
   await cp(source, output, {recursive: true});
 }
 
@@ -160,13 +158,15 @@ async function renderSiteMetadata() {
 
 async function findHtmlFiles(directory) {
   const entries = await readdir(directory, {withFileTypes: true});
-  const nestedFiles = await Promise.all(entries.map(async (entry) => {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return findHtmlFiles(entryPath);
-    }
-    return entry.isFile() && entry.name.endsWith('.html') ? [entryPath] : [];
-  }));
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        return findHtmlFiles(entryPath);
+      }
+      return entry.isFile() && entry.name.endsWith('.html') ? [entryPath] : [];
+    }),
+  );
   return nestedFiles.flat();
 }
 
@@ -176,7 +176,10 @@ async function addFaviconLinks() {
 
   for (const htmlFile of htmlFiles) {
     const sourceHtml = await readFile(htmlFile, 'utf8');
-    const relativePath = path.relative(path.dirname(htmlFile), faviconPath).split(path.sep).join('/');
+    const relativePath = path
+      .relative(path.dirname(htmlFile), faviconPath)
+      .split(path.sep)
+      .join('/');
     const faviconLink = `<link rel="icon" type="image/png" sizes="256x256" href="${relativePath}">`;
     if (sourceHtml.includes(faviconLink)) {
       continue;

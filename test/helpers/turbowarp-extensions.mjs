@@ -15,10 +15,15 @@ function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
     opcode,
     blockType,
     text: opcode,
-    arguments: Object.fromEntries(argumentNames.map((name) => [name, {
-      type: 'string',
-      defaultValue: '',
-    }])),
+    arguments: Object.fromEntries(
+      argumentNames.map((name) => [
+        name,
+        {
+          type: 'string',
+          defaultValue: '',
+        },
+      ]),
+    ),
   };
 }
 
@@ -47,7 +52,7 @@ function createProductionAssetManagerClass(vm, onCreate) {
     },
     translate(value) {
       return typeof value === 'object' && value !== null
-        ? value.default ?? value.defaultMessage ?? ''
+        ? (value.default ?? value.defaultMessage ?? '')
         : value;
     },
   };
@@ -81,11 +86,7 @@ function createProductionAssetManagerClass(vm, onCreate) {
 export function registerKamishibaiTestExtensions(
   vm,
   clock,
-  {
-    initialLocalStorage = {},
-    productionAssetManager = false,
-    viewerLanguage = 'English',
-  } = {},
+  {initialLocalStorage = {}, productionAssetManager = false, viewerLanguage = 'English'} = {},
 ) {
   const state = {
     actorSequences: new Map(),
@@ -186,8 +187,8 @@ export function registerKamishibaiTestExtensions(
       });
     }
     changeRuntimeVariable(args) {
-      this.runtimeVariables[args.VAR]
-        = Cast.toNumber(this.runtimeVariables[args.VAR]) + Cast.toNumber(args.NUM);
+      this.runtimeVariables[args.VAR] =
+        Cast.toNumber(this.runtimeVariables[args.VAR]) + Cast.toNumber(args.NUM);
     }
     getRuntimeVariable(args) {
       return this.runtimeVariables[args.VAR] ?? '';
@@ -246,9 +247,7 @@ export function registerKamishibaiTestExtensions(
     posWith(args) {
       const string = Cast.toString(args.STRING);
       const substring = Cast.toString(args.SUBSTRING);
-      return args.POSITION === 'ends'
-        ? string.endsWith(substring)
-        : string.startsWith(substring);
+      return args.POSITION === 'ends' ? string.endsWith(substring) : string.startsWith(substring);
     }
     replaceRegex(args) {
       return Cast.toString(args.STRING).replace(
@@ -335,14 +334,17 @@ export function registerKamishibaiTestExtensions(
       if (!list || !Array.isArray(list.value)) {
         throw new Error(`Loading asset list not found: ${listName || '(empty)'}`);
       }
-      const priorityNames = [state.loadingBackdrop, ...state.loadingCostumes]
-        .filter((name, index, values) => name && values.indexOf(name) === index);
+      const priorityNames = [state.loadingBackdrop, ...state.loadingCostumes].filter(
+        (name, index, values) => name && values.indexOf(name) === index,
+      );
       const loadingNames = new Set(priorityNames);
       const entries = list.value.map((entry) => Cast.toString(entry));
-      const declaredNames = new Set(entries.map((entry) => {
-        const separatorIndex = entry.indexOf(',');
-        return (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
-      }));
+      const declaredNames = new Set(
+        entries.map((entry) => {
+          const separatorIndex = entry.indexOf(',');
+          return (separatorIndex < 0 ? entry : entry.slice(0, separatorIndex)).trim();
+        }),
+      );
       const missingNames = priorityNames.filter((name) => !declaredNames.has(name));
       if (missingNames.length > 0) {
         throw new Error(`Loading asset is not declared: ${missingNames.join(', ')}`);
@@ -374,11 +376,7 @@ export function registerKamishibaiTestExtensions(
     setTextValue(args) {
       const name = Cast.toString(args.NAME);
       const resource = state.assets.get(name);
-      if (
-        resource !== undefined
-        && resource !== 'text'
-        && !resource.startsWith('text:')
-      ) {
+      if (resource !== undefined && resource !== 'text' && !resource.startsWith('text:')) {
         throw new Error(`Asset is not text: ${name}`);
       }
       const explicitName = resource?.startsWith('text:')
@@ -455,7 +453,9 @@ export function registerKamishibaiTestExtensions(
     startActorLoop() {}
     startActorSequence(args) {
       const actor = Cast.toString(args.ACTOR);
-      const assets = Cast.toString(args.ASSETS).split(',').map((name) => name.trim());
+      const assets = Cast.toString(args.ASSETS)
+        .split(',')
+        .map((name) => name.trim());
       state.actorSequences.set(actor, assets.at(-1));
       if (assets[0]) state.actorSkins.set(actor, assets[0]);
     }
@@ -489,15 +489,29 @@ export function registerKamishibaiTestExtensions(
         block('stopPredict'),
       ]);
     }
-    currentPoseReporter() { return ''; }
+    currentPoseReporter() {
+      return '';
+    }
     hidePreview() {}
-    isModelLoaded() { return true; }
-    isPoseWithThreshold() { return state.poseMatches; }
-    lastErrorReporter() { return ''; }
+    isModelLoaded() {
+      return true;
+    }
+    isPoseWithThreshold() {
+      return state.poseMatches;
+    }
+    lastErrorReporter() {
+      return '';
+    }
     loadModel() {}
-    menu_positionMenu(args) { return args.positionMenu ?? 'top-left'; }
-    poseScoreReporter() { return state.poseScore; }
-    scoreReporter() { return state.poseScore; }
+    menu_positionMenu(args) {
+      return args.positionMenu ?? 'top-left';
+    }
+    poseScoreReporter() {
+      return state.poseScore;
+    }
+    scoreReporter() {
+      return state.poseScore;
+    }
     setModelURL() {}
     setPreviewOpacity() {}
     setPreviewPosition() {}
@@ -516,18 +530,22 @@ export function registerKamishibaiTestExtensions(
         block('setProjectId', BlockType.COMMAND, ['ID']),
       ]);
     }
-    get(args) { return state.localStorage.get(Cast.toString(args.KEY)) ?? ''; }
-    set(args) { state.localStorage.set(Cast.toString(args.KEY), args.VALUE); }
+    get(args) {
+      return state.localStorage.get(Cast.toString(args.KEY)) ?? '';
+    }
+    set(args) {
+      state.localStorage.set(Cast.toString(args.KEY), args.VALUE);
+    }
     setProjectId() {}
   }
 
   class TranslateExtension {
     getInfo() {
-      return extensionInfo('translate', [
-        block('getViewerLanguage', BlockType.REPORTER),
-      ]);
+      return extensionInfo('translate', [block('getViewerLanguage', BlockType.REPORTER)]);
     }
-    getViewerLanguage() { return state.viewerLanguage; }
+    getViewerLanguage() {
+      return state.viewerLanguage;
+    }
   }
 
   class TextLinesExtension {
@@ -540,14 +558,17 @@ export function registerKamishibaiTestExtensions(
         block('writeLinesToList', BlockType.COMMAND, ['TEXT', 'LIST']),
       ]);
     }
-    menu_LIST_MENU(args) { return args.LIST_MENU ?? ''; }
+    menu_LIST_MENU(args) {
+      return args.LIST_MENU ?? '';
+    }
     writeLinesToList(args, util) {
       const listName = Cast.toString(args.LIST);
       const stage = this.runtime.getTargetForStage();
-      const list = util.target.lookupVariableById(listName)
-        ?? stage?.lookupVariableById(listName)
-        ?? util.target.lookupVariableByNameAndType(listName, 'list')
-        ?? stage?.lookupVariableByNameAndType(listName, 'list');
+      const list =
+        util.target.lookupVariableById(listName) ??
+        stage?.lookupVariableById(listName) ??
+        util.target.lookupVariableByNameAndType(listName, 'list') ??
+        stage?.lookupVariableByNameAndType(listName, 'list');
       if (!list) throw new Error(`List not found: ${listName}`);
       list.value = Cast.toString(args.TEXT).split(/\r\n|\n|\r/u);
     }
@@ -566,9 +587,7 @@ export function registerKamishibaiTestExtensions(
       const expression = Cast.toString(args.EXPRESSION).trim();
       if (expression === 'true') return true;
       if (expression === 'false' || !expression) return false;
-      return Cast.toBoolean(
-        this.runtime.ext_lmsTempVars2.getRuntimeVariable({VAR: expression}),
-      );
+      return Cast.toBoolean(this.runtime.ext_lmsTempVars2.getRuntimeVariable({VAR: expression}));
     }
   }
 
@@ -586,10 +605,16 @@ export function registerKamishibaiTestExtensions(
     getInfo() {
       return extensionInfo('kubohiroyaasyncinput', [
         block('listenForKeyAndBroadcast', BlockType.COMMAND, [
-          'KEY_ID', 'RUNTIME_VAR', 'VALUE', 'MESSAGE',
+          'KEY_ID',
+          'RUNTIME_VAR',
+          'VALUE',
+          'MESSAGE',
         ]),
         block('listenForActorTouchAndBroadcast', BlockType.COMMAND, [
-          'ACTOR', 'RUNTIME_VAR', 'VALUE', 'MESSAGE',
+          'ACTOR',
+          'RUNTIME_VAR',
+          'VALUE',
+          'MESSAGE',
         ]),
         block('stopAllInputListeners'),
         block('stopAllKeyListeners'),
@@ -649,8 +674,12 @@ export function registerKamishibaiTestExtensions(
         block('valueOfTimer', BlockType.REPORTER, ['TIMER']),
       ]);
     }
-    removeTimer(args) { state.timers.delete(Cast.toString(args.TIMER)); }
-    startResetTimer(args) { state.timers.set(Cast.toString(args.TIMER), clock.now); }
+    removeTimer(args) {
+      state.timers.delete(Cast.toString(args.TIMER));
+    }
+    startResetTimer(args) {
+      state.timers.set(Cast.toString(args.TIMER), clock.now);
+    }
     valueOfTimer(args) {
       const start = state.timers.get(Cast.toString(args.TIMER));
       return start === undefined ? '' : (clock.now - start) / 1000;
@@ -666,8 +695,12 @@ export function registerKamishibaiTestExtensions(
         block('showPickerExtensionsAs', BlockType.COMMAND, ['extension', 'as']),
       ]);
     }
-    menu_automaticallyOpen(args) { return args.automaticallyOpen ?? ''; }
-    menu_encoding(args) { return args.encoding ?? ''; }
+    menu_automaticallyOpen(args) {
+      return args.automaticallyOpen ?? '';
+    }
+    menu_encoding(args) {
+      return args.encoding ?? '';
+    }
     setOpenMode() {}
     showPickerExtensionsAs() {
       state.filePickerRequests += 1;
@@ -708,9 +741,7 @@ export function registerKamishibaiTestExtensions(
 
   class WebLinkExtension {
     getInfo() {
-      return extensionInfo('kubohiroyaweblink', [
-        block('openUrl', BlockType.COMMAND, ['URL']),
-      ]);
+      return extensionInfo('kubohiroyaweblink', [block('openUrl', BlockType.COMMAND, ['URL'])]);
     }
     openUrl(args) {
       state.openedUrls.push(Cast.toString(args.URL));
@@ -725,8 +756,8 @@ export function registerKamishibaiTestExtensions(
     'kubohiroyaassetmanager',
     productionAssetManager
       ? createProductionAssetManagerClass(vm, (extension) => {
-        state.assetManager = extension;
-      })
+          state.assetManager = extension;
+        })
       : AssetManagerExtension,
   );
   register(vm, 'tmpose', PoseExtension);

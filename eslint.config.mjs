@@ -1,25 +1,62 @@
+import globals from 'globals';
+
+const rules = {
+  eqeqeq: 'error',
+  'no-undef': 'error',
+  'no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
+};
+
 export default [
   {
-    files: ['src/builder/**/*.js', 'bin/**/*.mjs', 'test/builder.test.mjs'],
+    ignores: [
+      '.vivliostyle/**',
+      'dist/**',
+      'node_modules/**',
+      'output/**',
+      'tmp/**',
+      // These files are immutable build artifacts synchronized from their upstream repositories.
+      'app/extensions/kubohiroyaassetmanager.js',
+      'app/extensions/kubohiroyaasyncinput.js',
+      'app/extensions/kubohiroyaruntimeexpression.js',
+      'app/extensions/kubohiroyatextlines.js',
+      'app/extensions/tmpose.js',
+    ],
+  },
+  {
+    files: [
+      'bin/**/*.{js,mjs,cjs}',
+      'docs/**/*.{js,mjs,cjs}',
+      'scripts/**/*.{js,mjs,cjs}',
+      'src/**/*.{js,mjs,cjs}',
+      'test/**/*.{js,mjs,cjs}',
+      '*.{js,mjs,cjs}',
+    ],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      globals: globals.node,
+    },
+    rules,
+  },
+  {
+    files: ['site/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.browser,
+    },
+    rules,
+  },
+  {
+    files: ['app/extensions/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'script',
       globals: {
-        AbortSignal: 'readonly',
-        Buffer: 'readonly',
-        console: 'readonly',
-        fetch: 'readonly',
-        process: 'readonly',
-        Response: 'readonly',
-        structuredClone: 'readonly',
-        TextDecoder: 'readonly',
-        URL: 'readonly',
+        ...globals.browser,
+        Scratch: 'readonly',
       },
     },
-    rules: {
-      eqeqeq: 'error',
-      'no-undef': 'error',
-      'no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
-    },
+    rules,
   },
 ];

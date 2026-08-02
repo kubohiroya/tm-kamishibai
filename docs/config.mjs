@@ -31,31 +31,36 @@ export const generalDocumentConfig = {
       sourceFilename: '04-dsl-manual.md',
       title: '紙芝居DSLファイル作成マニュアル',
       audience: '作品を作る方',
-      description: '3.1の台本を設計し、シーンラベル、分岐、入力、アニメーションを含めて作成・テストする手順を説明します。',
+      description:
+        '3.1の台本を設計し、シーンラベル、分岐、入力、アニメーションを含めて作成・テストする手順を説明します。',
     },
     {
       sourceFilename: '05-command-reference.md',
       title: '紙芝居DSL コマンドリファレンス',
       audience: '台本文法を調べる方',
-      description: 'kamishibai 3.1で利用できるコマンド、アクション、引数、注意事項を一覧化しています。',
+      description:
+        'kamishibai 3.1で利用できるコマンド、アクション、引数、注意事項を一覧化しています。',
     },
     {
       sourceFilename: '06-developer-guide.md',
       title: '紙芝居アプリ ソフトウェアメンテナンスガイド',
       audience: 'ソフトウェア開発者',
-      description: '成果物とビルダーの利用、アプリ本体、SB3、ドキュメントの変更、検証、公開手順を案内します。',
+      description:
+        '成果物とビルダーの利用、アプリ本体、SB3、ドキュメントの変更、検証、公開手順を案内します。',
     },
     {
       sourceFilename: '07-internal-specification.md',
       title: '紙芝居アプリ内部仕様書',
       audience: 'アプリの実装を調査・変更する方',
-      description: '現行の汎用アプリSB3におけるtarget、変数、block、message、呼出し関係、状態遷移を記録します。',
+      description:
+        '現行の汎用アプリSB3におけるtarget、変数、block、message、呼出し関係、状態遷移を記録します。',
     },
     {
       sourceFilename: 'history.md',
       title: '紙芝居DSL 2.0から3.1への変更履歴',
       audience: '2.0から移行する方',
-      description: '2.0から3.1で追加・変更・置換したDSL仕様と、台本の移行手順を差分形式でまとめています。',
+      description:
+        '2.0から3.1で追加・変更・置換したDSL仕様と、台本の移行手順を差分形式でまとめています。',
     },
   ],
 };
@@ -92,9 +97,8 @@ export const staffDocumentConfig = {
 };
 
 export function resolveLearnedThroughGrade(value = process.env.RUBYGANA_GRADE) {
-  const grade = value === undefined || value === ''
-    ? documentConfig.learnedThroughGrade
-    : Number(value);
+  const grade =
+    value === undefined || value === '' ? documentConfig.learnedThroughGrade : Number(value);
 
   if (!Number.isInteger(grade) || grade < 1 || grade > 6) {
     throw new RangeError('RUBYGANA_GRADE must be an integer from 1 through 6.');

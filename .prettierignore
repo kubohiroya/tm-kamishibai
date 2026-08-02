@@ -1,0 +1,19 @@
+.vivliostyle/
+dist/
+node_modules/
+output/
+tmp/
+
+# Immutable build artifacts synchronized from their upstream repositories.
+app/extensions/kubohiroyaassetmanager.js
+app/extensions/kubohiroyaasyncinput.js
+app/extensions/kubohiroyaruntimeexpression.js
+app/extensions/kubohiroyatextlines.js
+app/extensions/tmpose.js
+
+# Binary assets and package-manager output.
+app/assets/
+docs/images/
+pnpm-lock.yaml
+site/favicon.png
+test/fixtures/assets/

@@ -7,11 +7,13 @@ function flattenDocumentTableOfContents() {
     type: 'element',
     tagName: 'ol',
     properties: {},
-    children: documentProps.flatMap(({children}) => [children]
-      .flat(Infinity)
-      .flatMap((child) => child?.type === 'element' && child.tagName === 'ol'
-        ? child.children
-        : child)),
+    children: documentProps.flatMap(({children}) =>
+      [children]
+        .flat(Infinity)
+        .flatMap((child) =>
+          child?.type === 'element' && child.tagName === 'ol' ? child.children : child,
+        ),
+    ),
   });
 }
 
@@ -27,10 +29,7 @@ export default defineConfig({
       path: `${documentConfig.sourceDirectory}/${documentConfig.coverFilename}`,
       output: documentConfig.coverHtmlFilename,
       imageSrc: 'images/image01.png',
-      theme: [
-        'theme.css',
-        'document-theme.css',
-      ],
+      theme: ['theme.css', 'document-theme.css'],
     },
     {
       rel: 'contents',
@@ -40,17 +39,10 @@ export default defineConfig({
       output: documentConfig.sourceFilename.replace(/\.md$/u, '.html'),
     },
   ],
-  theme: [
-    'theme.css',
-    'document-theme.css',
-  ],
+  theme: ['theme.css', 'document-theme.css'],
   workspaceDir: '../tmp/docs-workshop-vivliostyle',
   copyAsset: {
-    excludes: [
-      'dist/**',
-      'general/**',
-      'tmp/**',
-    ],
+    excludes: ['dist/**', 'general/**', 'tmp/**'],
   },
   toc: {
     title: '目次',
