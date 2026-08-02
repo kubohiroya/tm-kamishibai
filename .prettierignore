@@ -1,0 +1,6 @@
+# Pinned build artifacts owned and formatted by their standalone extension repositories.
+app/extensions/kubohiroyaassetmanager.js
+app/extensions/kubohiroyaasyncinput.js
+app/extensions/kubohiroyaruntimeexpression.js
+app/extensions/kubohiroyatextlines.js
+app/extensions/tmpose.js
