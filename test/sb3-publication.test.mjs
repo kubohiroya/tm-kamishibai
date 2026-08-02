@@ -82,10 +82,7 @@ test('links and documents the generated downloadable SB3', async () => {
     /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.7/u,
     'README installation must use the current fixed npm version.',
   );
-  assert.match(
-    developerGuide,
-    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u,
-  );
+  assert.match(developerGuide, /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u);
   assert.match(developerGuide, /npm view @kubohiroya\/tmpose-kamishibai version/u);
   for (const document of [developerGuide, internalSpecification, readme]) {
     assert.doesNotMatch(
@@ -143,11 +140,7 @@ test('renders the top-page download version from package metadata', async () => 
     /Expected exactly one/u,
   );
   assert.throws(
-    () =>
-      renderSiteVersion(
-        `${siteIndex}\n${siteVersionPlaceholder}`,
-        packageJson.version,
-      ),
+    () => renderSiteVersion(`${siteIndex}\n${siteVersionPlaceholder}`, packageJson.version),
     /found 2/u,
   );
 });
@@ -164,17 +157,14 @@ test('opens the Urashima web sample from the top-page Web card', async () => {
 });
 
 test('links the public sample site without restoring the retired local page', async () => {
-  const pages = await Promise.all([
-    'site/index.html',
-    'site/docs/index.html',
-    'site/downloads/index.html',
-  ].map((relativePath) => readFile(path.join(projectRoot, relativePath), 'utf8')));
+  const pages = await Promise.all(
+    ['site/index.html', 'site/docs/index.html', 'site/downloads/index.html'].map((relativePath) =>
+      readFile(path.join(projectRoot, relativePath), 'utf8'),
+    ),
+  );
 
   for (const page of pages) {
-    assert.match(
-      page,
-      /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-samples\/"/u,
-    );
+    assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-samples\/"/u);
     assert.doesNotMatch(page, /href="(?:\.\.\/)*samples\/"/u);
   }
 });
@@ -198,10 +188,7 @@ test('documents the generic, editor, and player artifact profiles', async () => 
   assert.match(profileSection, /`generic`[^\n]*`kamishibai\.sb3`[^\n]*非埋め込み[^\n]*非埋め込み/u);
   assert.match(profileSection, /`editor`[^\n]*`_urashima\.sb3`[^\n]*非埋め込み[^\n]*埋め込み/u);
   assert.match(profileSection, /`player`[^\n]*`urashima\.sb3`[^\n]*埋め込み[^\n]*埋め込み/u);
-  assert.match(
-    profileSection,
-    /builder APIとCLIが受け付ける\s*`profile`は`editor`または`player`/u,
-  );
+  assert.match(profileSection, /builder APIとCLIが受け付ける\s*`profile`は`editor`または`player`/u);
   assert.match(profileSection, /`player`[\s\S]*ファイル選択なし/u);
   assert.match(profileSection, /オンライン依存[^\n]*成果物manifest/u);
 });
@@ -240,38 +227,28 @@ test('keeps the generic app source free of Urashima sample content', async () =>
   const sampleAssetNames = ['Beach1', 'Dragon Castle', 'Ocean Wave', 'Urashima-old-2'];
 
   assert(genericStage, 'The generic app source has no Stage target.');
-  assert.deepEqual(genericStage.variables?.tmposeEmbeddedScript, [
-    '__tmpose_embedded_script',
-    '',
-  ]);
+  assert.deepEqual(genericStage.variables?.tmposeEmbeddedScript, ['__tmpose_embedded_script', '']);
   assert.equal(
     genericProject.monitors.some((monitor) => monitor.id === 'tmposeEmbeddedScript'),
     false,
     'The reserved embedded script variable must not have a monitor.',
   );
   assert.equal(genericStage.blocks.embeddedScriptChoice?.opcode, 'control_if_else');
-  assert.equal(
-    genericStage.blocks.embeddedSetScript?.opcode,
-    'lmsTempVars2_setRuntimeVariable',
-  );
-  assert.deepEqual(genericStage.blocks.embeddedSetScript?.inputs?.VAR, [
-    1,
-    [10, 'script'],
-  ]);
+  assert.equal(genericStage.blocks.embeddedSetScript?.opcode, 'lmsTempVars2_setRuntimeVariable');
+  assert.deepEqual(genericStage.blocks.embeddedSetScript?.inputs?.VAR, [1, [10, 'script']]);
   assert.equal(
     genericStage.blocks.embeddedStartStory?.inputs?.BROADCAST_INPUT?.[1]?.[1],
     'startStory',
   );
-  assert.equal(
-    genericStage.blocks['l@']?.inputs?.BROADCAST_INPUT?.[1]?.[1],
-    'showCover',
-  );
+  assert.equal(genericStage.blocks['l@']?.inputs?.BROADCAST_INPUT?.[1]?.[1], 'showCover');
   for (const list of Object.values(genericStage.lists ?? {})) {
     assert.deepEqual(list[1], [], `Generic runtime list is not empty: ${list[0]}`);
   }
   for (const targetName of sampleTargetNames) {
-    assert(!genericProject.targets.some((target) => target.name === targetName),
-      `Generic app source contains the sample target: ${targetName}`);
+    assert(
+      !genericProject.targets.some((target) => target.name === targetName),
+      `Generic app source contains the sample target: ${targetName}`,
+    );
   }
 
   const genericAssetNames = genericProject.targets.flatMap((target) => [
@@ -279,7 +256,9 @@ test('keeps the generic app source free of Urashima sample content', async () =>
     ...(target.sounds ?? []).map((sound) => sound.name),
   ]);
   for (const assetName of sampleAssetNames) {
-    assert(!genericAssetNames.includes(assetName),
-      `Generic app source contains the sample asset: ${assetName}`);
+    assert(
+      !genericAssetNames.includes(assetName),
+      `Generic app source contains the sample asset: ${assetName}`,
+    );
   }
 });

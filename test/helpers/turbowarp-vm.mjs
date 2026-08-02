@@ -83,10 +83,7 @@ export class KamishibaiVmHarness {
   }
 
   hasRuntimeVariable(name) {
-    return Object.hasOwn(
-      this.extensionState.tempVariables?.runtimeVariables ?? {},
-      name,
-    );
+    return Object.hasOwn(this.extensionState.tempVariables?.runtimeVariables ?? {}, name);
   }
 
   setRuntimeVariable(name, value) {
@@ -115,19 +112,18 @@ export class KamishibaiVmHarness {
   }
 
   getActor(name) {
-    return this.vm.runtime.targets.find((target) => (
-      !target.isStage
-      && target.sprite?.name === 'Actor'
-      && target.lookupVariableByNameAndType('actorName', '')?.value === name
-    ));
+    return this.vm.runtime.targets.find(
+      (target) =>
+        !target.isStage &&
+        target.sprite?.name === 'Actor' &&
+        target.lookupVariableByNameAndType('actorName', '')?.value === name,
+    );
   }
 
   getSprite(name) {
-    return this.vm.runtime.targets.find((target) => (
-      !target.isStage
-      && target.isOriginal
-      && target.sprite?.name === name
-    ));
+    return this.vm.runtime.targets.find(
+      (target) => !target.isStage && target.isOriginal && target.sprite?.name === name,
+    );
   }
 
   getSpriteCostumeName(name) {

@@ -17,9 +17,8 @@ async function loadAsyncInput() {
     id: 'actor-right-door',
     isStage: false,
     drawableID: 7,
-    lookupVariableByNameAndType: (name, type) => (
-      name === 'actorName' && type === '' ? {value: 'RightDoor'} : undefined
-    ),
+    lookupVariableByNameAndType: (name, type) =>
+      name === 'actorName' && type === '' ? {value: 'RightDoor'} : undefined,
   };
   const canvas = {
     addEventListener: (name, listener) => canvasListeners.set(name, listener),
@@ -31,7 +30,9 @@ async function loadAsyncInput() {
     ext_lmsTempVars2: {
       getRuntimeVariable: ({VAR}) => variables[VAR],
       runtimeVariableExists: ({VAR}) => Object.hasOwn(variables, VAR),
-      setRuntimeVariable: ({VAR, STRING}) => { variables[VAR] = STRING; },
+      setRuntimeVariable: ({VAR, STRING}) => {
+        variables[VAR] = STRING;
+      },
     },
     off: (name) => runtimeListeners.delete(name),
     on: (name, listener) => runtimeListeners.set(name, listener),
@@ -47,7 +48,9 @@ async function loadAsyncInput() {
     ArgumentType: {NUMBER: 'number', STRING: 'string'},
     BlockType: {BOOLEAN: 'boolean', COMMAND: 'command'},
     extensions: {
-      register: (registered) => { extension = registered; },
+      register: (registered) => {
+        extension = registered;
+      },
       unsandboxed: true,
     },
     translate: (value) => value,
@@ -70,16 +73,21 @@ async function loadAsyncInput() {
 
 test('registers a stage-owned pointer binding for a named kamishibai actor', async () => {
   const state = await loadAsyncInput();
-  assert(state.extension.getInfo().blocks.some((block) => (
-    block.opcode === 'listenForActorTouchAndBroadcast'
-  )));
+  assert(
+    state.extension
+      .getInfo()
+      .blocks.some((block) => block.opcode === 'listenForActorTouchAndBroadcast'),
+  );
 
-  state.extension.listenForActorTouchAndBroadcast({
-    ACTOR: 'RightDoor',
-    MESSAGE: 'stopTouchInput',
-    RUNTIME_VAR: 'nextSceneLabel',
-    VALUE: 'ocean',
-  }, {target: state.stage});
+  state.extension.listenForActorTouchAndBroadcast(
+    {
+      ACTOR: 'RightDoor',
+      MESSAGE: 'stopTouchInput',
+      RUNTIME_VAR: 'nextSceneLabel',
+      VALUE: 'ocean',
+    },
+    {target: state.stage},
+  );
   assert.equal(state.extension.touchBindings.get(state.actor.id).ownerTargetId, 'stage');
 
   state.canvasListeners.get('pointerdown')({
@@ -98,10 +106,17 @@ test('registers a stage-owned pointer binding for a named kamishibai actor', asy
 
 test('rejects a touch binding for an unknown actor', async () => {
   const state = await loadAsyncInput();
-  assert.throws(() => state.extension.listenForActorTouchAndBroadcast({
-    ACTOR: 'MissingActor',
-    MESSAGE: 'stopTouchInput',
-    RUNTIME_VAR: 'nextSceneLabel',
-    VALUE: 'missing',
-  }, {target: state.stage}), /Actor not found: MissingActor/u);
+  assert.throws(
+    () =>
+      state.extension.listenForActorTouchAndBroadcast(
+        {
+          ACTOR: 'MissingActor',
+          MESSAGE: 'stopTouchInput',
+          RUNTIME_VAR: 'nextSceneLabel',
+          VALUE: 'missing',
+        },
+        {target: state.stage},
+      ),
+    /Actor not found: MissingActor/u,
+  );
 });

@@ -11,9 +11,9 @@ const imageReferences = [documentConfig.coverFilename, documentConfig.sourceFile
       import.meta.url,
     );
     const source = readFileSync(sourceUrl, 'utf8');
-    return [
-      ...source.matchAll(/!\[[^\]]*\]\(([^)]+)\)(?:\{style="([^"]+)"\})?/gu),
-    ].map(([, reference, style]) => ({reference, sourceUrl, style}));
+    return [...source.matchAll(/!\[[^\]]*\]\(([^)]+)\)(?:\{style="([^"]+)"\})?/gu)].map(
+      ([, reference, style]) => ({reference, sourceUrl, style}),
+    );
   },
 );
 
@@ -22,10 +22,7 @@ test('resolves every local image referenced by the workshop Markdown', () => {
 
   for (const {reference, sourceUrl} of imageReferences) {
     assert.match(reference, /\.(?:avif|gif|jpe?g|png|svg|webp)$/iu);
-    assert(
-      existsSync(new URL(reference, sourceUrl)),
-      `Missing workshop image: ${reference}`,
-    );
+    assert(existsSync(new URL(reference, sourceUrl)), `Missing workshop image: ${reference}`);
   }
 });
 

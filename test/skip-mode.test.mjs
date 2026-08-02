@@ -19,11 +19,13 @@ function runtimeVariableName(block) {
 }
 
 function allBlockEntries() {
-  return project.targets.flatMap((target) => Object.entries(target.blocks).map(([id, block]) => ({
-    target,
-    id,
-    block,
-  })));
+  return project.targets.flatMap((target) =>
+    Object.entries(target.blocks).map(([id, block]) => ({
+      target,
+      id,
+      block,
+    })),
+  );
 }
 
 function descendants(target, rootId) {
@@ -67,10 +69,7 @@ function findProcedure(proccode) {
 function findKeyScript(key) {
   for (const target of project.targets) {
     for (const [id, block] of Object.entries(target.blocks)) {
-      if (
-        block.opcode === 'event_whenkeypressed'
-        && block.fields.KEY_OPTION?.[0] === key
-      ) {
+      if (block.opcode === 'event_whenkeypressed' && block.fields.KEY_OPTION?.[0] === key) {
         return {target, id, block};
       }
     }
@@ -79,17 +78,19 @@ function findKeyScript(key) {
 }
 
 function skipModeAssignments(blocks) {
-  return [...blocks.values()].filter((block) => (
-    block.opcode === 'lmsTempVars2_setRuntimeVariable'
-    && runtimeVariableName(block) === 'skipMode'
-  ));
+  return [...blocks.values()].filter(
+    (block) =>
+      block.opcode === 'lmsTempVars2_setRuntimeVariable' &&
+      runtimeVariableName(block) === 'skipMode',
+  );
 }
 
 function skipModeDeletions(blocks) {
-  return [...blocks.values()].filter((block) => (
-    block.opcode === 'lmsTempVars2_deleteRuntimeVariable'
-    && runtimeVariableName(block) === 'skipMode'
-  ));
+  return [...blocks.values()].filter(
+    (block) =>
+      block.opcode === 'lmsTempVars2_deleteRuntimeVariable' &&
+      runtimeVariableName(block) === 'skipMode',
+  );
 }
 
 function collectStrings(value, result = []) {
@@ -115,15 +116,13 @@ test('uses absence as the only idle skipMode state', () => {
   );
 
   const assignments = allBlockEntries()
-    .filter(({block}) => (
-      block.opcode === 'lmsTempVars2_setRuntimeVariable'
-      && runtimeVariableName(block) === 'skipMode'
-    ))
+    .filter(
+      ({block}) =>
+        block.opcode === 'lmsTempVars2_setRuntimeVariable' &&
+        runtimeVariableName(block) === 'skipMode',
+    )
     .map(({block}) => literalString(block.inputs.STRING));
-  assert.deepEqual(
-    [...new Set(assignments)].sort(),
-    ['action', 'pose', 'scene', 'title'],
-  );
+  assert.deepEqual([...new Set(assignments)].sort(), ['action', 'pose', 'scene', 'title']);
 });
 
 test('maps rehearsal keys to guarded skip requests', () => {
@@ -142,10 +141,11 @@ test('maps rehearsal keys to guarded skip requests', () => {
       `${key} does not map to the expected skipMode request.`,
     );
     assert(
-      [...blocks.values()].some((candidate) => (
-        candidate.opcode === 'lmsTempVars2_runtimeVariableExists'
-        && runtimeVariableName(candidate) === 'skipMode'
-      )),
+      [...blocks.values()].some(
+        (candidate) =>
+          candidate.opcode === 'lmsTempVars2_runtimeVariableExists' &&
+          runtimeVariableName(candidate) === 'skipMode',
+      ),
       `${key} does not guard its request with a skipMode existence check.`,
     );
   }
@@ -166,20 +166,23 @@ test('continues pose iteration only while skipMode is absent', () => {
   const conditionId = referencedBlockIds(poseLoop.inputs.CONDITION)[0];
   const conditionBlocks = descendants(target, conditionId);
   assert(
-    [...conditionBlocks.values()].some((candidate) => (
-      candidate.opcode === 'operator_not'
-      && referencedBlockIds(candidate.inputs.OPERAND).some((id) => (
-        target.blocks[id]?.opcode === 'lmsTempVars2_runtimeVariableExists'
-        && runtimeVariableName(target.blocks[id]) === 'skipMode'
-      ))
-    )),
+    [...conditionBlocks.values()].some(
+      (candidate) =>
+        candidate.opcode === 'operator_not' &&
+        referencedBlockIds(candidate.inputs.OPERAND).some(
+          (id) =>
+            target.blocks[id]?.opcode === 'lmsTempVars2_runtimeVariableExists' &&
+            runtimeVariableName(target.blocks[id]) === 'skipMode',
+        ),
+    ),
     'Pose loop does not use "not exists(skipMode)" as its idle condition.',
   );
   assert.equal(
-    [...conditionBlocks.values()].filter((candidate) => (
-      candidate.opcode === 'lmsTempVars2_getRuntimeVariable'
-      && runtimeVariableName(candidate) === 'skipMode'
-    )).length,
+    [...conditionBlocks.values()].filter(
+      (candidate) =>
+        candidate.opcode === 'lmsTempVars2_getRuntimeVariable' &&
+        runtimeVariableName(candidate) === 'skipMode',
+    ).length,
     0,
     'Pose loop still compares the skipMode value instead of checking existence.',
   );

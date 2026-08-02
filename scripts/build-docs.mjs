@@ -47,22 +47,15 @@ function runNode(script, args, options = {}) {
 
 function runRubygana(input, output, grade) {
   return new Promise((resolve, reject) => {
-    const rubyArguments = documentConfig.rubyOverrides.flatMap((override) => [
-      '--ruby',
-      override,
-    ]);
-    const child = spawn(process.execPath, [
-      rubyganaBin,
-      '--html',
-      '--grade',
-      String(grade),
-      '--use-rp',
-      ...rubyArguments,
-      input,
-    ], {
-      cwd: projectRoot,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    });
+    const rubyArguments = documentConfig.rubyOverrides.flatMap((override) => ['--ruby', override]);
+    const child = spawn(
+      process.execPath,
+      [rubyganaBin, '--html', '--grade', String(grade), '--use-rp', ...rubyArguments, input],
+      {
+        cwd: projectRoot,
+        stdio: ['ignore', 'pipe', 'inherit'],
+      },
+    );
     const chunks = [];
 
     child.stdout.on('data', (chunk) => chunks.push(chunk));
@@ -86,13 +79,15 @@ function runRubygana(input, output, grade) {
 
 async function findHtmlFiles(directory) {
   const entries = await readdir(directory, {withFileTypes: true});
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return findHtmlFiles(entryPath);
-    }
-    return entry.isFile() && entry.name.endsWith('.html') ? [entryPath] : [];
-  }));
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        return findHtmlFiles(entryPath);
+      }
+      return entry.isFile() && entry.name.endsWith('.html') ? [entryPath] : [];
+    }),
+  );
   return nested.flat();
 }
 
@@ -118,21 +113,12 @@ async function applyRubygana(htmlFile, grade) {
 
 export function normalizeWorkshopImagePaths(source) {
   return source
-    .replace(
-      /(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu,
-      '$1images/',
-    )
-    .replace(
-      /(<img\b[^>]*\bsrc=")\.\//giu,
-      `$1${documentConfig.sourceDirectory}/`,
-    );
+    .replace(/(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu, '$1images/')
+    .replace(/(<img\b[^>]*\bsrc=")\.\//giu, `$1${documentConfig.sourceDirectory}/`);
 }
 
 export function normalizeGeneralImagePaths(source) {
-  return source.replace(
-    /(<img\b[^>]*\bsrc=")\.\.\/images\//giu,
-    '$1images/',
-  );
+  return source.replace(/(<img\b[^>]*\bsrc=")\.\.\/images\//giu, '$1images/');
 }
 
 function baseBuildInfo(details = {}) {
@@ -172,19 +158,23 @@ async function writeBuildInfo(directory, buildInfo) {
 async function prepareWorkshopHtml(htmlPath, grade) {
   const source = await readFile(htmlPath, 'utf8');
   const isTableOfContents = /<nav\b[^>]*\bid="toc"[^>]*>/iu.test(source);
-  const section = path.basename(htmlPath) === documentConfig.coverHtmlFilename
-    ? 'cover'
-    : isTableOfContents ? 'toc' : 'body';
+  const section =
+    path.basename(htmlPath) === documentConfig.coverHtmlFilename
+      ? 'cover'
+      : isTableOfContents
+        ? 'toc'
+        : 'body';
   const note = `<p class="furigana-build-note">このドキュメントは、小学${grade}年生までに学ぶ漢字を学習済みとして想定して、それ以後に学ぶ漢字についての、ふりがなを付けています。</p>`;
   const withoutGeneratedTitle = isTableOfContents
     ? source.replace(/(<body\b[^>]*>)\s*<h1\b[^>]*>[\s\S]*?<\/h1>/iu, '$1')
     : source;
   const withTocLabels = withoutGeneratedTitle.replace(
     /<nav\b[^>]*\bid="toc"[^>]*>[\s\S]*?<\/nav>/iu,
-    (tableOfContents) => tableOfContents.replace(
-      /(<a\b[^>]*>)([\s\S]*?)(<\/a>)/giu,
-      '$1<span class="toc-label">$2</span>$3',
-    ),
+    (tableOfContents) =>
+      tableOfContents.replace(
+        /(<a\b[^>]*>)([\s\S]*?)(<\/a>)/giu,
+        '$1<span class="toc-label">$2</span>$3',
+      ),
   );
   const withLocalImages = normalizeWorkshopImagePaths(withTocLabels);
   const withGrade = withLocalImages.replace(
@@ -195,9 +185,10 @@ async function prepareWorkshopHtml(htmlPath, grade) {
     /<body(\s|>)/i,
     `<body data-publication-section="${section}"$1`,
   );
-  const withNote = section === 'cover'
-    ? withSection.replace(/(<h1\b[^>]*>[\s\S]*?<\/h1>)/i, `$1\n${note}`)
-    : withSection;
+  const withNote =
+    section === 'cover'
+      ? withSection.replace(/(<h1\b[^>]*>[\s\S]*?<\/h1>)/i, `$1\n${note}`)
+      : withSection;
   await writeFile(htmlPath, withNote);
 }
 
@@ -216,47 +207,39 @@ function browserArguments() {
 
 async function buildWebPublication(configPath, outputDirectory, environment = process.env) {
   await rm(outputDirectory, {recursive: true, force: true});
-  await runNode(vivliostyleBin, [
-    'build',
-    '--config',
-    configPath,
-    '--output',
-    outputDirectory,
-    '--format',
-    'webpub',
-  ], {
-    cwd: path.dirname(configPath),
-    env: environment,
-  });
+  await runNode(
+    vivliostyleBin,
+    ['build', '--config', configPath, '--output', outputDirectory, '--format', 'webpub'],
+    {
+      cwd: path.dirname(configPath),
+      env: environment,
+    },
+  );
 }
 
 async function buildPdf(htmlPath, pdfPath) {
   await mkdir(path.dirname(pdfPath), {recursive: true});
-  await runNode(vivliostyleBin, [
-    'build',
-    path.basename(htmlPath),
-    '--size',
-    'A4',
-    '--output',
-    pdfPath,
-    ...browserArguments(),
-  ], {cwd: path.dirname(htmlPath)});
+  await runNode(
+    vivliostyleBin,
+    ['build', path.basename(htmlPath), '--size', 'A4', '--output', pdfPath, ...browserArguments()],
+    {cwd: path.dirname(htmlPath)},
+  );
 }
 
 async function normalizeGeneratedImagePaths(htmlPath) {
   const source = await readFile(htmlPath, 'utf8');
-  await writeFile(htmlPath, source.replace(
-    /(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu,
-    '$1images/',
-  ));
+  await writeFile(
+    htmlPath,
+    source.replace(/(<img\b[^>]*\bsrc=")\.\.\/\.\.\/images\//giu, '$1images/'),
+  );
 }
 
 async function prepareGeneralFuriganaHtml(htmlPath, grade) {
   const source = await readFile(htmlPath, 'utf8');
-  await writeFile(htmlPath, source.replace(
-    /<html(\s|>)/i,
-    `<html data-rubygana-grade="${grade}"$1`,
-  ));
+  await writeFile(
+    htmlPath,
+    source.replace(/<html(\s|>)/i, `<html data-rubygana-grade="${grade}"$1`),
+  );
 }
 
 async function removeDirectoryContentsExcept(directory, preservedEntryNames = []) {
@@ -451,8 +434,8 @@ export async function buildDocs({
 
   const appBarResult = await installSiteAppBars(docsDirectory, distDirectory);
   console.log(
-    `Installed the shared AppBar in ${appBarResult.installedCount} of `
-      + `${appBarResult.htmlCount} documentation HTML file(s).`,
+    `Installed the shared AppBar in ${appBarResult.installedCount} of ` +
+      `${appBarResult.htmlCount} documentation HTML file(s).`,
   );
 
   if (selectedPublications.has('general')) {

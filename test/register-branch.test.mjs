@@ -27,10 +27,9 @@ function referencedBlockId(input) {
 }
 
 function findProcedureCall(proccode) {
-  const entry = Object.entries(stage.blocks).find(([, block]) => (
-    block.opcode === 'procedures_call'
-    && block.mutation?.proccode === proccode
-  ));
+  const entry = Object.entries(stage.blocks).find(
+    ([, block]) => block.opcode === 'procedures_call' && block.mutation?.proccode === proccode,
+  );
   assert(entry, `Procedure call not found: ${proccode}`);
   return {id: entry[0], block: entry[1]};
 }
@@ -84,10 +83,12 @@ test('preserves every character after the first top-level equals sign', () => {
 });
 
 test('evaluates equality comparisons used by registerBranch conditions', () => {
-  const runtimeExpression = loadRuntimeExpression(new Map([
-    ['score', '1'],
-    ['state', 'ready'],
-  ]));
+  const runtimeExpression = loadRuntimeExpression(
+    new Map([
+      ['score', '1'],
+      ['state', 'ready'],
+    ]),
+  );
 
   assert.equal(runtimeExpression.runtimeCondition({EXPRESSION: 'score == 1'}), true);
   assert.equal(runtimeExpression.runtimeCondition({EXPRESSION: 'score != 2'}), true);
