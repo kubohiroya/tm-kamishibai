@@ -6,7 +6,7 @@ allowBuilds:
   fsevents: false
 
 overrides:
-  "scratch-vm>scratch-parser": 6.0.0
+  'scratch-vm>scratch-parser': 6.0.0
 
 peerDependencyRules:
   allowedVersions:

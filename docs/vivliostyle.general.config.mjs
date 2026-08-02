@@ -3,18 +3,18 @@ import {defineConfig} from '@vivliostyle/cli';
 import {generalDocumentConfig} from './config.mjs';
 
 export function createGeneralVivliostyleConfig(sourceFilename) {
-  const selectedDocument = sourceFilename === undefined
-    ? undefined
-    : generalDocumentConfig.documents.find(
-      (document) => document.sourceFilename === sourceFilename,
-    );
+  const selectedDocument =
+    sourceFilename === undefined
+      ? undefined
+      : generalDocumentConfig.documents.find(
+          (document) => document.sourceFilename === sourceFilename,
+        );
   if (sourceFilename !== undefined && selectedDocument === undefined) {
     throw new Error(`Unknown general document: ${sourceFilename}`);
   }
 
-  const documents = selectedDocument === undefined
-    ? generalDocumentConfig.documents
-    : [selectedDocument];
+  const documents =
+    selectedDocument === undefined ? generalDocumentConfig.documents : [selectedDocument];
   const standalone = selectedDocument !== undefined;
 
   return defineConfig({
@@ -29,20 +29,12 @@ export function createGeneralVivliostyleConfig(sourceFilename) {
         ? generalDocumentConfig.standaloneArticleHtmlFilename
         : documentSourceFilename.replace(/\.md$/u, '.html'),
     })),
-    theme: [
-      'theme.css',
-      'general-theme.css',
-    ],
+    theme: ['theme.css', 'general-theme.css'],
     workspaceDir: standalone
       ? `../tmp/docs-general-vivliostyle/${sourceFilename.replace(/\.md$/u, '')}`
       : '../tmp/docs-general-vivliostyle/all',
     copyAsset: {
-      excludes: [
-        'dist/**',
-        'tmp/**',
-        'general/**',
-        'workshops/**',
-      ],
+      excludes: ['dist/**', 'tmp/**', 'general/**', 'workshops/**'],
     },
     toc: {
       title: standalone ? '目次' : '一般ドキュメント目次',

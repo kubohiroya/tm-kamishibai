@@ -13,10 +13,7 @@ import generalVivliostyleConfig, {
 } from '../docs/vivliostyle.general.config.mjs';
 import staffVivliostyleConfig from '../docs/vivliostyle.staff.config.mjs';
 import workshopVivliostyleConfig from '../docs/vivliostyle.workshop.config.mjs';
-import {
-  normalizeGeneralImagePaths,
-  normalizeWorkshopImagePaths,
-} from '../scripts/build-docs.mjs';
+import {normalizeGeneralImagePaths, normalizeWorkshopImagePaths} from '../scripts/build-docs.mjs';
 
 test('uses the configured grade when no environment override is present', () => {
   const originalGrade = process.env.RUBYGANA_GRADE;
@@ -69,10 +66,7 @@ test('delegates the workshop table of contents to Vivliostyle', () => {
   assert.equal(workshopVivliostyleConfig.viewerParam, 'bookMode=true');
   assert.equal(documentConfig.coverHtmlFilename, 'index.html');
   assert.notEqual(documentConfig.coverHtmlFilename, documentConfig.tocHtmlFilename);
-  assert.equal(
-    workshopVivliostyleConfig.copyAsset.excludes.includes('workshops/**'),
-    false,
-  );
+  assert.equal(workshopVivliostyleConfig.copyAsset.excludes.includes('workshops/**'), false);
   assert.doesNotMatch(`${cover}\n${source}`, /^## 目次\s*$/mu);
   assert.doesNotMatch(`${cover}\n${source}`, /^#{1,6}\s+!\[/mu);
   assert.equal((cover.match(/^#\s+/gmu) ?? []).length, 1);
@@ -90,10 +84,9 @@ test('delegates the workshop table of contents to Vivliostyle', () => {
 
 test('normalizes shared and document-local workshop image paths', () => {
   assert.equal(
-    normalizeWorkshopImagePaths([
-      '<img src="../../images/shared.png">',
-      '<img src="./local.png">',
-    ].join('\n')),
+    normalizeWorkshopImagePaths(
+      ['<img src="../../images/shared.png">', '<img src="./local.png">'].join('\n'),
+    ),
     [
       '<img src="images/shared.png">',
       `<img src="${documentConfig.sourceDirectory}/local.png">`,
@@ -115,19 +108,18 @@ test('delegates each general document table of contents to Vivliostyle', () => {
   assert.equal(config.title, '紙芝居アプリ内部仕様書');
   assert.deepEqual(
     config.entry.map(({path, output}) => ({path, output})),
-    [{
-      path: `${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
-      output: generalDocumentConfig.standaloneArticleHtmlFilename,
-    }],
+    [
+      {
+        path: `${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
+        output: generalDocumentConfig.standaloneArticleHtmlFilename,
+      },
+    ],
   );
   assert.equal(config.toc.title, '目次');
   assert.equal(config.toc.htmlPath, generalDocumentConfig.standaloneTocHtmlFilename);
   assert.equal(config.toc.sectionDepth, 3);
   assert.match(config.workspaceDir, /07-internal-specification$/u);
-  assert.throws(
-    () => createGeneralVivliostyleConfig('missing.md'),
-    /Unknown general document/u,
-  );
+  assert.throws(() => createGeneralVivliostyleConfig('missing.md'), /Unknown general document/u);
 });
 
 test('prints Vivliostyle-generated general document tables of contents with page numbers', () => {
@@ -173,10 +165,12 @@ test('publishes appendix A as a standalone non-ruby staff document', () => {
   );
   assert.deepEqual(
     staffVivliostyleConfig.entry.map(({path, output}) => ({path, output})),
-    [{
-      path: `${staffDocumentConfig.sourceDirectory}/${staffDocumentConfig.sourceFilename}`,
-      output: staffDocumentConfig.htmlFilename,
-    }],
+    [
+      {
+        path: `${staffDocumentConfig.sourceDirectory}/${staffDocumentConfig.sourceFilename}`,
+        output: staffDocumentConfig.htmlFilename,
+      },
+    ],
   );
   assert.match(source, new RegExp(`^# ${staffDocumentConfig.title}$`, 'mu'));
   assert.match(source, /^# 1\. 体験会運営用資料$/mu);
@@ -192,7 +186,10 @@ test('publishes the current software developer guide', () => {
   assert(developerDocument, 'Developer document is missing from the general document config.');
 
   const source = readFileSync(
-    new URL(`../docs/${generalDocumentConfig.sourceDirectory}/${developerDocument.sourceFilename}`, import.meta.url),
+    new URL(
+      `../docs/${generalDocumentConfig.sourceDirectory}/${developerDocument.sourceFilename}`,
+      import.meta.url,
+    ),
     'utf8',
   );
   const generalTheme = readFileSync(new URL('../docs/general-theme.css', import.meta.url), 'utf8');
@@ -305,7 +302,10 @@ test('defines the general documents with furigana only for the kids summary', ()
 
   for (const {sourceFilename, title} of generalDocumentConfig.documents) {
     const source = readFileSync(
-      new URL(`../docs/${generalDocumentConfig.sourceDirectory}/${sourceFilename}`, import.meta.url),
+      new URL(
+        `../docs/${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
+        import.meta.url,
+      ),
       'utf8',
     );
     assert.match(source, new RegExp(`^# ${title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
@@ -327,13 +327,18 @@ test('defines the general documents with furigana only for the kids summary', ()
 });
 
 test('documents the kamishibai 3.1 DSL across the current general guides', () => {
-  const sources = new Map(generalDocumentConfig.documents.map(({sourceFilename}) => [
-    sourceFilename,
-    readFileSync(
-      new URL(`../docs/${generalDocumentConfig.sourceDirectory}/${sourceFilename}`, import.meta.url),
-      'utf8',
-    ),
-  ]));
+  const sources = new Map(
+    generalDocumentConfig.documents.map(({sourceFilename}) => [
+      sourceFilename,
+      readFileSync(
+        new URL(
+          `../docs/${generalDocumentConfig.sourceDirectory}/${sourceFilename}`,
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ]),
+  );
 
   for (const [sourceFilename, source] of sources) {
     if (sourceFilename === 'history.md') {
@@ -409,10 +414,7 @@ test('documents the kamishibai 3.1 DSL across the current general guides', () =>
     sources.get('05-command-reference.md'),
     /setLoadingCostume=loading1,loading2,loading3/u,
   );
-  assert.match(
-    sources.get('05-command-reference.md'),
-    /setLoadingBackdrop=loadingBackground/u,
-  );
+  assert.match(sources.get('05-command-reference.md'), /setLoadingBackdrop=loadingBackground/u);
   assert.match(sources.get('03-user-guide.md'), /Loading.*分子・分母/u);
 });
 
