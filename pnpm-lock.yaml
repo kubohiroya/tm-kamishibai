@@ -33,6 +33,9 @@ importers:
       gh-pages:
         specifier: ^6.3.0
         version: 6.3.0
+      globals:
+        specifier: 17.8.0
+        version: 17.8.0
       prettier:
         specifier: ^3.0.0
         version: 3.9.6
@@ -1822,6 +1825,10 @@ packages:
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
+    engines: {node: '>=18'}
+
+  globals@17.8.0:
+    resolution: {integrity: sha512-Zz/LMDZScFmkakeL2cTHzf+PbWKdpU3uclqkZT7TjDG58j5WPt0PpA+n9uPI24fZtlw07q0OtEi84K+umsRzqQ==}
     engines: {node: '>=18'}
 
   globby@11.1.0:
@@ -6178,6 +6185,8 @@ snapshots:
       path-is-absolute: 1.0.1
 
   globals@14.0.0: {}
+
+  globals@17.8.0: {}
 
   globby@11.1.0:
     dependencies:
