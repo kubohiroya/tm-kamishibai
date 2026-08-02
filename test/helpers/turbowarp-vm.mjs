@@ -111,6 +111,12 @@ export class KamishibaiVmHarness {
     return this.getStage().lookupVariableByNameAndType(name, '')?.value;
   }
 
+  setStageVariable(name, value) {
+    const variable = this.getStage().lookupVariableByNameAndType(name, '');
+    if (!variable) throw new Error(`Stage variable not found: ${name}`);
+    variable.value = value;
+  }
+
   getActor(name) {
     return this.vm.runtime.targets.find(
       (target) =>

@@ -62,6 +62,13 @@
       }
     },
     {
+      "id": "kubohiroyakamishibairuntime",
+      "path": "extensions/kubohiroyakamishibairuntime.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64"
+    },
+    {
       "id": "kubohiroyaasyncinput",
       "path": "extensions/kubohiroyaasyncinput.js",
       "mediaType": "text/javascript",
