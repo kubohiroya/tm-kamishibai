@@ -13,6 +13,10 @@ const kamishibaiRuntimeSource = readFileSync(
   new URL('../../app/extensions/kubohiroyakamishibairuntime.js', import.meta.url),
   'utf8',
 );
+const runtimeExpressionSource = readFileSync(
+  new URL('../../app/extensions/kubohiroyaruntimeexpression.js', import.meta.url),
+  'utf8',
+);
 
 function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
   return {
@@ -123,7 +127,12 @@ function createProductionExtensionClass(vm, source, onCreate = () => {}) {
 export function registerKamishibaiTestExtensions(
   vm,
   clock,
-  {initialLocalStorage = {}, productionAssetManager = false, viewerLanguage = 'English'} = {},
+  {
+    initialLocalStorage = {},
+    productionAssetManager = false,
+    productionRuntimeExpression = false,
+    viewerLanguage = 'English',
+  } = {},
 ) {
   const state = {
     actorSequences: new Map(),
@@ -148,6 +157,7 @@ export function registerKamishibaiTestExtensions(
     playingSounds: new Set(),
     poseMatches: false,
     poseScore: 0,
+    runtimeExpression: null,
     runtimeVariableWrites: [],
     timers: new Map(),
     tempVariables: null,
@@ -804,7 +814,15 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);
-  register(vm, 'kubohiroyaruntimeexpression', RuntimeExpressionExtension);
+  register(
+    vm,
+    'kubohiroyaruntimeexpression',
+    productionRuntimeExpression
+      ? createProductionExtensionClass(vm, runtimeExpressionSource, (extension) => {
+          state.runtimeExpression = extension;
+        })
+      : RuntimeExpressionExtension,
+  );
   register(
     vm,
     'kubohiroyakamishibairuntime',

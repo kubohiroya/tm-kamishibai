@@ -16,6 +16,14 @@ async function startFixture(harness, fixtureUrl = runtimeFixtureUrl) {
   startScript(harness, script);
 }
 
+function loadDiagnosticVm(options = {}) {
+  return loadKamishibaiVm({
+    ...options,
+    productionAssetManager: true,
+    productionRuntimeExpression: true,
+  });
+}
+
 function startScript(harness, script) {
   harness.greenFlag();
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
@@ -24,13 +32,14 @@ function startScript(harness, script) {
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
 }
 
-function startInvalidScript(harness, script) {
+async function startInvalidScript(harness, script) {
   harness.setStageVariable('featureDetailedScriptErrors', true);
   harness.greenFlag();
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.setRuntimeVariable('script', script);
+  harness.diagnosticAssetRegistrySize = harness.extensionState.assetManager.assetRegistry.size;
   harness.broadcast('startStory');
-  harness.runUntil(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
+  await harness.runUntilAsync(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
 }
 
 function assertScriptError(harness, {category, line, message}) {
@@ -38,10 +47,23 @@ function assertScriptError(harness, {category, line, message}) {
   assert.equal(Number(harness.getRuntimeVariable('kamishibaiErrorLine')), line);
   assert.match(harness.getRuntimeVariable('kamishibaiErrorMessage'), message);
   assert.match(harness.getRuntimeVariable('kamishibaiErrorSvg'), /^<svg[^>]*>/u);
+  assert.match(harness.getRuntimeVariable('kamishibaiErrorCode'), /^K31-/u);
+  assert.ok(Number(harness.getRuntimeVariable('kamishibaiErrorColumn')) >= 1);
   assert.equal(harness.getSprite('prompt').visible, true);
   assert.match(
     harness.extensionState.displayedText.get(harness.getSprite('prompt').id),
-    /台本エラー/u,
+    /台本エラー|Script error/u,
+  );
+  const diagnostic = JSON.parse(harness.extensionState.kamishibaiRuntime.getLastDiagnosticJson());
+  assert.equal(diagnostic.source.line, line);
+  assert.equal(diagnostic.category, category);
+  assert.equal(
+    harness.extensionState.assetManager.assetRegistry.size,
+    harness.diagnosticAssetRegistrySize,
+  );
+  assert.equal(
+    harness.vm.runtime.targets.filter((target) => !target.isStage && !target.isOriginal).length,
+    0,
   );
   assert.equal(harness.vm.runtime.threads.length, 0);
 }
@@ -187,10 +209,10 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
 });
 
 test('shows an SVG error and stops on an unsupported kamishibai version', async (context) => {
-  const harness = await loadKamishibaiVm();
+  const harness = await loadDiagnosticVm();
   context.after(() => harness.quit());
 
-  startInvalidScript(harness, 'kamishibai=2.0');
+  await startInvalidScript(harness, 'kamishibai=2.0');
 
   assertScriptError(harness, {
     category: 'unsupported-version',
@@ -225,18 +247,18 @@ test('reports unsupported top-level and actor action commands with their lines',
       ].join('\n'),
     },
   ]) {
-    const harness = await loadKamishibaiVm();
+    const harness = await loadDiagnosticVm();
     context.after(() => harness.quit());
-    startInvalidScript(harness, errorCase.script);
+    await startInvalidScript(harness, errorCase.script);
     assertScriptError(harness, errorCase);
   }
 });
 
 test('reports a project-local asset address that cannot be resolved', async (context) => {
-  const harness = await loadKamishibaiVm();
+  const harness = await loadDiagnosticVm();
   context.after(() => harness.quit());
 
-  startInvalidScript(
+  await startInvalidScript(
     harness,
     ['kamishibai=3.1', 'asset=Missing,costume:Loading:not-there'].join('\n'),
   );
@@ -253,9 +275,9 @@ test('reports undefined assets referenced by setSkin and pose', async (context) 
     'action=Hero:setSkin:MissingSkin',
     'action=Hero:pose:MissingSkin:firstPose:',
   ]) {
-    const harness = await loadKamishibaiVm();
+    const harness = await loadDiagnosticVm();
     context.after(() => harness.quit());
-    startInvalidScript(
+    await startInvalidScript(
       harness,
       [
         'kamishibai=3.1',
@@ -278,10 +300,10 @@ test('reports undefined assets referenced by setSkin and pose', async (context) 
 });
 
 test('reports an undefined scene transition target', async (context) => {
-  const harness = await loadKamishibaiVm();
+  const harness = await loadDiagnosticVm();
   context.after(() => harness.quit());
 
-  startInvalidScript(
+  await startInvalidScript(
     harness,
     [
       'kamishibai=3.1',
@@ -302,10 +324,10 @@ test('reports an undefined scene transition target', async (context) => {
 });
 
 test('reports Runtime Expression syntax errors at the registerBranch line', async (context) => {
-  const harness = await loadKamishibaiVm();
+  const harness = await loadDiagnosticVm();
   context.after(() => harness.quit());
 
-  startInvalidScript(
+  await startInvalidScript(
     harness,
     [
       'kamishibai=3.1',
