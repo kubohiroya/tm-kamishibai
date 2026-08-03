@@ -4,31 +4,27 @@ import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
 
-test('documents every security override and its removal condition', async () => {
-  const [audit, workspace] = await Promise.all([
-    readFile(new URL('docs/development/dependency-audit.md', root), 'utf8'),
+test('removes documentation-only dependencies and overrides', async () => {
+  const [packageJson, workspace] = await Promise.all([
+    readFile(new URL('package.json', root), 'utf8').then(JSON.parse),
     readFile(new URL('pnpm-workspace.yaml', root), 'utf8'),
   ]);
   const overrideSection = workspace.slice(workspace.indexOf('overrides:'));
-  const expectedOverrides = [
+  const removedOverrides = [
     '@vivliostyle/cli>dompurify',
     'press-ready>uuid',
-    'scratch-vm>uuid',
-    'scratch-vm>worker-loader',
     'prismjs',
     'trim',
     'valibot',
   ];
 
-  for (const name of expectedOverrides) {
-    assert.match(overrideSection, new RegExp(`['"]?${name}['"]?:`, 'u'));
+  assert.equal(packageJson.devDependencies['@vivliostyle/cli'], undefined);
+  assert.equal(packageJson.devDependencies.rubygana, undefined);
+  for (const name of removedOverrides) {
+    assert.doesNotMatch(overrideSection, new RegExp(`['"]?${name}['"]?:`, 'u'));
   }
+  assert.match(overrideSection, /['"]scratch-vm>uuid['"]:\s*11\.1\.1/u);
   assert.match(overrideSection, /['"]scratch-vm>worker-loader['"]:\s*['"]-['"]/u);
-  for (const name of ['dompurify', 'prismjs', 'trim', 'valibot', 'uuid', 'worker-loader']) {
-    assert.ok(audit.includes('| `' + name + '`'));
-  }
-  assert.match(audit, /解除条件/u);
-  assert.match(audit, /#212/u);
 });
 
 test('removes the unused scratch-vm legacy Webpack toolchain', async () => {

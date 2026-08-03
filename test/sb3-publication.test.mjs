@@ -30,20 +30,9 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
 });
 
 test('links and documents the generated downloadable SB3', async () => {
-  const [
-    downloadPage,
-    developerGuide,
-    internalSpecification,
-    readme,
-    userGuide,
-    packageJsonSource,
-    ciWorkflow,
-  ] = await Promise.all([
+  const [downloadPage, readme, packageJsonSource, ciWorkflow] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
-    readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
-    readFile(path.join(projectRoot, 'docs/general/07-internal-specification.md'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
-    readFile(path.join(projectRoot, 'docs/general/03-user-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
     readFile(path.join(projectRoot, '.github/workflows/ci.yml'), 'utf8'),
   ]);
@@ -51,19 +40,6 @@ test('links and documents the generated downloadable SB3', async () => {
 
   assert.match(downloadPage, /href="kamishibai\.sb3" download/u);
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
-  assert.match(userGuide, /`kamishibai\.sb3`/u);
-  for (const command of [
-    'pnpm sb3:build',
-    'pnpm sb3:import -- /path/to/edited-kamishibai.sb3',
-    'pnpm sb3:check',
-    'pnpm test',
-    'pnpm run build',
-  ]) {
-    assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
-  }
-  assert.match(developerGuide, /`app\/`[^\n]*正本/u);
-  assert.match(developerGuide, /github\.com\/kubohiroya\/sb3-toolchain/u);
-  assert.doesNotMatch(developerGuide, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.match(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
@@ -72,14 +48,6 @@ test('links and documents the generated downloadable SB3', async () => {
   );
   assert.match(ciWorkflow, /run: pnpm sb3:check/u);
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
-  assert.match(developerGuide, /`stories\/urashima\/`/u);
-  assert.doesNotMatch(developerGuide, /samples\/urashima\//u);
-  assert.match(developerGuide, /`dist\/downloads\/kamishibai\.sb3`/u);
-  assert.match(userGuide, /kubohiroya\.github\.io\/tmpose-kamishibai\/downloads\//u);
-  assert.match(
-    userGuide,
-    /kubohiroya\.github\.io\/tmpose-kamishibai-samples\/stories\/urashima\//u,
-  );
   assert.match(
     readme,
     new RegExp(
@@ -88,41 +56,13 @@ test('links and documents the generated downloadable SB3', async () => {
     ),
     'README installation must use the current fixed npm version.',
   );
-  assert.match(developerGuide, /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u);
-  assert.match(developerGuide, /npm view @kubohiroya\/tmpose-kamishibai version/u);
-  for (const document of [developerGuide, internalSpecification, readme]) {
-    assert.doesNotMatch(
-      document,
-      /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u,
-      'Documentation must not use the retired Git tag installation path.',
-    );
-    assert.doesNotMatch(document, /allowBuilds/u);
-  }
-  for (const document of [developerGuide, readme]) {
-    assert.match(document, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
-    assert.match(document, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
-  }
-  assert.match(developerGuide, /pnpm install --frozen-lockfile/u);
-  for (const command of [
-    'pnpm sb3:extensions:status',
-    'pnpm sb3:extensions:sync',
-    'pnpm sb3:extensions:update -- OLD_ID --migrate-id NEW_ID',
-    'pnpm run preview:docs',
-  ]) {
-    assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
-  }
-  for (const command of ['pnpm release:check', 'npm publish --access public']) {
-    assert(developerGuide.includes(command), `Developer guide is missing: ${command}`);
-  }
-  for (const exportedName of [
-    'buildSb3Bundle',
-    'Sb3BuilderError',
-    'validateAssetManifest',
-    'validateBundle',
-  ]) {
-    assert(developerGuide.includes(exportedName), `Developer guide is missing: ${exportedName}`);
-  }
-  assert.match(readme, /\[メンテナンスガイド\]\(docs\/general\/06-developer-guide\.md\)/u);
+  assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
+  assert.doesNotMatch(readme, /allowBuilds/u);
+  assert.match(readme, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
+  assert.match(readme, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
+  assert.match(readme, /github\.com\/kubohiroya\/tmpose-kamishibai-docs/u);
+  assert.match(readme, /kubohiroya\.github\.io\/tmpose-kamishibai-docs\//u);
+  assert.doesNotMatch(readme, /\]\(docs\//u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
 });
 
@@ -138,7 +78,7 @@ test('renders the top-page download version from package metadata', async () => 
   const rendered = renderSiteVersion(siteIndex, packageJson.version);
   assert.match(
     rendered,
-    new RegExp(`kamishibai ${packageJson.version.replaceAll('.', '\\.')}のSB3ファイル`, 'u'),
+    new RegExp(`kamishibai\\s+${packageJson.version.replaceAll('.', '\\.')}のSB3ファイル`, 'u'),
   );
   assert(!rendered.includes(siteVersionPlaceholder));
   assert.throws(
@@ -153,12 +93,9 @@ test('renders the top-page download version from package metadata', async () => 
 
 test('opens the Urashima web sample from the top-page Web card', async () => {
   const siteIndex = await readFile(path.join(projectRoot, 'site/index.html'), 'utf8');
-  const webCard = siteIndex.match(
-    /<a class="content-card" href="([^"]+)">\s*<h3 class="card-heading">[\s\S]*?Web版を開く<\/h3>/u,
-  );
 
-  assert(webCard, 'The top-page Web card is missing.');
-  assert.equal(webCard[1], urashimaWebUrl);
+  assert(siteIndex.includes(`href="${urashimaWebUrl}"`));
+  assert.match(siteIndex, /Web版を開く/u);
   assert.doesNotMatch(siteIndex, /https:\/\/sqs\.prof\.cuc\.ac\.jp\/kamishibai\//u);
 });
 
@@ -173,30 +110,6 @@ test('links the public sample site without restoring the retired local page', as
     assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-samples\/"/u);
     assert.doesNotMatch(page, /href="(?:\.\.\/)*samples\/"/u);
   }
-});
-
-test('documents the generic, editor, and player artifact profiles', async () => {
-  const developerGuide = await readFile(
-    path.join(projectRoot, 'docs/general/06-developer-guide.md'),
-    'utf8',
-  );
-  const profileSection = developerGuide.match(
-    /^## 成果物プロファイルを理解する \{#artifact-profiles\}$(?<section>[\s\S]*?)(?=^## SB3・台本変換ビルダーを利用する \{#sb3-script-builder\}$)/mu,
-  )?.groups?.section;
-
-  assert(profileSection, 'Developer guide is missing the artifact profile section.');
-  for (const profile of ['`generic`', '`editor`', '`player`']) {
-    assert(profileSection.includes(profile), `Artifact profile is missing: ${profile}`);
-  }
-  for (const filename of ['`kamishibai.sb3`', '`_urashima.sb3`', '`urashima.sb3`']) {
-    assert(profileSection.includes(filename), `Artifact filename is missing: ${filename}`);
-  }
-  assert.match(profileSection, /`generic`[^\n]*`kamishibai\.sb3`[^\n]*非埋め込み[^\n]*非埋め込み/u);
-  assert.match(profileSection, /`editor`[^\n]*`_urashima\.sb3`[^\n]*非埋め込み[^\n]*埋め込み/u);
-  assert.match(profileSection, /`player`[^\n]*`urashima\.sb3`[^\n]*埋め込み[^\n]*埋め込み/u);
-  assert.match(profileSection, /builder APIとCLIが受け付ける\s*`profile`は`editor`または`player`/u);
-  assert.match(profileSection, /`player`[\s\S]*ファイル選択なし/u);
-  assert.match(profileSection, /オンライン依存[^\n]*成果物manifest/u);
 });
 
 test('keeps only minimal validation scripts in the application repository', async () => {

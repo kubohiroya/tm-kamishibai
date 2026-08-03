@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
@@ -7,16 +6,6 @@ import {loadKamishibaiProject} from './helpers/sb3-project.mjs';
 
 const project = loadKamishibaiProject();
 const stage = project.targets.find((target) => target.isStage);
-const relatedDocumentation = [
-  '03-user-guide.md',
-  '04-dsl-manual.md',
-  '05-command-reference.md',
-  '01-executive-summary-adult.md',
-].map((filename) => ({
-  filename,
-  source: readFileSync(new URL(`../docs/general/${filename}`, import.meta.url), 'utf8'),
-}));
-
 function literalString(input) {
   const value = input?.[1];
   return Array.isArray(value) && value[0] === 10 ? String(value[1]) : undefined;
@@ -98,23 +87,4 @@ test('evaluates equality comparisons used by registerBranch conditions', () => {
     () => runtimeExpression.runtimeCondition({EXPRESSION: 'score = 1'}),
     /Unexpected character/u,
   );
-});
-
-test('documents equality comparisons as supported syntax', () => {
-  for (const {filename, source} of relatedDocumentation) {
-    assert.doesNotMatch(
-      source,
-      /条件式内の等価比較は避け|`=`[^\n]*(?:なるべく避け|使うのが安全)/u,
-      `${filename} still discourages equals signs without matching the implementation.`,
-    );
-  }
-
-  for (const filename of ['04-dsl-manual.md', '05-command-reference.md']) {
-    const source = relatedDocumentation.find((document) => document.filename === filename).source;
-    for (const operator of ['==', '!=', '===', '!==']) {
-      assert(source.includes(`\`${operator}\``), `${filename} does not document ${operator}.`);
-    }
-    assert.match(source, /最初の `=`/u);
-    assert.match(source, /registerBranch=.*==/u);
-  }
 });
