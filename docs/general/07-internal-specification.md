@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1749 |
+| block                    | 1753 |
 | event hat                |   49 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   13 |
@@ -175,6 +175,8 @@ cloneを非表示のまま保持せず削除します。
 保存済み台本があるmenuでは、上段を`ファイルを開く`／`もう一度`、下段を
 `アプリ情報`／`言語`とする2列×2行の固定グリッドでcloneを配置します。
 各セルは、上側にローカルSVG costumeのアイコン、下側にruntime textのラベルを配置します。
+上段のラベルと下段のアイコンの中心間隔を90以上確保し、行間を明確に分けます。
+4つのメニューラベルには、既定の`Handwriting`ではなく細身の`Sans Serif`を指定します。
 アイコンは`ui.icon.open`、`ui.icon.reload`、`ui.icon.about`、`ui.icon.language`として
 Asset Managerへ登録し、対応するラベルと同じ`uiAction`を持つ独立した`UiItem` cloneにします。
 そのため、アイコンとラベルのどちらをクリックしても同じ画面操作を実行します。

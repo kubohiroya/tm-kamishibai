@@ -25021,7 +25021,7 @@
         },
         "uiFlagColor3": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "uiFlagRegister4",
+          "next": "uiFlagFont3",
           "parent": "uiFlagWidth3",
           "inputs": {
             "NAME": [
@@ -25050,10 +25050,41 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagFont3": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegister4",
+          "parent": "uiFlagColor3",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagRegister4": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth4",
-          "parent": "uiFlagColor3",
+          "parent": "uiFlagFont3",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -25107,7 +25138,7 @@
         },
         "uiFlagColor4": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "uiFlagRegister5",
+          "next": "uiFlagFont4",
           "parent": "uiFlagWidth4",
           "inputs": {
             "NAME": [
@@ -25136,10 +25167,41 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagFont4": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegister5",
+          "parent": "uiFlagColor4",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagRegister5": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth5",
-          "parent": "uiFlagColor4",
+          "parent": "uiFlagFont4",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -25193,7 +25255,7 @@
         },
         "uiFlagColor5": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "uiFlagRegister6",
+          "next": "uiFlagFont5",
           "parent": "uiFlagWidth5",
           "inputs": {
             "NAME": [
@@ -25222,10 +25284,41 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagFont5": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegister6",
+          "parent": "uiFlagColor5",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagRegister6": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth6",
-          "parent": "uiFlagColor5",
+          "parent": "uiFlagFont5",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -25279,7 +25372,7 @@
         },
         "uiFlagColor6": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "uiFlagRegisterMenuIconOpen",
+          "next": "uiFlagFont6",
           "parent": "uiFlagWidth6",
           "inputs": {
             "NAME": [
@@ -25308,10 +25401,41 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagFont6": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": "uiFlagRegisterMenuIconOpen",
+          "parent": "uiFlagColor6",
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "PROPERTY": [
+              1,
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagRegisterMenuIconOpen": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagRegisterMenuIconReload",
-          "parent": "uiFlagColor6",
+          "parent": "uiFlagFont6",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -33388,7 +33512,7 @@
               1,
               [
                 10,
-                "88"
+                "105"
               ]
             ],
             "uiSizeArg": [
@@ -33454,7 +33578,7 @@
               1,
               [
                 10,
-                "88"
+                "105"
               ]
             ],
             "uiSizeArg": [
@@ -33520,7 +33644,7 @@
               1,
               [
                 10,
-                "-22"
+                "-35"
               ]
             ],
             "uiSizeArg": [
@@ -33586,7 +33710,7 @@
               1,
               [
                 10,
-                "-22"
+                "-35"
               ]
             ],
             "uiSizeArg": [
@@ -33652,7 +33776,7 @@
               1,
               [
                 10,
-                "45"
+                "60"
               ]
             ],
             "uiSizeArg": [
@@ -33796,7 +33920,7 @@
               1,
               [
                 10,
-                "45"
+                "60"
               ]
             ],
             "uiSizeArg": [
@@ -33862,7 +33986,7 @@
               1,
               [
                 10,
-                "-65"
+                "-80"
               ]
             ],
             "uiSizeArg": [
@@ -33928,7 +34052,7 @@
               1,
               [
                 10,
-                "-65"
+                "-80"
               ]
             ],
             "uiSizeArg": [

@@ -11,19 +11,33 @@ const officialWebsiteUrl = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ).homepage;
 const menuGridLayout = new Map([
-  ['openButton', {size: 65, textWidth: 326, x: -110, y: 45}],
-  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 45}],
-  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -65}],
-  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -65}],
+  ['openButton', {size: 65, textWidth: 326, x: -110, y: 60}],
+  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 60}],
+  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -80}],
+  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -80}],
 ]);
 const menuIconLayout = new Map([
   [
     'openButtonIcon',
-    {action: 'open-file', asset: 'ui.icon.open', labelId: 'openButton', size: 100, x: -110, y: 88},
+    {
+      action: 'open-file',
+      asset: 'ui.icon.open',
+      labelId: 'openButton',
+      size: 100,
+      x: -110,
+      y: 105,
+    },
   ],
   [
     'reloadButtonIcon',
-    {action: 'reload', asset: 'ui.icon.reload', labelId: 'reloadButton', size: 100, x: 110, y: 88},
+    {
+      action: 'reload',
+      asset: 'ui.icon.reload',
+      labelId: 'reloadButton',
+      size: 100,
+      x: 110,
+      y: 105,
+    },
   ],
   [
     'showTitleButtonIcon',
@@ -33,7 +47,7 @@ const menuIconLayout = new Map([
       labelId: 'showTitleButton',
       size: 100,
       x: -110,
-      y: -22,
+      y: -35,
     },
   ],
   [
@@ -44,7 +58,7 @@ const menuIconLayout = new Map([
       labelId: 'languageButton',
       size: 100,
       x: 110,
-      y: -22,
+      y: -35,
     },
   ],
 ]);
@@ -110,6 +124,15 @@ function assertMenuGridFitsStage(clones) {
     ['showTitleButton', 'languageButton'],
   ]) {
     assert(bounds.get(leftId).right < bounds.get(rightId).left, `${leftId} overlaps ${rightId}`);
+  }
+  for (const [upperLabelId, lowerIconId] of [
+    ['openButton', 'showTitleButtonIcon'],
+    ['reloadButton', 'languageButtonIcon'],
+  ]) {
+    assert(
+      clones.get(upperLabelId).y - clones.get(lowerIconId).y >= 90,
+      `${upperLabelId} is too close to ${lowerIconId}`,
+    );
   }
 }
 
@@ -673,7 +696,11 @@ test('prefers a saved UI language and changes it from the Language menu', async 
 });
 
 test('uses only active-screen UI clones and releases their Asset Manager state', async (context) => {
-  const harness = await loadKamishibaiVm({productionAssetManager: true});
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
+  const harness = await loadKamishibaiVm({
+    initialLocalStorage: {script: savedScript},
+    productionAssetManager: true,
+  });
   context.after(() => harness.quit());
 
   harness.greenFlag();
@@ -716,21 +743,18 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   harness.clickTarget(titleClones.get('titleHeading'));
   await harness.runUntilAsync(() => {
     const ids = [...uiItemClonesById(harness).keys()].sort();
-    return (
-      ids.length === 4 &&
-      ids[0] === 'languageButton' &&
-      ids[1] === 'languageButtonIcon' &&
-      ids[2] === 'openButton' &&
-      ids[3] === 'openButtonIcon'
-    );
+    return ids.length === 8;
   });
   for (const targetId of titleTargetIds) {
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
   }
 
   const menuClones = uiItemClonesById(harness);
-  assertMenuGrid(menuClones, ['openButton', 'languageButton']);
-  assertMenuIcons(menuClones, ['openButtonIcon', 'languageButtonIcon']);
+  assertMenuGrid(menuClones);
+  assertMenuIcons(menuClones);
+  for (const id of menuGridLayout.keys()) {
+    assert.equal(harness.extensionState.textFonts.get(menuClones.get(id).id), 'Sans Serif');
+  }
   const menuTargetIds = [...menuClones.values()].map((target) => target.id);
   harness.clickTarget(menuClones.get('languageButton'));
   await harness.runUntilAsync(() => {

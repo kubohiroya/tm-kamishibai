@@ -162,6 +162,7 @@ export function registerKamishibaiTestExtensions(
     timers: new Map(),
     tempVariables: null,
     textColors: new Map(),
+    textFonts: new Map(),
     textOutlineColors: new Map(),
     textOutlineWidths: new Map(),
     touchInputBindings: new Map(),
@@ -768,6 +769,7 @@ export function registerKamishibaiTestExtensions(
         for (const values of [
           state.displayedText,
           state.textColors,
+          state.textFonts,
           state.textOutlineColors,
           state.textOutlineWidths,
         ]) {
@@ -777,6 +779,7 @@ export function registerKamishibaiTestExtensions(
       runtime.on('targetWasRemoved', (target) => {
         state.displayedText.delete(target.id);
         state.textColors.delete(target.id);
+        state.textFonts.delete(target.id);
         state.textOutlineColors.delete(target.id);
         state.textOutlineWidths.delete(target.id);
       });
@@ -798,7 +801,9 @@ export function registerKamishibaiTestExtensions(
     animateText(args, util) {
       state.displayedText.set(util.target.id, Cast.toString(args.TEXT));
     }
-    setFont() {}
+    setFont(args, util) {
+      state.textFonts.set(util.target.id, Cast.toString(args.FONT));
+    }
     setColor(args, util) {
       state.textColors.set(util.target.id, Cast.toString(args.COLOR));
     }
