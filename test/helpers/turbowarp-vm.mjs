@@ -214,6 +214,27 @@ export async function loadKamishibaiVm({
     vmLog.warn = originalWarn;
     vmLog.warning = originalWarning;
   }
+  if (productionAssetManager) {
+    let nextDrawableId = 1;
+    let nextSkinId = 1;
+    const initializeRenderedTarget = (target) => {
+      if (target.drawableID === null || target.drawableID === undefined) {
+        target.drawableID = nextDrawableId;
+        nextDrawableId += 1;
+      }
+      for (const costume of target.sprite?.costumes ?? []) {
+        if (typeof costume.skinId !== 'number') {
+          costume.skinId = nextSkinId;
+          nextSkinId += 1;
+        }
+      }
+    };
+    for (const target of vm.runtime.targets) initializeRenderedTarget(target);
+    vm.runtime.on('targetWasCreated', initializeRenderedTarget);
+    extensionState.assetManager.renderer = {
+      updateDrawableSkinId() {},
+    };
+  }
   vm.runtime.currentMSecs = 0;
   return new KamishibaiVmHarness(vm, clock, extensionState);
 }

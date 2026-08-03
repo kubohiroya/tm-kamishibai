@@ -25279,7 +25279,7 @@
         },
         "uiFlagColor6": {
           "opcode": "kubohiroyaassetmanager_setTextStyle",
-          "next": "uiFlagRegister7",
+          "next": "uiFlagRegisterMenuIconOpen",
           "parent": "uiFlagWidth6",
           "inputs": {
             "NAME": [
@@ -25308,10 +25308,106 @@
           "shadow": false,
           "topLevel": false
         },
+        "uiFlagRegisterMenuIconOpen": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagRegisterMenuIconReload",
+          "parent": "uiFlagColor6",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "costume:UiItem:menu-icon-open"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.icon.open"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegisterMenuIconReload": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagRegisterMenuIconAbout",
+          "parent": "uiFlagRegisterMenuIconOpen",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "costume:UiItem:menu-icon-reload"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.icon.reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegisterMenuIconAbout": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagRegisterMenuIconLanguage",
+          "parent": "uiFlagRegisterMenuIconReload",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "costume:UiItem:menu-icon-about"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.icon.about"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "uiFlagRegisterMenuIconLanguage": {
+          "opcode": "kubohiroyaassetmanager_registerAsset",
+          "next": "uiFlagRegister7",
+          "parent": "uiFlagRegisterMenuIconAbout",
+          "inputs": {
+            "RESOURCE_ID": [
+              1,
+              [
+                10,
+                "costume:UiItem:menu-icon-language"
+              ]
+            ],
+            "NAME": [
+              1,
+              [
+                10,
+                "ui.icon.language"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "uiFlagRegister7": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
           "next": "uiFlagWidth7",
-          "parent": "uiFlagColor6",
+          "parent": "uiFlagRegisterMenuIconLanguage",
           "inputs": {
             "RESOURCE_ID": [
               1,
@@ -33248,6 +33344,270 @@
           "shadow": false,
           "topLevel": false
         },
+        "ui_menu_icon_open_call": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_54",
+          "parent": "ui_control_if_48",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "openButtonIcon"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.icon.open"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "open-file"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "-110"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "88"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_menu_icon_reload_call": {
+          "opcode": "procedures_call",
+          "next": "ui_menu_icon_about_call",
+          "parent": "ui_procedures_call_53",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "reloadButtonIcon"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.icon.reload"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "reload"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "110"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "88"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_menu_icon_about_call": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_menu_icon_reload_call",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "showTitleButtonIcon"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.icon.about"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "show-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "-110"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-22"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_menu_icon_language_call": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_procedures_call_54",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "languageButtonIcon"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.icon.language"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "show-language"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "110"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-22"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
         "ui_procedures_call_47": {
           "opcode": "procedures_call",
           "next": "ui_control_if_48",
@@ -33292,7 +33652,7 @@
               1,
               [
                 10,
-                "55"
+                "45"
               ]
             ],
             "uiSizeArg": [
@@ -33316,7 +33676,7 @@
         },
         "ui_control_if_48": {
           "opcode": "control_if",
-          "next": "ui_procedures_call_54",
+          "next": "ui_menu_icon_open_call",
           "parent": "ui_procedures_call_47",
           "inputs": {
             "CONDITION": [
@@ -33436,7 +33796,7 @@
               1,
               [
                 10,
-                "55"
+                "45"
               ]
             ],
             "uiSizeArg": [
@@ -33460,7 +33820,7 @@
         },
         "ui_procedures_call_53": {
           "opcode": "procedures_call",
-          "next": null,
+          "next": "ui_menu_icon_reload_call",
           "parent": "ui_procedures_call_52",
           "inputs": {
             "uiIdArg": [
@@ -33502,7 +33862,7 @@
               1,
               [
                 10,
-                "-55"
+                "-65"
               ]
             ],
             "uiSizeArg": [
@@ -33526,8 +33886,8 @@
         },
         "ui_procedures_call_54": {
           "opcode": "procedures_call",
-          "next": null,
-          "parent": "ui_control_if_48",
+          "next": "ui_menu_icon_language_call",
+          "parent": "ui_menu_icon_open_call",
           "inputs": {
             "uiIdArg": [
               1,
@@ -33568,7 +33928,7 @@
               1,
               [
                 10,
-                "-55"
+                "-65"
               ]
             ],
             "uiSizeArg": [
@@ -35086,6 +35446,42 @@
           "md5ext": "b85391a10e36ffc5157fa1f4f2d419ce.svg",
           "rotationCenterX": 5,
           "rotationCenterY": 5
+        },
+        {
+          "name": "menu-icon-open",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "1766a36329eca190b2b19bba53ef7d8f",
+          "md5ext": "1766a36329eca190b2b19bba53ef7d8f.svg",
+          "rotationCenterX": 24,
+          "rotationCenterY": 24
+        },
+        {
+          "name": "menu-icon-reload",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "8cf6379b2d82bea5a39bb46757a9bd3d",
+          "md5ext": "8cf6379b2d82bea5a39bb46757a9bd3d.svg",
+          "rotationCenterX": 24,
+          "rotationCenterY": 24
+        },
+        {
+          "name": "menu-icon-about",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "fc0a44695524e272260a18d76320828f",
+          "md5ext": "fc0a44695524e272260a18d76320828f.svg",
+          "rotationCenterX": 24,
+          "rotationCenterY": 24
+        },
+        {
+          "name": "menu-icon-language",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "7069974a56d188a8d1e9e79513df9e0e",
+          "md5ext": "7069974a56d188a8d1e9e79513df9e0e.svg",
+          "rotationCenterX": 24,
+          "rotationCenterY": 24
         }
       ],
       "sounds": [],

@@ -11,10 +11,42 @@ const officialWebsiteUrl = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ).homepage;
 const menuGridLayout = new Map([
-  ['openButton', {size: 65, textWidth: 326, x: -110, y: 55}],
-  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 55}],
-  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -55}],
-  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -55}],
+  ['openButton', {size: 65, textWidth: 326, x: -110, y: 45}],
+  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 45}],
+  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -65}],
+  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -65}],
+]);
+const menuIconLayout = new Map([
+  [
+    'openButtonIcon',
+    {action: 'open-file', asset: 'ui.icon.open', labelId: 'openButton', size: 100, x: -110, y: 88},
+  ],
+  [
+    'reloadButtonIcon',
+    {action: 'reload', asset: 'ui.icon.reload', labelId: 'reloadButton', size: 100, x: 110, y: 88},
+  ],
+  [
+    'showTitleButtonIcon',
+    {
+      action: 'show-title',
+      asset: 'ui.icon.about',
+      labelId: 'showTitleButton',
+      size: 100,
+      x: -110,
+      y: -22,
+    },
+  ],
+  [
+    'languageButtonIcon',
+    {
+      action: 'show-language',
+      asset: 'ui.icon.language',
+      labelId: 'languageButton',
+      size: 100,
+      x: 110,
+      y: -22,
+    },
+  ],
 ]);
 
 async function startFixture(harness, fixtureUrl = runtimeFixtureUrl) {
@@ -40,6 +72,10 @@ function startScript(harness, script) {
 
 function uiItemId(target) {
   return target.lookupVariableByNameAndType('uiId', '')?.value;
+}
+
+function uiItemVariable(target, name) {
+  return target.lookupVariableByNameAndType(name, '')?.value;
 }
 
 function uiItemClonesById(harness) {
@@ -74,6 +110,41 @@ function assertMenuGridFitsStage(clones) {
     ['showTitleButton', 'languageButton'],
   ]) {
     assert(bounds.get(leftId).right < bounds.get(rightId).left, `${leftId} overlaps ${rightId}`);
+  }
+}
+
+function assertMenuIcons(clones, ids = [...menuIconLayout.keys()]) {
+  for (const id of ids) {
+    const target = clones.get(id);
+    assert(target, `Missing menu icon: ${id}`);
+    const {action, asset, labelId, size, x, y} = menuIconLayout.get(id);
+    const label = clones.get(labelId);
+    assert(label, `Missing paired menu label: ${labelId}`);
+    assert.deepEqual(
+      {
+        action: uiItemVariable(target, 'uiAction'),
+        asset: uiItemVariable(target, 'uiAsset'),
+        size: target.size,
+        x: target.x,
+        y: target.y,
+      },
+      {action, asset, size, x, y},
+      `Unexpected menu icon configuration: ${id}`,
+    );
+    assert.equal(uiItemVariable(target, 'uiAction'), uiItemVariable(label, 'uiAction'));
+    assert.equal(target.x, label.x);
+    assert.ok(target.y > label.y, `${id} must be above ${labelId}`);
+  }
+}
+
+function assertMenuIconsFitStage(clones) {
+  for (const [id, {x, y}] of menuIconLayout) {
+    const target = clones.get(id);
+    const halfSize = (48 * target.size) / 200;
+    assert(x - halfSize >= -240, `${id} extends past the left edge`);
+    assert(x + halfSize <= 240, `${id} extends past the right edge`);
+    assert(y - halfSize >= -180, `${id} extends past the bottom edge`);
+    assert(y + halfSize <= 180, `${id} extends past the top edge`);
   }
 }
 
@@ -189,16 +260,26 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   );
   assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
   assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
-  for (const name of ['prompt', 'UiItem']) {
-    assert.deepEqual(
-      harness
-        .getSprite(name)
-        .getCostumes()
-        .map((costume) => costume.name),
-      ['ui-placeholder'],
-      `${name} still contains a localized costume`,
-    );
-  }
+  assert.deepEqual(
+    harness
+      .getSprite('prompt')
+      .getCostumes()
+      .map((costume) => costume.name),
+    ['ui-placeholder'],
+  );
+  assert.deepEqual(
+    harness
+      .getSprite('UiItem')
+      .getCostumes()
+      .map((costume) => costume.name),
+    [
+      'ui-placeholder',
+      'menu-icon-open',
+      'menu-icon-reload',
+      'menu-icon-about',
+      'menu-icon-language',
+    ],
+  );
   assert.deepEqual(
     harness
       .getSprite('officialWebsiteButton')
@@ -482,10 +563,12 @@ test('localizes the app shell from the standard viewer-language reporter', async
     );
 
     harness.broadcast('showMenu');
-    await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+    await harness.runUntilAsync(() => uiItemClonesById(harness).size === 8);
     const menuClones = uiItemClonesById(harness);
     assertMenuGrid(menuClones);
     assertMenuGridFitsStage(menuClones);
+    assertMenuIcons(menuClones);
+    assertMenuIconsFitStage(menuClones);
     for (const [uiId, label] of [
       ['openButton', localized.ui.open],
       ['reloadButton', localized.ui.reload],
@@ -506,9 +589,14 @@ test('uses clone UI as the standard app-shell path', async (context) => {
   harness.greenFlag();
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   harness.broadcast('showMenu');
-  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
 
-  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), ['languageButton', 'openButton']);
+  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), [
+    'languageButton',
+    'languageButtonIcon',
+    'openButton',
+    'openButtonIcon',
+  ]);
 });
 
 test('prefers a saved UI language and changes it from the Language menu', async (context) => {
@@ -525,7 +613,7 @@ test('prefers a saved UI language and changes it from the Language menu', async 
 
   harness.broadcast('showMenu');
   await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
-  harness.clickTarget(uiItemClonesById(harness).get('languageButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('languageButtonIcon'));
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
   const languageClones = uiItemClonesById(harness);
   assert.equal(
@@ -628,7 +716,13 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   harness.clickTarget(titleClones.get('titleHeading'));
   await harness.runUntilAsync(() => {
     const ids = [...uiItemClonesById(harness).keys()].sort();
-    return ids.length === 2 && ids[0] === 'languageButton' && ids[1] === 'openButton';
+    return (
+      ids.length === 4 &&
+      ids[0] === 'languageButton' &&
+      ids[1] === 'languageButtonIcon' &&
+      ids[2] === 'openButton' &&
+      ids[3] === 'openButtonIcon'
+    );
   });
   for (const targetId of titleTargetIds) {
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
@@ -636,6 +730,7 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
 
   const menuClones = uiItemClonesById(harness);
   assertMenuGrid(menuClones, ['openButton', 'languageButton']);
+  assertMenuIcons(menuClones, ['openButtonIcon', 'languageButtonIcon']);
   const menuTargetIds = [...menuClones.values()].map((target) => target.id);
   harness.clickTarget(menuClones.get('languageButton'));
   await harness.runUntilAsync(() => {
@@ -698,24 +793,29 @@ test('keeps saved-script menu actions running after their source clones are dele
   harness.greenFlag();
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   harness.broadcast('showMenu');
-  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 8);
   assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), [
     'languageButton',
+    'languageButtonIcon',
     'openButton',
+    'openButtonIcon',
     'reloadButton',
+    'reloadButtonIcon',
     'showTitleButton',
+    'showTitleButtonIcon',
   ]);
   assertMenuGrid(uiItemClonesById(harness));
+  assertMenuIcons(uiItemClonesById(harness));
 
-  harness.clickTarget(uiItemClonesById(harness).get('showTitleButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('showTitleButtonIcon'));
   await harness.runUntilAsync(
     () =>
       harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
   );
 
   harness.broadcast('showMenu');
-  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
-  harness.clickTarget(uiItemClonesById(harness).get('openButton'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 8);
+  harness.clickTarget(uiItemClonesById(harness).get('openButtonIcon'));
   await harness.runUntilAsync(() => harness.extensionState.filePickerRequests === 1);
   assert.equal(uiItemClonesById(harness).size, 0);
 });
@@ -729,7 +829,7 @@ test('reloads a saved script from a UI clone after deleting the menu clones', as
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   harness.broadcast('showMenu');
   await harness.runUntilAsync(() => uiItemClonesById(harness).has('reloadButton'));
-  harness.clickTarget(uiItemClonesById(harness).get('reloadButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('reloadButtonIcon'));
   await harness.runUntilAsync(() => harness.getBackdropName() === 'Stars');
 
   assert.equal(uiItemClonesById(harness).size, 0);
