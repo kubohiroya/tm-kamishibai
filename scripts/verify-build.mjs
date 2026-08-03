@@ -168,7 +168,7 @@ async function verifySiteAppBars() {
     );
     assert(
       html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/\"') &&
-        html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/docs/\"') &&
+        html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai-docs/\"') &&
         html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai-samples/\"') &&
         html.includes('href=\"https://kubohiroya.github.io/tmpose-kamishibai/downloads/\"'),
       `${path.relative(outputDirectory, htmlFile)} is missing a shared AppBar destination.`,

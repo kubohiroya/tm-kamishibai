@@ -15,7 +15,7 @@ const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
 const destinations = {
   top: siteRoot,
-  docs: `${siteRoot}docs/`,
+  docs: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/',
   samples: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/',
   downloads: `${siteRoot}downloads/`,
 };
@@ -134,7 +134,7 @@ test('injects the shared AppBar into generated documentation HTML', () => {
   );
   assert.match(
     updatedHtml,
-    /<a class="site-nav__link" href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai\/docs\/" aria-current="page">/u,
+    /<a class="site-nav__link" href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/" aria-current="page">/u,
   );
   assert.match(
     updatedHtml,
