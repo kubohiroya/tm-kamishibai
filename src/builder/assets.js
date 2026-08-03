@@ -133,7 +133,7 @@ async function fetchAsset(uri, options) {
 }
 
 /**
- * @param {ReturnType<import('./manifest.js').validateAssetManifest>['assets'][number]} entry
+ * @param {ReturnType<typeof import('./manifest.js').validateAssetManifest>['assets'][number]} entry
  * @param {{allowedRoots: string[], allowHttp: boolean, baseDirectory: string, fetchImplementation: typeof fetch, maximumBytes: number, maxRedirects: number, timeoutMs: number}} options
  */
 async function resolveAsset(entry, options) {
@@ -181,7 +181,7 @@ async function resolveAsset(entry, options) {
 }
 
 /**
- * @param {ReturnType<import('./manifest.js').validateAssetManifest>} manifest
+ * @param {ReturnType<typeof import('./manifest.js').validateAssetManifest>} manifest
  * @param {string} baseDirectory
  * @param {{allowedFileRoots?: string[], allowHttp?: boolean, fetchImplementation?: typeof fetch, maxAssetBytes?: number, maxRedirects?: number, requestTimeoutMs?: number}} [options]
  */
