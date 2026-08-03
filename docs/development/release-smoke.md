@@ -110,18 +110,34 @@ Stop the release if any of these occurs:
 
 ## Result record (2026-08-03)
 
-| Item                       | Environment / artifact                                                                    | Result                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Candidate                  | `3865783`, SHA-256 `31d55f574ee6ac5f7244a9609c69efa74adf8eb141a13cf158e7b37453ed65b3`     | pending final manual paths                                 |
-| Editor                     | TurboWarp `pentapod`, `editor.6079e10d7d50d3d832ef.js`; Chrome 150.0.7871.187; macOS 27.0 | candidate loaded; title displayed                          |
-| Permissions                | candidate in fresh Editor tab                                                             | passed: seven prompts, then no security dialog             |
-| Published 3.1.7 comparison | public generic and Player SB3                                                             | passed: six prompts; title/menu displayed                  |
-| Packager comparison        | published Urashima web build in a separate Codex browser session                          | title displayed; current candidate package still required  |
-| External script            | `pr-44-smoke.txt`                                                                         | pending local file selection                               |
-| Embedded script            | published Urashima Player                                                                 | start requested; pending camera permission and first scene |
-| Camera/TMPose/transition   | Urashima model `https://sqs.prof.cuc.ac.jp/kamishibai/20260630/1and2/` and camera         | pending physical camera confirmation                       |
-| Detailed diagnostic        | generated flag ON/OFF fixtures                                                            | ON passed; OFF awaits camera permission before legacy path |
-| Diagnostic restart         | fixed ON fixture from PR #216                                                             | passed: SVG → normal title → same SVG                      |
+| Item                       | Environment / artifact                                                                    | Result                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Candidate                  | `3865783`, SHA-256 `31d55f574ee6ac5f7244a9609c69efa74adf8eb141a13cf158e7b37453ed65b3`     | pending expected-pose completion only                    |
+| Editor                     | TurboWarp `pentapod`, `editor.6079e10d7d50d3d832ef.js`; Chrome 150.0.7871.187; macOS 27.0 | candidate loaded; title displayed                        |
+| Permissions                | candidate in fresh Editor tab                                                             | passed: seven prompts, then no security dialog           |
+| Published 3.1.7 comparison | public generic and Player SB3                                                             | passed: six prompts; title/menu displayed                |
+| Packager comparison        | current-candidate Urashima Player in an isolated Playwright context                       | passed except expected-pose completion                   |
+| External script            | `pr-44-smoke.txt`                                                                         | passed: timed and Right-interrupted paths                |
+| Embedded script            | published and current-candidate Urashima Player                                           | passed: Beach, Ocean, and Dragon Castle reached          |
+| Camera/TMPose/transition   | Urashima model `https://sqs.prof.cuc.ac.jp/kamishibai/20260630/1and2/` and camera         | live preview/inference and interrupted transition passed |
+| Detailed diagnostic        | generated flag ON/OFF fixtures                                                            | passed: ON SVG safe stop; OFF `INVALIDSCRIPT` fallback   |
+| Diagnostic restart         | fixed ON fixture from PR #216                                                             | passed: SVG → normal title → same SVG                    |
 
-The pending rows are release blockers. Replace them with `passed` plus concise evidence before closing
-the release-smoke issue.
+Playwright selected `pr-44-smoke.txt` through the real file chooser, observed Stars for the 30-second
+wait, its normal return to Title, and a separate Right-key interruption. Both runs ended without
+remaining runtime threads or extension-managed input/animation work.
+
+The current candidate was combined with the Urashima source and asset manifest by the repository
+builder, then packaged as plain HTML with autoplay and the release window title. Its builder manifest
+records the candidate SHA-256 above. In a fresh Playwright browser context which had not run the
+Editor checks, it opened without a permission dialog, file chooser, console error, or page error.
+Camera permission was granted for that context. At the first `help` pose action, TMPose reported a
+live 320×240 video track, a loaded model, active inference, a non-empty recognition result, and no
+extension error. Right and Down advanced to Ocean and Dragon Castle; after leaving the pose action,
+inference and the preview stopped.
+
+The expected `help` pose itself was not produced during this run (the recognizer returned `ride1`), so
+pose-driven completion remains unverified. This is the sole remaining release blocker. Do not close
+the release-smoke issue or mark the pull request ready until a person performs the expected pose and
+confirms that the action completes without a navigation key. No camera frame is retained as release
+evidence or committed to the repository.
