@@ -10,6 +10,12 @@ const poseFixtureUrl = new URL('./fixtures/runtime/pose-skip-mode.txt', import.m
 const officialWebsiteUrl = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ).homepage;
+const menuGridLayout = new Map([
+  ['openButton', {size: 65, textWidth: 326, x: -110, y: 55}],
+  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 55}],
+  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -55}],
+  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -55}],
+]);
 
 async function startFixture(harness, fixtureUrl = runtimeFixtureUrl) {
   const script = await readFile(fixtureUrl, 'utf8');
@@ -38,6 +44,37 @@ function uiItemId(target) {
 
 function uiItemClonesById(harness) {
   return new Map(harness.getClones('UiItem').map((target) => [uiItemId(target), target]));
+}
+
+function assertMenuGrid(clones, ids = [...menuGridLayout.keys()]) {
+  for (const id of ids) {
+    const target = clones.get(id);
+    assert(target, `Missing menu item: ${id}`);
+    const {size, x, y} = menuGridLayout.get(id);
+    assert.deepEqual(
+      {size: target.size, x: target.x, y: target.y},
+      {size, x, y},
+      `Unexpected menu position: ${id}`,
+    );
+  }
+}
+
+function assertMenuGridFitsStage(clones) {
+  const bounds = new Map();
+  for (const [id, {textWidth}] of menuGridLayout) {
+    const target = clones.get(id);
+    const halfWidth = (textWidth * target.size) / 200;
+    const itemBounds = {left: target.x - halfWidth, right: target.x + halfWidth};
+    assert(itemBounds.left >= -240, `${id} extends past the left edge`);
+    assert(itemBounds.right <= 240, `${id} extends past the right edge`);
+    bounds.set(id, itemBounds);
+  }
+  for (const [leftId, rightId] of [
+    ['openButton', 'reloadButton'],
+    ['showTitleButton', 'languageButton'],
+  ]) {
+    assert(bounds.get(leftId).right < bounds.get(rightId).left, `${leftId} overlaps ${rightId}`);
+  }
 }
 
 async function startInvalidScript(harness, script) {
@@ -387,6 +424,7 @@ test('shows the built-in English Title fallback before runtime initialization', 
 });
 
 test('localizes the app shell from the standard viewer-language reporter', async (context) => {
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
   for (const {locale, viewerLanguage} of [
     {
       locale: 'en',
@@ -405,7 +443,10 @@ test('localizes the app shell from the standard viewer-language reporter', async
       viewerLanguage: 'ja-JP',
     },
   ]) {
-    const harness = await loadKamishibaiVm({viewerLanguage});
+    const harness = await loadKamishibaiVm({
+      initialLocalStorage: {script: savedScript},
+      viewerLanguage,
+    });
     context.after(() => harness.quit());
     const localized = appShellLocales[locale];
 
@@ -441,15 +482,16 @@ test('localizes the app shell from the standard viewer-language reporter', async
     );
 
     harness.broadcast('showMenu');
-    await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
+    await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
     const menuClones = uiItemClonesById(harness);
+    assertMenuGrid(menuClones);
+    assertMenuGridFitsStage(menuClones);
     for (const [uiId, label] of [
       ['openButton', localized.ui.open],
       ['reloadButton', localized.ui.reload],
       ['showTitleButton', localized.ui.about],
       ['languageButton', localized.ui.language],
     ]) {
-      if (!menuClones.has(uiId)) continue;
       assert.equal(harness.extensionState.displayedText.get(menuClones.get(uiId).id), label);
     }
   }
@@ -593,22 +635,7 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   }
 
   const menuClones = uiItemClonesById(harness);
-  assert.deepEqual(
-    {
-      size: menuClones.get('openButton').size,
-      x: menuClones.get('openButton').x,
-      y: menuClones.get('openButton').y,
-    },
-    {size: 100, x: 15, y: 76},
-  );
-  assert.deepEqual(
-    {
-      size: menuClones.get('languageButton').size,
-      x: menuClones.get('languageButton').x,
-      y: menuClones.get('languageButton').y,
-    },
-    {size: 65, x: 2, y: -165},
-  );
+  assertMenuGrid(menuClones, ['openButton', 'languageButton']);
   const menuTargetIds = [...menuClones.values()].map((target) => target.id);
   harness.clickTarget(menuClones.get('languageButton'));
   await harness.runUntilAsync(() => {
@@ -678,6 +705,7 @@ test('keeps saved-script menu actions running after their source clones are dele
     'reloadButton',
     'showTitleButton',
   ]);
+  assertMenuGrid(uiItemClonesById(harness));
 
   harness.clickTarget(uiItemClonesById(harness).get('showTitleButton'));
   await harness.runUntilAsync(

@@ -172,6 +172,8 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 `UiItem`本体を非表示のcontroller兼雛形とし、
 `showTitle`、`showMenu`、`showLanguageMenu`ごとに必要な項目だけをcloneとして作ります。画面遷移時は
 cloneを非表示のまま保持せず削除します。
+保存済み台本があるmenuでは、上段を`ファイルを開く`／`もう一度`、下段を
+`このアプリについて`／`言語`とする2列×2行の固定グリッドでcloneを配置します。
 雛形は10×10の透明costumeを保持し、位置とsizeだけを設定してcloneします。2×2の透明costumeでは
 TurboWarpのsprite fencingにより50〜80%の指定が100%へ切り上げられるため、最小50%を保持できる寸法にしています。
 Asset Managerのruntime text skinはclone開始後にclone自身へ適用し、Animated Textのskinを雛形から複製しません。
