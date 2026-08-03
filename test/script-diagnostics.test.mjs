@@ -65,11 +65,22 @@ function headingsBetween(document, startHeading, endHeading) {
 
 async function reachTitle(harness) {
   harness.greenFlag();
-  await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+}
+
+function uiItemClonesById(harness) {
+  return new Map(
+    harness
+      .getClones('UiItem')
+      .map((target) => [target.lookupVariableByNameAndType('uiId', '')?.value, target]),
+  );
 }
 
 function titleLayout(harness) {
-  return Object.fromEntries(
+  const cloneLayout = Object.fromEntries(
     [
       'titleHeading',
       'titleVersion',
@@ -78,13 +89,13 @@ function titleLayout(harness) {
       'titleAuthorOrganization',
       'titleAuthorName',
       'officialWebsiteLabel',
-      'officialWebsiteButton',
-      'closeTitleButton',
-    ].map((name) => {
-      const target = harness.getSprite(name);
-      return [name, targetLayout(target)];
-    }),
+    ].map((name) => [name, targetLayout(uiItemClonesById(harness).get(name))]),
   );
+  return {
+    ...cloneLayout,
+    officialWebsiteButton: targetLayout(harness.getSprite('officialWebsiteButton')),
+    closeTitleButton: targetLayout(harness.getSprite('closeTitleButton')),
+  };
 }
 
 function targetLayout(target) {
@@ -228,21 +239,21 @@ test('stops background work and clears the diagnostic presentation on project re
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorLine'), 2);
   assert.equal(harness.getSprite('prompt').visible, true);
 
-  const titleHeading = harness.getSprite('titleHeading');
-  const originalSetSize = titleHeading.setSize.bind(titleHeading);
-  const originalSetXY = titleHeading.setXY.bind(titleHeading);
+  const unrelatedTarget = harness.getSprite('officialWebsiteButton');
+  const originalSetSize = unrelatedTarget.setSize.bind(unrelatedTarget);
+  const originalSetXY = unrelatedTarget.setXY.bind(unrelatedTarget);
   let unrelatedLayoutWrites = 0;
-  titleHeading.setSize = (...arguments_) => {
+  unrelatedTarget.setSize = (...arguments_) => {
     unrelatedLayoutWrites += 1;
     return originalSetSize(...arguments_);
   };
-  titleHeading.setXY = (...arguments_) => {
+  unrelatedTarget.setXY = (...arguments_) => {
     unrelatedLayoutWrites += 1;
     return originalSetXY(...arguments_);
   };
   harness.extensionState.kamishibaiRuntime.resetForProjectStart();
-  titleHeading.setSize = originalSetSize;
-  titleHeading.setXY = originalSetXY;
+  unrelatedTarget.setSize = originalSetSize;
+  unrelatedTarget.setXY = originalSetXY;
   assert.equal(unrelatedLayoutWrites, 0);
   assert.deepEqual(targetLayout(harness.getSprite('prompt')), initialPromptLayout);
 

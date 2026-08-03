@@ -136,19 +136,6 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'Stage',
       'Actor',
       'prompt',
-      'openButton',
-      'reloadButton',
-      'showTitleButton',
-      'languageButton',
-      'japaneseLanguageButton',
-      'englishLanguageButton',
-      'titleHeading',
-      'titleVersion',
-      'titleLicenseApp',
-      'titleLicenseStory',
-      'titleAuthorOrganization',
-      'titleAuthorName',
-      'officialWebsiteLabel',
       'UiItem',
       'officialWebsiteButton',
       'closeTitleButton',
@@ -165,23 +152,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   );
   assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
   assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
-  for (const name of [
-    'prompt',
-    'openButton',
-    'reloadButton',
-    'showTitleButton',
-    'languageButton',
-    'japaneseLanguageButton',
-    'englishLanguageButton',
-    'titleHeading',
-    'titleVersion',
-    'titleLicenseApp',
-    'titleLicenseStory',
-    'titleAuthorOrganization',
-    'titleAuthorName',
-    'officialWebsiteLabel',
-    'UiItem',
-  ]) {
+  for (const name of ['prompt', 'UiItem']) {
     assert.deepEqual(
       harness
         .getSprite(name)
@@ -205,17 +176,6 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       .map((costume) => costume.name),
     ['title-close-button'],
   );
-  for (const [name, size] of [
-    ['titleHeading', 140],
-    ['titleVersion', 80],
-    ['titleLicenseApp', 50],
-    ['titleLicenseStory', 50],
-    ['titleAuthorOrganization', 50],
-    ['titleAuthorName', 50],
-    ['officialWebsiteLabel', 60],
-  ]) {
-    assert.equal(harness.getSprite(name).size, size);
-  }
   const uiItemBlocks = harness.getSprite('UiItem').blocks;
   const cloneStart = Object.values(uiItemBlocks._blocks).find(
     (block) => block.opcode === 'control_start_as_clone',
@@ -268,8 +228,8 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   );
   assert.equal(goWebsiteButtonBehind.opcode, 'looks_gotofrontback');
   assert.equal(goWebsiteButtonBehind.fields.FRONT_BACK.value, 'back');
-  assert.equal(harness.getStageVariable('featureCloneUiItems'), false);
-  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), false);
+  assert.equal(harness.getStageVariable('featureCloneUiItems'), undefined);
+  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   assert.equal(harness.getSprite('UiItem').visible, false);
   assert.equal(harness.getClones('UiItem').length, 0);
 });
@@ -422,7 +382,8 @@ test('shows the built-in English Title fallback before runtime initialization', 
   assert.equal(harness.getSprite('officialWebsiteButton').visible, true);
   assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), 'official-website-button');
   assert.equal(harness.getSprite('closeTitleButton').visible, true);
-  assert.equal(harness.getSprite('titleHeading').visible, false);
+  assert.equal(harness.getSprite('UiItem').visible, false);
+  assert.equal(harness.getClones('UiItem').length, 0);
 });
 
 test('localizes the app shell from the standard viewer-language reporter', async (context) => {
@@ -449,63 +410,63 @@ test('localizes the app shell from the standard viewer-language reporter', async
     const localized = appShellLocales[locale];
 
     harness.greenFlag();
-    harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+    await harness.runUntilAsync(() => {
+      const clones = uiItemClonesById(harness);
+      return harness.getRuntimeVariable('skipMode') === 'title' && clones.size === 7;
+    });
     assert.equal(harness.getRuntimeVariable('uiLanguage'), locale);
     assert.equal(harness.getBackdropName(), 'TitleRuntime');
     assert.equal(
       harness.getSpriteCostumeName('officialWebsiteButton'),
       'official-website-button-runtime',
     );
-    for (const [spriteName, label] of [
+    const titleClones = uiItemClonesById(harness);
+    for (const [uiId, label] of [
       ['titleHeading', localized.about.title],
       ['titleLicenseApp', localized.about.license.app],
       ['titleLicenseStory', localized.about.license.story],
       ['officialWebsiteLabel', localized.about.officialWebsite.name],
     ]) {
-      assert.equal(
-        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
-        label,
-      );
+      assert.equal(harness.extensionState.displayedText.get(titleClones.get(uiId).id), label);
     }
     assert(
       harness.extensionState.displayedText
-        .get(harness.getSprite('titleAuthorOrganization').id)
+        .get(titleClones.get('titleAuthorOrganization').id)
         .includes(localized.about.author.organization),
     );
     assert(
       harness.extensionState.displayedText
-        .get(harness.getSprite('titleAuthorName').id)
+        .get(titleClones.get('titleAuthorName').id)
         .includes(localized.about.author.name),
     );
 
     harness.broadcast('showMenu');
-    harness.runUntil(() => harness.getSprite('languageButton').visible);
-    for (const [spriteName, label] of [
+    await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
+    const menuClones = uiItemClonesById(harness);
+    for (const [uiId, label] of [
       ['openButton', localized.ui.open],
       ['reloadButton', localized.ui.reload],
       ['showTitleButton', localized.ui.about],
       ['languageButton', localized.ui.language],
     ]) {
-      assert.equal(
-        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
-        label,
-      );
+      if (!menuClones.has(uiId)) continue;
+      assert.equal(harness.extensionState.displayedText.get(menuClones.get(uiId).id), label);
     }
   }
 });
 
-test('latches the clone UI feature flag at green flag startup', async (context) => {
+test('uses clone UI as the standard app-shell path', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
 
+  assert.equal(harness.getStageVariable('featureCloneUiItems'), undefined);
+  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   harness.greenFlag();
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
-  harness.setStageVariable('featureCloneUiItems', true);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   harness.broadcast('showMenu');
-  harness.runUntil(() => harness.getSprite('openButton').visible);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
 
-  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), false);
-  assert.equal(harness.getClones('UiItem').length, 0);
+  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), ['languageButton', 'openButton']);
 });
 
 test('prefers a saved UI language and changes it from the Language menu', async (context) => {
@@ -521,56 +482,62 @@ test('prefers a saved UI language and changes it from the Language menu', async 
   assert.equal(harness.getBackdropName(), 'TitleRuntime');
 
   harness.broadcast('showMenu');
-  harness.runUntil(() => harness.getSprite('languageButton').visible);
-  harness.clickSprite('languageButton');
-  harness.runUntil(
-    () =>
-      harness.getSprite('japaneseLanguageButton').visible &&
-      harness.getSprite('englishLanguageButton').visible,
-  );
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('languageButton'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
+  const languageClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    harness.extensionState.displayedText.get(languageClones.get('japaneseLanguageButton').id),
     '日本語',
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    harness.extensionState.displayedText.get(languageClones.get('englishLanguageButton').id),
     appShellSelectedLanguageNames.en,
   );
 
-  harness.clickSprite('japaneseLanguageButton');
-  harness.runUntil(
+  harness.clickTarget(languageClones.get('japaneseLanguageButton'));
+  await harness.runUntilAsync(
     () =>
       harness.getRuntimeVariable('uiLanguage') === 'ja' &&
-      harness.getSprite('languageButton').visible,
+      uiItemClonesById(harness).has('languageButton'),
   );
+  const localizedMenuClones = uiItemClonesById(harness);
   assert.equal(harness.extensionState.localStorage.get('uiLanguage'), 'ja');
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('openButton').id),
+    harness.extensionState.displayedText.get(localizedMenuClones.get('openButton').id),
     appShellLocales.ja.ui.open,
   );
-  assert.equal(harness.getSprite('japaneseLanguageButton').visible, false);
-  assert.equal(harness.getSprite('englishLanguageButton').visible, false);
+  assert.equal(localizedMenuClones.has('japaneseLanguageButton'), false);
+  assert.equal(localizedMenuClones.has('englishLanguageButton'), false);
 
-  harness.clickSprite('languageButton');
-  harness.runUntil(() => harness.getSprite('japaneseLanguageButton').visible);
+  harness.clickTarget(localizedMenuClones.get('languageButton'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('japaneseLanguageButton'));
+  const localizedLanguageClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    harness.extensionState.displayedText.get(
+      localizedLanguageClones.get('japaneseLanguageButton').id,
+    ),
     appShellSelectedLanguageNames.ja,
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    harness.extensionState.displayedText.get(
+      localizedLanguageClones.get('englishLanguageButton').id,
+    ),
     'English',
   );
   harness.broadcast('hideMenu');
 
   harness.broadcast('showTitle');
-  harness.runUntil(() => harness.getBackdropName() === 'TitleRuntime');
+  await harness.runUntilAsync(
+    () =>
+      harness.getBackdropName() === 'TitleRuntime' && uiItemClonesById(harness).has('titleHeading'),
+  );
   assert.equal(
     harness.getSpriteCostumeName('officialWebsiteButton'),
     'official-website-button-runtime',
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('titleHeading').id),
+    harness.extensionState.displayedText.get(uiItemClonesById(harness).get('titleHeading').id),
     appShellLocales.ja.about.title,
   );
 });
@@ -578,7 +545,6 @@ test('prefers a saved UI language and changes it from the Language menu', async 
 test('uses only active-screen UI clones and releases their Asset Manager state', async (context) => {
   const harness = await loadKamishibaiVm({productionAssetManager: true});
   context.after(() => harness.quit());
-  harness.setStageVariable('featureCloneUiItems', true);
 
   harness.greenFlag();
   await harness.runUntilAsync(() => {
@@ -612,23 +578,6 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
     const target = titleClones.get(id);
     assert.deepEqual({size: target.size, x: target.x, y: target.y}, expected);
   }
-  for (const legacyName of [
-    'titleHeading',
-    'titleVersion',
-    'titleLicenseApp',
-    'titleLicenseStory',
-    'titleAuthorOrganization',
-    'titleAuthorName',
-    'officialWebsiteLabel',
-  ]) {
-    assert.equal(harness.getSprite(legacyName).visible, false);
-    assert.equal(
-      harness.extensionState.assetManager.displayedAssets.has(harness.getSprite(legacyName).id),
-      false,
-    );
-  }
-  harness.setStageVariable('featureCloneUiItems', false);
-  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   const titleTargetIds = [...titleClones.values()].map((target) => target.id);
   for (const target of titleClones.values()) {
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(target.id), true);
@@ -709,7 +658,6 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
   }
 
-  harness.setStageVariable('featureCloneUiItems', true);
   harness.greenFlag();
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   assert.equal(harness.getClones('UiItem').length, 7);
@@ -719,7 +667,6 @@ test('keeps saved-script menu actions running after their source clones are dele
   const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
   const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
   context.after(() => harness.quit());
-  harness.setStageVariable('featureCloneUiItems', true);
 
   harness.greenFlag();
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
@@ -749,7 +696,6 @@ test('reloads a saved script from a UI clone after deleting the menu clones', as
   const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
   const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
   context.after(() => harness.quit());
-  harness.setStageVariable('featureCloneUiItems', true);
 
   harness.greenFlag();
   await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
@@ -765,7 +711,6 @@ test('reloads a saved script from a UI clone after deleting the menu clones', as
 test('restores the clone title UI after a detailed diagnostic and green flag restart', async (context) => {
   const harness = await loadDiagnosticVm();
   context.after(() => harness.quit());
-  harness.setStageVariable('featureCloneUiItems', true);
   harness.setStageVariable('featureDetailedScriptErrors', true);
 
   harness.greenFlag();
@@ -789,14 +734,14 @@ test('shows the official website button only on Title and opens the package home
 
   harness.greenFlag();
   const button = harness.getSprite('officialWebsiteButton');
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   assert.equal(button.visible, true);
   assert.equal(button.x, 0);
   assert.equal(button.y, -16);
 
   harness.clickSprite('officialWebsiteButton');
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);
-  harness.clickSprite('officialWebsiteLabel');
+  harness.clickTarget(uiItemClonesById(harness).get('officialWebsiteLabel'));
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl, officialWebsiteUrl]);
 
   harness.broadcast('showMenu');
@@ -814,13 +759,13 @@ test('closes Title from the top-right close button using the same flow as a Stag
 
   harness.greenFlag();
   const closeButton = harness.getSprite('closeTitleButton');
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   assert.equal(closeButton.visible, true);
   assert.equal(closeButton.x, 220);
   assert.equal(closeButton.y, 160);
 
   harness.clickSprite('closeTitleButton');
-  harness.runUntil(() => harness.getSprite('openButton').visible);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
   assert.equal(closeButton.visible, false);
   assert.equal(harness.getSprite('officialWebsiteButton').visible, false);
@@ -832,11 +777,11 @@ test('closes Title when runtime-generated Title text is clicked', async (context
   context.after(() => harness.quit());
 
   harness.greenFlag();
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
-  harness.clickSprite('titleHeading');
-  harness.runUntil(() => harness.getSprite('openButton').visible);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('titleHeading'));
+  harness.clickTarget(uiItemClonesById(harness).get('titleHeading'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
-  assert.equal(harness.getSprite('titleHeading').visible, false);
+  assert.equal(uiItemClonesById(harness).has('titleHeading'), false);
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
@@ -1092,9 +1037,9 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   harness.greenFlag();
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.broadcast('showMenu');
-  harness.runUntil(() => harness.getSprite('openButton')?.visible === true);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
-  const openButton = harness.getSprite('openButton');
+  const openButton = uiItemClonesById(harness).get('openButton');
   assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
 
   harness.setRuntimeVariable(
@@ -1134,18 +1079,22 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   );
 
   harness.broadcast('showMenu');
-  harness.runUntil(
+  await harness.runUntilAsync(
     () =>
-      harness.getSprite('reloadButton')?.visible === true &&
-      harness.getSprite('showTitleButton')?.visible === true,
+      uiItemClonesById(harness).has('reloadButton') &&
+      uiItemClonesById(harness).has('showTitleButton'),
   );
-  assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
+  const savedScriptMenuClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('reloadButton').id),
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('openButton').id),
+    appShellLocales.en.ui.open,
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('reloadButton').id),
     appShellLocales.en.ui.reload,
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('showTitleButton').id),
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('showTitleButton').id),
     appShellLocales.en.ui.about,
   );
   assert.deepEqual(harness.extensionState.consoleErrors, []);
