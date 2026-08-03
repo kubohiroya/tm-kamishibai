@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1730 |
+| block                    | 1734 |
 | event hat                |   49 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   13 |
@@ -378,7 +378,7 @@ runtime variableと前回のSVG skinは次のgreen flagで削除します。
 | 台本解析              | `sceneBlock`, `sceneLabel`, `sceneLabelList`, `condition`, `conditionList`             |
 | asset／actor生成      | `asset`, `assetList`, `resourceId`, `actor`, `actorName`, `skin`                       |
 | action実行            | `action`, `actionResult`, `actionListResult`, `stageActionResult`, `actorActionResult` |
-| command／branch／入力 | `commandIndex`, `branchIndex`, `keyId`, `hasRead`                                      |
+| command／branch／入力 | `commandIndex`, `branchIndex`, `keyId`, `loadingDisplayed`                             |
 | cover                 | `cover`, `coverBackground`, `coverBgm`                                                 |
 | Actor clone           | `x`, `y`, `scale`                                                                      |
 | その他                | `durationList`, `sceneIndex`                                                           |
@@ -546,6 +546,13 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | pose action   | camera preview／pose認識開始 → 第1音を再生 → `exec pose %s`反復（条件成立時は第2音を「ポーズ認識」更新前に再生）→音声／認識停止 → prompt非表示 |
 | asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                                                 |
 | 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                                      |
+
+`create asset`はLoading用assetを先に登録し、`assetLoadingStarted`直後に1回だけ
+`wait 0`して初期表示を描画します。通常assetは登録完了数がthread variable
+`loadingDisplayed`を上回る場合だけ最大値を保存し、`assetLoadingProgress`を通常broadcastで
+1件につき1回送ります。全assetの登録後に1回だけ`wait 0`して未完了の表示更新をflushしてから、
+`assetLoadingCompleted`をbroadcast and waitします。URL／cacheの完了待ちはAsset Managerが
+返すPromiseに委ね、assetごとの追加`wait 0`は行いません。
 
 ## broadcastと状態遷移
 

@@ -128,6 +128,8 @@ export function registerKamishibaiTestExtensions(
   vm,
   clock,
   {
+    asyncAssetDisplay = false,
+    asyncExternalAssets = false,
     initialLocalStorage = {},
     productionAssetManager = false,
     productionRuntimeExpression = false,
@@ -357,8 +359,15 @@ export function registerKamishibaiTestExtensions(
     }
     registerAsset(args) {
       const name = Cast.toString(args.NAME);
-      state.assetRegistrations.push(name);
-      state.assets.set(name, Cast.toString(args.RESOURCE_ID));
+      const resourceId = Cast.toString(args.RESOURCE_ID);
+      const register = () => {
+        state.assetRegistrations.push(name);
+        state.assets.set(name, resourceId);
+      };
+      if (/^https?:\/\//u.test(resourceId) && asyncExternalAssets) {
+        return Promise.resolve().then(register);
+      }
+      register();
     }
     setLoadingCostumes(args) {
       const seen = new Set();
@@ -464,22 +473,26 @@ export function registerKamishibaiTestExtensions(
       this.applyCostume(this.runtime.getTargetForStage(), args.NAME);
     }
     setThisSpriteSkin(args, util) {
-      const name = Cast.toString(args.NAME);
-      const resource = state.assets.get(name);
-      if (resource === 'text' || resource?.startsWith('text:')) {
-        const explicitName = resource.startsWith('text:')
-          ? resource.slice('text:'.length).trim()
-          : '';
-        state.displayedAssets.set(util.target.id, name);
-        state.displayedText.set(
-          util.target.id,
-          state.tempVariables.getRuntimeVariable({
-            VAR: `text:${explicitName || name}`,
-          }),
-        );
-        return;
-      }
-      this.applyCostume(util.target, name);
+      const apply = () => {
+        const name = Cast.toString(args.NAME);
+        const resource = state.assets.get(name);
+        if (resource === 'text' || resource?.startsWith('text:')) {
+          const explicitName = resource.startsWith('text:')
+            ? resource.slice('text:'.length).trim()
+            : '';
+          state.displayedAssets.set(util.target.id, name);
+          state.displayedText.set(
+            util.target.id,
+            state.tempVariables.getRuntimeVariable({
+              VAR: `text:${explicitName || name}`,
+            }),
+          );
+          return;
+        }
+        this.applyCostume(util.target, name);
+      };
+      if (asyncAssetDisplay) return Promise.resolve().then(apply);
+      apply();
     }
     playSound(args) {
       state.playingSounds.add(Cast.toString(args.NAME));

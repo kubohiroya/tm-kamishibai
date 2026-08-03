@@ -9237,7 +9237,7 @@
         },
         "ff": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "C",
+          "next": "fi",
           "parent": "loadingPrepare",
           "inputs": {
             "VAR": [
@@ -9261,8 +9261,8 @@
         },
         "C": {
           "opcode": "control_repeat",
-          "next": "kV",
-          "parent": "ff",
+          "next": "loadingProgressFlushWait",
+          "parent": "fi",
           "inputs": {
             "TIMES": [
               3,
@@ -9480,7 +9480,7 @@
         },
         "a?": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "fi",
+          "next": "a^",
           "parent": "a=",
           "inputs": {
             "VAR": [
@@ -9640,14 +9640,14 @@
         },
         "fi": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "a^",
-          "parent": "a?",
+          "next": "C",
+          "parent": "ff",
           "inputs": {
             "VAR": [
               1,
               [
                 10,
-                "hasRead"
+                "loadingDisplayed"
               ]
             ],
             "STRING": [
@@ -9665,7 +9665,7 @@
         "a^": {
           "opcode": "sipcconsole_debug",
           "next": "loadingPreProgressIf",
-          "parent": "fi",
+          "parent": "a?",
           "inputs": {
             "string": [
               3,
@@ -10210,7 +10210,7 @@
         },
         "F": {
           "opcode": "kubohiroyaassetmanager_registerAsset",
-          "next": "fn",
+          "next": null,
           "parent": "D",
           "inputs": {
             "RESOURCE_ID": [
@@ -10270,21 +10270,22 @@
         },
         "fn": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "k-",
-          "parent": "F",
+          "next": "a`",
+          "parent": "E",
           "inputs": {
             "VAR": [
               1,
               [
                 10,
-                "hasRead"
+                "loadingDisplayed"
               ]
             ],
             "STRING": [
-              1,
+              3,
+              "loadingProgressNext",
               [
-                10,
-                "1"
+                4,
+                "0"
               ]
             ]
           },
@@ -10295,7 +10296,7 @@
         "k-": {
           "opcode": "control_wait",
           "next": null,
-          "parent": "fn",
+          "parent": "fp",
           "inputs": {
             "DURATION": [
               1,
@@ -10320,7 +10321,7 @@
             ],
             "SUBSTACK": [
               2,
-              "a`"
+              "fn"
             ]
           },
           "fields": {},
@@ -10334,17 +10335,17 @@
           "inputs": {
             "OPERAND1": [
               3,
-              "k/",
+              "loadingProgressCurrent",
               [
-                10,
-                ""
+                4,
+                "0"
               ]
             ],
             "OPERAND2": [
               3,
-              "loadingCompleteCount",
+              "loadingProgressShown",
               [
-                10,
+                4,
                 "0"
               ]
             ]
@@ -10356,7 +10357,7 @@
         "k/": {
           "opcode": "lmsTempVars2_getThreadVariable",
           "next": null,
-          "parent": "fo",
+          "parent": "loadingProgressCurrent",
           "inputs": {
             "VAR": [
               1,
@@ -10373,7 +10374,102 @@
         "loadingCompleteCount": {
           "opcode": "kubohiroyaassetmanager_loadingAssetCount",
           "next": null,
+          "parent": "loadingProgressCurrent",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressCurrent": {
+          "opcode": "operator_subtract",
+          "next": null,
           "parent": "fo",
+          "inputs": {
+            "NUM1": [
+              3,
+              "k/",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingCompleteCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressShown": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "fo",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "loadingDisplayed"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressNext": {
+          "opcode": "operator_subtract",
+          "next": null,
+          "parent": "fn",
+          "inputs": {
+            "NUM1": [
+              3,
+              "loadingProgressNextIndex",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "NUM2": [
+              3,
+              "loadingProgressNextCount",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressNextIndex": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "loadingProgressNext",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "index"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressNextCount": {
+          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
+          "next": null,
+          "parent": "loadingProgressNext",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -10382,7 +10478,7 @@
         "a`": {
           "opcode": "sipcconsole_Journal",
           "next": "a~",
-          "parent": "E",
+          "parent": "fn",
           "inputs": {
             "string": [
               3,
@@ -10642,7 +10738,7 @@
         },
         "fp": {
           "opcode": "event_broadcastandwait",
-          "next": null,
+          "next": "k-",
           "parent": "loadingPreFirstIf",
           "inputs": {
             "BROADCAST_INPUT": [
@@ -10661,7 +10757,7 @@
         "a~": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "k@",
-          "parent": "fp",
+          "parent": "a`",
           "inputs": {
             "VAR": [
               1,
@@ -10710,53 +10806,18 @@
           "topLevel": false
         },
         "k[": {
-          "opcode": "operator_subtract",
-          "next": null,
-          "parent": "ba",
-          "inputs": {
-            "NUM1": [
-              3,
-              "loadingCompleteIndex",
-              [
-                4,
-                "0"
-              ]
-            ],
-            "NUM2": [
-              3,
-              "loadingCompleteMessageCount",
-              [
-                4,
-                "0"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "loadingCompleteIndex": {
           "opcode": "lmsTempVars2_getThreadVariable",
           "next": null,
-          "parent": "k[",
+          "parent": "ba",
           "inputs": {
             "VAR": [
               1,
               [
                 10,
-                "index"
+                "loadingDisplayed"
               ]
             ]
           },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "loadingCompleteMessageCount": {
-          "opcode": "kubohiroyaassetmanager_loadingAssetCount",
-          "next": null,
-          "parent": "k[",
-          "inputs": {},
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -10836,7 +10897,7 @@
           "topLevel": false
         },
         "k@": {
-          "opcode": "event_broadcastandwait",
+          "opcode": "event_broadcast",
           "next": null,
           "parent": "a~",
           "inputs": {
@@ -10880,7 +10941,7 @@
         "kV": {
           "opcode": "event_broadcastandwait",
           "next": null,
-          "parent": "C",
+          "parent": "loadingProgressFlushWait",
           "inputs": {
             "BROADCAST_INPUT": [
               1,
@@ -10888,6 +10949,23 @@
                 11,
                 "assetLoadingCompleted",
                 "zeRQU6vLAx`yyQGqhb.C"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "loadingProgressFlushWait": {
+          "opcode": "control_wait",
+          "next": "kV",
+          "parent": "C",
+          "inputs": {
+            "DURATION": [
+              1,
+              [
+                5,
+                "0"
               ]
             ]
           },
