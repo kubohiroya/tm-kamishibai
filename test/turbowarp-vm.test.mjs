@@ -16,12 +16,56 @@ async function startFixture(harness, fixtureUrl = runtimeFixtureUrl) {
   startScript(harness, script);
 }
 
+function loadDiagnosticVm(options = {}) {
+  return loadKamishibaiVm({
+    ...options,
+    productionAssetManager: true,
+    productionRuntimeExpression: true,
+  });
+}
+
 function startScript(harness, script) {
   harness.greenFlag();
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.setRuntimeVariable('script', script);
   harness.broadcast('startStory');
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
+}
+
+async function startInvalidScript(harness, script) {
+  harness.setStageVariable('featureDetailedScriptErrors', true);
+  harness.greenFlag();
+  await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.setRuntimeVariable('script', script);
+  harness.diagnosticAssetRegistrySize = harness.extensionState.assetManager.assetRegistry.size;
+  harness.broadcast('startStory');
+  await harness.runUntilAsync(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
+}
+
+function assertScriptError(harness, {category, line, message}) {
+  assert.equal(harness.getRuntimeVariable('kamishibaiErrorCategory'), category);
+  assert.equal(Number(harness.getRuntimeVariable('kamishibaiErrorLine')), line);
+  assert.match(harness.getRuntimeVariable('kamishibaiErrorMessage'), message);
+  assert.match(harness.getRuntimeVariable('kamishibaiErrorSvg'), /^<svg[^>]*>/u);
+  assert.match(harness.getRuntimeVariable('kamishibaiErrorCode'), /^K31-/u);
+  assert.ok(Number(harness.getRuntimeVariable('kamishibaiErrorColumn')) >= 1);
+  assert.equal(harness.getSprite('prompt').visible, true);
+  assert.match(
+    harness.extensionState.displayedText.get(harness.getSprite('prompt').id),
+    /台本エラー|Script error/u,
+  );
+  const diagnostic = JSON.parse(harness.extensionState.kamishibaiRuntime.getLastDiagnosticJson());
+  assert.equal(diagnostic.source.line, line);
+  assert.equal(diagnostic.category, category);
+  assert.equal(
+    harness.extensionState.assetManager.assetRegistry.size,
+    harness.diagnosticAssetRegistrySize,
+  );
+  assert.equal(
+    harness.vm.runtime.targets.filter((target) => !target.isStage && !target.isOriginal).length,
+    0,
+  );
+  assert.equal(harness.vm.runtime.threads.length, 0);
 }
 
 function actorActionScript(action, {before = []} = {}) {
@@ -162,6 +206,146 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   ]) {
     assert.equal(harness.getSprite(name).size, size);
   }
+});
+
+test('shows an SVG error and stops on an unsupported kamishibai version', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+
+  await startInvalidScript(harness, 'kamishibai=2.0');
+
+  assertScriptError(harness, {
+    category: 'unsupported-version',
+    line: 1,
+    message: /2\.0.*3\.1/u,
+  });
+  assert.equal(harness.getRuntimeVariable('kamishibaiErrorSource'), 'kamishibai=2.0');
+});
+
+test('reports unsupported top-level and actor action commands with their lines', async (context) => {
+  for (const errorCase of [
+    {
+      category: 'unsupported-command',
+      line: 2,
+      message: /teleport/u,
+      script: ['kamishibai=3.1', 'teleport=somewhere'].join('\n'),
+    },
+    {
+      category: 'unsupported-action',
+      line: 9,
+      message: /fly/u,
+      script: [
+        'kamishibai=3.1',
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'asset=Hero,costume:Loading:loading',
+        'actor=Hero,Hero',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        'action=Hero:fly',
+      ].join('\n'),
+    },
+  ]) {
+    const harness = await loadDiagnosticVm();
+    context.after(() => harness.quit());
+    await startInvalidScript(harness, errorCase.script);
+    assertScriptError(harness, errorCase);
+  }
+});
+
+test('reports a project-local asset address that cannot be resolved', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+
+  await startInvalidScript(
+    harness,
+    ['kamishibai=3.1', 'asset=Missing,costume:Loading:not-there'].join('\n'),
+  );
+
+  assertScriptError(harness, {
+    category: 'asset-address',
+    line: 2,
+    message: /Loading\/not-there/u,
+  });
+});
+
+test('reports undefined assets referenced by setSkin and pose', async (context) => {
+  for (const action of [
+    'action=Hero:setSkin:MissingSkin',
+    'action=Hero:pose:MissingSkin:firstPose:',
+  ]) {
+    const harness = await loadDiagnosticVm();
+    context.after(() => harness.quit());
+    await startInvalidScript(
+      harness,
+      [
+        'kamishibai=3.1',
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'asset=Hero,costume:Loading:loading',
+        'actor=Hero,Hero',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        action,
+      ].join('\n'),
+    );
+    assertScriptError(harness, {
+      category: 'undefined-asset',
+      line: 9,
+      message: /MissingSkin/u,
+    });
+  }
+});
+
+test('reports an undefined scene transition target', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+
+  await startInvalidScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=keyInputToChangeScene:ArrowRight:missing-scene',
+    ].join('\n'),
+  );
+
+  assertScriptError(harness, {
+    category: 'undefined-scene',
+    line: 7,
+    message: /missing-scene/u,
+  });
+});
+
+test('reports Runtime Expression syntax errors at the registerBranch line', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+
+  await startInvalidScript(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'registerBranch=choose:score = 1:first',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+    ].join('\n'),
+  );
+
+  assertScriptError(harness, {
+    category: 'expression-syntax',
+    line: 4,
+    message: /score = 1/u,
+  });
 });
 
 test('shows the built-in English Title fallback before runtime initialization', async (context) => {

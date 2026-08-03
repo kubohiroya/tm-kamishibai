@@ -28,6 +28,10 @@
         "tmposeEmbeddedScript": [
           "__tmpose_embedded_script",
           ""
+        ],
+        "featureDetailedScriptErrors": [
+          "featureDetailedScriptErrors",
+          false
         ]
       },
       "lists": {
@@ -5483,7 +5487,7 @@
         },
         "jX": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "ctxStartClear",
+          "next": "scriptErrorValidate",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -23099,10 +23103,19 @@
           "shadow": false,
           "topLevel": false
         },
+        "scriptErrorValidate": {
+          "opcode": "kubohiroyakamishibairuntime_validateScriptOrStop",
+          "next": "ctxStartClear",
+          "parent": "jX",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "ctxStartClear": {
           "opcode": "lmsTempVars2_deleteRuntimeVariable",
           "next": "ctxStartSet",
-          "parent": "jX",
+          "parent": "scriptErrorValidate",
           "inputs": {
             "VAR": [
               1,
@@ -35425,6 +35438,7 @@
     "localstorage",
     "kubohiroyatextlines",
     "kubohiroyaruntimeexpression",
+    "kubohiroyakamishibairuntime",
     "kubohiroyaasyncinput",
     "lmsTimers",
     "files",
@@ -35441,6 +35455,7 @@
     "localstorage": "https://extensions.turbowarp.org/local-storage.js",
     "kubohiroyatextlines": "embedded-extension:extensions/kubohiroyatextlines.js",
     "kubohiroyaruntimeexpression": "embedded-extension:extensions/kubohiroyaruntimeexpression.js",
+    "kubohiroyakamishibairuntime": "embedded-extension:extensions/kubohiroyakamishibairuntime.js",
     "kubohiroyaasyncinput": "embedded-extension:extensions/kubohiroyaasyncinput.js",
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",

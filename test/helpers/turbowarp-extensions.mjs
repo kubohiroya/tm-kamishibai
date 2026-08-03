@@ -9,6 +9,14 @@ const assetManagerSource = readFileSync(
   new URL('../../app/extensions/kubohiroyaassetmanager.js', import.meta.url),
   'utf8',
 );
+const kamishibaiRuntimeSource = readFileSync(
+  new URL('../../app/extensions/kubohiroyakamishibairuntime.js', import.meta.url),
+  'utf8',
+);
+const runtimeExpressionSource = readFileSync(
+  new URL('../../app/extensions/kubohiroyaruntimeexpression.js', import.meta.url),
+  'utf8',
+);
 
 function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
   return {
@@ -83,10 +91,48 @@ function createProductionAssetManagerClass(vm, onCreate) {
   };
 }
 
+function createProductionExtensionClass(vm, source, onCreate = () => {}) {
+  let registeredExtension = null;
+  const Scratch = {
+    vm,
+    extensions: {
+      unsandboxed: true,
+      register(extension) {
+        registeredExtension = extension;
+      },
+    },
+    BlockType,
+    ArgumentType: {
+      BOOLEAN: 'Boolean',
+      NUMBER: 'number',
+      STRING: 'string',
+    },
+    Cast,
+    translate(value) {
+      return typeof value === 'object' && value !== null
+        ? (value.default ?? value.defaultMessage ?? '')
+        : value;
+    },
+  };
+  runInNewContext(source, {console, Scratch, setTimeout, clearTimeout});
+  if (!registeredExtension) throw new Error('Production extension did not register itself.');
+  return class {
+    constructor() {
+      onCreate(registeredExtension);
+      return registeredExtension;
+    }
+  };
+}
+
 export function registerKamishibaiTestExtensions(
   vm,
   clock,
-  {initialLocalStorage = {}, productionAssetManager = false, viewerLanguage = 'English'} = {},
+  {
+    initialLocalStorage = {},
+    productionAssetManager = false,
+    productionRuntimeExpression = false,
+    viewerLanguage = 'English',
+  } = {},
 ) {
   const state = {
     actorSequences: new Map(),
@@ -102,6 +148,7 @@ export function registerKamishibaiTestExtensions(
     displayedText: new Map(),
     filePickerRequests: 0,
     keyInputBindings: new Map(),
+    kamishibaiRuntime: null,
     localStorage: new Map(Object.entries(initialLocalStorage)),
     loadingAssetCount: 0,
     loadingBackdrop: '',
@@ -110,6 +157,7 @@ export function registerKamishibaiTestExtensions(
     playingSounds: new Set(),
     poseMatches: false,
     poseScore: 0,
+    runtimeExpression: null,
     runtimeVariableWrites: [],
     timers: new Map(),
     tempVariables: null,
@@ -585,6 +633,9 @@ export function registerKamishibaiTestExtensions(
     }
     runtimeCondition(args) {
       const expression = Cast.toString(args.EXPRESSION).trim();
+      if (/(^|[^=!<>])=($|[^=])/u.test(expression)) {
+        throw new SyntaxError('Unexpected assignment operator.');
+      }
       if (expression === 'true') return true;
       if (expression === 'false' || !expression) return false;
       return Cast.toBoolean(this.runtime.ext_lmsTempVars2.getRuntimeVariable({VAR: expression}));
@@ -763,7 +814,22 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);
-  register(vm, 'kubohiroyaruntimeexpression', RuntimeExpressionExtension);
+  register(
+    vm,
+    'kubohiroyaruntimeexpression',
+    productionRuntimeExpression
+      ? createProductionExtensionClass(vm, runtimeExpressionSource, (extension) => {
+          state.runtimeExpression = extension;
+        })
+      : RuntimeExpressionExtension,
+  );
+  register(
+    vm,
+    'kubohiroyakamishibairuntime',
+    createProductionExtensionClass(vm, kamishibaiRuntimeSource, (extension) => {
+      state.kamishibaiRuntime = extension;
+    }),
+  );
   register(vm, 'kubohiroyaasyncinput', AsyncInputExtension);
   register(vm, 'lmsTimers', TimersExtension);
   register(vm, 'files', FilesExtension);

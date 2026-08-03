@@ -11,7 +11,7 @@
   var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
   const extensionName = "Runtime Expression";
-  const blocks = [{ "opcode": "runtimeCondition", "blockType": "BOOLEAN", "text": "condition [EXPRESSION]", "description": "Safely evaluates a JavaScript-like condition using Temporary Variables runtime variables.", "featureFlag": "runtimeExpression", "arguments": { "EXPRESSION": { "type": "STRING", "defaultValue": 'state == "ready"' } } }, { "opcode": "registerConditionalBroadcast", "blockType": "COMMAND", "text": "register [ID] conditional broadcast [CONDITION] [MESSAGE_ON_TRUE] / [MESSAGE_ON_FALSE] with [TIMEOUT] seconds timeout", "description": "Registers broadcasts for false-to-true and true-to-false runtime condition changes.", "featureFlag": "conditionalBroadcast", "arguments": { "ID": { "type": "STRING", "defaultValue": "watcher" }, "CONDITION": { "type": "STRING", "defaultValue": 'state == "ready"' }, "MESSAGE_ON_TRUE": { "type": "STRING", "defaultValue": "state ready" }, "MESSAGE_ON_FALSE": { "type": "STRING", "defaultValue": "state not ready" }, "TIMEOUT": { "type": "NUMBER", "defaultValue": 0 } } }, { "opcode": "unregisterConditionalBroadcast", "blockType": "COMMAND", "text": "unregister [ID] conditional broadcast", "description": "Unregisters the conditional broadcast with the matching ID.", "featureFlag": "conditionalBroadcast", "arguments": { "ID": { "type": "STRING", "defaultValue": "watcher" } } }];
+  const blocks = [{ "opcode": "validateConditionSyntax", "blockType": "REPORTER", "text": "validate condition syntax [EXPRESSION]", "description": "Returns a JSON syntax-validation result without reading runtime variables or evaluating the expression.", "hideFromPalette": true, "arguments": { "EXPRESSION": { "type": "STRING", "defaultValue": 'state == "ready"' } } }, { "opcode": "runtimeCondition", "blockType": "BOOLEAN", "text": "condition [EXPRESSION]", "description": "Safely evaluates a JavaScript-like condition using Temporary Variables runtime variables.", "featureFlag": "runtimeExpression", "arguments": { "EXPRESSION": { "type": "STRING", "defaultValue": 'state == "ready"' } } }, { "opcode": "registerConditionalBroadcast", "blockType": "COMMAND", "text": "register [ID] conditional broadcast [CONDITION] [MESSAGE_ON_TRUE] / [MESSAGE_ON_FALSE] with [TIMEOUT] seconds timeout", "description": "Registers broadcasts for false-to-true and true-to-false runtime condition changes.", "featureFlag": "conditionalBroadcast", "arguments": { "ID": { "type": "STRING", "defaultValue": "watcher" }, "CONDITION": { "type": "STRING", "defaultValue": 'state == "ready"' }, "MESSAGE_ON_TRUE": { "type": "STRING", "defaultValue": "state ready" }, "MESSAGE_ON_FALSE": { "type": "STRING", "defaultValue": "state not ready" }, "TIMEOUT": { "type": "NUMBER", "defaultValue": 0 } } }, { "opcode": "unregisterConditionalBroadcast", "blockType": "COMMAND", "text": "unregister [ID] conditional broadcast", "description": "Unregisters the conditional broadcast with the matching ID.", "featureFlag": "conditionalBroadcast", "arguments": { "ID": { "type": "STRING", "defaultValue": "watcher" } } }];
   const definitions = {
     extensionName,
     blocks
@@ -379,6 +379,20 @@
   function parseCondition(expression) {
     return new ConditionParser(tokenizeCondition(expression)).parse();
   }
+  function validateConditionSyntax(expression) {
+    try {
+      parseCondition(expression);
+      return { ok: true };
+    } catch (error) {
+      if (!(error instanceof ConditionSyntaxError)) throw error;
+      return {
+        ok: false,
+        code: "CONDITION_SYNTAX_ERROR",
+        position: error.position,
+        message: error.message
+      };
+    }
+  }
   function evaluateConditionExpression(expression, resolveVariable) {
     switch (expression.kind) {
       case "literal":
@@ -598,6 +612,7 @@
           opcode: block.opcode,
           blockType: Scratch.BlockType[block.blockType],
           text: Scratch.translate(block.text),
+          ...block.hideFromPalette ? { hideFromPalette: true } : {},
           arguments: Object.fromEntries(
             Object.entries(block.arguments).map(([name, argument]) => [
               name,
@@ -615,6 +630,11 @@
       return this.evaluator.evaluate(
         String(args.EXPRESSION ?? ""),
         (name) => readRuntimeVariable(runtimeVariables, name)
+      );
+    }
+    validateConditionSyntax(args) {
+      return JSON.stringify(
+        validateConditionSyntax(String(args.EXPRESSION ?? ""))
       );
     }
     registerConditionalBroadcast(args) {

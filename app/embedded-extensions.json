@@ -11,9 +11,9 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-asset-manager",
         "ref": "main",
-        "resolvedCommit": "c7cbd4b9d51b8ac17d7d0d143738d93cfdfa35b6",
+        "resolvedCommit": "c85e0f5d2846f1c3e12e9719e6a24314088074ef",
         "artifact": "dist/asset-manager.js",
-        "integrity": "sha256-CglKdH8NjSOG6tOwOJzOdClEWtSKExnrKESDffzgFU4="
+        "integrity": "sha256-9qe+/KcGSGLjU1BSoT+18IDkkmsmUVE8+h6+CYbg27A="
       }
     },
     {
@@ -56,10 +56,17 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-runtime-expression",
         "ref": "main",
-        "resolvedCommit": "7c39ed9996f9a34fb3e038844646ff9ce361cd8d",
+        "resolvedCommit": "ca86698bbfd4858e2e5d215a50cedbacd3d8c15c",
         "artifact": "dist/runtime-expression.js",
-        "integrity": "sha256-P2gBufIdthFIMutT3Sb4MpeXLHq7k4NhUNEHpqFjms0="
+        "integrity": "sha256-Y26Bf/HO94j/cbROXJpe1Ed9C1O+V/XZd8NdNn1pFm4="
       }
+    },
+    {
+      "id": "kubohiroyakamishibairuntime",
+      "path": "extensions/kubohiroyakamishibairuntime.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64"
     },
     {
       "id": "kubohiroyaasyncinput",

@@ -329,7 +329,7 @@ test('documents actor clone creation before actor action delivery', () => {
   );
 });
 
-test('documents invalidScript as a terminal error instead of a pose transition', () => {
+test('documents legacy and detailed script errors as terminal states', () => {
   const invalidScriptSenders = projectSource.targets.flatMap((target) =>
     Object.entries(target.blocks ?? {})
       .filter(
@@ -364,6 +364,16 @@ test('documents invalidScript as a terminal error instead of a pose transition',
   assert.match(JSON.stringify(setErrorSkin.inputs?.NAME), /ui\.invalidScript/u);
   assert.equal(showPrompt.opcode, 'looks_show');
 
+  const stage = projectSource.targets.find(({isStage}) => isStage);
+  const startStory = Object.values(stage.blocks).find(
+    (block) =>
+      block.opcode === 'event_whenbroadcastreceived' &&
+      block.fields?.BROADCAST_OPTION?.[0] === 'startStory',
+  );
+  const detailedPreflight = stage.blocks[startStory.next];
+  assert.equal(detailedPreflight.opcode, 'kubohiroyakamishibairuntime_validateScriptOrStop');
+  assert.equal(stage.variables.featureDetailedScriptErrors[1], false);
+
   assert.match(stateDiagram, /<g id="state-script-error" aria-label="台本エラー表示・実行停止">/u);
   assert.match(
     stateDiagram,
@@ -376,8 +386,9 @@ test('documents invalidScript as a terminal error instead of a pose transition',
   assert.match(specification, /`invalidScript`はpose待機への遷移ではありません/u);
   assert.match(
     specification,
-    /\| 台本エラー表示・実行停止\s+\| 台本・command・scene解析エラー時の`invalidScript`/u,
+    /\| 台本エラー表示・実行停止\s+\| 詳細preflightまたは従来parserのfatal error/u,
   );
+  assert.match(specification, /Scratch parserより前に物理行番号付きの限定preflight/u);
 });
 
 test('plays the configured pose completion sound before updating the recognition value', () => {

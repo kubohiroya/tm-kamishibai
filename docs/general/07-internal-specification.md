@@ -99,43 +99,44 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |   20 |
-| block                    | 1751 |
+| block                    | 1752 |
 | event hat                |   98 |
 | カスタムブロック定義     |   42 |
-| Scratch変数              |    6 |
+| Scratch変数              |    7 |
 | Scratch list             |   11 |
 | broadcast message        |   21 |
 | 静的なruntime variable名 |   19 |
 | 静的なthread variable名  |   36 |
-| TurboWarp機能拡張        |   14 |
+| TurboWarp機能拡張        |   15 |
 
 本書に掲載するblock IDの意味と安定性は
 [「event、カスタムブロック、呼出し関係」](#events-custom-blocks-call-graph){data-ref="chapter"}で説明します。
 
 ### 使用する機能拡張
 
-| ID                            | 役割                                     | 取得形態 |
-| ----------------------------- | ---------------------------------------- | -------- |
-| `sipcconsole`                 | デバッグ用console                        | Gallery  |
-| `lmsTempVars2`                | runtime variable／thread variable        | Gallery  |
-| `strings`                     | 文字列処理                               | Gallery  |
-| `kubohiroyaassetmanager`      | 画像・音声の登録とLoading進捗            | 埋め込み |
-| `tmpose`                      | カメラ姿勢認識                           | 埋め込み |
-| `localstorage`                | 台本と選択UI言語のローカル保存           | Gallery  |
-| `kubohiroyatextlines`         | 行単位の台本処理                         | 埋め込み |
-| `kubohiroyaruntimeexpression` | 分岐条件式の評価                         | 埋め込み |
-| `kubohiroyaasyncinput`        | key／touch入力とscene移動                | 埋め込み |
-| `lmsTimers`                   | `wait`と時間ベースactor actionのタイマー | Gallery  |
-| `files`                       | 外部台本ファイルの選択                   | Gallery  |
-| `text`                        | テキスト描画・アニメーション             | Gallery  |
-| `translate`                   | Scratch／TurboWarpの表示言語を取得       | 標準     |
-| `kubohiroyaweblink`           | HTTPSの公式Webサイトを新しいタブで開く   | 埋め込み |
+| ID                            | 役割                                       | 取得形態 |
+| ----------------------------- | ------------------------------------------ | -------- |
+| `sipcconsole`                 | デバッグ用console                          | Gallery  |
+| `lmsTempVars2`                | runtime variable／thread variable          | Gallery  |
+| `strings`                     | 文字列処理                                 | Gallery  |
+| `kubohiroyaassetmanager`      | 画像・音声の登録とLoading進捗              | 埋め込み |
+| `tmpose`                      | カメラ姿勢認識                             | 埋め込み |
+| `localstorage`                | 台本と選択UI言語のローカル保存             | Gallery  |
+| `kubohiroyatextlines`         | 行単位の台本処理                           | 埋め込み |
+| `kubohiroyaruntimeexpression` | 分岐条件式の評価                           | 埋め込み |
+| `kubohiroyakamishibairuntime` | DSL 3.1の限定preflight、診断表示、安全停止 | 埋め込み |
+| `kubohiroyaasyncinput`        | key／touch入力とscene移動                  | 埋め込み |
+| `lmsTimers`                   | `wait`と時間ベースactor actionのタイマー   | Gallery  |
+| `files`                       | 外部台本ファイルの選択                     | Gallery  |
+| `text`                        | テキスト描画・アニメーション               | Gallery  |
+| `translate`                   | Scratch／TurboWarpの表示言語を取得         | 標準     |
+| `kubohiroyaweblink`           | HTTPSの公式Webサイトを新しいタブで開く     | 埋め込み |
 
 GitHub由来の管理対象となる埋め込み拡張では、由来、固定commit、SHA-256を
 `app/embedded-extensions.json`の`source`に記録します。更新方法は
 [`sb3-toolchain`のワークフロー](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md)
-に従います。`kubohiroyaweblink`はこのproject内で管理する小規模な拡張なので、
-`source`を持ちません。
+に従います。`kubohiroyakamishibairuntime`と`kubohiroyaweblink`はこのproject内で管理する
+小規模な拡張なので、`source`を持ちません。
 
 ## SB3の構成 {#sb3-structure}
 
@@ -156,7 +157,7 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 | ------------------------- | ---------- | ------------------------------------------------------------------- | --------------------------------------------------- |
 | `Stage`                   | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `TitleRuntime`, `Stars`, `LoadingBackdrop` |
 | `Actor`                   | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                                 |
-| `prompt`                  | UI sprite  | 操作案内、pose案内、台本エラーをAsset Managerのcostumeで表示        | `ui-placeholder`                                    |
+| `prompt`                  | UI sprite  | 操作案内とpose案内をAsset Managerで、詳細な台本エラーをSVGで表示    | `ui-placeholder`                                    |
 | `openButton`              | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                                    |
 | `reloadButton`            | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                                    |
 | `showTitleButton`         | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                                    |
@@ -297,17 +298,20 @@ runtime variableの3種類に分けます。
 
 ### Scratch変数
 
-| 所有者  | 変数                       | 初期値       | 役割                                   |
-| ------- | -------------------------- | ------------ | -------------------------------------- |
-| `Stage` | `ポーズ認識`               | `0`          | pose認識中の表示・互換用状態           |
-| `Stage` | `チャージ`                 | `0`          | pose成立までのcharge表示・互換用状態   |
-| `Stage` | `actionIndex`              | `1`          | 現在処理する`actionList`の位置         |
-| `Stage` | `poseIndex`                | `1`          | 現在処理する`poseList`の位置           |
-| `Stage` | `__tmpose_embedded_script` | 空文字       | `player` profileの組み込み台本予約領域 |
-| `Actor` | `actorName`                | `_template_` | cloneが担当する台本上のactor名         |
+| 所有者  | 変数                          | 初期値       | 役割                                    |
+| ------- | ----------------------------- | ------------ | --------------------------------------- |
+| `Stage` | `ポーズ認識`                  | `0`          | pose認識中の表示・互換用状態            |
+| `Stage` | `チャージ`                    | `0`          | pose成立までのcharge表示・互換用状態    |
+| `Stage` | `actionIndex`                 | `1`          | 現在処理する`actionList`の位置          |
+| `Stage` | `poseIndex`                   | `1`          | 現在処理する`poseList`の位置            |
+| `Stage` | `featureDetailedScriptErrors` | `false`      | DSL 3.1詳細診断preflightの既定OFFフラグ |
+| `Stage` | `__tmpose_embedded_script`    | 空文字       | `player` profileの組み込み台本予約領域  |
+| `Actor` | `actorName`                   | `_template_` | cloneが担当する台本上のactor名          |
 
 `__tmpose_embedded_script`はStageに一つだけ存在し、monitorを持ちません。`generic`と
 `editor`では空、`player`ではbuilderが変換済み台本を設定します。
+`featureDetailedScriptErrors`は最初の`startStory`で一度だけ読み、次のgreen flagまで値を固定します。
+`false`では従来のScratch parserと`invalidScript`経路だけを使います。
 
 ### Scratch list
 
@@ -352,6 +356,12 @@ runtime variableの3種類に分けます。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
 静的な19個には数えません。
 
+詳細診断を有効にしてfatal errorが発生した場合、Kamishibai Runtimeは互換用scalarとして
+`kamishibaiErrorCategory`、`kamishibaiErrorCode`、`kamishibaiErrorLine`、
+`kamishibaiErrorColumn`、`kamishibaiErrorMessage`、`kamishibaiErrorSource`、
+`kamishibaiErrorSvg`を作ります。診断の正本は拡張内部の`lastDiagnostic`であり、これらの
+runtime variableと前回のSVG skinは次のgreen flagで削除します。
+
 ### thread variable
 
 カスタムブロック呼出しごとに分離され、呼出し終了後に共有状態として残さない値です。
@@ -392,22 +402,22 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### Stage
 
-| target  | ID                     | trigger               | 実行される内容                                                                                |
-| ------- | ---------------------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `Stage` | `iM`                   | green flag            | UI言語を保存値／標準`（言語）`から決定後、camera／pose／actorを初期化し`showTitle`送信        |
-| `Stage` | `i;`                   | key `space`           | `showCover`送信                                                                               |
-| `Stage` | `i}`                   | key `down arrow`      | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=scene`             |
-| `Stage` | `jb`                   | key `right arrow`     | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=action`            |
-| `Stage` | `jX`                   | `startStory`受信      | `start camera`, `create sceneList`, `exec scene # %s with %s`, `create asset`, `create actor` |
-| `Stage` | `j/`                   | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信             |
-| `Stage` | `j?`                   | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                              |
-| `Stage` | `kD`                   | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                             |
-| `Stage` | `l=`                   | Stage click           | `closeTitle`送信                                                                              |
-| `Stage` | `titleCloseHat`        | `closeTitle`受信      | 組み込み台本の有無に応じて`showCover`または`startStory`送信                                   |
-| `Stage` | `l[`                   | `showTitle`受信       | `TitleRuntime`へ切替え、実行contextをclearし、`hidePrompt`, `deleteAllActors`送信             |
-| `Stage` | `m~`                   | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                                 |
-| `Stage` | `nx`                   | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                                 |
-| `Stage` | `uiLanguageChangedHat` | `languageChanged`受信 | menuと`about.*`の実行時SVGテキストを選択言語で更新                                            |
+| target  | ID                     | trigger               | 実行される内容                                                                         |
+| ------- | ---------------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| `Stage` | `iM`                   | green flag            | UI言語を保存値／標準`（言語）`から決定後、camera／pose／actorを初期化し`showTitle`送信 |
+| `Stage` | `i;`                   | key `space`           | `showCover`送信                                                                        |
+| `Stage` | `i}`                   | key `down arrow`      | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=scene`      |
+| `Stage` | `jb`                   | key `right arrow`     | 現在の`sound`停止、sequence終端化、`finishTimedActorAction`送信、`skipMode=action`     |
+| `Stage` | `jX`                   | `startStory`受信      | 既定OFFの詳細診断後、`start camera`, `create sceneList`, asset／actor生成、scene実行   |
+| `Stage` | `j/`                   | `stopStory`受信       | `stop camera`, `stop pose recog`, `show cover`; `deleteAllActors`, `showMenu`送信      |
+| `Stage` | `j?`                   | `debugTestCamera`受信 | TMPoseのcamera previewを直接確認                                                       |
+| `Stage` | `kD`                   | `showCover`受信       | `show cover`; `hidePrompt`, `deleteAllActors`送信                                      |
+| `Stage` | `l=`                   | Stage click           | `closeTitle`送信                                                                       |
+| `Stage` | `titleCloseHat`        | `closeTitle`受信      | 組み込み台本の有無に応じて`showCover`または`startStory`送信                            |
+| `Stage` | `l[`                   | `showTitle`受信       | `TitleRuntime`へ切替え、実行contextをclearし、`hidePrompt`, `deleteAllActors`送信      |
+| `Stage` | `m~`                   | `stopKeyInput`受信    | Async Inputの全listenerを停止                                                          |
+| `Stage` | `nx`                   | `stopTouchInput`受信  | Async Inputの全listenerを停止                                                          |
+| `Stage` | `uiLanguageChangedHat` | `languageChanged`受信 | menuと`about.*`の実行時SVGテキストを選択言語で更新                                     |
 
 #### Actor
 
@@ -548,7 +558,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | 起点          | 経路                                                                                                                                           |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | green flag    | 保存済みUI言語または標準`（言語）`を判定 → app shell文言初期化 → camera／pose停止 → actor非表示 → `showTitle`                                  |
-| `startStory`  | 台本検証 → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`                                                                   |
+| `startStory`  | flag ONなら副作用のないDSL 3.1 preflight → `create sceneList` → asset／actor生成 → `exec scene # %s with %s`                                   |
 | scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`                                                                        |
 | Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                                                                                       |
 | Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action                                                            |
@@ -594,21 +604,28 @@ callback messageです。`debugTestCamera`は通常フローに送信元を持�
 主要状態はStageが所有します。UI表示そのものを状態の正本にせず、runtime variable、
 broadcast、実行中のcustom blockから導出します。
 
-| 状態                     | 入口                                              | 主な出口                                                                           |
-| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 初期化                   | green flag                                        | `showTitle`                                                                        |
-| title                    | `showTitle`                                       | Stage clickまたは右上の閉じるボタン。組み込み台本なら`startStory`、それ以外はcover |
-| cover／menu              | `showCover`または`stopStory`                      | open／reloadで`startStory`、title buttonで`showTitle`                              |
-| 台本準備                 | `startStory`                                      | 正常ならasset loadingとscene実行、検証異常なら`invalidScript`                      |
-| asset loading            | `create asset`                                    | `assetLoadingCompleted`後にscene実行                                               |
-| scene実行                | `exec scene # %s with %s`                         | 次scene／branch、最終sceneで`stopStory`、解析異常で`invalidScript`                 |
-| action実行               | `exec actionList`                                 | Rightでaction境界、Downでscene境界、完了で次action                                 |
-| pose待機                 | `exec pose action %s`                             | pose成立、Right／Downでaction実行へ戻る                                            |
-| 台本エラー表示・実行停止 | 台本・command・scene解析エラー時の`invalidScript` | `prompt`が`ui.invalidScript`を表示し、送信元の`stop all`で実行を停止               |
+| 状態                     | 入口                                       | 主な出口                                                                           |
+| ------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| 初期化                   | green flag                                 | `showTitle`                                                                        |
+| title                    | `showTitle`                                | Stage clickまたは右上の閉じるボタン。組み込み台本なら`startStory`、それ以外はcover |
+| cover／menu              | `showCover`または`stopStory`               | open／reloadで`startStory`、title buttonで`showTitle`                              |
+| 台本準備                 | `startStory`                               | 正常ならasset loadingとscene実行、詳細診断または従来検証の異常なら安全停止         |
+| asset loading            | `create asset`                             | `assetLoadingCompleted`後にscene実行                                               |
+| scene実行                | `exec scene # %s with %s`                  | 次scene／branch、最終sceneで`stopStory`、解析異常で`invalidScript`                 |
+| action実行               | `exec actionList`                          | Rightでaction境界、Downでscene境界、完了で次action                                 |
+| pose待機                 | `exec pose action %s`                      | pose成立、Right／Downでaction実行へ戻る                                            |
+| 台本エラー表示・実行停止 | 詳細preflightまたは従来parserのfatal error | flag ONではSVG診断、OFFでは`ui.invalidScript`を表示し、後続threadを停止            |
 
-`invalidScript`はpose待機への遷移ではありません。Stageは台本検証、command解析、
+`invalidScript`はpose待機への遷移ではありません。flag OFFでは、Stageが台本検証、command解析、
 scene解析のエラー時にこのmessageを送信し、各送信箇所の直後に`stop all`を実行します。
 `prompt`はmessageを受信すると`ui.invalidScript`のskinを設定して表示します。
+
+flag ONでは、Kamishibai RuntimeがScratch parserより前に物理行番号付きの限定preflightを行います。
+最初のfatal diagnosticを内部へ保存して`runtime.stopAll()`を呼び、日本語または英語の説明、
+code、行・列、該当行をXML escapeした480×360 SVGを`prompt`へ適用します。Asset Managerの
+project-local address検証APIとRuntime Expressionのsyntax-only APIだけを使い、正常時の
+実行用listやactorは従来のScratch parserだけが生成します。rendererを利用できない場合は
+テキスト表示、それも利用できない場合は`invalidScript`へfallbackします。
 
 `skipMode`は要求、`skipContext`は消費可能な境界です。要求はtitle、action、pose、sceneの
 該当境界だけが消費し、scene開始、cover、stopでclearします。`nextSceneLabel`はkey／touch

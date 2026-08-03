@@ -33,6 +33,15 @@ export class KamishibaiVmHarness {
     throw new Error(`VM condition was not reached within ${maxSteps} steps.`);
   }
 
+  async runUntilAsync(predicate, {maxSteps = 500, milliseconds = 16} = {}) {
+    for (let step = 0; step < maxSteps; step += 1) {
+      if (predicate()) return;
+      this.step({milliseconds});
+      await Promise.resolve();
+    }
+    throw new Error(`VM condition was not reached within ${maxSteps} steps.`);
+  }
+
   greenFlag() {
     this.vm.greenFlag();
     this.clock.now = 0;
@@ -111,6 +120,12 @@ export class KamishibaiVmHarness {
     return this.getStage().lookupVariableByNameAndType(name, '')?.value;
   }
 
+  setStageVariable(name, value) {
+    const variable = this.getStage().lookupVariableByNameAndType(name, '');
+    if (!variable) throw new Error(`Stage variable not found: ${name}`);
+    variable.value = value;
+  }
+
   getActor(name) {
     return this.vm.runtime.targets.find(
       (target) =>
@@ -152,6 +167,7 @@ export async function loadKamishibaiVm({
   initialLocalStorage = {},
   sb3Path = defaultKamishibaiSb3Path,
   productionAssetManager = false,
+  productionRuntimeExpression = false,
   viewerLanguage = 'English',
 } = {}) {
   const originalWarn = vmLog.warn;
@@ -169,6 +185,7 @@ export async function loadKamishibaiVm({
   const extensionState = registerKamishibaiTestExtensions(vm, clock, {
     initialLocalStorage,
     productionAssetManager,
+    productionRuntimeExpression,
     viewerLanguage,
   });
 
