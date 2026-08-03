@@ -342,15 +342,13 @@ test('coalesces asset progress without waiting after each registration', () => {
   assert.equal(blocks.F.next, null);
 
   assert.equal(blocks.fp.opcode, 'event_broadcastandwait');
-  assert.equal(blocks.fp.next, 'k-');
-  assert.equal(blocks['k-'].opcode, 'control_wait');
-  assert.deepEqual(blocks['k-'].inputs?.DURATION, [1, [5, '0']]);
+  assert.equal(blocks.fp.next, null);
+  assert.equal(blocks['k-'], undefined);
 
-  assert.equal(blocks.C.next, 'loadingProgressFlushWait');
-  assert.equal(blocks.loadingProgressFlushWait.opcode, 'control_wait');
-  assert.deepEqual(blocks.loadingProgressFlushWait.inputs?.DURATION, [1, [5, '0']]);
-  assert.equal(blocks.loadingProgressFlushWait.next, 'kV');
+  assert.equal(blocks.C.next, 'kV');
+  assert.equal(blocks.loadingProgressFlushWait, undefined);
   assert.equal(blocks.kV.opcode, 'event_broadcastandwait');
+  assert.equal(blocks.kV.parent, 'C');
 
   assert.equal(literalString(blocks.fi.inputs?.VAR), 'loadingDisplayed');
   assert.equal(blocks.fo.opcode, 'operator_gt');

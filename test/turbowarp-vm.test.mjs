@@ -1478,7 +1478,7 @@ test('stops only the current sound when Down skips a scene', async (context) => 
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
-test('applies stateful actions when Down interrupts scene parsing', async (context) => {
+test('applies stateful actions when Down skips before they execute', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   const script = [
@@ -1489,6 +1489,7 @@ test('applies stateful actions when Down interrupts scene parsing', async (conte
     'cover=Title,',
     '---',
     'sceneLabel=first',
+    'action=wait:30',
     'action=stage:Stars',
     'action=bgm:Music',
     'action=transition:fadeOut',
@@ -1502,12 +1503,14 @@ test('applies stateful actions when Down interrupts scene parsing', async (conte
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.setRuntimeVariable('script', script);
   harness.broadcast('startStory');
-  harness.runUntil(() => harness.getRuntimeVariable('sceneIndex') === 1);
+  harness.runUntil(() => Number(harness.getRuntimeVariable('sceneIndex')) === 1);
   harness.setRuntimeVariable('skipContext', 'scene');
 
   harness.pressKey('ArrowDown');
   harness.runUntil(
-    () => harness.getRuntimeVariable('sceneIndex') === 2 && !harness.hasRuntimeVariable('skipMode'),
+    () =>
+      Number(harness.getRuntimeVariable('sceneIndex')) === 2 &&
+      !harness.hasRuntimeVariable('skipMode'),
   );
 
   assert.equal(harness.getStageEffect('brightness'), -100);

@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1734 |
+| block                    | 1732 |
 | event hat                |   49 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   13 |
@@ -547,12 +547,11 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                                                 |
 | 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                                      |
 
-`create asset`はLoading用assetを先に登録し、`assetLoadingStarted`直後に1回だけ
-`wait 0`して初期表示を描画します。通常assetは登録完了数がthread variable
-`loadingDisplayed`を上回る場合だけ最大値を保存し、`assetLoadingProgress`を通常broadcastで
-1件につき1回送ります。全assetの登録後に1回だけ`wait 0`して未完了の表示更新をflushしてから、
+`create asset`はLoading用assetを先に登録し、`assetLoadingStarted`をbroadcast and waitします。
+通常assetは登録完了数がthread variable `loadingDisplayed`を上回る場合だけ最大値を保存し、
+`assetLoadingProgress`を通常broadcastで1件につき1回送ります。全assetの登録後は
 `assetLoadingCompleted`をbroadcast and waitします。URL／cacheの完了待ちはAsset Managerが
-返すPromiseに委ね、assetごとの追加`wait 0`は行いません。
+返すPromiseに委ね、追加の`wait 0`は行いません。
 
 ## broadcastと状態遷移
 

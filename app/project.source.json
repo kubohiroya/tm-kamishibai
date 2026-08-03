@@ -9261,7 +9261,7 @@
         },
         "C": {
           "opcode": "control_repeat",
-          "next": "loadingProgressFlushWait",
+          "next": "kV",
           "parent": "fi",
           "inputs": {
             "TIMES": [
@@ -10293,23 +10293,6 @@
           "shadow": false,
           "topLevel": false
         },
-        "k-": {
-          "opcode": "control_wait",
-          "next": null,
-          "parent": "fp",
-          "inputs": {
-            "DURATION": [
-              1,
-              [
-                5,
-                "0"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
         "E": {
           "opcode": "control_if",
           "next": "k.",
@@ -10738,7 +10721,7 @@
         },
         "fp": {
           "opcode": "event_broadcastandwait",
-          "next": "k-",
+          "next": null,
           "parent": "loadingPreFirstIf",
           "inputs": {
             "BROADCAST_INPUT": [
@@ -10941,7 +10924,7 @@
         "kV": {
           "opcode": "event_broadcastandwait",
           "next": null,
-          "parent": "loadingProgressFlushWait",
+          "parent": "C",
           "inputs": {
             "BROADCAST_INPUT": [
               1,
@@ -10949,23 +10932,6 @@
                 11,
                 "assetLoadingCompleted",
                 "zeRQU6vLAx`yyQGqhb.C"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "loadingProgressFlushWait": {
-          "opcode": "control_wait",
-          "next": "kV",
-          "parent": "C",
-          "inputs": {
-            "DURATION": [
-              1,
-              [
-                5,
-                "0"
               ]
             ]
           },
