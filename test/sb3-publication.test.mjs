@@ -229,10 +229,22 @@ test('keeps the generic app source free of Urashima sample content', async () =>
   );
   const genericProject = JSON.parse(genericProjectSource);
   const genericStage = genericProject.targets.find((target) => target.isStage);
+  const prompt = genericProject.targets.find((target) => target.name === 'prompt');
+  const loading = genericProject.targets.find((target) => target.name === 'Loading');
   const sampleTargetNames = ['Fish', 'Princess', 'Turtle', 'Urashima'];
   const sampleAssetNames = ['Beach1', 'Dragon Castle', 'Ocean Wave', 'Urashima-old-2'];
 
   assert(genericStage, 'The generic app source has no Stage target.');
+  assert.deepEqual(
+    {x: prompt?.x, y: prompt?.y, size: prompt?.size},
+    {x: -8, y: 150, size: 100},
+    'The generic prompt layout differs.',
+  );
+  assert.deepEqual(
+    {x: loading?.x, y: loading?.y, size: loading?.size},
+    {x: 1, y: -62, size: 100},
+    'The generic loading layout differs.',
+  );
   assert.deepEqual(genericStage.variables?.tmposeEmbeddedScript, ['__tmpose_embedded_script', '']);
   assert.equal(
     genericProject.monitors.some((monitor) => monitor.id === 'tmposeEmbeddedScript'),

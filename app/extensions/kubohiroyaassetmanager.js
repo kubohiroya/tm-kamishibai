@@ -176,7 +176,7 @@
     };
   }
   const EXTENSION_ID = "kubohiroyaassetmanager";
-  const EXTENSION_VERSION = "0.4.0";
+  const EXTENSION_VERSION = "0.4.1";
   const EXTENSION_DOCS_URI = "https://kubohiroya.github.io/turbowarp-asset-manager/";
   const DB_NAME = "tw-asset-manager";
   const DB_VERSION = 1;
@@ -1712,7 +1712,7 @@
         );
       }
       this.renderer.updateDrawableSkinId(target.drawableID, skin.skinId);
-      if (!target.isStage && skin.sourceSize !== null && target.size !== skin.sourceSize) {
+      if (!target.isStage && target.isOriginal && skin.sourceSize !== null && target.size !== skin.sourceSize) {
         target.setSize(skin.sourceSize);
       }
       target.emitVisualChange?.();
@@ -1911,8 +1911,18 @@
       }
       return actor;
     }
+    actorNameOf(target) {
+      return normalizeName(target.lookupVariableByNameAndType?.("actorName", "")?.value);
+    }
     resolveActorTarget(actor, util) {
-      const matches = this.runtime.targets.filter(
+      const invokingTarget = util?.target;
+      if (invokingTarget && !invokingTarget.isStage && (this.actorNameOf(invokingTarget) === actor || invokingTarget.sprite?.name === actor)) {
+        return invokingTarget;
+      }
+      const actorNameMatches = this.runtime.targets.filter(
+        (target2) => !target2.isStage && this.actorNameOf(target2) === actor
+      );
+      const matches = actorNameMatches.length > 0 ? actorNameMatches : this.runtime.targets.filter(
         (target2) => !target2.isStage && target2.sprite?.name === actor
       );
       if (matches.length > 1) {
@@ -1926,17 +1936,18 @@
           }
         );
       }
-      const invokingTarget = util?.target;
-      if (invokingTarget && !invokingTarget.isStage && invokingTarget.sprite?.name === actor) {
-        return invokingTarget;
-      }
       const target = matches[0] ?? this.findTargetByName(actor);
       if (!target) {
         const candidates = suggestNames(
           actor,
-          this.runtime.targets.flatMap(
-            (candidate) => !candidate.isStage && candidate.sprite?.name ? [candidate.sprite.name] : []
-          )
+          [
+            ...new Set(
+              this.runtime.targets.flatMap((candidate) => {
+                if (candidate.isStage) return [];
+                return [this.actorNameOf(candidate), candidate.sprite?.name ?? ""].filter(Boolean);
+              })
+            )
+          ]
         );
         throw new AssetManagerError("SPRITE_NOT_FOUND", `Actor not found: ${actor}.`, {
           operation: "resolveActor",
