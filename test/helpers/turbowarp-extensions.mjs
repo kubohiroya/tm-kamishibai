@@ -760,6 +760,27 @@ export function registerKamishibaiTestExtensions(
   }
 
   class TextExtension {
+    constructor(runtime) {
+      runtime.on('targetWasCreated', (target) => {
+        if (target.isOriginal) return;
+        const original = target.sprite?.clones?.find((candidate) => candidate.isOriginal);
+        if (!original) return;
+        for (const values of [
+          state.displayedText,
+          state.textColors,
+          state.textOutlineColors,
+          state.textOutlineWidths,
+        ]) {
+          if (values.has(original.id)) values.set(target.id, values.get(original.id));
+        }
+      });
+      runtime.on('targetWasRemoved', (target) => {
+        state.displayedText.delete(target.id);
+        state.textColors.delete(target.id);
+        state.textOutlineColors.delete(target.id);
+        state.textOutlineWidths.delete(target.id);
+      });
+    }
     getInfo() {
       return extensionInfo('text', [
         block('setText', BlockType.COMMAND, ['TEXT']),
@@ -769,6 +790,7 @@ export function registerKamishibaiTestExtensions(
         block('setWidth', BlockType.COMMAND, ['WIDTH', 'ALIGN']),
         block('setOutlineWidth', BlockType.COMMAND, ['WIDTH']),
         block('setOutlineColor', BlockType.COMMAND, ['COLOR']),
+        block('getDisplayedText', BlockType.REPORTER),
       ]);
     }
     setText(args, util) {
@@ -787,6 +809,9 @@ export function registerKamishibaiTestExtensions(
     }
     setOutlineColor(args, util) {
       state.textOutlineColors.set(util.target.id, Cast.toString(args.COLOR));
+    }
+    getDisplayedText(args, util) {
+      return state.displayedText.get(util.target.id) ?? '';
     }
   }
 

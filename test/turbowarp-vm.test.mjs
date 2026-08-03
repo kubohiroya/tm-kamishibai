@@ -216,6 +216,52 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   ]) {
     assert.equal(harness.getSprite(name).size, size);
   }
+  const uiItemBlocks = harness.getSprite('UiItem').blocks;
+  const cloneStart = Object.values(uiItemBlocks._blocks).find(
+    (block) => block.opcode === 'control_start_as_clone',
+  );
+  const createClone = Object.values(uiItemBlocks._blocks).find(
+    (block) => block.opcode === 'control_create_clone_of',
+  );
+  const prepareTemplateSkin = uiItemBlocks.getBlock(createClone.parent);
+  const initializeNonTextClone = uiItemBlocks.getBlock(cloneStart.next);
+  const applyNonTextCloneSkin = uiItemBlocks.getBlock(initializeNonTextClone.inputs.SUBSTACK.block);
+  const initializeTextClone = uiItemBlocks.getBlock(initializeNonTextClone.next);
+  const setTextOutlineWidth = uiItemBlocks.getBlock(initializeTextClone.inputs.SUBSTACK.block);
+  const showClone = uiItemBlocks.getBlock(initializeTextClone.next);
+  assert.equal(prepareTemplateSkin.opcode, 'kubohiroyaassetmanager_setThisSpriteSkin');
+  assert.equal(
+    applyNonTextCloneSkin.opcode,
+    'kubohiroyaassetmanager_setThisSpriteSkin',
+    'non-text assets are applied directly to the initialized clone drawable',
+  );
+  assert.equal(setTextOutlineWidth.opcode, 'text_setOutlineWidth');
+  const setTextOutlineColor = uiItemBlocks.getBlock(setTextOutlineWidth.next);
+  const refreshDisplayedText = uiItemBlocks.getBlock(setTextOutlineColor.next);
+  assert.equal(setTextOutlineColor.opcode, 'text_setOutlineColor');
+  assert.equal(refreshDisplayedText.opcode, 'text_setText');
+  assert.equal(
+    uiItemBlocks.getBlock(refreshDisplayedText.inputs.TEXT.block).opcode,
+    'text_getDisplayedText',
+  );
+  assert.equal(uiItemBlocks.getBlock(showClone.next).opcode, 'control_wait');
+  const officialWebsiteBlocks = harness.getSprite('officialWebsiteButton').blocks;
+  const showWebsiteButton = Object.values(officialWebsiteBlocks._blocks).find(
+    (block) =>
+      block.opcode === 'looks_show' &&
+      officialWebsiteBlocks.getBlock(block.next)?.opcode === 'control_if',
+  );
+  const sendWebsiteButtonBehind = officialWebsiteBlocks.getBlock(showWebsiteButton.next);
+  assert.equal(
+    officialWebsiteBlocks.getBlock(sendWebsiteButtonBehind.inputs.CONDITION.block).fields.VARIABLE
+      .value,
+    'cloneUiItemsEnabled',
+  );
+  const goWebsiteButtonBehind = officialWebsiteBlocks.getBlock(
+    sendWebsiteButtonBehind.inputs.SUBSTACK.block,
+  );
+  assert.equal(goWebsiteButtonBehind.opcode, 'looks_gotofrontback');
+  assert.equal(goWebsiteButtonBehind.fields.FRONT_BACK.value, 'back');
   assert.equal(harness.getStageVariable('featureCloneUiItems'), false);
   assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), false);
   assert.equal(harness.getSprite('UiItem').visible, false);
@@ -575,8 +621,7 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   const titleTargetIds = [...titleClones.values()].map((target) => target.id);
   for (const target of titleClones.values()) {
-    const asset = target.lookupVariableByNameAndType('uiAsset', '')?.value;
-    assert.equal(harness.extensionState.assetManager.displayedAssets.get(target.id), asset);
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(target.id), false);
   }
 
   harness.clickTarget(titleClones.get('titleHeading'));
@@ -621,10 +666,12 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   const languageTargetIds = [...languageClones.values()].map((target) => target.id);
   harness.clickTarget(languageClones.get('japaneseLanguageButton'));
   await harness.runUntilAsync(() => {
-    const openButton = uiItemClonesById(harness).get('openButton');
+    const menuClonesAfterLanguageChange = uiItemClonesById(harness);
+    const openButton = menuClonesAfterLanguageChange.get('openButton');
     return (
       harness.getRuntimeVariable('uiLanguage') === 'ja' &&
       openButton &&
+      menuClonesAfterLanguageChange.has('languageButton') &&
       harness.extensionState.displayedText.get(openButton.id) === appShellLocales.ja.ui.open
     );
   });

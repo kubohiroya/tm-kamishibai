@@ -35582,7 +35582,7 @@
         },
         "ui_looks_setsizeto_13": {
           "opcode": "looks_setsizeto",
-          "next": "ui_control_create_clone_of_15",
+          "next": "ui_kubohiroyaassetmanager_prepare_template_skin",
           "parent": "ui_motion_gotoxy_10",
           "inputs": {
             "SIZE": [
@@ -35595,6 +35595,38 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_kubohiroyaassetmanager_prepare_template_skin": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "ui_control_create_clone_of_15",
+          "parent": "ui_looks_setsizeto_13",
+          "inputs": {
+            "NAME": [
+              3,
+              "ui_data_variable_prepare_template_asset",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_prepare_template_asset": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_kubohiroyaassetmanager_prepare_template_skin",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiAsset",
+              "uiItemAsset"
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
@@ -35614,8 +35646,8 @@
         },
         "ui_control_create_clone_of_15": {
           "opcode": "control_create_clone_of",
-          "next": null,
-          "parent": "ui_looks_setsizeto_13",
+          "next": "ui_data_setvariableto_restore_template",
+          "parent": "ui_kubohiroyaassetmanager_prepare_template_skin",
           "inputs": {
             "CLONE_OPTION": [
               1,
@@ -35623,6 +35655,28 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_restore_template": {
+          "opcode": "data_setvariableto",
+          "next": null,
+          "parent": "ui_control_create_clone_of_15",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "true"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
@@ -36997,7 +37051,7 @@
         },
         "ui_control_start_as_clone_59": {
           "opcode": "control_start_as_clone",
-          "next": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
+          "next": "ui_control_if_non_text_asset",
           "parent": null,
           "inputs": {},
           "fields": {},
@@ -37006,10 +37060,235 @@
           "x": 500,
           "y": 40
         },
+        "ui_control_if_non_text_asset": {
+          "opcode": "control_if",
+          "next": "ui_control_if_text_asset_style",
+          "parent": "ui_control_start_as_clone_59",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_not_text_asset"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_kubohiroyaassetmanager_setThisSpriteSkin_60"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_text_asset_style": {
+          "opcode": "control_if",
+          "next": "ui_looks_show_62",
+          "parent": "ui_control_if_non_text_asset",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_text_style_mime"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_text_set_outline_width"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_text_style_mime": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_text_asset_style",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_kubohiroyaassetmanager_get_text_style_mime",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "text/plain"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_kubohiroyaassetmanager_get_text_style_mime": {
+          "opcode": "kubohiroyaassetmanager_getAssetMimeType",
+          "next": null,
+          "parent": "ui_operator_equals_text_style_mime",
+          "inputs": {
+            "NAME": [
+              3,
+              "ui_data_variable_text_style_asset",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_text_style_asset": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_kubohiroyaassetmanager_get_text_style_mime",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiAsset",
+              "uiItemAsset"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_text_set_outline_width": {
+          "opcode": "text_setOutlineWidth",
+          "next": "ui_text_set_outline_color",
+          "parent": "ui_control_if_text_asset_style",
+          "inputs": {
+            "WIDTH": [
+              1,
+              [
+                4,
+                "2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_text_set_outline_color": {
+          "opcode": "text_setOutlineColor",
+          "next": "ui_text_refresh_displayed_text",
+          "parent": "ui_text_set_outline_width",
+          "inputs": {
+            "COLOR": [
+              1,
+              [
+                9,
+                "#000000"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_text_refresh_displayed_text": {
+          "opcode": "text_setText",
+          "next": null,
+          "parent": "ui_text_set_outline_color",
+          "inputs": {
+            "TEXT": [
+              3,
+              "ui_text_get_displayed_text",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_text_get_displayed_text": {
+          "opcode": "text_getDisplayedText",
+          "next": null,
+          "parent": "ui_text_refresh_displayed_text",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_not_text_asset": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "ui_control_if_non_text_asset",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "ui_operator_equals_text_mime"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_text_mime": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_operator_not_text_asset",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_kubohiroyaassetmanager_get_text_mime",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "text/plain"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_kubohiroyaassetmanager_get_text_mime": {
+          "opcode": "kubohiroyaassetmanager_getAssetMimeType",
+          "next": null,
+          "parent": "ui_operator_equals_text_mime",
+          "inputs": {
+            "NAME": [
+              3,
+              "ui_data_variable_mime_asset",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_mime_asset": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_kubohiroyaassetmanager_get_text_mime",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiAsset",
+              "uiItemAsset"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
         "ui_kubohiroyaassetmanager_setThisSpriteSkin_60": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
-          "next": "ui_looks_show_62",
-          "parent": "ui_control_start_as_clone_59",
+          "next": null,
+          "parent": "ui_control_if_non_text_asset",
           "inputs": {
             "NAME": [
               3,
@@ -37040,9 +37319,26 @@
         },
         "ui_looks_show_62": {
           "opcode": "looks_show",
-          "next": "ui_looks_gotofrontback_63",
-          "parent": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
+          "next": "ui_control_wait_before_front",
+          "parent": "ui_control_if_text_asset_style",
           "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_wait_before_front": {
+          "opcode": "control_wait",
+          "next": "ui_looks_gotofrontback_63",
+          "parent": "ui_looks_show_62",
+          "inputs": {
+            "DURATION": [
+              1,
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
           "fields": {},
           "shadow": false,
           "topLevel": false
@@ -37050,7 +37346,7 @@
         "ui_looks_gotofrontback_63": {
           "opcode": "looks_gotofrontback",
           "next": null,
-          "parent": "ui_looks_show_62",
+          "parent": "ui_control_wait_before_front",
           "inputs": {},
           "fields": {
             "FRONT_BACK": [
@@ -38518,10 +38814,56 @@
         },
         "officialWebsiteTitleShow": {
           "opcode": "looks_show",
-          "next": null,
+          "next": "officialWebsiteSendBehindCloneLabel",
           "parent": "officialWebsiteSwitchRuntime",
           "inputs": {},
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteSendBehindCloneLabel": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "officialWebsiteTitleShow",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "officialWebsiteCloneUiEnabled"
+            ],
+            "SUBSTACK": [
+              2,
+              "officialWebsiteGoBehindCloneLabel"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteCloneUiEnabled": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "officialWebsiteSendBehindCloneLabel",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteGoBehindCloneLabel": {
+          "opcode": "looks_gotofrontback",
+          "next": null,
+          "parent": "officialWebsiteSendBehindCloneLabel",
+          "inputs": {},
+          "fields": {
+            "FRONT_BACK": [
+              "back",
+              null
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
