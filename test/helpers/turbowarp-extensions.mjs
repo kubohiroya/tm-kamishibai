@@ -790,7 +790,6 @@ export function registerKamishibaiTestExtensions(
         block('setWidth', BlockType.COMMAND, ['WIDTH', 'ALIGN']),
         block('setOutlineWidth', BlockType.COMMAND, ['WIDTH']),
         block('setOutlineColor', BlockType.COMMAND, ['COLOR']),
-        block('getDisplayedText', BlockType.REPORTER),
       ]);
     }
     setText(args, util) {
@@ -809,9 +808,6 @@ export function registerKamishibaiTestExtensions(
     }
     setOutlineColor(args, util) {
       state.textOutlineColors.set(util.target.id, Cast.toString(args.COLOR));
-    }
-    getDisplayedText(args, util) {
-      return state.displayedText.get(util.target.id) ?? '';
     }
   }
 

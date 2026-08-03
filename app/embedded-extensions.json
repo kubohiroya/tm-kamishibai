@@ -11,9 +11,9 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-asset-manager",
         "ref": "main",
-        "resolvedCommit": "dd1a9d40e27f0bb770eb9a79c0b6841df2fd463c",
+        "resolvedCommit": "1ebf60742a59c3d6a06b6453e7b36df20d375318",
         "artifact": "dist/asset-manager.js",
-        "integrity": "sha256-HWh3EEMwUm26ifaDq93bcaFsGPPnyOxMt/iZvF+whgA="
+        "integrity": "sha256-UCWBW6isNZQkthhBo4PSoZfZiKHXa8slXiF00LwVzgE="
       }
     },
     {

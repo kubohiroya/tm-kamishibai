@@ -35173,7 +35173,7 @@
       "variables": {
         "uiItemIsTemplate": [
           "uiIsTemplate",
-          true
+          1
         ],
         "uiItemId": [
           "uiId",
@@ -35364,8 +35364,8 @@
             "VALUE": [
               1,
               [
-                10,
-                "false"
+                4,
+                "0"
               ]
             ]
           },
@@ -35582,7 +35582,7 @@
         },
         "ui_looks_setsizeto_13": {
           "opcode": "looks_setsizeto",
-          "next": "ui_kubohiroyaassetmanager_prepare_template_skin",
+          "next": "ui_control_create_clone_of_15",
           "parent": "ui_motion_gotoxy_10",
           "inputs": {
             "SIZE": [
@@ -35595,38 +35595,6 @@
             ]
           },
           "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_kubohiroyaassetmanager_prepare_template_skin": {
-          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
-          "next": "ui_control_create_clone_of_15",
-          "parent": "ui_looks_setsizeto_13",
-          "inputs": {
-            "NAME": [
-              3,
-              "ui_data_variable_prepare_template_asset",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_data_variable_prepare_template_asset": {
-          "opcode": "data_variable",
-          "next": null,
-          "parent": "ui_kubohiroyaassetmanager_prepare_template_skin",
-          "inputs": {},
-          "fields": {
-            "VARIABLE": [
-              "uiAsset",
-              "uiItemAsset"
-            ]
-          },
           "shadow": false,
           "topLevel": false
         },
@@ -35647,7 +35615,7 @@
         "ui_control_create_clone_of_15": {
           "opcode": "control_create_clone_of",
           "next": "ui_data_setvariableto_restore_template",
-          "parent": "ui_kubohiroyaassetmanager_prepare_template_skin",
+          "parent": "ui_looks_setsizeto_13",
           "inputs": {
             "CLONE_OPTION": [
               1,
@@ -35666,8 +35634,8 @@
             "VALUE": [
               1,
               [
-                10,
-                "true"
+                4,
+                "1"
               ]
             ]
           },
@@ -36190,7 +36158,7 @@
         },
         "ui_procedures_call_29": {
           "opcode": "procedures_call",
-          "next": "ui_data_setvariableto_30",
+          "next": null,
           "parent": "ui_procedures_call_28",
           "inputs": {
             "uiIdArg": [
@@ -36253,28 +36221,6 @@
             "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
             "warp": "true"
           }
-        },
-        "ui_data_setvariableto_30": {
-          "opcode": "data_setvariableto",
-          "next": null,
-          "parent": "ui_procedures_call_29",
-          "inputs": {
-            "VALUE": [
-              1,
-              [
-                10,
-                "true"
-              ]
-            ]
-          },
-          "fields": {
-            "VARIABLE": [
-              "uiIsTemplate",
-              "uiItemIsTemplate"
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
         },
         "ui_event_whenbroadcastreceived_31": {
           "opcode": "event_whenbroadcastreceived",
@@ -36442,7 +36388,7 @@
         },
         "ui_procedures_call_38": {
           "opcode": "procedures_call",
-          "next": "ui_data_setvariableto_39",
+          "next": null,
           "parent": "ui_procedures_call_37",
           "inputs": {
             "uiIdArg": [
@@ -36505,28 +36451,6 @@
             "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
             "warp": "true"
           }
-        },
-        "ui_data_setvariableto_39": {
-          "opcode": "data_setvariableto",
-          "next": null,
-          "parent": "ui_procedures_call_38",
-          "inputs": {
-            "VALUE": [
-              1,
-              [
-                10,
-                "true"
-              ]
-            ]
-          },
-          "fields": {
-            "VARIABLE": [
-              "uiIsTemplate",
-              "uiItemIsTemplate"
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
         },
         "ui_event_whenbroadcastreceived_40": {
           "opcode": "event_whenbroadcastreceived",
@@ -36921,7 +36845,7 @@
         },
         "ui_procedures_call_54": {
           "opcode": "procedures_call",
-          "next": "ui_data_setvariableto_55",
+          "next": null,
           "parent": "ui_control_if_48",
           "inputs": {
             "uiIdArg": [
@@ -36985,28 +36909,6 @@
             "warp": "true"
           }
         },
-        "ui_data_setvariableto_55": {
-          "opcode": "data_setvariableto",
-          "next": null,
-          "parent": "ui_procedures_call_54",
-          "inputs": {
-            "VALUE": [
-              1,
-              [
-                10,
-                "true"
-              ]
-            ]
-          },
-          "fields": {
-            "VARIABLE": [
-              "uiIsTemplate",
-              "uiItemIsTemplate"
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
-        },
         "ui_event_whenflagclicked_56": {
           "opcode": "event_whenflagclicked",
           "next": "ui_looks_hide_57",
@@ -37035,8 +36937,8 @@
             "VALUE": [
               1,
               [
-                10,
-                "true"
+                4,
+                "1"
               ]
             ]
           },
@@ -37051,7 +36953,7 @@
         },
         "ui_control_start_as_clone_59": {
           "opcode": "control_start_as_clone",
-          "next": "ui_control_if_non_text_asset",
+          "next": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
           "parent": null,
           "inputs": {},
           "fields": {},
@@ -37060,235 +36962,10 @@
           "x": 500,
           "y": 40
         },
-        "ui_control_if_non_text_asset": {
-          "opcode": "control_if",
-          "next": "ui_control_if_text_asset_style",
-          "parent": "ui_control_start_as_clone_59",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "ui_operator_not_text_asset"
-            ],
-            "SUBSTACK": [
-              2,
-              "ui_kubohiroyaassetmanager_setThisSpriteSkin_60"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_control_if_text_asset_style": {
-          "opcode": "control_if",
-          "next": "ui_looks_show_62",
-          "parent": "ui_control_if_non_text_asset",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "ui_operator_equals_text_style_mime"
-            ],
-            "SUBSTACK": [
-              2,
-              "ui_text_set_outline_width"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_operator_equals_text_style_mime": {
-          "opcode": "operator_equals",
-          "next": null,
-          "parent": "ui_control_if_text_asset_style",
-          "inputs": {
-            "OPERAND1": [
-              3,
-              "ui_kubohiroyaassetmanager_get_text_style_mime",
-              [
-                10,
-                ""
-              ]
-            ],
-            "OPERAND2": [
-              1,
-              [
-                10,
-                "text/plain"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_kubohiroyaassetmanager_get_text_style_mime": {
-          "opcode": "kubohiroyaassetmanager_getAssetMimeType",
-          "next": null,
-          "parent": "ui_operator_equals_text_style_mime",
-          "inputs": {
-            "NAME": [
-              3,
-              "ui_data_variable_text_style_asset",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_data_variable_text_style_asset": {
-          "opcode": "data_variable",
-          "next": null,
-          "parent": "ui_kubohiroyaassetmanager_get_text_style_mime",
-          "inputs": {},
-          "fields": {
-            "VARIABLE": [
-              "uiAsset",
-              "uiItemAsset"
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_text_set_outline_width": {
-          "opcode": "text_setOutlineWidth",
-          "next": "ui_text_set_outline_color",
-          "parent": "ui_control_if_text_asset_style",
-          "inputs": {
-            "WIDTH": [
-              1,
-              [
-                4,
-                "2"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_text_set_outline_color": {
-          "opcode": "text_setOutlineColor",
-          "next": "ui_text_refresh_displayed_text",
-          "parent": "ui_text_set_outline_width",
-          "inputs": {
-            "COLOR": [
-              1,
-              [
-                9,
-                "#000000"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_text_refresh_displayed_text": {
-          "opcode": "text_setText",
-          "next": null,
-          "parent": "ui_text_set_outline_color",
-          "inputs": {
-            "TEXT": [
-              3,
-              "ui_text_get_displayed_text",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_text_get_displayed_text": {
-          "opcode": "text_getDisplayedText",
-          "next": null,
-          "parent": "ui_text_refresh_displayed_text",
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_operator_not_text_asset": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "ui_control_if_non_text_asset",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "ui_operator_equals_text_mime"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_operator_equals_text_mime": {
-          "opcode": "operator_equals",
-          "next": null,
-          "parent": "ui_operator_not_text_asset",
-          "inputs": {
-            "OPERAND1": [
-              3,
-              "ui_kubohiroyaassetmanager_get_text_mime",
-              [
-                10,
-                ""
-              ]
-            ],
-            "OPERAND2": [
-              1,
-              [
-                10,
-                "text/plain"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_kubohiroyaassetmanager_get_text_mime": {
-          "opcode": "kubohiroyaassetmanager_getAssetMimeType",
-          "next": null,
-          "parent": "ui_operator_equals_text_mime",
-          "inputs": {
-            "NAME": [
-              3,
-              "ui_data_variable_mime_asset",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "ui_data_variable_mime_asset": {
-          "opcode": "data_variable",
-          "next": null,
-          "parent": "ui_kubohiroyaassetmanager_get_text_mime",
-          "inputs": {},
-          "fields": {
-            "VARIABLE": [
-              "uiAsset",
-              "uiItemAsset"
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
-        },
         "ui_kubohiroyaassetmanager_setThisSpriteSkin_60": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
-          "next": null,
-          "parent": "ui_control_if_non_text_asset",
+          "next": "ui_looks_show_62",
+          "parent": "ui_control_start_as_clone_59",
           "inputs": {
             "NAME": [
               3,
@@ -37320,7 +36997,7 @@
         "ui_looks_show_62": {
           "opcode": "looks_show",
           "next": "ui_control_wait_before_front",
-          "parent": "ui_control_if_text_asset_style",
+          "parent": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -38724,10 +38401,10 @@
           "name": "ui-placeholder",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "assetId": "b6c18d2f3df8b5d12e2b6a529109fec2",
-          "md5ext": "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
-          "rotationCenterX": 1,
-          "rotationCenterY": 1
+          "assetId": "b85391a10e36ffc5157fa1f4f2d419ce",
+          "md5ext": "b85391a10e36ffc5157fa1f4f2d419ce.svg",
+          "rotationCenterX": 5,
+          "rotationCenterY": 5
         }
       ],
       "sounds": [],

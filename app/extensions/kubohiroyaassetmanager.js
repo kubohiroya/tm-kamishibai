@@ -943,11 +943,15 @@
       const name = normalizeName(value);
       const kind = this.assetRegistry.get(name);
       if (!kind) throw new Error(`Asset is not loaded: ${name}`);
+      if (!this.runtime.targets.includes(target)) return;
       if (kind === "text") {
         await this.applyTextToTarget(target, name, util);
       } else {
-        this.applySkinToTarget(target, await this.resolveSkin(name));
+        const skin = await this.resolveSkin(name);
+        if (!this.runtime.targets.includes(target)) return;
+        this.applySkinToTarget(target, skin);
       }
+      if (!this.runtime.targets.includes(target)) return;
       this.displayedAssets.set(target.id, name);
     }
     async applyTextToTarget(target, name, util) {

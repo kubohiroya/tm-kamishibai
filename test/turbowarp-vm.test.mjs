@@ -223,28 +223,34 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   const createClone = Object.values(uiItemBlocks._blocks).find(
     (block) => block.opcode === 'control_create_clone_of',
   );
-  const prepareTemplateSkin = uiItemBlocks.getBlock(createClone.parent);
-  const initializeNonTextClone = uiItemBlocks.getBlock(cloneStart.next);
-  const applyNonTextCloneSkin = uiItemBlocks.getBlock(initializeNonTextClone.inputs.SUBSTACK.block);
-  const initializeTextClone = uiItemBlocks.getBlock(initializeNonTextClone.next);
-  const setTextOutlineWidth = uiItemBlocks.getBlock(initializeTextClone.inputs.SUBSTACK.block);
-  const showClone = uiItemBlocks.getBlock(initializeTextClone.next);
-  assert.equal(prepareTemplateSkin.opcode, 'kubohiroyaassetmanager_setThisSpriteSkin');
+  const createUiItemPrototype = Object.values(uiItemBlocks._blocks).find(
+    (block) =>
+      block.opcode === 'procedures_prototype' &&
+      block.mutation?.proccode?.startsWith('create UI item'),
+  );
+  const setTemplateSize = uiItemBlocks.getBlock(createClone.parent);
+  const applyCloneSkin = uiItemBlocks.getBlock(cloneStart.next);
+  const showClone = uiItemBlocks.getBlock(applyCloneSkin.next);
+  assert.equal(setTemplateSize.opcode, 'looks_setsizeto');
+  assert.equal(createUiItemPrototype.mutation.warp, 'true');
+  assert.equal(uiItemBlocks.getBlock(createClone.next).opcode, 'data_setvariableto');
   assert.equal(
-    applyNonTextCloneSkin.opcode,
+    applyCloneSkin.opcode,
     'kubohiroyaassetmanager_setThisSpriteSkin',
-    'non-text assets are applied directly to the initialized clone drawable',
+    'assets are applied only after cloning the stable placeholder drawable',
   );
-  assert.equal(setTextOutlineWidth.opcode, 'text_setOutlineWidth');
-  const setTextOutlineColor = uiItemBlocks.getBlock(setTextOutlineWidth.next);
-  const refreshDisplayedText = uiItemBlocks.getBlock(setTextOutlineColor.next);
-  assert.equal(setTextOutlineColor.opcode, 'text_setOutlineColor');
-  assert.equal(refreshDisplayedText.opcode, 'text_setText');
-  assert.equal(
-    uiItemBlocks.getBlock(refreshDisplayedText.inputs.TEXT.block).opcode,
-    'text_getDisplayedText',
-  );
+  assert.equal(showClone.opcode, 'looks_show');
   assert.equal(uiItemBlocks.getBlock(showClone.next).opcode, 'control_wait');
+  assert.equal(
+    Object.values(uiItemBlocks._blocks).some((block) => block.opcode === 'text_setText'),
+    false,
+    'UiItem delegates text rendering to Asset Manager instead of cloning Animated Text state',
+  );
+  assert.equal(
+    harness.getSprite('UiItem').getCostumes()[0].assetId,
+    'b85391a10e36ffc5157fa1f4f2d419ce',
+    'UiItem uses a 10x10 placeholder so 50% sizes are not fenced up to 100%',
+  );
   const officialWebsiteBlocks = harness.getSprite('officialWebsiteButton').blocks;
   const showWebsiteButton = Object.values(officialWebsiteBlocks._blocks).find(
     (block) =>
@@ -581,6 +587,10 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   });
   assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   const titleClones = uiItemClonesById(harness);
+  assert.equal(
+    harness.extensionState.displayedText.get(titleClones.get('officialWebsiteLabel').id),
+    appShellLocales.en.about.officialWebsite.name,
+  );
   assert.deepEqual([...titleClones.keys()].sort(), [
     'officialWebsiteLabel',
     'titleAuthorName',
@@ -621,7 +631,7 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   const titleTargetIds = [...titleClones.values()].map((target) => target.id);
   for (const target of titleClones.values()) {
-    assert.equal(harness.extensionState.assetManager.displayedAssets.has(target.id), false);
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(target.id), true);
   }
 
   harness.clickTarget(titleClones.get('titleHeading'));

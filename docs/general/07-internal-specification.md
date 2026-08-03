@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |   21 |
-| block                    | 1961 |
+| block                    | 1943 |
 | event hat                |  108 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   14 |
@@ -186,10 +186,11 @@ title用テキストsprite、`Loading`、`LoadingBubbleAnchor`の実画像は、
 `cloneUiItemsEnabled`へ値を固定します。この経路では`UiItem`本体を非表示のcontroller兼雛形とし、
 `showTitle`、`showMenu`、`showLanguageMenu`ごとに必要な項目だけをcloneとして作ります。画面遷移時は
 cloneを非表示のまま保持せず削除します。従来の個別UI spriteは同じフラグで表示処理全体を止めます。
-clone生成前に雛形へassetとsizeを適用するため、Animated Textのclone hookがtext skinの内容・style・scaleを
-初期化済みdrawableへ複製できます。clone hookが複製しないoutlineはclone開始後に再設定し、継承した
-表示テキストを設定し直してclone自身のscaleでreflowします。
-画像assetはclone開始後にAsset Managerで再適用し、表示後に1 tick譲ってから最前面へ移動します。
+雛形は10×10の透明costumeを保持し、位置とsizeだけを設定してcloneします。2×2の透明costumeでは
+TurboWarpのsprite fencingにより50〜80%の指定が100%へ切り上げられるため、最小50%を保持できる寸法にしています。
+Asset Managerのruntime text skinはclone開始後にclone自身へ適用し、Animated Textのskinを雛形から複製しません。
+生成手続きはwarpで原子的に実行し、cloneへローカル値をコピーした直後に雛形の`uiIsTemplate`を数値`1`へ復元します。
+asset適用後に表示し、1 tick譲ってから最前面へ移動します。
 フラグOFFでは`UiItem`はcloneを作らず、従来spriteのblockをそのまま使用するため即時に切り戻せます。
 
 アプリUIの定義元は`scripts/sb3/app-shell-locales.mjs`です。ロケール別の`about.title`、
@@ -489,7 +490,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `titleAuthorName`         | `titleAuthorNameFlag`, `titleAuthorNameClick`, `titleAuthorNameShowTitle`, `titleAuthorNameHideMenu`, `titleAuthorNameStartStory`                                         | green flag／click／title・menu・story | 開発者氏名・emailを表示し、clickでは`closeTitle`送信  |
 | `officialWebsiteLabel`    | `officialWebsiteLabelFlag`, `officialWebsiteLabelClick`, `officialWebsiteLabelShowTitle`, `officialWebsiteLabelHideMenu`, `officialWebsiteLabelStartStory`                | green flag／click／title・menu・story | 公式Webサイト名を表示し、clickではサイトを開く        |
 | `UiItem`                  | `ui_event_whenbroadcastreceived_17`, `ui_event_whenbroadcastreceived_31`, `ui_event_whenbroadcastreceived_40`                                                             | title／言語選択／menu表示             | 現在画面の既存cloneを削除し、必要なUI項目だけを生成   |
-| `UiItem`                  | `ui_event_whenflagclicked_56`, `ui_control_start_as_clone_59`                                                                                                             | green flag／clone開始                 | text outlineを補完し、画像assetを再適用して最前面表示 |
+| `UiItem`                  | `ui_event_whenflagclicked_56`, `ui_control_start_as_clone_59`                                                                                                             | green flag／clone開始                 | clone自身へassetを適用して最前面表示                  |
 | `UiItem`                  | `ui_event_whenbroadcastreceived_64`, `ui_event_whenbroadcastreceived_69`, `ui_event_whenbroadcastreceived_74`                                                             | menu非表示／明示削除／story開始       | 不要になったUI cloneを削除                            |
 | `UiItem`                  | `ui_event_whenthisspriteclicked_79`, `ui_event_whenbroadcastreceived_135`                                                                                                 | clone click／action relay受信         | action envelopeを本体へ渡し、本体側で画面遷移を実行   |
 | `officialWebsiteButton`   | `officialWebsiteFlag`                                                                                                                                                     | green flag                            | 初期化前用の英語フォールバックを表示                  |
