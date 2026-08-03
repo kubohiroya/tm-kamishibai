@@ -3,10 +3,14 @@ import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 import {strFromU8, unzipSync} from 'fflate';
 
 import {buildReleaseSmokeFixtures} from '../scripts/build-release-smoke-fixtures.mjs';
+
+const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const preparedTestSb3 = path.join(projectRoot, 'tmp', 'kamishibai.sb3');
 
 async function withTemporaryDirectory(run) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tmpose-release-smoke-'));
@@ -27,11 +31,17 @@ test('builds reproducible release smoke fixtures with detailed diagnostics on an
   await withTemporaryDirectory(async (directory) => {
     const firstDirectory = path.join(directory, 'first');
     const secondDirectory = path.join(directory, 'second');
-    const first = await buildReleaseSmokeFixtures({outputDirectory: firstDirectory});
-    await buildReleaseSmokeFixtures({outputDirectory: secondDirectory});
+    const first = await buildReleaseSmokeFixtures({
+      baseSb3: preparedTestSb3,
+      outputDirectory: firstDirectory,
+    });
+    await buildReleaseSmokeFixtures({
+      baseSb3: preparedTestSb3,
+      outputDirectory: secondDirectory,
+    });
 
     assert.equal(first.manifest.formatVersion, 1);
-    assert.equal(first.manifest.base.path, 'dist/downloads/kamishibai.sb3');
+    assert.equal(first.manifest.base.path, 'tmp/kamishibai.sb3');
     assert.equal(first.fixtures.length, 2);
     for (const fixture of first.fixtures) {
       const firstBytes = await readFile(path.join(firstDirectory, fixture.filename));
