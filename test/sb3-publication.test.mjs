@@ -82,7 +82,10 @@ test('links and documents the generated downloadable SB3', async () => {
   );
   assert.match(
     readme,
-    /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@3\.1\.7/u,
+    new RegExp(
+      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
+      'u',
+    ),
     'README installation must use the current fixed npm version.',
   );
   assert.match(developerGuide, /pnpm add --save-exact @kubohiroya\/tmpose-kamishibai@<VERSION>/u);

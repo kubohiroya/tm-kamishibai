@@ -70,7 +70,7 @@ export const appShellLocales = Object.freeze({
       title: '「参加型」AI紙芝居',
     }),
     ui: Object.freeze({
-      about: 'このアプリについて',
+      about: 'アプリ情報',
       invalidScript: 'エラー：不正な台本ファイル',
       language: '言語',
       open: 'ファイルを開く',
