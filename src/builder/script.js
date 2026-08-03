@@ -47,7 +47,7 @@ export function createEmbeddedReference(entry) {
 
 /**
  * @param {Buffer | Uint8Array} sourceBytes
- * @param {ReturnType<import('./manifest.js').validateAssetManifest>} assetManifest
+ * @param {ReturnType<typeof import('./manifest.js').validateAssetManifest>} assetManifest
  */
 export function transformScript(sourceBytes, assetManifest) {
   let source;

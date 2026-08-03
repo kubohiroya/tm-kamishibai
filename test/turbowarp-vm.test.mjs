@@ -32,6 +32,14 @@ function startScript(harness, script) {
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
 }
 
+function uiItemId(target) {
+  return target.lookupVariableByNameAndType('uiId', '')?.value;
+}
+
+function uiItemClonesById(harness) {
+  return new Map(harness.getClones('UiItem').map((target) => [uiItemId(target), target]));
+}
+
 async function startInvalidScript(harness, script) {
   harness.setStageVariable('featureDetailedScriptErrors', true);
   harness.greenFlag();
@@ -128,19 +136,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       'Stage',
       'Actor',
       'prompt',
-      'openButton',
-      'reloadButton',
-      'showTitleButton',
-      'languageButton',
-      'japaneseLanguageButton',
-      'englishLanguageButton',
-      'titleHeading',
-      'titleVersion',
-      'titleLicenseApp',
-      'titleLicenseStory',
-      'titleAuthorOrganization',
-      'titleAuthorName',
-      'officialWebsiteLabel',
+      'UiItem',
       'officialWebsiteButton',
       'closeTitleButton',
       'Loading',
@@ -156,22 +152,7 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   );
   assert.deepEqual(harness.getSprite('Actor').getSounds(), []);
   assert.deepEqual(harness.getSprite('Loading').getSounds(), []);
-  for (const name of [
-    'prompt',
-    'openButton',
-    'reloadButton',
-    'showTitleButton',
-    'languageButton',
-    'japaneseLanguageButton',
-    'englishLanguageButton',
-    'titleHeading',
-    'titleVersion',
-    'titleLicenseApp',
-    'titleLicenseStory',
-    'titleAuthorOrganization',
-    'titleAuthorName',
-    'officialWebsiteLabel',
-  ]) {
+  for (const name of ['prompt', 'UiItem']) {
     assert.deepEqual(
       harness
         .getSprite(name)
@@ -195,17 +176,62 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
       .map((costume) => costume.name),
     ['title-close-button'],
   );
-  for (const [name, size] of [
-    ['titleHeading', 140],
-    ['titleVersion', 80],
-    ['titleLicenseApp', 50],
-    ['titleLicenseStory', 50],
-    ['titleAuthorOrganization', 50],
-    ['titleAuthorName', 50],
-    ['officialWebsiteLabel', 60],
-  ]) {
-    assert.equal(harness.getSprite(name).size, size);
-  }
+  const uiItemBlocks = harness.getSprite('UiItem').blocks;
+  const cloneStart = Object.values(uiItemBlocks._blocks).find(
+    (block) => block.opcode === 'control_start_as_clone',
+  );
+  const createClone = Object.values(uiItemBlocks._blocks).find(
+    (block) => block.opcode === 'control_create_clone_of',
+  );
+  const createUiItemPrototype = Object.values(uiItemBlocks._blocks).find(
+    (block) =>
+      block.opcode === 'procedures_prototype' &&
+      block.mutation?.proccode?.startsWith('create UI item'),
+  );
+  const setTemplateSize = uiItemBlocks.getBlock(createClone.parent);
+  const applyCloneSkin = uiItemBlocks.getBlock(cloneStart.next);
+  const showClone = uiItemBlocks.getBlock(applyCloneSkin.next);
+  assert.equal(setTemplateSize.opcode, 'looks_setsizeto');
+  assert.equal(createUiItemPrototype.mutation.warp, 'true');
+  assert.equal(uiItemBlocks.getBlock(createClone.next).opcode, 'data_setvariableto');
+  assert.equal(
+    applyCloneSkin.opcode,
+    'kubohiroyaassetmanager_setThisSpriteSkin',
+    'assets are applied only after cloning the stable placeholder drawable',
+  );
+  assert.equal(showClone.opcode, 'looks_show');
+  assert.equal(uiItemBlocks.getBlock(showClone.next).opcode, 'control_wait');
+  assert.equal(
+    Object.values(uiItemBlocks._blocks).some((block) => block.opcode === 'text_setText'),
+    false,
+    'UiItem delegates text rendering to Asset Manager instead of cloning Animated Text state',
+  );
+  assert.equal(
+    harness.getSprite('UiItem').getCostumes()[0].assetId,
+    'b85391a10e36ffc5157fa1f4f2d419ce',
+    'UiItem uses a 10x10 placeholder so 50% sizes are not fenced up to 100%',
+  );
+  const officialWebsiteBlocks = harness.getSprite('officialWebsiteButton').blocks;
+  const showWebsiteButton = Object.values(officialWebsiteBlocks._blocks).find(
+    (block) =>
+      block.opcode === 'looks_show' &&
+      officialWebsiteBlocks.getBlock(block.next)?.opcode === 'control_if',
+  );
+  const sendWebsiteButtonBehind = officialWebsiteBlocks.getBlock(showWebsiteButton.next);
+  assert.equal(
+    officialWebsiteBlocks.getBlock(sendWebsiteButtonBehind.inputs.CONDITION.block).fields.VARIABLE
+      .value,
+    'cloneUiItemsEnabled',
+  );
+  const goWebsiteButtonBehind = officialWebsiteBlocks.getBlock(
+    sendWebsiteButtonBehind.inputs.SUBSTACK.block,
+  );
+  assert.equal(goWebsiteButtonBehind.opcode, 'looks_gotofrontback');
+  assert.equal(goWebsiteButtonBehind.fields.FRONT_BACK.value, 'back');
+  assert.equal(harness.getStageVariable('featureCloneUiItems'), undefined);
+  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
+  assert.equal(harness.getSprite('UiItem').visible, false);
+  assert.equal(harness.getClones('UiItem').length, 0);
 });
 
 test('shows an SVG error and stops on an unsupported kamishibai version', async (context) => {
@@ -356,7 +382,8 @@ test('shows the built-in English Title fallback before runtime initialization', 
   assert.equal(harness.getSprite('officialWebsiteButton').visible, true);
   assert.equal(harness.getSpriteCostumeName('officialWebsiteButton'), 'official-website-button');
   assert.equal(harness.getSprite('closeTitleButton').visible, true);
-  assert.equal(harness.getSprite('titleHeading').visible, false);
+  assert.equal(harness.getSprite('UiItem').visible, false);
+  assert.equal(harness.getClones('UiItem').length, 0);
 });
 
 test('localizes the app shell from the standard viewer-language reporter', async (context) => {
@@ -383,49 +410,63 @@ test('localizes the app shell from the standard viewer-language reporter', async
     const localized = appShellLocales[locale];
 
     harness.greenFlag();
-    harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+    await harness.runUntilAsync(() => {
+      const clones = uiItemClonesById(harness);
+      return harness.getRuntimeVariable('skipMode') === 'title' && clones.size === 7;
+    });
     assert.equal(harness.getRuntimeVariable('uiLanguage'), locale);
     assert.equal(harness.getBackdropName(), 'TitleRuntime');
     assert.equal(
       harness.getSpriteCostumeName('officialWebsiteButton'),
       'official-website-button-runtime',
     );
-    for (const [spriteName, label] of [
+    const titleClones = uiItemClonesById(harness);
+    for (const [uiId, label] of [
       ['titleHeading', localized.about.title],
       ['titleLicenseApp', localized.about.license.app],
       ['titleLicenseStory', localized.about.license.story],
       ['officialWebsiteLabel', localized.about.officialWebsite.name],
     ]) {
-      assert.equal(
-        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
-        label,
-      );
+      assert.equal(harness.extensionState.displayedText.get(titleClones.get(uiId).id), label);
     }
     assert(
       harness.extensionState.displayedText
-        .get(harness.getSprite('titleAuthorOrganization').id)
+        .get(titleClones.get('titleAuthorOrganization').id)
         .includes(localized.about.author.organization),
     );
     assert(
       harness.extensionState.displayedText
-        .get(harness.getSprite('titleAuthorName').id)
+        .get(titleClones.get('titleAuthorName').id)
         .includes(localized.about.author.name),
     );
 
     harness.broadcast('showMenu');
-    harness.runUntil(() => harness.getSprite('languageButton').visible);
-    for (const [spriteName, label] of [
+    await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
+    const menuClones = uiItemClonesById(harness);
+    for (const [uiId, label] of [
       ['openButton', localized.ui.open],
       ['reloadButton', localized.ui.reload],
       ['showTitleButton', localized.ui.about],
       ['languageButton', localized.ui.language],
     ]) {
-      assert.equal(
-        harness.extensionState.displayedText.get(harness.getSprite(spriteName).id),
-        label,
-      );
+      if (!menuClones.has(uiId)) continue;
+      assert.equal(harness.extensionState.displayedText.get(menuClones.get(uiId).id), label);
     }
   }
+});
+
+test('uses clone UI as the standard app-shell path', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  assert.equal(harness.getStageVariable('featureCloneUiItems'), undefined);
+  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
+
+  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), ['languageButton', 'openButton']);
 });
 
 test('prefers a saved UI language and changes it from the Language menu', async (context) => {
@@ -441,58 +482,250 @@ test('prefers a saved UI language and changes it from the Language menu', async 
   assert.equal(harness.getBackdropName(), 'TitleRuntime');
 
   harness.broadcast('showMenu');
-  harness.runUntil(() => harness.getSprite('languageButton').visible);
-  harness.clickSprite('languageButton');
-  harness.runUntil(
-    () =>
-      harness.getSprite('japaneseLanguageButton').visible &&
-      harness.getSprite('englishLanguageButton').visible,
-  );
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('languageButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('languageButton'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 2);
+  const languageClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    harness.extensionState.displayedText.get(languageClones.get('japaneseLanguageButton').id),
     '日本語',
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    harness.extensionState.displayedText.get(languageClones.get('englishLanguageButton').id),
     appShellSelectedLanguageNames.en,
   );
 
-  harness.clickSprite('japaneseLanguageButton');
-  harness.runUntil(
+  harness.clickTarget(languageClones.get('japaneseLanguageButton'));
+  await harness.runUntilAsync(
     () =>
       harness.getRuntimeVariable('uiLanguage') === 'ja' &&
-      harness.getSprite('languageButton').visible,
+      uiItemClonesById(harness).has('languageButton'),
   );
+  const localizedMenuClones = uiItemClonesById(harness);
   assert.equal(harness.extensionState.localStorage.get('uiLanguage'), 'ja');
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('openButton').id),
+    harness.extensionState.displayedText.get(localizedMenuClones.get('openButton').id),
     appShellLocales.ja.ui.open,
   );
-  assert.equal(harness.getSprite('japaneseLanguageButton').visible, false);
-  assert.equal(harness.getSprite('englishLanguageButton').visible, false);
+  assert.equal(localizedMenuClones.has('japaneseLanguageButton'), false);
+  assert.equal(localizedMenuClones.has('englishLanguageButton'), false);
 
-  harness.clickSprite('languageButton');
-  harness.runUntil(() => harness.getSprite('japaneseLanguageButton').visible);
+  harness.clickTarget(localizedMenuClones.get('languageButton'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('japaneseLanguageButton'));
+  const localizedLanguageClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('japaneseLanguageButton').id),
+    harness.extensionState.displayedText.get(
+      localizedLanguageClones.get('japaneseLanguageButton').id,
+    ),
     appShellSelectedLanguageNames.ja,
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('englishLanguageButton').id),
+    harness.extensionState.displayedText.get(
+      localizedLanguageClones.get('englishLanguageButton').id,
+    ),
     'English',
   );
   harness.broadcast('hideMenu');
 
   harness.broadcast('showTitle');
-  harness.runUntil(() => harness.getBackdropName() === 'TitleRuntime');
+  await harness.runUntilAsync(
+    () =>
+      harness.getBackdropName() === 'TitleRuntime' && uiItemClonesById(harness).has('titleHeading'),
+  );
   assert.equal(
     harness.getSpriteCostumeName('officialWebsiteButton'),
     'official-website-button-runtime',
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('titleHeading').id),
+    harness.extensionState.displayedText.get(uiItemClonesById(harness).get('titleHeading').id),
     appShellLocales.ja.about.title,
   );
+});
+
+test('uses only active-screen UI clones and releases their Asset Manager state', async (context) => {
+  const harness = await loadKamishibaiVm({productionAssetManager: true});
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => {
+    const clones = uiItemClonesById(harness);
+    return clones.size === 7 && [...clones.values()].every((target) => target.visible);
+  });
+  assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
+  const titleClones = uiItemClonesById(harness);
+  assert.equal(
+    harness.extensionState.displayedText.get(titleClones.get('officialWebsiteLabel').id),
+    appShellLocales.en.about.officialWebsite.name,
+  );
+  assert.deepEqual([...titleClones.keys()].sort(), [
+    'officialWebsiteLabel',
+    'titleAuthorName',
+    'titleAuthorOrganization',
+    'titleHeading',
+    'titleLicenseApp',
+    'titleLicenseStory',
+    'titleVersion',
+  ]);
+  for (const [id, expected] of new Map([
+    ['titleHeading', {size: 140, x: 0, y: 62}],
+    ['titleVersion', {size: 80, x: 0, y: 22}],
+    ['titleLicenseApp', {size: 50, x: 0, y: -55}],
+    ['titleLicenseStory', {size: 50, x: 0, y: -92}],
+    ['titleAuthorOrganization', {size: 50, x: 0, y: -135}],
+    ['titleAuthorName', {size: 50, x: 0, y: -158}],
+    ['officialWebsiteLabel', {size: 60, x: 13, y: -16}],
+  ])) {
+    const target = titleClones.get(id);
+    assert.deepEqual({size: target.size, x: target.x, y: target.y}, expected);
+  }
+  const titleTargetIds = [...titleClones.values()].map((target) => target.id);
+  for (const target of titleClones.values()) {
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(target.id), true);
+  }
+
+  harness.clickTarget(titleClones.get('titleHeading'));
+  await harness.runUntilAsync(() => {
+    const ids = [...uiItemClonesById(harness).keys()].sort();
+    return ids.length === 2 && ids[0] === 'languageButton' && ids[1] === 'openButton';
+  });
+  for (const targetId of titleTargetIds) {
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
+  }
+
+  const menuClones = uiItemClonesById(harness);
+  assert.deepEqual(
+    {
+      size: menuClones.get('openButton').size,
+      x: menuClones.get('openButton').x,
+      y: menuClones.get('openButton').y,
+    },
+    {size: 100, x: 15, y: 76},
+  );
+  assert.deepEqual(
+    {
+      size: menuClones.get('languageButton').size,
+      x: menuClones.get('languageButton').x,
+      y: menuClones.get('languageButton').y,
+    },
+    {size: 65, x: 2, y: -165},
+  );
+  const menuTargetIds = [...menuClones.values()].map((target) => target.id);
+  harness.clickTarget(menuClones.get('languageButton'));
+  await harness.runUntilAsync(() => {
+    const ids = [...uiItemClonesById(harness).keys()].sort();
+    return (
+      ids.length === 2 && ids[0] === 'englishLanguageButton' && ids[1] === 'japaneseLanguageButton'
+    );
+  });
+  for (const targetId of menuTargetIds) {
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
+  }
+
+  const languageClones = uiItemClonesById(harness);
+  const languageTargetIds = [...languageClones.values()].map((target) => target.id);
+  harness.clickTarget(languageClones.get('japaneseLanguageButton'));
+  await harness.runUntilAsync(() => {
+    const menuClonesAfterLanguageChange = uiItemClonesById(harness);
+    const openButton = menuClonesAfterLanguageChange.get('openButton');
+    return (
+      harness.getRuntimeVariable('uiLanguage') === 'ja' &&
+      openButton &&
+      menuClonesAfterLanguageChange.has('languageButton') &&
+      harness.extensionState.displayedText.get(openButton.id) === appShellLocales.ja.ui.open
+    );
+  });
+  assert.equal(harness.extensionState.localStorage.get('uiLanguage'), 'ja');
+  assert.equal(
+    harness.extensionState.displayedText.get(uiItemClonesById(harness).get('openButton').id),
+    appShellLocales.ja.ui.open,
+  );
+  for (const targetId of languageTargetIds) {
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
+  }
+
+  harness.broadcast('showTitle');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  const linkedTitleClones = uiItemClonesById(harness);
+  harness.clickTarget(linkedTitleClones.get('officialWebsiteLabel'));
+  await harness.runUntilAsync(() => harness.extensionState.openedUrls.length === 1);
+  assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);
+  assert.equal(uiItemClonesById(harness).size, 7);
+
+  const finalTargetIds = [...linkedTitleClones.values()].map((target) => target.id);
+  harness.broadcast('hideMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 0);
+  for (const targetId of finalTargetIds) {
+    assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
+  }
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  assert.equal(harness.getClones('UiItem').length, 7);
+});
+
+test('keeps saved-script menu actions running after their source clones are deleted', async (context) => {
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
+  const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), [
+    'languageButton',
+    'openButton',
+    'reloadButton',
+    'showTitleButton',
+  ]);
+
+  harness.clickTarget(uiItemClonesById(harness).get('showTitleButton'));
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+  harness.clickTarget(uiItemClonesById(harness).get('openButton'));
+  await harness.runUntilAsync(() => harness.extensionState.filePickerRequests === 1);
+  assert.equal(uiItemClonesById(harness).size, 0);
+});
+
+test('reloads a saved script from a UI clone after deleting the menu clones', async (context) => {
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
+  const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('reloadButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('reloadButton'));
+  await harness.runUntilAsync(() => harness.getBackdropName() === 'Stars');
+
+  assert.equal(uiItemClonesById(harness).size, 0);
+  assert.equal(harness.getRuntimeVariable('script'), savedScript);
+});
+
+test('restores the clone title UI after a detailed diagnostic and green flag restart', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+  harness.setStageVariable('featureDetailedScriptErrors', true);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.setRuntimeVariable('script', 'kamishibai=2.0');
+  harness.broadcast('startStory');
+  await harness.runUntilAsync(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
+  assert.equal(uiItemClonesById(harness).size, 0);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+  assert.equal(harness.getSprite('prompt').visible, false);
 });
 
 test('shows the official website button only on Title and opens the package homepage', async (context) => {
@@ -501,14 +734,14 @@ test('shows the official website button only on Title and opens the package home
 
   harness.greenFlag();
   const button = harness.getSprite('officialWebsiteButton');
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   assert.equal(button.visible, true);
   assert.equal(button.x, 0);
   assert.equal(button.y, -16);
 
   harness.clickSprite('officialWebsiteButton');
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl]);
-  harness.clickSprite('officialWebsiteLabel');
+  harness.clickTarget(uiItemClonesById(harness).get('officialWebsiteLabel'));
   assert.deepEqual(harness.extensionState.openedUrls, [officialWebsiteUrl, officialWebsiteUrl]);
 
   harness.broadcast('showMenu');
@@ -526,13 +759,13 @@ test('closes Title from the top-right close button using the same flow as a Stag
 
   harness.greenFlag();
   const closeButton = harness.getSprite('closeTitleButton');
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
   assert.equal(closeButton.visible, true);
   assert.equal(closeButton.x, 220);
   assert.equal(closeButton.y, 160);
 
   harness.clickSprite('closeTitleButton');
-  harness.runUntil(() => harness.getSprite('openButton').visible);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
   assert.equal(closeButton.visible, false);
   assert.equal(harness.getSprite('officialWebsiteButton').visible, false);
@@ -544,11 +777,11 @@ test('closes Title when runtime-generated Title text is clicked', async (context
   context.after(() => harness.quit());
 
   harness.greenFlag();
-  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
-  harness.clickSprite('titleHeading');
-  harness.runUntil(() => harness.getSprite('openButton').visible);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('titleHeading'));
+  harness.clickTarget(uiItemClonesById(harness).get('titleHeading'));
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
-  assert.equal(harness.getSprite('titleHeading').visible, false);
+  assert.equal(uiItemClonesById(harness).has('titleHeading'), false);
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
@@ -804,9 +1037,9 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   harness.greenFlag();
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.broadcast('showMenu');
-  harness.runUntil(() => harness.getSprite('openButton')?.visible === true);
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('openButton'));
 
-  const openButton = harness.getSprite('openButton');
+  const openButton = uiItemClonesById(harness).get('openButton');
   assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
 
   harness.setRuntimeVariable(
@@ -846,18 +1079,22 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   );
 
   harness.broadcast('showMenu');
-  harness.runUntil(
+  await harness.runUntilAsync(
     () =>
-      harness.getSprite('reloadButton')?.visible === true &&
-      harness.getSprite('showTitleButton')?.visible === true,
+      uiItemClonesById(harness).has('reloadButton') &&
+      uiItemClonesById(harness).has('showTitleButton'),
   );
-  assert.equal(harness.extensionState.displayedText.get(openButton.id), appShellLocales.en.ui.open);
+  const savedScriptMenuClones = uiItemClonesById(harness);
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('reloadButton').id),
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('openButton').id),
+    appShellLocales.en.ui.open,
+  );
+  assert.equal(
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('reloadButton').id),
     appShellLocales.en.ui.reload,
   );
   assert.equal(
-    harness.extensionState.displayedText.get(harness.getSprite('showTitleButton').id),
+    harness.extensionState.displayedText.get(savedScriptMenuClones.get('showTitleButton').id),
     appShellLocales.en.ui.about,
   );
   assert.deepEqual(harness.extensionState.consoleErrors, []);
