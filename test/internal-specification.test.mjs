@@ -329,6 +329,37 @@ test('documents actor clone creation before actor action delivery', () => {
   );
 });
 
+test('coalesces asset progress without waiting after each registration', () => {
+  const stage = projectSource.targets.find(({isStage}) => isStage);
+  const blocks = stage.blocks;
+  const progressSenders = Object.values(blocks).filter(
+    (block) => block.inputs?.BROADCAST_INPUT?.[1]?.[1] === 'assetLoadingProgress',
+  );
+
+  assert.equal(progressSenders.length, 1);
+  assert.equal(progressSenders[0].opcode, 'event_broadcast');
+  assert.equal(blocks.F.opcode, 'kubohiroyaassetmanager_registerAsset');
+  assert.equal(blocks.F.next, null);
+
+  assert.equal(blocks.fp.opcode, 'event_broadcastandwait');
+  assert.equal(blocks.fp.next, null);
+  assert.equal(blocks['k-'], undefined);
+
+  assert.equal(blocks.C.next, 'kV');
+  assert.equal(blocks.loadingProgressFlushWait, undefined);
+  assert.equal(blocks.kV.opcode, 'event_broadcastandwait');
+  assert.equal(blocks.kV.parent, 'C');
+
+  assert.equal(literalString(blocks.fi.inputs?.VAR), 'loadingDisplayed');
+  assert.equal(blocks.fo.opcode, 'operator_gt');
+  assert.equal(inputBlockId(blocks.fo.inputs?.OPERAND1), 'loadingProgressCurrent');
+  assert.equal(inputBlockId(blocks.fo.inputs?.OPERAND2), 'loadingProgressShown');
+  assert.equal(literalString(blocks.loadingProgressShown.inputs?.VAR), 'loadingDisplayed');
+  assert.equal(literalString(blocks.fn.inputs?.VAR), 'loadingDisplayed');
+  assert.equal(blocks['k['].opcode, 'lmsTempVars2_getThreadVariable');
+  assert.equal(literalString(blocks['k['].inputs?.VAR), 'loadingDisplayed');
+});
+
 test('documents legacy and detailed script errors as terminal states', () => {
   const invalidScriptSenders = projectSource.targets.flatMap((target) =>
     Object.entries(target.blocks ?? {})
