@@ -856,17 +856,14 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
     harness.extensionState.runtimeVariableWrites
       .filter(({name}) => name === 'message')
       .map(({value}) => value),
-    ['0 / 3', '1 / 3', '1 / 3', '2 / 3', '2 / 3', '3 / 3'],
+    ['1 / 3', '2 / 3', '3 / 3'],
   );
   assert.deepEqual(
     harness.extensionState.bubbleUpdates.filter(
       ({targetName}) => targetName === 'Loading' || targetName === 'LoadingBubbleAnchor',
     ),
     [
-      {targetName: 'LoadingBubbleAnchor', text: '0 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
-      {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
-      {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '3 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '', type: 'say'},
@@ -912,7 +909,7 @@ test('keeps the built-in Loading costume separate from the fixed bubble anchor',
     harness.extensionState.bubbleUpdates
       .filter(({targetName}) => targetName === 'LoadingBubbleAnchor')
       .map(({text}) => text),
-    ['0 / 2', '1 / 2', '1 / 2', '2 / 2', ''],
+    ['1 / 2', '2 / 2', ''],
   );
 });
 

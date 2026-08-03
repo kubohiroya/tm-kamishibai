@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1741 |
+| block                    | 1730 |
 | event hat                |   49 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   13 |
