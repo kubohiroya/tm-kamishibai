@@ -9,7 +9,6 @@ const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 const firstPartyFiles = [
   'app/extensions/kubohiroyaweblink.js',
   'bin/tmpose-kamishibai.mjs',
-  'docs/config.mjs',
   'eslint.config.mjs',
   'scripts/build-site.mjs',
   'site/site-shell.js',

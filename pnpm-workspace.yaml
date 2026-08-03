@@ -6,14 +6,9 @@ allowBuilds:
   fsevents: false
 
 overrides:
-  '@vivliostyle/cli>dompurify': 3.4.12
-  'press-ready>uuid': 11.1.1
   'scratch-vm>scratch-parser': 6.0.0
   'scratch-vm>uuid': 11.1.1
   'scratch-vm>worker-loader': '-'
-  prismjs: 1.30.0
-  trim: 1.0.1
-  valibot: 1.4.2
 
 peerDependencyRules:
   allowedVersions:

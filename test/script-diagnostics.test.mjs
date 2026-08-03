@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
@@ -52,17 +51,6 @@ const contractFixture = [
   'action=wait:30',
 ].join('\n');
 
-function sorted(values) {
-  return [...values].sort((left, right) => left.localeCompare(right));
-}
-
-function headingsBetween(document, startHeading, endHeading) {
-  const start = document.indexOf(startHeading);
-  const end = document.indexOf(endHeading, start + startHeading.length);
-  assert.ok(start >= 0 && end > start, `Document section not found: ${startHeading}`);
-  return [...document.slice(start, end).matchAll(/^### `([^`]+)`/gmu)].map((match) => match[1]);
-}
-
 async function reachTitle(harness) {
   harness.greenFlag();
   await harness.runUntilAsync(
@@ -107,32 +95,6 @@ async function runDetailedPreflight(harness, script) {
   harness.broadcast('startStory');
   await harness.runUntilAsync(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
 }
-
-test('keeps the DSL 3.1 contract synchronized with the command reference', async (context) => {
-  const harness = await loadKamishibaiVm();
-  context.after(() => harness.quit());
-  const document = await readFile(
-    new URL('../docs/general/05-command-reference.md', import.meta.url),
-    'utf8',
-  );
-  const contract = JSON.parse(harness.extensionState.kamishibaiRuntime.getDsl31ContractJson());
-
-  const commands = headingsBetween(document, '## トップレベルコマンド', '## グローバルアクション');
-  const globalActions = headingsBetween(
-    document,
-    '## グローバルアクション',
-    '## アクターアクション',
-  );
-  const actorActions = headingsBetween(
-    document,
-    '## アクターアクション',
-    '## ポーズ認識アクション',
-  );
-
-  assert.deepEqual(sorted(contract.commands), sorted([...commands, 'action']));
-  assert.deepEqual(sorted(contract.globalActions), sorted(globalActions));
-  assert.deepEqual(sorted(contract.actorActions), sorted([...actorActions, 'pose']));
-});
 
 test('accepts the full contract fixture without preflight side effects', async (context) => {
   const harness = await loadKamishibaiVm({

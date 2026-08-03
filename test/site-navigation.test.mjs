@@ -4,12 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {injectSiteAppBar} from '../scripts/site-appbar.mjs';
-import {
-  renderAppBarState,
-  shouldHideAppBarForFragment,
-  updateAppBarScrollState,
-} from '../site/site-shell.js';
+import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
@@ -51,7 +46,10 @@ test('uses one accessible site header across the published entry pages', async (
     assert.match(html, /<header class="site-header">/u);
     assert.match(
       html,
-      new RegExp(`<link rel="stylesheet" href="${page.stylesheet.replaceAll('.', '\\.')}">`, 'u'),
+      new RegExp(
+        `<link rel="stylesheet" href="${page.stylesheet.replaceAll('.', '\\.')}"\\s*/?>`,
+        'u',
+      ),
     );
     assert.match(
       html,
@@ -63,7 +61,7 @@ test('uses one accessible site header across the published entry pages', async (
     assert.match(
       html,
       new RegExp(
-        `<img class="site-brand__symbol" src="${page.symbol.replaceAll('.', '\\.')}" width="40" height="40" alt="">`,
+        `<img class="site-brand__symbol" src="${page.symbol.replaceAll('.', '\\.')}" width="40" height="40" alt=""\\s*/?>`,
         'u',
       ),
     );
@@ -74,7 +72,9 @@ test('uses one accessible site header across the published entry pages', async (
       assert.match(
         html,
         new RegExp(
-          `<a class="site-nav__link" href="${href.replaceAll('.', '\\.')}"${currentAttribute}>`,
+          `<a\\b(?=[^>]*class="site-nav__link")(?=[^>]*href="${href.replaceAll('.', '\\.')}")${
+            currentAttribute ? '(?=[^>]*aria-current="page")' : '(?![^>]*aria-current="page")'
+          }[^>]*>`,
           'u',
         ),
       );
@@ -86,7 +86,7 @@ test('uses one accessible site header across the published entry pages', async (
     );
     assert.match(
       html,
-      /<a class="site-repository" href="https:\/\/github\.com\/kubohiroya\/tmpose-kamishibai" target="_blank" rel="noopener" aria-label="tmpose-kamishibaiをGitHubで開く" title="tmpose-kamishibaiをGitHubで開く">/u,
+      /<a\b(?=[^>]*class="site-repository")(?=[^>]*href="https:\/\/github\.com\/kubohiroya\/tmpose-kamishibai")(?=[^>]*target="_blank")(?=[^>]*rel="noopener")(?=[^>]*aria-label="tmpose-kamishibaiをGitHubで開く")(?=[^>]*title="tmpose-kamishibaiをGitHubで開く")[^>]*>/u,
     );
     assert.match(html, /<svg class="site-repository__icon"[\s\S]*?aria-hidden="true">/u);
   }
@@ -105,42 +105,9 @@ test('keeps the shared navigation visible and operable on narrow screens', async
   );
   assert.match(css, /@media \(max-width:\s*760px\)/u);
   assert.match(css, /\.site-header--hidden\s*\{[\s\S]*?transform:\s*translateY\(/u);
-  assert.match(css, /\.site-header--instant\s*\{[\s\S]*?transition:\s*none;/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
   assert.match(css, /@media print/u);
   assert.match(css, /:focus-visible/u);
-});
-
-test('injects the shared AppBar into generated documentation HTML', () => {
-  const generatedHtml = [
-    '<!doctype html>',
-    '<html lang="ja">',
-    '<head><meta charset="utf-8"><link rel="stylesheet" href="theme.css"></head>',
-    '<body data-publication-section="body"><h1>資料</h1></body>',
-    '</html>',
-  ].join('');
-  const updatedHtml = injectSiteAppBar(generatedHtml, '../../../');
-
-  assert.match(updatedHtml, /<link rel="stylesheet" href="\.\.\/\.\.\/\.\.\/site-shell\.css">/u);
-  assert.match(
-    updatedHtml,
-    /<script type="module" src="\.\.\/\.\.\/\.\.\/site-shell\.js"><\/script>/u,
-  );
-  assert.match(updatedHtml, /<body class="site-document" data-publication-section="body">/u);
-  assert.match(updatedHtml, /<header class="site-header">/u);
-  assert.match(
-    updatedHtml,
-    /<img class="site-brand__symbol" src="\.\.\/\.\.\/\.\.\/favicon\.png"/u,
-  );
-  assert.match(
-    updatedHtml,
-    /<a class="site-nav__link" href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/" aria-current="page">/u,
-  );
-  assert.match(
-    updatedHtml,
-    /<div id="main-content" class="site-content-anchor" tabindex="-1"><\/div>/u,
-  );
-  assert.equal(injectSiteAppBar(updatedHtml, '../../../'), updatedHtml);
 });
 
 test('hides on downward scroll and reopens on upward scroll or focus', () => {
@@ -185,46 +152,11 @@ test('hides on downward scroll and reopens on upward scroll or focus', () => {
   assert.equal(state.hidden, false);
 });
 
-test('starts hidden when a document opens at a heading fragment', () => {
-  assert.equal(
-    shouldHideAppBarForFragment({
-      hash: '#1-概要',
-      isDocumentPage: true,
-    }),
-    true,
-  );
-  assert.equal(
-    shouldHideAppBarForFragment({
-      hash: '#main-content',
-      isDocumentPage: true,
-    }),
-    false,
-  );
-  assert.equal(
-    shouldHideAppBarForFragment({
-      hash: '',
-      isDocumentPage: true,
-    }),
-    false,
-  );
-  assert.equal(
-    shouldHideAppBarForFragment({
-      hash: '#1-概要',
-      isDocumentPage: false,
-    }),
-    false,
-  );
-});
-
-test('skips the transition when hiding for a heading fragment', () => {
+test('renders the current AppBar visibility', () => {
   const classes = new Set();
   const operations = [];
   const header = {
     classList: {
-      remove(name) {
-        operations.push(['remove', name]);
-        classes.delete(name);
-      },
       toggle(name, enabled) {
         operations.push(['toggle', name, enabled]);
         if (enabled) {
@@ -234,32 +166,12 @@ test('skips the transition when hiding for a heading fragment', () => {
         }
       },
     },
-    getBoundingClientRect() {
-      operations.push(['measure']);
-      return {};
-    },
   };
 
-  renderAppBarState(header, {hidden: true, instant: true});
+  renderAppBarState(header, {hidden: true});
 
-  assert.deepEqual(operations, [
-    ['toggle', 'site-header--instant', true],
-    ['toggle', 'site-header--hidden', true],
-    ['measure'],
-    ['remove', 'site-header--instant'],
-  ]);
+  assert.deepEqual(operations, [['toggle', 'site-header--hidden', true]]);
   assert.deepEqual([...classes], ['site-header--hidden']);
-});
-
-test('keeps only the table-of-contents button on the workshop cover', async () => {
-  const cover = await readFile(
-    path.join(projectRoot, 'docs/workshops/2026-08-01/tmpose-kamishibai-cover-20260801.md'),
-    'utf8',
-  );
-
-  assert.doesNotMatch(cover, />ドキュメント一覧へ<\/a>/u);
-  assert.doesNotMatch(cover, />Vivliostyle Viewerで読む/u);
-  assert.match(cover, />目次へ<\/a>/u);
 });
 
 test('records the Urashima source used for the site symbol', async () => {

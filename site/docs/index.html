@@ -1,209 +1,107 @@
 <!doctype html>
 <html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="TMPose紙芝居の一般向け、紙芝居DSL作成者向け、開発者向けドキュメントと体験会資料">
-  <title>ドキュメント | TMPose紙芝居</title>
-  <link rel="stylesheet" href="../site-shell.css">
-  <script type="module" src="../site-shell.js"></script>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: system-ui, sans-serif;
-      --ink: #3f302b;
-      --muted: #756960;
-      --paper: #fffdf8;
-      --canvas: #fff8ee;
-      --accent: #963f2f;
-      --line: #dbc9bb;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--canvas); color: var(--ink); }
-    main { max-width: 1080px; margin: auto; padding: 40px 24px 72px; }
-    h1 { margin-bottom: .35rem; font-size: clamp(2rem, 6vw, 3.5rem); }
-    h2 { margin-top: 3rem; font-size: 1.65rem; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
-    article { padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 5px 18px rgb(89 61 43 / 8%); }
-    article h3 { display: flex; align-items: flex-start; gap: .65rem; margin: 0 0 .45rem; font-size: 1.15rem; }
-    .card-icon { flex: 0 0 auto; font-size: 1.45rem; line-height: 1; }
-    article p { line-height: 1.65; }
-    .audience { margin: 0 0 .8rem; color: var(--muted); font-size: .92rem; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
-    .button { display: inline-block; padding: 8px 12px; border-radius: 7px; background: var(--accent); color: white; text-decoration: none; font-weight: 700; }
-    .button.secondary { border: 1px solid var(--accent); background: white; color: var(--accent); }
-  </style>
-</head>
-<body>
-<a class="skip-link" href="#main-content">本文へ移動</a>
-<header class="site-header">
-  <div class="site-header__inner">
-    <a class="site-brand" href="https://kubohiroya.github.io/tmpose-kamishibai/">
-      <img class="site-brand__symbol" src="../favicon.png" width="40" height="40" alt="">
-      <span>TMPose紙芝居</span>
-    </a>
-    <nav class="site-nav" aria-label="サイトナビゲーション">
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/">トップ</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/" aria-current="page">ドキュメント</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプル</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/">ダウンロード</a>
-    </nav>
-    <a class="site-repository" href="https://github.com/kubohiroya/tmpose-kamishibai" target="_blank" rel="noopener" aria-label="tmpose-kamishibaiをGitHubで開く" title="tmpose-kamishibaiをGitHubで開く">
-      <svg class="site-repository__icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
-      </svg>
-    </a>
-  </div>
-</header>
-<main id="main-content">
-
-  <header>
-    <h1>ドキュメント</h1>
-  </header>
-
-  <section aria-labelledby="general-documents">
-    <h2 id="general-documents">一般向けドキュメント</h2>
-    <div class="cards">
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">👥</span>紙芝居アプリ 概要説明書 大人向け</h3>
-        <p class="audience">保護者・教員・運営者</p>
-        <p>アプリの価値、仕組み、利用場面、教育的な意義を簡潔にまとめています。</p>
-        <div class="actions">
-          <a class="button" href="general/01-executive-summary-adult/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/01-executive-summary-adult/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/01-executive-summary-adult.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🧒</span>紙芝居アプリ 概要説明書 子供向け</h3>
-        <p class="audience">子供・初めての方</p>
-        <p>紙芝居でできることや安全な使い方を、やさしい言葉で紹介します。</p>
-        <div class="actions">
-          <a class="button" href="general/02-executive-summary-kids/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/02-executive-summary-kids/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/02-executive-summary-kids.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🕹️</span>紙芝居アプリ 操作説明書</h3>
-        <p class="audience">アプリを使う方</p>
-        <p>台本の読み込み、再生、ポーズ認識、本番前の確認方法を説明します。</p>
-        <div class="actions">
-          <a class="button" href="general/03-user-guide/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/03-user-guide/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/03-user-guide.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🎭</span>TMPose紙芝居 アプリ・教材・ツールチェインガイド</h3>
-        <p class="audience">アプリと教材の全体像を把握する方</p>
-        <p>アプリ概要、浦島太郎、体験会教材、DSL 3.1、sb3-toolchainを図解付き・全8ページで紹介します。</p>
-        <div class="actions">
-          <a class="button" href="general/09-application-materials-guide/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/09-application-materials-guide/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/09-application-materials-guide.pdf">PDF</a>
-        </div>
-      </article>
-    </div>
-  </section>
-
-  <section aria-labelledby="dsl-author-documents">
-    <h2 id="dsl-author-documents">紙芝居DSL作成者向けドキュメント</h2>
-    <div class="cards">
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">✍️</span>紙芝居DSLファイル作成マニュアル</h3>
-        <p class="audience">作品を作る方</p>
-        <p>3.1の台本を設計し、シーンラベル、分岐、入力、アニメーションを含めて作成・テストする手順を説明します。</p>
-        <div class="actions">
-          <a class="button" href="general/04-dsl-manual/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/04-dsl-manual/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/04-dsl-manual.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">📚</span>紙芝居DSL コマンドリファレンス</h3>
-        <p class="audience">台本文法を調べる方</p>
-        <p>kamishibai 3.1で利用できるコマンド、アクション、引数、注意事項を一覧化しています。</p>
-        <div class="actions">
-          <a class="button" href="general/05-command-reference/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/05-command-reference/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/05-command-reference.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🕰️</span>紙芝居DSL 2.0から3.1への変更履歴</h3>
-        <p class="audience">2.0から移行する方</p>
-        <p>2.0から3.1で追加・変更・置換したDSL仕様と、台本の移行手順を差分形式でまとめています。</p>
-        <div class="actions">
-          <a class="button" href="general/history/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/history/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/history.pdf">PDF</a>
-        </div>
-      </article>
-    </div>
-  </section>
-
-  <section aria-labelledby="developer-documents">
-    <h2 id="developer-documents">開発者向けドキュメント</h2>
-    <div class="cards">
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🛠️</span>紙芝居アプリ ソフトウェアメンテナンスガイド</h3>
-        <p class="audience">ソフトウェア開発者</p>
-        <p>成果物とビルダーの利用、アプリ本体、SB3、ドキュメントの変更、検証、公開手順を案内します。</p>
-        <div class="actions">
-          <a class="button" href="general/06-developer-guide/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/06-developer-guide/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/06-developer-guide.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🧩</span>紙芝居アプリ内部仕様書</h3>
-        <p class="audience">アプリの実装を調査・変更する方</p>
-        <p>現行の汎用アプリSB3におけるtarget、変数、block、message、呼出し関係、状態遷移を記録します。</p>
-        <div class="actions">
-          <a class="button" href="general/07-internal-specification/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/07-internal-specification/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/07-internal-specification.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🔌</span>TMPose紙芝居 機能拡張ガイド</h3>
-        <p class="audience">アプリの依存機能を調査・変更する方</p>
-        <p>15個の依存機能拡張を、一覧と図解付き・1拡張1ページの全16ページで紹介します。</p>
-        <div class="actions">
-          <a class="button" href="general/08-extension-guide/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/general/08-extension-guide/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="general/08-extension-guide.pdf">PDF</a>
-        </div>
-      </article>
-    </div>
-  </section>
-
-  <section aria-labelledby="workshop-documents">
-    <h2 id="workshop-documents">体験会資料</h2>
-    <div class="cards">
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🤖</span>親子AIプログラミング体験会 2026年8月1日版</h3>
-        <p class="audience">体験会の参加者</p>
-        <p>画像づくりAI、ポーズ認識AI、紙芝居プログラミングを組み合わせる体験会教材です。この資料だけ、小学3年生までの配当漢字を基準にふりがなを追加しています。</p>
-        <div class="actions">
-          <a class="button" href="workshops/2026-08-01/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/workshops/2026-08-01/publication.json&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="workshops/2026-08-01/tmpose-kamishibai-20260801.pdf">PDF</a>
-        </div>
-      </article>
-      <article>
-        <h3><span class="card-icon" aria-hidden="true">🧰</span>親子AIプログラミング体験会スタッフ向け資料2026年8月1日版</h3>
-        <p class="audience">体験会のスタッフ・運営者</p>
-        <p>必要機材、会場見取り図、事前準備、タイムテーブル、トラブル対応をまとめています。ふりがなの自動追加は行っていません。</p>
-        <div class="actions">
-          <a class="button" href="workshops/2026-08-01/staff/">HTML</a>
-          <a class="button secondary" href="https://vivliostyle.org/viewer/#src=https://kubohiroya.github.io/tmpose-kamishibai/docs/workshops/2026-08-01/staff/index.html&amp;bookMode=true" target="_blank" rel="noopener">Vivliostyle Viewer</a>
-          <a class="button secondary" href="workshops/2026-08-01/staff/tmpose-kamishibai-staff-20260801.pdf">PDF</a>
-        </div>
-      </article>
-    </div>
-  </section>
-</main>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TMPose紙芝居のドキュメント移転案内" />
+    <meta
+      http-equiv="refresh"
+      content="0; url=https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+    />
+    <link rel="canonical" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/" />
+    <title>ドキュメントを移動しました | TMPose紙芝居</title>
+    <link rel="stylesheet" href="../site-shell.css" />
+    <script type="module" src="../site-shell.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+        --ink: #3f302b;
+        --paper: #fffdf8;
+        --canvas: #fff8ee;
+        --accent: #963f2f;
+        --line: #dbc9bb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+      }
+      main {
+        max-width: 760px;
+        margin: auto;
+        padding: 72px 24px;
+      }
+      .notice {
+        padding: 32px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+      }
+      .button {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 10px 16px;
+        border-radius: 7px;
+        background: var(--accent);
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="https://kubohiroya.github.io/tmpose-kamishibai/">
+          <img class="site-brand__symbol" src="../favicon.png" width="40" height="40" alt="" />
+          <span>TMPose紙芝居</span>
+        </a>
+        <nav class="site-nav" aria-label="サイトナビゲーション">
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/"
+            >トップ</a
+          >
+          <a
+            class="site-nav__link"
+            href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+            aria-current="page"
+            >ドキュメント</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/"
+            >サンプル</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/"
+            >ダウンロード</a
+          >
+        </nav>
+        <a
+          class="site-repository"
+          href="https://github.com/kubohiroya/tmpose-kamishibai"
+          target="_blank"
+          rel="noopener"
+          aria-label="tmpose-kamishibaiをGitHubで開く"
+          title="tmpose-kamishibaiをGitHubで開く"
+        >
+          <svg class="site-repository__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"
+            />
+          </svg>
+        </a>
+      </div>
+    </header>
+    <main id="main-content">
+      <section class="notice">
+        <h1>ドキュメントを移動しました</h1>
+        <p>TMPose紙芝居のドキュメントは、専用のドキュメントサイトへ移設しました。</p>
+        <a class="button" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+          >新しいドキュメントサイトを開く</a
+        >
+      </section>
+    </main>
+  </body>
 </html>

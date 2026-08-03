@@ -2,19 +2,8 @@ const topRevealOffset = 8;
 const downwardThreshold = 24;
 const upwardThreshold = 12;
 
-export function shouldHideAppBarForFragment({hash, isDocumentPage}) {
-  return isDocumentPage && hash.length > 1 && hash !== '#main-content';
-}
-
-export function renderAppBarState(header, {hidden, instant = false}) {
-  header.classList.toggle('site-header--instant', instant);
+export function renderAppBarState(header, {hidden}) {
   header.classList.toggle('site-header--hidden', hidden);
-
-  if (instant) {
-    // Commit the hidden transform before restoring transitions.
-    header.getBoundingClientRect();
-    header.classList.remove('site-header--instant');
-  }
 }
 
 export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}) {
@@ -48,21 +37,14 @@ export function updateAppBarScrollState(state, {scrollY, headerHeight, hasFocus}
 }
 
 function initializeSiteAppBar(header) {
-  const shouldHideForCurrentFragment = () =>
-    shouldHideAppBarForFragment({
-      hash: window.location.hash,
-      isDocumentPage: document.body.classList.contains('site-document'),
-    });
-  const initiallyHidden = shouldHideForCurrentFragment();
   let state = {
     lastY: Math.max(0, window.scrollY),
     accumulatedDelta: 0,
-    hidden: initiallyHidden,
+    hidden: false,
   };
   let frameRequested = false;
 
-  const render = ({instant = false} = {}) =>
-    renderAppBarState(header, {hidden: state.hidden, instant});
+  const render = () => renderAppBarState(header, {hidden: state.hidden});
   const reveal = () => {
     state = {
       ...state,
@@ -71,22 +53,6 @@ function initializeSiteAppBar(header) {
       hidden: false,
     };
     render();
-  };
-  const conceal = ({instant = false} = {}) => {
-    state = {
-      ...state,
-      lastY: Math.max(0, window.scrollY),
-      accumulatedDelta: 0,
-      hidden: true,
-    };
-    render({instant});
-  };
-  const synchronizeFragmentVisibility = () => {
-    if (shouldHideForCurrentFragment()) {
-      conceal({instant: true});
-      return;
-    }
-    reveal();
   };
   const update = () => {
     frameRequested = false;
@@ -105,10 +71,9 @@ function initializeSiteAppBar(header) {
   };
 
   window.addEventListener('scroll', requestUpdate, {passive: true});
-  window.addEventListener('pageshow', synchronizeFragmentVisibility);
-  window.addEventListener('hashchange', synchronizeFragmentVisibility);
+  window.addEventListener('pageshow', reveal);
   header.addEventListener('focusin', reveal);
-  render({instant: initiallyHidden});
+  render();
 }
 
 function initializeSiteAppBars() {

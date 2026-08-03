@@ -9,10 +9,8 @@ const rules = {
 export default [
   {
     ignores: [
-      '.vivliostyle/**',
       'dist/**',
       'node_modules/**',
-      'output/**',
       'tmp/**',
       // These files are immutable build artifacts synchronized from their upstream repositories.
       'app/extensions/kubohiroyaassetmanager.js',
