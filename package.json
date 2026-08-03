@@ -30,7 +30,7 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "packageManager": "pnpm@11.11.0",
+  "packageManager": "pnpm@11.18.0",
   "scripts": {
     "build": "node scripts/build-site.mjs",
     "sb3:build": "node scripts/sb3/build.mjs",
@@ -67,7 +67,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#fa0d827a8ee0fe58436aa1e7a6c227e6ace44186",
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#2c82aaf02f605564f79efe8ff3bbd8f1a78d6fe9",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
     "@vivliostyle/cli": "11.1.0",
@@ -75,7 +75,7 @@
     "gh-pages": "^6.3.0",
     "globals": "17.8.0",
     "prettier": "^3.0.0",
-    "rubygana": "github:kubohiroya/rubygana#a24b8a699a1b033546f4d1a47a63005f7af95735",
+    "rubygana": "github:kubohiroya/rubygana#649cba1138f73f71f514711716e9a61a858ba712",
     "scratch-parser": "6.0.0",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",

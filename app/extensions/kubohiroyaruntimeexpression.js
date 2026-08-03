@@ -587,6 +587,7 @@
     return true;
   }
   const EXTENSION_ID = "kubohiroyaruntimeexpression";
+  const DOCS_URI = "https://kubohiroya.github.io/turbowarp-runtime-expression/";
   const blockDefinitions = definitions.blocks;
   class RuntimeExpressionExtension {
     constructor() {
@@ -605,6 +606,7 @@
       return {
         id: EXTENSION_ID,
         name: Scratch.translate(definitions.extensionName),
+        docsURI: DOCS_URI,
         color1: "#6f5bd3",
         color2: "#5845b8",
         color3: "#40328e",

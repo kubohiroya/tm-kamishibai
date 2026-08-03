@@ -60,6 +60,9 @@ pnpm install
 | `pnpm sb3:import -- /path/to/project.sb3` | TurboWarpで編集したSB3を`app/`へ取り込み          |
 | `pnpm run deploy`                         | ビルド結果をGitHub Pagesへ公開                    |
 
+`pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
+CIでも`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
+
 文書だけをプレビューする場合は、`pnpm run preview:docs`、`pnpm run preview:workshop`、`pnpm run preview:staff`を利用できます。
 
 主な生成先は次のとおりです。
