@@ -544,6 +544,18 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
     'titleLicenseStory',
     'titleVersion',
   ]);
+  for (const [id, expected] of new Map([
+    ['titleHeading', {size: 140, x: 0, y: 62}],
+    ['titleVersion', {size: 80, x: 0, y: 22}],
+    ['titleLicenseApp', {size: 50, x: 0, y: -55}],
+    ['titleLicenseStory', {size: 50, x: 0, y: -92}],
+    ['titleAuthorOrganization', {size: 50, x: 0, y: -135}],
+    ['titleAuthorName', {size: 50, x: 0, y: -158}],
+    ['officialWebsiteLabel', {size: 60, x: 13, y: -16}],
+  ])) {
+    const target = titleClones.get(id);
+    assert.deepEqual({size: target.size, x: target.x, y: target.y}, expected);
+  }
   for (const legacyName of [
     'titleHeading',
     'titleVersion',
@@ -577,6 +589,22 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   }
 
   const menuClones = uiItemClonesById(harness);
+  assert.deepEqual(
+    {
+      size: menuClones.get('openButton').size,
+      x: menuClones.get('openButton').x,
+      y: menuClones.get('openButton').y,
+    },
+    {size: 100, x: 15, y: 76},
+  );
+  assert.deepEqual(
+    {
+      size: menuClones.get('languageButton').size,
+      x: menuClones.get('languageButton').x,
+      y: menuClones.get('languageButton').y,
+    },
+    {size: 65, x: 2, y: -165},
+  );
   const menuTargetIds = [...menuClones.values()].map((target) => target.id);
   harness.clickTarget(menuClones.get('languageButton'));
   await harness.runUntilAsync(() => {
@@ -592,12 +620,19 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   const languageClones = uiItemClonesById(harness);
   const languageTargetIds = [...languageClones.values()].map((target) => target.id);
   harness.clickTarget(languageClones.get('japaneseLanguageButton'));
-  await harness.runUntilAsync(
-    () =>
+  await harness.runUntilAsync(() => {
+    const openButton = uiItemClonesById(harness).get('openButton');
+    return (
       harness.getRuntimeVariable('uiLanguage') === 'ja' &&
-      uiItemClonesById(harness).has('openButton'),
-  );
+      openButton &&
+      harness.extensionState.displayedText.get(openButton.id) === appShellLocales.ja.ui.open
+    );
+  });
   assert.equal(harness.extensionState.localStorage.get('uiLanguage'), 'ja');
+  assert.equal(
+    harness.extensionState.displayedText.get(uiItemClonesById(harness).get('openButton').id),
+    appShellLocales.ja.ui.open,
+  );
   for (const targetId of languageTargetIds) {
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
   }
@@ -616,6 +651,79 @@ test('uses only active-screen UI clones and releases their Asset Manager state',
   for (const targetId of finalTargetIds) {
     assert.equal(harness.extensionState.assetManager.displayedAssets.has(targetId), false);
   }
+
+  harness.setStageVariable('featureCloneUiItems', true);
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  assert.equal(harness.getClones('UiItem').length, 7);
+});
+
+test('keeps saved-script menu actions running after their source clones are deleted', async (context) => {
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
+  const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
+  context.after(() => harness.quit());
+  harness.setStageVariable('featureCloneUiItems', true);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+  assert.deepEqual([...uiItemClonesById(harness).keys()].sort(), [
+    'languageButton',
+    'openButton',
+    'reloadButton',
+    'showTitleButton',
+  ]);
+
+  harness.clickTarget(uiItemClonesById(harness).get('showTitleButton'));
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 4);
+  harness.clickTarget(uiItemClonesById(harness).get('openButton'));
+  await harness.runUntilAsync(() => harness.extensionState.filePickerRequests === 1);
+  assert.equal(uiItemClonesById(harness).size, 0);
+});
+
+test('reloads a saved script from a UI clone after deleting the menu clones', async (context) => {
+  const savedScript = await readFile(runtimeFixtureUrl, 'utf8');
+  const harness = await loadKamishibaiVm({initialLocalStorage: {script: savedScript}});
+  context.after(() => harness.quit());
+  harness.setStageVariable('featureCloneUiItems', true);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.broadcast('showMenu');
+  await harness.runUntilAsync(() => uiItemClonesById(harness).has('reloadButton'));
+  harness.clickTarget(uiItemClonesById(harness).get('reloadButton'));
+  await harness.runUntilAsync(() => harness.getBackdropName() === 'Stars');
+
+  assert.equal(uiItemClonesById(harness).size, 0);
+  assert.equal(harness.getRuntimeVariable('script'), savedScript);
+});
+
+test('restores the clone title UI after a detailed diagnostic and green flag restart', async (context) => {
+  const harness = await loadDiagnosticVm();
+  context.after(() => harness.quit());
+  harness.setStageVariable('featureCloneUiItems', true);
+  harness.setStageVariable('featureDetailedScriptErrors', true);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(() => uiItemClonesById(harness).size === 7);
+  harness.setRuntimeVariable('script', 'kamishibai=2.0');
+  harness.broadcast('startStory');
+  await harness.runUntilAsync(() => Boolean(harness.getRuntimeVariable('kamishibaiErrorCategory')));
+  assert.equal(uiItemClonesById(harness).size, 0);
+
+  harness.greenFlag();
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+  assert.equal(harness.getSprite('prompt').visible, false);
 });
 
 test('shows the official website button only on Title and opens the package homepage', async (context) => {
