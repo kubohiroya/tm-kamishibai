@@ -68,6 +68,29 @@ async function reachTitle(harness) {
   await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
 }
 
+function titleLayout(harness) {
+  return Object.fromEntries(
+    [
+      'titleHeading',
+      'titleVersion',
+      'titleLicenseApp',
+      'titleLicenseStory',
+      'titleAuthorOrganization',
+      'titleAuthorName',
+      'officialWebsiteLabel',
+      'officialWebsiteButton',
+      'closeTitleButton',
+    ].map((name) => {
+      const target = harness.getSprite(name);
+      return [name, targetLayout(target)];
+    }),
+  );
+}
+
+function targetLayout(target) {
+  return {size: target.size, visible: target.visible, x: target.x, y: target.y};
+}
+
 async function runDetailedPreflight(harness, script) {
   harness.setRuntimeVariable('script', script);
   harness.broadcast('startStory');
@@ -190,6 +213,8 @@ test('stops background work and clears the diagnostic presentation on project re
   context.after(() => harness.quit());
   harness.setStageVariable('featureDetailedScriptErrors', true);
   await reachTitle(harness);
+  const initialTitleLayout = titleLayout(harness);
+  const initialPromptLayout = targetLayout(harness.getSprite('prompt'));
 
   harness.extensionState.asyncInput.listenForKeyAndBroadcast(
     {KEY_ID: 'KeyA', MESSAGE: 'unused', RUNTIME_VAR: 'unused', VALUE: '1'},
@@ -203,12 +228,31 @@ test('stops background work and clears the diagnostic presentation on project re
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorLine'), 2);
   assert.equal(harness.getSprite('prompt').visible, true);
 
+  const titleHeading = harness.getSprite('titleHeading');
+  const originalSetSize = titleHeading.setSize.bind(titleHeading);
+  const originalSetXY = titleHeading.setXY.bind(titleHeading);
+  let unrelatedLayoutWrites = 0;
+  titleHeading.setSize = (...arguments_) => {
+    unrelatedLayoutWrites += 1;
+    return originalSetSize(...arguments_);
+  };
+  titleHeading.setXY = (...arguments_) => {
+    unrelatedLayoutWrites += 1;
+    return originalSetXY(...arguments_);
+  };
+  harness.extensionState.kamishibaiRuntime.resetForProjectStart();
+  titleHeading.setSize = originalSetSize;
+  titleHeading.setXY = originalSetXY;
+  assert.equal(unrelatedLayoutWrites, 0);
+  assert.deepEqual(targetLayout(harness.getSprite('prompt')), initialPromptLayout);
+
   await reachTitle(harness);
   assert.equal(harness.extensionState.kamishibaiRuntime.getLastDiagnosticJson(), '');
   assert.equal(harness.hasRuntimeVariable('kamishibaiErrorCategory'), false);
   assert.equal(harness.hasRuntimeVariable('kamishibaiErrorLine'), false);
   assert.equal(harness.getSprite('prompt').visible, false);
   assert.equal(harness.getSprite('officialWebsiteButton').visible, true);
+  assert.deepEqual(titleLayout(harness), initialTitleLayout);
 
   await runDetailedPreflight(harness, 'kamishibai=2.0');
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorLine'), 1);
