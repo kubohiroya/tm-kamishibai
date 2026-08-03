@@ -174,6 +174,8 @@ export class KamishibaiVmHarness {
 }
 
 export async function loadKamishibaiVm({
+  asyncAssetDisplay = false,
+  asyncExternalAssets = false,
   initialLocalStorage = {},
   sb3Path = defaultKamishibaiSb3Path,
   productionAssetManager = false,
@@ -193,6 +195,8 @@ export async function loadKamishibaiVm({
   }
   const clock = {now: 0};
   const extensionState = registerKamishibaiTestExtensions(vm, clock, {
+    asyncAssetDisplay,
+    asyncExternalAssets,
     initialLocalStorage,
     productionAssetManager,
     productionRuntimeExpression,
