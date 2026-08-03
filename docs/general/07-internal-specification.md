@@ -98,14 +98,14 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 
 | 項目                     | 件数 |
 | ------------------------ | ---: |
-| target（Stageを含む）    |   20 |
-| block                    | 1752 |
-| event hat                |   98 |
-| カスタムブロック定義     |   42 |
-| Scratch変数              |    7 |
+| target（Stageを含む）    |   21 |
+| block                    | 1941 |
+| event hat                |  108 |
+| カスタムブロック定義     |   43 |
+| Scratch変数              |   14 |
 | Scratch list             |   11 |
-| broadcast message        |   21 |
-| 静的なruntime variable名 |   19 |
+| broadcast message        |   23 |
+| 静的なruntime variable名 |   21 |
 | 静的なthread variable名  |   36 |
 | TurboWarp機能拡張        |   15 |
 
@@ -171,6 +171,7 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 | `titleAuthorOrganization` | UI sprite  | `about.author.organization`を実行時SVGテキストとして表示            | `ui-placeholder`                                    |
 | `titleAuthorName`         | UI sprite  | `about.author.name`とemailを実行時SVGテキストとして表示             | `ui-placeholder`                                    |
 | `officialWebsiteLabel`    | UI sprite  | 公式Webサイト名を実行時SVGテキストとして表示し、押下時に開く        | `ui-placeholder`                                    |
+| `UiItem`                  | UI雛形     | menu、言語選択、title用テキストを画面ごとのcloneとして生成・破棄    | `ui-placeholder`                                    |
 | `officialWebsiteButton`   | UI sprite  | titleの3行目から公式Webサイトを開く                                 | 初期表示用／実行時表示用の言語非依存costume         |
 | `closeTitleButton`        | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                                |
 | `Loading`                 | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                                 |
@@ -180,6 +181,12 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 title用テキストsprite、`Loading`、`LoadingBubbleAnchor`の実画像は、Asset Managerへ登録します。台本が定義する
 予約済みUIテキストは`ui.prompt`だけです。`ui.open`、`ui.reload`、`ui.about`、`ui.language`、
 `ui.invalidScript`はアプリの言語定義から設定します。
+
+既定OFFの`featureCloneUiItems`をgreen flag前に有効にすると、起動時に
+`cloneUiItemsEnabled`へ値を固定します。この経路では`UiItem`本体を非表示のcontroller兼雛形とし、
+`showTitle`、`showMenu`、`showLanguageMenu`ごとに必要な項目だけをcloneとして作ります。画面遷移時は
+cloneを非表示のまま保持せず削除します。従来の個別UI spriteは同じフラグで表示処理全体を止めます。
+フラグOFFでは`UiItem`はcloneを作らず、従来spriteのblockをそのまま使用するため即時に切り戻せます。
 
 アプリUIの定義元は`scripts/sb3/app-shell-locales.mjs`です。ロケール別の`about.title`、
 `about.officialWebsite.name`、`about.license.app`、`about.license.story`、
@@ -288,8 +295,9 @@ Stage actionはStage内で実行されます。Actor actionでは、Stageが`act
 自分を対象とするものを実行することです。
 
 UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
-Asset ManagerのLoading messageで受け取ります。台本の実行状態をUI sprite側へ
-複製せず、Stageを状態の所有者とします。
+Asset ManagerのLoading messageで受け取ります。clone UI経路では`UiItem`本体が画面単位の
+clone生成とaction実行を担い、clone自身は表示情報とclickしたactionだけを保持します。
+台本の実行状態をUI sprite側へ複製せず、Stageを状態の所有者とします。
 
 ## 変数とlist
 
@@ -298,20 +306,29 @@ runtime variableの3種類に分けます。
 
 ### Scratch変数
 
-| 所有者  | 変数                          | 初期値       | 役割                                    |
-| ------- | ----------------------------- | ------------ | --------------------------------------- |
-| `Stage` | `ポーズ認識`                  | `0`          | pose認識中の表示・互換用状態            |
-| `Stage` | `チャージ`                    | `0`          | pose成立までのcharge表示・互換用状態    |
-| `Stage` | `actionIndex`                 | `1`          | 現在処理する`actionList`の位置          |
-| `Stage` | `poseIndex`                   | `1`          | 現在処理する`poseList`の位置            |
-| `Stage` | `featureDetailedScriptErrors` | `false`      | DSL 3.1詳細診断preflightの既定OFFフラグ |
-| `Stage` | `__tmpose_embedded_script`    | 空文字       | `player` profileの組み込み台本予約領域  |
-| `Actor` | `actorName`                   | `_template_` | cloneが担当する台本上のactor名          |
+| 所有者   | 変数                          | 初期値       | 役割                                       |
+| -------- | ----------------------------- | ------------ | ------------------------------------------ |
+| `Stage`  | `ポーズ認識`                  | `0`          | pose認識中の表示・互換用状態               |
+| `Stage`  | `チャージ`                    | `0`          | pose成立までのcharge表示・互換用状態       |
+| `Stage`  | `actionIndex`                 | `1`          | 現在処理する`actionList`の位置             |
+| `Stage`  | `poseIndex`                   | `1`          | 現在処理する`poseList`の位置               |
+| `Stage`  | `featureDetailedScriptErrors` | `false`      | DSL 3.1詳細診断preflightの既定OFFフラグ    |
+| `Stage`  | `featureCloneUiItems`         | `false`      | clone UI経路の既定OFFフラグ                |
+| `Stage`  | `cloneUiItemsEnabled`         | `false`      | green flag時に固定したclone UI経路の有効値 |
+| `Stage`  | `__tmpose_embedded_script`    | 空文字       | `player` profileの組み込み台本予約領域     |
+| `Actor`  | `actorName`                   | `_template_` | cloneが担当する台本上のactor名             |
+| `UiItem` | `uiIsTemplate`                | `true`       | 本体とcloneを区別する                      |
+| `UiItem` | `uiId`                        | `_template_` | UI項目の論理ID                             |
+| `UiItem` | `uiAsset`                     | 空文字       | Asset Managerへ渡すasset名                 |
+| `UiItem` | `uiAction`                    | 空文字       | click時にcontrollerへ渡すaction名          |
+| `UiItem` | `uiValue`                     | 空文字       | 言語値またはURLなどのaction引数            |
 
 `__tmpose_embedded_script`はStageに一つだけ存在し、monitorを持ちません。`generic`と
 `editor`では空、`player`ではbuilderが変換済み台本を設定します。
 `featureDetailedScriptErrors`は最初の`startStory`で一度だけ読み、次のgreen flagまで値を固定します。
 `false`では従来のScratch parserと`invalidScript`経路だけを使います。
+`featureCloneUiItems`はgreen flagの先頭で`cloneUiItemsEnabled`へコピーし、その実行中は後者だけを
+参照します。したがって、実行途中で元フラグを変更してもUI実装経路は切り替わりません。
 
 ### Scratch list
 
@@ -333,7 +350,7 @@ runtime variableの3種類に分けます。
 
 ### runtime variable
 
-静的な名前を持つruntime variableは次の19個です。
+静的な名前を持つruntime variableは次の21個です。
 
 | 変数                                                           | 生存期間／役割                                                     |
 | -------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -351,10 +368,11 @@ runtime variableの3種類に分けます。
 | `loadingCostume`                                               | Loading spriteへ適用するcostume名                                  |
 | `message`                                                      | Loading bubbleへ表示する現在の進捗文言                             |
 | `uiLanguage`                                                   | アプリUIの表示言語。`ja`または`en`                                 |
+| `uiItemAction`, `uiItemValue`                                  | clickしたUI cloneから非clone controllerへ渡すaction envelope       |
 
 このほか、`exec command %s %s`はDSLで指定されたruntime variable名を動的に設定します。
 分岐条件は`branch:<branchName>`という名前で保存します。この2系列は入力から名前が決まるため、
-静的な19個には数えません。
+静的な21個には数えません。
 
 詳細診断を有効にしてfatal errorが発生した場合、Kamishibai Runtimeは互換用scalarとして
 `kamishibaiErrorCategory`、`kamishibaiErrorCode`、`kamishibaiErrorLine`、
@@ -466,6 +484,10 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | `titleAuthorOrganization` | `titleAuthorOrganizationFlag`, `titleAuthorOrganizationClick`, `titleAuthorOrganizationShowTitle`, `titleAuthorOrganizationHideMenu`, `titleAuthorOrganizationStartStory` | green flag／click／title・menu・story | 開発者所属を表示し、clickでは`closeTitle`送信         |
 | `titleAuthorName`         | `titleAuthorNameFlag`, `titleAuthorNameClick`, `titleAuthorNameShowTitle`, `titleAuthorNameHideMenu`, `titleAuthorNameStartStory`                                         | green flag／click／title・menu・story | 開発者氏名・emailを表示し、clickでは`closeTitle`送信  |
 | `officialWebsiteLabel`    | `officialWebsiteLabelFlag`, `officialWebsiteLabelClick`, `officialWebsiteLabelShowTitle`, `officialWebsiteLabelHideMenu`, `officialWebsiteLabelStartStory`                | green flag／click／title・menu・story | 公式Webサイト名を表示し、clickではサイトを開く        |
+| `UiItem`                  | `ui_event_whenbroadcastreceived_17`, `ui_event_whenbroadcastreceived_31`, `ui_event_whenbroadcastreceived_40`                                                             | title／言語選択／menu表示             | 現在画面の既存cloneを削除し、必要なUI項目だけを生成   |
+| `UiItem`                  | `ui_event_whenflagclicked_56`, `ui_control_start_as_clone_59`                                                                                                             | green flag／clone開始                 | 本体を非表示にし、cloneへassetを適用して表示          |
+| `UiItem`                  | `ui_event_whenbroadcastreceived_64`, `ui_event_whenbroadcastreceived_69`, `ui_event_whenbroadcastreceived_74`                                                             | menu非表示／明示削除／story開始       | 不要になったUI cloneを削除                            |
+| `UiItem`                  | `ui_event_whenthisspriteclicked_79`, `ui_event_whenbroadcastreceived_135`                                                                                                 | clone click／action relay受信         | action envelopeを本体へ渡し、本体側で画面遷移を実行   |
 | `officialWebsiteButton`   | `officialWebsiteFlag`                                                                                                                                                     | green flag                            | 初期化前用の英語フォールバックを表示                  |
 | `officialWebsiteButton`   | `officialWebsiteClick`                                                                                                                                                    | sprite click                          | 公式Webサイトを新しいタブで開く                       |
 | `officialWebsiteButton`   | `officialWebsiteShowTitle`                                                                                                                                                | `showTitle`受信                       | 文字なしの実行時costumeへ切り替えて表示               |
@@ -493,19 +515,20 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### 初期化・parse・共通処理
 
-| target  | ID   | 定義                                       | 引数                         | warp | 呼び出す処理／送信するmessage                                                                                |
-| ------- | ---- | ------------------------------------------ | ---------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
-| `Stage` | `c:` | `init skinList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `c_` | `init poseList with %s`                    | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `dc` | `init soundList with %s`                   | `commaSeparatedText`         | yes  | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `gH` | `init durationList with %s`                | `commaSeparatedText`         | no   | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `eM` | `selectValue # %s separated by %s from %s` | `index`, `separator`, `text` | yes  | —                                                                                                            |
-| `Stage` | `hl` | `substr of %s after %s`                    | `text`, `firstDelim`         | no   | —                                                                                                            |
-| `Stage` | `dL` | `min %s %s`                                | `valueA`, `valueB`           | yes  | —                                                                                                            |
-| `Stage` | `d)` | `exec command %s %s`                       | `key`, `value`               | no   | `substr of %s after %s`, `selectValue # %s separated by %s from %s`, `setTMPoseURL with %s`; `invalidScript` |
-| `Stage` | `e+` | `create sceneList`                         | —                            | yes  | `selectValue # %s separated by %s from %s`                                                                   |
-| `Stage` | `fe` | `create asset`                             | —                            | no   | 組み込み`LoadingBackdrop`; Asset Manager; `assetLoadingStarted/Progress/Completed`                           |
-| `Stage` | `fv` | `create actor`                             | —                            | no   | `selectValue # %s separated by %s from %s`                                                                   |
+| target   | ID                       | 定義                                                              | 引数                                               | warp | 呼び出す処理／送信するmessage                                                                                |
+| -------- | ------------------------ | ----------------------------------------------------------------- | -------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `Stage`  | `c:`                     | `init skinList with %s`                                           | `commaSeparatedText`                               | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage`  | `c_`                     | `init poseList with %s`                                           | `commaSeparatedText`                               | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage`  | `dc`                     | `init soundList with %s`                                          | `commaSeparatedText`                               | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage`  | `gH`                     | `init durationList with %s`                                       | `commaSeparatedText`                               | no   | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage`  | `eM`                     | `selectValue # %s separated by %s from %s`                        | `index`, `separator`, `text`                       | yes  | —                                                                                                            |
+| `Stage`  | `hl`                     | `substr of %s after %s`                                           | `text`, `firstDelim`                               | no   | —                                                                                                            |
+| `Stage`  | `dL`                     | `min %s %s`                                                       | `valueA`, `valueB`                                 | yes  | —                                                                                                            |
+| `Stage`  | `d)`                     | `exec command %s %s`                                              | `key`, `value`                                     | no   | `substr of %s after %s`, `selectValue # %s separated by %s from %s`, `setTMPoseURL with %s`; `invalidScript` |
+| `Stage`  | `e+`                     | `create sceneList`                                                | —                                                  | yes  | `selectValue # %s separated by %s from %s`                                                                   |
+| `Stage`  | `fe`                     | `create asset`                                                    | —                                                  | no   | 組み込み`LoadingBackdrop`; Asset Manager; `assetLoadingStarted/Progress/Completed`                           |
+| `Stage`  | `fv`                     | `create actor`                                                    | —                                                  | no   | `selectValue # %s separated by %s from %s`                                                                   |
+| `UiItem` | `uiCreateItemDefinition` | `create UI item %s asset %s action %s value %s x %s y %s size %s` | `id`, `asset`, `action`, `value`, `x`, `y`, `size` | yes  | clone用ローカル変数、位置、sizeを設定してcloneを生成                                                         |
 
 #### camera・pose
 
@@ -562,6 +585,7 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 | scene実行     | `exec command %s %s` → `exec actionList` → actionごとに`exec action %s`                                                                        |
 | Stage action  | branch、transition、key／touch入力、`wait`などへdispatch                                                                                       |
 | Actor action  | runtime envelope設定 → `execActorAction` → 対象clone → 移動・見た目・音・時間action                                                            |
+| UI clone      | `showTitle`／`showMenu`／`showLanguageMenu` → 旧clone削除 → `create UI item...` → click時は`runUiItemAction`で本体へactionを委譲               |
 | pose action   | camera preview／pose認識開始 → 第1音を再生 → `exec pose %s`反復（条件成立時は第2音を「ポーズ認識」更新前に再生）→音声／認識停止 → prompt非表示 |
 | asset loading | 組み込みの黒背景 → `setLoadingBackdrop`指定背景 → Loading用画像 → 通常アセット                                                                 |
 | 終了          | `stopStory` → camera／pose停止 → actor削除 → cover → menu                                                                                      |
@@ -570,29 +594,31 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### message一覧
 
-| message                  | 主な送信者                            | 受信者                           | 役割                                        |
-| ------------------------ | ------------------------------------- | -------------------------------- | ------------------------------------------- |
-| `showPrompt`             | `Stage`                               | `prompt`                         | 操作・pose案内を表示                        |
-| `hidePrompt`             | `Stage`                               | `prompt`                         | 案内を非表示                                |
-| `invalidScript`          | `Stage`                               | `prompt`                         | 台本エラーを表示                            |
-| `hideMenu`               | menu／言語選択button                  | menu／言語選択button             | menuと選択肢を一括非表示                    |
-| `showMenu`               | `Stage`、言語選択button               | 4つのmenu button、Title用2ボタン | 利用可能なmenuを表示しTitle用ボタンを隠す   |
-| `showLanguageMenu`       | `languageButton`                      | 2つの言語選択button              | `日本語`と`English`の選択肢を表示           |
-| `languageChanged`        | `Stage`、2つの言語選択button          | `Stage`                          | app shellの予約済みテキストを選択言語へ更新 |
-| `startStory`             | `Stage`, `openButton`, `reloadButton` | `Stage`、Title用2ボタン          | 台本の解析・実行を開始しTitle用ボタンを隠す |
-| `stopStory`              | `Stage`                               | `Stage`                          | 実行を停止しcoverへ戻す                     |
-| `showCover`              | `Stage`                               | `Stage`                          | coverを構築してmenuを表示                   |
-| `showTitle`              | `Stage`, `showTitleButton`            | `Stage`、Title用2ボタン          | title状態へ戻しTitle用ボタンを表示する      |
-| `closeTitle`             | `Stage`, `closeTitleButton`           | `Stage`                          | Stage clickと閉じるボタンの遷移を共通化する |
-| `execActorAction`        | `Stage`                               | `Actor`                          | action envelopeをcloneへ通知                |
-| `deleteAllActors`        | `Stage`                               | `Actor`                          | 全cloneを削除                               |
-| `assetLoadingStarted`    | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を開始                           |
-| `assetLoadingProgress`   | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | 進捗costumeとmessageを更新                  |
-| `assetLoadingCompleted`  | `Stage`／Asset Manager                | `Loading`, `LoadingBubbleAnchor` | Loading表示を終了                           |
-| `stopKeyInput`           | Async Input                           | `Stage`                          | key listenerを停止                          |
-| `stopTouchInput`         | Async Input                           | `Stage`                          | touch listenerを停止                        |
-| `finishTimedActorAction` | `Stage`のRight／Down key hat          | `Actor`                          | 時間actionを確定状態へ進める                |
-| `debugTestCamera`        | TurboWarp editorからの手動送信        | `Stage`                          | camera previewの診断                        |
+| message                  | 主な送信者                               | 受信者                            | 役割                                        |
+| ------------------------ | ---------------------------------------- | --------------------------------- | ------------------------------------------- |
+| `showPrompt`             | `Stage`                                  | `prompt`                          | 操作・pose案内を表示                        |
+| `hidePrompt`             | `Stage`                                  | `prompt`                          | 案内を非表示                                |
+| `invalidScript`          | `Stage`                                  | `prompt`                          | 台本エラーを表示                            |
+| `hideMenu`               | menu／言語選択button、`UiItem`本体       | 従来UI sprite、`UiItem` clone     | 従来UIを隠し、UI cloneを削除                |
+| `showMenu`               | `Stage`、言語選択button、`UiItem`本体    | 従来UI sprite、`UiItem`本体       | 利用可能なmenu項目を表示                    |
+| `showLanguageMenu`       | `languageButton`、`UiItem`本体           | 2つの言語選択button、`UiItem`本体 | `日本語`と`English`の選択肢を表示           |
+| `languageChanged`        | `Stage`、言語選択button、`UiItem`本体    | `Stage`                           | app shellの予約済みテキストを選択言語へ更新 |
+| `startStory`             | `Stage`、menu button、`UiItem`本体       | `Stage`、Title用UI、`UiItem`      | 台本の解析・実行を開始しUI cloneを削除      |
+| `stopStory`              | `Stage`                                  | `Stage`                           | 実行を停止しcoverへ戻す                     |
+| `showCover`              | `Stage`                                  | `Stage`                           | coverを構築してmenuを表示                   |
+| `showTitle`              | `Stage`、`showTitleButton`、`UiItem`本体 | `Stage`、Title用UI、`UiItem`本体  | title状態へ戻しTitle用UIを表示する          |
+| `closeTitle`             | `Stage`、Title用UI、`UiItem`本体         | `Stage`                           | Stage clickと閉じるUIの遷移を共通化する     |
+| `deleteUiClones`         | `UiItem`本体                             | `UiItem` clone                    | 次画面の生成前に既存UI cloneを全削除        |
+| `runUiItemAction`        | `UiItem` clone                           | `UiItem`本体                      | clickされたaction/valueを本体で実行         |
+| `execActorAction`        | `Stage`                                  | `Actor`                           | action envelopeをcloneへ通知                |
+| `deleteAllActors`        | `Stage`                                  | `Actor`                           | 全cloneを削除                               |
+| `assetLoadingStarted`    | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | Loading表示を開始                           |
+| `assetLoadingProgress`   | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | 進捗costumeとmessageを更新                  |
+| `assetLoadingCompleted`  | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | Loading表示を終了                           |
+| `stopKeyInput`           | Async Input                              | `Stage`                           | key listenerを停止                          |
+| `stopTouchInput`         | Async Input                              | `Stage`                           | touch listenerを停止                        |
+| `finishTimedActorAction` | `Stage`のRight／Down key hat             | `Actor`                           | 時間actionを確定状態へ進める                |
+| `debugTestCamera`        | TurboWarp editorからの手動送信           | `Stage`                           | camera previewの診断                        |
 
 `stopKeyInput`と`stopTouchInput`は標準broadcast blockではなく、Async Inputへ渡した
 callback messageです。`debugTestCamera`は通常フローに送信元を持たない診断用messageです。

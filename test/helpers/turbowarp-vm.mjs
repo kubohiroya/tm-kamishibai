@@ -67,7 +67,11 @@ export class KamishibaiVmHarness {
   clickSprite(name) {
     const sprite = this.getSprite(name);
     if (!sprite) throw new Error(`Sprite not found: ${name}`);
-    this.vm.runtime.startHats('event_whenthisspriteclicked', null, sprite);
+    this.clickTarget(sprite);
+  }
+
+  clickTarget(target) {
+    this.vm.runtime.startHats('event_whenthisspriteclicked', null, target);
     this.step();
   }
 
@@ -138,6 +142,12 @@ export class KamishibaiVmHarness {
   getSprite(name) {
     return this.vm.runtime.targets.find(
       (target) => !target.isStage && target.isOriginal && target.sprite?.name === name,
+    );
+  }
+
+  getClones(name) {
+    return this.vm.runtime.targets.filter(
+      (target) => !target.isStage && !target.isOriginal && target.sprite?.name === name,
     );
   }
 
