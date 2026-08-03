@@ -449,6 +449,11 @@
       __publicField(this, "lastAssetErrorType", "");
       __publicField(this, "lastAssetErrorLabel", "");
       __publicField(this, "assetErrorVersion", 0);
+      this.runtime.on?.("STOP_FOR_TARGET", (target) => {
+        if (target && !this.runtime.targets.includes(target)) {
+          this.displayedAssets.delete(target.id);
+        }
+      });
     }
     setLoadingBackdrop(args) {
       this.loadingBackdropName = normalizeName(args.NAME);
