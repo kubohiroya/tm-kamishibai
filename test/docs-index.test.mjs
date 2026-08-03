@@ -20,7 +20,7 @@ const audienceSections = [
   {
     id: 'developer-documents',
     title: '開発者向けドキュメント',
-    documents: ['06-developer-guide', '07-internal-specification'],
+    documents: ['06-developer-guide', '07-internal-specification', '08-extension-guide'],
   },
 ];
 
@@ -77,7 +77,7 @@ test('offers HTML, Vivliostyle Viewer, and PDF on every document card', () => {
     ([, actions]) => actions,
   );
 
-  assert.equal(actionGroups.length, 10);
+  assert.equal(actionGroups.length, 11);
   for (const actions of actionGroups) {
     assert.deepEqual(
       [...actions.matchAll(/<a\b[^>]*>([^<]+)<\/a>/gu)].map(([, label]) => label),

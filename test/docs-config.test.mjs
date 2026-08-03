@@ -271,7 +271,7 @@ test('publishes the current software developer guide', () => {
 test('defines the general documents with furigana only for the kids summary', () => {
   assert.equal(generalDocumentConfig.sourceDirectory, 'general');
   assert.equal(generalDocumentConfig.outputDirectory, 'general');
-  assert.equal(generalDocumentConfig.documents.length, 8);
+  assert.equal(generalDocumentConfig.documents.length, 9);
   assert.deepEqual(
     generalDocumentConfig.documents.map(({sourceFilename}) => sourceFilename),
     [
@@ -282,6 +282,7 @@ test('defines the general documents with furigana only for the kids summary', ()
       '05-command-reference.md',
       '06-developer-guide.md',
       '07-internal-specification.md',
+      '08-extension-guide.md',
       'history.md',
     ],
   );

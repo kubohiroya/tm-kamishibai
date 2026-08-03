@@ -334,7 +334,11 @@ export async function buildDocs({
       }
 
       const standaloneManifestPath = path.join(standaloneDirectory, 'publication.json');
-      await buildPdf(standaloneManifestPath, pdfPath);
+      const pdfInputPath =
+        generalDocument.pdfIncludesGeneratedToc === false
+          ? standaloneArticlePath
+          : standaloneManifestPath;
+      await buildPdf(pdfInputPath, pdfPath);
       await copyFile(pdfPath, path.join(generalDirectory, pdfFilename));
     }
 

@@ -140,7 +140,184 @@ a[data-ref="section"]::after {
   text-decoration: underline;
 }
 
+body > section.level1:has(> .extension-overview-kicker) {
+  page: extension-guide;
+}
+
+.extension-overview-kicker {
+  margin: -1.7rem 0 1.1rem;
+  color: var(--accent);
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.extension-overview-hero {
+  margin: 1.2rem 0;
+  break-inside: avoid;
+}
+
+.extension-overview-hero img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.extension-overview-hero figcaption,
+.extension-flow figcaption {
+  margin-top: 0.38rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.extension-overview-summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-left: 5px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.extension-overview-summary p {
+  margin: 0;
+}
+
+.extension-overview-source {
+  margin-top: 0.7rem;
+}
+
+body > section.level1 > section.level2:has(> h2.extension-sheet) {
+  padding: 1.1rem 1.25rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: linear-gradient(180deg, var(--accent-soft) 0, var(--paper) 5.4rem);
+  break-before: page;
+  break-after: page;
+  break-inside: avoid;
+}
+
+h2.extension-sheet {
+  margin: 0 0 0.65rem;
+  padding: 0 0 0.42rem;
+  font-size: 1.7rem;
+}
+
+.extension-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.extension-meta span {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-weight: 700;
+}
+
+.extension-meta code {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.extension-flow {
+  margin: 1.1rem 0;
+  break-inside: avoid;
+}
+
+.extension-flow > div {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--paper);
+}
+
+.extension-flow span {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.35rem;
+  background: var(--accent-soft);
+  font-weight: 700;
+  text-align: center;
+}
+
+.extension-flow b {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--accent);
+  font-size: 1.3rem;
+}
+
+.extension-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 1.05rem 0;
+}
+
+.extension-columns section {
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  break-inside: avoid;
+}
+
+.extension-columns ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.extension-columns li {
+  margin: 0.22rem 0;
+}
+
+.extension-subhead {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.extension-note {
+  margin: 1rem 0 0;
+  padding: 0.65rem 0.8rem;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  break-inside: avoid;
+}
+
+.extension-source {
+  margin: 0.8rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  break-inside: avoid;
+}
+
 @media print {
+  @page extension-guide {
+    size: A4;
+    margin: 14mm 15mm 16mm;
+  }
+
   body > section.level1:first-child > h1:first-child,
   body > h1:first-child {
     margin-top: 0;
@@ -179,5 +356,48 @@ a[data-ref="section"]::after {
 
   .print-page-break {
     break-before: page;
+  }
+
+  body > section.level1:has(> .extension-overview-kicker) {
+    font-size: 8.7pt;
+    line-height: 1.52;
+  }
+
+  body > section.level1:has(> .extension-overview-kicker) > h1:first-child {
+    margin-bottom: 1.25rem;
+    padding: 0.8rem 0 0.65rem;
+    font-size: 20pt;
+  }
+
+  .extension-overview-kicker {
+    margin: -0.65rem 0 0.65rem;
+    font-size: 9.5pt;
+  }
+
+  .extension-overview-hero {
+    margin: 0.75rem auto;
+    width: 82%;
+  }
+
+  .extension-overview-summary {
+    gap: 0.55rem;
+    margin: 0.7rem 0;
+    padding: 0.55rem 0.7rem;
+  }
+
+  body > section.level1 > section.level2:has(> h2.extension-sheet) {
+    min-height: 255mm;
+    padding: 5mm 6mm;
+    border-radius: 0;
+    font-size: 8.8pt;
+    line-height: 1.5;
+  }
+
+  h2.extension-sheet {
+    font-size: 18pt;
+  }
+
+  .extension-flow > div {
+    min-height: 18mm;
   }
 }

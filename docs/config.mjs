@@ -56,6 +56,14 @@ export const generalDocumentConfig = {
         '現行の汎用アプリSB3におけるtarget、変数、block、message、呼出し関係、状態遷移を記録します。',
     },
     {
+      sourceFilename: '08-extension-guide.md',
+      title: 'TMPose紙芝居 機能拡張ガイド',
+      audience: 'アプリの依存機能を調査・変更する方',
+      description:
+        'アプリ本体と15個の依存機能拡張を、図解付き・1項目1ページの全16ページで紹介します。',
+      pdfIncludesGeneratedToc: false,
+    },
+    {
       sourceFilename: 'history.md',
       title: '紙芝居DSL 2.0から3.1への変更履歴',
       audience: '2.0から移行する方',
