@@ -36,6 +36,7 @@
     extension.setRuntimeVariable({ VAR: name, STRING: value });
   }
   const EXTENSION_ID = "kubohiroyaasyncinput";
+  const DOCS_URI = "https://kubohiroya.github.io/turbowarp-async-input/";
   const ACCUMULATED_POSE_CHANGED_EVENT = "TMPOSE_ACCUMULATED_POSE_CHANGED";
   const ARITHMETIC_OPERATORS = /* @__PURE__ */ new Set(["+", "-", "*", "/"]);
   const POSE_CHANGE_REASONS = /* @__PURE__ */ new Set(["prediction", "reset", "stop"]);
@@ -149,6 +150,7 @@
       return {
         id: EXTENSION_ID,
         name: Scratch.translate(definitions.extensionName),
+        docsURI: DOCS_URI,
         color1: "#2f9d8f",
         color2: "#247c72",
         color3: "#185b54",

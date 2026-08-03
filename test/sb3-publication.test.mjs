@@ -37,6 +37,7 @@ test('links and documents the generated downloadable SB3', async () => {
     readme,
     userGuide,
     packageJsonSource,
+    ciWorkflow,
   ] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/06-developer-guide.md'), 'utf8'),
@@ -44,6 +45,7 @@ test('links and documents the generated downloadable SB3', async () => {
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
     readFile(path.join(projectRoot, 'docs/general/03-user-guide.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
+    readFile(path.join(projectRoot, '.github/workflows/ci.yml'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
 
@@ -68,6 +70,7 @@ test('links and documents the generated downloadable SB3', async () => {
     /^github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}$/u,
     'SB3 toolchain dependency must use a fixed commit.',
   );
+  assert.match(ciWorkflow, /run: pnpm sb3:check/u);
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(developerGuide, /`stories\/urashima\/`/u);
   assert.doesNotMatch(developerGuide, /samples\/urashima\//u);

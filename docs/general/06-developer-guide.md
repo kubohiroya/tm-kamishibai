@@ -302,6 +302,8 @@ DSL名、同一target内のSB3名、既存SB3のアセット名は重複でき�
 決定的出力の共通仕様は
 [`sb3-toolchain`のSB3ソース管理ワークフロー](https://github.com/kubohiroya/sb3-toolchain/blob/main/docs/workflows.md)
 を参照してください。
+CIも依存関係のinstall直後に`pnpm sb3:check`を実行するため、ローカル開発、テスト、
+配布buildで同じcommit固定のツールチェインを利用します。
 
 `app/`から編集用SB3を生成します。
 

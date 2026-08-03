@@ -3,10 +3,10 @@
 ## 監査基準
 
 - 監査日: 2026-08-03
-- 対象commit: Phase -1の#198までを統合した`main`
-- package manager: `pnpm@11.11.0`
+- 対象commit: `main`の`e884bea`を起点とする#227の依存更新
+- package manager: `pnpm@11.18.0`
 - Node.js: リポジトリの`engines`で定める22.12.0以上
-- 追跡Issue: #204、legacy Webpack経路の除去は#212
+- 追跡Issue: #204、legacy Webpack経路の除去は#212、バージョン更新は#227
 
 監査には次のコマンドを使用します。
 
@@ -18,6 +18,39 @@ pnpm why <package>
 
 `pnpm audit --prod`はリリースされるnpm packageの実行依存、`pnpm audit`はテスト、
 SB3生成、文書生成を含む開発依存も対象とします。
+
+## バージョン更新状況
+
+2026-08-03にnpm registryと各GitHubリポジトリの既定branchを確認しました。
+
+| 対象                   | 更新前       | 更新後・判断                                                                |
+| ---------------------- | ------------ | --------------------------------------------------------------------------- |
+| pnpm                   | 11.11.0      | 最新の11.18.0へ更新                                                         |
+| sb3-toolchain          | 0.1.0相当    | 最新の0.3.0、commit `2c82aaf`へ更新                                         |
+| rubygana               | `a24b8a6`    | 最新のmaster `649cba1`、0.9.0へ更新                                         |
+| globals                | 17.8.0       | 17.9.0は公開後24時間未満で鮮度policyの対象となるため17.8.0を維持            |
+| trim override          | 0.0.3        | 最新の1.0.1へ更新し、文書buildを含む全検証で互換性を確認                    |
+| その他の直接npm依存    | package.json | registry上の最新安定版と一致                                                |
+| scratch-vm             | `c482342`    | TurboWarpの最新develop／既定branchと一致するため維持                        |
+| scratch-render-fonts   | `7b6768f`    | TurboWarpの最新master／既定branchと一致するため維持                         |
+| CommonJS利用元内のuuid | 11.1.1       | 12以降はCommonJS用exportがないため、press-readyとscratch-vm内は11.1.1を維持 |
+
+`@kubohiroya/sb3-toolchain`はcommit固定の開発時依存です。`pnpm sb3:*`、CIの
+`pnpm sb3:check`、配布buildのJavaScript API呼び出しは同じ0.3.0を利用します。
+
+管理対象の組み込み機能拡張は、最新toolchainのtransactional updateで次の上流
+`main`へ更新しました。
+
+| 機能拡張           | 更新後version | resolved commit |
+| ------------------ | ------------- | --------------- |
+| Asset Manager      | 0.4.0         | `c952b0b`       |
+| TMPose             | 1.4.0         | `08fe0cf`       |
+| Text Lines         | 0.1.1         | `8655d76`       |
+| Runtime Expression | 0.2.0         | `7e2bd99`       |
+| Async Input        | 0.2.0         | `3ecd7ff`       |
+
+外部URLで読み込むTurboWarp Gallery機能拡張はversionをこのrepositoryで固定しないため、
+URLを維持します。ローカル実装のKamishibai RuntimeとWeb Linkには別の上流versionはありません。
 
 ## 結果
 
@@ -34,7 +67,7 @@ SB3生成、文書生成を含む開発依存も対象とします。
 | --------------- | ---------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `dompurify`     | `@vivliostyle/cli`内を3.4.12 | CLIが3.4.11を固定しているため                                                      | Vivliostyle CLI自身が3.4.12以上を採用                                                |
 | `prismjs`       | 1.30.0                       | VFMのsyntax highlight経路が1.27.0を選択するため                                    | VFM／refractor自身が1.30.0以上を採用                                                 |
-| `trim`          | 0.0.3                        | VFMのMarkdown parserが0.0.1を選択するため                                          | VFM／remark-parseが脆弱な`trim`依存を除去                                            |
+| `trim`          | 1.0.1                        | VFMのMarkdown parserが0.0.1を選択するため                                          | VFM／remark-parseが`trim`依存を除去                                                  |
 | `valibot`       | 1.4.2                        | VFMが1.2.0を選択するため                                                           | VFM自身が1.4.2以上を採用                                                             |
 | `uuid`          | `press-ready`内を11.1.1      | PDF後処理経路が8.3.2を選択するため                                                 | press-ready自身が11.1.1以上を採用                                                    |
 | `uuid`          | `scratch-vm`内を11.1.1       | VMテスト経路が8.3.2を選択するため                                                  | TurboWarp scratch-vm自身が11.1.1以上を採用                                           |

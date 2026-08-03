@@ -2,7 +2,7 @@ packages:
   - .
 
 allowBuilds:
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/fa0d827a8ee0fe58436aa1e7a6c227e6ace44186': true
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/2c82aaf02f605564f79efe8ff3bbd8f1a78d6fe9': true
   fsevents: false
 
 overrides:
@@ -12,7 +12,7 @@ overrides:
   'scratch-vm>uuid': 11.1.1
   'scratch-vm>worker-loader': '-'
   prismjs: 1.30.0
-  trim: 0.0.3
+  trim: 1.0.1
   valibot: 1.4.2
 
 peerDependencyRules:
