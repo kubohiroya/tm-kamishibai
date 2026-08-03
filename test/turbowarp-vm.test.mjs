@@ -32,6 +32,14 @@ function startScript(harness, script) {
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
 }
 
+async function startScriptAsync(harness, script) {
+  harness.greenFlag();
+  await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.setRuntimeVariable('script', script);
+  harness.broadcast('startStory');
+  await harness.runUntilAsync(() => harness.getBackdropName() === 'Stars');
+}
+
 function uiItemId(target) {
   return target.lookupVariableByNameAndType('uiId', '')?.value;
 }
@@ -856,17 +864,14 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
     harness.extensionState.runtimeVariableWrites
       .filter(({name}) => name === 'message')
       .map(({value}) => value),
-    ['0 / 3', '1 / 3', '1 / 3', '2 / 3', '2 / 3', '3 / 3'],
+    ['1 / 3', '2 / 3', '3 / 3'],
   );
   assert.deepEqual(
     harness.extensionState.bubbleUpdates.filter(
       ({targetName}) => targetName === 'Loading' || targetName === 'LoadingBubbleAnchor',
     ),
     [
-      {targetName: 'LoadingBubbleAnchor', text: '0 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
-      {targetName: 'LoadingBubbleAnchor', text: '1 / 3', type: 'say'},
-      {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '2 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '3 / 3', type: 'say'},
       {targetName: 'LoadingBubbleAnchor', text: '', type: 'say'},
@@ -882,6 +887,59 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
   assert.equal(loadingBubbleAnchor.visible, false);
   assert.equal(harness.getSprite('Loading').getCustomState('Scratch.looks')?.text ?? '', '');
   assert.equal(harness.getSprite('Loading').visible, false);
+});
+
+test('keeps asynchronous URL progress monotonic and flushes it before completion', async (context) => {
+  const harness = await loadKamishibaiVm({
+    asyncAssetDisplay: true,
+    asyncExternalAssets: true,
+  });
+  context.after(() => harness.quit());
+
+  await startScriptAsync(
+    harness,
+    [
+      'kamishibai=3.1',
+      'asset=Title,backdrop',
+      'asset=loading1,costume:Loading:loading',
+      'asset=Music,https://example.com/test-music.mp3',
+      'asset=Stars,backdrop',
+      'setLoadingCostume=loading1',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=wait:30',
+    ].join('\n'),
+  );
+
+  const progressText = () =>
+    harness.extensionState.bubbleUpdates
+      .filter(({targetName}) => targetName === 'LoadingBubbleAnchor')
+      .map(({text}) => text);
+  assert.deepEqual(progressText(), ['1 / 3', '2 / 3', '3 / 3', '']);
+
+  const completedValues = progressText()
+    .filter(Boolean)
+    .map((text) => Number.parseInt(text, 10));
+  assert(
+    completedValues.every((value, index) => index === 0 || value > completedValues[index - 1]),
+  );
+
+  const updateCountAfterCompletion = progressText().length;
+  const displayCountAfterCompletion = harness.extensionState.displayedAssetHistory.filter(
+    ({targetName}) => targetName === 'Loading',
+  ).length;
+  for (let index = 0; index < 5; index += 1) {
+    harness.step();
+    await Promise.resolve();
+  }
+  assert.equal(progressText().length, updateCountAfterCompletion);
+  assert.equal(
+    harness.extensionState.displayedAssetHistory.filter(({targetName}) => targetName === 'Loading')
+      .length,
+    displayCountAfterCompletion,
+  );
 });
 
 test('keeps the built-in Loading costume separate from the fixed bubble anchor', async (context) => {
@@ -912,7 +970,7 @@ test('keeps the built-in Loading costume separate from the fixed bubble anchor',
     harness.extensionState.bubbleUpdates
       .filter(({targetName}) => targetName === 'LoadingBubbleAnchor')
       .map(({text}) => text),
-    ['0 / 2', '1 / 2', '1 / 2', '2 / 2', ''],
+    ['1 / 2', '2 / 2', ''],
   );
 });
 
@@ -1420,7 +1478,7 @@ test('stops only the current sound when Down skips a scene', async (context) => 
   assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 });
 
-test('applies stateful actions when Down interrupts scene parsing', async (context) => {
+test('applies stateful actions when Down skips before they execute', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   const script = [
@@ -1431,6 +1489,7 @@ test('applies stateful actions when Down interrupts scene parsing', async (conte
     'cover=Title,',
     '---',
     'sceneLabel=first',
+    'action=wait:30',
     'action=stage:Stars',
     'action=bgm:Music',
     'action=transition:fadeOut',
@@ -1444,12 +1503,14 @@ test('applies stateful actions when Down interrupts scene parsing', async (conte
   harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
   harness.setRuntimeVariable('script', script);
   harness.broadcast('startStory');
-  harness.runUntil(() => harness.getRuntimeVariable('sceneIndex') === 1);
+  harness.runUntil(() => Number(harness.getRuntimeVariable('sceneIndex')) === 1);
   harness.setRuntimeVariable('skipContext', 'scene');
 
   harness.pressKey('ArrowDown');
   harness.runUntil(
-    () => harness.getRuntimeVariable('sceneIndex') === 2 && !harness.hasRuntimeVariable('skipMode'),
+    () =>
+      Number(harness.getRuntimeVariable('sceneIndex')) === 2 &&
+      !harness.hasRuntimeVariable('skipMode'),
   );
 
   assert.equal(harness.getStageEffect('brightness'), -100);
