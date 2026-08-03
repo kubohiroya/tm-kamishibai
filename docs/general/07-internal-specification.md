@@ -8,6 +8,8 @@ custom block、呼出し関係、状態遷移の内部仕様を現在の実装�
 [ソフトウェアメンテナンスガイド](06-developer-guide.md)を参照してください。台本の
 外部仕様は[台本DSLマニュアル](04-dsl-manual.md)と
 [コマンドリファレンス](05-command-reference.md)を参照してください。
+各機能拡張の役割と現行アプリでの利用箇所は
+[機能拡張ガイド](08-extension-guide.md)を参照してください。
 
 本書は「アプリが内部でどのように動くか」を扱い、「リポジトリをどう変更・公開するか」
 や「ビルダーをどう利用するか」は扱いません。
@@ -642,5 +644,7 @@ transitionの反復待ちは`skipMode`の存在で終了しますが、最後の
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
 - [`05-command-reference.md`](05-command-reference.md): コマンドとactionの外部仕様
 - [`06-developer-guide.md`](06-developer-guide.md): 成果物とビルダーの利用、setup、変更、検証、公開
+- [`08-extension-guide.md`](08-extension-guide.md): 依存機能拡張15個の一覧、図解、役割、利用箇所
+- [`09-application-materials-guide.md`](09-application-materials-guide.md): アプリ、浦島太郎、体験会教材、DSL 3.1、sb3-toolchainの8ページ概要
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口

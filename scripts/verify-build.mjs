@@ -64,6 +64,8 @@ const documentationCardIcons = [
   ['🧒', '紙芝居アプリ 概要説明書 子供向け'],
   ['🛠️', '紙芝居アプリ ソフトウェアメンテナンスガイド'],
   ['🧩', '紙芝居アプリ内部仕様書'],
+  ['🔌', 'TMPose紙芝居 機能拡張ガイド'],
+  ['🎭', 'TMPose紙芝居 アプリ・教材・ツールチェインガイド'],
   ['🕰️', '紙芝居DSL 2.0から3.1への変更履歴'],
   ['🤖', '親子AIプログラミング体験会 2026年8月1日版'],
   ['🧰', '親子AIプログラミング体験会スタッフ向け資料2026年8月1日版'],
@@ -659,13 +661,27 @@ async function verifyGeneralDocuments(grade) {
       `${pdfFilename} differs between dist/docs and output/pdf.`,
     );
 
-    totalPages += await verifyPdfFile(publishedPdfPath);
+    const documentPageCount = await verifyPdfFile(publishedPdfPath);
+    totalPages += documentPageCount;
     await verifyPdfFile(outputPdfPath);
+    if (generalDocument.expectedPdfPageCount !== undefined) {
+      assert(
+        documentPageCount === generalDocument.expectedPdfPageCount,
+        `${pdfFilename} has ${documentPageCount} pages; expected ${generalDocument.expectedPdfPageCount}.`,
+      );
+    }
     const bookmarkCount = await pdfBookmarkCount(publishedPdfPath);
-    assert(
-      bookmarkCount >= bodyHeadingIds.length,
-      `${pdfFilename} does not contain bookmarks for its generated table of contents.`,
-    );
+    if (generalDocument.pdfIncludesGeneratedToc === false) {
+      assert(
+        bookmarkCount === 0,
+        `${pdfFilename} unexpectedly contains generated table-of-contents bookmarks.`,
+      );
+    } else {
+      assert(
+        bookmarkCount >= bodyHeadingIds.length,
+        `${pdfFilename} does not contain bookmarks for its generated table of contents.`,
+      );
+    }
   }
 
   assert(
