@@ -62,6 +62,7 @@ export const generalDocumentConfig = {
       description:
         'アプリ本体と15個の依存機能拡張を、図解付き・1項目1ページの全16ページで紹介します。',
       pdfIncludesGeneratedToc: false,
+      expectedPdfPageCount: 16,
     },
     {
       sourceFilename: 'history.md',

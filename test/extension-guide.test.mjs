@@ -55,6 +55,7 @@ test('defines one overview and fifteen self-contained extension pages', () => {
     ({sourceFilename}) => sourceFilename === '08-extension-guide.md',
   );
   assert.equal(documentConfig?.pdfIncludesGeneratedToc, false);
+  assert.equal(documentConfig?.expectedPdfPageCount, 16);
   assert.match(guide, /^# TMPose紙芝居 機能拡張ガイド$/mu);
   assert.match(guide, /<figure class="extension-overview-hero">/u);
   assert.match(guide, /<img src="\.\.\/images\/image01\.png"/u);
