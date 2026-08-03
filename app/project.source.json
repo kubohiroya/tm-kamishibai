@@ -32,6 +32,14 @@
         "featureDetailedScriptErrors": [
           "featureDetailedScriptErrors",
           false
+        ],
+        "featureCloneUiItems": [
+          "featureCloneUiItems",
+          false
+        ],
+        "cloneUiItemsEnabled": [
+          "cloneUiItemsEnabled",
+          false
         ]
       },
       "lists": {
@@ -101,12 +109,14 @@
         "skipFinishTimedActor": "finishTimedActorAction",
         "closeTitleMessage": "closeTitle",
         "languageChangedMessage": "languageChanged",
-        "showLanguageMenuMessage": "showLanguageMenu"
+        "showLanguageMenuMessage": "showLanguageMenu",
+        "uiDeleteClonesMessage": "deleteUiClones",
+        "uiItemActionMessage": "runUiItemAction"
       },
       "blocks": {
         "iM": {
           "opcode": "event_whenflagclicked",
-          "next": "cY",
+          "next": "cloneUiItemsEnabledLatch",
           "parent": null,
           "inputs": {},
           "fields": {},
@@ -118,7 +128,7 @@
         "cY": {
           "opcode": "sipcconsole_Emptying",
           "next": "cZ",
-          "parent": "iM",
+          "parent": "cloneUiItemsEnabledLatch",
           "inputs": {},
           "fields": {},
           "shadow": false,
@@ -26129,7 +26139,7 @@
               1,
               [
                 10,
-            "700"
+                "700"
               ]
             ]
           },
@@ -27053,6 +27063,43 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "cloneUiItemsEnabledLatch": {
+          "opcode": "data_setvariableto",
+          "next": "cY",
+          "parent": "iM",
+          "inputs": {
+            "VALUE": [
+              3,
+              "cloneUiItemsFeatureFlagReporter",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "cloneUiItemsFeatureFlagReporter": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "cloneUiItemsEnabledLatch",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "featureCloneUiItems",
+              "featureCloneUiItems"
+            ]
+          },
           "shadow": false,
           "topLevel": false
         }
@@ -32003,7 +32050,7 @@
         },
         "o,": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "uiOpenSetSkin",
+          "next": "openButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32029,7 +32076,7 @@
         "uiOpenSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "o-",
-          "parent": "o,",
+          "parent": "openButtonCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -32040,6 +32087,52 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "openButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "o,",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "openButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "uiOpenSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "openButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "openButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "openButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "openButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "openButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
           "shadow": false,
           "topLevel": false
         }
@@ -32193,7 +32286,7 @@
         },
         "o[": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "iE",
+          "next": "reloadButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32210,7 +32303,7 @@
         "iE": {
           "opcode": "localstorage_setProjectId",
           "next": "uiReloadSetSkin",
-          "parent": "o[",
+          "parent": "reloadButtonCloneUiLegacyGuard",
           "inputs": {
             "ID": [
               1,
@@ -32358,6 +32451,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "reloadButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "o[",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "reloadButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "iE"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "reloadButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "reloadButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "reloadButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "reloadButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "reloadButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -32467,7 +32606,7 @@
         },
         "pb": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "iJ",
+          "next": "showTitleButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32484,7 +32623,7 @@
         "iJ": {
           "opcode": "localstorage_setProjectId",
           "next": "uiAboutSetSkin",
-          "parent": "pb",
+          "parent": "showTitleButtonCloneUiLegacyGuard",
           "inputs": {
             "ID": [
               1,
@@ -32656,6 +32795,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "showTitleButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "pb",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "showTitleButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "iJ"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "showTitleButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "showTitleButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "showTitleButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "showTitleButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "showTitleButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -32736,7 +32921,7 @@
         },
         "languageButtonShowMenu": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "languageButtonSetSkin",
+          "next": "languageButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32753,7 +32938,7 @@
         "languageButtonSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "languageButtonMenuShow",
-          "parent": "languageButtonShowMenu",
+          "parent": "languageButtonCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -32820,6 +33005,52 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "languageButtonShowMenu",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "languageButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "languageButtonSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "languageButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "languageButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "languageButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "languageButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
           "shadow": false,
           "topLevel": false
         }
@@ -32902,7 +33133,7 @@
         },
         "japaneseLanguageShowChoices": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "japaneseLanguageSetSkin",
+          "next": "japaneseLanguageButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -32919,7 +33150,7 @@
         "japaneseLanguageSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "japaneseLanguageShow",
-          "parent": "japaneseLanguageShowChoices",
+          "parent": "japaneseLanguageButtonCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33054,6 +33285,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "japaneseLanguageButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "japaneseLanguageShowChoices",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "japaneseLanguageButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "japaneseLanguageSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "japaneseLanguageButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "japaneseLanguageButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "japaneseLanguageButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "japaneseLanguageButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -33134,7 +33411,7 @@
         },
         "englishLanguageShowChoices": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "englishLanguageSetSkin",
+          "next": "englishLanguageButtonCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -33151,7 +33428,7 @@
         "englishLanguageSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "englishLanguageShow",
-          "parent": "englishLanguageShowChoices",
+          "parent": "englishLanguageButtonCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33286,6 +33563,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "englishLanguageButtonCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "englishLanguageShowChoices",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "englishLanguageButtonCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "englishLanguageSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageButtonCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "englishLanguageButtonCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "englishLanguageButtonCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "englishLanguageButtonCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "englishLanguageButtonCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -33352,7 +33675,7 @@
         },
         "titleHeadingShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleHeadingSetSkin",
+          "next": "titleHeadingCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -33369,7 +33692,7 @@
         "titleHeadingSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleHeadingShow",
-          "parent": "titleHeadingShowTitle",
+          "parent": "titleHeadingCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33459,6 +33782,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleHeadingCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleHeadingShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleHeadingCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleHeadingSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleHeadingCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleHeadingCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleHeadingCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleHeadingCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -33525,7 +33894,7 @@
         },
         "titleVersionShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleVersionSetSkin",
+          "next": "titleVersionCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -33542,7 +33911,7 @@
         "titleVersionSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleVersionShow",
-          "parent": "titleVersionShowTitle",
+          "parent": "titleVersionCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33632,6 +34001,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleVersionCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleVersionShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleVersionCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleVersionSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleVersionCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleVersionCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleVersionCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleVersionCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -33698,7 +34113,7 @@
         },
         "titleLicenseAppShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleLicenseAppSetSkin",
+          "next": "titleLicenseAppCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -33715,7 +34130,7 @@
         "titleLicenseAppSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleLicenseAppShow",
-          "parent": "titleLicenseAppShowTitle",
+          "parent": "titleLicenseAppCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33805,6 +34220,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleLicenseAppCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleLicenseAppShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleLicenseAppCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleLicenseAppSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleLicenseAppCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleLicenseAppCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseAppCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleLicenseAppCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -33871,7 +34332,7 @@
         },
         "titleLicenseStoryShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleLicenseStorySetSkin",
+          "next": "titleLicenseStoryCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -33888,7 +34349,7 @@
         "titleLicenseStorySetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleLicenseStoryShow",
-          "parent": "titleLicenseStoryShowTitle",
+          "parent": "titleLicenseStoryCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -33978,6 +34439,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleLicenseStoryCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleLicenseStoryShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleLicenseStoryCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleLicenseStorySetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleLicenseStoryCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleLicenseStoryCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleLicenseStoryCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleLicenseStoryCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -34044,7 +34551,7 @@
         },
         "titleAuthorOrganizationShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleAuthorOrganizationSetSkin",
+          "next": "titleAuthorOrganizationCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -34061,7 +34568,7 @@
         "titleAuthorOrganizationSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleAuthorOrganizationShow",
-          "parent": "titleAuthorOrganizationShowTitle",
+          "parent": "titleAuthorOrganizationCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -34151,6 +34658,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleAuthorOrganizationCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleAuthorOrganizationShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleAuthorOrganizationCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleAuthorOrganizationSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleAuthorOrganizationCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleAuthorOrganizationCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorOrganizationCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleAuthorOrganizationCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -34217,7 +34770,7 @@
         },
         "titleAuthorNameShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "titleAuthorNameSetSkin",
+          "next": "titleAuthorNameCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -34234,7 +34787,7 @@
         "titleAuthorNameSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "titleAuthorNameShow",
-          "parent": "titleAuthorNameShowTitle",
+          "parent": "titleAuthorNameCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -34324,6 +34877,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "titleAuthorNameCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "titleAuthorNameShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "titleAuthorNameCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "titleAuthorNameSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "titleAuthorNameCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "titleAuthorNameCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleAuthorNameCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "titleAuthorNameCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -34390,7 +34989,7 @@
         },
         "officialWebsiteLabelShowTitle": {
           "opcode": "event_whenbroadcastreceived",
-          "next": "officialWebsiteLabelSetSkin",
+          "next": "officialWebsiteLabelCloneUiLegacyGuard",
           "parent": null,
           "inputs": {},
           "fields": {
@@ -34407,7 +35006,7 @@
         "officialWebsiteLabelSetSkin": {
           "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
           "next": "officialWebsiteLabelShow",
-          "parent": "officialWebsiteLabelShowTitle",
+          "parent": "officialWebsiteLabelCloneUiLegacyGuard",
           "inputs": {
             "NAME": [
               1,
@@ -34496,6 +35095,52 @@
           "fields": {},
           "shadow": false,
           "topLevel": false
+        },
+        "officialWebsiteLabelCloneUiLegacyGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "officialWebsiteLabelShowTitle",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "officialWebsiteLabelCloneUiFlagOff"
+            ],
+            "SUBSTACK": [
+              2,
+              "officialWebsiteLabelSetSkin"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelCloneUiFlagOff": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "officialWebsiteLabelCloneUiLegacyGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "officialWebsiteLabelCloneUiFlag"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteLabelCloneUiFlag": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "officialWebsiteLabelCloneUiFlagOff",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
@@ -34518,6 +35163,3257 @@
       "x": 13,
       "y": -16,
       "size": 60,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "UiItem",
+      "variables": {
+        "uiItemIsTemplate": [
+          "uiIsTemplate",
+          1
+        ],
+        "uiItemId": [
+          "uiId",
+          "_template_"
+        ],
+        "uiItemAsset": [
+          "uiAsset",
+          ""
+        ],
+        "uiItemAction": [
+          "uiAction",
+          ""
+        ],
+        "uiItemValue": [
+          "uiValue",
+          ""
+        ]
+      },
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "uiCreateItemDefinition": {
+          "opcode": "procedures_definition",
+          "next": "ui_data_setvariableto_1",
+          "parent": null,
+          "inputs": {
+            "custom_block": [
+              1,
+              "uiCreateItemPrototype"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 500,
+          "y": 700
+        },
+        "uiCreateItemPrototype": {
+          "opcode": "procedures_prototype",
+          "next": null,
+          "parent": "uiCreateItemDefinition",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              "uiCreateItemArgument1"
+            ],
+            "uiAssetArg": [
+              1,
+              "uiCreateItemArgument2"
+            ],
+            "uiActionArg": [
+              1,
+              "uiCreateItemArgument3"
+            ],
+            "uiValueArg": [
+              1,
+              "uiCreateItemArgument4"
+            ],
+            "uiXArg": [
+              1,
+              "uiCreateItemArgument5"
+            ],
+            "uiYArg": [
+              1,
+              "uiCreateItemArgument6"
+            ],
+            "uiSizeArg": [
+              1,
+              "uiCreateItemArgument7"
+            ]
+          },
+          "fields": {},
+          "shadow": true,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "argumentnames": "[\"id\",\"asset\",\"action\",\"value\",\"x\",\"y\",\"size\"]",
+            "argumentdefaults": "[\"\",\"\",\"\",\"\",\"0\",\"0\",\"100\"]",
+            "warp": "true"
+          }
+        },
+        "uiCreateItemArgument1": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "id",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument2": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "asset",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument3": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument4": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument5": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "x",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument6": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "y",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "uiCreateItemArgument7": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "uiCreateItemPrototype",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "size",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_1": {
+          "opcode": "data_setvariableto",
+          "next": "ui_data_setvariableto_2",
+          "parent": "uiCreateItemDefinition",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_2": {
+          "opcode": "data_setvariableto",
+          "next": "ui_data_setvariableto_4",
+          "parent": "ui_data_setvariableto_1",
+          "inputs": {
+            "VALUE": [
+              3,
+              "ui_argument_reporter_string_number_3",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiId",
+              "uiItemId"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_3": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_data_setvariableto_2",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "id",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_4": {
+          "opcode": "data_setvariableto",
+          "next": "ui_data_setvariableto_6",
+          "parent": "ui_data_setvariableto_2",
+          "inputs": {
+            "VALUE": [
+              3,
+              "ui_argument_reporter_string_number_5",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiAsset",
+              "uiItemAsset"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_5": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_data_setvariableto_4",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "asset",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_6": {
+          "opcode": "data_setvariableto",
+          "next": "ui_data_setvariableto_8",
+          "parent": "ui_data_setvariableto_4",
+          "inputs": {
+            "VALUE": [
+              3,
+              "ui_argument_reporter_string_number_7",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiAction",
+              "uiItemAction"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_7": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_data_setvariableto_6",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_8": {
+          "opcode": "data_setvariableto",
+          "next": "ui_motion_gotoxy_10",
+          "parent": "ui_data_setvariableto_6",
+          "inputs": {
+            "VALUE": [
+              3,
+              "ui_argument_reporter_string_number_9",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiValue",
+              "uiItemValue"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_9": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_data_setvariableto_8",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_motion_gotoxy_10": {
+          "opcode": "motion_gotoxy",
+          "next": "ui_looks_setsizeto_13",
+          "parent": "ui_data_setvariableto_8",
+          "inputs": {
+            "X": [
+              3,
+              "ui_argument_reporter_string_number_11",
+              [
+                4,
+                "0"
+              ]
+            ],
+            "Y": [
+              3,
+              "ui_argument_reporter_string_number_12",
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_11": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_motion_gotoxy_10",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "x",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_12": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_motion_gotoxy_10",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "y",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_looks_setsizeto_13": {
+          "opcode": "looks_setsizeto",
+          "next": "ui_control_create_clone_of_15",
+          "parent": "ui_motion_gotoxy_10",
+          "inputs": {
+            "SIZE": [
+              3,
+              "ui_argument_reporter_string_number_14",
+              [
+                4,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_argument_reporter_string_number_14": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "ui_looks_setsizeto_13",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "size",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_create_clone_of_15": {
+          "opcode": "control_create_clone_of",
+          "next": "ui_data_setvariableto_restore_template",
+          "parent": "ui_looks_setsizeto_13",
+          "inputs": {
+            "CLONE_OPTION": [
+              1,
+              "ui_control_create_clone_of_menu_16"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_restore_template": {
+          "opcode": "data_setvariableto",
+          "next": null,
+          "parent": "ui_control_create_clone_of_15",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                4,
+                "1"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_create_clone_of_menu_16": {
+          "opcode": "control_create_clone_of_menu",
+          "next": null,
+          "parent": "ui_control_create_clone_of_15",
+          "inputs": {},
+          "fields": {
+            "CLONE_OPTION": [
+              "_myself_",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "ui_event_whenbroadcastreceived_17": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_18",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showTitle",
+              "BRhWRQ@e}Fz5h^/o!V%x"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "ui_control_if_18": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_17",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_and_19"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_22"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_and_19": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "ui_control_if_18",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "ui_data_variable_20"
+            ],
+            "OPERAND2": [
+              2,
+              "ui_data_variable_21"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_20": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_19",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_21": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_19",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_22": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_procedures_call_23",
+          "parent": "ui_control_if_18",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "deleteUiClones",
+                "uiDeleteClonesMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_procedures_call_23": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_24",
+          "parent": "ui_event_broadcastandwait_22",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleHeading"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.title"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "62"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "140"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_24": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_25",
+          "parent": "ui_procedures_call_23",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleVersion"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "22"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "80"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_25": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_26",
+          "parent": "ui_procedures_call_24",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleLicenseApp"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.license.app"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-55"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "50"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_26": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_27",
+          "parent": "ui_procedures_call_25",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleLicenseStory"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.license.story"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-92"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "50"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_27": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_28",
+          "parent": "ui_procedures_call_26",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleAuthorOrganization"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.author.organization"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-135"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "50"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_28": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_29",
+          "parent": "ui_procedures_call_27",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "titleAuthorName"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.author.name"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-158"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "50"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_29": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_procedures_call_28",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "officialWebsiteLabel"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "about.officialWebsite.name"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "open-url"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                "{{ABOUT_OFFICIAL_WEBSITE_URL}}"
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "13"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-16"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "60"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_event_whenbroadcastreceived_31": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_32",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showLanguageMenu",
+              "showLanguageMenuMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 300
+        },
+        "ui_control_if_32": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_31",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_and_33"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_36"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_and_33": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "ui_control_if_32",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "ui_data_variable_34"
+            ],
+            "OPERAND2": [
+              2,
+              "ui_data_variable_35"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_34": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_33",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_35": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_33",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_36": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_procedures_call_37",
+          "parent": "ui_control_if_32",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "deleteUiClones",
+                "uiDeleteClonesMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_procedures_call_37": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_38",
+          "parent": "ui_event_broadcastandwait_36",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "japaneseLanguageButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "language.ja"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "set-language"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                "ja"
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "35"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "80"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_38": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_procedures_call_37",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "englishLanguageButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "language.en"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "set-language"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                "en"
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-35"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "80"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_event_whenbroadcastreceived_40": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_41",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "showMenu",
+              ":{;PJwcS%zS4ud[f.6}c"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 440
+        },
+        "ui_control_if_41": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_40",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_and_42"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_45"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_and_42": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "ui_control_if_41",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "ui_data_variable_43"
+            ],
+            "OPERAND2": [
+              2,
+              "ui_data_variable_44"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_43": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_42",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_44": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_42",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_45": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_localstorage_setProjectId_46",
+          "parent": "ui_control_if_41",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "deleteUiClones",
+                "uiDeleteClonesMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_localstorage_setProjectId_46": {
+          "opcode": "localstorage_setProjectId",
+          "next": "ui_procedures_call_47",
+          "parent": "ui_event_broadcastandwait_45",
+          "inputs": {
+            "ID": [
+              1,
+              [
+                10,
+                "kamishibai"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_procedures_call_47": {
+          "opcode": "procedures_call",
+          "next": "ui_control_if_48",
+          "parent": "ui_localstorage_setProjectId_46",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "openButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.open"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "open-file"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "15"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "76"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_control_if_48": {
+          "opcode": "control_if",
+          "next": "ui_procedures_call_54",
+          "parent": "ui_procedures_call_47",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_gt_49"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_procedures_call_52"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_gt_49": {
+          "opcode": "operator_gt",
+          "next": null,
+          "parent": "ui_control_if_48",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_operator_length_50",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_length_50": {
+          "opcode": "operator_length",
+          "next": null,
+          "parent": "ui_operator_gt_49",
+          "inputs": {
+            "STRING": [
+              3,
+              "ui_localstorage_get_51",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_localstorage_get_51": {
+          "opcode": "localstorage_get",
+          "next": null,
+          "parent": "ui_operator_length_50",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "script"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_procedures_call_52": {
+          "opcode": "procedures_call",
+          "next": "ui_procedures_call_53",
+          "parent": "ui_control_if_48",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "reloadButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.reload"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "reload"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "-0.6079408497789629"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-19.811043947124894"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "100"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_53": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_procedures_call_52",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "showTitleButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.about"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "show-title"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "2.0677075140657823"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-125.39406473774856"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "65"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_procedures_call_54": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "ui_control_if_48",
+          "inputs": {
+            "uiIdArg": [
+              1,
+              [
+                10,
+                "languageButton"
+              ]
+            ],
+            "uiAssetArg": [
+              1,
+              [
+                10,
+                "ui.language"
+              ]
+            ],
+            "uiActionArg": [
+              1,
+              [
+                10,
+                "show-language"
+              ]
+            ],
+            "uiValueArg": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ],
+            "uiXArg": [
+              1,
+              [
+                10,
+                "2"
+              ]
+            ],
+            "uiYArg": [
+              1,
+              [
+                10,
+                "-165"
+              ]
+            ],
+            "uiSizeArg": [
+              1,
+              [
+                10,
+                "65"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "create UI item %s asset %s action %s value %s x %s y %s size %s",
+            "argumentids": "[\"uiIdArg\",\"uiAssetArg\",\"uiActionArg\",\"uiValueArg\",\"uiXArg\",\"uiYArg\",\"uiSizeArg\"]",
+            "warp": "true"
+          }
+        },
+        "ui_event_whenflagclicked_56": {
+          "opcode": "event_whenflagclicked",
+          "next": "ui_looks_hide_57",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "ui_looks_hide_57": {
+          "opcode": "looks_hide",
+          "next": "ui_data_setvariableto_58",
+          "parent": "ui_event_whenflagclicked_56",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_setvariableto_58": {
+          "opcode": "data_setvariableto",
+          "next": null,
+          "parent": "ui_looks_hide_57",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                4,
+                "1"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_start_as_clone_59": {
+          "opcode": "control_start_as_clone",
+          "next": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 500,
+          "y": 40
+        },
+        "ui_kubohiroyaassetmanager_setThisSpriteSkin_60": {
+          "opcode": "kubohiroyaassetmanager_setThisSpriteSkin",
+          "next": "ui_looks_show_62",
+          "parent": "ui_control_start_as_clone_59",
+          "inputs": {
+            "NAME": [
+              3,
+              "ui_data_variable_61",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_61": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiAsset",
+              "uiItemAsset"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_looks_show_62": {
+          "opcode": "looks_show",
+          "next": "ui_control_wait_before_front",
+          "parent": "ui_kubohiroyaassetmanager_setThisSpriteSkin_60",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_wait_before_front": {
+          "opcode": "control_wait",
+          "next": "ui_looks_gotofrontback_63",
+          "parent": "ui_looks_show_62",
+          "inputs": {
+            "DURATION": [
+              1,
+              [
+                4,
+                "0"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_looks_gotofrontback_63": {
+          "opcode": "looks_gotofrontback",
+          "next": null,
+          "parent": "ui_control_wait_before_front",
+          "inputs": {},
+          "fields": {
+            "FRONT_BACK": [
+              "front",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_whenbroadcastreceived_64": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_65",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "hideMenu",
+              "Pups#}akMo#d~p`[HCXt"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 500,
+          "y": 180
+        },
+        "ui_control_if_65": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_64",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_not_66"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_control_delete_this_clone_68"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_not_66": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "ui_control_if_65",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "ui_data_variable_67"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_67": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_not_66",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_delete_this_clone_68": {
+          "opcode": "control_delete_this_clone",
+          "next": null,
+          "parent": "ui_control_if_65",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_whenbroadcastreceived_69": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_70",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "deleteUiClones",
+              "uiDeleteClonesMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 500,
+          "y": 320
+        },
+        "ui_control_if_70": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_69",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_not_71"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_control_delete_this_clone_73"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_not_71": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "ui_control_if_70",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "ui_data_variable_72"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_72": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_not_71",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_delete_this_clone_73": {
+          "opcode": "control_delete_this_clone",
+          "next": null,
+          "parent": "ui_control_if_70",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_whenbroadcastreceived_74": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_75",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "startStory",
+              "6Pyo=N[k$}0.Pxna2e6)"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 500,
+          "y": 460
+        },
+        "ui_control_if_75": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_74",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_not_76"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_control_delete_this_clone_78"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_not_76": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "ui_control_if_75",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "ui_data_variable_77"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_77": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_not_76",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_delete_this_clone_78": {
+          "opcode": "control_delete_this_clone",
+          "next": null,
+          "parent": "ui_control_if_75",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_whenthisspriteclicked_79": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "ui_control_if_80",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 900,
+          "y": 40
+        },
+        "ui_control_if_80": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenthisspriteclicked_79",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_and_81"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_lmsTempVars2_setRuntimeVariable_85"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_and_81": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "ui_control_if_80",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "ui_data_variable_82"
+            ],
+            "OPERAND2": [
+              2,
+              "ui_operator_not_83"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_82": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_81",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_not_83": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "ui_operator_and_81",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "ui_data_variable_84"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_84": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_not_83",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_85": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_lmsTempVars2_setRuntimeVariable_87",
+          "parent": "ui_control_if_80",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ],
+            "STRING": [
+              3,
+              "ui_data_variable_86",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_86": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_85",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiAction",
+              "uiItemAction"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_87": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_event_broadcast_89",
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_85",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemValue"
+              ]
+            ],
+            "STRING": [
+              3,
+              "ui_data_variable_88",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_88": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_87",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiValue",
+              "uiItemValue"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_89": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_87",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "runUiItemAction",
+                "uiItemActionMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_90": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_lmsTempVars2_setRuntimeVariable_91",
+          "parent": "ui_control_if_95",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_91": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_event_broadcast_94",
+          "parent": "ui_event_broadcastandwait_90",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "script"
+              ]
+            ],
+            "STRING": [
+              3,
+              "ui_files_showPickerExtensionsAs_92",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_files_showPickerExtensionsAs_92": {
+          "opcode": "files_showPickerExtensionsAs",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_91",
+          "inputs": {
+            "extension": [
+              1,
+              [
+                10,
+                "txt"
+              ]
+            ],
+            "as": [
+              1,
+              "ui_files_menu_encoding_93"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_files_menu_encoding_93": {
+          "opcode": "files_menu_encoding",
+          "next": null,
+          "parent": "ui_files_showPickerExtensionsAs_92",
+          "inputs": {},
+          "fields": {
+            "encoding": [
+              "text",
+              null
+            ]
+          },
+          "shadow": true,
+          "topLevel": false
+        },
+        "ui_event_broadcast_94": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_91",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "startStory",
+                "6Pyo=N[k$}0.Pxna2e6)"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_95": {
+          "opcode": "control_if",
+          "next": "ui_control_if_102",
+          "parent": "ui_control_if_136",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_96"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_90"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_96": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_95",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_97",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "open-file"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_97": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_96",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_98": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_lmsTempVars2_setRuntimeVariable_99",
+          "parent": "ui_control_if_102",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_99": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_event_broadcast_101",
+          "parent": "ui_event_broadcastandwait_98",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "script"
+              ]
+            ],
+            "STRING": [
+              3,
+              "ui_localstorage_get_100",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_localstorage_get_100": {
+          "opcode": "localstorage_get",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_99",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "script"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_101": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_99",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "startStory",
+                "6Pyo=N[k$}0.Pxna2e6)"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_102": {
+          "opcode": "control_if",
+          "next": "ui_control_if_108",
+          "parent": "ui_control_if_95",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_103"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_98"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_103": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_102",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_104",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "reload"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_104": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_103",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_105": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_event_broadcastandwait_106",
+          "parent": "ui_control_if_108",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skipMode"
+              ]
+            ],
+            "STRING": [
+              1,
+              [
+                10,
+                "title"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_106": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_event_broadcast_107",
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_105",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_107": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_event_broadcastandwait_106",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showTitle",
+                "BRhWRQ@e}Fz5h^/o!V%x"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_108": {
+          "opcode": "control_if",
+          "next": "ui_control_if_113",
+          "parent": "ui_control_if_102",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_109"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_lmsTempVars2_setRuntimeVariable_105"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_109": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_108",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_110",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "show-title"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_110": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_109",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_111": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_event_broadcast_112",
+          "parent": "ui_control_if_113",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_112": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_event_broadcastandwait_111",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showLanguageMenu",
+                "showLanguageMenuMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_113": {
+          "opcode": "control_if",
+          "next": "ui_control_if_123",
+          "parent": "ui_control_if_108",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_114"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcastandwait_111"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_114": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_113",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_115",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "show-language"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_115": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_114",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_setRuntimeVariable_116": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": "ui_localstorage_set_118",
+          "parent": "ui_control_if_123",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "STRING": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_117",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_117": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_116",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemValue"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_localstorage_set_118": {
+          "opcode": "localstorage_set",
+          "next": "ui_event_broadcastandwait_120",
+          "parent": "ui_lmsTempVars2_setRuntimeVariable_116",
+          "inputs": {
+            "KEY": [
+              1,
+              [
+                10,
+                "uiLanguage"
+              ]
+            ],
+            "VALUE": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_119",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_119": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_localstorage_set_118",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemValue"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_120": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_event_broadcastandwait_121",
+          "parent": "ui_localstorage_set_118",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "languageChanged",
+                "languageChangedMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcastandwait_121": {
+          "opcode": "event_broadcastandwait",
+          "next": "ui_event_broadcast_122",
+          "parent": "ui_event_broadcastandwait_120",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "hideMenu",
+                "Pups#}akMo#d~p`[HCXt"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_122": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_event_broadcastandwait_121",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "showMenu",
+                ":{;PJwcS%zS4ud[f.6}c"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_123": {
+          "opcode": "control_if",
+          "next": "ui_control_if_127",
+          "parent": "ui_control_if_113",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_124"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_lmsTempVars2_setRuntimeVariable_116"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_124": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_123",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_125",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "set-language"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_125": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_124",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_broadcast_126": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "ui_control_if_127",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_127": {
+          "opcode": "control_if",
+          "next": "ui_control_if_132",
+          "parent": "ui_control_if_123",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_128"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_event_broadcast_126"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_128": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_127",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_129",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "close-title"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_129": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_128",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_kubohiroyaweblink_openUrl_130": {
+          "opcode": "kubohiroyaweblink_openUrl",
+          "next": null,
+          "parent": "ui_control_if_132",
+          "inputs": {
+            "URL": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_131",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_131": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_kubohiroyaweblink_openUrl_130",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemValue"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_control_if_132": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_control_if_127",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_equals_133"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_kubohiroyaweblink_openUrl_130"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_equals_133": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "ui_control_if_132",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "ui_lmsTempVars2_getRuntimeVariable_134",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "open-url"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_lmsTempVars2_getRuntimeVariable_134": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "ui_operator_equals_133",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "uiItemAction"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_event_whenbroadcastreceived_135": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "ui_control_if_136",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "runUiItemAction",
+              "uiItemActionMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 900,
+          "y": 180
+        },
+        "ui_control_if_136": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "ui_event_whenbroadcastreceived_135",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "ui_operator_and_137"
+            ],
+            "SUBSTACK": [
+              2,
+              "ui_control_if_95"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_operator_and_137": {
+          "opcode": "operator_and",
+          "next": null,
+          "parent": "ui_control_if_136",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "ui_data_variable_138"
+            ],
+            "OPERAND2": [
+              2,
+              "ui_data_variable_139"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_138": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_137",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "ui_data_variable_139": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "ui_operator_and_137",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "uiIsTemplate",
+              "uiItemIsTemplate"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "ui-placeholder",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "assetId": "b85391a10e36ffc5157fa1f4f2d419ce",
+          "md5ext": "b85391a10e36ffc5157fa1f4f2d419ce.svg",
+          "rotationCenterX": 5,
+          "rotationCenterY": 5
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 20,
+      "visible": false,
+      "x": 0,
+      "y": 0,
+      "size": 100,
       "direction": 90,
       "draggable": false,
       "rotationStyle": "all around"
@@ -34595,10 +38491,56 @@
         },
         "officialWebsiteTitleShow": {
           "opcode": "looks_show",
-          "next": null,
+          "next": "officialWebsiteSendBehindCloneLabel",
           "parent": "officialWebsiteSwitchRuntime",
           "inputs": {},
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteSendBehindCloneLabel": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "officialWebsiteTitleShow",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "officialWebsiteCloneUiEnabled"
+            ],
+            "SUBSTACK": [
+              2,
+              "officialWebsiteGoBehindCloneLabel"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteCloneUiEnabled": {
+          "opcode": "data_variable",
+          "next": null,
+          "parent": "officialWebsiteSendBehindCloneLabel",
+          "inputs": {},
+          "fields": {
+            "VARIABLE": [
+              "cloneUiItemsEnabled",
+              "cloneUiItemsEnabled"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteGoBehindCloneLabel": {
+          "opcode": "looks_gotofrontback",
+          "next": null,
+          "parent": "officialWebsiteSendBehindCloneLabel",
+          "inputs": {},
+          "fields": {
+            "FRONT_BACK": [
+              "back",
+              null
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
