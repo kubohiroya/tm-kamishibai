@@ -98,11 +98,11 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 
 | 項目                     | 件数 |
 | ------------------------ | ---: |
-| target（Stageを含む）    |   21 |
-| block                    | 1943 |
-| event hat                |  108 |
+| target（Stageを含む）    |    8 |
+| block                    | 1741 |
+| event hat                |   49 |
 | カスタムブロック定義     |   43 |
-| Scratch変数              |   14 |
+| Scratch変数              |   13 |
 | Scratch list             |   11 |
 | broadcast message        |   23 |
 | 静的なruntime variable名 |   21 |
@@ -153,45 +153,30 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 
 ### target一覧
 
-| target                    | 種別       | 役割                                                                | 初期costume／sound                                  |
-| ------------------------- | ---------- | ------------------------------------------------------------------- | --------------------------------------------------- |
-| `Stage`                   | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `TitleRuntime`, `Stars`, `LoadingBackdrop` |
-| `Actor`                   | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                                 |
-| `prompt`                  | UI sprite  | 操作案内とpose案内をAsset Managerで、詳細な台本エラーをSVGで表示    | `ui-placeholder`                                    |
-| `openButton`              | UI sprite  | 外部台本ファイルを選択して`startStory`へ渡す                        | `ui-placeholder`                                    |
-| `reloadButton`            | UI sprite  | 保存済みの直前の台本を再読込する                                    | `ui-placeholder`                                    |
-| `showTitleButton`         | UI sprite  | menuからtitleへ戻す                                                 | `ui-placeholder`                                    |
-| `languageButton`          | UI sprite  | menu末尾から言語選択画面を開く                                      | `ui-placeholder`                                    |
-| `japaneseLanguageButton`  | UI sprite  | UI言語を日本語に変更して保存                                        | `ui-placeholder`                                    |
-| `englishLanguageButton`   | UI sprite  | UI言語を英語に変更して保存                                          | `ui-placeholder`                                    |
-| `titleHeading`            | UI sprite  | `about.title`を実行時SVGテキストとして表示                          | `ui-placeholder`                                    |
-| `titleVersion`            | UI sprite  | versionとbuild dateを実行時SVGテキストとして表示                    | `ui-placeholder`                                    |
-| `titleLicenseApp`         | UI sprite  | `about.license.app`を実行時SVGテキストとして表示                    | `ui-placeholder`                                    |
-| `titleLicenseStory`       | UI sprite  | `about.license.story`を実行時SVGテキストとして表示                  | `ui-placeholder`                                    |
-| `titleAuthorOrganization` | UI sprite  | `about.author.organization`を実行時SVGテキストとして表示            | `ui-placeholder`                                    |
-| `titleAuthorName`         | UI sprite  | `about.author.name`とemailを実行時SVGテキストとして表示             | `ui-placeholder`                                    |
-| `officialWebsiteLabel`    | UI sprite  | 公式Webサイト名を実行時SVGテキストとして表示し、押下時に開く        | `ui-placeholder`                                    |
-| `UiItem`                  | UI雛形     | menu、言語選択、title用テキストを画面ごとのcloneとして生成・破棄    | `ui-placeholder`                                    |
-| `officialWebsiteButton`   | UI sprite  | titleの3行目から公式Webサイトを開く                                 | 初期表示用／実行時表示用の言語非依存costume         |
-| `closeTitleButton`        | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                                |
-| `Loading`                 | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                                 |
-| `LoadingBubbleAnchor`     | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`                             |
+| target                  | 種別       | 役割                                                                | 初期costume／sound                                  |
+| ----------------------- | ---------- | ------------------------------------------------------------------- | --------------------------------------------------- |
+| `Stage`                 | Stage      | 初期化、台本解析、scene/action実行、カメラ、入力、遷移を統括        | `Title`, `TitleRuntime`, `Stars`, `LoadingBackdrop` |
+| `Actor`                 | sprite雛形 | 物語上の登場人物ごとにcloneされ、移動・見た目・音・時間actionを実行 | `button1`／音声なし                                 |
+| `prompt`                | UI sprite  | 操作案内とpose案内をAsset Managerで、詳細な台本エラーをSVGで表示    | `ui-placeholder`                                    |
+| `UiItem`                | UI雛形     | menu、言語選択、title用テキストを画面ごとのcloneとして生成・破棄    | `ui-placeholder`                                    |
+| `officialWebsiteButton` | UI sprite  | titleの3行目から公式Webサイトを開く                                 | 初期表示用／実行時表示用の言語非依存costume         |
+| `closeTitleButton`      | UI sprite  | title右上の閉じるボタンからStage clickと同じ遷移を実行する          | `title-close-button`                                |
+| `Loading`               | UI sprite  | Asset Managerの読込開始・進捗・完了に合わせてcostumeを表示          | `loading`／音声なし                                 |
+| `LoadingBubbleAnchor`   | UI sprite  | Loading進捗メッセージ用のspeech bubble位置を固定                    | `loading-bubble-anchor`                             |
 
-`Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、menu／言語選択sprite、
-title用テキストsprite、`Loading`、`LoadingBubbleAnchor`の実画像は、Asset Managerへ登録します。台本が定義する
+`Actor`の本体は非表示で、cloneだけを登場人物として表示します。`prompt`、`UiItem` clone、
+`Loading`、`LoadingBubbleAnchor`の実画像は、Asset Managerへ登録します。台本が定義する
 予約済みUIテキストは`ui.prompt`だけです。`ui.open`、`ui.reload`、`ui.about`、`ui.language`、
 `ui.invalidScript`はアプリの言語定義から設定します。
 
-既定OFFの`featureCloneUiItems`をgreen flag前に有効にすると、起動時に
-`cloneUiItemsEnabled`へ値を固定します。この経路では`UiItem`本体を非表示のcontroller兼雛形とし、
+`UiItem`本体を非表示のcontroller兼雛形とし、
 `showTitle`、`showMenu`、`showLanguageMenu`ごとに必要な項目だけをcloneとして作ります。画面遷移時は
-cloneを非表示のまま保持せず削除します。従来の個別UI spriteは同じフラグで表示処理全体を止めます。
+cloneを非表示のまま保持せず削除します。
 雛形は10×10の透明costumeを保持し、位置とsizeだけを設定してcloneします。2×2の透明costumeでは
 TurboWarpのsprite fencingにより50〜80%の指定が100%へ切り上げられるため、最小50%を保持できる寸法にしています。
 Asset Managerのruntime text skinはclone開始後にclone自身へ適用し、Animated Textのskinを雛形から複製しません。
 生成手続きはwarpで原子的に実行し、cloneへローカル値をコピーした直後に雛形の`uiIsTemplate`を数値`1`へ復元します。
 asset適用後に表示し、1 tick譲ってから最前面へ移動します。
-フラグOFFでは`UiItem`はcloneを作らず、従来spriteのblockをそのまま使用するため即時に切り戻せます。
 
 アプリUIの定義元は`scripts/sb3/app-shell-locales.mjs`です。ロケール別の`about.title`、
 `about.officialWebsite.name`、`about.license.app`、`about.license.story`、
@@ -300,7 +285,7 @@ Stage actionはStage内で実行されます。Actor actionでは、Stageが`act
 自分を対象とするものを実行することです。
 
 UI spriteは表示状態を`showMenu`／`hideMenu`、`showPrompt`／`hidePrompt`、
-Asset ManagerのLoading messageで受け取ります。clone UI経路では`UiItem`本体が画面単位の
+Asset ManagerのLoading messageで受け取ります。`UiItem`本体が画面単位の
 clone生成とaction実行を担い、clone自身は表示情報とclickしたactionだけを保持します。
 台本の実行状態をUI sprite側へ複製せず、Stageを状態の所有者とします。
 
@@ -311,29 +296,27 @@ runtime variableの3種類に分けます。
 
 ### Scratch変数
 
-| 所有者   | 変数                          | 初期値       | 役割                                       |
-| -------- | ----------------------------- | ------------ | ------------------------------------------ |
-| `Stage`  | `ポーズ認識`                  | `0`          | pose認識中の表示・互換用状態               |
-| `Stage`  | `チャージ`                    | `0`          | pose成立までのcharge表示・互換用状態       |
-| `Stage`  | `actionIndex`                 | `1`          | 現在処理する`actionList`の位置             |
-| `Stage`  | `poseIndex`                   | `1`          | 現在処理する`poseList`の位置               |
-| `Stage`  | `featureDetailedScriptErrors` | `false`      | DSL 3.1詳細診断preflightの既定OFFフラグ    |
-| `Stage`  | `featureCloneUiItems`         | `false`      | clone UI経路の既定OFFフラグ                |
-| `Stage`  | `cloneUiItemsEnabled`         | `false`      | green flag時に固定したclone UI経路の有効値 |
-| `Stage`  | `__tmpose_embedded_script`    | 空文字       | `player` profileの組み込み台本予約領域     |
-| `Actor`  | `actorName`                   | `_template_` | cloneが担当する台本上のactor名             |
-| `UiItem` | `uiIsTemplate`                | `true`       | 本体とcloneを区別する                      |
-| `UiItem` | `uiId`                        | `_template_` | UI項目の論理ID                             |
-| `UiItem` | `uiAsset`                     | 空文字       | Asset Managerへ渡すasset名                 |
-| `UiItem` | `uiAction`                    | 空文字       | click時にcontrollerへ渡すaction名          |
-| `UiItem` | `uiValue`                     | 空文字       | 言語値またはURLなどのaction引数            |
+| 所有者   | 変数                          | 初期値       | 役割                                    |
+| -------- | ----------------------------- | ------------ | --------------------------------------- |
+| `Stage`  | `ポーズ認識`                  | `0`          | pose認識中の表示・互換用状態            |
+| `Stage`  | `チャージ`                    | `0`          | pose成立までのcharge表示・互換用状態    |
+| `Stage`  | `actionIndex`                 | `1`          | 現在処理する`actionList`の位置          |
+| `Stage`  | `poseIndex`                   | `1`          | 現在処理する`poseList`の位置            |
+| `Stage`  | `featureDetailedScriptErrors` | `false`      | DSL 3.1詳細診断preflightの既定OFFフラグ |
+| `Stage`  | `cloneUiItemsEnabled`         | `true`       | clone UI lifecycle guard                |
+| `Stage`  | `__tmpose_embedded_script`    | 空文字       | `player` profileの組み込み台本予約領域  |
+| `Actor`  | `actorName`                   | `_template_` | cloneが担当する台本上のactor名          |
+| `UiItem` | `uiIsTemplate`                | `true`       | 本体とcloneを区別する                   |
+| `UiItem` | `uiId`                        | `_template_` | UI項目の論理ID                          |
+| `UiItem` | `uiAsset`                     | 空文字       | Asset Managerへ渡すasset名              |
+| `UiItem` | `uiAction`                    | 空文字       | click時にcontrollerへ渡すaction名       |
+| `UiItem` | `uiValue`                     | 空文字       | 言語値またはURLなどのaction引数         |
 
 `__tmpose_embedded_script`はStageに一つだけ存在し、monitorを持ちません。`generic`と
 `editor`では空、`player`ではbuilderが変換済み台本を設定します。
 `featureDetailedScriptErrors`は最初の`startStory`で一度だけ読み、次のgreen flagまで値を固定します。
 `false`では従来のScratch parserと`invalidScript`経路だけを使います。
-`featureCloneUiItems`はgreen flagの先頭で`cloneUiItemsEnabled`へコピーし、その実行中は後者だけを
-参照します。したがって、実行途中で元フラグを変更してもUI実装経路は切り替わりません。
+`cloneUiItemsEnabled`はclone UIの内部guardで、汎用SB3では`true`のまま使用します。
 
 ### Scratch list
 
@@ -453,64 +436,33 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 #### UI sprite
 
-| target                    | ID                                                                                                                                                                        | trigger                               | 実行される内容                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `prompt`                  | `oS`                                                                                                                                                                      | `showPrompt`受信                      | 案内costumeを表示                                     |
-| `prompt`                  | `oV`                                                                                                                                                                      | `hidePrompt`受信                      | 非表示                                                |
-| `prompt`                  | `oX`                                                                                                                                                                      | `invalidScript`受信                   | エラーcostumeを表示                                   |
-| `openButton`              | `o!`                                                                                                                                                                      | green flag                            | 非表示                                                |
-| `openButton`              | `o%`                                                                                                                                                                      | sprite click                          | file選択後に`hideMenu`, `startStory`送信              |
-| `openButton`              | `o*`                                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
-| `openButton`              | `o,`                                                                                                                                                                      | `showMenu`受信                        | `ui.open` skinで表示                                  |
-| `reloadButton`            | `o.`                                                                                                                                                                      | green flag                            | 非表示                                                |
-| `reloadButton`            | `o:`                                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
-| `reloadButton`            | `o=`                                                                                                                                                                      | sprite click                          | 保存済み台本で`hideMenu`, `startStory`送信            |
-| `reloadButton`            | `o[`                                                                                                                                                                      | `showMenu`受信                        | 台本が保存済みなら表示                                |
-| `showTitleButton`         | <code>o&#96;</code>                                                                                                                                                       | green flag                            | 非表示                                                |
-| `showTitleButton`         | <code>o&#124;</code>                                                                                                                                                      | `hideMenu`受信                        | 非表示                                                |
-| `showTitleButton`         | `o~`                                                                                                                                                                      | sprite click                          | `hideMenu`, `showTitle`送信                           |
-| `showTitleButton`         | `pb`                                                                                                                                                                      | `showMenu`受信                        | title以外なら表示                                     |
-| `languageButton`          | `languageButtonFlag`                                                                                                                                                      | green flag                            | 非表示                                                |
-| `languageButton`          | `languageButtonHideMenu`                                                                                                                                                  | `hideMenu`受信                        | 非表示                                                |
-| `languageButton`          | `languageButtonShowMenu`                                                                                                                                                  | `showMenu`受信                        | `ui.language` skinで表示                              |
-| `languageButton`          | `languageButtonClick`                                                                                                                                                     | sprite click                          | `hideMenu`後に`showLanguageMenu`送信                  |
-| `japaneseLanguageButton`  | `japaneseLanguageFlag`                                                                                                                                                    | green flag                            | 非表示                                                |
-| `japaneseLanguageButton`  | `japaneseLanguageHideMenu`                                                                                                                                                | `hideMenu`受信                        | 非表示                                                |
-| `japaneseLanguageButton`  | `japaneseLanguageShowChoices`                                                                                                                                             | `showLanguageMenu`受信                | 現在値なら`✓ 日本語`、それ以外は`日本語`を表示        |
-| `japaneseLanguageButton`  | `japaneseLanguageClick`                                                                                                                                                   | sprite click                          | `uiLanguage=ja`を保存・適用しmenuへ戻る               |
-| `englishLanguageButton`   | `englishLanguageFlag`                                                                                                                                                     | green flag                            | 非表示                                                |
-| `englishLanguageButton`   | `englishLanguageHideMenu`                                                                                                                                                 | `hideMenu`受信                        | 非表示                                                |
-| `englishLanguageButton`   | `englishLanguageShowChoices`                                                                                                                                              | `showLanguageMenu`受信                | 現在値なら`✓ English`、それ以外は`English`を表示      |
-| `englishLanguageButton`   | `englishLanguageClick`                                                                                                                                                    | sprite click                          | `uiLanguage=en`を保存・適用しmenuへ戻る               |
-| `titleHeading`            | `titleHeadingFlag`, `titleHeadingClick`, `titleHeadingShowTitle`, `titleHeadingHideMenu`, `titleHeadingStartStory`                                                        | green flag／click／title・menu・story | `about.title`を表示し、clickでは`closeTitle`送信      |
-| `titleVersion`            | `titleVersionFlag`, `titleVersionClick`, `titleVersionShowTitle`, `titleVersionHideMenu`, `titleVersionStartStory`                                                        | green flag／click／title・menu・story | `about.version`を表示し、clickでは`closeTitle`送信    |
-| `titleLicenseApp`         | `titleLicenseAppFlag`, `titleLicenseAppClick`, `titleLicenseAppShowTitle`, `titleLicenseAppHideMenu`, `titleLicenseAppStartStory`                                         | green flag／click／title・menu・story | アプリライセンスを表示し、clickでは`closeTitle`送信   |
-| `titleLicenseStory`       | `titleLicenseStoryFlag`, `titleLicenseStoryClick`, `titleLicenseStoryShowTitle`, `titleLicenseStoryHideMenu`, `titleLicenseStoryStartStory`                               | green flag／click／title・menu・story | 台本ライセンス案内を表示し、clickでは`closeTitle`送信 |
-| `titleAuthorOrganization` | `titleAuthorOrganizationFlag`, `titleAuthorOrganizationClick`, `titleAuthorOrganizationShowTitle`, `titleAuthorOrganizationHideMenu`, `titleAuthorOrganizationStartStory` | green flag／click／title・menu・story | 開発者所属を表示し、clickでは`closeTitle`送信         |
-| `titleAuthorName`         | `titleAuthorNameFlag`, `titleAuthorNameClick`, `titleAuthorNameShowTitle`, `titleAuthorNameHideMenu`, `titleAuthorNameStartStory`                                         | green flag／click／title・menu・story | 開発者氏名・emailを表示し、clickでは`closeTitle`送信  |
-| `officialWebsiteLabel`    | `officialWebsiteLabelFlag`, `officialWebsiteLabelClick`, `officialWebsiteLabelShowTitle`, `officialWebsiteLabelHideMenu`, `officialWebsiteLabelStartStory`                | green flag／click／title・menu・story | 公式Webサイト名を表示し、clickではサイトを開く        |
-| `UiItem`                  | `ui_event_whenbroadcastreceived_17`, `ui_event_whenbroadcastreceived_31`, `ui_event_whenbroadcastreceived_40`                                                             | title／言語選択／menu表示             | 現在画面の既存cloneを削除し、必要なUI項目だけを生成   |
-| `UiItem`                  | `ui_event_whenflagclicked_56`, `ui_control_start_as_clone_59`                                                                                                             | green flag／clone開始                 | clone自身へassetを適用して最前面表示                  |
-| `UiItem`                  | `ui_event_whenbroadcastreceived_64`, `ui_event_whenbroadcastreceived_69`, `ui_event_whenbroadcastreceived_74`                                                             | menu非表示／明示削除／story開始       | 不要になったUI cloneを削除                            |
-| `UiItem`                  | `ui_event_whenthisspriteclicked_79`, `ui_event_whenbroadcastreceived_135`                                                                                                 | clone click／action relay受信         | action envelopeを本体へ渡し、本体側で画面遷移を実行   |
-| `officialWebsiteButton`   | `officialWebsiteFlag`                                                                                                                                                     | green flag                            | 初期化前用の英語フォールバックを表示                  |
-| `officialWebsiteButton`   | `officialWebsiteClick`                                                                                                                                                    | sprite click                          | 公式Webサイトを新しいタブで開く                       |
-| `officialWebsiteButton`   | `officialWebsiteShowTitle`                                                                                                                                                | `showTitle`受信                       | 文字なしの実行時costumeへ切り替えて表示               |
-| `officialWebsiteButton`   | `officialWebsiteHideMenu`                                                                                                                                                 | `showMenu`受信                        | 非表示                                                |
-| `officialWebsiteButton`   | `officialWebsiteStartStory`                                                                                                                                               | `startStory`受信                      | 非表示                                                |
-| `closeTitleButton`        | `closeTitleFlag`                                                                                                                                                          | green flag                            | 右上に表示                                            |
-| `closeTitleButton`        | `closeTitleClick`                                                                                                                                                         | sprite click                          | `closeTitle`送信                                      |
-| `closeTitleButton`        | `closeTitleShowTitle`                                                                                                                                                     | `showTitle`受信                       | 表示                                                  |
-| `closeTitleButton`        | `closeTitleHideMenu`                                                                                                                                                      | `showMenu`受信                        | 非表示                                                |
-| `closeTitleButton`        | `closeTitleStartStory`                                                                                                                                                    | `startStory`受信                      | 非表示                                                |
-| `Loading`                 | `pf`                                                                                                                                                                      | green flag                            | 非表示                                                |
-| `Loading`                 | `pm`                                                                                                                                                                      | `assetLoadingStarted`受信             | Loading costumeを表示                                 |
-| `Loading`                 | `pj`                                                                                                                                                                      | `assetLoadingProgress`受信            | costumeを循環                                         |
-| `Loading`                 | `ph`                                                                                                                                                                      | `assetLoadingCompleted`受信           | 非表示、完了sound                                     |
-| `LoadingBubbleAnchor`     | `loadingBubbleFlag`                                                                                                                                                       | green flag                            | 非表示、bubbleをclear                                 |
-| `LoadingBubbleAnchor`     | `loadingBubbleStarted`                                                                                                                                                    | `assetLoadingStarted`受信             | anchorを表示                                          |
-| `LoadingBubbleAnchor`     | `loadingBubbleProgress`                                                                                                                                                   | `assetLoadingProgress`受信            | runtime variable `message`をsay                       |
-| `LoadingBubbleAnchor`     | `loadingBubbleCompleted`                                                                                                                                                  | `assetLoadingCompleted`受信           | bubbleをclearして非表示                               |
+| target                  | ID                                                                                                            | trigger                         | 実行される内容                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------- |
+| `prompt`                | `oS`                                                                                                          | `showPrompt`受信                | 案内costumeを表示                                   |
+| `prompt`                | `oV`                                                                                                          | `hidePrompt`受信                | 非表示                                              |
+| `prompt`                | `oX`                                                                                                          | `invalidScript`受信             | エラーcostumeを表示                                 |
+| `UiItem`                | `ui_event_whenbroadcastreceived_17`, `ui_event_whenbroadcastreceived_31`, `ui_event_whenbroadcastreceived_40` | title／言語選択／menu表示       | 現在画面の既存cloneを削除し、必要なUI項目だけを生成 |
+| `UiItem`                | `ui_event_whenflagclicked_56`, `ui_control_start_as_clone_59`                                                 | green flag／clone開始           | clone自身へassetを適用して最前面表示                |
+| `UiItem`                | `ui_event_whenbroadcastreceived_64`, `ui_event_whenbroadcastreceived_69`, `ui_event_whenbroadcastreceived_74` | menu非表示／明示削除／story開始 | 不要になったUI cloneを削除                          |
+| `UiItem`                | `ui_event_whenthisspriteclicked_79`, `ui_event_whenbroadcastreceived_135`                                     | clone click／action relay受信   | action envelopeを本体へ渡し、本体側で画面遷移を実行 |
+| `officialWebsiteButton` | `officialWebsiteFlag`                                                                                         | green flag                      | 初期化前用の英語フォールバックを表示                |
+| `officialWebsiteButton` | `officialWebsiteClick`                                                                                        | sprite click                    | 公式Webサイトを新しいタブで開く                     |
+| `officialWebsiteButton` | `officialWebsiteShowTitle`                                                                                    | `showTitle`受信                 | 文字なしの実行時costumeへ切り替えて表示             |
+| `officialWebsiteButton` | `officialWebsiteHideMenu`                                                                                     | `showMenu`受信                  | 非表示                                              |
+| `officialWebsiteButton` | `officialWebsiteStartStory`                                                                                   | `startStory`受信                | 非表示                                              |
+| `closeTitleButton`      | `closeTitleFlag`                                                                                              | green flag                      | 右上に表示                                          |
+| `closeTitleButton`      | `closeTitleClick`                                                                                             | sprite click                    | `closeTitle`送信                                    |
+| `closeTitleButton`      | `closeTitleShowTitle`                                                                                         | `showTitle`受信                 | 表示                                                |
+| `closeTitleButton`      | `closeTitleHideMenu`                                                                                          | `showMenu`受信                  | 非表示                                              |
+| `closeTitleButton`      | `closeTitleStartStory`                                                                                        | `startStory`受信                | 非表示                                              |
+| `Loading`               | `pf`                                                                                                          | green flag                      | 非表示                                              |
+| `Loading`               | `pm`                                                                                                          | `assetLoadingStarted`受信       | Loading costumeを表示                               |
+| `Loading`               | `pj`                                                                                                          | `assetLoadingProgress`受信      | costumeを循環                                       |
+| `Loading`               | `ph`                                                                                                          | `assetLoadingCompleted`受信     | 非表示、完了sound                                   |
+| `LoadingBubbleAnchor`   | `loadingBubbleFlag`                                                                                           | green flag                      | 非表示、bubbleをclear                               |
+| `LoadingBubbleAnchor`   | `loadingBubbleStarted`                                                                                        | `assetLoadingStarted`受信       | anchorを表示                                        |
+| `LoadingBubbleAnchor`   | `loadingBubbleProgress`                                                                                       | `assetLoadingProgress`受信      | runtime variable `message`をsay                     |
+| `LoadingBubbleAnchor`   | `loadingBubbleCompleted`                                                                                      | `assetLoadingCompleted`受信     | bubbleをclearして非表示                             |
 
 ### カスタムブロック定義一覧
 
@@ -599,31 +551,31 @@ blockが再生成されるとIDは変わります。したがって、IDは外�
 
 ### message一覧
 
-| message                  | 主な送信者                               | 受信者                            | 役割                                        |
-| ------------------------ | ---------------------------------------- | --------------------------------- | ------------------------------------------- |
-| `showPrompt`             | `Stage`                                  | `prompt`                          | 操作・pose案内を表示                        |
-| `hidePrompt`             | `Stage`                                  | `prompt`                          | 案内を非表示                                |
-| `invalidScript`          | `Stage`                                  | `prompt`                          | 台本エラーを表示                            |
-| `hideMenu`               | menu／言語選択button、`UiItem`本体       | 従来UI sprite、`UiItem` clone     | 従来UIを隠し、UI cloneを削除                |
-| `showMenu`               | `Stage`、言語選択button、`UiItem`本体    | 従来UI sprite、`UiItem`本体       | 利用可能なmenu項目を表示                    |
-| `showLanguageMenu`       | `languageButton`、`UiItem`本体           | 2つの言語選択button、`UiItem`本体 | `日本語`と`English`の選択肢を表示           |
-| `languageChanged`        | `Stage`、言語選択button、`UiItem`本体    | `Stage`                           | app shellの予約済みテキストを選択言語へ更新 |
-| `startStory`             | `Stage`、menu button、`UiItem`本体       | `Stage`、Title用UI、`UiItem`      | 台本の解析・実行を開始しUI cloneを削除      |
-| `stopStory`              | `Stage`                                  | `Stage`                           | 実行を停止しcoverへ戻す                     |
-| `showCover`              | `Stage`                                  | `Stage`                           | coverを構築してmenuを表示                   |
-| `showTitle`              | `Stage`、`showTitleButton`、`UiItem`本体 | `Stage`、Title用UI、`UiItem`本体  | title状態へ戻しTitle用UIを表示する          |
-| `closeTitle`             | `Stage`、Title用UI、`UiItem`本体         | `Stage`                           | Stage clickと閉じるUIの遷移を共通化する     |
-| `deleteUiClones`         | `UiItem`本体                             | `UiItem` clone                    | 次画面の生成前に既存UI cloneを全削除        |
-| `runUiItemAction`        | `UiItem` clone                           | `UiItem`本体                      | clickされたaction/valueを本体で実行         |
-| `execActorAction`        | `Stage`                                  | `Actor`                           | action envelopeをcloneへ通知                |
-| `deleteAllActors`        | `Stage`                                  | `Actor`                           | 全cloneを削除                               |
-| `assetLoadingStarted`    | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | Loading表示を開始                           |
-| `assetLoadingProgress`   | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | 進捗costumeとmessageを更新                  |
-| `assetLoadingCompleted`  | `Stage`／Asset Manager                   | `Loading`, `LoadingBubbleAnchor`  | Loading表示を終了                           |
-| `stopKeyInput`           | Async Input                              | `Stage`                           | key listenerを停止                          |
-| `stopTouchInput`         | Async Input                              | `Stage`                           | touch listenerを停止                        |
-| `finishTimedActorAction` | `Stage`のRight／Down key hat             | `Actor`                           | 時間actionを確定状態へ進める                |
-| `debugTestCamera`        | TurboWarp editorからの手動送信           | `Stage`                           | camera previewの診断                        |
+| message                  | 主な送信者                     | 受信者                           | 役割                                        |
+| ------------------------ | ------------------------------ | -------------------------------- | ------------------------------------------- |
+| `showPrompt`             | `Stage`                        | `prompt`                         | 操作・pose案内を表示                        |
+| `hidePrompt`             | `Stage`                        | `prompt`                         | 案内を非表示                                |
+| `invalidScript`          | `Stage`                        | `prompt`                         | 台本エラーを表示                            |
+| `hideMenu`               | `UiItem`本体                   | `UiItem` clone                   | UI cloneを削除                              |
+| `showMenu`               | `Stage`、`UiItem`本体          | `UiItem`本体                     | 利用可能なmenu項目を表示                    |
+| `showLanguageMenu`       | `UiItem`本体                   | `UiItem`本体                     | `日本語`と`English`の選択肢を表示           |
+| `languageChanged`        | `Stage`、`UiItem`本体          | `Stage`                          | app shellの予約済みテキストを選択言語へ更新 |
+| `startStory`             | `Stage`、`UiItem`本体          | `Stage`、`UiItem`                | 台本の解析・実行を開始しUI cloneを削除      |
+| `stopStory`              | `Stage`                        | `Stage`                          | 実行を停止しcoverへ戻す                     |
+| `showCover`              | `Stage`                        | `Stage`                          | coverを構築してmenuを表示                   |
+| `showTitle`              | `Stage`、`UiItem`本体          | `Stage`、`UiItem`本体            | title状態へ戻しTitle用UIを表示する          |
+| `closeTitle`             | `Stage`、`UiItem`本体          | `Stage`                          | Stage clickと閉じるUIの遷移を共通化する     |
+| `deleteUiClones`         | `UiItem`本体                   | `UiItem` clone                   | 次画面の生成前に既存UI cloneを全削除        |
+| `runUiItemAction`        | `UiItem` clone                 | `UiItem`本体                     | clickされたaction/valueを本体で実行         |
+| `execActorAction`        | `Stage`                        | `Actor`                          | action envelopeをcloneへ通知                |
+| `deleteAllActors`        | `Stage`                        | `Actor`                          | 全cloneを削除                               |
+| `assetLoadingStarted`    | `Stage`／Asset Manager         | `Loading`, `LoadingBubbleAnchor` | Loading表示を開始                           |
+| `assetLoadingProgress`   | `Stage`／Asset Manager         | `Loading`, `LoadingBubbleAnchor` | 進捗costumeとmessageを更新                  |
+| `assetLoadingCompleted`  | `Stage`／Asset Manager         | `Loading`, `LoadingBubbleAnchor` | Loading表示を終了                           |
+| `stopKeyInput`           | Async Input                    | `Stage`                          | key listenerを停止                          |
+| `stopTouchInput`         | Async Input                    | `Stage`                          | touch listenerを停止                        |
+| `finishTimedActorAction` | `Stage`のRight／Down key hat   | `Actor`                          | 時間actionを確定状態へ進める                |
+| `debugTestCamera`        | TurboWarp editorからの手動送信 | `Stage`                          | camera previewの診断                        |
 
 `stopKeyInput`と`stopTouchInput`は標準broadcast blockではなく、Async Inputへ渡した
 callback messageです。`debugTestCamera`は通常フローに送信元を持たない診断用messageです。
