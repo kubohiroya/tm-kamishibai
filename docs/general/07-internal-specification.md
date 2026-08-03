@@ -99,7 +99,7 @@ DSLランタイムはbroadcastや共有変数でproject内のtargetを統括し�
 | 項目                     | 件数 |
 | ------------------------ | ---: |
 | target（Stageを含む）    |    8 |
-| block                    | 1732 |
+| block                    | 1744 |
 | event hat                |   49 |
 | カスタムブロック定義     |   43 |
 | Scratch変数              |   13 |
@@ -172,6 +172,16 @@ Stageに置かれたblock群が、台本の読込・解析、assetとactorの生
 `UiItem`本体を非表示のcontroller兼雛形とし、
 `showTitle`、`showMenu`、`showLanguageMenu`ごとに必要な項目だけをcloneとして作ります。画面遷移時は
 cloneを非表示のまま保持せず削除します。
+保存済み台本があるmenuでは、上段を`ファイルを開く`／`もう一度`、下段を
+`アプリ情報`／`言語`とする2列×2行の固定グリッドでcloneを配置します。
+各セルは、上側にローカルSVG costumeのアイコン、下側にruntime textのラベルを配置します。
+上段のラベルと下段のアイコンの中心間隔を90以上確保し、行間を明確に分けます。
+4つのメニューラベルには、既定の`Handwriting`ではなく細身の`Sans Serif`を指定します。
+左右で異なるラベル長と文字高を含む可視外接範囲がStage中央に来るよう、セル中心全体を
+幾何学的な中央から右へ17、下へ17移動し、四辺の余白を均等にします。
+アイコンは`ui.icon.open`、`ui.icon.reload`、`ui.icon.about`、`ui.icon.language`として
+Asset Managerへ登録し、対応するラベルと同じ`uiAction`を持つ独立した`UiItem` cloneにします。
+そのため、アイコンとラベルのどちらをクリックしても同じ画面操作を実行します。
 雛形は10×10の透明costumeを保持し、位置とsizeだけを設定してcloneします。2×2の透明costumeでは
 TurboWarpのsprite fencingにより50〜80%の指定が100%へ切り上げられるため、最小50%を保持できる寸法にしています。
 Asset Managerのruntime text skinはclone開始後にclone自身へ適用し、Animated Textのskinを雛形から複製しません。
