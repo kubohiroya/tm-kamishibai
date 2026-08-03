@@ -65,7 +65,41 @@ function headingsBetween(document, startHeading, endHeading) {
 
 async function reachTitle(harness) {
   harness.greenFlag();
-  await harness.runUntilAsync(() => harness.getRuntimeVariable('skipMode') === 'title');
+  await harness.runUntilAsync(
+    () =>
+      harness.getRuntimeVariable('skipMode') === 'title' && uiItemClonesById(harness).size === 7,
+  );
+}
+
+function uiItemClonesById(harness) {
+  return new Map(
+    harness
+      .getClones('UiItem')
+      .map((target) => [target.lookupVariableByNameAndType('uiId', '')?.value, target]),
+  );
+}
+
+function titleLayout(harness) {
+  const cloneLayout = Object.fromEntries(
+    [
+      'titleHeading',
+      'titleVersion',
+      'titleLicenseApp',
+      'titleLicenseStory',
+      'titleAuthorOrganization',
+      'titleAuthorName',
+      'officialWebsiteLabel',
+    ].map((name) => [name, targetLayout(uiItemClonesById(harness).get(name))]),
+  );
+  return {
+    ...cloneLayout,
+    officialWebsiteButton: targetLayout(harness.getSprite('officialWebsiteButton')),
+    closeTitleButton: targetLayout(harness.getSprite('closeTitleButton')),
+  };
+}
+
+function targetLayout(target) {
+  return {size: target.size, visible: target.visible, x: target.x, y: target.y};
 }
 
 async function runDetailedPreflight(harness, script) {
@@ -190,6 +224,8 @@ test('stops background work and clears the diagnostic presentation on project re
   context.after(() => harness.quit());
   harness.setStageVariable('featureDetailedScriptErrors', true);
   await reachTitle(harness);
+  const initialTitleLayout = titleLayout(harness);
+  const initialPromptLayout = targetLayout(harness.getSprite('prompt'));
 
   harness.extensionState.asyncInput.listenForKeyAndBroadcast(
     {KEY_ID: 'KeyA', MESSAGE: 'unused', RUNTIME_VAR: 'unused', VALUE: '1'},
@@ -203,12 +239,31 @@ test('stops background work and clears the diagnostic presentation on project re
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorLine'), 2);
   assert.equal(harness.getSprite('prompt').visible, true);
 
+  const unrelatedTarget = harness.getSprite('officialWebsiteButton');
+  const originalSetSize = unrelatedTarget.setSize.bind(unrelatedTarget);
+  const originalSetXY = unrelatedTarget.setXY.bind(unrelatedTarget);
+  let unrelatedLayoutWrites = 0;
+  unrelatedTarget.setSize = (...arguments_) => {
+    unrelatedLayoutWrites += 1;
+    return originalSetSize(...arguments_);
+  };
+  unrelatedTarget.setXY = (...arguments_) => {
+    unrelatedLayoutWrites += 1;
+    return originalSetXY(...arguments_);
+  };
+  harness.extensionState.kamishibaiRuntime.resetForProjectStart();
+  unrelatedTarget.setSize = originalSetSize;
+  unrelatedTarget.setXY = originalSetXY;
+  assert.equal(unrelatedLayoutWrites, 0);
+  assert.deepEqual(targetLayout(harness.getSprite('prompt')), initialPromptLayout);
+
   await reachTitle(harness);
   assert.equal(harness.extensionState.kamishibaiRuntime.getLastDiagnosticJson(), '');
   assert.equal(harness.hasRuntimeVariable('kamishibaiErrorCategory'), false);
   assert.equal(harness.hasRuntimeVariable('kamishibaiErrorLine'), false);
   assert.equal(harness.getSprite('prompt').visible, false);
   assert.equal(harness.getSprite('officialWebsiteButton').visible, true);
+  assert.deepEqual(titleLayout(harness), initialTitleLayout);
 
   await runDetailedPreflight(harness, 'kamishibai=2.0');
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorLine'), 1);

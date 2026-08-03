@@ -768,16 +768,16 @@
       }
     }
 
-    captureVisibility() {
+    captureVisibility(layoutTarget) {
       if (this.visibilitySnapshot) return;
       this.visibilitySnapshot = new Map();
       for (const target of this.runtime.targets) {
         if (target.isStage) continue;
         this.visibilitySnapshot.set(target, {
-          size: target.size,
           visible: target.visible,
-          x: target.x,
-          y: target.y,
+          ...(target === layoutTarget
+            ? {restoreLayout: true, size: target.size, x: target.x, y: target.y}
+            : {}),
         });
       }
     }
@@ -785,8 +785,10 @@
     restoreVisibility() {
       if (!this.visibilitySnapshot) return;
       for (const [target, snapshot] of this.visibilitySnapshot) {
-        target.setXY?.(snapshot.x, snapshot.y);
-        target.setSize?.(snapshot.size);
+        if (snapshot.restoreLayout) {
+          target.setXY?.(snapshot.x, snapshot.y);
+          target.setSize?.(snapshot.size);
+        }
         target.setVisible?.(snapshot.visible);
       }
       this.visibilitySnapshot = null;
@@ -856,7 +858,7 @@
         return;
       }
 
-      this.captureVisibility();
+      this.captureVisibility(prompt);
       this.promptTarget = prompt;
       for (const target of this.runtime.targets) {
         if (!target.isStage && target !== prompt) target.setVisible?.(false);
