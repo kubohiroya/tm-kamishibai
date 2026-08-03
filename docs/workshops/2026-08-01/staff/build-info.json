@@ -1,9 +1,0 @@
-{
-  "htmlAndPdfGenerator": "Vivliostyle CLI 11.1.0",
-  "publicationKind": "workshop-staff-documentation",
-  "rubyApplied": false,
-  "sourceDirectory": "workshops/2026-08-01",
-  "sourceFilename": "tmpose-kamishibai-staff-20260801.md",
-  "htmlFilename": "index.html",
-  "pdfFilename": "tmpose-kamishibai-staff-20260801.pdf"
-}

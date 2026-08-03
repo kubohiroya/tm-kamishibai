@@ -1,97 +1,213 @@
 <!doctype html>
 <html lang="ja">
-<head>
+  <head>
   <link rel="icon" type="image/png" sizes="256x256" href="favicon.png">
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居">
-  <title>TMPose紙芝居</title>
-  <link rel="stylesheet" href="site-shell.css">
-  <script type="module" src="site-shell.js"></script>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: system-ui, sans-serif;
-      --ink: #3f302b;
-      --muted: #756960;
-      --paper: #fffdf8;
-      --canvas: #fff8ee;
-      --accent: #963f2f;
-      --line: #dbc9bb;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--canvas); color: var(--ink); }
-    main { max-width: 1080px; margin: auto; padding: 48px 24px 72px; }
-    h1 { font-size: clamp(2rem, 6vw, 4rem); margin-bottom: .25rem; }
-    .lead { font-size: 1.35rem; margin-top: 0; }
-    .hero-image { display: block; width: 100%; height: auto; margin: 32px 0; border-radius: 18px; box-shadow: 0 16px 36px rgb(63 48 43 / 18%); }
-    section { margin-top: 40px; }
-    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-    .content-card { display: flex; min-height: 190px; flex-direction: column; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 5px 18px rgb(89 61 43 / 8%); color: var(--ink); text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
-    .content-card:hover { transform: translateY(-2px); box-shadow: 0 9px 24px rgb(89 61 43 / 14%); }
-    .content-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-    .card-heading { display: flex; align-items: center; gap: .7rem; margin: 0 0 .75rem; color: var(--accent); font-size: 1.25rem; }
-    .card-icon { font-size: 1.6rem; line-height: 1; }
-    .content-card p { margin: 0; line-height: 1.7; }
-    .card-destination { margin-top: auto; padding-top: 1rem; color: var(--muted); font-size: .92rem; font-weight: 700; }
-    @media (max-width: 680px) {
-      .cards { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-<a class="skip-link" href="#main-content">本文へ移動</a>
-<header class="site-header">
-  <div class="site-header__inner">
-    <a class="site-brand" href="https://kubohiroya.github.io/tmpose-kamishibai/">
-      <img class="site-brand__symbol" src="favicon.png" width="40" height="40" alt="">
-      <span>TMPose紙芝居</span>
-    </a>
-    <nav class="site-nav" aria-label="サイトナビゲーション">
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/" aria-current="page">トップ</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/docs/">ドキュメント</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプル</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/">ダウンロード</a>
-    </nav>
-    <a class="site-repository" href="https://github.com/kubohiroya/tmpose-kamishibai" target="_blank" rel="noopener" aria-label="tmpose-kamishibaiをGitHubで開く" title="tmpose-kamishibaiをGitHubで開く">
-      <svg class="site-repository__icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"/>
-      </svg>
-    </a>
-  </div>
-</header>
-<main id="main-content">
-  <h1>TMPose紙芝居</h1>
-  <p class="lead">ポーズで進めるAIインタラクティブ紙芝居</p>
-  <p>TurboWarpとTMPoseを利用し、参加者がカメラの前でポーズを取ることで物語を進める紙芝居システムです。</p>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居" />
+    <title>TMPose紙芝居</title>
+    <link rel="stylesheet" href="site-shell.css" />
+    <script type="module" src="site-shell.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+        --ink: #3f302b;
+        --muted: #756960;
+        --paper: #fffdf8;
+        --canvas: #fff8ee;
+        --accent: #963f2f;
+        --line: #dbc9bb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+      }
+      main {
+        max-width: 1080px;
+        margin: auto;
+        padding: 48px 24px 72px;
+      }
+      h1 {
+        font-size: clamp(2rem, 6vw, 4rem);
+        margin-bottom: 0.25rem;
+      }
+      .lead {
+        font-size: 1.35rem;
+        margin-top: 0;
+      }
+      .hero-image {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 32px 0;
+        border-radius: 18px;
+        box-shadow: 0 16px 36px rgb(63 48 43 / 18%);
+      }
+      section {
+        margin-top: 40px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .content-card {
+        display: flex;
+        min-height: 190px;
+        flex-direction: column;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+        box-shadow: 0 5px 18px rgb(89 61 43 / 8%);
+        color: var(--ink);
+        text-decoration: none;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+      .content-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 9px 24px rgb(89 61 43 / 14%);
+      }
+      .content-card:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+      .card-heading {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        margin: 0 0 0.75rem;
+        color: var(--accent);
+        font-size: 1.25rem;
+      }
+      .card-icon {
+        font-size: 1.6rem;
+        line-height: 1;
+      }
+      .content-card p {
+        margin: 0;
+        line-height: 1.7;
+      }
+      .card-destination {
+        margin-top: auto;
+        padding-top: 1rem;
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+      @media (max-width: 680px) {
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="https://kubohiroya.github.io/tmpose-kamishibai/">
+          <img class="site-brand__symbol" src="favicon.png" width="40" height="40" alt="" />
+          <span>TMPose紙芝居</span>
+        </a>
+        <nav class="site-nav" aria-label="サイトナビゲーション">
+          <a
+            class="site-nav__link"
+            href="https://kubohiroya.github.io/tmpose-kamishibai/"
+            aria-current="page"
+            >トップ</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+            >ドキュメント</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/"
+            >サンプル</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/"
+            >ダウンロード</a
+          >
+        </nav>
+        <a
+          class="site-repository"
+          href="https://github.com/kubohiroya/tmpose-kamishibai"
+          target="_blank"
+          rel="noopener"
+          aria-label="tmpose-kamishibaiをGitHubで開く"
+          title="tmpose-kamishibaiをGitHubで開く"
+        >
+          <svg class="site-repository__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"
+            />
+          </svg>
+        </a>
+      </div>
+    </header>
+    <main id="main-content">
+      <h1>TMPose紙芝居</h1>
+      <p class="lead">ポーズで進めるAIインタラクティブ紙芝居</p>
+      <p>
+        TurboWarpとTMPoseを利用し、参加者がカメラの前でポーズを取ることで物語を進める紙芝居システムです。
+      </p>
 
-  <img class="hero-image" src="images/image01.png" width="1999" height="1490" alt="カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めているアプリ画面">
+      <img
+        class="hero-image"
+        src="images/image01.png"
+        width="1999"
+        height="1490"
+        alt="カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めているアプリ画面"
+      />
 
-  <section aria-labelledby="site-contents">
-    <h2 id="site-contents">このサイトで提供するもの</h2>
-    <div class="cards">
-      <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/">
-        <h3 class="card-heading"><span class="card-icon" aria-hidden="true">▶️</span>Web版を開く</h3>
-        <p>PC・スマートフォンのブラウザで紙芝居アプリを起動します。カメラの前でポーズを取り、物語を進められます。</p>
-        <span class="card-destination">紙芝居アプリへ</span>
-      </a>
-      <a class="content-card" href="docs/">
-        <h3 class="card-heading"><span class="card-icon" aria-hidden="true">📕</span>ドキュメント</h3>
-        <p>操作説明、DSL作成マニュアル、コマンドリファレンス、体験会資料をHTML・PDFで読めます。</p>
-        <span class="card-destination">ドキュメント一覧へ</span>
-      </a>
-      <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">
-        <h3 class="card-heading"><span class="card-icon" aria-hidden="true">🎭</span>サンプル</h3>
-        <p>浦島太郎などの紙芝居DSLサンプルと、その画像・音声・SB3を利用できます。</p>
-        <span class="card-destination">サンプルサイトへ</span>
-      </a>
-      <a class="content-card" href="downloads/">
-        <h3 class="card-heading"><span class="card-icon" aria-hidden="true">📁</span>ダウンロード</h3>
-        <p>TurboWarpで編集・実行できるkamishibai 3.1.7のSB3ファイルをダウンロードできます。</p>
-        <span class="card-destination">配布ファイル一覧へ</span>
-      </a>
-    </div>
-  </section>
-</main>
-</body>
+      <section aria-labelledby="site-contents">
+        <h2 id="site-contents">このサイトで提供するもの</h2>
+        <div class="cards">
+          <a
+            class="content-card"
+            href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/"
+          >
+            <h3 class="card-heading">
+              <span class="card-icon" aria-hidden="true">▶️</span>Web版を開く
+            </h3>
+            <p>
+              PC・スマートフォンのブラウザで紙芝居アプリを起動します。カメラの前でポーズを取り、物語を進められます。
+            </p>
+            <span class="card-destination">紙芝居アプリへ</span>
+          </a>
+          <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/">
+            <h3 class="card-heading">
+              <span class="card-icon" aria-hidden="true">📕</span>ドキュメント
+            </h3>
+            <p>
+              操作説明、DSL作成マニュアル、コマンドリファレンス、体験会資料をHTML・PDFで読めます。
+            </p>
+            <span class="card-destination">ドキュメント一覧へ</span>
+          </a>
+          <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">
+            <h3 class="card-heading">
+              <span class="card-icon" aria-hidden="true">🎭</span>サンプル
+            </h3>
+            <p>浦島太郎などの紙芝居DSLサンプルと、その画像・音声・SB3を利用できます。</p>
+            <span class="card-destination">サンプルサイトへ</span>
+          </a>
+          <a class="content-card" href="downloads/">
+            <h3 class="card-heading">
+              <span class="card-icon" aria-hidden="true">📁</span>ダウンロード
+            </h3>
+            <p>
+              TurboWarpで編集・実行できるkamishibai
+              3.1.9のSB3ファイルをダウンロードできます。
+            </p>
+            <span class="card-destination">配布ファイル一覧へ</span>
+          </a>
+        </div>
+      </section>
+    </main>
+  </body>
 </html>
