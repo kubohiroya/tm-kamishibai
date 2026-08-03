@@ -610,6 +610,7 @@ TMPose紙芝居の開発から分離し、他のTurboWarp作品や開発環境�
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
 - [`05-command-reference.md`](05-command-reference.md): コマンドとアクションの仕様
 - [`07-internal-specification.md`](07-internal-specification.md): 汎用アプリSB3の内部構造、呼出し関係、状態遷移
-- [`08-extension-guide.md`](08-extension-guide.md): アプリ本体と依存機能拡張15個の図解、役割、利用箇所
+- [`08-extension-guide.md`](08-extension-guide.md): 依存機能拡張15個の一覧、図解、役割、利用箇所
+- [`09-application-materials-guide.md`](09-application-materials-guide.md): アプリ、浦島太郎、体験会教材、DSL 3.1、sb3-toolchainの8ページ概要
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口と主要コマンド

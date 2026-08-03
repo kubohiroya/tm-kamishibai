@@ -10,7 +10,12 @@ const audienceSections = [
   {
     id: 'general-documents',
     title: '一般向けドキュメント',
-    documents: ['01-executive-summary-adult', '02-executive-summary-kids', '03-user-guide'],
+    documents: [
+      '01-executive-summary-adult',
+      '02-executive-summary-kids',
+      '03-user-guide',
+      '09-application-materials-guide',
+    ],
   },
   {
     id: 'dsl-author-documents',
@@ -77,7 +82,7 @@ test('offers HTML, Vivliostyle Viewer, and PDF on every document card', () => {
     ([, actions]) => actions,
   );
 
-  assert.equal(actionGroups.length, 11);
+  assert.equal(actionGroups.length, 12);
   for (const actions of actionGroups) {
     assert.deepEqual(
       [...actions.matchAll(/<a\b[^>]*>([^<]+)<\/a>/gu)].map(([, label]) => label),

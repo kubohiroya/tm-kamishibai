@@ -50,16 +50,18 @@ test('documents every app extension in project order', () => {
   }
 });
 
-test('defines one overview and fifteen self-contained extension pages', () => {
+test('defines one extension index and fifteen self-contained extension pages', () => {
   const documentConfig = generalDocumentConfig.documents.find(
     ({sourceFilename}) => sourceFilename === '08-extension-guide.md',
   );
   assert.equal(documentConfig?.pdfIncludesGeneratedToc, false);
   assert.equal(documentConfig?.expectedPdfPageCount, 16);
   assert.match(guide, /^# TMPose紙芝居 機能拡張ガイド$/mu);
-  assert.match(guide, /<figure class="extension-overview-hero">/u);
-  assert.match(guide, /<img src="\.\.\/images\/image01\.png"/u);
-  assert.match(guide, /ポーズをとろう！/u);
+  assert.match(guide, /<nav class="extension-index-grid" aria-label="機能拡張一覧">/u);
+  assert.equal((guide.match(/<a href="#extension-[^"]+">/gu) ?? []).length, 15);
+  assert.doesNotMatch(guide, /extension-overview-hero/u);
+  assert.doesNotMatch(guide, /image01\.png/u);
+  assert.doesNotMatch(guide, /ポーズをとろう！/u);
   assert.match(guide, /全16ページ/u);
   assert.equal((guide.match(/<figure class="extension-flow">/gu) ?? []).length, 15);
   assert.equal((guide.match(/<div class="extension-columns">/gu) ?? []).length, 15);

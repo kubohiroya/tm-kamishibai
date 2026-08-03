@@ -40,7 +40,7 @@
     "sb3:extensions:sync": "sb3-toolchain extensions sync app",
     "sb3:extensions:update": "sb3-toolchain extensions update app",
     "lint": "eslint .",
-    "format": "prettier --check \"**/*.{js,mjs,cjs}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\" \"docs/{general/{06-developer-guide,07-internal-specification,08-extension-guide,LICENSE},workshops/LICENSE}.md\"",
+    "format": "prettier --check \"**/*.{js,mjs,cjs}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\" \"docs/{general/{06-developer-guide,07-internal-specification,08-extension-guide,09-application-materials-guide,LICENSE},workshops/LICENSE}.md\"",
     "typecheck": "tsc --project tsconfig.builder.json",
     "preview:docs": "vivliostyle preview --config docs/vivliostyle.general.config.mjs",
     "preview:staff": "vivliostyle preview --config docs/vivliostyle.staff.config.mjs",

@@ -59,10 +59,18 @@ export const generalDocumentConfig = {
       sourceFilename: '08-extension-guide.md',
       title: 'TMPose紙芝居 機能拡張ガイド',
       audience: 'アプリの依存機能を調査・変更する方',
-      description:
-        'アプリ本体と15個の依存機能拡張を、図解付き・1項目1ページの全16ページで紹介します。',
+      description: '15個の依存機能拡張を一覧と図解付き・1拡張1ページの全16ページで紹介します。',
       pdfIncludesGeneratedToc: false,
       expectedPdfPageCount: 16,
+    },
+    {
+      sourceFilename: '09-application-materials-guide.md',
+      title: 'TMPose紙芝居 アプリ・教材・ツールチェインガイド',
+      audience: 'アプリと教材の全体像を把握する方',
+      description:
+        'アプリ概要、浦島太郎、体験会教材、DSL 3.1、sb3-toolchainを図解付き・全8ページで紹介します。',
+      pdfIncludesGeneratedToc: false,
+      expectedPdfPageCount: 8,
     },
     {
       sourceFilename: 'history.md',

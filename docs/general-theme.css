@@ -152,38 +152,64 @@ body > section.level1:has(> .extension-overview-kicker) {
   letter-spacing: 0.04em;
 }
 
-.extension-overview-hero {
-  margin: 1.2rem 0;
-  break-inside: avoid;
-}
-
-.extension-overview-hero img {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-}
-
-.extension-overview-hero figcaption,
-.extension-flow figcaption {
+.extension-flow figcaption,
+.application-hero figcaption,
+.application-flow figcaption,
+.application-workshop-overview figcaption,
+.application-image-grid figcaption {
   margin-top: 0.38rem;
   color: var(--muted);
   font-size: 0.82rem;
   text-align: center;
 }
 
-.extension-overview-summary {
+.extension-index-grid {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
   margin: 1rem 0;
-  padding: 0.85rem 1rem;
-  border-left: 5px solid var(--accent);
+}
+
+.extension-index-grid a {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0.16rem;
+  min-width: 0;
+  padding: 0.6rem 0.68rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  break-inside: avoid;
+}
+
+.extension-index-grid a:hover {
   background: var(--accent-soft);
 }
 
-.extension-overview-summary p {
-  margin: 0;
+.extension-index-grid strong {
+  color: var(--accent);
+  font-size: 0.92rem;
+}
+
+.extension-index-grid code {
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+
+.extension-index-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.extension-overview-note {
+  margin: 0.75rem 0;
+  padding: 0.7rem 0.85rem;
+  border-left: 5px solid var(--accent);
+  background: var(--accent-soft);
 }
 
 .extension-overview-source {
@@ -312,8 +338,234 @@ h2.extension-sheet {
   break-inside: avoid;
 }
 
+body > section.level1:has(> .application-guide-kicker) {
+  page: application-guide;
+}
+
+.application-guide-kicker {
+  margin: -1.5rem 0 0.3rem;
+  color: var(--accent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.application-page-label {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body > section.level1 > section.level2:has(> h2.application-sheet) {
+  padding: 1.1rem 1.25rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: linear-gradient(180deg, var(--accent-soft) 0, var(--paper) 5.4rem);
+  break-before: page;
+  break-after: page;
+  break-inside: avoid;
+}
+
+h2.application-sheet {
+  margin: 0 0 0.5rem;
+  padding: 0 0 0.38rem;
+  font-size: 1.62rem;
+}
+
+.application-hero,
+.application-workshop-overview {
+  margin: 0.85rem auto;
+  break-inside: avoid;
+}
+
+.application-hero img,
+.application-workshop-overview img {
+  display: block;
+  max-width: 100%;
+  max-height: 29rem;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.application-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0.85rem 0;
+}
+
+.application-value-grid section {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--paper);
+  break-inside: avoid;
+}
+
+.application-value-grid strong,
+.application-subhead {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.application-value-grid span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.application-callout {
+  margin: 0.85rem 0;
+  padding: 0.66rem 0.8rem;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  break-inside: avoid;
+}
+
+.application-source {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  break-inside: avoid;
+}
+
+.application-flow {
+  margin: 0.9rem 0;
+  break-inside: avoid;
+}
+
+.application-flow > div,
+.application-storyline,
+.application-cycle {
+  display: flex;
+  min-height: 4.2rem;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.68rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--paper);
+}
+
+.application-flow span,
+.application-storyline span,
+.application-cycle span {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.35rem;
+  background: var(--accent-soft);
+  font-weight: 700;
+  text-align: center;
+}
+
+.application-flow b,
+.application-storyline b,
+.application-cycle b {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--accent);
+  font-size: 1.2rem;
+}
+
+.application-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0.9rem 0;
+}
+
+.application-columns section {
+  padding: 0.72rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--paper);
+  break-inside: avoid;
+}
+
+.application-columns :is(ul, ol, dl) {
+  margin: 0.35rem 0 0;
+}
+
+.application-columns :is(ul, ol) {
+  padding-left: 1.2rem;
+}
+
+.application-columns li {
+  margin: 0.18rem 0;
+}
+
+.application-columns dt {
+  margin-top: 0.28rem;
+  font-weight: 700;
+}
+
+.application-columns dd {
+  margin-left: 0;
+  color: var(--muted);
+}
+
+.application-columns pre,
+.application-code {
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.application-storyline,
+.application-cycle {
+  margin: 0.85rem 0;
+  min-height: 3.5rem;
+  break-inside: avoid;
+}
+
+.application-workshop-overview img {
+  max-height: 31rem;
+}
+
+.application-image-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.85rem 0;
+}
+
+.application-image-grid figure {
+  display: grid;
+  grid-template-rows: 12rem auto;
+  margin: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--paper);
+  break-inside: avoid;
+}
+
+.application-image-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 @media print {
   @page extension-guide {
+    size: A4;
+    margin: 14mm 15mm 16mm;
+  }
+
+  @page application-guide {
     size: A4;
     margin: 14mm 15mm 16mm;
   }
@@ -374,15 +626,32 @@ h2.extension-sheet {
     font-size: 9.5pt;
   }
 
-  .extension-overview-hero {
-    margin: 0.75rem auto;
-    width: 82%;
+  .extension-index-grid {
+    gap: 2.2mm;
+    margin: 3mm 0;
   }
 
-  .extension-overview-summary {
-    gap: 0.55rem;
-    margin: 0.7rem 0;
-    padding: 0.55rem 0.7rem;
+  .extension-index-grid a {
+    gap: 0.3mm;
+    min-height: 25mm;
+    padding: 2.2mm 2.4mm;
+  }
+
+  .extension-index-grid strong {
+    font-size: 9.2pt;
+  }
+
+  .extension-index-grid code {
+    font-size: 7pt;
+  }
+
+  .extension-index-grid span {
+    font-size: 7.5pt;
+  }
+
+  .extension-overview-note {
+    margin: 2.4mm 0;
+    padding: 2.2mm 2.8mm;
   }
 
   body > section.level1 > section.level2:has(> h2.extension-sheet) {
@@ -399,5 +668,138 @@ h2.extension-sheet {
 
   .extension-flow > div {
     min-height: 18mm;
+  }
+
+  body > section.level1:has(> .application-guide-kicker) {
+    font-size: 8.7pt;
+    line-height: 1.48;
+  }
+
+  body > section.level1:has(> .application-guide-kicker) > h1:first-child {
+    margin-bottom: 1.1rem;
+    padding: 0.8rem 0 0.65rem;
+    font-size: 19pt;
+  }
+
+  .application-guide-kicker {
+    margin: -0.6rem 0 0.15rem;
+    font-size: 9.3pt;
+  }
+
+  .application-page-label {
+    margin-bottom: 2mm;
+    font-size: 7pt;
+  }
+
+  body > section.level1 > section.level2:has(> h2.application-sheet) {
+    min-height: 255mm;
+    padding: 5mm 6mm;
+    border-radius: 0;
+    font-size: 8.7pt;
+    line-height: 1.48;
+  }
+
+  h2.application-sheet {
+    font-size: 17pt;
+  }
+
+  .application-hero {
+    margin: 3mm auto;
+  }
+
+  .application-hero img {
+    max-height: 122mm;
+  }
+
+  .application-urashima-hero img {
+    max-height: 130mm;
+  }
+
+  .application-workshop-overview {
+    margin: 2.5mm auto;
+  }
+
+  .application-workshop-overview img {
+    max-height: 155mm;
+  }
+
+  .application-value-grid {
+    gap: 2.4mm;
+    margin: 2.7mm 0;
+  }
+
+  .application-value-grid section {
+    padding: 2.4mm 2.7mm;
+  }
+
+  .application-value-grid span {
+    font-size: 7.5pt;
+  }
+
+  .application-callout {
+    margin: 2.7mm 0;
+    padding: 2.3mm 2.8mm;
+  }
+
+  .application-source {
+    margin-top: 2.2mm;
+    font-size: 6.7pt;
+  }
+
+  .application-flow {
+    margin: 3mm 0;
+  }
+
+  .application-flow > div,
+  .application-storyline,
+  .application-cycle {
+    min-height: 18mm;
+    gap: 2mm;
+    padding: 2.5mm;
+  }
+
+  .application-flow span,
+  .application-storyline span,
+  .application-cycle span {
+    padding: 2mm;
+    font-size: 7.7pt;
+  }
+
+  .application-columns {
+    gap: 3mm;
+    margin: 3mm 0;
+  }
+
+  .application-columns section {
+    padding: 2.8mm 3mm;
+  }
+
+  .application-columns pre,
+  .application-code {
+    font-size: 6.8pt;
+    line-height: 1.38;
+  }
+
+  .application-storyline,
+  .application-cycle {
+    margin: 3mm 0;
+  }
+
+  .application-image-grid {
+    gap: 2mm;
+    margin: 3mm 0;
+  }
+
+  .application-image-grid figure {
+    grid-template-rows: 58mm auto;
+    padding: 1.8mm;
+  }
+
+  .application-image-grid figcaption {
+    font-size: 6.8pt;
+  }
+
+  .application-toolchain-flow span {
+    font-size: 6.8pt;
   }
 }

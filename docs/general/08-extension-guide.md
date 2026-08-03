@@ -2,19 +2,34 @@
 
 Copyright © 2026 Hiroya Kubo. この文書は[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)で提供します。
 
-<p class="extension-overview-kicker">tmpose-kamishibaiと15個の機能拡張を、全16ページで見渡す</p>
+<p class="extension-overview-kicker">全16ページ。15個の機能拡張を一覧し、2〜16ページで1つずつ詳しく見る</p>
 
-TMPose紙芝居（tmpose-kamishibai）は、TurboWarpとTMPoseを利用し、参加者がカメラの前で
-ポーズを取ることで物語を進めるAIインタラクティブ紙芝居です。テキスト形式の
-`kamishibai=3.1`台本を読み込み、画像・音声・アクター・入力・分岐を組み合わせて再生します。
+`kamishibai=3.1`台本を動かす現行アプリは、次の15機能拡張を
+`app/project.source.json`の順に読み込みます。名前を選ぶと、その拡張の解説ページへ移動します。
 
-<figure class="extension-overview-hero"><img src="../images/image01.png" alt="カメラ映像に浦島太郎とカメを重ね、ポーズをとろう！と表示しているTMPose紙芝居のアプリ画面"><figcaption>カメラの前の参加者と物語のアクターを重ね、ポーズ認識で場面を進めます。</figcaption></figure>
+<nav class="extension-index-grid" aria-label="機能拡張一覧">
+<a href="#extension-consoles"><strong>Consoles</strong><code>sipcconsole</code><span>実行状況をbrowser consoleへ記録</span></a>
+<a href="#extension-temporary-variables"><strong>Temporary Variables</strong><code>lmsTempVars2</code><span>処理中の一時状態を共有・保持</span></a>
+<a href="#extension-text-operators"><strong>Text</strong><code>strings</code><span>台本の文字列を検索・分割・整形</span></a>
+<a href="#extension-asset-manager"><strong>Asset Manager</strong><code>kubohiroyaassetmanager</code><span>画像・音声・文字とLoadingを管理</span></a>
+<a href="#extension-tmpose"><strong>TMPose</strong><code>tmpose</code><span>camera映像からポーズを認識</span></a>
+<a href="#extension-local-storage"><strong>Local Storage</strong><code>localstorage</code><span>台本とUI言語をbrowserへ保存</span></a>
+<a href="#extension-text-lines"><strong>Text Lines</strong><code>kubohiroyatextlines</code><span>台本を行単位のlistへ展開</span></a>
+<a href="#extension-runtime-expression"><strong>Runtime Expression</strong><code>kubohiroyaruntimeexpression</code><span>分岐条件を安全に評価</span></a>
+<a href="#extension-kamishibai-runtime"><strong>Kamishibai Runtime</strong><code>kubohiroyakamishibairuntime</code><span>台本を事前検査しSVG診断を表示</span></a>
+<a href="#extension-async-input"><strong>Async Input</strong><code>kubohiroyaasyncinput</code><span>key・touch・pose入力を競合待機</span></a>
+<a href="#extension-more-timers"><strong>More Timers</strong><code>lmsTimers</code><span>複数の名前付きtimerを計測</span></a>
+<a href="#extension-files"><strong>Files</strong><code>files</code><span>端末からTXT台本を選択</span></a>
+<a href="#extension-animated-text"><strong>Animated Text</strong><code>text</code><span>文字をstage上へ描画・演出</span></a>
+<a href="#extension-translate"><strong>Translate</strong><code>translate</code><span>viewerの言語を取得</span></a>
+<a href="#extension-web-link"><strong>Web Link</strong><code>kubohiroyaweblink</code><span>許可されたHTTPSリンクを開く</span></a>
+</nav>
 
-<div class="extension-overview-summary"><p><strong>この文書の読み方</strong></p><p>続く15ページでは、<code>app/project.source.json</code>の<code>extensions</code>に記録された機能拡張を1つずつ紹介します。Gallery拡張、SB3埋め込み拡張、TurboWarp標準拡張をすべて含みます。</p><p>各図は公式ガイド、Extension Gallery、配布ソースの図解やblock定義を本書向けに再構成しました。「このアプリでの利用」は現行SB3で実際に使うblockに限定し、版と固定commitは2026年8月4日時点です。</p></div>
+<p class="extension-overview-note">各ページは、役割、主要機能、このアプリでの利用、注意点、出典を同じ順で掲載します。Gallery拡張、SB3埋め込み拡張、project内拡張を含み、版と固定commitは2026年8月4日時点です。</p>
 
-<p class="extension-source extension-overview-source">出典: <a href="https://kubohiroya.github.io/tmpose-kamishibai/">TMPose紙芝居 公式サイト</a>。実装の呼出し関係は<a href="https://kubohiroya.github.io/tmpose-kamishibai/docs/general/07-internal-specification/">内部仕様書</a>、更新手順は<a href="https://kubohiroya.github.io/tmpose-kamishibai/docs/general/06-developer-guide/">メンテナンスガイド</a>を参照してください。Loading画面を含むアセット読込の流れも内部仕様書に記載しています。</p>
+<p class="extension-source extension-overview-source">呼出し関係とLoadingを含むアセット読込は<a href="https://kubohiroya.github.io/tmpose-kamishibai/docs/general/07-internal-specification/">内部仕様書</a>、更新手順は<a href="https://kubohiroya.github.io/tmpose-kamishibai/docs/general/06-developer-guide/">メンテナンスガイド</a>、版ごとの差分は<a href="https://kubohiroya.github.io/tmpose-kamishibai/docs/general/history/"><code>history.md</code></a>を参照してください。</p>
 
-版ごとの差分を確認するときは[`history.md`](https://kubohiroya.github.io/tmpose-kamishibai/docs/general/history/)を参照してください。
+DSLとアプリの版ごとの差分は[`history.md`](history.md)で確認できます。
 
 ## Consoles {#extension-consoles .extension-sheet}
 

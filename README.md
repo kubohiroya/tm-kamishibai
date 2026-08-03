@@ -91,6 +91,7 @@ CIでも`pnpm sb3:check`を実行し、同じツールチェインで`app/`を�
 - [メンテナンスガイド](docs/general/06-developer-guide.md)
 - [内部仕様書](docs/general/07-internal-specification.md)
 - [機能拡張ガイド](docs/general/08-extension-guide.md)
+- [アプリ・教材・ツールチェインガイド](docs/general/09-application-materials-guide.md)
 - [変更履歴](docs/general/history.md)
 - [公開ドキュメント一覧](https://kubohiroya.github.io/tmpose-kamishibai/docs/)
 

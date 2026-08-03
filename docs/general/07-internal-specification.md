@@ -644,6 +644,7 @@ transitionの反復待ちは`skipMode`の存在で終了しますが、最後の
 - [`04-dsl-manual.md`](04-dsl-manual.md): 台本の構造と書き方
 - [`05-command-reference.md`](05-command-reference.md): コマンドとactionの外部仕様
 - [`06-developer-guide.md`](06-developer-guide.md): 成果物とビルダーの利用、setup、変更、検証、公開
-- [`08-extension-guide.md`](08-extension-guide.md): アプリ本体と依存機能拡張15個の図解、役割、利用箇所
+- [`08-extension-guide.md`](08-extension-guide.md): 依存機能拡張15個の一覧、図解、役割、利用箇所
+- [`09-application-materials-guide.md`](09-application-materials-guide.md): アプリ、浦島太郎、体験会教材、DSL 3.1、sb3-toolchainの8ページ概要
 - [`history.md`](history.md): DSLとアプリの変更履歴
 - [`README.md`](../../README.md): プロジェクト全体の入口
