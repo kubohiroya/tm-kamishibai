@@ -11,10 +11,10 @@ const officialWebsiteUrl = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ).homepage;
 const menuGridLayout = new Map([
-  ['openButton', {size: 65, textWidth: 326, x: -110, y: 60}],
-  ['reloadButton', {size: 65, textWidth: 208, x: 110, y: 60}],
-  ['showTitleButton', {size: 65, textWidth: 360, x: -110, y: -80}],
-  ['languageButton', {size: 65, textWidth: 220, x: 110, y: -80}],
+  ['openButton', {size: 65, textWidth: 326, x: -93, y: 43}],
+  ['reloadButton', {size: 65, textWidth: 208, x: 127, y: 43}],
+  ['showTitleButton', {size: 65, textWidth: 360, x: -93, y: -97}],
+  ['languageButton', {size: 65, textWidth: 220, x: 127, y: -97}],
 ]);
 const menuIconLayout = new Map([
   [
@@ -24,8 +24,8 @@ const menuIconLayout = new Map([
       asset: 'ui.icon.open',
       labelId: 'openButton',
       size: 100,
-      x: -110,
-      y: 105,
+      x: -93,
+      y: 88,
     },
   ],
   [
@@ -35,8 +35,8 @@ const menuIconLayout = new Map([
       asset: 'ui.icon.reload',
       labelId: 'reloadButton',
       size: 100,
-      x: 110,
-      y: 105,
+      x: 127,
+      y: 88,
     },
   ],
   [
@@ -46,8 +46,8 @@ const menuIconLayout = new Map([
       asset: 'ui.icon.about',
       labelId: 'showTitleButton',
       size: 100,
-      x: -110,
-      y: -35,
+      x: -93,
+      y: -52,
     },
   ],
   [
@@ -57,8 +57,8 @@ const menuIconLayout = new Map([
       asset: 'ui.icon.language',
       labelId: 'languageButton',
       size: 100,
-      x: 110,
-      y: -35,
+      x: 127,
+      y: -52,
     },
   ],
 ]);
