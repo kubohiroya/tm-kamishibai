@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "3.1.9",
+  "version": "3.2.0",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",

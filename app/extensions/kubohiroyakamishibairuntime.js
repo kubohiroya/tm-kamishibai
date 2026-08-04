@@ -10,13 +10,14 @@
   'use strict';
 
   const extensionId = 'kubohiroyakamishibairuntime';
-  const supportedVersion = '3.1';
+  const supportedVersion = '3.2';
+  const legacyTextWarningCode = 'LEGACY_TEXT_ASSET_NOOP';
   const featureFlagName = 'featureDetailedScriptErrors';
   const promptSpriteName = 'prompt';
   const errorVariablePrefix = 'kamishibaiError';
   const errorVariableNames = ['Category', 'Code', 'Column', 'Line', 'Message', 'Source', 'Svg'];
 
-  const dsl31Contract = {
+  const dsl32Contract = {
     commands: new Map([
       ['kamishibai', {kind: 'version'}],
       ['asset', {kind: 'assetDeclaration'}],
@@ -27,7 +28,8 @@
       ['setLoadingBackdrop', {kind: 'singleAssetReference'}],
       ['setLoadingCostume', {kind: 'assetListReference'}],
       ['setPoseRecognitionSound', {kind: 'assetListReference'}],
-      ['text', {kind: 'textReference'}],
+      ['text', {kind: 'legacyText'}],
+      ['textStyle', {kind: 'legacyText'}],
       ['sceneLabel', {kind: 'sceneDeclaration'}],
       ['TMPoseURL', {kind: 'pass'}],
       ['action', {kind: 'action'}],
@@ -37,7 +39,7 @@
       ['wait', {}],
       ['bgm', {singleAssetReferences: [1]}],
       ['sound', {singleAssetReferences: [1]}],
-      ['text', {singleAssetReferences: [1]}],
+      ['text', {}],
       ['transition', {transitionIndex: 1}],
       ['branch', {branchReferenceIndex: 1}],
       ['keyInputToChangeScene', {sceneListReferenceIndexes: [2]}],
@@ -215,7 +217,7 @@
       if (separatorIndex < 1) {
         raiseDiagnostic({
           category: 'invalid-command',
-          code: 'K31-COMMAND-001',
+          code: 'K32-COMMAND-001',
           messageKey: 'invalidCommand',
           command: {lineNumber: index + 1, sourceLine},
         });
@@ -230,6 +232,46 @@
     return commands;
   }
 
+  function isLegacyTextResourceId(value) {
+    const resourceId = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    return resourceId === 'text' || resourceId.startsWith('text:');
+  }
+
+  function collectLegacyTextUsage(script) {
+    const assetNames = new Set();
+    const referencedNames = new Set();
+    const lines = String(script ?? '').split(/\r\n|\n|\r/u);
+    for (const sourceLine of lines) {
+      const line = sourceLine.trim();
+      if (!line || line.startsWith('#') || line === '---') continue;
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex < 1) continue;
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
+      if (key === 'asset') {
+        const parts = value.split(',');
+        const name = parts.shift()?.trim() ?? '';
+        const resourceId = parts.join(',');
+        if (name && isLegacyTextResourceId(resourceId)) assetNames.add(name);
+      } else if (key === 'text' || key === 'textStyle') {
+        const name = value.split(':', 1)[0]?.trim() ?? '';
+        if (name) referencedNames.add(name);
+      } else if (key === 'action') {
+        const parts = value.split(':');
+        if (parts[0]?.trim() === 'text') {
+          const name = parts[1]?.trim() ?? '';
+          if (name) referencedNames.add(name);
+        }
+      }
+    }
+    return {
+      assetNames,
+      names: new Set([...assetNames, ...referencedNames]),
+    };
+  }
+
   function validateVersion(script, commands) {
     const versionCommand = commands.find((command) => command.key === 'kamishibai');
     if (versionCommand?.value === supportedVersion) return;
@@ -237,7 +279,7 @@
     raiseDiagnostic({
       args: {actual, supported: supportedVersion},
       category: 'unsupported-version',
-      code: 'K31-VERSION-001',
+      code: 'K32-VERSION-001',
       messageKey: 'unsupportedVersion',
       command: versionCommand ?? {
         lineNumber: 1,
@@ -248,11 +290,11 @@
 
   function validateCommandNames(commands) {
     for (const command of commands) {
-      if (dsl31Contract.commands.has(command.key)) continue;
+      if (dsl32Contract.commands.has(command.key)) continue;
       raiseDiagnostic({
         args: {command: command.key},
         category: 'unsupported-command',
-        code: 'K31-COMMAND-002',
+        code: 'K32-COMMAND-002',
         messageKey: 'unsupportedCommand',
         command,
       });
@@ -269,7 +311,7 @@
       raiseDiagnostic({
         args: {dependency},
         category: 'internal-error',
-        code: 'K31-INTERNAL-001',
+        code: 'K32-INTERNAL-001',
         messageKey: 'invalidDependencyResult',
         technicalDetail: error instanceof Error ? error.message : String(error),
         command,
@@ -278,7 +320,7 @@
     raiseDiagnostic({
       args: {dependency},
       category: 'internal-error',
-      code: 'K31-INTERNAL-001',
+      code: 'K32-INTERNAL-001',
       messageKey: 'invalidDependencyResult',
       technicalDetail: `Unexpected result: ${String(value)}`,
       command,
@@ -291,7 +333,7 @@
       raiseDiagnostic({
         args: {dependency},
         category: 'internal-error',
-        code: 'K31-INTERNAL-001',
+        code: 'K32-INTERNAL-001',
         messageKey: 'dependencyUnavailable',
         command,
       });
@@ -307,7 +349,7 @@
       raiseDiagnostic({
         args: {dependency},
         category: 'internal-error',
-        code: 'K31-INTERNAL-001',
+        code: 'K32-INTERNAL-001',
         messageKey: 'invalidDependencyResult',
         technicalDetail: error instanceof Error ? error.message : String(error),
         command,
@@ -320,7 +362,7 @@
     if (separatorIndex < 0) {
       raiseDiagnostic({
         category: 'asset-address',
-        code: 'K31-ASSET-ADDRESS-001',
+        code: 'K32-ASSET-ADDRESS-001',
         messageKey: 'assetDefinitionFormat',
         command,
       });
@@ -344,7 +386,7 @@
           type: String(result.type ?? 'resource-id'),
         },
         category: 'asset-address',
-        code: 'K31-ASSET-ADDRESS-001',
+        code: 'K32-ASSET-ADDRESS-001',
         messageKey: 'invalidAssetAddress',
         technicalDetail: detail,
         command,
@@ -359,7 +401,7 @@
     raiseDiagnostic({
       args: {asset: normalizedName || '(empty)', usage},
       category: 'undefined-asset',
-      code: 'K31-ASSET-REF-001',
+      code: 'K32-ASSET-REF-001',
       messageKey: 'undefinedAsset',
       command,
     });
@@ -399,7 +441,7 @@
     raiseDiagnostic({
       args: {branch: branch.name, expression},
       category: 'expression-syntax',
-      code: 'K31-EXPRESSION-001',
+      code: 'K32-EXPRESSION-001',
       column: expressionColumn(branch.command, expression, position),
       messageKey: 'expressionSyntax',
       technicalDetail: String(result.message ?? ''),
@@ -422,11 +464,11 @@
     }
     if (specification.transitionIndex !== undefined) {
       const transition = parts[specification.transitionIndex] ?? '';
-      if (!dsl31Contract.transitions.has(transition)) {
+      if (!dsl32Contract.transitions.has(transition)) {
         raiseDiagnostic({
           args: {transition: transition || '(empty)'},
           category: 'unsupported-action',
-          code: 'K31-ACTION-001',
+          code: 'K32-ACTION-001',
           messageKey: 'unsupportedTransition',
           command,
         });
@@ -449,7 +491,7 @@
   function validateAction(command, context) {
     const parts = command.value.split(':').map((part) => part.trim());
     const targetOrCommand = parts[0] ?? '';
-    const globalSpecification = dsl31Contract.globalActions.get(targetOrCommand);
+    const globalSpecification = dsl32Contract.globalActions.get(targetOrCommand);
     if (globalSpecification) {
       validateGlobalAction(command, parts, targetOrCommand, globalSpecification, context);
       return;
@@ -461,18 +503,18 @@
       raiseDiagnostic({
         args: {actor: undefinedActor},
         category: 'unsupported-action',
-        code: 'K31-ACTION-001',
+        code: 'K32-ACTION-001',
         messageKey: 'undefinedActor',
         command,
       });
     }
     const actionName = parts[1] ?? '';
-    const actorSpecification = dsl31Contract.actorActions.get(actionName);
+    const actorSpecification = dsl32Contract.actorActions.get(actionName);
     if (!actorSpecification) {
       raiseDiagnostic({
         args: {action: actionName || '(empty)'},
         category: 'unsupported-action',
-        code: 'K31-ACTION-001',
+        code: 'K32-ACTION-001',
         messageKey: 'unsupportedAction',
         command,
       });
@@ -487,7 +529,7 @@
         raiseDiagnostic({
           args: {scene: label},
           category: 'undefined-scene',
-          code: 'K31-SCENE-REF-001',
+          code: 'K32-SCENE-REF-001',
           messageKey: 'undefinedScene',
           command,
         });
@@ -498,7 +540,7 @@
       raiseDiagnostic({
         args: {branch: reference.name || '(empty)'},
         category: 'undefined-branch',
-        code: 'K31-BRANCH-REF-001',
+        code: 'K32-BRANCH-REF-001',
         messageKey: 'undefinedBranch',
         command: reference.command,
       });
@@ -512,7 +554,7 @@
         raiseDiagnostic({
           args: {scene: label},
           category: 'undefined-scene',
-          code: 'K31-SCENE-REF-001',
+          code: 'K32-SCENE-REF-001',
           messageKey: 'undefinedScene',
           command: branch.command,
         });
@@ -531,7 +573,7 @@
       scenes: new Set(),
     };
     for (const command of commands) {
-      const kind = dsl31Contract.commands.get(command.key).kind;
+      const kind = dsl32Contract.commands.get(command.key).kind;
       if (kind === 'assetDeclaration') {
         context.assets.add(parseAsset(command, runtime));
       } else if (kind === 'actorDeclaration') {
@@ -548,7 +590,7 @@
 
   function validateCommandReferences(commands, context) {
     for (const command of commands) {
-      const kind = dsl31Contract.commands.get(command.key).kind;
+      const kind = dsl32Contract.commands.get(command.key).kind;
       if (kind === 'actorDeclaration') {
         requireAsset(context.assets, splitList(command.value)[1], command, 'actor');
       } else if (kind === 'cover') {
@@ -559,14 +601,6 @@
         requireAsset(context.assets, command.value, command, command.key);
       } else if (kind === 'assetListReference') {
         requireAssets(context.assets, command.value, command, command.key);
-      } else if (kind === 'textReference' && !command.value.startsWith('ui.')) {
-        const separatorIndex = command.value.indexOf(':');
-        requireAsset(
-          context.assets,
-          command.value.slice(0, separatorIndex < 0 ? command.value.length : separatorIndex),
-          command,
-          'text',
-        );
       } else if (kind === 'action') {
         validateAction(command, context);
       }
@@ -641,10 +675,10 @@
 
   function contractSnapshot() {
     return {
-      commands: [...dsl31Contract.commands.keys()],
-      globalActions: [...dsl31Contract.globalActions.keys()],
-      actorActions: [...dsl31Contract.actorActions.keys()],
-      transitions: [...dsl31Contract.transitions],
+      commands: [...dsl32Contract.commands.keys()],
+      globalActions: [...dsl32Contract.globalActions.keys()],
+      actorActions: [...dsl32Contract.actorActions.keys()],
+      transitions: [...dsl32Contract.transitions],
     };
   }
 
@@ -658,6 +692,10 @@
       this.usedTextFallback = false;
       this.visibilitySnapshot = null;
       this.promptTarget = null;
+      this.legacyTextAssets = new Set();
+      this.legacyTextWarning = null;
+      this.legacyTextWarningEmitted = false;
+      this.legacyTextWarningEmissionCount = 0;
       this.runtime.on?.('PROJECT_START', () => this.resetForProjectStart());
     }
 
@@ -673,12 +711,83 @@
             text: 'validate kamishibai script or stop',
             hideFromPalette: true,
           },
+          {
+            opcode: 'isLegacyTextAsset',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: '[NAME] is a legacy text asset',
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '',
+              },
+            },
+            hideFromPalette: true,
+          },
+          {
+            opcode: 'isLegacyTextCommand',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: '[KEY] [VALUE] is a legacy text command',
+            arguments: {
+              KEY: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '',
+              },
+              VALUE: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '',
+              },
+            },
+            hideFromPalette: true,
+          },
+          {
+            opcode: 'isLegacyTextAction',
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: '[ACTION] is a legacy text action',
+            arguments: {
+              ACTION: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '',
+              },
+            },
+            hideFromPalette: true,
+          },
         ],
       };
     }
 
-    getDsl31ContractJson() {
+    getDsl32ContractJson() {
       return JSON.stringify(contractSnapshot());
+    }
+
+    getLegacyTextWarningJson() {
+      return this.legacyTextWarning ? JSON.stringify(this.legacyTextWarning) : '';
+    }
+
+    getLegacyTextWarningEmissionCount() {
+      return this.legacyTextWarningEmissionCount;
+    }
+
+    isLegacyTextAsset(args) {
+      return this.legacyTextAssets.has(String(args.NAME ?? '').trim());
+    }
+
+    isLegacyTextCommand(args) {
+      const key = String(args.KEY ?? '').trim();
+      if (key === 'text' || key === 'textStyle') return true;
+      if (key !== 'asset') return false;
+      const value = String(args.VALUE ?? '');
+      const separatorIndex = value.indexOf(',');
+      return separatorIndex >= 0 && isLegacyTextResourceId(value.slice(separatorIndex + 1));
+    }
+
+    isLegacyTextAction(args) {
+      const parts = String(args.ACTION ?? '')
+        .split(':')
+        .map((part) => part.trim());
+      if (parts[0] === 'text') return true;
+      return (
+        (parts[1] === 'show' || parts[1] === 'setSkin') && this.legacyTextAssets.has(parts[2] ?? '')
+      );
     }
 
     getLastDiagnosticJson() {
@@ -697,7 +806,7 @@
           ok: false,
           diagnostic: createDiagnostic({
             category: 'internal-error',
-            code: 'K31-INTERNAL-001',
+            code: 'K32-INTERNAL-001',
             messageKey: 'internalError',
             technicalDetail:
               error instanceof Error ? (error.stack ?? error.message) : String(error),
@@ -710,6 +819,10 @@
       this.clearPresentation();
       this.featureEnabled = null;
       this.lastDiagnostic = null;
+      this.legacyTextAssets = new Set();
+      this.legacyTextWarning = null;
+      this.legacyTextWarningEmitted = false;
+      this.legacyTextWarningEmissionCount = 0;
       for (const name of errorVariableNames) this.deleteErrorVariable(name);
     }
 
@@ -901,10 +1014,31 @@
     }
 
     validateScriptOrStop() {
+      const script = this.readScript();
+      const legacyTextUsage = collectLegacyTextUsage(script);
+      this.legacyTextAssets = legacyTextUsage.assetNames;
+      if (legacyTextUsage.names.size > 0) {
+        this.legacyTextWarning = {
+          code: legacyTextWarningCode,
+          dslVersion: supportedVersion,
+          names: [...legacyTextUsage.names],
+        };
+        if (!this.legacyTextWarningEmitted) {
+          console.warn(
+            `[DSL ${supportedVersion}][${legacyTextWarningCode}] Legacy text assets are no longer rendered: ${[
+              ...legacyTextUsage.names,
+            ].join(', ')}. Use the SVG Text extension instead.`,
+          );
+          this.legacyTextWarningEmitted = true;
+          this.legacyTextWarningEmissionCount += 1;
+        }
+      } else {
+        this.legacyTextWarning = null;
+      }
       if (this.featureEnabled === null) this.featureEnabled = this.readFeatureFlag();
       if (!this.featureEnabled) return;
 
-      const result = JSON.parse(this.validateScriptSource({SCRIPT: this.readScript()}));
+      const result = JSON.parse(this.validateScriptSource({SCRIPT: script}));
       if (result.ok) return;
       this.presentDiagnostic(result.diagnostic);
     }

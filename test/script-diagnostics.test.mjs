@@ -4,8 +4,8 @@ import test from 'node:test';
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
 const contractFixture = [
-  'kamishibai=3.1',
-  '# All DSL 3.1 commands and actions are represented in this fixture.',
+  'kamishibai=3.2',
+  '# All DSL 3.2 commands and actions are represented in this fixture.',
   'setRuntimeVariable=score:1',
   'asset=Title,backdrop',
   'asset=Stars,backdrop',
@@ -15,8 +15,9 @@ const contractFixture = [
   'asset=Narration,text',
   'setLoadingBackdrop=Title',
   'setLoadingCostume=Hero,HeroAlt',
-  'setPoseRecognitionSound=Audio',
+  'setPoseRecognitionSound=Hero',
   'text=ui.prompt:Pose!',
+  'textStyle=Narration:font:Sans Serif',
   'actor=Hero,Hero',
   'cover=Title,',
   'registerBranch=route:score == 1:first',
@@ -148,13 +149,13 @@ test('preserves physical source locations for LF, CRLF, and CR scripts', async (
 
   for (const newline of ['\n', '\r\n', '\r']) {
     const sourceLine = 'unsupported=value=with=equals';
-    const script = ['kamishibai=3.1', '# comment', '', '---', sourceLine].join(newline);
+    const script = ['kamishibai=3.2', '# comment', '', '---', sourceLine].join(newline);
     const result = JSON.parse(
       harness.extensionState.kamishibaiRuntime.validateScriptSource({SCRIPT: script}),
     );
 
     assert.equal(result.ok, false);
-    assert.equal(result.diagnostic.code, 'K31-COMMAND-002');
+    assert.equal(result.diagnostic.code, 'K32-COMMAND-002');
     assert.deepEqual(result.diagnostic.source, {line: 5, column: 1, text: sourceLine});
   }
 });
@@ -194,7 +195,7 @@ test('stops background work and clears the diagnostic presentation on project re
     {target: harness.getStage()},
   );
   harness.extensionState.assetManager.actorAnimations.set('stale-test-animation', {timer: null});
-  await runDetailedPreflight(harness, ['kamishibai=3.1', 'unsupported=first-error'].join('\n'));
+  await runDetailedPreflight(harness, ['kamishibai=3.2', 'unsupported=first-error'].join('\n'));
 
   assert.equal(harness.extensionState.keyInputBindings.size, 0);
   assert.equal(harness.extensionState.assetManager.actorAnimations.size, 0);
@@ -248,5 +249,5 @@ test('keeps the detailed preflight disabled for an execution that started with t
   harness.greenFlag();
   harness.setRuntimeVariable('script', 'kamishibai=2.0');
   harness.extensionState.kamishibaiRuntime.validateScriptOrStop();
-  assert.equal(harness.getRuntimeVariable('kamishibaiErrorCode'), 'K31-VERSION-001');
+  assert.equal(harness.getRuntimeVariable('kamishibaiErrorCode'), 'K32-VERSION-001');
 });

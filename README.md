@@ -19,7 +19,7 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.1.9
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.2.0
 ```
 
 ```bash
@@ -32,6 +32,18 @@ pnpm exec tmpose-kamishibai build-sb3 \
 ```
 
 API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
+
+## DSL 3.2の互換性
+
+tmpose-kamishibai 3.2.0は`kamishibai=3.2`を使用します。旧Text Asset構文は移行時の構文互換性のため受理しますが、表示処理は行いません。
+
+- `asset=NAME,text`
+- `text=NAME:VALUE`
+- `textStyle=NAME:PROPERTY:VALUE`
+- `action=text:NAME:VALUE`
+- 旧Text Assetを参照する`show`および`setSkin`
+
+これらを含む台本は処理を継続し、プロジェクトごとに一度`LEGACY_TEXT_ASSET_NOOP`警告を開発者コンソールへ出力します。置き換え先は名前付きスタイルを共有するSVG Text機能拡張です。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この互換処理の対象外です。
 
 ## このリポジトリを開発する
 

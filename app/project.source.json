@@ -146,7 +146,7 @@
               1,
               [
                 10,
-                "kamishibai=3.1"
+                "kamishibai=3.2"
               ]
             ]
           },
@@ -3164,7 +3164,7 @@
         },
         "d)": {
           "opcode": "procedures_definition",
-          "next": "h",
+          "next": "legacyCommandGuard",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -3236,7 +3236,7 @@
         "h": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "d)",
+          "parent": "legacyCommandGuard",
           "inputs": {
             "CONDITION": [
               2,
@@ -3252,6 +3252,92 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyCommandGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "d)",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "legacyCommandNot"
+            ],
+            "SUBSTACK": [
+              2,
+              "h"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyCommandNot": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "legacyCommandGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "legacyCommandCheck"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyCommandCheck": {
+          "opcode": "kubohiroyakamishibairuntime_isLegacyTextCommand",
+          "next": null,
+          "parent": "legacyCommandNot",
+          "inputs": {
+            "KEY": [
+              3,
+              "legacyCommandKey",
+              [
+                10,
+                ""
+              ]
+            ],
+            "VALUE": [
+              3,
+              "legacyCommandValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyCommandKey": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "legacyCommandCheck",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyCommandValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "legacyCommandCheck",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
@@ -11182,7 +11268,7 @@
         },
         "be": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "bf",
+          "next": "legacyActorCreationGuard",
           "parent": "bd",
           "inputs": {
             "VAR": [
@@ -11265,7 +11351,7 @@
         "bf": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bg",
-          "parent": "be",
+          "parent": "legacyActorCreationGuard",
           "inputs": {
             "VAR": [
               1,
@@ -11376,7 +11462,7 @@
         },
         "fA": {
           "opcode": "control_wait",
-          "next": "lb",
+          "next": null,
           "parent": "bh",
           "inputs": {
             "DURATION": [
@@ -11394,7 +11480,7 @@
         "lb": {
           "opcode": "lmsTempVars2_changeThreadVariable",
           "next": null,
-          "parent": "fA",
+          "parent": "legacyActorCreationGuard",
           "inputs": {
             "VAR": [
               1,
@@ -11408,6 +11494,73 @@
               [
                 4,
                 "1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorCreationGuard": {
+          "opcode": "control_if",
+          "next": "lb",
+          "parent": "be",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "legacyActorCreationNot"
+            ],
+            "SUBSTACK": [
+              2,
+              "bf"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorCreationNot": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "legacyActorCreationGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "legacyActorCreationCheck"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorCreationCheck": {
+          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAsset",
+          "next": null,
+          "parent": "legacyActorCreationNot",
+          "inputs": {
+            "NAME": [
+              3,
+              "legacyActorCreationSkin",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorCreationSkin": {
+          "opcode": "lmsTempVars2_getThreadVariable",
+          "next": null,
+          "parent": "legacyActorCreationCheck",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "skin"
               ]
             ]
           },
@@ -15427,7 +15580,7 @@
         },
         "gp": {
           "opcode": "procedures_definition",
-          "next": "bK",
+          "next": "legacyActorActionGuard",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -15481,7 +15634,7 @@
         "bK": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bL",
-          "parent": "gp",
+          "parent": "legacyActorActionGuard",
           "inputs": {
             "VAR": [
               1,
@@ -15500,6 +15653,70 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorActionGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "gp",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "legacyActorActionNot"
+            ],
+            "SUBSTACK": [
+              2,
+              "bK"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorActionNot": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "legacyActorActionGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "legacyActorActionCheck"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorActionCheck": {
+          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAction",
+          "next": null,
+          "parent": "legacyActorActionNot",
+          "inputs": {
+            "ACTION": [
+              3,
+              "legacyActorActionValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyActorActionValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "legacyActorActionCheck",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
@@ -17135,7 +17352,7 @@
         },
         "gP": {
           "opcode": "procedures_definition",
-          "next": "bY",
+          "next": "legacyStageActionGuard",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -17189,7 +17406,7 @@
         "bY": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bZ",
-          "parent": "gP",
+          "parent": "legacyStageActionGuard",
           "inputs": {
             "VAR": [
               1,
@@ -17208,6 +17425,70 @@
             ]
           },
           "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyStageActionGuard": {
+          "opcode": "control_if",
+          "next": null,
+          "parent": "gP",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "legacyStageActionNot"
+            ],
+            "SUBSTACK": [
+              2,
+              "bY"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyStageActionNot": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "legacyStageActionGuard",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "legacyStageActionCheck"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyStageActionCheck": {
+          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAction",
+          "next": null,
+          "parent": "legacyStageActionNot",
+          "inputs": {
+            "ACTION": [
+              3,
+              "legacyStageActionValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "legacyStageActionValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "legacyStageActionCheck",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
           "shadow": false,
           "topLevel": false
         },
