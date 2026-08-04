@@ -244,6 +244,12 @@
     return resourceId === 'text' || resourceId.startsWith('text:');
   }
 
+  function isAppShellTextName(value) {
+    return String(value ?? '')
+      .trim()
+      .startsWith('ui.');
+  }
+
   function collectLegacyTextUsage(script) {
     const assetNames = new Set();
     const referencedNames = new Set();
@@ -262,7 +268,7 @@
         if (name && isLegacyTextResourceId(resourceId)) assetNames.add(name);
       } else if (key === 'text' || key === 'textStyle') {
         const name = value.split(':', 1)[0]?.trim() ?? '';
-        if (name) referencedNames.add(name);
+        if (name && !isAppShellTextName(name)) referencedNames.add(name);
       } else if (key === 'action') {
         const parts = value.split(':');
         if (parts[0]?.trim() === 'text') {

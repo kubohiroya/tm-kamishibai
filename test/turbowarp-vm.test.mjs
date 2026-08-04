@@ -1309,6 +1309,8 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
     harness.extensionState.displayedText.get(savedScriptMenuClones.get('showTitleButton').id),
     appShellLocales.en.ui.about,
   );
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson(), '');
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 0);
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
@@ -1326,6 +1328,8 @@ test('keeps deprecated text assets functional in both DSL 3.1 and 3.2 scripts', 
         'asset=Caption,text:Narration',
         'actor=Narration,Narration',
         'actor=Caption,Caption',
+        'text=ui.prompt:ポーズをとろう！',
+        'textStyle=ui.prompt:color:#ff6666',
         'text=Narration:本文',
         'textStyle=Narration:font:Sans Serif',
         'cover=Title,',
