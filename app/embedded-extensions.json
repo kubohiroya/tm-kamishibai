@@ -104,6 +104,13 @@
       "mediaType": "text/javascript",
       "parameters": [],
       "encoding": "base64"
+    },
+    {
+      "id": "kubohiroyascalablebubbles",
+      "path": "extensions/kubohiroyascalablebubbles.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64"
     }
   ],
   "extensionBundles": [

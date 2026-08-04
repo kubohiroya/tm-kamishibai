@@ -36411,7 +36411,8 @@
     "files",
     "text",
     "translate",
-    "kubohiroyaweblink"
+    "kubohiroyaweblink",
+    "kubohiroyascalablebubbles"
   ],
   "extensionURLs": {
     "sipcconsole": "https://extensions.turbowarp.org/-SIPC-/consoles.js",
@@ -36427,7 +36428,8 @@
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",
     "text": "embedded-extension:extensions/text.js",
-    "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js"
+    "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js",
+    "kubohiroyascalablebubbles": "embedded-extension:extensions/kubohiroyascalablebubbles.js"
   },
   "meta": {
     "semver": "3.0.0",

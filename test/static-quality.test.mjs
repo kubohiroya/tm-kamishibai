@@ -7,6 +7,7 @@ import {ESLint} from 'eslint';
 const projectRoot = new URL('../', import.meta.url);
 const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 const firstPartyFiles = [
+  'app/extensions/kubohiroyascalablebubbles.js',
   'app/extensions/kubohiroyaweblink.js',
   'bin/tmpose-kamishibai.mjs',
   'eslint.config.mjs',
@@ -51,6 +52,7 @@ test('excludes only upstream-synchronized extension artifacts from local linting
   for (const filename of vendoredExtensions) {
     assert.equal(await eslint.isPathIgnored(filename), true, `${filename} must remain vendored`);
   }
+  assert.equal(await eslint.isPathIgnored('app/extensions/kubohiroyascalablebubbles.js'), false);
   assert.equal(await eslint.isPathIgnored('app/extensions/kubohiroyaweblink.js'), false);
 });
 

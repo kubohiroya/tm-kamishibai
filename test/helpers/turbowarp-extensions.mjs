@@ -19,6 +19,10 @@ const runtimeExpressionSource = readFileSync(
   new URL('../../app/extensions/kubohiroyaruntimeexpression.js', import.meta.url),
   'utf8',
 );
+const scalableBubblesSource = readFileSync(
+  new URL('../../app/extensions/kubohiroyascalablebubbles.js', import.meta.url),
+  'utf8',
+);
 
 function block(opcode, blockType = BlockType.COMMAND, argumentNames = []) {
   return {
@@ -303,6 +307,7 @@ export function registerKamishibaiTestExtensions(
     poseMatches: false,
     poseScore: 0,
     runtimeExpression: null,
+    scalableBubbles: null,
     runtimeVariableWrites: [],
     timers: new Map(),
     tempVariables: null,
@@ -1001,6 +1006,13 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'files', FilesExtension);
   register(vm, 'translate', TranslateExtension);
   register(vm, 'kubohiroyaweblink', WebLinkExtension);
+  register(
+    vm,
+    'kubohiroyascalablebubbles',
+    createProductionExtensionClass(vm, scalableBubblesSource, (extension) => {
+      state.scalableBubbles = extension;
+    }),
+  );
 
   const memberRuntimes = new Map(
     bundledMemberIds.map((memberId) => [memberId, createBundledRuntime(vm.runtime, memberId)]),

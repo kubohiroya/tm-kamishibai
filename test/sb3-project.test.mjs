@@ -85,6 +85,19 @@ test('bundles Animated Text with every embedded dynamic caller', () => {
   );
 });
 
+test('embeds the responsive Scalable Bubbles extension independently', () => {
+  const project = loadKamishibaiProject();
+  assert(project.extensions.includes('kubohiroyascalablebubbles'));
+  const extensionUrl = project.extensionURLs.kubohiroyascalablebubbles;
+  assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
+  const extensionSource = Buffer.from(
+    extensionUrl.slice(extensionUrl.indexOf(',') + 1),
+    'base64',
+  ).toString('utf8');
+  assert(extensionSource.includes("this.runtime.on('SAY', this.handleSayOrThink)"));
+  assert(extensionSource.includes("this.runtime.on('STAGE_SIZE_CHANGED'"));
+});
+
 test('skips generated output preparation when an SB3 path is configured', async () => {
   let buildCalled = false;
   const result = await prepareTestSb3({
