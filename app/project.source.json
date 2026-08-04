@@ -5805,7 +5805,25 @@
           "inputs": {
             "OPERAND": [
               2,
+              "supportedVersionOr"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "supportedVersionOr": {
+          "opcode": "operator_or",
+          "next": null,
+          "parent": "el",
+          "inputs": {
+            "OPERAND1": [
+              2,
               "p"
+            ],
+            "OPERAND2": [
+              2,
+              "version31Check"
             ]
           },
           "fields": {},
@@ -5813,28 +5831,23 @@
           "topLevel": false
         },
         "p": {
-          "opcode": "strings_posWith",
+          "opcode": "operator_equals",
           "next": null,
-          "parent": "el",
+          "parent": "supportedVersionOr",
           "inputs": {
-            "STRING": [
+            "OPERAND1": [
               3,
               "jY",
               [
                 10,
-                "turbowarp"
+                ""
               ]
             ],
-            "POSITION": [
+            "OPERAND2": [
               1,
-              "jZ"
-            ],
-            "SUBSTRING": [
-              3,
-              "j!",
               [
                 10,
-                "kamishibai=1.0"
+                "kamishibai=3.2"
               ]
             ]
           },
@@ -5842,10 +5855,60 @@
           "shadow": false,
           "topLevel": false
         },
-        "jY": {
+        "version31Check": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "supportedVersionOr",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "version31Line",
+              [
+                10,
+                ""
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "kamishibai=3.1"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "version31Line": {
+          "opcode": "kubohiroyatextlines_lineAt",
+          "next": null,
+          "parent": "version31Check",
+          "inputs": {
+            "TEXT": [
+              3,
+              "version31Script",
+              [
+                10,
+                ""
+              ]
+            ],
+            "LINE": [
+              1,
+              [
+                4,
+                1
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "version31Script": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "p",
+          "parent": "version31Line",
           "inputs": {
             "VAR": [
               1,
@@ -5859,30 +5922,41 @@
           "shadow": false,
           "topLevel": false
         },
-        "jZ": {
-          "opcode": "strings_menu_positions",
+        "jY": {
+          "opcode": "kubohiroyatextlines_lineAt",
           "next": null,
           "parent": "p",
-          "inputs": {},
-          "fields": {
-            "positions": [
-              "starts",
-              null
+          "inputs": {
+            "TEXT": [
+              3,
+              "version32Script",
+              [
+                10,
+                ""
+              ]
+            ],
+            "LINE": [
+              1,
+              [
+                4,
+                1
+              ]
             ]
           },
-          "shadow": true,
+          "fields": {},
+          "shadow": false,
           "topLevel": false
         },
-        "j!": {
+        "version32Script": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "p",
+          "parent": "jY",
           "inputs": {
             "VAR": [
               1,
               [
                 10,
-                "version"
+                "script"
               ]
             ]
           },

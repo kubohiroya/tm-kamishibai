@@ -394,7 +394,7 @@ test('shows an SVG error and stops on an unsupported kamishibai version', async 
   assertScriptError(harness, {
     category: 'unsupported-version',
     line: 1,
-    message: /2\.0.*3\.2/u,
+    message: /2\.0.*3\.1.*3\.2/u,
   });
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorSource'), 'kamishibai=2.0');
 });
@@ -1312,59 +1312,61 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
-test('keeps deprecated DSL text assets functional during the 3.2 migration period', async (context) => {
-  const harness = await loadKamishibaiVm();
-  context.after(() => harness.quit());
-  startScript(
-    harness,
-    [
-      'kamishibai=3.2',
-      'asset=Title,backdrop',
-      'asset=Stars,backdrop',
-      'asset=Narration,text',
-      'asset=Caption,text:Narration',
-      'actor=Narration,Narration',
-      'actor=Caption,Caption',
-      'text=Narration:本文',
-      'textStyle=Narration:font:Sans Serif',
-      'cover=Title,',
-      '---',
-      'sceneLabel=first',
-      'action=stage:Stars',
-      'action=text:Narration:むかし',
-      'action=Narration:show:Narration:0,0,100',
-      'action=Caption:setSkin:Caption',
-      'action=wait:30',
-    ].join('\n'),
-  );
+test('keeps deprecated text assets functional in both DSL 3.1 and 3.2 scripts', async (context) => {
+  for (const dslVersion of ['3.1', '3.2']) {
+    const harness = await loadKamishibaiVm();
+    context.after(() => harness.quit());
+    startScript(
+      harness,
+      [
+        `kamishibai=${dslVersion}`,
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'asset=Narration,text',
+        'asset=Caption,text:Narration',
+        'actor=Narration,Narration',
+        'actor=Caption,Caption',
+        'text=Narration:本文',
+        'textStyle=Narration:font:Sans Serif',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        'action=stage:Stars',
+        'action=text:Narration:むかし',
+        'action=Narration:show:Narration:0,0,100',
+        'action=Caption:setSkin:Caption',
+        'action=wait:30',
+      ].join('\n'),
+    );
 
-  harness.runUntil(
-    () =>
-      harness.getRuntimeVariable('text:Narration') === 'むかし' &&
-      harness.getActor('Narration')?.visible === true,
-  );
+    harness.runUntil(
+      () =>
+        harness.getRuntimeVariable('text:Narration') === 'むかし' &&
+        harness.getActor('Narration')?.visible === true,
+    );
 
-  assert.equal(harness.getBackdropName(), 'Stars');
-  assert.equal(harness.getActor('Narration')?.visible, true);
-  assert.notEqual(harness.getActor('Caption'), undefined);
-  assert.equal(harness.extensionState.assetRegistrations.includes('Narration'), true);
-  assert.equal(harness.extensionState.assetRegistrations.includes('Caption'), true);
-  assert.equal(harness.getRuntimeVariable('text:Narration'), 'むかし');
-  assert.equal(harness.getRuntimeVariable('textStyle:Narration:font'), 'Sans Serif');
-  assert.equal(harness.hasRuntimeVariable('Narration'), false);
-  assert.deepEqual(
-    JSON.parse(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson()),
-    {
-      code: 'LEGACY_TEXT_ASSET_DEPRECATED',
-      dslVersion: '3.2',
-      names: ['Narration', 'Caption'],
-    },
-  );
-  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
+    assert.equal(harness.getBackdropName(), 'Stars');
+    assert.equal(harness.getActor('Narration')?.visible, true);
+    assert.notEqual(harness.getActor('Caption'), undefined);
+    assert.equal(harness.extensionState.assetRegistrations.includes('Narration'), true);
+    assert.equal(harness.extensionState.assetRegistrations.includes('Caption'), true);
+    assert.equal(harness.getRuntimeVariable('text:Narration'), 'むかし');
+    assert.equal(harness.getRuntimeVariable('textStyle:Narration:font'), 'Sans Serif');
+    assert.equal(harness.hasRuntimeVariable('Narration'), false);
+    assert.deepEqual(
+      JSON.parse(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson()),
+      {
+        code: 'LEGACY_TEXT_ASSET_DEPRECATED',
+        dslVersion,
+        names: ['Narration', 'Caption'],
+      },
+    );
+    assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
 
-  harness.extensionState.kamishibaiRuntime.validateScriptOrStop();
-  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
-  assert.deepEqual(harness.extensionState.consoleErrors, []);
+    harness.extensionState.kamishibaiRuntime.validateScriptOrStop();
+    assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
+    assert.deepEqual(harness.extensionState.consoleErrors, []);
+  }
 });
 
 test('registers and displays a text asset through the production Asset Manager', async (context) => {

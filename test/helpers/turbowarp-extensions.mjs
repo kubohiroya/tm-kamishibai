@@ -766,9 +766,19 @@ export function registerKamishibaiTestExtensions(
     }
     getInfo() {
       return extensionInfo('kubohiroyatextlines', [
+        block('lineAt', BlockType.REPORTER, ['TEXT', 'LINE']),
+        block('lineCount', BlockType.REPORTER, ['TEXT']),
         block('menu_LIST_MENU', BlockType.REPORTER),
         block('writeLinesToList', BlockType.COMMAND, ['TEXT', 'LIST']),
       ]);
+    }
+    lineAt(args) {
+      const lines = Cast.toString(args.TEXT).split(/\r\n|\n|\r/u);
+      const line = Math.trunc(Cast.toNumber(args.LINE));
+      return line >= 1 && line <= lines.length ? (lines[line - 1] ?? '') : '';
+    }
+    lineCount(args) {
+      return Cast.toString(args.TEXT).split(/\r\n|\n|\r/u).length;
     }
     menu_LIST_MENU(args) {
       return args.LIST_MENU ?? '';

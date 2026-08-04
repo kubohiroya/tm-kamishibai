@@ -35,7 +35,7 @@ API、アセットマニフェスト、安全設定、出力形式について�
 
 ## DSL 3.2の互換性
 
-tmpose-kamishibai 3.2.0は`kamishibai=3.2`を使用します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
+tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`の台本を読み込めます。既存の3.1台本は冒頭を書き換えずに実行でき、新規の台本には`kamishibai=3.2`を推奨します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
 
 - `asset=NAME,text`
 - `text=NAME:VALUE`

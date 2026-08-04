@@ -10,7 +10,8 @@
   'use strict';
 
   const extensionId = 'kubohiroyakamishibairuntime';
-  const supportedVersion = '3.2';
+  const currentVersion = '3.2';
+  const supportedVersions = ['3.1', currentVersion];
   const legacyTextWarningCode = 'LEGACY_TEXT_ASSET_DEPRECATED';
   const featureFlagName = 'featureDetailedScriptErrors';
   const promptSpriteName = 'prompt';
@@ -92,9 +93,11 @@
   const diagnosticMessages = {
     unsupportedVersion: {
       ja: ({actual, supported}) =>
-        `kamishibai=${actual} には対応していません。対応バージョンは ${supported} です。`,
+        `kamishibai=${actual} には対応していません。対応バージョンは ${supported.join('、')} です。`,
       en: ({actual, supported}) =>
-        `kamishibai=${actual} is not supported. This app supports version ${supported}.`,
+        `kamishibai=${actual} is not supported. This app supports versions ${supported.join(
+          ' and ',
+        )}.`,
     },
     invalidCommand: {
       ja: () => 'コマンドは「キー=値」の形式で記述してください。',
@@ -272,12 +275,25 @@
     };
   }
 
+  function readDeclaredVersion(script) {
+    for (const sourceLine of String(script ?? '').split(/\r\n|\n|\r/u)) {
+      const line = sourceLine.trim();
+      if (!line || line.startsWith('#') || line === '---') continue;
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex < 1) continue;
+      if (line.slice(0, separatorIndex).trim() === 'kamishibai') {
+        return line.slice(separatorIndex + 1).trim();
+      }
+    }
+    return '';
+  }
+
   function validateVersion(script, commands) {
     const versionCommand = commands.find((command) => command.key === 'kamishibai');
-    if (versionCommand?.value === supportedVersion) return;
+    if (supportedVersions.includes(versionCommand?.value)) return;
     const actual = versionCommand?.value || '(missing)';
     raiseDiagnostic({
-      args: {actual, supported: supportedVersion},
+      args: {actual, supported: supportedVersions},
       category: 'unsupported-version',
       code: 'K32-VERSION-001',
       messageKey: 'unsupportedVersion',
@@ -950,16 +966,17 @@
 
     validateScriptOrStop() {
       const script = this.readScript();
+      const declaredVersion = readDeclaredVersion(script);
       const legacyTextUsage = collectLegacyTextUsage(script);
-      if (legacyTextUsage.names.size > 0) {
+      if (supportedVersions.includes(declaredVersion) && legacyTextUsage.names.size > 0) {
         this.legacyTextWarning = {
           code: legacyTextWarningCode,
-          dslVersion: supportedVersion,
+          dslVersion: declaredVersion,
           names: [...legacyTextUsage.names],
         };
         if (!this.legacyTextWarningEmitted) {
           console.warn(
-            `[DSL ${supportedVersion}][${legacyTextWarningCode}] Legacy text assets remain supported during the DSL 3.2 migration period: ${[
+            `[DSL ${declaredVersion}][${legacyTextWarningCode}] Legacy text assets remain supported during the DSL 3.2 migration period: ${[
               ...legacyTextUsage.names,
             ].join(
               ', ',

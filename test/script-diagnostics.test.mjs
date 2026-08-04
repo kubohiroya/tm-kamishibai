@@ -129,6 +129,33 @@ test('accepts the full contract fixture without preflight side effects', async (
   );
 });
 
+test('accepts both DSL 3.1 and DSL 3.2 version declarations', async (context) => {
+  const harness = await loadKamishibaiVm({
+    productionAssetManager: true,
+    productionRuntimeExpression: true,
+  });
+  context.after(() => harness.quit());
+
+  for (const version of ['3.1', '3.2']) {
+    const script = contractFixture.replace('kamishibai=3.2', `kamishibai=${version}`);
+    assert.deepEqual(
+      JSON.parse(harness.extensionState.kamishibaiRuntime.validateScriptSource({SCRIPT: script})),
+      {ok: true},
+    );
+  }
+
+  for (const version of ['3.0', '3.3']) {
+    const result = JSON.parse(
+      harness.extensionState.kamishibaiRuntime.validateScriptSource({
+        SCRIPT: `kamishibai=${version}`,
+      }),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.diagnostic.code, 'K32-VERSION-001');
+    assert.deepEqual(result.diagnostic.args.supported, ['3.1', '3.2']);
+  }
+});
+
 test('the Scratch parser processes the same full contract fixture', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
@@ -141,6 +168,25 @@ test('the Scratch parser processes the same full contract fixture', async (conte
 
   assert.deepEqual(harness.extensionState.consoleErrors, []);
   assert.ok(harness.extensionState.assetRegistrations.length > 0);
+});
+
+test('the Scratch parser rejects non-enumerated version lines without detailed preflight', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+
+  harness.greenFlag();
+  harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
+  harness.setRuntimeVariable(
+    'script',
+    contractFixture.replace('kamishibai=3.2', 'kamishibai=3.10'),
+  );
+  harness.broadcast('startStory');
+  harness.runUntil(() => harness.extensionState.consoleErrors.includes('invalid script'));
+
+  assert.notEqual(harness.getBackdropName(), 'Stars');
+  assert.equal(harness.getSprite('prompt').visible, true);
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson(), '');
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 0);
 });
 
 test('preserves physical source locations for LF, CRLF, and CR scripts', async (context) => {
