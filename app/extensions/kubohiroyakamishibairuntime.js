@@ -11,7 +11,7 @@
 
   const extensionId = 'kubohiroyakamishibairuntime';
   const supportedVersion = '3.2';
-  const legacyTextWarningCode = 'LEGACY_TEXT_ASSET_NOOP';
+  const legacyTextWarningCode = 'LEGACY_TEXT_ASSET_DEPRECATED';
   const featureFlagName = 'featureDetailedScriptErrors';
   const promptSpriteName = 'prompt';
   const errorVariablePrefix = 'kamishibaiError';
@@ -28,8 +28,8 @@
       ['setLoadingBackdrop', {kind: 'singleAssetReference'}],
       ['setLoadingCostume', {kind: 'assetListReference'}],
       ['setPoseRecognitionSound', {kind: 'assetListReference'}],
-      ['text', {kind: 'legacyText'}],
-      ['textStyle', {kind: 'legacyText'}],
+      ['text', {kind: 'textReference'}],
+      ['textStyle', {kind: 'textReference'}],
       ['sceneLabel', {kind: 'sceneDeclaration'}],
       ['TMPoseURL', {kind: 'pass'}],
       ['action', {kind: 'action'}],
@@ -39,7 +39,7 @@
       ['wait', {}],
       ['bgm', {singleAssetReferences: [1]}],
       ['sound', {singleAssetReferences: [1]}],
-      ['text', {}],
+      ['text', {singleAssetReferences: [1]}],
       ['transition', {transitionIndex: 1}],
       ['branch', {branchReferenceIndex: 1}],
       ['keyInputToChangeScene', {sceneListReferenceIndexes: [2]}],
@@ -692,7 +692,6 @@
       this.usedTextFallback = false;
       this.visibilitySnapshot = null;
       this.promptTarget = null;
-      this.legacyTextAssets = new Set();
       this.legacyTextWarning = null;
       this.legacyTextWarningEmitted = false;
       this.legacyTextWarningEmissionCount = 0;
@@ -711,46 +710,6 @@
             text: 'validate kamishibai script or stop',
             hideFromPalette: true,
           },
-          {
-            opcode: 'isLegacyTextAsset',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: '[NAME] is a legacy text asset',
-            arguments: {
-              NAME: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: '',
-              },
-            },
-            hideFromPalette: true,
-          },
-          {
-            opcode: 'isLegacyTextCommand',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: '[KEY] [VALUE] is a legacy text command',
-            arguments: {
-              KEY: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: '',
-              },
-              VALUE: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: '',
-              },
-            },
-            hideFromPalette: true,
-          },
-          {
-            opcode: 'isLegacyTextAction',
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: '[ACTION] is a legacy text action',
-            arguments: {
-              ACTION: {
-                type: Scratch.ArgumentType.STRING,
-                defaultValue: '',
-              },
-            },
-            hideFromPalette: true,
-          },
         ],
       };
     }
@@ -765,29 +724,6 @@
 
     getLegacyTextWarningEmissionCount() {
       return this.legacyTextWarningEmissionCount;
-    }
-
-    isLegacyTextAsset(args) {
-      return this.legacyTextAssets.has(String(args.NAME ?? '').trim());
-    }
-
-    isLegacyTextCommand(args) {
-      const key = String(args.KEY ?? '').trim();
-      if (key === 'text' || key === 'textStyle') return true;
-      if (key !== 'asset') return false;
-      const value = String(args.VALUE ?? '');
-      const separatorIndex = value.indexOf(',');
-      return separatorIndex >= 0 && isLegacyTextResourceId(value.slice(separatorIndex + 1));
-    }
-
-    isLegacyTextAction(args) {
-      const parts = String(args.ACTION ?? '')
-        .split(':')
-        .map((part) => part.trim());
-      if (parts[0] === 'text') return true;
-      return (
-        (parts[1] === 'show' || parts[1] === 'setSkin') && this.legacyTextAssets.has(parts[2] ?? '')
-      );
     }
 
     getLastDiagnosticJson() {
@@ -819,7 +755,6 @@
       this.clearPresentation();
       this.featureEnabled = null;
       this.lastDiagnostic = null;
-      this.legacyTextAssets = new Set();
       this.legacyTextWarning = null;
       this.legacyTextWarningEmitted = false;
       this.legacyTextWarningEmissionCount = 0;
@@ -1016,7 +951,6 @@
     validateScriptOrStop() {
       const script = this.readScript();
       const legacyTextUsage = collectLegacyTextUsage(script);
-      this.legacyTextAssets = legacyTextUsage.assetNames;
       if (legacyTextUsage.names.size > 0) {
         this.legacyTextWarning = {
           code: legacyTextWarningCode,
@@ -1025,9 +959,11 @@
         };
         if (!this.legacyTextWarningEmitted) {
           console.warn(
-            `[DSL ${supportedVersion}][${legacyTextWarningCode}] Legacy text assets are no longer rendered: ${[
+            `[DSL ${supportedVersion}][${legacyTextWarningCode}] Legacy text assets remain supported during the DSL 3.2 migration period: ${[
               ...legacyTextUsage.names,
-            ].join(', ')}. Use the SVG Text extension instead.`,
+            ].join(
+              ', ',
+            )}. Migrate to https://github.com/kubohiroya/turbowarp-svg-text before compatibility support is removed.`,
           );
           this.legacyTextWarningEmitted = true;
           this.legacyTextWarningEmissionCount += 1;

@@ -3164,7 +3164,7 @@
         },
         "d)": {
           "opcode": "procedures_definition",
-          "next": "legacyCommandGuard",
+          "next": "h",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -3236,7 +3236,7 @@
         "h": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "legacyCommandGuard",
+          "parent": "d)",
           "inputs": {
             "CONDITION": [
               2,
@@ -3252,92 +3252,6 @@
             ]
           },
           "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyCommandGuard": {
-          "opcode": "control_if",
-          "next": null,
-          "parent": "d)",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "legacyCommandNot"
-            ],
-            "SUBSTACK": [
-              2,
-              "h"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyCommandNot": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "legacyCommandGuard",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "legacyCommandCheck"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyCommandCheck": {
-          "opcode": "kubohiroyakamishibairuntime_isLegacyTextCommand",
-          "next": null,
-          "parent": "legacyCommandNot",
-          "inputs": {
-            "KEY": [
-              3,
-              "legacyCommandKey",
-              [
-                10,
-                ""
-              ]
-            ],
-            "VALUE": [
-              3,
-              "legacyCommandValue",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyCommandKey": {
-          "opcode": "argument_reporter_string_number",
-          "next": null,
-          "parent": "legacyCommandCheck",
-          "inputs": {},
-          "fields": {
-            "VALUE": [
-              "key",
-              null
-            ]
-          },
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyCommandValue": {
-          "opcode": "argument_reporter_string_number",
-          "next": null,
-          "parent": "legacyCommandCheck",
-          "inputs": {},
-          "fields": {
-            "VALUE": [
-              "value",
-              null
-            ]
-          },
           "shadow": false,
           "topLevel": false
         },
@@ -4483,7 +4397,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "n"
+              "sceneTextStyleCommandDispatch"
             ]
           },
           "fields": {},
@@ -4653,6 +4567,263 @@
           "opcode": "argument_reporter_string_number",
           "next": null,
           "parent": "sceneTextValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneTextStyleCommandDispatch": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "sceneTextCommandDispatch",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "sceneCommandIsTextStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "sceneSetTextStyle"
+            ],
+            "SUBSTACK2": [
+              2,
+              "n"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneCommandIsTextStyle": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "sceneTextStyleCommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "sceneCommandKeyForTextStyle",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "textStyle"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneCommandKeyForTextStyle": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneCommandIsTextStyle",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSetTextStyle": {
+          "opcode": "kubohiroyaassetmanager_setTextStyle",
+          "next": null,
+          "parent": "sceneTextStyleCommandDispatch",
+          "inputs": {
+            "NAME": [
+              3,
+              "sceneTextStyleAssetName",
+              [
+                10,
+                "Narration"
+              ]
+            ],
+            "PROPERTY": [
+              3,
+              "sceneTextStyleProperty",
+              [
+                10,
+                "font"
+              ]
+            ],
+            "VALUE": [
+              3,
+              "sceneTextStyleValue",
+              [
+                10,
+                "Sans Serif"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneTextStyleAssetName": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneSetTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "1"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneTextStyleCommandValueForName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneTextStyleCommandValueForName": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneTextStyleAssetName",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneTextStyleProperty": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneSetTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "2"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneTextStyleCommandValueForProperty",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneTextStyleCommandValueForProperty": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneTextStyleProperty",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneTextStyleValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneSetTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "3"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneTextStyleCommandValueForValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneTextStyleCommandValueForValue": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneTextStyleValue",
           "inputs": {},
           "fields": {
             "VALUE": [
@@ -4861,7 +5032,7 @@
         "n": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "sceneTextCommandDispatch",
+          "parent": "sceneTextStyleCommandDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -11268,7 +11439,7 @@
         },
         "be": {
           "opcode": "lmsTempVars2_setThreadVariable",
-          "next": "legacyActorCreationGuard",
+          "next": "bf",
           "parent": "bd",
           "inputs": {
             "VAR": [
@@ -11351,7 +11522,7 @@
         "bf": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bg",
-          "parent": "legacyActorCreationGuard",
+          "parent": "be",
           "inputs": {
             "VAR": [
               1,
@@ -11462,7 +11633,7 @@
         },
         "fA": {
           "opcode": "control_wait",
-          "next": null,
+          "next": "lb",
           "parent": "bh",
           "inputs": {
             "DURATION": [
@@ -11480,7 +11651,7 @@
         "lb": {
           "opcode": "lmsTempVars2_changeThreadVariable",
           "next": null,
-          "parent": "legacyActorCreationGuard",
+          "parent": "fA",
           "inputs": {
             "VAR": [
               1,
@@ -11494,73 +11665,6 @@
               [
                 4,
                 "1"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorCreationGuard": {
-          "opcode": "control_if",
-          "next": "lb",
-          "parent": "be",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "legacyActorCreationNot"
-            ],
-            "SUBSTACK": [
-              2,
-              "bf"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorCreationNot": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "legacyActorCreationGuard",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "legacyActorCreationCheck"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorCreationCheck": {
-          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAsset",
-          "next": null,
-          "parent": "legacyActorCreationNot",
-          "inputs": {
-            "NAME": [
-              3,
-              "legacyActorCreationSkin",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorCreationSkin": {
-          "opcode": "lmsTempVars2_getThreadVariable",
-          "next": null,
-          "parent": "legacyActorCreationCheck",
-          "inputs": {
-            "VAR": [
-              1,
-              [
-                10,
-                "skin"
               ]
             ]
           },
@@ -15580,7 +15684,7 @@
         },
         "gp": {
           "opcode": "procedures_definition",
-          "next": "legacyActorActionGuard",
+          "next": "bK",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -15634,7 +15738,7 @@
         "bK": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bL",
-          "parent": "legacyActorActionGuard",
+          "parent": "gp",
           "inputs": {
             "VAR": [
               1,
@@ -15653,70 +15757,6 @@
             ]
           },
           "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorActionGuard": {
-          "opcode": "control_if",
-          "next": null,
-          "parent": "gp",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "legacyActorActionNot"
-            ],
-            "SUBSTACK": [
-              2,
-              "bK"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorActionNot": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "legacyActorActionGuard",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "legacyActorActionCheck"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorActionCheck": {
-          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAction",
-          "next": null,
-          "parent": "legacyActorActionNot",
-          "inputs": {
-            "ACTION": [
-              3,
-              "legacyActorActionValue",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyActorActionValue": {
-          "opcode": "argument_reporter_string_number",
-          "next": null,
-          "parent": "legacyActorActionCheck",
-          "inputs": {},
-          "fields": {
-            "VALUE": [
-              "action",
-              null
-            ]
-          },
           "shadow": false,
           "topLevel": false
         },
@@ -17352,7 +17392,7 @@
         },
         "gP": {
           "opcode": "procedures_definition",
-          "next": "legacyStageActionGuard",
+          "next": "bY",
           "parent": null,
           "inputs": {
             "custom_block": [
@@ -17406,7 +17446,7 @@
         "bY": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
           "next": "bZ",
-          "parent": "legacyStageActionGuard",
+          "parent": "gP",
           "inputs": {
             "VAR": [
               1,
@@ -17425,70 +17465,6 @@
             ]
           },
           "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyStageActionGuard": {
-          "opcode": "control_if",
-          "next": null,
-          "parent": "gP",
-          "inputs": {
-            "CONDITION": [
-              2,
-              "legacyStageActionNot"
-            ],
-            "SUBSTACK": [
-              2,
-              "bY"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyStageActionNot": {
-          "opcode": "operator_not",
-          "next": null,
-          "parent": "legacyStageActionGuard",
-          "inputs": {
-            "OPERAND": [
-              2,
-              "legacyStageActionCheck"
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyStageActionCheck": {
-          "opcode": "kubohiroyakamishibairuntime_isLegacyTextAction",
-          "next": null,
-          "parent": "legacyStageActionNot",
-          "inputs": {
-            "ACTION": [
-              3,
-              "legacyStageActionValue",
-              [
-                10,
-                ""
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "legacyStageActionValue": {
-          "opcode": "argument_reporter_string_number",
-          "next": null,
-          "parent": "legacyStageActionCheck",
-          "inputs": {},
-          "fields": {
-            "VALUE": [
-              "action",
-              null
-            ]
-          },
           "shadow": false,
           "topLevel": false
         },

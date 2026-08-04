@@ -364,11 +364,15 @@ test('builds a player with the exact transformed script and starts it from the t
     harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
     harness.setRuntimeVariable('script', 'stale script from another session');
     harness.clickStage();
-    harness.runUntil(() => harness.getBackdropName() === 'Builder Scene');
+    harness.runUntil(
+      () =>
+        harness.getBackdropName() === 'Builder Scene' &&
+        harness.getRuntimeVariable('text:Narration') === 'むかし' &&
+        harness.getActor('Narration')?.visible === true,
+    );
 
     assert.equal(harness.getRuntimeVariable('script'), validated.script);
-    assert.equal(harness.getActor('Narration'), undefined);
-    assert.equal(harness.hasRuntimeVariable('text:Narration'), false);
+    assert.equal(harness.getActor('Narration')?.visible, true);
     assert.equal(harness.hasRuntimeVariable('Narration'), false);
     assert.deepEqual(harness.extensionState.consoleErrors, []);
     assert.equal(

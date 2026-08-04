@@ -573,7 +573,14 @@ export function registerKamishibaiTestExtensions(
       const index = Math.max(1, Math.trunc(Cast.toNumber(args.INDEX)));
       return state.loadingCostumes[(index - 1) % state.loadingCostumes.length];
     }
-    setTextStyle() {}
+    setTextStyle(args) {
+      const name = Cast.toString(args.NAME);
+      const property = Cast.toString(args.PROPERTY).trim().toLowerCase();
+      state.tempVariables.setRuntimeVariable({
+        VAR: `textStyle:${name}:${property}`,
+        STRING: Cast.toString(args.VALUE),
+      });
+    }
     setTextValue(args) {
       const name = Cast.toString(args.NAME);
       const resource = state.assets.get(name);

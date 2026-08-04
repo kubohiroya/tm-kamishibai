@@ -1276,13 +1276,13 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   harness.broadcast('startStory');
   harness.runUntil(() => harness.getBackdropName() === 'Stars');
 
-  assert.equal(harness.getRuntimeVariable('text:ui.prompt'), 'Pose!');
+  assert.equal(harness.getRuntimeVariable('text:ui.prompt'), 'ポーズをとろう！');
   assert.equal(harness.getRuntimeVariable('text:ui.open'), appShellLocales.en.ui.open);
 
   harness.broadcast('showPrompt');
   harness.runUntil(() => harness.getSprite('prompt')?.visible === true);
   const prompt = harness.getSprite('prompt');
-  assert.equal(harness.extensionState.displayedText.get(prompt.id), 'Pose!');
+  assert.equal(harness.extensionState.displayedText.get(prompt.id), 'ポーズをとろう！');
 
   harness.broadcast('invalidScript');
   harness.runUntil(
@@ -1312,7 +1312,7 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
-test('treats legacy DSL text assets and actions as no-op', async (context) => {
+test('keeps deprecated DSL text assets functional during the 3.2 migration period', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   startScript(
@@ -1338,17 +1338,24 @@ test('treats legacy DSL text assets and actions as no-op', async (context) => {
     ].join('\n'),
   );
 
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('text:Narration') === 'むかし' &&
+      harness.getActor('Narration')?.visible === true,
+  );
+
   assert.equal(harness.getBackdropName(), 'Stars');
-  assert.equal(harness.getActor('Narration'), undefined);
-  assert.equal(harness.getActor('Caption'), undefined);
-  assert.equal(harness.extensionState.assetRegistrations.includes('Narration'), false);
-  assert.equal(harness.extensionState.assetRegistrations.includes('Caption'), false);
-  assert.equal(harness.hasRuntimeVariable('text:Narration'), false);
+  assert.equal(harness.getActor('Narration')?.visible, true);
+  assert.notEqual(harness.getActor('Caption'), undefined);
+  assert.equal(harness.extensionState.assetRegistrations.includes('Narration'), true);
+  assert.equal(harness.extensionState.assetRegistrations.includes('Caption'), true);
+  assert.equal(harness.getRuntimeVariable('text:Narration'), 'むかし');
+  assert.equal(harness.getRuntimeVariable('textStyle:Narration:font'), 'Sans Serif');
   assert.equal(harness.hasRuntimeVariable('Narration'), false);
   assert.deepEqual(
     JSON.parse(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson()),
     {
-      code: 'LEGACY_TEXT_ASSET_NOOP',
+      code: 'LEGACY_TEXT_ASSET_DEPRECATED',
       dslVersion: '3.2',
       names: ['Narration', 'Caption'],
     },

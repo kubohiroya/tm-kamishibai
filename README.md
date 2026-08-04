@@ -35,7 +35,7 @@ API、アセットマニフェスト、安全設定、出力形式について�
 
 ## DSL 3.2の互換性
 
-tmpose-kamishibai 3.2.0は`kamishibai=3.2`を使用します。旧Text Asset構文は移行時の構文互換性のため受理しますが、表示処理は行いません。
+tmpose-kamishibai 3.2.0は`kamishibai=3.2`を使用します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
 
 - `asset=NAME,text`
 - `text=NAME:VALUE`
@@ -43,7 +43,7 @@ tmpose-kamishibai 3.2.0は`kamishibai=3.2`を使用します。旧Text Asset構�
 - `action=text:NAME:VALUE`
 - 旧Text Assetを参照する`show`および`setSkin`
 
-これらを含む台本は処理を継続し、プロジェクトごとに一度`LEGACY_TEXT_ASSET_NOOP`警告を開発者コンソールへ出力します。置き換え先は名前付きスタイルを共有するSVG Text機能拡張です。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この互換処理の対象外です。
+旧構文を含む台本では、プロジェクトごとに一度`LEGACY_TEXT_ASSET_DEPRECATED`警告を開発者コンソールへ出力しますが、実行は継続します。旧Text Assetは少なくとも3.2系列では維持し、削除する場合は将来のメジャーバージョンで事前に告知します。移行先は[`kubohiroya/turbowarp-svg-text`](https://github.com/kubohiroya/turbowarp-svg-text)です。この機能拡張を組み込んだ3.2プロジェクトでは、旧Text Assetと新しいSVG Textを同じ台本内で併用できます。新規の台本では、名前付きスタイルを共有するSVG Textを使用してください。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この警告の対象外です。
 
 ## このリポジトリを開発する
 
