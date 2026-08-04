@@ -1,4 +1,4 @@
-kamishibai=3.1
+kamishibai=3.2
 # PR #44 manual smoke-test script.
 # 1. Load this file, then press Space or click to start.
 # 2. Confirm that the backdrop changes from Title to Stars.

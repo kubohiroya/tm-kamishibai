@@ -1,4 +1,4 @@
-kamishibai=3.1
+kamishibai=3.2
 # Runtime fixture for skipMode context and propagation tests.
 asset=Title,backdrop
 asset=Stars,backdrop

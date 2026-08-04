@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "3.1.9",
+  "version": "3.2.0",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
@@ -61,10 +61,11 @@
   "author": "Hiroya Kubo",
   "license": "MPL-2.0",
   "dependencies": {
+    "@kubohiroya/turbowarp-svg-text": "0.1.0",
     "fflate": "0.8.3"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#f21dd1e746eb527cb8bbeb95c36ba89317ab89a2",
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#b3f4b9aa3ed3ede363700be815fe522f6a47df0b",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",

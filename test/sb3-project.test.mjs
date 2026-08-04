@@ -45,9 +45,14 @@ test('loads project.json from an SB3 archive', async () => {
   });
 });
 
-test('bundles Animated Text with every embedded dynamic caller', () => {
+test('bundles Animated Text and SVG Text with their embedded callers', () => {
   const project = loadKamishibaiProject();
-  const memberIds = ['kubohiroyaassetmanager', 'text', 'kubohiroyakamishibairuntime'];
+  const memberIds = [
+    'kubohiroyaassetmanager',
+    'text',
+    'kubohiroyakamishibairuntime',
+    'kubohiroyasvgtext',
+  ];
   assert(project.extensions.includes('tmposebundle'));
   assert.equal(
     memberIds.some((memberId) => project.extensions.includes(memberId)),
@@ -77,9 +82,19 @@ test('bundles Animated Text with every embedded dynamic caller', () => {
     opcodes.includes('tmposebundle_text__animateText'),
     'Animated Text project blocks must use the bundle namespace.',
   );
+  assert(
+    opcodes.includes('tmposebundle_kubohiroyasvgtext__defineStyle'),
+    'SVG Text project blocks must use the bundle namespace.',
+  );
+  assert(
+    opcodes.includes('tmposebundle_kubohiroyasvgtext__setText'),
+    'SVG Text actor blocks must use the bundle namespace.',
+  );
   assert.equal(
     opcodes.some((opcode) =>
-      /^(?:kubohiroyaassetmanager|text|kubohiroyakamishibairuntime)_/u.test(opcode),
+      /^(?:kubohiroyaassetmanager|text|kubohiroyakamishibairuntime|kubohiroyasvgtext)_/u.test(
+        opcode,
+      ),
     ),
     false,
   );
