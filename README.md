@@ -19,7 +19,7 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.2.0
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.2.1
 ```
 
 ```bash
@@ -53,7 +53,7 @@ svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up
 
 値の並びは`STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`です。`ALIGN`は`left`、`center`、`right`、`DIRECTION`は`up`、`up-right`、`right`、`down-right`、`down`、`down-left`、`left`、`up-left`から指定します。方向は吹き出しにだけ適用されます。
 
-アクター自身をSVGテキストとして表示するには、アクションで文字列とスタイル名を指定します。文字列中のリテラル`\n`は改行になります。アニメーションは3.2.0の対象外です。
+アクター自身をSVGテキストとして表示するには、アクションで文字列とスタイル名を指定します。文字列中のリテラル`\n`は改行になります。アニメーションは3.2系列の対象外です。
 
 ```text
 action=Hero:setText:タイトル\nサブタイトル:title
