@@ -18,8 +18,8 @@ importers:
         version: 0.8.3
     devDependencies:
       '@kubohiroya/sb3-toolchain':
-        specifier: github:kubohiroya/sb3-toolchain#f21dd1e746eb527cb8bbeb95c36ba89317ab89a2
-        version: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/f21dd1e746eb527cb8bbeb95c36ba89317ab89a2
+        specifier: github:kubohiroya/sb3-toolchain#5b3e4b17bb971e038692e27ff3bbdb698ed59e15
+        version: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/5b3e4b17bb971e038692e27ff3bbdb698ed59e15
       '@turbowarp/scratch-svg-renderer':
         specifier: 1.1.0
         version: 1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)
@@ -103,8 +103,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/f21dd1e746eb527cb8bbeb95c36ba89317ab89a2':
-    resolution: {gitHosted: true, integrity: sha512-LZhlvEZHjLa18HNi0r8SyAZBqx4EXRzXfvXPWh3BG5zMjOSXhp36hCjbJmAfFrL1Y4vIUR725J5q5GQVcqHkdg==, tarball: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/f21dd1e746eb527cb8bbeb95c36ba89317ab89a2}
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/5b3e4b17bb971e038692e27ff3bbdb698ed59e15':
+    resolution: {gitHosted: true, integrity: sha512-++8U19nDWSgDRazRYUn7CoBcGvP29HinnLp+71zyw5QlXqNzFyYws3QF5iMUuIcjMKjOzCUZNFQq41kBvAYsaQ==, tarball: https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/5b3e4b17bb971e038692e27ff3bbdb698ed59e15}
     version: 0.4.0
     engines: {node: '>=22.12.0'}
     hasBin: true
@@ -905,7 +905,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/f21dd1e746eb527cb8bbeb95c36ba89317ab89a2':
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/5b3e4b17bb971e038692e27ff3bbdb698ed59e15':
     dependencies:
       fflate: 0.8.3
 

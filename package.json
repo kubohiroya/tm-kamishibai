@@ -64,7 +64,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#f21dd1e746eb527cb8bbeb95c36ba89317ab89a2",
+    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#5b3e4b17bb971e038692e27ff3bbdb698ed59e15",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",
