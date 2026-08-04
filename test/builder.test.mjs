@@ -18,7 +18,11 @@ import {
   validateAssetManifest,
   validateBundle,
 } from '../src/builder/index.js';
-import {embeddedScriptVariableId, embeddedScriptVariableName} from '../src/builder/constants.js';
+import {
+  embeddedScriptVariableId,
+  embeddedScriptVariableName,
+  packageVersion,
+} from '../src/builder/constants.js';
 import {createEmbeddedReference} from '../src/builder/script.js';
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
@@ -929,7 +933,8 @@ test('exposes one CLI contract and a fixed installable package version', async (
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@kubohiroya/tmpose-kamishibai');
-  assert.equal(packageJson.version, '3.2.1');
+  assert.equal(packageJson.version, '3.2.2');
+  assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
   assert.equal(packageJson.bin['tmpose-kamishibai'], 'bin/tmpose-kamishibai.mjs');
