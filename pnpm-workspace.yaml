@@ -2,7 +2,7 @@ packages:
   - .
 
 allowBuilds:
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/2c82aaf02f605564f79efe8ff3bbd8f1a78d6fe9': true
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/f21dd1e746eb527cb8bbeb95c36ba89317ab89a2': true
   fsevents: false
 
 overrides:

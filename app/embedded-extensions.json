@@ -17,6 +17,21 @@
       }
     },
     {
+      "id": "text",
+      "path": "extensions/text.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64",
+      "source": {
+        "provider": "github",
+        "repository": "TurboWarp/extensions",
+        "ref": "master",
+        "resolvedCommit": "9c0ae4f045dfb021cf329ea1ea6e595502c56a8a",
+        "artifact": "extensions/lab/text.js",
+        "integrity": "sha256-aNaVYu62vBeUDKn0+BwNZAO91mWs/xjiYVxXU7Jja98="
+      }
+    },
+    {
       "id": "tmpose",
       "path": "extensions/tmpose.js",
       "mediaType": "text/javascript",
@@ -89,6 +104,13 @@
       "mediaType": "text/javascript",
       "parameters": [],
       "encoding": "base64"
+    }
+  ],
+  "extensionBundles": [
+    {
+      "id": "tmposebundle",
+      "name": "TMPose Extension Bundle",
+      "members": ["kubohiroyaassetmanager", "text", "kubohiroyakamishibairuntime"]
     }
   ]
 }

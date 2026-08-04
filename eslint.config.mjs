@@ -17,6 +17,7 @@ export default [
       'app/extensions/kubohiroyaasyncinput.js',
       'app/extensions/kubohiroyaruntimeexpression.js',
       'app/extensions/kubohiroyatextlines.js',
+      'app/extensions/text.js',
       'app/extensions/tmpose.js',
     ],
   },

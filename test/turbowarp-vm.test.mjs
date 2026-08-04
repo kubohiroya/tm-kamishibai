@@ -345,13 +345,15 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   assert.equal(uiItemBlocks.getBlock(createClone.next).opcode, 'data_setvariableto');
   assert.equal(
     applyCloneSkin.opcode,
-    'kubohiroyaassetmanager_setThisSpriteSkin',
+    'tmposebundle_kubohiroyaassetmanager__setThisSpriteSkin',
     'assets are applied only after cloning the stable placeholder drawable',
   );
   assert.equal(showClone.opcode, 'looks_show');
   assert.equal(uiItemBlocks.getBlock(showClone.next).opcode, 'control_wait');
   assert.equal(
-    Object.values(uiItemBlocks._blocks).some((block) => block.opcode === 'text_setText'),
+    Object.values(uiItemBlocks._blocks).some(
+      (block) => block.opcode === 'tmposebundle_text__setText',
+    ),
     false,
     'UiItem delegates text rendering to Asset Manager instead of cloning Animated Text state',
   );
@@ -1356,6 +1358,11 @@ test('updates and clears a registered text asset from ordered text actions', asy
 test('registers and displays a text asset through the production Asset Manager', async (context) => {
   const harness = await loadKamishibaiVm({productionAssetManager: true});
   context.after(() => harness.quit());
+  assert.equal(harness.vm.runtime.getOpcodeFunction('text_setText'), undefined);
+  assert.equal(
+    typeof harness.vm.runtime.getOpcodeFunction('tmposebundle_text__setText'),
+    'function',
+  );
   const actor = harness.vm.runtime.targets.find(
     (target) => target.isOriginal && target.sprite?.name === 'Actor',
   );

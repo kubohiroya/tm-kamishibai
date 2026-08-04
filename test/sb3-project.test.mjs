@@ -45,6 +45,46 @@ test('loads project.json from an SB3 archive', async () => {
   });
 });
 
+test('bundles Animated Text with every embedded dynamic caller', () => {
+  const project = loadKamishibaiProject();
+  const memberIds = ['kubohiroyaassetmanager', 'text', 'kubohiroyakamishibairuntime'];
+  assert(project.extensions.includes('tmposebundle'));
+  assert.equal(
+    memberIds.some((memberId) => project.extensions.includes(memberId)),
+    false,
+  );
+  assert.equal(
+    memberIds.some((memberId) => Object.hasOwn(project.extensionURLs, memberId)),
+    false,
+  );
+
+  const bundleUrl = project.extensionURLs.tmposebundle;
+  assert.match(bundleUrl, /^data:text\/javascript;base64,/u);
+  const bundleSource = Buffer.from(bundleUrl.slice(bundleUrl.indexOf(',') + 1), 'base64').toString(
+    'utf8',
+  );
+  for (const memberId of memberIds) assert(bundleSource.includes(`//   ID: ${memberId}`));
+  assert(bundleSource.includes("property === 'getOpcodeFunction'"));
+
+  const opcodes = project.targets.flatMap((target) =>
+    Object.values(target.blocks ?? {}).map((block) => block.opcode),
+  );
+  assert(
+    opcodes.includes('tmposebundle_kubohiroyaassetmanager__setThisSpriteSkin'),
+    'Asset Manager project blocks must use the bundle namespace.',
+  );
+  assert(
+    opcodes.includes('tmposebundle_text__animateText'),
+    'Animated Text project blocks must use the bundle namespace.',
+  );
+  assert.equal(
+    opcodes.some((opcode) =>
+      /^(?:kubohiroyaassetmanager|text|kubohiroyakamishibairuntime)_/u.test(opcode),
+    ),
+    false,
+  );
+});
+
 test('skips generated output preparation when an SB3 path is configured', async () => {
   let buildCalled = false;
   const result = await prepareTestSb3({

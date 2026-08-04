@@ -5,6 +5,8 @@ import {runInNewContext} from 'node:vm';
 const require = createRequire(import.meta.url);
 const BlockType = require('scratch-vm/src/extension-support/block-type');
 const Cast = require('scratch-vm/src/util/cast');
+const bundledExtensionId = 'tmposebundle';
+const bundledMemberIds = ['kubohiroyaassetmanager', 'text', 'kubohiroyakamishibairuntime'];
 const assetManagerSource = readFileSync(
   new URL('../../app/extensions/kubohiroyaassetmanager.js', import.meta.url),
   'utf8',
@@ -41,6 +43,147 @@ function extensionInfo(id, blocks) {
 
 function register(vm, id, ExtensionClass) {
   vm.extensionManager.addBuiltinExtension(id, ExtensionClass);
+}
+
+function rewriteBundledOpcode(opcode) {
+  if (typeof opcode !== 'string') return opcode;
+  for (const memberId of bundledMemberIds) {
+    const prefix = `${memberId}_`;
+    if (opcode.startsWith(prefix)) {
+      return `${bundledExtensionId}_${memberId}__${opcode.slice(prefix.length)}`;
+    }
+  }
+  return opcode;
+}
+
+function createBundledRuntime(runtime, memberId) {
+  return new Proxy(runtime, {
+    get(target, property) {
+      if (property === 'getOpcodeFunction') {
+        return (opcode, ...args) => target.getOpcodeFunction(rewriteBundledOpcode(opcode), ...args);
+      }
+      if (property === 'startHats') {
+        return (opcode, ...args) => {
+          const prefix = `${memberId}_`;
+          const rewritten =
+            typeof opcode === 'string' && opcode.startsWith(prefix)
+              ? `${bundledExtensionId}_${memberId}__${opcode.slice(prefix.length)}`
+              : opcode;
+          return target.startHats(rewritten, ...args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function createBundledVm(vm, runtime) {
+  return new Proxy(vm, {
+    get(target, property) {
+      if (property === 'runtime') return runtime;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function createTestBundleExtensionClass(memberDefinitions, onComponent) {
+  return class TestBundleExtension {
+    constructor() {
+      this.components = new Map();
+      for (const {ExtensionClass, id, runtime} of memberDefinitions) {
+        const component = new ExtensionClass(runtime);
+        this.components.set(id, component);
+        onComponent(id, component);
+      }
+    }
+
+    addDelegate(name, component, originalName) {
+      this[name] = (...args) => component[originalName](...args);
+    }
+
+    getInfo() {
+      const result = {
+        id: bundledExtensionId,
+        name: 'TMPose Extension Bundle',
+        blocks: [],
+        menus: {},
+        customFieldTypes: {},
+      };
+      for (const memberId of bundledMemberIds) {
+        const component = this.components.get(memberId);
+        const info = component.getInfo();
+        const namespace = `${memberId}__`;
+        const customFieldTypes = info.customFieldTypes ?? {};
+        for (const [fieldName, fieldInfo] of Object.entries(customFieldTypes)) {
+          result.customFieldTypes[`${namespace}${fieldName}`] = fieldInfo;
+        }
+        for (const blockInfo of info.blocks ?? []) {
+          if (blockInfo === '---') {
+            result.blocks.push(blockInfo);
+            continue;
+          }
+          const block = {...blockInfo};
+          if (block.arguments) {
+            block.arguments = Object.fromEntries(
+              Object.entries(block.arguments).map(([argumentName, argumentInfo]) => {
+                const argument = {...argumentInfo};
+                if (typeof argument.menu === 'string')
+                  argument.menu = `${namespace}${argument.menu}`;
+                if (
+                  typeof argument.type === 'string' &&
+                  Object.hasOwn(customFieldTypes, argument.type)
+                ) {
+                  argument.type = `${namespace}${argument.type}`;
+                }
+                return [argumentName, argument];
+              }),
+            );
+          }
+          if (block.blockType === BlockType.LABEL) {
+            result.blocks.push(block);
+            continue;
+          }
+          if (block.blockType === BlockType.BUTTON) {
+            const delegateName = `${namespace}button__${block.func}`;
+            this.addDelegate(delegateName, component, block.func);
+            block.func = delegateName;
+            result.blocks.push(block);
+            continue;
+          }
+          block.opcode = `${namespace}${block.opcode}`;
+          if (block.blockType !== BlockType.EVENT) {
+            const originalName = block.func || blockInfo.opcode;
+            block.func = block.opcode;
+            this.addDelegate(block.opcode, component, originalName);
+          } else {
+            delete block.func;
+          }
+          result.blocks.push(block);
+        }
+        for (const [menuName, menuInfo] of Object.entries(info.menus ?? {})) {
+          const bundledMenuName = `${namespace}${menuName}`;
+          if (typeof menuInfo === 'string') {
+            const delegateName = `${namespace}menu__${menuName}`;
+            this.addDelegate(delegateName, component, menuInfo);
+            result.menus[bundledMenuName] = {items: delegateName};
+          } else if (Array.isArray(menuInfo)) {
+            result.menus[bundledMenuName] = [...menuInfo];
+          } else {
+            const menu = {...menuInfo};
+            if (typeof menu.items === 'string') {
+              const delegateName = `${namespace}menu__${menuName}`;
+              this.addDelegate(delegateName, component, menu.items);
+              menu.items = delegateName;
+            }
+            result.menus[bundledMenuName] = menu;
+          }
+        }
+      }
+      return result;
+    }
+  };
 }
 
 function createProductionAssetManagerClass(vm, onCreate) {
@@ -841,15 +984,6 @@ export function registerKamishibaiTestExtensions(
   register(vm, 'sipcconsole', ConsoleExtension);
   register(vm, 'lmsTempVars2', TempVariablesExtension);
   register(vm, 'strings', StringsExtension);
-  register(
-    vm,
-    'kubohiroyaassetmanager',
-    productionAssetManager
-      ? createProductionAssetManagerClass(vm, (extension) => {
-          state.assetManager = extension;
-        })
-      : AssetManagerExtension,
-  );
   register(vm, 'tmpose', PoseExtension);
   register(vm, 'localstorage', LocalStorageExtension);
   register(vm, 'kubohiroyatextlines', TextLinesExtension);
@@ -862,19 +996,43 @@ export function registerKamishibaiTestExtensions(
         })
       : RuntimeExpressionExtension,
   );
-  register(
-    vm,
-    'kubohiroyakamishibairuntime',
-    createProductionExtensionClass(vm, kamishibaiRuntimeSource, (extension) => {
-      state.kamishibaiRuntime = extension;
-    }),
-  );
   register(vm, 'kubohiroyaasyncinput', AsyncInputExtension);
   register(vm, 'lmsTimers', TimersExtension);
   register(vm, 'files', FilesExtension);
-  register(vm, 'text', TextExtension);
   register(vm, 'translate', TranslateExtension);
   register(vm, 'kubohiroyaweblink', WebLinkExtension);
+
+  const memberRuntimes = new Map(
+    bundledMemberIds.map((memberId) => [memberId, createBundledRuntime(vm.runtime, memberId)]),
+  );
+  const memberVm = (memberId) => createBundledVm(vm, memberRuntimes.get(memberId));
+  const AssetManagerClass = productionAssetManager
+    ? createProductionAssetManagerClass(memberVm('kubohiroyaassetmanager'), () => {})
+    : AssetManagerExtension;
+  const KamishibaiRuntimeClass = createProductionExtensionClass(
+    memberVm('kubohiroyakamishibairuntime'),
+    kamishibaiRuntimeSource,
+  );
+  const BundleExtension = createTestBundleExtensionClass(
+    [
+      {
+        ExtensionClass: AssetManagerClass,
+        id: 'kubohiroyaassetmanager',
+        runtime: memberRuntimes.get('kubohiroyaassetmanager'),
+      },
+      {ExtensionClass: TextExtension, id: 'text', runtime: memberRuntimes.get('text')},
+      {
+        ExtensionClass: KamishibaiRuntimeClass,
+        id: 'kubohiroyakamishibairuntime',
+        runtime: memberRuntimes.get('kubohiroyakamishibairuntime'),
+      },
+    ],
+    (memberId, component) => {
+      if (memberId === 'kubohiroyaassetmanager') state.assetManager = component;
+      if (memberId === 'kubohiroyakamishibairuntime') state.kamishibaiRuntime = component;
+    },
+  );
+  register(vm, bundledExtensionId, BundleExtension);
 
   return state;
 }

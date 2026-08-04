@@ -16,6 +16,10 @@ import {
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
 export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
+const assetManagerSetTextValueOpcodes = new Set([
+  'kubohiroyaassetmanager_setTextValue',
+  'tmposebundle_kubohiroyaassetmanager__setTextValue',
+]);
 
 function escapeXml(value) {
   return value
@@ -115,7 +119,7 @@ export function readTitleBuildMetadataFromSb3(archiveBytes) {
   const versionBlocks = project.targets
     .flatMap((target) => Object.values(target.blocks ?? {}))
     .filter((block) => {
-      if (block.opcode !== 'kubohiroyaassetmanager_setTextValue') return false;
+      if (!assetManagerSetTextValueOpcodes.has(block.opcode)) return false;
       return block.inputs?.NAME?.[1]?.[1] === 'about.version';
     });
   assert.equal(

@@ -36426,7 +36426,7 @@
     "kubohiroyaasyncinput": "embedded-extension:extensions/kubohiroyaasyncinput.js",
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",
-    "text": "https://extensions.turbowarp.org/lab/text.js",
+    "text": "embedded-extension:extensions/text.js",
     "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js"
   },
   "meta": {
