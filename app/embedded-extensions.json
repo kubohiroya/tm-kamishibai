@@ -84,6 +84,26 @@
       "encoding": "base64"
     },
     {
+      "id": "kubohiroyasvgtext",
+      "path": "extensions/kubohiroyasvgtext.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64",
+      "source": {
+        "provider": "npm",
+        "package": "@kubohiroya/turbowarp-svg-text",
+        "version": "0.1.0",
+        "artifact": "dist/svg-text.js",
+        "integrity": "sha256-BsSY0a8LSsJQwNhESrSRnvbr1SMFbbajQsP2NWXRjN8=",
+        "apiManifest": {
+          "artifact": "dist/extension-manifest.json",
+          "path": "extensions/kubohiroyasvgtext.manifest.json",
+          "formatVersion": 1,
+          "integrity": "sha256-nuzmQRfDNAcqv+v2Yl0WqrIYeWonTOTtgOWwT4vJceY="
+        }
+      }
+    },
+    {
       "id": "kubohiroyaasyncinput",
       "path": "extensions/kubohiroyaasyncinput.js",
       "mediaType": "text/javascript",
@@ -110,7 +130,12 @@
     {
       "id": "tmposebundle",
       "name": "TMPose Extension Bundle",
-      "members": ["kubohiroyaassetmanager", "text", "kubohiroyakamishibairuntime"]
+      "members": [
+        "kubohiroyaassetmanager",
+        "text",
+        "kubohiroyakamishibairuntime",
+        "kubohiroyasvgtext"
+      ]
     }
   ]
 }

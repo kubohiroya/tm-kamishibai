@@ -1369,6 +1369,49 @@ test('keeps deprecated text assets functional in both DSL 3.1 and 3.2 scripts', 
   }
 });
 
+test('uses SVG Text actors alongside deprecated text assets in DSL 3.2', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(
+    harness,
+    [
+      'kamishibai=3.2',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'asset=Narration,text',
+      'actor=Hero,Hero',
+      'text=Narration:旧テキスト',
+      'svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=text:Narration:移行中も利用可能',
+      'action=Hero:show:Hero:0,0,100',
+      'action=Hero:setText:タイトル\\nサブタイトル:title',
+      'action=wait:30',
+    ].join('\n'),
+  );
+
+  harness.runUntil(() => harness.getActorSvgText('Hero') !== undefined);
+
+  assert.deepEqual(harness.extensionState.svgTextStyles.get('title'), {
+    alignment: 'center',
+    backgroundColor: '#112233',
+    direction: 'up',
+    font: 'Noto Sans JP',
+    fontPercent: 150,
+    textColor: '#ffffff',
+  });
+  assert.deepEqual(harness.getActorSvgText('Hero'), {
+    style: 'title',
+    text: 'タイトル\nサブタイトル',
+  });
+  assert.equal(harness.getRuntimeVariable('text:Narration'), '移行中も利用可能');
+  assert.deepEqual(harness.extensionState.consoleErrors, []);
+});
+
 test('registers and displays a text asset through the production Asset Manager', async (context) => {
   const harness = await loadKamishibaiVm({productionAssetManager: true});
   context.after(() => harness.quit());

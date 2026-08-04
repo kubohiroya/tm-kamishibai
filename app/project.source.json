@@ -4592,7 +4592,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "n"
+              "sceneSvgTextStyleCommandDispatch"
             ]
           },
           "fields": {},
@@ -5029,10 +5029,515 @@
           "shadow": false,
           "topLevel": false
         },
-        "n": {
+        "sceneSvgTextStyleCommandDispatch": {
           "opcode": "control_if_else",
           "next": null,
           "parent": "sceneTextStyleCommandDispatch",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "sceneCommandIsSvgTextStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "sceneDefineSvgTextStyle"
+            ],
+            "SUBSTACK2": [
+              2,
+              "n"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneCommandIsSvgTextStyle": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "sceneSvgTextStyleCommandDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "sceneCommandKeyForSvgTextStyle",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "svgTextStyle"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneCommandKeyForSvgTextStyle": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneCommandIsSvgTextStyle",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "key",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneDefineSvgTextStyle": {
+          "opcode": "kubohiroyasvgtext_defineStyle",
+          "next": null,
+          "parent": "sceneSvgTextStyleCommandDispatch",
+          "inputs": {
+            "STYLE": [
+              3,
+              "sceneSvgTextStyleName",
+              [
+                10,
+                "default"
+              ]
+            ],
+            "BACKGROUND": [
+              3,
+              "sceneSvgTextStyleBackground",
+              [
+                10,
+                "#ffffff"
+              ]
+            ],
+            "TEXT_COLOR": [
+              3,
+              "sceneSvgTextStyleTextColor",
+              [
+                10,
+                "#575e75"
+              ]
+            ],
+            "FONT": [
+              3,
+              "sceneSvgTextStyleFont",
+              [
+                10,
+                "Helvetica, Arial, sans-serif"
+              ]
+            ],
+            "SIZE": [
+              3,
+              "sceneSvgTextStyleSize",
+              [
+                4,
+                "100"
+              ]
+            ],
+            "ALIGN": [
+              3,
+              "sceneSvgTextStyleAlign",
+              [
+                10,
+                "center"
+              ]
+            ],
+            "DIRECTION": [
+              3,
+              "sceneSvgTextStyleDirection",
+              [
+                10,
+                "down"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleName": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "1"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForName",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForName": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleName",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleBackground": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "2"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForBackground",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForBackground": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleBackground",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleTextColor": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "3"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForTextColor",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForTextColor": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleTextColor",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleFont": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "4"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForFont",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForFont": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleFont",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleSize": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "5"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForSize",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForSize": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleSize",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleAlign": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "6"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForAlign",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForAlign": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleAlign",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "sceneSvgTextStyleDirection": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "sceneDefineSvgTextStyle",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "7"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "sceneSvgTextStyleValueForDirection",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "sceneSvgTextStyleValueForDirection": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "sceneSvgTextStyleDirection",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "value",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "n": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "sceneSvgTextStyleCommandDispatch",
           "inputs": {
             "CONDITION": [
               2,
@@ -30143,7 +30648,7 @@
             ],
             "SUBSTACK2": [
               2,
-              "ih"
+              "actorSvgTextDispatch"
             ]
           },
           "fields": {},
@@ -30314,10 +30819,134 @@
           "shadow": false,
           "topLevel": false
         },
+        "actorSvgTextDispatch": {
+          "opcode": "control_if_else",
+          "next": null,
+          "parent": "aa",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorCommandIsSetText"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorSetSvgText"
+            ],
+            "SUBSTACK2": [
+              2,
+              "ih"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorCommandIsSetText": {
+          "opcode": "strings_identical",
+          "next": null,
+          "parent": "actorSvgTextDispatch",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "actorCommandForSetText",
+              [
+                10,
+                "A"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "setText"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorCommandForSetText": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorCommandIsSetText",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionCommand"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorSetSvgText": {
+          "opcode": "kubohiroyasvgtext_setText",
+          "next": null,
+          "parent": "actorSvgTextDispatch",
+          "inputs": {
+            "TEXT": [
+              3,
+              "actorSvgTextValue",
+              [
+                10,
+                ""
+              ]
+            ],
+            "STYLE": [
+              3,
+              "actorSvgTextStyle",
+              [
+                10,
+                "default"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorSvgTextValue": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorSetSvgText",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorSvgTextStyle": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorSetSvgText",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "ih": {
           "opcode": "sipcconsole_Error",
           "next": null,
-          "parent": "aa",
+          "parent": "actorSvgTextDispatch",
           "inputs": {
             "string": [
               3,
@@ -36737,6 +37366,7 @@
     "kubohiroyatextlines",
     "kubohiroyaruntimeexpression",
     "kubohiroyakamishibairuntime",
+    "kubohiroyasvgtext",
     "kubohiroyaasyncinput",
     "lmsTimers",
     "files",
@@ -36758,7 +37388,8 @@
     "lmsTimers": "https://extensions.turbowarp.org/Lily/MoreTimers.js",
     "files": "https://extensions.turbowarp.org/files.js",
     "text": "embedded-extension:extensions/text.js",
-    "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js"
+    "kubohiroyaweblink": "embedded-extension:extensions/kubohiroyaweblink.js",
+    "kubohiroyasvgtext": "embedded-extension:extensions/kubohiroyasvgtext.js"
   },
   "meta": {
     "semver": "3.0.0",

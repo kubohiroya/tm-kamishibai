@@ -168,6 +168,11 @@ export class KamishibaiVmHarness {
     return this.extensionState.actorSkins.get(name);
   }
 
+  getActorSvgText(name) {
+    const actor = this.getActor(name);
+    return actor ? this.extensionState.svgTextActors.get(actor.id) : undefined;
+  }
+
   quit() {
     this.vm.quit();
   }

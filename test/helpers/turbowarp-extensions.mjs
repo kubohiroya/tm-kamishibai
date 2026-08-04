@@ -6,7 +6,12 @@ const require = createRequire(import.meta.url);
 const BlockType = require('scratch-vm/src/extension-support/block-type');
 const Cast = require('scratch-vm/src/util/cast');
 const bundledExtensionId = 'tmposebundle';
-const bundledMemberIds = ['kubohiroyaassetmanager', 'text', 'kubohiroyakamishibairuntime'];
+const bundledMemberIds = [
+  'kubohiroyaassetmanager',
+  'text',
+  'kubohiroyakamishibairuntime',
+  'kubohiroyasvgtext',
+];
 const assetManagerSource = readFileSync(
   new URL('../../app/extensions/kubohiroyaassetmanager.js', import.meta.url),
   'utf8',
@@ -304,6 +309,9 @@ export function registerKamishibaiTestExtensions(
     poseScore: 0,
     runtimeExpression: null,
     runtimeVariableWrites: [],
+    svgText: null,
+    svgTextActors: new Map(),
+    svgTextStyles: new Map(),
     timers: new Map(),
     tempVariables: null,
     textColors: new Map(),
@@ -989,6 +997,46 @@ export function registerKamishibaiTestExtensions(
     }
   }
 
+  class SvgTextExtension {
+    constructor(runtime) {
+      runtime.on('targetWasRemoved', (target) => state.svgTextActors.delete(target.id));
+    }
+    getInfo() {
+      return extensionInfo('kubohiroyasvgtext', [
+        block('defineStyle', BlockType.COMMAND, [
+          'STYLE',
+          'BACKGROUND',
+          'TEXT_COLOR',
+          'FONT',
+          'SIZE',
+          'ALIGN',
+          'DIRECTION',
+        ]),
+        block('sayWithStyle', BlockType.COMMAND, ['MESSAGE', 'STYLE']),
+        block('thinkWithStyle', BlockType.COMMAND, ['MESSAGE', 'STYLE']),
+        block('setText', BlockType.COMMAND, ['TEXT', 'STYLE']),
+      ]);
+    }
+    defineStyle(args) {
+      state.svgTextStyles.set(Cast.toString(args.STYLE).trim() || 'default', {
+        alignment: Cast.toString(args.ALIGN),
+        backgroundColor: Cast.toString(args.BACKGROUND),
+        direction: Cast.toString(args.DIRECTION),
+        font: Cast.toString(args.FONT),
+        fontPercent: Cast.toNumber(args.SIZE),
+        textColor: Cast.toString(args.TEXT_COLOR),
+      });
+    }
+    setText(args, util) {
+      state.svgTextActors.set(util.target.id, {
+        style: Cast.toString(args.STYLE).trim() || 'default',
+        text: Cast.toString(args.TEXT).replace(/\\r\\n|\\n|\\r/gu, '\n'),
+      });
+    }
+    sayWithStyle() {}
+    thinkWithStyle() {}
+  }
+
   class WebLinkExtension {
     getInfo() {
       return extensionInfo('kubohiroyaweblink', [block('openUrl', BlockType.COMMAND, ['URL'])]);
@@ -1043,10 +1091,16 @@ export function registerKamishibaiTestExtensions(
         id: 'kubohiroyakamishibairuntime',
         runtime: memberRuntimes.get('kubohiroyakamishibairuntime'),
       },
+      {
+        ExtensionClass: SvgTextExtension,
+        id: 'kubohiroyasvgtext',
+        runtime: memberRuntimes.get('kubohiroyasvgtext'),
+      },
     ],
     (memberId, component) => {
       if (memberId === 'kubohiroyaassetmanager') state.assetManager = component;
       if (memberId === 'kubohiroyakamishibairuntime') state.kamishibaiRuntime = component;
+      if (memberId === 'kubohiroyasvgtext') state.svgText = component;
     },
   );
   register(vm, bundledExtensionId, BundleExtension);
