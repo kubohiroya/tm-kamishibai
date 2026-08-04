@@ -1,0 +1,1964 @@
+# 紙芝居DSL 4.0 設計レビュー草案
+
+Copyright © 2026 Hiroya Kubo.
+
+文書状態: 実装前レビュー草案
+
+対象: DSL設計者、Scratch／TurboWarp実装者、教材設計者
+
+関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)
+
+現行実装: [`tmpose-kamishibai 3.2.2`](../../README.md#dsl-32の互換性)
+
+機能拡張構成: [`app/embedded-extensions.json`](../../app/embedded-extensions.json)
+調査基準日: 2026-08-05
+
+この文書は、紙芝居DSL 4.0とその実行基盤の設計案をレビューするための資料です。
+利用者向けの確定仕様でも、実装済み機能の説明でもありません。この文書のレビューが
+完了するまで、DSL 4.0の実装へ着手しないことを前提とします。
+
+## 判断状態の読み方
+
+各設計項目を次の状態で示します。
+
+| 状態     | 意味                                                      |
+| -------- | --------------------------------------------------------- |
+| 現行事実 | 3.2.2または固定ツールチェインですでに実装・検証されている |
+| 決定済み | これまでの設計議論で4.0でも採用する方向が合意されている   |
+| 提案     | 本文書がレビュー対象として提示する具体案                  |
+| 保留     | 先に依存する設計のレビューを終えるまで判断を進めない      |
+| 未決     | 実装前に選択または追加検証が必要                          |
+
+「決定済み」は、細部まで凍結したことを意味しません。後から重大な問題が分かった場合は、
+根拠を記録した上で再検討します。
+
+「現行事実」は4.0で無条件に維持する判断を意味しません。4.0で変更する場合は、現行契約、
+変更理由、移行、ロールバックを明記します。
+
+レビューでは、まず「2. 現時点の設計判断一覧」で前提を確認し、「3. DSL 4.0の表層構文」で
+台本の読みやすさを評価してください。その後、「7」から「11」で実行基盤を確認し、最後に
+「15. レビューが必要な未決事項」のチェック項目ごとに判断を記録する想定です。
+
+## 0. 現行3.2ベースライン
+
+Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツールチェインが更新されました。
+4.0案は次の既成事実を設計入力とし、3.1だけを基準にしません。
+
+### 0.1 DSLと診断 `[現行事実]`
+
+- 3.2.2は`kamishibai=3.1`と`kamishibai=3.2`を受理し、新規台本には3.2を推奨する
+- 実行用の台本解析は引き続きScratch側が担当し、起動時固定・既定OFFの
+  `featureDetailedScriptErrors`を有効にした場合は`kubohiroyakamishibairuntime`が副作用前の
+  preflight、行・列付き`K32-*`診断、SVGエラー表示、安全停止を担当する
+- 旧Text Assetは3.1／3.2で実行可能だがdeprecatedであり、3.2系列だけの移行互換とする
+- 新規テキスト表示は、名前付きスタイルと`setText`を提供するSVG Textを使用する
+- SVG Textは`@kubohiroya/turbowarp-svg-text@0.1.0`、成果物のSHA-256、API manifestを固定する
+
+4.0はこの診断UXを維持しつつ、preflightとScratchパーサーの二段構成を、Source Mapを持つ
+単一のJavaScriptパーサーへ置き換える提案です。
+
+### 0.2 埋め込み機能拡張 `[現行事実]`
+
+現行の正本は`app/embedded-extensions.json`内の個別エントリと、個別JavaScriptを参照する
+`app/project.source.json`です。生成SB3だけが`extensionBundles`によって変換されます。
+
+`tmposebundle`のmemberは次の4件です。
+
+| member                        | source provider | 現行の役割                                 |
+| ----------------------------- | --------------- | ------------------------------------------ |
+| `kubohiroyaassetmanager`      | GitHub          | アセット登録、skin、音声、旧Text Asset互換 |
+| `text`                        | GitHub          | Animated Textと3.2診断表示                 |
+| `kubohiroyakamishibairuntime` | local           | preflight、診断、3.1／3.2移行制御          |
+| `kubohiroyasvgtext`           | npm             | 3.2の名前付きSVG Text                      |
+
+`sb3-toolchain`は生成時に次を行います。
+
+- memberごとのIDとdata URLを一つのbundle IDとdata URLへ変換する
+- block、monitor、menu、custom field、hat、extension storageをmember namespaceへ写す
+- memberからの`runtime.startHats()`と`runtime.getOpcodeFunction()`をbundle opcodeへ変換する
+- 個別sourceとprovenanceを展開ソースに残し、復元カプセルによるunbundleを可能にする
+- 安全に分類できないmemberや未分類opcode参照を、推測で変換せずbuild errorにする
+
+したがって4.0では、独自の合成系を先に新設せず、現行`extensionBundles`契約を第一候補とします。
+
+### 0.3 source providerと更新契約 `[現行事実]`
+
+- GitHub providerはrepository、ref、resolved commit、artifact、SHA-256を記録する
+- npm providerはpackage、完全固定version、artifact、SHA-256を記録し、導入済みpackageから
+  ネットワークなしで`status`／`sync`する
+- 任意のAPI manifestはopcode、block type、argument、menu契約を記録し、更新前に互換性を比較する
+- `status`、`sync`、`update`は個別member単位で行い、bundle生成と依存更新を混同しない
+- TurboWarp block cleanupは既定OFFの明示オプションであり、DSL 4.0の構文、runtime、Bundle
+  設計には含めない
+
+### 0.4 3.2から維持・変更する境界
+
+| 対象                      | 4.0での扱い                                                       |
+| ------------------------- | ----------------------------------------------------------------- |
+| 一行ずつ読める台本        | 維持する                                                          |
+| 3.1／3.2台本の実行        | 3.2 runtimeで維持し、4.0 parserへ混在させない                     |
+| K32診断の表示と安全停止   | UXを維持し、K4の複数診断とSource Mapへ拡張する                    |
+| 旧Text Asset              | 3.2互換に残し、4.0のcore schemaには入れない案をレビューする       |
+| SVG Text                  | 4.0の標準テキスト表示候補として維持する                           |
+| 個別の機能拡張source      | provider、version／commit、integrityを正本として維持する          |
+| `extensionBundles`        | 4.0 Compositeの第一候補として維持する                             |
+| 新しい`./composition` API | 現行bundleで不足する契約が実証された場合だけ追加を検討する        |
+| block cleanup             | DSL設計外。必要なbuildでだけ既定OFFオプションを明示的に有効化する |
+
+現行ベースラインの変更履歴と固定仕様は、次を参照します。
+
+- [`tmpose-kamishibai` PR #246](https://github.com/kubohiroya/tmpose-kamishibai/pull/246):
+  Animated Textを含む静的bundleとmember間動的opcode変換
+- [`tmpose-kamishibai` PR #252](https://github.com/kubohiroya/tmpose-kamishibai/pull/252):
+  DSL 3.2、SVG Text、npm source provider
+- [`sb3-toolchain` PR #31](https://github.com/kubohiroya/sb3-toolchain/pull/31):
+  `getOpcodeFunction()`のmember間変換
+- [`sb3-toolchain` PR #32](https://github.com/kubohiroya/sb3-toolchain/pull/32):
+  DSL設計から分離する既定OFFのblock cleanup
+- [`sb3-toolchain` PR #38](https://github.com/kubohiroya/sb3-toolchain/pull/38):
+  完全固定npm sourceの`status`／`sync`／`update`
+- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/extension-bundles.md)
+- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/source-format-v1.md)
+
+## 1. 設計の目的
+
+### 1.1 解決する問題
+
+DSL 3.2の実行用パーサーはScratchブロックで実装され、JavaScriptの限定preflightがその前段で
+診断します。処理内容が見えるため教育的で、独自コマンドを追加しやすい一方、構文解析、検証、
+実行制御が多数のブロックと共有変数へ分散しています。そのため、次の問題が残っています。
+
+- 構文解析処理が冗長で、区切り文字や引数数に関する不具合を混入させやすい
+- エラーの発生行、列、参照元、参照先を一貫して報告しにくい
+- 未定義アセットやシーン参照を実行前に網羅的に検証しにくい
+- Scratch側と機能拡張側へパーサーを二重に持つと、仕様差が生じる
+- パース結果が共有変数へ分散し、構造化データとして再利用しにくい
+- reporterがJavaScriptオブジェクトを直接返せない
+
+### 1.2 維持する価値
+
+DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしません。一方で、3.1／3.2の
+次の長所は維持します。
+
+- 初めて見た子供でも、上から順に読める
+- 一つの演出が原則として一行で表現される
+- 背景、登場人物、セリフ、待機などの意味が記号に埋もれない
+- 短い台本を少ない記述量で作れる
+- Scratch上で独自アクションを追加し、DSLを拡張する教育活動を残せる
+- 台本とScratchプログラムの対応関係を観察できる
+- 名前付きスタイルを再利用するSVG Textにより、テキストの意味と見た目を分離できる
+
+### 1.3 非目標
+
+- YAMLの全機能を紙芝居DSLとして公開すること
+- DSLから任意のJavaScriptを実行すること
+- 3.1／3.2と4.0を同じパーサー内で自動判別して実行し続けること
+- reporterから生のJavaScriptオブジェクトを返すこと
+- Temporary Variables拡張へ依存すること
+- 許可後に別の機能拡張コードを動的にダウンロードすること
+
+## 2. 現時点の設計判断一覧
+
+| ID   | 状態     | 判断                                                                   |
+| ---- | -------- | ---------------------------------------------------------------------- |
+| D-01 | 決定済み | DSL 4.0のパーサーはTurboWarp機能拡張側へ一本化する                     |
+| D-02 | 決定済み | Scratchブロックによる3.1／3.2パーサーを4.0ランタイムには残さない       |
+| D-03 | 決定済み | 3.2に近い簡潔な一行アクションを維持する                                |
+| D-04 | 決定済み | Scratch Action Registryにより、ScratchでDSLアクションを拡張可能にする  |
+| D-05 | 決定済み | オブジェクトはopaque referenceを介してScratchへ渡す                    |
+| D-06 | 決定済み | Object StoreはTemporary Variablesとは別実装・別名前空間にする          |
+| D-07 | 決定済み | Object Store、Iterator、JSONPathは紙芝居固有にしない                   |
+| D-08 | 決定済み | Kamishibai用成果物は静的に合成し、一つの拡張として登録する             |
+| D-09 | 決定済み | 正式な拡張IDは`kubohiroyakamishibai4`とする                            |
+| D-10 | 決定済み | 実行時に子拡張をロードするメタ拡張方式は採用しない                     |
+| D-11 | 決定済み | StoryDocumentは不変データとし、sceneを記述順のordered arrayで保持する  |
+| D-12 | 決定済み | Action IDは内容ハッシュではなく文書内の決定的なStoryPathとする         |
+| D-13 | 決定済み | 正規化後も各nodeから台本位置へ戻れるSource Mapを保持する               |
+| D-14 | 決定済み | Generic Core、TurboWarp Adapter、Kamishibai Adapterの三層に分ける      |
+| D-15 | 決定済み | story／scene／actionの意味と寿命はKamishibai Adapterだけが扱う         |
+| D-16 | 決定済み | Generic Coreの標準かつ正本の保存実装には`MapBackend`を採用する         |
+| D-17 | 決定済み | 上位層への依存とbuildをまたぐobject referenceの共有を禁止する          |
+| D-18 | 決定済み | 再利用可能なcapabilityは独立GitHub projectとして開発・配布可能にする   |
+| D-19 | 決定済み | 個別Standalone成果物を展開ソースの正本として維持する                   |
+| D-20 | 決定済み | 4.0 Compositeの第一候補に`sb3-toolchain`の静的bundleを使用する         |
+| D-21 | 決定済み | Kamishibai固有adapterは本projectに置き、汎用projectから逆依存しない    |
+| D-22 | 決定済み | 外部capabilityのversion／commit、artifact、integrityをsourceに固定する |
+| D-23 | 決定済み | 既存の公開package、repository、Standalone extension IDを維持する       |
+| D-24 | 決定済み | bundleは生成SB3だけを変換し、個別ID／opcode／storageを展開sourceに残す |
+| D-25 | 決定済み | member間`startHats`／`getOpcodeFunction`はbundle namespaceへ変換する   |
+| D-26 | 決定済み | block cleanupはDSL設計外の既定OFF build optionとして扱う               |
+| P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする            |
+| P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する            |
+| P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う         |
+| P-04 | 提案     | 全文検証が成功するまで、アセット読込や紙芝居実行を開始しない           |
+| P-05 | 提案     | 複数エラーを収集し、SVGエラー画面から発生位置と原因を確認可能にする    |
+| P-06 | 提案     | 管理対象参照を参照カウントし、外部参照が残る対象の`free`を拒否する     |
+| P-07 | 提案     | 旧Text Assetを4.0 core schemaへ入れず、SVG Textを標準経路にする        |
+| P-08 | 提案     | 4.0で更新する全managed memberにAPI manifestを要求する                  |
+| P-09 | 提案     | `./composition`は現行bundleで不足が確認されたcapabilityだけに追加する  |
+
+## 3. DSL 4.0の表層構文
+
+### 3.1 基本方針 `[提案]`
+
+DSL 4.0はYAML 1.2を基礎とします。ただし、実装が受け付けるのは紙芝居用スキーマで
+定義した構造だけです。YAMLタグによるオブジェクト生成や任意型の復元は許可しません。
+
+バージョン宣言は次の形を提案します。
+
+```yaml
+kamishibai: '4.0'
+```
+
+文字列として扱うことで、`4.0`が数値`4`へ正規化されることを避けます。
+
+### 3.2 最小例 `[提案]`
+
+```yaml
+kamishibai: '4.0'
+
+assets:
+  Beach: backdrop
+  Hero: costume
+  OpeningSound: sound
+
+actors:
+  Hero: Hero
+
+cover: [Beach, OpeningSound]
+
+scenes:
+  opening:
+    - stage: Beach
+    - Hero.show: [Hero, 0, -60, 30]
+    - Hero.say: ['こんにちは！', 2]
+    - wait: 1
+```
+
+3.2の`action=`とコロン区切りを、YAMLの「キーと値」へ置き換えています。一つの
+アクションを一つのリスト項目として書くため、実行順は上から下へ読み取れます。
+
+### 3.3 3.2との見た目の比較
+
+3.2:
+
+```text
+kamishibai=3.2
+asset=Beach,backdrop
+asset=Hero,costume
+asset=OpeningSound,sound
+actor=Hero,Hero
+cover=Beach,OpeningSound
+---
+sceneLabel=opening
+action=stage:Beach
+action=Hero:show:Hero:0,-60,30
+action=Hero:say:こんにちは！:2
+action=wait:1
+```
+
+4.0案:
+
+```yaml
+kamishibai: '4.0'
+assets: {Beach: backdrop, Hero: costume, OpeningSound: sound}
+actors: {Hero: Hero}
+cover: [Beach, OpeningSound]
+scenes:
+  opening:
+    - stage: Beach
+    - Hero.show: [Hero, 0, -60, 30]
+    - Hero.say: ['こんにちは！', 2]
+    - wait: 1
+```
+
+短い定義はYAMLのinline表記を使えます。教材では読みやすい複数行表記を基本とし、
+記述量を減らしたい作者はinline表記を選べるようにします。
+
+### 3.4 アクションの共通形式 `[提案]`
+
+一つのアクションは、キーを一つだけ持つYAML mappingとします。
+
+```yaml
+- アクション名: 引数
+```
+
+グローバルアクション:
+
+```yaml
+- stage: Beach
+- wait: 1.5
+- bgm: GuitarChords
+- sound: Gong
+- transition: fadeOut
+- branch: chooseRoute
+```
+
+アクターアクション:
+
+```yaml
+- Hero.show: [HeroHappy, 0, -60, 30]
+- Hero.moveTo: [40, -57, 1.5]
+- Hero.say: ['冒険に出発だ！', 2]
+- Hero.setSkin: HeroSurprised
+```
+
+アクターアクションのキーは、最初の`.`より前をアクター名、後ろをコマンド名として
+解釈します。アクター名に`.`を許可するか、長形式で回避可能にするかは未決です。
+
+### 3.5 位置引数と名前付き引数 `[提案]`
+
+よく使うアクションは3.2に近い位置引数で短く書けます。
+
+```yaml
+- Hero.show: [HeroHappy, 0, -60, 30]
+```
+
+同じアクションを名前付き引数でも書ける案を併記します。
+
+```yaml
+- Hero.show:
+    skin: HeroHappy
+    position: [0, -60]
+    scale: 30
+```
+
+パーサーは両者を同じ内部形式へ正規化します。位置引数は短く、名前付き引数は意味を
+確認しやすいという長所があります。一方、複数表記を許すと仕様とテストが増えるため、
+4.0初版で両方を採用するかはレビューが必要です。
+
+### 3.6 シーンの短形式と長形式 `[提案]`
+
+シーン固有の設定がない場合は、アクション列を直接書きます。
+
+```yaml
+scenes:
+  opening:
+    - stage: Beach
+    - wait: 1
+```
+
+ポーズモデルなどの設定がある場合は、長形式を使います。
+
+```yaml
+scenes:
+  rescue:
+    poseModel: https://example.com/pose-model/
+    actions:
+      - stage: Ocean
+      - Hero.pose: [HeroHelp, help, SquishPop]
+```
+
+どちらも内部では同じ`SceneNode`へ正規化します。
+
+### 3.7 アセット `[提案]`
+
+3.2の短縮アドレスを維持します。
+
+```yaml
+assets:
+  Beach: backdrop
+  Hero: costume
+  HeroHappy: costume:Hero
+  OpeningSound: sound
+  RemoteImage: https://example.com/images/remote.png
+```
+
+複雑な参照には名前付き形式を使用できます。
+
+```yaml
+assets:
+  HeroHappy:
+    kind: costume
+    target: Hero
+    name: Hero-happy
+```
+
+パーサーは短縮アドレスを文字列のまま保持せず、次のような型付きアドレスへ変換します。
+
+```json
+{
+  "kind": "costume",
+  "target": "Hero",
+  "name": "Hero-happy"
+}
+```
+
+これにより、`costume:`の分割や対象検索を実行時に繰り返しません。
+
+### 3.8 SVG Text `[提案]`
+
+4.0の標準テキスト経路には、3.2で導入した名前付きSVG Textを使用します。旧Text Assetの
+`asset=...,text`、`text=`、`textStyle=`は4.0のcore schemaへ入れず、3.2 runtimeとconverterの
+互換責務に残す案です。
+
+```yaml
+textStyles:
+  title:
+    background: '#112233'
+    color: '#ffffff'
+    font: Noto Sans JP
+    size: 150
+    align: center
+    direction: up
+
+scenes:
+  opening:
+    - Hero.setText: ['タイトル\nサブタイトル', title]
+```
+
+3.2の`svgTextStyle=STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`を名前付きmappingへ
+正規化します。`size: 100`は480×360ステージの標準14px相当、`direction`は吹き出しにだけ適用、
+文字列中の`\n`は改行という3.2契約を維持します。アニメーションを4.0初版へ含めるかは未決です。
+
+### 3.9 アクター、表紙、初期変数 `[提案]`
+
+```yaml
+actors:
+  Hero: Hero
+  Princess: Princess
+
+cover: [Beach, OpeningSound]
+
+variables:
+  startScene: opening
+  takeSeaRoute: true
+  score: 1
+```
+
+YAMLのBoolean、数値、文字列を保持します。ただし式評価側へ渡す型とScratch変数へ
+投影する型の規則は別途定義します。
+
+### 3.10 Loadingとポーズ認識音 `[提案]`
+
+```yaml
+loading:
+  backdrop: LoadingBackground
+  costumes: [Loading1, Loading2, Loading3]
+
+poseRecognition:
+  sounds: [ClockTicking, Success]
+```
+
+3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
+mappingへまとめます。
+
+### 3.11 分岐 `[提案]`
+
+3.2の条件リストと遷移先リストを別々に並べる形式を廃止し、条件と遷移先を一組として
+記述します。
+
+```yaml
+branches:
+  chooseRoute:
+    - if: 'score == 1'
+      goto: ocean
+    - if: takeSeaRoute
+      goto: seaRoute
+    - else: home
+```
+
+シーンからは次のように呼び出します。
+
+```yaml
+- branch: chooseRoute
+```
+
+`if`の値は`turbowarp-runtime-expression`互換の式として構文解析します。式の具体的な
+言語仕様を4.0で固定するか、評価器を交換可能にするかは未決です。
+
+### 3.12 入力による遷移 `[提案]`
+
+```yaml
+- keyInputToChangeScene:
+    ArrowLeft: leftRoute
+    ArrowRight: rightRoute
+
+- touchInputToChangeScene:
+    LeftDoor: leftRoute
+    RightDoor: rightRoute
+```
+
+入力と遷移先の個数不一致が構造上発生しない形にします。
+
+### 3.13 ポーズ認識 `[提案]`
+
+単一ポーズ:
+
+```yaml
+- Hero.pose: [HeroJump, jump, JumpSound]
+```
+
+複数ポーズ:
+
+```yaml
+- Hero.pose:
+    - [HeroLeft, left, StepSound]
+    - [HeroRight, right, StepSound]
+```
+
+3.2のスキン名リスト、ポーズ名リスト、効果音リストという三つの並行配列を、
+一ポーズごとの組へ変換します。これによりリスト長不一致を構造上防ぎます。
+
+### 3.14 YAML利用範囲と安全制限 `[提案]`
+
+- YAML 1.2 core schemaを基準とする
+- カスタムタグを禁止する
+- 任意クラスや関数の復元を禁止する
+- alias数、nesting深度、node数、文字列長、ファイルサイズに上限を設ける
+- `__proto__`、`prototype`、`constructor`など、オブジェクト汚染につながるキーを拒否する
+- duplicate keyをエラーにする
+- merge keyを禁止する
+- 日時型への暗黙変換を行わない
+- source locationを失う単純な`parse()`結果だけに依存せず、CSTまたは同等の位置情報を保持する
+
+上限値は実装前ベンチマーク後に決めます。
+
+### 3.15 総合例 `[提案]`
+
+次は、アセット、SVG Text、アクター、シーン、アクション、分岐、入力、ポーズ認識を一つに
+まとめたレビュー用例です。個々の短形式は3.2に対応しますが、YAML schema自体は未実装です。
+
+```yaml
+kamishibai: '4.0'
+
+assets:
+  Beach: backdrop
+  Ocean: backdrop
+  HeroIdle: costume:Hero
+  HeroJump: costume:Hero
+  ClockTicking: sound
+  Success: sound
+
+textStyles:
+  title:
+    background: '#112233'
+    color: '#ffffff'
+    font: Noto Sans JP
+    size: 150
+    align: center
+    direction: up
+
+actors:
+  Hero: HeroIdle
+  Caption: HeroIdle
+
+cover: [Beach, Success]
+
+variables:
+  score: 1
+
+poseRecognition:
+  sounds: [ClockTicking, Success]
+
+branches:
+  chooseRoute:
+    - if: 'score == 1'
+      goto: rescue
+    - else: ending
+
+scenes:
+  opening:
+    - stage: Beach
+    - Hero.show: [HeroIdle, 0, -60, 30]
+    - Caption.setText: ['海へ出発！', title]
+    - Hero.say: ['助けに行こう', 2]
+    - keyInputToChangeScene:
+        ArrowRight: rescue
+    - branch: chooseRoute
+
+  rescue:
+    poseModel: https://example.com/pose-model/
+    actions:
+      - stage: Ocean
+      - Hero.pose: [HeroJump, jump, Success]
+      - wait: 1
+      - goto: ending
+
+  ending:
+    - Caption.setText: ['おしまい', title]
+```
+
+## 4. パーサーと検証
+
+### 4.1 単一パーサー `[決定済み]`
+
+現行3.2は`kubohiroyakamishibairuntime`のpreflightとScratch実行用パーサーを直列化し、
+行・列付き`K32-*`診断を安全に追加しています。この境界は3.2互換パッチとして維持しますが、
+4.0へ二つの構文実装を持ち込みません。
+
+DSL 4.0を解釈する正本は`kubohiroyakamishibai4`機能拡張内のパーサーだけです。
+Scratch側に同じ構文規則を再実装しません。
+
+Scratch側は次を担当します。
+
+- 台本テキストの取得開始
+- パース・検証の開始
+- 成功したStoryDocument参照の受け取り
+- 紙芝居実行の開始
+- Scratchで定義されたカスタムアクションの処理
+- エラー画面からの再試行やタイトル復帰
+
+### 4.2 処理段階 `[提案]`
+
+1. 入力をUTF-8テキストとして受け取る
+2. YAML構文を解析し、全nodeのsource rangeを保持する
+3. `kamishibai`バージョンとトップレベル構造を検証する
+4. assets、actors、scenes、branches、variablesのsymbol tableを作る
+5. アセットアドレスを型付き構造へ正規化する
+6. すべての参照を解決する
+7. core action schemaとScratch Action Registryによりアクションを検証する
+8. Runtime Expressionの式を構文解析する
+9. 不変な`StoryDocument`を生成する
+10. エラーが0件の場合だけObject Storeへ格納し、root referenceを返す
+
+検証中にアセットをロードしたり、ステージを変更したり、アクターcloneを生成したりしません。
+
+### 4.3 検証する参照 `[提案]`
+
+- アセット定義の短縮アドレスが実在するcostume、backdrop、soundへ解決できるか
+- actorの初期skinが定義済み画像アセットか
+- `stage`が定義済みbackdropアセットを参照しているか
+- `show`、`setSkin`、`pose`、`loop`、`sequence`が定義済みアセットを参照しているか
+- `bgm`、`sound`、ポーズ認識音が定義済みsoundアセットか
+- `setText`が定義済みSVG Text styleを参照しているか
+- `branch`が定義済みbranchを参照しているか
+- branch、key、touch、gotoが定義済みsceneを参照しているか
+- action commandがcore actionまたはScratch Action Registryに登録済みか
+- 式が評価前に構文解析可能か
+
+### 4.4 エラー収集方針 `[提案]`
+
+最初の一件で解析を終了せず、安全に継続可能な範囲で複数エラーを収集します。ただし、
+YAML構造を回復できない構文エラーでは、その地点で意味検証を中止します。
+
+過大な入力により画面が埋まらないよう、表示・保持するエラー数には上限を設けます。
+上限到達時は`K4-TOO-MANY-ERRORS`を追加します。
+
+### 4.5 3.2診断との互換境界 `[決定済み]`
+
+- `K32-*`は3.1／3.2入力用の互換診断として維持する
+- `K4-*`はYAML CST、schema、Source Mapを利用する4.0専用診断とする
+- `K32-*`と`K4-*`のcodeを同じ意味に見せかけて再利用しない
+- 画面の日本語／英語、source excerpt、SVG escape、安全停止、再試行というUXは共有する
+- 3.2台本を4.0 parserへ渡した場合はconverterを暗黙実行せず、version不一致を返す
+
+## 5. 診断情報とSVGエラー画面
+
+3.2.2は`featureDetailedScriptErrors`が有効な場合、最初のfatal diagnosticをJSONとして保持し、
+行・列・該当行をXML escapeしたSVGへ描画して、安全停止と再試行を行います。4.0ではこの表示契約を
+置き換えるのではなく、
+複数診断、関連位置、正規化nodeへのpathを追加します。
+
+### 5.1 診断モデル `[提案]`
+
+```json
+{
+  "code": "K4-ASSET-UNDEFINED",
+  "severity": "error",
+  "message": "アセット 'HeroMissing' は定義されていません。",
+  "path": "$.scenes.opening.actions[2].skin",
+  "source": {
+    "uri": "story.yaml",
+    "line": 18,
+    "column": 21,
+    "endLine": 18,
+    "endColumn": 32,
+    "excerpt": "    - Hero.setSkin: HeroMissing"
+  },
+  "related": [],
+  "hint": "assetsに追加するか、定義済みのアセット名へ変更してください。"
+}
+```
+
+`path`は正規化前のYAML構造を指す論理パスです。JSONPathと完全に同じ構文へするかは
+未決ですが、エラー表示とテストで安定して参照できる表記にします。
+
+### 5.2 必須エラー分類 `[提案]`
+
+| code                       | 例                                                  |
+| -------------------------- | --------------------------------------------------- |
+| `K4-VERSION-UNSUPPORTED`   | `kamishibai`が未対応                                |
+| `K4-YAML-SYNTAX`           | YAMLの字下げ、括弧、引用符が不正                    |
+| `K4-SCHEMA-INVALID`        | 必須項目不足、型違い、未知のトップレベル項目        |
+| `K4-COMMAND-UNSUPPORTED`   | coreにもAction Registryにもないコマンド             |
+| `K4-ASSET-ADDRESS-MISSING` | `costume:`などの参照先がSB3内に見つからない         |
+| `K4-ASSET-UNDEFINED`       | `setSkin`や`pose`が未定義アセットを参照             |
+| `K4-SCENE-UNDEFINED`       | 未定義シーンへの遷移                                |
+| `K4-BRANCH-UNDEFINED`      | 未定義branchの実行                                  |
+| `K4-EXPRESSION-SYNTAX`     | Runtime Expressionの式に構文エラー                  |
+| `K4-REGISTRY-MISSING`      | Scratchカスタムアクションのhandlerが見つからない    |
+| `K4-RESOURCE-LIMIT`        | サイズ、深度、node数、alias数などの安全上限を超えた |
+
+### 5.3 画面表示と停止 `[提案]`
+
+1. パーサーが`DiagnosticList`参照を返す
+2. Kamishibai controllerが通常の開始処理へ進まない
+3. 進行中のLoading、入力待ち、ポーズ認識、紙芝居用threadを停止する
+4. 一時的に作成したscene/action scopeを解放する
+5. 診断情報をXML escapeしてSVGへ描画する
+6. 専用Error表示targetまたはStageへSVG costumeとして表示する
+7. エラー番号、ファイル名、行・列、抜粋、説明、修正候補を表示する
+8. 複数エラーの前後移動、再読み込み、タイトル復帰を提供する
+
+SVG生成部は入力文字列をmarkupとして連結せず、必ずescapeします。長すぎる行は表示幅に
+合わせて折り返し、完全な診断情報はObject Store内に保持します。
+
+パーサーは副作用を起こさないため、検証失敗時は「途中まで実行された紙芝居」を巻き戻す
+必要がありません。実行時エラーについては、現在のscene/action scopeを終了して同じ
+エラー画面へ遷移します。
+
+## 6. パース後の情報構造
+
+### 6.1 StoryDocument `[決定済み]`
+
+```json
+{
+  "kind": "StoryDocument",
+  "version": "4.0",
+  "metadata": {},
+  "assets": {},
+  "actors": {},
+  "variables": {},
+  "branches": {},
+  "scenes": [
+    {
+      "id": "opening",
+      "poseModel": null,
+      "actions": []
+    }
+  ],
+  "sourceMap": {}
+}
+```
+
+StoryDocumentはパース完了後に変更しない不変データとします。実行中の現在scene、iterator
+位置、actor状態、入力待ちなどは別の`ExecutionState`へ保持します。`scenes`は台本の記述順を
+保持するordered arrayとし、各sceneは名前に由来する一意なscene IDを持ちます。scene IDから
+配列位置を引くindexは派生データであり、StoryDocument本体とは分離します。
+
+### 6.2 正規化ActionNode `[決定済み]`
+
+短形式と長形式は、次のような同一構造へ変換します。
+
+```json
+{
+  "kind": "Action",
+  "id": "/scenes/opening/actions/2",
+  "target": "Hero",
+  "command": "show",
+  "args": {
+    "skin": "HeroHappy",
+    "position": [0, -60],
+    "scale": 30
+  },
+  "sourceRange": {
+    "line": 12,
+    "column": 5,
+    "endLine": 12,
+    "endColumn": 42
+  }
+}
+```
+
+actionの`id`は内容ハッシュではなく、正規化StoryDocument内の決定的な`StoryPath`とします。
+sceneは配列位置ではなくscene IDで識別し、actionはscene内の0始まりの記述順で識別します。
+
+```text
+/scenes/<scene-id>/actions/<zero-based-index>
+```
+
+引数などの子nodeは、同じpathへfield名を追加します。
+
+```text
+/scenes/opening/actions/2/args/skin
+```
+
+内容や空白だけを変更してもpathは変わりません。scene名の変更、actionの移動、前方へのaction
+挿入ではpathが変わります。このIDは同じ文書構造内の診断・実行トレース・Source Map対応を
+目的とし、編集をまたいで永続する外部IDとはみなしません。
+
+### 6.3 Source Map `[決定済み]`
+
+正規化によりYAML上の形が失われても、StoryDocument、scene、action、引数、参照ごとに
+元の範囲へ戻れるsource mapを保持します。実行時に未定義状態や式評価エラーが発生した場合も、
+元の台本位置を表示します。Source Mapのkeyには6.2のStoryPathを使用します。
+
+## 7. 汎用Object StoreとKamishibai固有層の境界
+
+### 7.1 レイヤー構成 `[決定済み]`
+
+Object Storeを汎用と呼ぶため、紙芝居の概念をObject Store coreへ持ち込みません。設計を
+次の三層へ分離し、依存方向を下向きに限定します。
+
+```text
+Kamishibai Adapter
+  └─ StoryDocument、StoryPath、story／scene／action lifecycle、K4診断
+       ↓
+TurboWarp Adapter
+  └─ Scratch block facade、scalar変換、runtime変数projection、thread連携
+       ↓
+Generic Object Store Core
+  └─ realm、opaque reference、entry、親子scope、new／get／free
+```
+
+| 層                        | 知ってよいもの                                      | 知ってはならないもの                                   |
+| ------------------------- | --------------------------------------------------- | ------------------------------------------------------ |
+| Generic Object Store Core | JavaScript value、type tag、realm、scope、reference | Scratch、TurboWarp、StoryDocument、scene、action       |
+| TurboWarp Adapter         | Scratch scalar、block、VM adapter、runtime variable | 紙芝居DSL、StoryDocument schema、Kamishibaiの状態機械  |
+| Kamishibai Adapter        | StoryDocument、scene、action、診断、実行controller  | Object Store backendの私有`Map`やruntime変数の内部配置 |
+
+Generic CoreはTurboWarpなしで単体テストでき、Kamishibai AdapterはGeneric Coreの公開interface
+だけを利用します。
+
+### 7.2 Generic Object Store Coreの目的 `[決定済み]`
+
+Scratch reporterは構造化オブジェクトを公開値として扱うことを前提としていません。
+そこで、Generic Coreが構造化valueを保持し、呼び出し側へは文字列のopaque referenceだけを
+返します。Generic Core自身は、このreferenceがScratch reporterを通過することを知りません。
+
+参照文字列の候補:
+
+```text
+@obj/<realm>/<kind>/<slot>/<generation>
+```
+
+これは説明用であり、最終的な符号化形式は未決です。利用側は文字列を分解せず、Generic Core
+またはadapterの公開APIへそのまま渡します。
+
+### 7.3 Generic Coreの参照と解放 `[提案・再レビュー対象]`
+
+#### 7.3.1 参照カウントとrealm／generationの役割
+
+参照カウントを採用します。ただし、realm／generationを参照カウントで置き換えるのではなく、
+異なる失敗を検出する仕組みとして併用します。
+
+| 機構             | 防ぐ問題                                                              |
+| ---------------- | --------------------------------------------------------------------- |
+| reference count  | 生きている管理対象参照があるobjectを解放すること                      |
+| realm            | 別のStoreまたは台本再読込前のStoreのreferenceを受け入れること         |
+| slot＋generation | 解放後にslotが再利用されたとき、古いreferenceを新objectと誤認すること |
+
+参照カウントが0であっても、別realmのreferenceや解放済みhandleを正しいものとは判断できません。
+逆にrealmとgenerationが正しくても、生きている参照先を`free`してよいことにはなりません。
+
+#### 7.3.2 handleの種類
+
+Generic Coreのopaque handleを、少なくとも次の三種類に分けます。符号化された文字列を利用側が
+分解することは禁止し、種類の判定もCoreのAPIを介します。
+
+| 種類             | 作成契機                                  | 参照先のcount | 解放操作                          |
+| ---------------- | ----------------------------------------- | ------------- | --------------------------------- |
+| `OwnerRef`       | `newEntry`                                | 増やさない    | `free`で所有する構造を解放する    |
+| `ReferenceLease` | JSONPathのobject結果、明示的な参照作成    | 1増やす       | `releaseReference`で1減らす       |
+| `ExceptionRef`   | adapterがCoreの失敗をreporter値へ変換する | 対象外        | adapterの規則で診断寿命を管理する |
+
+`OwnerRef`は解放権限を示すhandleであり、自分自身への外部参照としては数えません。`ReferenceLease`は
+参照先を生存させる管理単位です。同じlease文字列をScratchの複数の変数やlistへコピーしても、leaseが
+増えたとはみなしません。それらは一つのleaseの別名です。いずれかの別名からreleaseすれば、ほかの
+別名も同時に無効になります。独立した寿命が必要なら、Core APIで新しいleaseを明示的に作ります。
+
+Store内のobjectから別nodeを指す場合は、単なる文字列ではなく`RefValue`という管理対象edgeとして
+保持します。`RefValue`の作成で参照先のcountを1増やし、置換または削除で1減らします。一方、通常の
+object propertyやarray elementによる構造的な親子関係は所有関係であり、`RefValue`として数えません。
+
+#### 7.3.3 JSONPath結果の扱い
+
+- scalarを選んだ場合はscalar値をcopyして返し、参照カウントを変更しない
+- objectまたはarrayを一件選んだ場合は`ReferenceLease`を作り、選択nodeのcountを1増やす
+- 複数nodeのquery結果は、選択した構造化nodeごとにleaseを所有するcollection entryとする
+- collectionを解放すると、collectionが所有する全leaseをreleaseする
+- queryが0件、複数件、型不一致になった場合のreporter表現はTurboWarp Adapterで定義する
+
+JSONPath文字列そのものを参照として数えるのではありません。JSONPathの評価によって作られた
+管理対象edgeまたはleaseを数えます。
+
+#### 7.3.4 安全な`free`
+
+`free(OwnerRef)`は、次の手順を一つのtransactionとして実行します。
+
+1. realm、slot、generation、handle種別、所有権を検証する
+2. 対象entryと、その構造的な子孫からなる解放closureを求める
+3. closure外からclosure内へ入る`ReferenceLease`と`RefValue`を数える
+4. 一つでも残っていれば、何も変更せず`STORE-OBJECT-IN-USE`で失敗する
+5. closure内からclosure外へ出る`RefValue`と、closureが所有するleaseをreleaseする
+6. closureと`OwnerRef`を削除し、再利用される各slotのgenerationを進める
+
+「下位の構造化objectの参照カウントがすべて0」を、各nodeの生のcountが0という意味にはしません。
+closure内部だけで完結する参照は、closureと同時に消えるためです。内部参照まで`free`を拒否する条件に
+すると、自己参照を含むobjectや、親子間に参照を持つ一つの所有構造を解放できなくなります。安全性の
+判定に使うのは、解放後にも残る**closure外部からの流入参照数**です。
+
+scope解放も同じ判定を使います。配下のいずれかへ外部参照が残る場合はscope全体の解放をatomicに
+失敗させ、途中まで削除しません。
+
+#### 7.3.5 失敗の表現と不変条件
+
+Generic Coreの公開操作は概念上`Result<Value, StoreException>`を返します。TurboWarp Adapterは
+失敗をScratch reporterで運べる`ExceptionRef`または同等のscalar値へ変換し、Scratch側が
+`<例外か?>`に相当するpredicateで分岐できるようにします。JavaScript例外をScratchとの境界の外へ
+投げたままにしません。scalarの正確な符号化とblock APIは7.5のレビュー項目として保留します。
+
+最低限、次の汎用error codeを区別します。
+
+| code                        | 意味                                         |
+| --------------------------- | -------------------------------------------- |
+| `STORE-OBJECT-IN-USE`       | 解放closureへ外部から参照が残っている        |
+| `STORE-REFERENCE-RELEASED`  | release済みleaseを使用または再releaseした    |
+| `STORE-REFERENCE-STALE`     | generationが一致しない                       |
+| `STORE-REALM-MISMATCH`      | handleのrealmが現在のStoreと一致しない       |
+| `STORE-REFERENCE-UNDERFLOW` | 内部不整合によりcountを0未満へ減らそうとした |
+
+参照の作成・置換・削除とcount更新は、必ず同じtransactionで行います。各entryについて「countが生きた
+管理対象流入edge数と一致する」という不変条件を検証できるデバッグAPIを用意します。
+
+異なる`OwnerRef`のclosure同士が強い`RefValue`でcycleを作ると、個別の`free`は双方とも失敗します。
+同一closure内のcycleはatomicに解放できますが、所有closureをまたぐcycleについては、作成禁止、
+weak reference、複数closureのatomic freeのいずれを採用するかが未決です。
+
+#### 7.3.6 操作例
+
+JSONPathで得た参照が`free`を止める例は次のとおりです。
+
+| 順序 | 操作                                   | 対象nodeのcount | 結果                                      |
+| ---- | -------------------------------------- | --------------- | ----------------------------------------- |
+| 1    | `newEntry`でrootと子node `actor`を作る | 0               | rootの`OwnerRef`を返す                    |
+| 2    | `query one(root, "$.actor")`を実行する | 1               | `actor`へのlease `L1`を返す               |
+| 3    | Scratch変数間で`L1`の文字列をcopyする  | 1               | 新しいleaseは作られない                   |
+| 4    | rootの`free`を試みる                   | 1               | `STORE-OBJECT-IN-USE`、Storeは変更しない  |
+| 5    | `L1`をreleaseする                      | 0               | `L1`を持つ全aliasが無効になる             |
+| 6    | rootの`free`を再実行する               | 削除            | rootと`actor`を解放し、generationを進める |
+
+別の所有closure Aの`RefValue`がclosure Bを指している場合、Bだけの`free`は失敗します。先にAを
+解放またはedgeを削除すればBのcountが減り、Bを解放できます。AとBを含む共通scopeを一括解放する
+場合は、そのedgeは解放closure内部の参照になるため、scope外からの参照がなければatomicに解放できます。
+
+以上に加え、Generic Coreはobject、array、scalarなどのvalue、type tag、読み取り専用view、任意の
+親子scopeを管理し、backendをinterfaceとして分離します。`StoryDocument`、`ActionView`、
+`DiagnosticList`は組み込み型にせず、上位層がtype tagを登録します。
+
+### 7.4 Generic scope `[保留: 7.3の再レビュー後]`
+
+本項のレビューは、7.3の参照カウントと解放closureの設計が解決した後に行います。以下は比較の
+土台として残す暫定案であり、まだ承認対象としません。
+
+Generic Coreのscopeは、紙芝居上の意味を持たない所有関係です。
+
+```text
+realm root scope
+  ├─ child scope A
+  │    └─ child scope B
+  └─ child scope C
+```
+
+公開操作の概念は次です。
+
+```text
+createScope(parentScopeRef, label?) -> scopeRef
+newEntry(value, typeTag, ownerScopeRef) -> ownerRef
+createReference(ownerOrLeaseRef, path?) -> referenceLease
+releaseReference(referenceLease)
+releaseScope(scopeRef)
+free(ownerRef)
+```
+
+`label`は診断用の文字列であり、lifecycleを決定しません。`action`、`scene`、`story`という文字列を
+Generic Coreが特別扱いすることは禁止します。
+
+### 7.5 TurboWarp Adapterの責務 `[保留: 7.3の再レビュー後]`
+
+本項のレビューは、7.3の失敗モデルとleaseの設計が解決した後に行います。特にreporterが返す
+`ExceptionRef`の符号化、判定block、診断内容の取得方法は、この項で決定します。
+
+- opaque referenceをScratch stringとして受け渡すblock facadeを提供する
+- Scratchのnumber、string、BooleanとGeneric Coreのscalarを変換する
+- `new`、`free`、参照作成・release、scope作成・解放をScratch blockとして公開する
+- `util.thread`などTurboWarp固有contextを必要なadapterへ渡す
+- 必要な場合だけruntime変数への読み取り専用projectionを実装する
+- Generic Store ErrorをScratchから扱えるscalar結果または診断参照へ変換する
+
+この層には`StoryDocument`を検索するblockや`action scope`という名前のAPIを置きません。
+汎用buildのruntime変数名へprefixが必要なら、例えば`@sd1/`のようにbuild manifestから注入し、
+Generic Coreへ固定しません。
+
+### 7.6 Kamishibai Adapterの責務 `[決定済み]`
+
+Kamishibai Adapterが初めて、汎用scopeへ紙芝居の意味を対応付けます。
+
+| Kamishibai上の寿命 | Generic Coreでの表現                  | 解放契機                            |
+| ------------------ | ------------------------------------- | ----------------------------------- |
+| story              | realm root直下の子scope               | 台本再読込、タイトル復帰、終了      |
+| scene              | story scopeの子scope                  | scene遷移、story終了、error         |
+| action             | scene scopeの子scope                  | action完了、失敗、scene遷移、error  |
+| manual             | 明示的に選択したowner scopeまたはroot | 呼び出し側の`free`または親scope解放 |
+
+- StoryDocumentを`kamishibai.storyDocument` type tagでstory scopeへ格納する
+- ActionViewと一時query結果をaction scopeへ格納する
+- Generic Store ErrorへStoryPathとSource Mapを付加し、`K4-*`診断へ変換する
+- Scratch Action RegistryのthreadとActionContext referenceを関連付ける
+- 紙芝居用projectionを採用する場合だけ、`@k4/`prefixを設定する
+
+Kamishibai AdapterはGeneric Coreのprivate backendへ直接アクセスせず、公開interfaceを介します。
+
+### 7.7 Storage Backendとprojection `[決定済み]`
+
+Generic Coreの標準backendには`MapBackend`を採用します。entry、構造node、参照カウント、scope、
+realm、generation、およびtransactionの状態は`MapBackend`を唯一の正本とします。
+
+`RuntimeVariableBackend`を正本にする案は採用しません。TurboWarp runtime変数への公開が必要な
+場合は、TurboWarp Adapterが`MapBackend`の値を選択的に複製する読み取り専用projectionとして
+実装できます。projectionを削除、再生成、または一時停止しても、Storeの参照カウント、`free`の
+成否、Iteratorの結果が変わってはなりません。projectionからStoreへ書き戻すことも禁止します。
+
+候補となるruntime変数名は次のとおりです。
+
+```text
+汎用build:   @sd1/<realm>/<scope>/<name>
+Kamishibai: @k4/<realm>/<scope>/<name>
+```
+
+projectionの対象、更新時期、prefix、階層、公開blockは7.5で検討します。本機構はTemporary
+Variablesとは別実装にし、その状態や名前空間へ依存させません。
+
+### 7.8 禁止する依存 `[決定済み]`
+
+- Generic CoreからTurboWarp VM、Scratch block、Kamishibai parserをimportしない
+- TurboWarp AdapterからStoryDocument schemaやKamishibai controllerをimportしない
+- Kamishibai Adapterからbackendの`Map`やruntime変数配置を直接操作しない
+- 汎用buildとKamishibai buildのrealmやobject referenceを共有しない
+- Kamishibai固有の`K4-*` error codeをGeneric Coreから返さない
+- 独立capabilityのcoreと、追加する場合のcomposition entrypointから
+  `Scratch.extensions.register`を呼ばない
+- 独立capabilityのcoreから`runtime.ext_*`による別拡張の探索をしない
+- 独立capability projectからKamishibaiのschema、adapter、controllerをimportしない
+- Kamishibai BundleからStandalone拡張のbrowser成果物をimportまたは動的loadしない
+
+## 8. IteratorとJSONPath
+
+### 8.1 責務分離 `[提案]`
+
+- Object Store: オブジェクトの所有と参照
+- JSONPath: 構造からnode集合を選ぶ
+- Iterator: node集合またはarrayを順番に読む状態
+- Kamishibai Runtime: StoryDocumentの意味に沿ってscene/actionを実行する
+
+JSONPathは[IETF RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html)互換の読み取り専用
+subsetから始めます。初版でfilter式まで実装するかは未決です。
+
+### 8.2 汎用blockの概念案 `[提案]`
+
+```text
+(new object store entry from JSON [text] owned by scope [scopeRef])
+(query one [ref] at [JSONPath])
+(query nodes [ref] at [JSONPath] owned by scope [scopeRef])
+(new iterator from [ref] at [JSONPath] owned by scope [scopeRef])
+<iterator [ref] has next?>
+(iterator [ref] next)
+release reference [referenceLease]
+free object owned by [ownerRef]
+```
+
+`query one`がscalarを選んだ場合はScratch scalarを返し、objectまたはarrayを選んだ場合は
+読み取り専用`ReferenceLease`を返します。このleaseの作成時に対象nodeの参照カウントを増やし、
+`release reference`で減らします。`query nodes`のcollectionは選択した構造化nodeへのleaseを
+所有し、collectionの解放時にまとめてreleaseします。型の曖昧さを避けるため、常にreferenceを
+返す別blockを用意する案もレビュー対象です。
+
+### 8.3 Kamishibaiでの利用 `[提案]`
+
+実行本体が毎actionを任意JSONPath文字列で検索する設計にはしません。型付きStoryIteratorを
+利用します。
+
+1. StoryDocument root referenceからStoryIteratorを作る
+2. 開始sceneを解決する
+3. SceneActionIteratorを作る
+4. actionを一件取得し、action scopeのActionView referenceを作る
+5. core handlerまたはScratch Action Registryへ渡す
+6. 完了後にaction scopeを解放する
+7. 次のactionへ進む
+
+JSONPathは、Scratchカスタムアクション、デバッグ、教材、将来の汎用拡張でActionViewや
+StoryDocumentを調べるために使います。
+
+### 8.4 Iteratorの状態 `[提案]`
+
+Iterator entryは少なくとも次を持ちます。
+
+```json
+{
+  "kind": "Iterator",
+  "sourceLeaseRef": "...",
+  "selection": "...",
+  "index": 0,
+  "length": 4,
+  "ownerScopeRef": "...",
+  "state": "ready"
+}
+```
+
+Iteratorは作成時にsource nodeへの強い`ReferenceLease`を一つ取得し、sourceの参照カウントを
+増やします。Iteratorを解放するとこのleaseをreleaseします。したがって、Iteratorが生きている間に
+sourceの`OwnerRef`を`free`しようとすると、`STORE-OBJECT-IN-USE`で失敗します。正常なCore操作だけで
+「Iteratorは生きているがsourceだけ解放済み」という状態は作りません。realm全体の破棄では両方が
+一括して無効になります。`next`を終端後に呼んだ場合の返値を空文字にするか、明示的エラーにするかは
+未決です。
+
+## 9. Scratch Action Registry
+
+### 9.1 教育的な目的 `[決定済み]`
+
+4.0ではJavaScriptパーサーへ一本化しますが、DSLの拡張方法までJavaScriptだけに閉じません。
+Scratch利用者が新しいアクションを定義し、台本から呼び出せる仕組みを提供します。
+
+台本例:
+
+```yaml
+- Hero.wave: [fast, 3]
+```
+
+Scratch側の概念例:
+
+```text
+「カスタムアクション wave を受け取ったとき」
+  現在のactionのtargetを読む
+  現在のactionの引数を読む
+  Scratchブロックで演出する
+  現在のactionを完了する
+```
+
+### 9.2 登録方法 `[提案]`
+
+カスタムaction用hat blockをproject内から検出し、台本のパース前にRegistry Snapshotを作る
+方式を提案します。
+
+```text
+when kamishibai action [wave]
+```
+
+hatの存在自体を登録とみなすため、別の初期化scriptで登録blockを実行する必要がありません。
+明示的な`register action` blockをgreen flag時に実行する方式との比較は必要です。
+
+### 9.3 dispatchとthread context `[提案]`
+
+1. runtimeが`wave` handlerに対応するhatを`startHats`で開始する
+2. 開始した各Scratch threadへActionContext referenceを関連付ける
+3. handler内の`current action` reporterは`util.thread`から対応contextを解決する
+4. handlerはActionViewをJSONPathまたは専用reporterで読む
+5. `complete`、`fail`、`goto`のいずれかで制御をruntimeへ返す
+6. thread終了とaction scope解放を確認する
+
+単一のグローバル`currentAction`変数だけに依存しないため、cloneや将来の並行処理でも
+contextが混ざりにくくなります。
+
+### 9.4 Registryが保持する情報 `[提案]`
+
+```json
+{
+  "name": "wave",
+  "target": "actor",
+  "parameters": [
+    {"name": "speed", "type": "string"},
+    {"name": "count", "type": "number"}
+  ],
+  "source": {
+    "targetId": "...",
+    "hatBlockId": "..."
+  }
+}
+```
+
+parameter schemaをScratch上でどの程度宣言できるようにするかは未決です。初版ではhandlerの
+存在だけを検証し、引数はlistまたはmappingとして渡す小さな仕様から始める案があります。
+
+### 9.5 名前衝突 `[未決]`
+
+- core actionと同名のcustom action登録を禁止する
+- custom actionへnamespaceを必須にする
+- project内だけで一意なら短い名前を許可する
+
+小学生向けの分かりやすさと、再利用可能なScratchモジュール間の衝突回避を比較する必要が
+あります。
+
+## 10. 実行制御
+
+### 10.1 状態機械 `[提案]`
+
+```text
+idle
+  -> parsing
+  -> validating
+  -> ready
+  -> loadingAssets
+  -> runningScene
+  -> waitingAction
+  -> runningScene
+  -> finished
+
+parsing / validating / loadingAssets / runningScene / waitingAction
+  -> error
+```
+
+`error`へ入った後は通常のscene iteratorを進めません。再試行では以前のstory、scene、action
+scopeをすべて破棄し、新しいrealmでパースからやり直します。
+
+### 10.2 core action handler `[提案]`
+
+core actionも巨大なswitch文へ固定せず、Action Registryと同様のschema registryへ登録します。
+ただしcore handlerはJavaScript側で実行し、Scratch custom handlerと区別します。
+
+```text
+command name -> argument schema -> validator -> executor
+```
+
+これにより、パーサー、検証器、実行器が同じcommand定義を参照できます。
+
+### 10.3 例外の境界 `[提案]`
+
+非サンドボックス拡張のblock関数から未処理例外を外へ投げません。内部例外はDiagnosticへ
+変換し、controllerへ失敗結果を返します。プログラミングエラーまで利用者向けエラーとして
+隠さず、console用causeと画面用messageを分離します。
+
+## 11. 独立capability projectとKamishibai Bundle
+
+### 11.0 現行Bundle契約 `[現行事実]`
+
+3.2の`tmposebundle`によって、Issue初回着手時に想定していた「合成専用entrypointがなければ
+Standalone拡張を静的bundle化できない」という前提は解消されました。`sb3-toolchain`は個別の
+classic拡張成果物をbuild入力とし、各`Scratch.extensions.register()`をproxyで捕捉して一つの
+Compositeを登録します。ビルド中にmember JavaScriptを実行せず、生成SB3のランタイムwrapperだけが
+memberを初期化します。
+
+```mermaid
+flowchart LR
+  M["embedded-extensions.json<br/>individual members + provenance"] --> T["sb3-toolchain build"]
+  P["project.source.json<br/>original IDs/opcodes/storage"] --> T
+  T --> B["generated SB3<br/>one composite ID/data URL"]
+  T --> C["recovery capsule<br/>original member data"]
+  B --> W["TurboWarp<br/>one permission unit"]
+```
+
+4.0では、この契約で不足を確認するまで別のbundle builderや必須`./composition` APIを追加しません。
+現行toolchainが対応する変換は次のとおりです。
+
+| 対象                          | 個別source                         | 生成SB3                                                    |
+| ----------------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| extension ID                  | member ID                          | `kubohiroyakamishibai4`                                    |
+| block opcode                  | `member_opcode`                    | `kubohiroyakamishibai4_member__opcode`                     |
+| menu／custom field            | member内の名前                     | `memberId__` namespace                                     |
+| `startHats()`                 | member opcode                      | Composite opcode                                           |
+| `getOpcodeFunction()`         | self／同一bundle member opcode     | Composite opcode                                           |
+| extension storage             | `storage.member`                   | `storage.kubohiroyakamishibai4.components.*`               |
+| block ID／graph link          | 元のID、`next`、`parent`、`inputs` | 変更なし                                                   |
+| member JavaScript／provenance | 個別ファイルとsource metadata      | member sourceをwrapperへ埋め、provenanceは展開sourceに残す |
+
+opcode文字列を運ぶ未対応API、非同期register、XML block、未分類参照などは、変換を推測せずbuildを
+失敗させます。このfail-closed契約を4.0でも維持します。
+
+### 11.1 開発・配布・登録単位を分ける `[決定済み]`
+
+再利用可能な機能を`tmpose-kamishibai`内のprivate moduleとしてだけ実装しません。すでに採用している
+「一つの機能拡張ごとに独立した公開GitHub repositoryとTurboWarp extension IDを持ち、必要な成果物は
+GitHub commitまたは完全固定npm versionから同期する」構成を維持します。npm公開と合成専用entrypointは、
+各capabilityに必須とはしません。
+
+| 境界                        | 役割                                                                 |
+| --------------------------- | -------------------------------------------------------------------- |
+| capability GitHub project   | 独立したIssue、source、test、version、releaseを持つ                  |
+| capability npm package      | 公開済みの場合に完全固定versionで利用する再利用単位                  |
+| Standalone TurboWarp成果物  | capability固有のextension IDとblockで単独利用するbrowser用JavaScript |
+| source metadata             | GitHub／npm provider、artifact、version／commit、integrity、API契約  |
+| Kamishibai固有adapter       | 汎用APIをStoryDocument、asset、pose、actionなどの意味へ対応付ける    |
+| Kamishibai Composite Bundle | 個別成果物とlocal adapterを生成SB3で一つの拡張として登録する         |
+
+```text
+public capability repository／npm package
+  └─ Standalone artifact + own extension ID ─────────┐
+                                                     ↓
+@kubohiroya/tmpose-kamishibai
+  ├─ embedded-extensions.json: provider + exact provenance
+  ├─ individual extension artifacts
+  ├─ Kamishibai-specific adapters
+  ├─ parser／schema／runtime／UI
+  └─ sb3-toolchain extensionBundles → kubohiroyakamishibai4
+```
+
+「TurboWarpへ一つの拡張として登録すること」は、「すべてを一つのrepositoryまたはnpm packageで
+開発すること」を意味しません。Kamishibaiは個別成果物を実行時にURLから追加downloadせず、固定済みの
+埋め込みsourceを`sb3-toolchain`でbuild時に一つのdata URLへまとめます。
+
+### 11.2 独立capability projectの単位 `[決定済み]`
+
+repositoryを分ける基準は、Kamishibaiなしで単独利用する意味があり、独立した公開API、version、
+test、releaseを持てることです。小さな内部moduleごとには分割しません。
+
+2026-08-05時点の3.2.2で、次のprojectとsource providerを使用しています。既存のrepository、
+package名、Standalone extension IDを置き換えず、4.0でも個別更新可能な境界を維持します。
+
+| capability         | 現行source                  | Standalone extension ID       | 4.0での用途                     |
+| ------------------ | --------------------------- | ----------------------------- | ------------------------------- |
+| Asset Manager      | GitHub固定commit            | `kubohiroyaassetmanager`      | asset、skin、sound              |
+| Animated Text      | TurboWarp GitHub固定commit  | `text`                        | 3.2互換表示。4.0での要否は監査  |
+| SVG Text           | npm完全固定version          | `kubohiroyasvgtext`           | 標準テキスト表示                |
+| Runtime Expression | GitHub固定commit            | `kubohiroyaruntimeexpression` | branch条件の事前検証と実行      |
+| Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
+| Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
+| TMPose             | GitHub固定commit            | `tmpose`                      | `TMPoseURL`と`pose` action      |
+| Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`候補   | StoryDocumentと実行時viewの保持 |
+
+Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.2の
+展開ソースはGitHub providerを使用しています。SVG Textだけはnpm provider、API manifest、完全固定versionを
+実運用しています。4.0はcapabilityごとに適したproviderを選び、bundle化だけを理由に別名の`*-core`
+packageや`./composition` entrypointを新設しません。
+
+Structured Dataは新しい独立GitHub projectとnpm packageとして、次のように関連度の高いmoduleを一つの
+repositoryで管理する案です。実際のrepository名とpackage名は作成Issueで確定します。
+
+```text
+turbowarp-structured-data
+  ├─ packages/core
+  ├─ packages/jsonpath
+  ├─ packages/iterator
+  ├─ packages/turbowarp-adapter
+  └─ packages/standalone-extension
+```
+
+Runtime Expression、Asset Manager、TMPose、Async Input、SVG Textは既存の独立projectを出発点とし、
+現行静的bundle契約を満たすStandalone成果物を維持します。Text Linesは4.0 parserの依存にはしませんが、
+独立した汎用拡張としての公開・保守を妨げません。
+
+汎用Diagnostic SVG rendererは独立project候補ですが、本当にKamishibai以外のconsumerと安定した
+APIを持てるかを確認してからrepositoryを分けます。静的合成toolは既存`sb3-toolchain`を使用します。
+別toolや`@kubohiroya/vite-plugin-turbowarp-extension`への追加は、現行toolchainで表現できない要件を
+fixtureで再現してから検討します。
+
+### 11.3 合成専用entrypointという代替案 `[未決]`
+
+次の`./composition`案は初期草案で決定済みとしていましたが、3.2の静的bundle運用後は必須では
+ありません。現行toolchainでは扱えない初期化、副作用分離、typed service注入が必要だとfixtureで
+確認されたcapabilityだけに採用する代替案へ戻します。
+
+#### 11.3.1 比較する二つの合成段階
+
+二案は完全な二者択一ではなく、合成する段階と契約が異なります。
+
+| 項目         | 現行`extensionBundles`                                        | `./composition` API                                        |
+| ------------ | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| 合成段階     | 展開sourceからSB3を生成するとき                               | capability packageまたはKamishibai memberをbuildするとき   |
+| 入力         | `register()`するclassic Standalone JavaScript                 | 自動registerしないESM service factory／block contribution  |
+| 正本         | 個別JS、projectの元opcode／storage、source metadata           | package source、exports、lockfile、service API             |
+| 登録         | runtime wrapperがmemberのregisterを捕捉し、Compositeを1回登録 | composition rootがserviceを組み立て、完成した拡張を1回登録 |
+| member間連携 | block opcode、`startHats()`、`getOpcodeFunction()`、VM API    | import、型付きinterface、port、直接のmethod call           |
+| 更新単位     | memberのGitHub commitまたはnpm version                        | composition APIを公開するpackage version                   |
+| 可逆性       | 復元カプセルと個別sourceからunbundle可能                      | 別途Standalone buildとopcode変換／復元契約が必要           |
+| 互換性検査   | block API manifestと保存済みproject参照                       | TypeScript型、service API version、統合testが別途必要      |
+
+#### 11.3.2 現行memberの依存監査
+
+3.2.2のmemberは、次の方法で他機能へ接続しています。
+
+| 接続方法                      | 現行例                                                 | 現行bundle契約                                          |
+| ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
+| `getOpcodeFunction()`         | Asset Manager→Animated Text、Kamishibai Runtime→Text等 | 同一bundle memberのopcodeをComposite namespaceへ変換    |
+| `startHats()`                 | Runtime Expression／Async Input／Kamishibai Runtime    | 呼出元member自身のhat opcodeを変換                      |
+| `runtime.ext_*`               | Temporary Variables、TMPose                            | 文書化されたmember間互換契約ではない。個別監査が必要    |
+| timer／listener／camera state | Animated Text、Asset Manager、TMPose、Async Input      | member実装をそのまま保持するが、統一disposeは提供しない |
+
+現在の`tmposebundle`は、bundle内依存を`getOpcodeFunction()`で表現しているため現行契約で動作します。
+4.0でAsync InputとTMPoseなどを同じbundleへ追加する場合、`runtime.ext_*`の発見、初期化順、終了処理が
+wrapperの保証範囲に入るかをfixtureで確認します。保証できない依存を、偶然動くglobal propertyとして
+残してはいけません。
+
+#### 11.3.3 現行`extensionBundles`の利点
+
+- 既存repositoryや公開成果物を変更せず、GitHub／npm／local memberを同じ形式でbundle化できる
+- Standalone ID、元opcode、block graph、extension storage、個別sourceを正本として維持できる
+- member更新、API互換性検査、bundle生成を別工程にし、更新失敗をmember単位で戻せる
+- build時にmember JavaScriptを実行せず、未分類参照や未対応形式をfail-closedで拒否できる
+- 生成SB3からunbundleでき、3.2のStandalone運用と編集資産を残せる
+- memberごとのIssue、test、release周期を維持し、4.0実装の前提変更を最小化できる
+
+#### 11.3.4 現行`extensionBundles`の欠点
+
+- wrapper、Scratch proxy、opcode／menu／storage変換という実行時間接層が残る
+- 対応可能なのはtoolchainが明示したTurboWarp APIだけで、未知のopcode carrierや`runtime.ext_*`を
+  一般化できない
+- memberが持つtimer、listener、camera、cacheの生成・破棄を一つのlifecycleとして制御しにくい
+- member間契約がblock opcodeやVM内部propertyになりやすく、型付きservice APIとして検査できない
+- Standalone成果物を丸ごと含むため、4.0で使わないblockやhelperをtree-shakeしにくい
+- API manifest v1は保存済みblock契約を検査するが、内部service、例外、resource ownershipは扱わない
+- member初期化順はmanifest順で決定できても、依存注入や非同期初期化の宣言モデルはない
+
+#### 11.3.5 `./composition`の利点
+
+- parser、Object Store、Expression、Asset、Inputを型付きportとして直接注入できる
+- service生成、realm開始、listener停止、disposeを一つのcomposition rootで管理できる
+- `runtime.ext_*`探索や文字列opcode呼出しをdomain内部から除き、依存方向を静的に検査できる
+- pure coreをTurboWarpなしで単体テストし、fake clock／storage／rendererを注入できる
+- 公開blockをKamishibai用facadeへ限定し、不要なpalette項目と未使用コードを削減できる
+- 共通libraryを一度だけ組み込み、重複helperや変換wrapperの一部を減らせる可能性がある
+- domain error、Diagnostic、transaction、resource ownershipを一つの型付き契約へ揃えやすい
+
+#### 11.3.6 `./composition`の欠点
+
+- 既存capabilityごとにcore、Standalone root、composition exportを分離し、releaseし直す初期費用が大きい
+- Standalone経路とComposite経路の二つを保守するため、同一動作を保証するparity testが必要になる
+- TypeScript型だけではruntime互換性を保証できず、service API versionと破壊的変更規則を新設する必要がある
+- package間の更新順、exact dependency、release調整が増え、独立projectの変更がlockstepになりやすい
+- source-level bundler、ESM／classic変換、source map、license、SBOM、決定的出力の新しい検証責務が増える
+- 現行の復元カプセルだけではStandalone blockへ戻せず、opcode移行とunbundleを別設計にする必要がある
+- package単位のprovenanceはlockfileに残るが、最終artifactからmember sourceを復元する仕組みは別途必要になる
+- tree-shakingやminifyはサイズを減らせる一方、成果物差分、attribution、再現性の検証を複雑にする
+- target codeを実行しない現行toolchainに比べ、追加するbundler plugin自体のsupply-chain監査範囲が広がる
+
+どちらも最終成果物はunsandboxedであり、一回の権限確認になること自体は同じです。
+`./composition`は権限を弱める仕組みではなく、内部依存とlifecycleを明示する仕組みです。
+
+#### 11.3.7 推奨する併用方針 `[提案]`
+
+4.0では次の二段構成を提案します。
+
+1. Parser、StoryDocument、Object Store、Iterator、JSONPath、Action Registryはpure libraryとして実装し、
+   紙芝居固有の4.0 runtime memberへsource-levelで組み込む
+2. そのfirst-party runtime memberと、現行契約を満たすAsset Manager、SVG TextなどのStandalone memberを、
+   `sb3-toolchain extensionBundles`で生成SB3の一つの権限単位にする
+
+概念上のIDは次のように分けます。
+
+```text
+individual first-party member: kubohiroyakamishibairuntime4
+generated Composite ID:        kubohiroyakamishibai4
+```
+
+既存capabilityへ`./composition`を追加するのは、少なくとも次の一つをfixtureで確認した場合に限定します。
+
+- `runtime.ext_*`や未対応VM APIへのmember間依存を現行wrapperで安全に表現できない
+- service instance、transaction、realm、disposeを複数memberで共有する必要がある
+- Standalone block surfaceを含めると、4.0の公開API、サイズ、権限説明が許容できない
+- block opcode経由では型、安全な例外、resource ownershipを維持できない
+- 非同期初期化や停止順を一つのcomposition rootで保証する必要がある
+
+この方針なら、既存拡張を一括改修する費用と、すべてをruntime wrapperへ押し込む長期的な複雑性の
+両方を避けられます。
+
+#### 11.3.8 採用時の追加公開契約
+
+採用する場合は、Standalone成果物と同じpackage内でversionとreleaseを一つに保ちます。
+
+```text
+Standalone browser artifact
+  └─ 現在のextension IDでScratch.extensions.registerを行う単独拡張
+
+./composition entrypoint
+  ├─ 自動registerしないservice factory
+  ├─ 自動registerしないblock contribution
+  └─ capability ID、API version、Standalone extension ID
+
+./core entrypoint（必要なprojectだけ）
+  └─ TurboWarp APIにも依存しない純粋なdomain service
+```
+
+既存packageのbrowser配布URL、`unpkg`、`jsdelivr`、Standalone extension IDは後方互換のため維持します。
+合成用APIを追加する場合の概念上の構成は次の形です。
+
+```json
+{
+  "exports": {
+    "./composition": {
+      "types": "./dist/composition.d.ts",
+      "import": "./dist/composition.js"
+    },
+    "./manifest": "./dist/capability-manifest.json"
+  }
+}
+```
+
+`./composition`が公開する概念上のAPIは次の形です。
+
+```js
+export const capabilityManifest = {};
+export function createService(options) {}
+export function createBlockContribution(service) {}
+```
+
+Standalone成果物も内部では同じservice factoryとblock contributionを利用し、Standalone用の
+composition rootだけが`Scratch.extensions.register`を呼びます。Kamishibaiは`./composition`だけを
+importし、Standalone browser artifactをimportしません。
+
+既存packageがStandalone成果物だけで現行bundle契約を満たす場合、subpath exportを追加しません。
+追加が必要な場合もpackage名は変えず、既存利用者へ破壊的変更を要求しない範囲ではminor version、
+package exportの再定義が必要な場合はmajor versionとしてreleaseします。
+
+capability coreでは次を禁止します。
+
+- `runtime.ext_*`で別の拡張instanceを探索すること
+- 特定のSB3、sprite、block IDを前提にすること
+- KamishibaiのStoryDocument、scene、action、`K4-*`診断をimportすること
+- importしただけでlistener、timer、camera、network accessを開始すること
+- mutable singletonへ実行状態を保存すること
+
+必要なclock、storage、network、rendererなどはconstructorまたはfactoryへportとして注入します。
+
+### 11.4 Standalone sourceと生成Composite `[決定済み]`
+
+個別sourceと生成SB3は異なる登録単位になります。Standalone extension IDは展開ソースに残し、
+`extensionBundles`が生成SB3だけをComposite IDへ変換します。
+
+```text
+@kubohiroya/turbowarp-asset-manager
+  Standalone extension ID: kubohiroyaassetmanager
+
+@kubohiroya/turbowarp-runtime-expression
+  Standalone extension ID: kubohiroyaruntimeexpression
+
+@kubohiroya/turbowarp-structured-data
+  Standalone extension ID: kubohiroyastructdata1
+
+上記memberを集約した生成SB3
+  extension ID: kubohiroyakamishibai4
+  register: sb3-toolchainのruntime wrapperが1回だけ実行
+```
+
+Kamishibaiは固定済みの`kubohiroyastructdata1.js`や`asset-manager.js`を個別ファイルとして展開ソースに
+保持します。生成SB3ではこれらを別URLからdownloadせず、toolchainが一つのdata URLへ埋め込みます。
+
+Composite Bundle内でmemberのStandalone extension IDをTurboWarpへ登録しませんが、個別ID、source
+provider、version／commit、artifact、integrity、任意のAPI manifestを展開ソースへ保持します。
+これにより、どの独立拡張のどの版を集約したかを追跡し、member単位で更新・ロールバックできます。
+
+Standalone版とComposite版ではTurboWarp上のextension IDが異なるため、SB3内の物理opcodeも異なります。
+共通化するのはmember実装、blockの意味、test fixtureです。`sb3-toolchain`はbuild時に保存済みblock、
+monitor、menu、storageをComposite namespaceへ変換し、unbundle時に元の表現へ戻します。
+
+両buildを同じprojectへ同時に読み込むことをKamishibaiの通常構成にはせず、Store、realm、opaque
+referenceも共有しません。
+
+### 11.5 Kamishibai固有adapterと依存性逆転 `[決定済み]`
+
+Kamishibai固有adapterは`tmpose-kamishibai`repositoryに置きます。独立capability projectへ
+Kamishibai用コードを追加しません。
+
+```text
+Structured Data library
+  ↓ KamishibaiStructuredDataAdapter
+StoryDocument／ActionView／ActionContext
+
+Asset Manager library
+  ↓ KamishibaiAssetAdapter
+asset／setSkin／sound／SVG表示
+
+Runtime Expression library
+  ↓ KamishibaiExpressionAdapter
+registerBranchの構文検証と評価
+
+TMPose library
+  ↓ KamishibaiPoseAdapter
+TMPoseURL／pose action
+```
+
+Kamishibai Runtimeは具体的なextension IDや`runtime.ext_*`へ依存せず、次のようなportへ依存します。
+
+```text
+AssetPort
+PosePort
+InputPort
+ExpressionPort
+DiagnosticRenderPort
+```
+
+具体adapterはcomposition rootでportへ注入します。Parserがasset、Scratch custom action、costumeなどを
+検証するときも、TurboWarp VMへ直接問い合わせず、adapterが作成した不変snapshotを入力として受け取ります。
+
+### 11.6 Kamishibai固有ソースとBundle構成 `[決定済み／提案]`
+
+`tmpose-kamishibai`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
+
+```text
+kamishibai/parser
+kamishibai/story-schema
+kamishibai/source-map
+kamishibai/command-registry
+kamishibai/action-registry
+kamishibai/runtime-controller
+kamishibai/realm-manager
+kamishibai/svg-error-overlay
+integrations/structured-data-adapter
+integrations/asset-adapter
+integrations/expression-adapter
+integrations/pose-adapter
+integrations/input-adapter
+turbowarp/block-facade
+turbowarp/thread-adapter
+turbowarp/composition-root
+```
+
+紙芝居固有の意味をこのrepositoryへ置く方針は決定済みです。上の具体的なmodule分割は提案であり、
+実装Issueで小さな単位へ分けます。
+
+外部capabilityは、公開形態に応じてGitHub providerまたはnpm providerで固定します。
+
+```yaml
+dependencies:
+  '@kubohiroya/turbowarp-svg-text': '<exact version>'
+devDependencies:
+  '@kubohiroya/sb3-toolchain': 'github:kubohiroya/sb3-toolchain#<commit>'
+```
+
+GitHub providerのcapabilityは`embedded-extensions.json`でresolved commitとartifactを固定します。
+npm providerのcapabilityは`package.json`／lockfileの完全固定versionと、同manifestのartifact／integrityを
+一致させます。すべてをnpm依存へ揃えること自体を目標にしません。
+
+Kamishibai 4用buildは、固定した個別memberと紙芝居固有memberを`extensionBundles`で指定し、
+一つの自己完結したJavaScriptを生成します。
+
+```text
+extension id: kubohiroyakamishibai4
+Scratch.extensions.register calls: 1
+dynamic child extension loading: none
+remote code loading: none
+```
+
+`sb3-toolchain`はmemberのlogical namespaceを物理opcodeへ決定的に変換します。build時にopcode重複、
+未解決handler、非同期／複数register、未分類opcode参照を検出し、成果物生成を失敗させます。
+
+### 11.7 外部capabilityの固定と検証 `[決定済み]`
+
+Kamishibai Bundleが利用する外部capabilityをmanifestとlockデータで固定します。
+
+```json
+{
+  "id": "example",
+  "path": "extensions/example.js",
+  "mediaType": "text/javascript",
+  "parameters": [],
+  "encoding": "base64",
+  "source": {
+    "provider": "github",
+    "repository": "owner/example-extension",
+    "ref": "main",
+    "resolvedCommit": "0123456789abcdef0123456789abcdef01234567",
+    "artifact": "dist/example.js",
+    "integrity": "sha256-..."
+  }
+}
+```
+
+完全固定npm sourceは`repository`、`ref`、`resolvedCommit`の代わりに次を持ちます。
+
+```json
+{
+  "provider": "npm",
+  "package": "@owner/example-extension",
+  "version": "1.2.3",
+  "artifact": "dist/example.js",
+  "integrity": "sha256-...",
+  "apiManifest": {
+    "artifact": "dist/extension-manifest.json",
+    "path": "extensions/example.manifest.json",
+    "formatVersion": 1,
+    "integrity": "sha256-..."
+  }
+}
+```
+
+version rangeだけに依存せず、GitHubでは解決済みcommit、npmでは完全固定versionとpackage managerの
+lockfile、両providerでは成果物SHA-256を記録します。`check`と`build`ではネットワークへ接続せず、
+少なくとも次を検証します。
+
+- provider metadataとversion／commitの形式
+- npm package名・導入済みversionとlockされた依存の一致
+- source artifactとintegrityの一致
+- header IDとmanifest IDの一致。runtime wrapperでは`getInfo().id`不一致も拒否する
+- API manifestを持つ場合はformat、opcode、block type、argument、menu契約
+- licenseと配布物への表示
+- bundle member順、ID重複、opcode変換可能性
+
+`extensions status`／`sync`／`update`はmember単位で行います。API manifestがある更新では、JavaScriptを
+置き換える前に保存済みblock契約との互換性を比較し、破壊的変更は明示的な二重許可なしに拒否します。
+JavaScript、API manifest、version／commit、integrityは一つのtransactionで更新します。
+
+API manifestはbundleのパレット順を決める資料ではなく、保存済みprojectの互換性検査用です。bundleの
+member順は`extensionBundles[].members`、block順は実行時`getInfo().blocks`を正本とします。4.0で新規追加
+または更新するmanaged memberにはAPI manifestを必須にする案をレビューします。
+
+### 11.8 3.2で利用中の拡張の移行方針 `[提案]`
+
+3.2でbundle済みのmemberは、個別sourceとStandalone IDを維持したまま4.0用bundle候補を選び直します。
+紙芝居固有の意味はKamishibai固有adapterに置き、汎用memberへ逆依存させません。
+
+| 3.2の拡張                     | 4.0での方針                                                        |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `kubohiroyakamishibairuntime` | K32互換を残し、4.0用parser／runtime memberを別IDで追加する         |
+| `kubohiroyatextlines`         | JavaScript parserが入力を扱うため4.0 DSL runtimeから除去           |
+| `kubohiroyaruntimeexpression` | 現行成果物をExpression Adapterから利用。必要時だけ公開APIを追加    |
+| `kubohiroyaassetmanager`      | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
+| `text`                        | 3.2診断／旧Text互換との依存を監査し、4.0 bundle member要否を決める |
+| `kubohiroyasvgtext`           | 4.0の標準テキスト表示memberとして継続する                          |
+| `tmpose`                      | 現行成果物をPose Adapterから利用。必要時だけ公開APIを追加          |
+| `kubohiroyaasyncinput`        | 現行成果物をInput Adapterから利用。必要時だけ公開APIを追加         |
+| `kubohiroyaweblink`           | app shell capabilityとしてbundleへ含めるかを別途判断               |
+| `lmsTempVars2`                | Object Storeは依存しない。4.0 adapterから除去できるか監査する      |
+| Gallery／標準拡張             | app shellとScratch codeの利用状況を監査し、残置または置換を決める  |
+
+たとえば現在のAsset ManagerがTemporary Variablesを直接探索している場合、まず現行bundleの
+`getOpcodeFunction()`変換とadapterで責務を隔離できるか確認します。それで解消できない場合だけ、
+Standalone互換adapterとasset core、または11.3の追加entrypointへ分離します。
+
+外部project側の変更が必要な場合は先にreleaseまたはcommitを確定し、その後このrepositoryのsource
+metadataをtransactionで更新します。外部projectのsourceを由来情報なしにcopyして先行実装することは
+禁止します。
+
+### 11.9 未決のrepository境界 `[未決]`
+
+- Generic DiagnosticからSVGを生成する部分を独立capabilityにするか
+- 現行`sb3-toolchain`静的bundle契約で扱えない4.0 memberが存在するか
+- Web Link、file picker、local storage、timer、text renderingをBundleへ含める範囲
+- Gallery／標準拡張を含めた最終的なSB3 extension依存一覧
+- Structured DataとTMPoseのnpm package名、各capabilityのrelease順序
+- `./composition`が必要になった場合、その共通型をどのpackageが公開するか
+- Standalone blockからComposite blockへの変換toolを初版で提供するか
+
+## 12. 3.1／3.2から4.0への移行
+
+### 12.1 ランタイムの分離 `[提案]`
+
+- 3.1／3.2作品は3.2.2以降の3.2アプリで引き続き実行する
+- 4.0アプリは4.0台本だけを実行する
+- 4.0パーサー内へ3.1／3.2構文解析や旧Text Asset互換を残さない
+- 3.1／3.2から4.0への変換はruntime外のconverterで行う
+
+converterを本リポジトリへ置くか、builder CLIへ含めるかは未決です。
+
+### 12.2 変換可能性
+
+機械変換しやすい項目:
+
+- `asset`、`actor`、`cover`
+- `setRuntimeVariable`
+- `sceneLabel`と`---`
+- core actionの大部分
+- `registerBranch`
+- key/touch input
+- poseの並行リスト
+- 3.2の`svgTextStyle`と`setText`
+
+人による確認が必要な項目:
+
+- 区切り文字を含む3.1／3.2文字列
+- Runtime Expressionの暗黙型変換
+- 未定義参照を実行時挙動に依存していた台本
+- custom action相当の独自Scratch変更
+- 3.1／3.2で偶然受理されていた不正な引数数
+- 旧Text Assetの値・style・`show`／`setSkin`をSVG Textへ移す箇所
+
+converterは変換結果だけでなく、変換元行番号を含むwarningを出します。
+
+### 12.3 段階導入 `[提案]`
+
+1. 設計文書とschema fixtureだけをレビューする
+2. 汎用Object Store、Iterator、JSONPathを単体テストする
+3. parserを副作用なしで実装する
+4. feature flag既定OFFで4.0 runtimeを追加する
+5. 最小台本とエラー台本で自動検証する
+6. Scratch Action Registryを追加する
+7. 4.0 memberを個別sourceとして追加し、API manifestと静的bundleを検証する
+8. 3.1／3.2 converterを追加する
+9. 4.0用SB3を3.2成果物と別名で配布する
+
+各段階は独立したIssueと小さなPRに分けます。feature flagをOFFにすれば3.1／3.2成果物へ影響しない
+状態を、4.0正式化まで維持します。
+
+## 13. セキュリティと資源制限
+
+### 13.1 trust boundary `[提案]`
+
+`kubohiroyakamishibai4`は非サンドボックス拡張としてVM、thread、rendererへアクセスします。
+そのため、Bundleには紙芝居実行に必要な同一trust boundaryの機能だけを含めます。
+
+一つのbundleへまとめることは権限確認の単位を一つにするだけで、memberの権限や信頼性を弱めません。
+個別memberのsource provider、version／commit、artifact、integrity、license、API manifestをレビューし、
+runtimeで追加コードをdownloadしません。
+
+次の機能を許可回数削減だけの目的で同梱しません。
+
+- 任意URLを開く汎用機能
+- クリップボード
+- カメラ・マイクの汎用制御
+- ファイルシステム
+- 任意JavaScript評価
+- 実行時のplugin download
+
+### 13.2 入力上限 `[提案]`
+
+少なくとも次の上限を設定可能にします。
+
+- 台本byte数
+- YAML node数
+- 最大nesting深度
+- 一つのscalarの長さ
+- scene数
+- 一sceneのaction数
+- asset数
+- JSONPath式長
+- Runtime Expression式長
+- 診断数
+- Object Store entry数
+- iterator生成数
+
+上限超過はフリーズさせず、位置情報付きDiagnosticへ変換します。
+
+### 13.3 式評価 `[未決]`
+
+`turbowarp-runtime-expression`との互換性は維持候補ですが、4.0の式言語として次を確認する
+必要があります。
+
+- JavaScriptの`eval`に依存しないか
+- 許可する演算子、関数、変数参照
+- 型変換と比較規則
+- property accessの可否
+- Object Store referenceを式へ渡すか
+- timeoutまたは計算量制限
+- 構文解析と実行を分離できるか
+
+## 14. テスト方針
+
+### 14.1 parser fixture
+
+- 最小台本
+- 3.2相当の全core actionを含む台本
+- 旧Text Assetを含む3.1／3.2入力のconverter warningとSVG Text変換
+- compact表記とnamed表記が同じStoryDocumentになること
+- 行末、空行、コメント、引用符、Unicode
+- 一つのerrorだけを持つ最小fixture
+- 複数の独立errorを持つfixture
+- resource limit境界
+
+### 14.2 propertyと決定性
+
+- 同じ入力から同じ正規化StoryDocumentを生成する
+- mappingの入力順に依存すべきでない箇所を明確にする
+- scene/actionの順序は保持する
+- parse、serialize、parseで意味が変わらない
+- 不正なreferenceを生成できない
+- free後のreferenceをgenerationで拒否する
+- leaseと`RefValue`の作成・削除に対応して参照カウントが増減する
+- lease文字列をcopyしても参照カウントが増えない
+- 外部参照があるclosureの`free`は、何も削除せず失敗する
+- closure内部だけの参照cycleはatomicに解放できる
+- countが管理対象流入edgeの実数と常に一致する
+- releaseの二重実行とcount underflowを検出する
+
+### 14.3 TurboWarp統合
+
+- SB3新規読込で拡張許可が一回で済む
+- 個別sourceのID／opcode／storageを保持し、生成SB3だけがComposite namespaceを使う
+- member間`startHats()`／`getOpcodeFunction()`がComposite opcodeへ変換される
+- unbundleで個別memberのURL、順序、storageを復元できる
+- GitHub／npm providerのstatus、sync、updateとAPI互換性検査をmember単位で行える
+- parse error時にgreen flag処理が実行へ進まない
+- SVGにline、column、excerpt、messageが表示される
+- custom action hatへ正しいActionContextが渡る
+- handler失敗・未完了・thread停止を検出できる
+- scene遷移時にscene/action scopeが解放される
+- 台本再読込時に以前のrealm referenceが無効になる
+- Web版、TurboWarp editor、Packager成果物で同じ意味になる
+
+block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受け入れ基準へ混在させません。
+
+## 15. レビューが必要な未決事項
+
+### 表層構文
+
+- [ ] `kamishibai: "4.0"`を採用するか
+- [ ] compact位置引数とnamed引数の両方を初版から許可するか
+- [ ] sceneの短形式と長形式を両方許可するか
+- [ ] アクター名に`.`を許可するか
+- [ ] 未知のトップレベルキーをerrorにするかwarningにするか
+- [ ] YAML anchor、aliasを全面禁止するか、制限付きで許可するか
+- [ ] 旧Text Assetを4.0 core schemaへ入れず、SVG Textだけを標準経路にするか
+- [ ] SVG Text styleの短形式とnamed mappingの両方を許可するか
+
+### 情報構造とAPI
+
+- [x] StoryDocumentのsceneは記述順を保持するordered arrayとする
+- [x] action IDは内容ハッシュではなく文書内の決定的なStoryPathとする
+- [x] Source MapはStoryPathから元の台本位置を引ける形で保持する
+- [x] Generic Core、TurboWarp Adapter、Kamishibai Adapterを分離する
+- [x] `MapBackend`をGeneric Coreの標準かつ唯一の正本とする
+- [ ] 7.3の管理対象参照、参照カウント、解放closureの意味を承認する
+- [ ] 所有closureをまたぐ強い参照cycleの扱いを決める
+- [ ] reporterが返す例外scalarの符号化と操作blockを決める
+- [ ] 7.3の承認後にGeneric scopeの最終構成を決める
+- [ ] 7.3の承認後にTurboWarp Adapterの最終責務を決める
+- [ ] opaque referenceの具体的な符号化
+- [ ] JSONPath subsetの範囲
+- [ ] `query one`のscalar-or-reference返値を許すか
+- [ ] iterator終端後の`next`をerrorにするか
+
+### Scratch拡張
+
+- [ ] custom action登録をhat検出にするか、明示的register blockにするか
+- [ ] custom actionのparameter schemaをScratchで宣言可能にするか
+- [ ] custom action名へnamespaceを要求するか
+- [ ] handlerが`complete`を呼ばず終了した場合の扱い
+- [ ] 複数handlerが同じaction名を登録した場合の扱い
+
+### 互換性と配布
+
+- [ ] 3.1／3.2 converterの配置と公開単位
+- [ ] 旧Text AssetからSVG Textへ自動変換できない項目のwarning仕様
+- [ ] 4.0のminor version互換規則
+- [ ] `kubohiroyastructdata1`を同時に公開するか
+- [ ] extension API manifestをScratchから参照するblockを公開するか
+
+### 独立capabilityとBundle
+
+- [x] 再利用可能なcapabilityを独立GitHub projectとして開発・配布可能にする
+- [x] 既存のStandalone extension IDと個別sourceを維持する
+- [x] GitHub／npm providerをcapabilityごとに選び、version／commit、artifact、integrityを固定する
+- [x] 現行`sb3-toolchain`の`extensionBundles`を4.0 Compositeの第一候補にする
+- [x] member間`startHats`／`getOpcodeFunction`とstorageをComposite namespaceへ変換する
+- [x] bundleは生成SB3だけを変更し、個別sourceと復元可能性を維持する
+- [x] Kamishibai固有adapterを本projectに置き、汎用projectからの逆依存を禁止する
+- [ ] 4.0で新規追加・更新するmanaged memberにAPI manifestを必須化するか
+- [ ] Diagnostic SVG rendererを独立capabilityにするか
+- [ ] 現行bundle契約で扱えない4.0 memberがある場合、toolchainを拡張するか`./composition`を追加するか
+- [ ] app shellとGallery／標準拡張を含む最終依存一覧を決める
+- [ ] Standalone blockからComposite blockへの変換toolを初版で提供するか
+- [ ] Structured DataとTMPoseのpackage名、各capabilityのrelease順序を決める
+- [ ] `./composition`が必要になった場合、その共通型の公開元を決める
+
+## 16. レビュー時の判断基準
+
+各提案を次の観点で評価します。
+
+1. 小学生が最小例を見て、上から順に意味を推測できるか
+2. 3.2より記述量が過度に増えていないか
+3. 同じ意味を表す表記を増やしすぎていないか
+4. パーサーが実行前に参照と式を検証できるか
+5. エラーから台本の修正位置へ直接戻れるか
+6. Scratchで独自アクションを作る教育的価値が残るか
+7. 汎用モジュールと紙芝居固有コードの境界が明確か
+8. Object Storeの参照と寿命を利用者が管理できるか
+9. 非サンドボックス権限を不必要に拡大していないか
+10. 3.1／3.2作品を壊さず段階導入・ロールバックできるか
+11. 汎用capabilityがKamishibaiなしで独立して開発・test・release・再利用できるか
+
+## 17. 次の成果物
+
+本文書のレビュー後、実装前に次の設計成果物を別Issueで作成します。
+
+- DSL 4.0の機械可読schema
+- 正常fixtureと期待StoryDocument
+- error code catalogと異常fixture
+- Scratch block API一覧
+- 各独立capabilityのrepository、source provider、Standalone ID、API manifest採用表
+- 現行静的bundleで不足が確認された場合だけ、`./composition`の追加contract
+- Kamishibai adapterのport一覧と依存関係図
+- `embedded-extensions.json`／lockfile／API manifestによる再現可能buildの検証仕様
+- Object Store／Iterator／JSONPath API仕様
+- Action Registryのthread lifecycle仕様
+- 3.1／3.2から4.0への変換対応表と旧Text Asset移行warning
+- feature flag、受け入れ試験、ロールバック手順
+
+これらが合意されるまで、本文書中のクラス名、block名、参照形式、YAML短縮表記を実装契約とは
+みなしません。
