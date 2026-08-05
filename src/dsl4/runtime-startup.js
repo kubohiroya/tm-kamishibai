@@ -41,6 +41,7 @@ export function resolveDsl4FeatureFlags(input = {}) {
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {Record<string, Function>} [options.port]
  * @param {{prepare: Function, setLoading: Function, release: Function}} [options.assetLifecycle]
+ * @param {(runtimeComponent: Readonly<Record<string, unknown>>, context: Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean}>}>) => {prepare: Function, setLoading: Function, release: Function}} [options.createAssetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -58,6 +59,17 @@ export async function createDsl4RuntimeStartup(options = {}) {
       diagnostics: [],
     });
   }
+  if (options.assetLifecycle !== undefined && options.createAssetLifecycle !== undefined) {
+    throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
+  }
+  if (
+    options.createAssetLifecycle !== undefined &&
+    typeof options.createAssetLifecycle !== 'function'
+  ) {
+    throw new TypeError('createAssetLifecycle must be a function');
+  }
+  const createAssetLifecycle =
+    typeof options.createAssetLifecycle === 'function' ? options.createAssetLifecycle : null;
   if (!isRecord(options.port))
     throw new TypeError('port must be an object when DSL 4.0 is enabled');
   if (!options.sourceFrontend || typeof options.sourceFrontend.parse !== 'function') {
@@ -94,6 +106,10 @@ export async function createDsl4RuntimeStartup(options = {}) {
     historyLimits: options.historyLimits,
     port: /** @type {Record<string, Function>} */ (options.port),
     assetLifecycle: options.assetLifecycle,
+    createAssetLifecycle: createAssetLifecycle
+      ? () =>
+          createAssetLifecycle(component, deepFreeze({channel: component.channel, featureFlags}))
+      : undefined,
     evaluateCondition: options.evaluateCondition,
     onEvent: options.onEvent,
     onInputError: options.onInputError,
