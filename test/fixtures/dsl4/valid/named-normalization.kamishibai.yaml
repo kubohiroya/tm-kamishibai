@@ -1,0 +1,16 @@
+kamishibai: '4.0'
+assets:
+  Beach:
+    kind: backdrop
+    name: Beach
+scenes:
+  opening:
+    actions:
+      - stage:
+          backdrop: Beach
+      - wait:
+          seconds: 1
+      - goto:
+          scene: ending
+  ending:
+    actions: []

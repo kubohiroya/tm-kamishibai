@@ -1,0 +1,6 @@
+kamishibai: '4.0'
+poseModels:
+  Rescue:
+    file: models/rescue
+scenes:
+  opening: []

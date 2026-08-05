@@ -1,0 +1,6 @@
+kamishibai: '4.0'
+assets:
+  Voice: sound
+scenes:
+  opening:
+    - stage: Voice

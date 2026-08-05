@@ -1,0 +1,7 @@
+kamishibai: '4.0'
+controls:
+  keymaps:
+    development:
+      Ctrl+ArrowLeft: history.previousAction
+scenes:
+  opening: []

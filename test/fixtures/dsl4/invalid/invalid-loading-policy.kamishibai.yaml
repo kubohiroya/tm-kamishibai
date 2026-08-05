@@ -1,0 +1,8 @@
+kamishibai: '4.0'
+assets:
+  Beach:
+    kind: backdrop
+    name: Beach
+    loading: deferred
+scenes:
+  opening: []

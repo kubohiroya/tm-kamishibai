@@ -1,0 +1,10 @@
+kamishibai: '4.0'
+branches:
+  result:
+    - else: ending
+    - if: 'score == 1'
+      goto: ending
+scenes:
+  opening:
+    - branch: result
+  ending: []

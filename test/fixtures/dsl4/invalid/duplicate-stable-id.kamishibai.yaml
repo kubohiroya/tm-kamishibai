@@ -1,0 +1,9 @@
+kamishibai: '4.0'
+scenes:
+  opening:
+    - wait:
+        stableId: duplicated
+        seconds: 1
+    - wait:
+        stableId: duplicated
+        seconds: 2

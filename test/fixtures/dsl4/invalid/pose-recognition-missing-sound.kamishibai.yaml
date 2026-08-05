@@ -1,0 +1,7 @@
+kamishibai: '4.0'
+assets:
+  Clock: sound
+poseRecognition:
+  idleSound: Clock
+scenes:
+  opening: []

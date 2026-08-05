@@ -1,0 +1,7 @@
+kamishibai: '4.0'
+assets:
+  Music: sound
+cover:
+  bgm: Music
+scenes:
+  opening: []
