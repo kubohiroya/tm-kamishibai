@@ -1,3 +1,8 @@
+import {
+  dsl4AssetBundleStoragePaths,
+  Dsl4AssetBundleError,
+  validateDsl4EmbeddedAssetBundle,
+} from './asset-bundle-descriptor.js';
 import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
@@ -81,6 +86,34 @@ function storedArtifacts(project) {
   ].filter(({artifact}) => artifact !== undefined);
 }
 
+/** @param {unknown} project */
+function storedAssetBundles(project) {
+  if (!isRecord(project)) return [];
+  const extensionStorage = isRecord(project.extensionStorage) ? project.extensionStorage : {};
+  const runtimeStorage = isRecord(extensionStorage.kubohiroyakamishibairuntime4)
+    ? extensionStorage.kubohiroyakamishibairuntime4
+    : {};
+  const bundleStorage = isRecord(extensionStorage.kubohiroyakamishibai4)
+    ? extensionStorage.kubohiroyakamishibai4
+    : {};
+  const components = isRecord(bundleStorage.components) ? bundleStorage.components : {};
+  const bundledRuntime = isRecord(components.kubohiroyakamishibairuntime4)
+    ? components.kubohiroyakamishibairuntime4
+    : {};
+  return [
+    {
+      channel: 'unbundled',
+      assets: runtimeStorage.assets,
+      path: dsl4AssetBundleStoragePaths.unbundled,
+    },
+    {
+      channel: 'bundled',
+      assets: bundledRuntime.assets,
+      path: dsl4AssetBundleStoragePaths.bundled,
+    },
+  ].filter(({assets}) => assets !== undefined);
+}
+
 /**
  * Resolve, parse, and validate one immutable runtime component snapshot.
  *
@@ -89,12 +122,22 @@ function storedArtifacts(project) {
  * @param {object} options
  * @param {number} options.maxSourceBytes
  * @param {boolean} [options.historyNavigationAvailable]
+ * @param {boolean} [options.requireAssetBundle]
+ * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetBytes]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function loadDsl4RuntimeArtifact(
   project,
   sourceFrontend,
-  {maxSourceBytes, historyNavigationAvailable = false, subtleCrypto = globalThis.crypto?.subtle},
+  {
+    maxSourceBytes,
+    historyNavigationAvailable = false,
+    requireAssetBundle = false,
+    maxAssetFiles,
+    maxAssetBytes,
+    subtleCrypto = globalThis.crypto?.subtle,
+  },
 ) {
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
@@ -150,7 +193,67 @@ export async function loadDsl4RuntimeArtifact(
   const validatedSuccess = /** @type {{artifact: Readonly<Record<string, unknown>>}} */ (
     /** @type {unknown} */ (validated)
   );
-  return deepFreeze({
+  let assetBundle = null;
+  let assetBundlePath = null;
+  let getAssetFile = null;
+  if (requireAssetBundle) {
+    if (maxAssetFiles === undefined || maxAssetBytes === undefined) {
+      throw new TypeError(
+        'maxAssetFiles and maxAssetBytes are required for complete component loading',
+      );
+    }
+    const bundles = storedAssetBundles(project);
+    if (bundles.length === 0) {
+      return failure(
+        storyDocument,
+        source.descriptor.sourceId,
+        'K4-ASSET-BUNDLE-CHANNEL-MISSING',
+        'DSL 4.0 embedded asset bundle is missing',
+        '$.assets',
+      );
+    }
+    if (bundles.length !== 1) {
+      return failure(
+        storyDocument,
+        source.descriptor.sourceId,
+        'K4-ASSET-BUNDLE-CHANNEL-AMBIGUOUS',
+        'DSL 4.0 asset bundle exists in both bundled and unbundled storage',
+        '$.assets',
+      );
+    }
+    const storedBundle = bundles[0];
+    if (storedBundle.channel !== source.channel) {
+      return failure(
+        storyDocument,
+        source.descriptor.sourceId,
+        'K4-ASSET-BUNDLE-CHANNEL-MISMATCH',
+        'DSL 4.0 source, runtime artifact, and assets must use the same storage channel',
+        '$.assets',
+      );
+    }
+    try {
+      const validatedBundle = await validateDsl4EmbeddedAssetBundle(
+        storyDocument,
+        storedBundle.assets,
+        {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+      );
+      assetBundle = validatedBundle.descriptor;
+      assetBundlePath = storedBundle.path;
+      getAssetFile = validatedBundle.getFile;
+    } catch (error) {
+      if (error instanceof Dsl4AssetBundleError) {
+        return failure(
+          storyDocument,
+          source.descriptor.sourceId,
+          error.code,
+          error.message,
+          '$.assets',
+        );
+      }
+      throw error;
+    }
+  }
+  const result = {
     ok: true,
     channel: source.channel,
     sourcePath: source.path,
@@ -159,5 +262,25 @@ export async function loadDsl4RuntimeArtifact(
     runtimeArtifact: validatedSuccess.artifact,
     storyDocument,
     diagnostics: [],
-  });
+  };
+  if (assetBundle && assetBundlePath && getAssetFile) {
+    Object.assign(result, {assetBundle, assetBundlePath, getAssetFile});
+  }
+  return deepFreeze(result);
+}
+
+/**
+ * Load a complete immutable source, control artifact, and embedded asset snapshot.
+ *
+ * @param {unknown} project
+ * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} sourceFrontend
+ * @param {object} options
+ * @param {number} options.maxSourceBytes
+ * @param {number} options.maxAssetFiles
+ * @param {number} options.maxAssetBytes
+ * @param {boolean} [options.historyNavigationAvailable]
+ * @param {{digest: Function}} [options.subtleCrypto]
+ */
+export function loadDsl4RuntimeComponent(project, sourceFrontend, options) {
+  return loadDsl4RuntimeArtifact(project, sourceFrontend, {...options, requireAssetBundle: true});
 }
