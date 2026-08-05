@@ -92,9 +92,9 @@
       "source": {
         "provider": "npm",
         "package": "@kubohiroya/turbowarp-svg-text",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "artifact": "dist/svg-text.js",
-        "integrity": "sha256-BsSY0a8LSsJQwNhESrSRnvbr1SMFbbajQsP2NWXRjN8=",
+        "integrity": "sha256-7eRrvKGD+1lfNAaTldQrZZGt20Lo+C+0F8U+1y0CnPo=",
         "apiManifest": {
           "artifact": "dist/extension-manifest.json",
           "path": "extensions/kubohiroyasvgtext.manifest.json",

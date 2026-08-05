@@ -24,7 +24,7 @@
   			"opcode": "defineStyle",
   			"blockType": "COMMAND",
   			"text": "define text style [STYLE] background [BACKGROUND] text [TEXT_COLOR] font [FONT] size [SIZE] align [ALIGN] bubble direction [DIRECTION]",
-  			"description": "Defines or replaces a named responsive text style shared by bubbles and SVG text actors.",
+  			"description": "Defines or replaces a named responsive text style. Bubble direction accepts names, compass aliases, or Scratch-style degrees from 0 to 360.",
   			"arguments": {
   				"STYLE": {
   					"type": "STRING",
@@ -154,19 +154,145 @@
   			"acceptReporters": true,
   			"items": [
   				"up",
+  				"up-up-right",
   				"up-right",
+  				"right-up-right",
   				"right",
+  				"right-down-right",
   				"down-right",
+  				"down-down-right",
   				"down",
+  				"down-down-left",
   				"down-left",
+  				"left-down-left",
   				"left",
-  				"up-left"
+  				"left-up-left",
+  				"up-left",
+  				"up-up-left"
   			]
   		}
   	}
   };
   //#endregion
   //#region src/extension.ts
+  var bubbleDirections = [
+  	"up",
+  	"up-up-right",
+  	"up-right",
+  	"right-up-right",
+  	"right",
+  	"right-down-right",
+  	"down-right",
+  	"down-down-right",
+  	"down",
+  	"down-down-left",
+  	"down-left",
+  	"left-down-left",
+  	"left",
+  	"left-up-left",
+  	"up-left",
+  	"up-up-left"
+  ];
+  var bubbleDirectionAliases = /* @__PURE__ */ new Map([
+  	["east", "right"],
+  	["east-northeast", "right-up-right"],
+  	["east-southeast", "right-down-right"],
+  	["north", "up"],
+  	["northeast", "up-right"],
+  	["north-northeast", "up-up-right"],
+  	["northwest", "up-left"],
+  	["north-northwest", "up-up-left"],
+  	["south", "down"],
+  	["southeast", "down-right"],
+  	["south-southeast", "down-down-right"],
+  	["southwest", "down-left"],
+  	["south-southwest", "down-down-left"],
+  	["west", "left"],
+  	["west-northwest", "left-up-left"],
+  	["west-southwest", "left-down-left"]
+  ]);
+  var intermediateDirectionOffset = Math.SQRT2 - 1;
+  var bubbleDirectionVectors = {
+  	down: {
+  		x: 0,
+  		y: -1
+  	},
+  	"down-down-left": {
+  		x: -intermediateDirectionOffset,
+  		y: -1
+  	},
+  	"down-down-right": {
+  		x: intermediateDirectionOffset,
+  		y: -1
+  	},
+  	"down-left": {
+  		x: -1,
+  		y: -1
+  	},
+  	"down-right": {
+  		x: 1,
+  		y: -1
+  	},
+  	left: {
+  		x: -1,
+  		y: 0
+  	},
+  	"left-down-left": {
+  		x: -1,
+  		y: -intermediateDirectionOffset
+  	},
+  	"left-up-left": {
+  		x: -1,
+  		y: intermediateDirectionOffset
+  	},
+  	right: {
+  		x: 1,
+  		y: 0
+  	},
+  	"right-down-right": {
+  		x: 1,
+  		y: -intermediateDirectionOffset
+  	},
+  	"right-up-right": {
+  		x: 1,
+  		y: intermediateDirectionOffset
+  	},
+  	up: {
+  		x: 0,
+  		y: 1
+  	},
+  	"up-left": {
+  		x: -1,
+  		y: 1
+  	},
+  	"up-right": {
+  		x: 1,
+  		y: 1
+  	},
+  	"up-up-left": {
+  		x: -intermediateDirectionOffset,
+  		y: 1
+  	},
+  	"up-up-right": {
+  		x: intermediateDirectionOffset,
+  		y: 1
+  	}
+  };
+  function normalizeVectorComponent(value) {
+  	if (Math.abs(value) < 1e-12) return 0;
+  	if (Math.abs(1 - Math.abs(value)) < 1e-12) return Math.sign(value);
+  	return value;
+  }
+  function directionVector(direction) {
+  	if (typeof direction === "string") return bubbleDirectionVectors[direction];
+  	const radians = direction * Math.PI / 180;
+  	const rawX = Math.sin(radians);
+  	const rawY = Math.cos(radians);
+  	return {
+  		x: normalizeVectorComponent(rawX),
+  		y: normalizeVectorComponent(rawY)
+  	};
+  }
   var blockDefinitions = block_definitions_default.blocks;
   var definitionMenus = block_definitions_default.menus;
   var EXTENSION_DOCS_URI = "https://kubohiroya.github.io/turbowarp-svg-text/";
@@ -289,7 +415,13 @@
   	}
   	normalizeDirection(value) {
   		const direction = Scratch.Cast.toString(value).trim().toLowerCase();
-  		if (direction === "up" || direction === "up-right" || direction === "right" || direction === "down-right" || direction === "down" || direction === "down-left" || direction === "left" || direction === "up-left") return direction;
+  		if (bubbleDirections.includes(direction)) return direction;
+  		const alias = bubbleDirectionAliases.get(direction);
+  		if (alias) return alias;
+  		if (direction !== "") {
+  			const degrees = Number(direction);
+  			if (Number.isFinite(degrees) && degrees >= 0 && degrees <= 360) return degrees === 360 ? 0 : degrees;
+  		}
   		return initialDefaultStyle.direction;
   	}
   	normalizeColor(value, fallback) {
@@ -510,37 +642,22 @@
   		const centerX = (targetBounds.left + targetBounds.right) / 2;
   		const centerY = (targetBounds.top + targetBounds.bottom) / 2;
   		const gap = baseStyle.tailHeight * this.getStageScale();
-  		let x = centerX - bubbleWidth / 2;
-  		let y = targetBounds.top + gap + bubbleHeight;
-  		switch (direction) {
-  			case "up-right":
-  				x = targetBounds.right + gap;
-  				break;
-  			case "right":
-  				x = targetBounds.right + gap;
-  				y = centerY + bubbleHeight / 2;
-  				break;
-  			case "down-right":
-  				x = targetBounds.right + gap;
-  				y = targetBounds.bottom - gap;
-  				break;
-  			case "down":
-  				y = targetBounds.bottom - gap;
-  				break;
-  			case "down-left":
-  				x = targetBounds.left - gap - bubbleWidth;
-  				y = targetBounds.bottom - gap;
-  				break;
-  			case "left":
-  				x = targetBounds.left - gap - bubbleWidth;
-  				y = centerY + bubbleHeight / 2;
-  				break;
-  			case "up-left": x = targetBounds.left - gap - bubbleWidth;
-  		}
-  		if (direction.endsWith("right") && !bubbleState.onSpriteRight) {
+  		const centeredBubbleX = centerX - bubbleWidth / 2;
+  		const centeredBubbleY = centerY + bubbleHeight / 2;
+  		const leftBubbleX = targetBounds.left - gap - bubbleWidth;
+  		const rightBubbleX = targetBounds.right + gap;
+  		const upperBubbleY = targetBounds.top + gap + bubbleHeight;
+  		const lowerBubbleY = targetBounds.bottom - gap;
+  		const vector = directionVector(direction);
+  		const horizontalDistance = vector.x < 0 ? centeredBubbleX - leftBubbleX : rightBubbleX - centeredBubbleX;
+  		const verticalDistance = vector.y < 0 ? centeredBubbleY - lowerBubbleY : upperBubbleY - centeredBubbleY;
+  		const numericDirectionScale = typeof direction === "number" ? Math.min(vector.x === 0 ? Number.POSITIVE_INFINITY : horizontalDistance / Math.abs(vector.x), vector.y === 0 ? Number.POSITIVE_INFINITY : verticalDistance / Math.abs(vector.y)) : null;
+  		let x = centeredBubbleX + vector.x * (numericDirectionScale ?? horizontalDistance);
+  		let y = centeredBubbleY + vector.y * (numericDirectionScale ?? verticalDistance);
+  		if (vector.x > 0 && !bubbleState.onSpriteRight) {
   			bubbleState.onSpriteRight = true;
   			this.updateTextSkin(bubbleState);
-  		} else if (direction.endsWith("left") && bubbleState.onSpriteRight) {
+  		} else if (vector.x < 0 && bubbleState.onSpriteRight) {
   			bubbleState.onSpriteRight = false;
   			this.updateTextSkin(bubbleState);
   		}
