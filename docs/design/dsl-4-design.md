@@ -238,7 +238,7 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する     |
 | D-32 | 決定済み | delivery、loading、memory retention、永続cacheの寿命を独立させる        |
 | D-33 | 決定済み | poseModelの既定retentionをscene、mediaの既定をstoryとする               |
-| D-34 | 決定済み | IndexedDBを台本単位で分離し、台本由来の可読database名をmanifestへ残す   |
+| D-34 | 決定済み | binary DBを台本単位で分離し、可読名と共通metadata catalogで管理する     |
 | D-35 | 決定済み | selected next sceneだけを先読みし、遷移commit時に不要resourceを解放する |
 | P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする             |
 | P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する             |
@@ -1471,13 +1471,26 @@ tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
 - stable IDにより同名台本を分離する
 - 初回生成したdatabase名をstory manifestへ保存し、台本名変更後も同じDBを利用する
 - DB内identity metadataに表示名、stable ID、database名、format、最終open時刻を保存する
-- app shellから台本名、database名、使用量、entry数、最終cleanup、削除量を確認できる
-- app shellから台本単位のstats、prune、clearを実行できるが、標準作者paletteへblockを追加しない
+- 共通`tw-kamishibai-cache-catalog-v1`にはDB名、story ID、表示名、logical bytes／entries、last-usedだけを保存する
+- catalogにbinary data、asset key、URLを保存せず、台本間のasset lookup／deduplicationへ使用しない
+- runtime instanceごとの短期leaseをapp shellからrenewし、story stop／dispose時にreleaseする
+- 別tabを含め一件でも有効なleaseがあるDBは自動cleanup／明示deleteの対象にしない
+- crash等でreleaseされないleaseはTTL後に削除する
+- app shellから全台本の名前、database名、使用量、entry数、最終cleanup、削除量を確認できる
+- app shellから台本単位のstats、prune、clear、database deleteを実行できるが、標準作者paletteへblockを追加しない
+- `clear`はdatabase／identityを残してentryを削除し、作品cacheの削除はdatabaseとcatalog recordを削除する
 
-永続cacheは既定30日の最終利用TTL、256 MiBまたはorigin quota 20%の小さい方をhigh-water、その80%を
-low-waterとする初期policyでboundedにします。具体値はhostから上書き可能とし、open、write前後、quota failure、
-session stop、upgrade、明示操作でbounded cursor cleanupを行います。memory releaseでcache recordを削除せず、
-cache clearでmaterialize済みresourceを直ちに無効化しません。
+永続cacheは既定30日の最終利用TTL、256 MiBまたはorigin quota 20%の小さい方をorigin全体のhigh-water、
+その80%をlow-waterとする初期policyでboundedにします。high-water超過時は全tabのactive leaseをpinし、catalogの
+last-used順に古いinactive DBを削除した後、必要ならcurrent DB内をasset LRUで掃除します。TTLを超えて開かれていない
+台本DBは、binaryを開かずdatabaseごと削除できます。具体値はhostから上書き可能とし、open、write前後、
+quota failure、session stop、upgrade、明示操作でcleanupを行います。
+
+各DB内のstats、TTL、LRU、clearはkey cursorと軽量metadataだけを走査し、保存済み`ArrayBuffer`を容量計算のために
+JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは削除しますが、未知のbyte長を診断上の
+削除byte数には加えません。catalog failureは現在台本のcache write／verified memory fallbackを失敗させず、
+機械可読warningとして報告します。memory releaseでcache recordを削除せず、cache clearでmaterialize済みresourceを
+直ちに無効化しません。
 
 remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
 size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は

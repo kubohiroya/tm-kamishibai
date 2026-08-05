@@ -210,6 +210,21 @@ manifestに保存済みのdatabase名を継続利用します。database内のid
 台本表示名、database名、使用量、entry数、最終cleanupを表示し、台本単位でstats、prune、clearを実行できます。
 これらを標準作者paletteのblockとしては公開しません。
 
+台本別databaseの一覧とorigin全体の容量管理には、小さな共通catalog database
+`tw-kamishibai-cache-catalog-v1`を使用します。catalogが保持するのはdatabase名、stable story ID、表示名、
+論理byte数、entry数、最終利用時刻だけで、binary dataやasset keyを保持せず、
+台本間のasset参照やdeduplicationには使用しません。各runtime instanceは短期leaseをrenewし、story stop／dispose時に
+releaseします。app shellはAsset Managerの`renewVerifiedRemoteStoryCacheLease`をheartbeatとして呼び、停止処理で
+`releaseVerifiedRemoteStoryCacheLease`を呼びます。origin全体がhigh-waterを超える場合は、実行中の全tabのleaseを
+pinしたまま、最終利用時刻が古い別台本のdatabaseから削除してlow-waterへ戻します。crash等でreleaseされなかった
+leaseは期限切れ後に掃除します。TTLを超えて開かれていない台本databaseは、binaryを読み込むことなくcatalogから
+列挙してdatabaseごと削除できます。
+
+app shellはcatalogを使って全台本cacheを一覧表示します。`clear`は現在のdatabaseとidentityを残してentryだけを
+削除し、「作品のcacheを削除」はdatabaseとcatalog recordを削除します。stats、TTL、LRU、clearの保守走査では
+keyと軽量metadataだけを読み、保存済み`ArrayBuffer`を容量計算のためにmaterializeしません。catalogが利用不能でも
+現在台本の検証済みcache／memory実行を中止せず、機械可読warningを返します。
+
 runtimeが扱う寿命は次の四段階です。
 
 1. SB3 ZIPまたはremote loaderが供給するsource bytes
