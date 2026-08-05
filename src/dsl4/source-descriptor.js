@@ -96,7 +96,7 @@ function encodeBase64(bytes) {
  * @param {Uint8Array} bytes
  * @param {{digest: Function}} subtleCrypto
  */
-async function sha256Integrity(bytes, subtleCrypto) {
+export async function computeDsl4Sha256Integrity(bytes, subtleCrypto = globalThis.crypto?.subtle) {
   if (!subtleCrypto || typeof subtleCrypto.digest !== 'function') {
     fail('K4-SOURCE-INTEGRITY-UNAVAILABLE', 'SHA-256 digest capability is unavailable');
   }
@@ -150,7 +150,7 @@ export async function createDsl4EmbeddedSourceDescriptor(
     mediaType: 'application/yaml',
     encoding: 'utf-8',
     byteLength: bytes.length,
-    integrity: await sha256Integrity(bytes, subtleCrypto),
+    integrity: await computeDsl4Sha256Integrity(bytes, subtleCrypto),
     text: canonicalSource,
   };
   return deepFreeze(descriptor);
@@ -206,7 +206,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
   ) {
     fail('K4-SOURCE-DESCRIPTOR-001', 'Embedded source integrity is not a SHA-256 SRI value');
   }
-  const expectedIntegrity = await sha256Integrity(bytes, subtleCrypto);
+  const expectedIntegrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
   if (input.integrity !== expectedIntegrity) {
     fail('K4-SOURCE-INTEGRITY-001', 'Embedded source integrity does not match UTF-8 text');
   }
