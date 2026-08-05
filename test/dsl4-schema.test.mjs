@@ -79,6 +79,8 @@ for (const name of [
   'non-scalar-variable.kamishibai.yaml',
   'cover-missing-backdrop.kamishibai.yaml',
   'pose-recognition-missing-sound.kamishibai.yaml',
+  'pose-choices.kamishibai.yaml',
+  'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',
   'invalid-loading-policy.kamishibai.yaml',
   'positional-multi-argument.kamishibai.yaml',
@@ -112,6 +114,8 @@ for (const [name, code] of [
   ['missing-reference.kamishibai.yaml', 'K4-REF-001'],
   ['path-traversal.kamishibai.yaml', 'K4-ASSET-001'],
   ['wrong-asset-kind.kamishibai.yaml', 'K4-REF-002'],
+  ['pose-action-without-model.kamishibai.yaml', 'K4-POSE-MODEL-001'],
+  ['pose-input-without-model.kamishibai.yaml', 'K4-POSE-MODEL-001'],
 ]) {
   test(`semantic validation rejects ${name}`, async () => {
     const result = await validateFixture('invalid', name);

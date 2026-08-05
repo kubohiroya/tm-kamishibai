@@ -53,6 +53,14 @@ loading:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 
 controls:
   keymaps:
@@ -101,7 +109,7 @@ scenes:
       - stage: Ocean
       - Hero.setSkin: HeroHelp
       - Hero.pose:
-          choices:
+          steps:
             - pose: help
               skin: HeroHelp
               sound: Success
@@ -111,17 +119,21 @@ scenes:
       - branch: rescueResult
 
   seaRoute:
-    - Hero.moveTo:
-        x: 40
-        y: -57
-        seconds: 1.5
-    - Hero.say:
-        text: 海路で帰ろう
-        seconds: 2
-    - transition:
-        effect: fadeOut
-        seconds: 0.5
-    - goto: ending
+    poseModel: 救助Pose
+    actions:
+      - Hero.moveTo:
+          x: 40
+          y: -57
+          seconds: 1.5
+      - Hero.say:
+          text: 海路で帰ろう
+          seconds: 2
+      - transition:
+          effect: fadeOut
+          seconds: 0.5
+      - poseInputToChangeScene:
+          help: ending
+          jump: rescue
 
   ending:
     - stage: Beach

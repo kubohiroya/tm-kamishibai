@@ -37,6 +37,9 @@ assets:
   CaptionIdle: costume:Caption
   Music: sound
   Effect: sound
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
 actors:
   Hero: HeroIdle
   Caption: CaptionIdle
@@ -46,6 +49,17 @@ textStyles:
 variables:
   firstRoute: false
   score: 1
+poseRecognition:
+  idleSound: Effect
+  chargeSound: Effect
+  sequence:
+    confidenceThreshold: 0.6
+    fullConfidenceHoldSeconds: 1.5
+    idleChargePerSecond: 0.1
+  selection:
+    accumulationPerSecond: 2
+    decayPerSecond: 0.8
+    scoreThreshold: 1
 branches:
   choose:
     - if: firstRoute
@@ -55,35 +69,37 @@ branches:
     - else: ending
 scenes:
   opening:
-    - stage: Beach
-    - bgm: Music
-    - sound: Effect
-    - wait: 0
-    - transition:
-        effect: fadeOut
-        seconds: 0
-    - Hero.show:
-        skin: HeroHappy
-        x: 0
-        y: 0
-        scale: 100
-    - Hero.moveTo:
-        x: 10
-        y: 20
-        seconds: 0
-    - Hero.say:
-        text: hello
-        seconds: 0
-    - Hero.setSkin: HeroIdle
-    - Caption.setText:
-        text: title
-        style: title
-    - Hero.pose:
-        choices:
-          - pose: happy
-            skin: HeroHappy
-            sound: Effect
-    - goto: branching
+    poseModel: RescuePose
+    actions:
+      - stage: Beach
+      - bgm: Music
+      - sound: Effect
+      - wait: 0
+      - transition:
+          effect: fadeOut
+          seconds: 0
+      - Hero.show:
+          skin: HeroHappy
+          x: 0
+          y: 0
+          scale: 100
+      - Hero.moveTo:
+          x: 10
+          y: 20
+          seconds: 0
+      - Hero.say:
+          text: hello
+          seconds: 0
+      - Hero.setSkin: HeroIdle
+      - Caption.setText:
+          text: title
+          style: title
+      - Hero.pose:
+          steps:
+            - pose: happy
+              skin: HeroHappy
+              sound: Effect
+      - goto: branching
   branching:
     - branch: choose
   keyChoice:
@@ -92,7 +108,13 @@ scenes:
         Digit2: ending
   touchChoice:
     - touchInputToChangeScene:
-        Hero: ending
+        Hero: poseChoice
+  poseChoice:
+    poseModel: RescuePose
+    actions:
+      - poseInputToChangeScene:
+          happy: ending
+          jump: opening
   ending: []
 `;
 
@@ -117,9 +139,8 @@ test('dispatches every core action and keeps transition separate from scene move
       },
     ]),
   );
-  port.pose = async (payload) => {
-    calls.push({method: 'pose', payload});
-    return 'happy';
+  port.waitForPose = async (payload) => {
+    calls.push({method: 'waitForPose', payload});
   };
   port.keyInputToChangeScene = async (payload) => {
     calls.push({method: 'keyInputToChangeScene', payload});
@@ -128,6 +149,10 @@ test('dispatches every core action and keeps transition separate from scene move
   port.touchInputToChangeScene = async (payload) => {
     calls.push({method: 'touchInputToChangeScene', payload});
     return 'Hero';
+  };
+  port.poseInputToChangeScene = async (payload) => {
+    calls.push({method: 'poseInputToChangeScene', payload});
+    return 'happy';
   };
   const evaluated = [];
   const controller = createDsl4RuntimeController({
@@ -155,13 +180,33 @@ test('dispatches every core action and keeps transition separate from scene move
       'say',
       'setSkin',
       'setText',
-      'pose',
       'setSkin',
+      'waitForPose',
       'sound',
       'keyInputToChangeScene',
       'touchInputToChangeScene',
+      'poseInputToChangeScene',
     ],
   );
+  assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
+    target: 'Hero',
+    pose: 'happy',
+    recognition: {
+      confidenceThreshold: 0.6,
+      fullConfidenceHoldSeconds: 1.5,
+      idleChargePerSecond: 0.1,
+      idleSound: 'Effect',
+      chargeSound: 'Effect',
+    },
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
+    poses: ['happy', 'jump'],
+    recognition: {
+      accumulationPerSecond: 2,
+      decayPerSecond: 0.8,
+      scoreThreshold: 1,
+    },
+  });
   const trace = controller.getTrace();
   assert.deepEqual(
     trace.map(({sequence}) => sequence),
@@ -173,8 +218,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 15);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 15);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 16);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 16);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
@@ -186,13 +231,73 @@ test('dispatches every core action and keeps transition separate from scene move
       ['branching', 'goto'],
       ['keyChoice', 'branch'],
       ['touchChoice', 'keyInput'],
-      ['ending', 'touchInput'],
+      ['poseChoice', 'touchInput'],
+      ['ending', 'poseInput'],
     ],
   );
   assert.equal(
     transitions.some(({reason}) => reason === 'transition'),
     false,
   );
+});
+
+test('runs every Actor.pose step in order with optional skin and sound', async () => {
+  const calls = [];
+  const story = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  FirstSkin: costume:Hero
+  LastSkin: costume:Hero
+  Effect: sound
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: first
+              skin: FirstSkin
+              sound: Effect
+            - pose: middle
+            - pose: last
+              skin: LastSkin
+`);
+  const controller = createDsl4RuntimeController({
+    storyDocument: story,
+    port: {
+      setSkin: async ({skin}) => calls.push(['skin', skin]),
+      waitForPose: async ({pose, recognition}) => calls.push(['wait', pose, recognition]),
+      sound: async ({sound}) => calls.push(['sound', sound]),
+    },
+  });
+
+  const state = await controller.start();
+
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(
+    calls.map(([method, value]) => [method, value]),
+    [
+      ['skin', 'FirstSkin'],
+      ['wait', 'first'],
+      ['sound', 'Effect'],
+      ['wait', 'middle'],
+      ['skin', 'LastSkin'],
+      ['wait', 'last'],
+    ],
+  );
+  assert.deepEqual(calls[1][2], {
+    confidenceThreshold: 0.5,
+    fullConfidenceHoldSeconds: 1,
+    idleChargePerSecond: 0,
+    idleSound: null,
+    chargeSound: null,
+  });
 });
 
 test('advances through empty scenes and the final scene deterministically', async () => {
@@ -300,8 +405,9 @@ scenes:
   );
 });
 
-test('cancelled pose does not apply stale skin or sound effects', async () => {
+test('cancelled pose keeps the current skin but does not sound or start a later step', async () => {
   const pendingPose = deferred();
+  const poseStarted = deferred();
   const effects = [];
   const controller = createDsl4RuntimeController({
     storyDocument: parseStory(`
@@ -309,29 +415,43 @@ kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   HeroHappy: costume:Hero
+  HeroLater: costume:Hero
   Effect: sound
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
 actors:
   Hero: HeroIdle
 scenes:
   opening:
-    - Hero.pose:
-        choices:
-          - pose: happy
-            skin: HeroHappy
-            sound: Effect
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: happy
+              skin: HeroHappy
+              sound: Effect
+            - pose: later
+              skin: HeroLater
+              sound: Effect
 `),
     port: {
-      pose: () => pendingPose.promise,
-      setSkin: async () => effects.push('setSkin'),
-      sound: async () => effects.push('sound'),
+      waitForPose: ({pose}) => {
+        effects.push(`wait:${pose}`);
+        poseStarted.resolve();
+        return pendingPose.promise;
+      },
+      setSkin: async ({skin}) => effects.push(`skin:${skin}`),
+      sound: async ({sound}) => effects.push(`sound:${sound}`),
     },
   });
   const run = controller.start();
+  await poseStarted.promise;
   controller.stop('cancel-pose');
-  pendingPose.resolve('happy');
+  pendingPose.resolve();
   const state = await run;
   assert.equal(state.status, 'stopped');
-  assert.deepEqual(effects, []);
+  assert.deepEqual(effects, ['skin:HeroHappy', 'wait:happy']);
 });
 
 test('cancelled branch does not evaluate later rules', async () => {
@@ -729,8 +849,8 @@ scenes:
   });
 }
 
-test('rejects an input result outside the declared routes', async () => {
-  const controller = createDsl4RuntimeController({
+test('rejects key and pose input results outside their declared routes', async () => {
+  const keyController = createDsl4RuntimeController({
     storyDocument: parseStory(`
 kamishibai: '4.0'
 scenes:
@@ -741,9 +861,29 @@ scenes:
 `),
     port: {keyInputToChangeScene: async () => 'Digit2'},
   });
-  const state = await controller.start();
-  assert.equal(state.status, 'failed');
-  assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
+  const poseController = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+scenes:
+  opening:
+    poseModel: RescuePose
+    actions:
+      - poseInputToChangeScene:
+          happy: ending
+  ending: []
+`),
+    port: {poseInputToChangeScene: async () => 'jump'},
+  });
+
+  for (const controller of [keyController, poseController]) {
+    const state = await controller.start();
+    assert.equal(state.status, 'failed');
+    assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
+  }
 });
 
 test('runtime controller core has no filesystem, network, VM, or Scratch dependency', async () => {
