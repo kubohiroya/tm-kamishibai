@@ -38,6 +38,41 @@ async function rejectInvalidRuntimeEnvironment(candidate, message) {
 }
 
 /**
+ * Make the published navigation session the sole owner of its runtime environment.
+ *
+ * @param {Readonly<Record<string, Function>>} session
+ * @param {RuntimeEnvironment} environment
+ */
+function ownRuntimeEnvironment(session, environment) {
+  /** @type {Promise<void> | null} */
+  let disposePromise = null;
+  return Object.freeze({
+    ...session,
+    /** @param {string} [reason] */
+    dispose(reason = 'dispose') {
+      if (disposePromise) return disposePromise;
+      disposePromise = (async () => {
+        const errors = [];
+        try {
+          session.dispose();
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          await environment.dispose(reason);
+        } catch (error) {
+          errors.push(error);
+        }
+        if (errors.length > 0) {
+          throw new AggregateError(errors, 'DSL 4.0 runtime session disposal failed');
+        }
+      })();
+      return disposePromise;
+    },
+  });
+}
+
+/**
  * Resolve one immutable startup feature snapshot.
  *
  * @param {unknown} [input]
@@ -225,13 +260,16 @@ export async function createDsl4RuntimeStartup(options = {}) {
   const success = /** @type {{session: Readonly<Record<string, Function>>}} */ (
     /** @type {unknown} */ (created)
   );
+  const publishedSession = runtimeEnvironment
+    ? ownRuntimeEnvironment(success.session, runtimeEnvironment)
+    : success.session;
   return deepFreeze({
     ok: true,
     enabled: true,
     featureFlags,
     channel: component.channel,
     runtimeComponent: loaded,
-    session: success.session,
+    session: publishedSession,
     diagnostics: [],
   });
 }

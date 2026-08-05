@@ -388,8 +388,6 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     throw new TypeError('createHostPort must be a function');
   }
 
-  /** @type {Awaited<ReturnType<typeof createRuntimeEnvironment>> | null} */
-  let environment = null;
   const startup = await createDsl4RuntimeStartup({
     featureFlags,
     project: options.project,
@@ -406,14 +404,10 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     async createRuntimeEnvironment(
       /** @type {Readonly<Record<string, unknown>>} */ runtimeComponent,
     ) {
-      environment = await createRuntimeEnvironment(options, runtimeComponent);
-      return environment;
+      return createRuntimeEnvironment(options, runtimeComponent);
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
-  if (!environment) {
-    throw hostError('K4-HOST-ENVIRONMENT-MISSING', 'Runtime environment was not published');
-  }
 
   const successfulStartup =
     /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
@@ -475,18 +469,10 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         const pending = [];
         try {
           const activeRun = session.getRunPromise();
-          session.dispose();
+          const sessionDisposal = session.dispose(reason);
           pending.push(Promise.resolve(session.whenInputIdle()));
           if (activeRun) pending.push(Promise.resolve(activeRun));
-        } catch (error) {
-          errors.push(error);
-        }
-        try {
-          pending.push(
-            Promise.resolve(
-              /** @type {NonNullable<typeof environment>} */ (environment).dispose(reason),
-            ),
-          );
+          if (sessionDisposal) pending.push(Promise.resolve(sessionDisposal));
         } catch (error) {
           errors.push(error);
         }

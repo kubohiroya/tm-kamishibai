@@ -317,7 +317,11 @@ test('creates an atomic runtime environment only after component validation', as
   });
   assert.deepEqual(calls, ['create']);
   assert.equal(result.session.getState().runtime.status, 'idle');
-  result.session.dispose();
+  const firstDispose = result.session.dispose('startup-test-dispose');
+  const secondDispose = result.session.dispose('ignored');
+  assert.strictEqual(secondDispose, firstDispose);
+  await firstDispose;
+  assert.deepEqual(calls, ['create', 'dispose:startup-test-dispose']);
 });
 
 test('cleans an atomic runtime environment when navigation session creation is rejected', async () => {
