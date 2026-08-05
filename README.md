@@ -45,13 +45,15 @@ tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`�
 
 旧構文を含む台本では、プロジェクトごとに一度`LEGACY_TEXT_ASSET_DEPRECATED`警告を開発者コンソールへ出力しますが、実行は継続します。旧Text Assetは少なくとも3.2系列では維持し、削除する場合は将来のメジャーバージョンで事前に告知します。移行先は[`kubohiroya/turbowarp-svg-text`](https://github.com/kubohiroya/turbowarp-svg-text)です。この機能拡張を組み込んだ3.2プロジェクトでは、旧Text Assetと新しいSVG Textを同じ台本内で併用できます。新規の台本では、名前付きスタイルを共有するSVG Textを使用してください。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この警告の対象外です。
 
-SVG Textは公開済みの`@kubohiroya/turbowarp-svg-text@0.1.0`を完全固定で利用します。台本のシーン定義より前に、背景色、文字色、フォント、相対フォントサイズ、配置、吹き出し方向を名前付きスタイルとして定義します。サイズ`100`は480×360ステージにおける標準14px相当で、ステージ寸法に比例して拡大・縮小します。
+SVG Textは公開済みの`@kubohiroya/turbowarp-svg-text@0.2.1`を完全固定で利用します。台本のシーン定義より前に、背景色、文字色、フォント、相対フォントサイズ、配置、吹き出し方向を名前付きスタイルとして定義します。サイズ`100`は480×360ステージにおける標準14px相当で、ステージ寸法に比例して拡大・縮小します。
 
 ```text
 svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up
 ```
 
-値の並びは`STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`です。`ALIGN`は`left`、`center`、`right`、`DIRECTION`は`up`、`up-right`、`right`、`down-right`、`down`、`down-left`、`left`、`up-left`から指定します。方向は吹き出しにだけ適用されます。
+値の並びは`STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`です。`ALIGN`は`left`、`center`、`right`から指定します。`DIRECTION`の16方向は、`up`、`up-up-right`、`up-right`、`right-up-right`、`right`、`right-down-right`、`down-right`、`down-down-right`、`down`、`down-down-left`、`down-left`、`left-down-left`、`left`、`left-up-left`、`up-left`、`up-up-left`です。
+
+方位エイリアスとして`north`、`northeast`、`east`、`southeast`、`south`、`southwest`、`west`、`northwest`の8方位と、`north-northeast`、`east-northeast`、`east-southeast`、`south-southeast`、`south-southwest`、`west-southwest`、`west-northwest`、`north-northwest`を含む16方位を指定できます。また、`0`以上`360`以下の数値と小数角度も指定できます。Scratchのスプライト方向と同じく`0`は上、`90`は右、`180`は下、`270`は左、`360`は`0`と同じ方向です。方向は吹き出しにだけ適用されます。
 
 アクター自身をSVGテキストとして表示するには、アクションで文字列とスタイル名を指定します。文字列中のリテラル`\n`は改行になります。アニメーションは3.2系列の対象外です。
 

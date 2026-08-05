@@ -1417,6 +1417,79 @@ test('uses SVG Text actors alongside deprecated text assets in DSL 3.2', async (
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
+test('preserves SVG Text canonical, compass, and Scratch degree directions in DSL 3.2', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  const directions = [
+    'up',
+    'up-up-right',
+    'up-right',
+    'right-up-right',
+    'right',
+    'right-down-right',
+    'down-right',
+    'down-down-right',
+    'down',
+    'down-down-left',
+    'down-left',
+    'left-down-left',
+    'left',
+    'left-up-left',
+    'up-left',
+    'up-up-left',
+    'north',
+    'north-northeast',
+    'northeast',
+    'east-northeast',
+    'east',
+    'east-southeast',
+    'southeast',
+    'south-southeast',
+    'south',
+    'south-southwest',
+    'southwest',
+    'west-southwest',
+    'west',
+    'west-northwest',
+    'northwest',
+    'north-northwest',
+    '0',
+    '90',
+    '180',
+    '270',
+    '360',
+    '22.5',
+  ];
+  startScript(
+    harness,
+    [
+      'kamishibai=3.2',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
+      'actor=Hero,Hero',
+      ...directions.map(
+        (direction, index) =>
+          `svgTextStyle=direction${index}:#ffffff:#222222:Noto Sans JP:100:left:${direction}`,
+      ),
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=Hero:show:Hero:0,0,100',
+      'action=wait:30',
+    ].join('\n'),
+  );
+
+  for (const [index, direction] of directions.entries()) {
+    assert.equal(
+      harness.extensionState.svgTextStyles.get(`direction${index}`).direction,
+      direction,
+    );
+  }
+  assert.deepEqual(harness.extensionState.consoleErrors, []);
+});
+
 test('registers and displays a text asset through the production Asset Manager', async (context) => {
   const harness = await loadKamishibaiVm({productionAssetManager: true});
   context.after(() => harness.quit());
