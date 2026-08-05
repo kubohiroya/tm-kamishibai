@@ -413,9 +413,14 @@ export function createDsl4RuntimeController({
     }
     if (command === 'poseInputToChangeScene') {
       const routes = /** @type {Record<string, string>} */ (args.routes);
+      const poseModel = String(currentScene()?.poseModel ?? '');
       const selected = await invokePort(
         command,
-        {poses: Object.keys(routes), recognition: cloneValue(poseSelectionRecognition)},
+        {
+          poses: Object.keys(routes),
+          poseModel,
+          recognition: cloneValue(poseSelectionRecognition),
+        },
         context,
       );
       if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
@@ -427,6 +432,7 @@ export function createDsl4RuntimeController({
     }
     if (command === 'pose') {
       const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
+      const poseModel = String(currentScene()?.poseModel ?? '');
       for (const step of steps) {
         if (typeof step.skin === 'string') {
           await invokePort('setSkin', {target, skin: step.skin}, context);
@@ -437,6 +443,7 @@ export function createDsl4RuntimeController({
           {
             target,
             pose: step.pose,
+            poseModel,
             recognition: cloneValue(poseSequenceRecognition),
           },
           context,

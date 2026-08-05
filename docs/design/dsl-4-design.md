@@ -500,11 +500,21 @@ loading:
   costumes: [Loading1, Loading2, Loading3]
 
 poseRecognition:
-  sounds: [ClockTicking, Success]
+  idleSound: ClockTicking
+  chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 ```
 
 3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
-mappingへまとめます。
+mappingへまとめます。sequenceとselectionは排他でActor sequenceを優先し、selectionはaction
+実行ごとに蓄積scoreをresetします。重複するselectionは直近の1回だけを有効にします。
 
 ### 3.11 分岐 `[提案]`
 
@@ -612,7 +622,16 @@ variables:
   score: 1
 
 poseRecognition:
-  sounds: [ClockTicking, Success]
+  idleSound: ClockTicking
+  chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 
 branches:
   chooseRoute:

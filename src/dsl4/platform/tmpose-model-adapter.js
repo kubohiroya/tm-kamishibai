@@ -97,8 +97,9 @@ export function createDsl4TMPoseModelAdapter(options) {
   const composition = validateComposition(options.composition);
   const ownedResources = new WeakSet();
   const releasedResources = new WeakSet();
+  const activeResources = new Map();
 
-  return Object.freeze({
+  const adapter = {
     /** @param {unknown} payload @param {unknown} [context] */
     async prepare(payload, context = {}) {
       if (!isRecord(payload) || !isRecord(payload.asset) || !Array.isArray(payload.files)) {
@@ -175,6 +176,7 @@ export function createDsl4TMPoseModelAdapter(options) {
           labels: Object.freeze([...registration.labels]),
         });
         ownedResources.add(resource);
+        activeResources.set(assetId, resource);
         return resource;
       } finally {
         signal?.removeEventListener('abort', cancelRegistration);
@@ -188,9 +190,18 @@ export function createDsl4TMPoseModelAdapter(options) {
       }
       if (releasedResources.has(resource)) return;
       releasedResources.add(resource);
+      if (activeResources.get(resource.name) === resource) activeResources.delete(resource.name);
       await composition.releasePoseModel(resource.name);
     },
-  });
+
+    /** @param {unknown} poseModel */
+    getPoseModelLabels(poseModel) {
+      if (typeof poseModel !== 'string' || poseModel.length === 0) return null;
+      const resource = activeResources.get(poseModel);
+      return resource ? resource.labels : null;
+    },
+  };
+  return Object.freeze(adapter);
 }
 
 /**
