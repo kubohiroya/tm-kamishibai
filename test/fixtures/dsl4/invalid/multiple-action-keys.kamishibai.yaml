@@ -1,0 +1,6 @@
+kamishibai: '4.0'
+scenes:
+  opening:
+    - wait: 1
+      goto: ending
+  ending: []

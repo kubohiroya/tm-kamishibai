@@ -1,0 +1,5 @@
+kamishibai: '4.0'
+assets:
+  Caption: text
+scenes:
+  opening: []

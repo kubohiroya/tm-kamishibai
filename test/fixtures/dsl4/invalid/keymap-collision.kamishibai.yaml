@@ -1,0 +1,10 @@
+kamishibai: '4.0'
+controls:
+  keymaps:
+    development:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - keyInputToChangeScene:
+        Space: ending
+  ending: []

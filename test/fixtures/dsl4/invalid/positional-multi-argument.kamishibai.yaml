@@ -1,0 +1,4 @@
+kamishibai: '4.0'
+scenes:
+  opening:
+    - Hero.say: [こんにちは, 2]

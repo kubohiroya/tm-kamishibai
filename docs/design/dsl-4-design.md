@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: 実装前レビュー草案
+文書状態: 全体architectureの設計資料（表層構文はIssue #260の確定仕様を参照）
 
 対象: DSL設計者、Scratch／TurboWarp実装者、教材設計者
 
@@ -13,9 +13,10 @@ Copyright © 2026 Hiroya Kubo.
 機能拡張構成: [`app/embedded-extensions.json`](../../app/embedded-extensions.json)
 調査基準日: 2026-08-05
 
-この文書は、紙芝居DSL 4.0とその実行基盤の設計案をレビューするための資料です。
-利用者向けの確定仕様でも、実装済み機能の説明でもありません。この文書のレビューが
-完了するまで、DSL 4.0の実装へ着手しないことを前提とします。
+この文書は、紙芝居DSL 4.0とその実行基盤の全体architectureをレビューするための資料です。
+表層構文についてはIssue #260のレビューが完了したため、
+[`dsl-4-surface.md`](dsl-4-surface.md)と
+[`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)を実装基準とします。
 
 ## 判断状態の読み方
 
@@ -247,6 +248,12 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | P-10 | 提案     | project全体350 block以下を目標、500 block以下を受け入れ上限とする       |
 
 ## 3. DSL 4.0の表層構文
+
+> **この章の3.1〜3.15は初期案を残した設計履歴であり、実装仕様ではありません。**
+> `cover`、複数引数action、pose recognition、pose model、asset loadingなどはIssue #260で
+> 見直されました。実装と新しいレビューでは
+> [`紙芝居DSL 4.0 表層仕様`](dsl-4-surface.md)および
+> [`JSON Schema`](../../schema/dsl-4.schema.json)を参照してください。
 
 ### 3.1 基本方針 `[提案]`
 

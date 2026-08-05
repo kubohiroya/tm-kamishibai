@@ -1,0 +1,133 @@
+kamishibai: '4.0'
+
+assets:
+  Beach: backdrop
+  LoadingBackground: backdrop
+  Loading1: costume:Loading
+  Loading2: costume:Loading
+  Ocean:
+    kind: backdrop
+    file: assets/ocean.svg
+    loading: lazy
+  HeroIdle: costume:Hero
+  HeroHappy: costume:Hero
+  HeroHelp: costume:Hero
+  CaptionIdle: costume:Caption
+  OpeningSound:
+    kind: sound
+    name: OpeningSound
+    loading: lazy
+  ClockTicking: sound
+  Success: sound
+  救助Pose:
+    kind: poseModel
+    file: pose-models/rescue
+    loading: lazy
+
+actors:
+  Hero: HeroIdle
+  Caption: CaptionIdle
+
+cover:
+  backdrop: Beach
+  bgm: OpeningSound
+
+textStyles:
+  title:
+    background: '#112233'
+    color: '#ffffff'
+    font: Noto Sans JP
+    size: 150
+    align: center
+    direction: up
+
+variables:
+  score: 1
+  takeSeaRoute: false
+  playerName: ななし
+
+loading:
+  backdrop: LoadingBackground
+  costumes: [Loading1, Loading2]
+
+poseRecognition:
+  idleSound: ClockTicking
+  chargeSound: Success
+
+controls:
+  keymaps:
+    development:
+      Space: navigation.nextAction
+      ArrowLeft: history.previousAction
+      ArrowUp: history.previousScene
+      ArrowDown: history.nextScene
+    production:
+      Space: navigation.nextAction
+
+branches:
+  rescueResult:
+    - if: 'score == 1'
+      goto: seaRoute
+    - if: takeSeaRoute
+      goto: seaRoute
+    - else: ending
+
+scenes:
+  opening:
+    - stage: Beach
+    - bgm: OpeningSound
+    - Caption.setText:
+        stableId: openingTitle
+        text: |-
+          海へ出発！
+          1か2を押してください
+        style: title
+    - Hero.show:
+        skin: HeroHappy
+        x: 0
+        y: -60
+        scale: 30
+    - Hero.say:
+        text: 助けに行こう
+        seconds: 2
+    - wait: 1
+    - keyInputToChangeScene:
+        Digit1: rescue
+        Digit2: ending
+
+  rescue:
+    poseModel: 救助Pose
+    actions:
+      - stage: Ocean
+      - Hero.setSkin: HeroHelp
+      - Hero.pose:
+          choices:
+            - pose: help
+              skin: HeroHelp
+              sound: Success
+            - pose: jump
+              skin: HeroHappy
+              sound: Success
+      - branch: rescueResult
+
+  seaRoute:
+    - Hero.moveTo:
+        x: 40
+        y: -57
+        seconds: 1.5
+    - Hero.say:
+        text: 海路で帰ろう
+        seconds: 2
+    - transition:
+        effect: fadeOut
+        seconds: 0.5
+    - goto: ending
+
+  ending:
+    - stage: Beach
+    - Caption.setText:
+        text: おしまい
+        style: title
+    - touchInputToChangeScene:
+        Hero: opening
+        Caption: rescue

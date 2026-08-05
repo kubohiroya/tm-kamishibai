@@ -1,0 +1,10 @@
+kamishibai: '4.0'
+assets:
+  Model:
+    kind: poseModel
+    file: models/demo
+scenes:
+  opening:
+    poseModel: Model
+    actions: []
+    wait: 1

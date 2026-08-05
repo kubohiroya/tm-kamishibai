@@ -1,0 +1,8 @@
+kamishibai: '4.0'
+variables:
+  items: [one, two]
+  state:
+    score: 1
+  empty: null
+scenes:
+  opening: []

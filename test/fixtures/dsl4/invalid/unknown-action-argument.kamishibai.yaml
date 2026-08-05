@@ -1,0 +1,6 @@
+kamishibai: '4.0'
+scenes:
+  opening:
+    - wait:
+        seconds: 1
+        frames: 30

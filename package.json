@@ -68,6 +68,7 @@
     "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#b3f4b9aa3ed3ede363700be815fe522f6a47df0b",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
+    "ajv": "8.18.0",
     "eslint": "^10.8.0",
     "gh-pages": "^6.3.0",
     "globals": "17.8.0",
@@ -75,7 +76,8 @@
     "scratch-parser": "6.0.0",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "yaml": "2.8.1"
   },
   "engines": {
     "node": ">=22.12.0"

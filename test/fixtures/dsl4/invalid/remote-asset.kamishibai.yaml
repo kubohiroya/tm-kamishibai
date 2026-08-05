@@ -1,0 +1,8 @@
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    file: https://example.com/ocean.svg
+scenes:
+  opening:
+    - stage: Ocean
