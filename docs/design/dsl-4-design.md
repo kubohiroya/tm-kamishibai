@@ -1475,6 +1475,8 @@ tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
 - catalogにbinary data、asset key、URLを保存せず、台本間のasset lookup／deduplicationへ使用しない
 - runtime instanceごとの短期leaseをapp shellからrenewし、story stop／dispose時にreleaseする
 - 別tabを含め一件でも有効なleaseがあるDBは自動cleanup／明示deleteの対象にしない
+- lease取得とcatalog更新を同じtransactionで行い、database deleteは排他的deletion markerを先に取得する
+- 明示deleteはcurrent runtimeのleaseを自動解除せず、stop／disposeとlease releaseの完了を要求する
 - crash等でreleaseされないleaseはTTL後に削除する
 - app shellから全台本の名前、database名、使用量、entry数、最終cleanup、削除量を確認できる
 - app shellから台本単位のstats、prune、clear、database deleteを実行できるが、標準作者paletteへblockを追加しない
@@ -1484,13 +1486,16 @@ tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
 その80%をlow-waterとする初期policyでboundedにします。high-water超過時は全tabのactive leaseをpinし、catalogの
 last-used順に古いinactive DBを削除した後、必要ならcurrent DB内をasset LRUで掃除します。TTLを超えて開かれていない
 台本DBは、binaryを開かずdatabaseごと削除できます。具体値はhostから上書き可能とし、open、write前後、
-quota failure、session stop、upgrade、明示操作でcleanupを行います。
+quota failure、session stop、upgrade、明示操作でcleanupを行います。他のactive DBが使用するbytesをcurrent DBの
+実効上限から差し引き、active leaseをpinしたまま新規entryをhigh-water内へ格納できない場合は永続化を省略して
+`ASSET_CACHE_ORIGIN_BUDGET_PINNED` warningを返し、検証済みbytesによるmemory実行を継続します。
 
 各DB内のstats、TTL、LRU、clearはkey cursorと軽量metadataだけを走査し、保存済み`ArrayBuffer`を容量計算のために
 JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは削除しますが、未知のbyte長を診断上の
 削除byte数には加えません。catalog failureは現在台本のcache write／verified memory fallbackを失敗させず、
-機械可読warningとして報告します。memory releaseでcache recordを削除せず、cache clearでmaterialize済みresourceを
-直ちに無効化しません。
+機械可読warningとして報告します。story DBのwrite／delete／clearは単調増加するstats revisionを更新し、catalogは
+別tabから遅れて到着した古いsnapshotでentries／bytesを上書きしません。memory releaseでcache recordを削除せず、
+cache clearでmaterialize済みresourceを直ちに無効化しません。
 
 remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
 size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は

@@ -218,12 +218,19 @@ releaseします。app shellはAsset Managerの`renewVerifiedRemoteStoryCacheLea
 `releaseVerifiedRemoteStoryCacheLease`を呼びます。origin全体がhigh-waterを超える場合は、実行中の全tabのleaseを
 pinしたまま、最終利用時刻が古い別台本のdatabaseから削除してlow-waterへ戻します。crash等でreleaseされなかった
 leaseは期限切れ後に掃除します。TTLを超えて開かれていない台本databaseは、binaryを読み込むことなくcatalogから
-列挙してdatabaseごと削除できます。
+列挙してdatabaseごと削除できます。lease取得とcatalog更新は一つのtransactionで行い、database deleteは先に
+排他的なdeletion markerを取得します。明示deleteはcurrent runtimeのleaseを自動解除せず、story stop／disposeと
+lease releaseの完了後だけ実行します。
+
+他のactive台本が使用しているbytesはcurrent台本の実効cache上限から差し引きます。active leaseをpinした結果、
+新しいassetをorigin全体のhigh-water内へ格納できない場合は、検証済みbytesをmemory上で使用してIndexedDBへの
+書き込みを省略し、`ASSET_CACHE_ORIGIN_BUDGET_PINNED` warningを返します。
 
 app shellはcatalogを使って全台本cacheを一覧表示します。`clear`は現在のdatabaseとidentityを残してentryだけを
 削除し、「作品のcacheを削除」はdatabaseとcatalog recordを削除します。stats、TTL、LRU、clearの保守走査では
 keyと軽量metadataだけを読み、保存済み`ArrayBuffer`を容量計算のためにmaterializeしません。catalogが利用不能でも
-現在台本の検証済みcache／memory実行を中止せず、機械可読warningを返します。
+現在台本の検証済みcache／memory実行を中止せず、機械可読warningを返します。story DBのwrite／delete／clearは
+単調増加するstats revisionを更新し、catalogは別tabから遅れて到着した古いentry／byte数を採用しません。
 
 runtimeが扱う寿命は次の四段階です。
 
