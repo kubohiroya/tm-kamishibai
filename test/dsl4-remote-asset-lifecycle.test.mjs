@@ -152,7 +152,7 @@ test('keeps remote loading disabled unless the host injects a loader', async () 
         adapter: {prepare() {}, release() {}},
         setLoading() {},
       }),
-    /requires loadRemoteAsset/u,
+    /requires a remote asset resolver/u,
   );
 });
 
@@ -189,14 +189,14 @@ test('rejects remote size, Content-Type, and integrity mismatches before registr
   }
 });
 
-test('verifies a remote pose archive before registering its extracted model files', async () => {
+test('rejects remote pose files until a trusted archive extractor is connected', async () => {
   const archive = new TextEncoder().encode('verified-pose-archive');
   const files = [
     {path: 'metadata.json', bytes: new TextEncoder().encode('{"labels":["rescue"]}')},
     {path: 'model.json', bytes: new TextEncoder().encode('{"model":true}')},
     {path: 'weights.bin', bytes: new Uint8Array([1, 2, 3])},
   ];
-  const prepared = [];
+  let prepared = 0;
   const lifecycle = createDsl4RemoteAssetLifecycle({
     runtimeComponent: component(
       {
@@ -213,22 +213,19 @@ test('verifies a remote pose archive before registering its extracted model file
       files,
     }),
     adapter: {
-      prepare(payload) {
-        prepared.push(payload);
-        return {id: payload.asset.id};
+      prepare() {
+        prepared += 1;
       },
       release() {},
     },
     setLoading() {},
     subtleCrypto: webcrypto.subtle,
   });
-  await lifecycle.prepare({assetIds: ['Remote']}, context());
-  assert.equal(prepared[0].asset.source.type, 'remote');
-  assert.deepEqual(
-    prepared[0].files.map(({path: filePath}) => filePath),
-    ['metadata.json', 'model.json', 'weights.bin'],
+  await assert.rejects(
+    lifecycle.prepare({assetIds: ['Remote']}, context()),
+    (error) => error.code === 'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
   );
-  assert.notStrictEqual(prepared[0].files[0].bytes, files[0].bytes);
+  assert.equal(prepared, 0);
   await lifecycle.release({reason: 'stop'});
 });
 

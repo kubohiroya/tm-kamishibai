@@ -5,9 +5,17 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {IDBFactory} from 'fake-indexeddb';
+
 import {createDsl4PlatformAssetSession} from '../src/dsl4/platform/index.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const cacheIdentity = Object.freeze({
+  id: 'story001',
+  label: 'story.kamishibai.yaml',
+  databaseName: 'tw-kamishibai-assets-v1--story--story001',
+});
 
 function runtimeComponent() {
   const files = new Map([
@@ -76,6 +84,7 @@ function remoteRuntimeComponent(remoteBytes) {
 }
 
 function factories(log, overrides = {}) {
+  const assetManagerCreateArguments = [];
   const assetManagerComposition = {
     async registerProjectAsset(input) {
       log.push(['media.register-project', input.name]);
@@ -102,6 +111,33 @@ function factories(log, overrides = {}) {
     async playSound() {},
     stopSound() {},
     stopAllSounds() {},
+    async resolveVerifiedRemoteBinary(input, resolveOptions) {
+      const loaded = await resolveOptions.load(input, {signal: resolveOptions.signal});
+      return {
+        bytes:
+          loaded.bytes instanceof Uint8Array
+            ? loaded.bytes
+            : new Uint8Array(/** @type {ArrayBuffer} */ (loaded.bytes)),
+        contentType: String(loaded.contentType).split(';', 1)[0],
+        integrity: input.integrity,
+        source: 'network',
+        cacheRead: 'miss',
+        cacheWrite: 'stored',
+        cacheWarnings: [],
+      };
+    },
+    async getVerifiedRemoteCacheStats() {},
+    async pruneVerifiedRemoteCache() {},
+    async clearVerifiedRemoteCache() {},
+    async listVerifiedRemoteStoryCaches() {
+      return [];
+    },
+    async pruneVerifiedRemoteStoryCaches() {},
+    async deleteVerifiedRemoteStoryCache() {},
+    async renewVerifiedRemoteStoryCacheLease() {},
+    async releaseVerifiedRemoteStoryCacheLease() {
+      log.push(['cache.release-lease']);
+    },
     ...overrides.assetManager,
   };
   const tmposeComposition = {
@@ -150,8 +186,10 @@ function factories(log, overrides = {}) {
   };
   return {
     assetManagerComposition,
+    assetManagerCreateArguments,
     tmposeComposition,
-    createAssetManagerComposition() {
+    createAssetManagerComposition(...args) {
+      assetManagerCreateArguments.push(args);
       log.push(['media.create']);
       return assetManagerComposition;
     },
@@ -258,7 +296,7 @@ test('enables verified remote loading only when the app shell injects a loader',
   const loads = [];
   const enabled = createDsl4PlatformAssetSession({
     ...setup.value,
-    subtleCrypto: webcrypto.subtle,
+    cacheIdentity,
     async loadRemoteAsset(payload, loadContext) {
       loads.push({payload, signal: loadContext.signal});
       return {bytes: remoteBytes, contentType: 'image/svg+xml'};
@@ -267,11 +305,74 @@ test('enables verified remote loading only when the app shell injects a loader',
   await enabled.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
   assert.equal(loads.length, 1);
   assert.equal(loads[0].payload.url, 'https://cdn.example.com/beach.svg');
+  assert.deepEqual(setup.created.assetManagerCreateArguments, [
+    [undefined, {verifiedRemoteCache: {cacheIdentity}}],
+  ]);
+  assert.deepEqual(enabled.verifiedRemoteCache.identity, cacheIdentity);
+  assert.deepEqual(enabled.verifiedRemoteCache.getWarnings(), []);
   assert.ok(
     enabledLog.some(([event, id]) => event === 'media.register-embedded' && id === 'RemoteBeach'),
   );
   await enabled.dispose('remote-cleanup');
   assert.ok(enabledLog.some(([event, id]) => event === 'media.release' && id === 'RemoteBeach'));
+  assert.ok(enabledLog.some(([event]) => event === 'cache.release-lease'));
+});
+
+test('uses the story-scoped IndexedDB cache before calling the host loader', async () => {
+  const remoteBytes = new TextEncoder().encode('<svg id="cached-beach"/>');
+  const component = remoteRuntimeComponent(remoteBytes);
+  const indexedDB = new IDBFactory();
+  const log = [];
+  let networkLoads = 0;
+
+  function createSession(loader) {
+    const setup = options(component, log);
+    return createDsl4PlatformAssetSession({
+      ...setup.value,
+      cacheIdentity,
+      verifiedRemoteCacheOptions: {
+        indexedDB,
+        subtleCrypto: webcrypto.subtle,
+        estimateStorage: async () => ({quota: 64 * 1024 * 1024, usage: 0}),
+      },
+      loadRemoteAsset: loader,
+      createAssetManagerComposition(_featureFlags, compositionOptions) {
+        log.push(['media.create']);
+        const cache = createVerifiedRemoteBinaryCache(compositionOptions.verifiedRemoteCache);
+        return Object.freeze({
+          ...setup.created.assetManagerComposition,
+          resolveVerifiedRemoteBinary: (input, resolveOptions) =>
+            cache.resolve(input, resolveOptions),
+          getVerifiedRemoteCacheStats: () => cache.getStats(),
+          pruneVerifiedRemoteCache: () => cache.prune(),
+          clearVerifiedRemoteCache: () => cache.clear(),
+          listVerifiedRemoteStoryCaches: () => cache.listStoryCaches(),
+          pruneVerifiedRemoteStoryCaches: () => cache.pruneStoryCaches(),
+          deleteVerifiedRemoteStoryCache: (databaseName) => cache.deleteStoryCache(databaseName),
+          renewVerifiedRemoteStoryCacheLease: () => cache.renewStoryCacheLease(),
+          releaseVerifiedRemoteStoryCacheLease: () => cache.releaseStoryCacheLease(),
+        });
+      },
+    });
+  }
+
+  const first = createSession(async () => {
+    networkLoads += 1;
+    return {bytes: Uint8Array.from(remoteBytes), contentType: 'image/svg+xml'};
+  });
+  await first.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
+  assert.equal(networkLoads, 1);
+  assert.equal((await first.verifiedRemoteCache.getStats()).entries, 1);
+  await first.dispose('first-session-complete');
+
+  const second = createSession(async () => {
+    networkLoads += 1;
+    throw new Error('offline loader must not run for a valid cache hit');
+  });
+  await second.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
+  assert.equal(networkLoads, 1);
+  assert.deepEqual(second.verifiedRemoteCache.getWarnings(), []);
+  await second.dispose('second-session-complete');
 });
 
 test('attempts every final cleanup and aggregates lifecycle and composition failures', async () => {
@@ -335,6 +436,10 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
   assert.throws(
     () => createDsl4PlatformAssetSession({...base, tmPoseRuntime: {}}),
     /Webcam and loadFromFiles/u,
+  );
+  assert.throws(
+    () => createDsl4PlatformAssetSession({...base, loadRemoteAsset() {}}),
+    /cacheIdentity must be an object/u,
   );
   assert.equal(factoryCalls, 0);
 

@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
-        specifier: github:kubohiroya/turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4
-        version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4
+        specifier: github:kubohiroya/turbowarp-asset-manager#93ea1e5727826501c699a1e2f827176fd923c0e3
+        version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3
       '@kubohiroya/turbowarp-async-input':
         specifier: github:kubohiroya/turbowarp-async-input#a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
         version: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
@@ -44,6 +44,9 @@ importers:
       eslint:
         specifier: ^10.8.0
         version: 10.8.0(supports-color@7.2.0)
+      fake-indexeddb:
+        specifier: 6.2.5
+        version: 6.2.5
       gh-pages:
         specifier: ^6.3.0
         version: 6.3.0
@@ -127,8 +130,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4':
-    resolution: {gitHosted: true, integrity: sha512-VyFCJnMT92wx+uEuEnU0nezApQIX8++PvTnxppafyhPm00lmu3iwuu6pyl78GOAxbhkFOfdOuyQEW3MvHq2sdw==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4}
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3':
+    resolution: {gitHosted: true, integrity: sha512-88s8gvO8yOF8sfRxVr5ow9/XF556pJ6YuQUVdOc+HFSkZEZ2FdUIGi9TJ6QGBTBXiUKqrppb4/uBeLBTmIbXWQ==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3}
     version: 0.5.0
 
   '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8':
@@ -485,6 +488,10 @@ packages:
   esutils@2.0.3:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -961,7 +968,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4': {}
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3': {}
 
   '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8': {}
 
@@ -1251,6 +1258,8 @@ snapshots:
   estraverse@5.3.0: {}
 
   esutils@2.0.3: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-deep-equal@3.1.3: {}
 

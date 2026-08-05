@@ -44,6 +44,7 @@ async function sha256Hex(bytes, subtleCrypto) {
  * @param {{prepare: Function, release: Function}} options.adapter
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
+ * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.resolveVerifiedRemoteAsset]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export function createDsl4EmbeddedAssetLifecycle({
@@ -51,6 +52,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   adapter,
   setLoading,
   loadRemoteAsset,
+  resolveVerifiedRemoteAsset,
   subtleCrypto = globalThis.crypto?.subtle,
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
@@ -79,6 +81,15 @@ export function createDsl4EmbeddedAssetLifecycle({
   if (loadRemoteAsset !== undefined && typeof loadRemoteAsset !== 'function') {
     throw new TypeError('loadRemoteAsset must be a function');
   }
+  if (
+    resolveVerifiedRemoteAsset !== undefined &&
+    typeof resolveVerifiedRemoteAsset !== 'function'
+  ) {
+    throw new TypeError('resolveVerifiedRemoteAsset must be a function');
+  }
+  const remoteLoader = typeof loadRemoteAsset === 'function' ? loadRemoteAsset : null;
+  const verifiedRemoteResolver =
+    typeof resolveVerifiedRemoteAsset === 'function' ? resolveVerifiedRemoteAsset : null;
   const getAssetFile = /** @type {Function} */ (runtimeComponent.getAssetFile);
 
   const manifest = new Map();
@@ -98,14 +109,15 @@ export function createDsl4EmbeddedAssetLifecycle({
     const source = /** @type {Record<string, any>} */ (asset.source);
     if (source.type === 'remote') {
       return (async () => {
-        if (typeof loadRemoteAsset !== 'function') {
+        const usesVerifiedResolver = verifiedRemoteResolver !== null;
+        if (!usesVerifiedResolver && remoteLoader === null) {
           throw assetError(
             asset.id,
             'K4-ASSET-REMOTE-DISABLED',
             `Remote asset loading is not enabled: ${asset.id}`,
           );
         }
-        if (!subtleCrypto || typeof subtleCrypto.digest !== 'function') {
+        if (!usesVerifiedResolver && (!subtleCrypto || typeof subtleCrypto.digest !== 'function')) {
           throw assetError(
             asset.id,
             'K4-ASSET-REMOTE-CRYPTO-001',
@@ -114,16 +126,18 @@ export function createDsl4EmbeddedAssetLifecycle({
         }
         let loaded;
         try {
-          loaded = await loadRemoteAsset(
-            Object.freeze({
-              assetId: asset.id,
-              url: source.url,
-              size: source.size,
-              contentType: source.contentType,
-              integrity: source.integrity,
-            }),
-            context,
-          );
+          const payload = Object.freeze({
+            assetId: asset.id,
+            url: source.url,
+            size: source.size,
+            contentType: source.contentType,
+            integrity: source.integrity,
+          });
+          if (verifiedRemoteResolver) {
+            loaded = await verifiedRemoteResolver(payload, context);
+          } else if (remoteLoader) {
+            loaded = await remoteLoader(payload, context);
+          }
         } catch (error) {
           if (context.signal?.aborted) throw abortError();
           const errorRecord = isRecord(error) ? error : {};
@@ -144,7 +158,7 @@ export function createDsl4EmbeddedAssetLifecycle({
             `Remote asset loader returned an invalid payload: ${asset.id}`,
           );
         }
-        const bytes = new Uint8Array(loaded.bytes);
+        const bytes = usesVerifiedResolver ? loaded.bytes : new Uint8Array(loaded.bytes);
         if (bytes.byteLength !== source.size) {
           throw assetError(
             asset.id,
@@ -159,7 +173,9 @@ export function createDsl4EmbeddedAssetLifecycle({
             `Remote asset Content-Type does not match: ${asset.id}`,
           );
         }
-        const integrity = `sha256-${await sha256Hex(bytes, subtleCrypto)}`;
+        const integrity = usesVerifiedResolver
+          ? loaded.integrity
+          : `sha256-${await sha256Hex(bytes, subtleCrypto)}`;
         if (integrity !== source.integrity) {
           throw assetError(
             asset.id,
@@ -168,30 +184,11 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (asset.kind === 'poseModel') {
-          if (!Array.isArray(loaded.files) || loaded.files.length === 0) {
-            throw assetError(
-              asset.id,
-              'K4-ASSET-REMOTE-LOAD-001',
-              `Remote pose model loader must return extracted files: ${asset.id}`,
-            );
-          }
-          const files = loaded.files.map((file) => {
-            if (
-              !isRecord(file) ||
-              typeof file.path !== 'string' ||
-              file.path.length === 0 ||
-              !(file.bytes instanceof Uint8Array) ||
-              file.bytes.byteLength === 0
-            ) {
-              throw assetError(
-                asset.id,
-                'K4-ASSET-REMOTE-LOAD-001',
-                `Remote pose model loader returned an invalid file: ${asset.id}`,
-              );
-            }
-            return Object.freeze({path: file.path, bytes: new Uint8Array(file.bytes)});
-          });
-          return Object.freeze({asset, files: Object.freeze(files)});
+          throw assetError(
+            asset.id,
+            'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
+            `Remote pose model loading requires a trusted archive extractor: ${asset.id}`,
+          );
         }
         return Object.freeze({
           asset,
@@ -351,8 +348,12 @@ export function createDsl4EmbeddedAssetLifecycle({
  * @param {Parameters<typeof createDsl4EmbeddedAssetLifecycle>[0]} options
  */
 export function createDsl4RemoteAssetLifecycle(options) {
-  if (!options || typeof options.loadRemoteAsset !== 'function') {
-    throw new TypeError('remote asset lifecycle requires loadRemoteAsset');
+  if (
+    !options ||
+    (typeof options.loadRemoteAsset !== 'function' &&
+      typeof options.resolveVerifiedRemoteAsset !== 'function')
+  ) {
+    throw new TypeError('remote asset lifecycle requires a remote asset resolver');
   }
   return createDsl4EmbeddedAssetLifecycle(options);
 }

@@ -221,9 +221,9 @@ test('keeps the adapter out of the default-off core import graph and pins its de
     adapterSource,
     /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
-  assert.match(packageJson, /turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4/u);
+  assert.match(packageJson, /turbowarp-asset-manager#93ea1e5727826501c699a1e2f827176fd923c0e3/u);
   assert.match(
     workspace,
-    /turbowarp-asset-manager\/tar\.gz\/34c7388f76d4983c928545d6bf440ebb6ce0abb4/u,
+    /turbowarp-asset-manager\/tar\.gz\/93ea1e5727826501c699a1e2f827176fd923c0e3/u,
   );
 });
