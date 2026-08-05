@@ -4,31 +4,68 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {compileDsl4Schema, normalizeDsl4Story, validateDsl4Source} from './helpers/dsl4-schema.mjs';
+import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = path.join(projectRoot, 'test', 'fixtures', 'dsl4');
 const schema = JSON.parse(
   await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
-const validateSchema = compileDsl4Schema(schema);
+const frontend = createDsl4SourceFrontend(schema);
 
 async function validateFixture(group, name) {
   const source = await readFile(path.join(fixtureRoot, group, name), 'utf8');
-  return validateDsl4Source(source, validateSchema);
+  return frontend.parse(source, {sourceId: name});
+}
+
+function semanticProjection(storyDocument) {
+  return {
+    assets: storyDocument.assets,
+    scenes: storyDocument.scenes.map((scene) => ({
+      id: scene.id,
+      poseModel: scene.poseModel,
+      actions: scene.actions.map(({command, target, args, stableId}) => ({
+        command,
+        target,
+        args,
+        ...(stableId ? {stableId} : {}),
+      })),
+    })),
+  };
+}
+
+function assertDeepFrozen(value) {
+  if (typeof value !== 'object' || value === null) return;
+  assert.equal(Object.isFrozen(value), true);
+  for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
 test('the approved comprehensive DSL 4.0 example satisfies schema and semantics', async () => {
   const result = await validateFixture('valid', 'comprehensive.kamishibai.yaml');
-  assert.deepEqual(result.errors, []);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.diagnostics, []);
+  assertDeepFrozen(result.storyDocument);
+  assert.equal(result.storyDocument.kind, 'StoryDocument');
+  assert.equal(result.storyDocument.version, '4.0');
+  assert.equal(result.storyDocument.metadata.sourceId, 'comprehensive.kamishibai.yaml');
+  assert.deepEqual(
+    result.storyDocument.scenes.map((scene) => scene.id),
+    ['opening', 'rescue', 'seaRoute', 'ending'],
+  );
+  assert.equal(result.storyDocument.scenes[0].actions[2].id, '/scenes/opening/actions/2');
+  assert.equal(result.storyDocument.scenes[0].actions[2].stableId, 'openingTitle');
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
 });
 
 test('compact and named actions plus short and long scenes normalize identically', async () => {
   const compact = await validateFixture('valid', 'compact-normalization.kamishibai.yaml');
   const named = await validateFixture('valid', 'named-normalization.kamishibai.yaml');
-  assert.deepEqual(compact.errors, []);
-  assert.deepEqual(named.errors, []);
-  assert.deepEqual(normalizeDsl4Story(compact.story), normalizeDsl4Story(named.story));
+  assert.equal(compact.ok, true);
+  assert.equal(named.ok, true);
+  assert.deepEqual(
+    semanticProjection(compact.storyDocument),
+    semanticProjection(named.storyDocument),
+  );
 });
 
 for (const name of [
@@ -50,8 +87,9 @@ for (const name of [
 ]) {
   test(`schema rejects ${name}`, async () => {
     const result = await validateFixture('invalid', name);
-    assert.ok(result.errors.length > 0);
-    assert.equal(result.story, undefined);
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.length > 0);
+    assert.equal(result.storyDocument, undefined);
   });
 }
 
@@ -63,7 +101,7 @@ for (const [name, code] of [
 ]) {
   test(`${name} reports ${code}`, async () => {
     const result = await validateFixture('invalid', name);
-    assert.ok(result.errors.some((error) => error.code === code));
+    assert.ok(result.diagnostics.some((error) => error.code === code));
   });
 }
 
@@ -77,7 +115,7 @@ for (const [name, code] of [
 ]) {
   test(`semantic validation rejects ${name}`, async () => {
     const result = await validateFixture('invalid', name);
-    assert.ok(result.errors.some((error) => error.code === code));
+    assert.ok(result.diagnostics.some((error) => error.code === code));
   });
 }
 
@@ -90,13 +128,13 @@ test('restricted YAML rejects aliases, anchors, merge keys, tags, duplicates, an
     "kamishibai: '4.0'\nscenes: {}\n---\nkamishibai: '4.0'\nscenes: {}\n",
   ];
   for (const source of sources) {
-    const result = validateDsl4Source(source, validateSchema);
-    assert.ok(result.errors.some((error) => error.code.startsWith('K4-YAML-')));
+    const result = frontend.parse(source);
+    assert.ok(result.diagnostics.some((error) => error.code.startsWith('K4-YAML-')));
   }
 });
 
 test('YAML 1.2 keeps yes, no, and dates as strings while preserving booleans', () => {
-  const result = validateDsl4Source(
+  const result = frontend.parse(
     [
       "kamishibai: '4.0'",
       'variables:',
@@ -108,14 +146,77 @@ test('YAML 1.2 keeps yes, no, and dates as strings while preserving booleans', (
       'scenes:',
       '  opening: []',
     ].join('\n'),
-    validateSchema,
   );
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.story.variables, {
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.storyDocument.variables, {
     yesValue: 'yes',
     noValue: 'no',
     dateValue: '2026-08-06',
     enabled: true,
     disabled: false,
   });
+});
+
+test('canonicalizes BOM and all line endings before reporting source positions', () => {
+  const source = "\uFEFFkamishibai: '4.0'\r\nscenes:\r  opening:\r\n    - wait: 1\r";
+  const result = frontend.parse(source, {sourceId: 'line-endings.kamishibai.yaml'});
+  assert.equal(result.ok, true);
+  assert.equal(result.canonicalSource, "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 1\n");
+  const action = result.storyDocument.scenes[0].actions[0];
+  assert.equal(action.sourceRange.start.line, 4);
+  assert.equal(action.sourceRange.start.column, 7);
+});
+
+test('diagnostics carry stable source identity, range, path, and deterministic order', async () => {
+  const source = await readFile(
+    path.join(fixtureRoot, 'invalid', 'wrong-asset-kind.kamishibai.yaml'),
+    'utf8',
+  );
+  const first = frontend.parse(source, {sourceId: 'story.kamishibai.yaml'});
+  const second = frontend.parse(source, {sourceId: 'story.kamishibai.yaml'});
+  assert.equal(first.ok, false);
+  assert.deepEqual(first.diagnostics, second.diagnostics);
+  assert.deepEqual(Object.keys(first.diagnostics[0]), [
+    'version',
+    'code',
+    'severity',
+    'message',
+    'sourceId',
+    'range',
+    'storyPath',
+    'path',
+    'related',
+  ]);
+  assert.equal(first.diagnostics[0].sourceId, 'story.kamishibai.yaml');
+  assert.equal(first.diagnostics[0].storyPath, '/scenes/opening/actions/0');
+  assert.ok(first.diagnostics[0].range.start.line > 0);
+});
+
+test('rejects object-pollution mapping keys before conversion to JavaScript values', () => {
+  const source = "kamishibai: '4.0'\nvariables:\n  __proto__: unsafe\nscenes:\n  opening: []\n";
+  const result = frontend.parse(source);
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({code}) => code === 'K4-YAML-006'));
+});
+
+test('keeps StoryPath stable across comments and whitespace-only edits', () => {
+  const sources = [
+    "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 1\n",
+    "# comment\nkamishibai: '4.0'\n\nscenes:\n  opening:\n\n    - wait: 1 # comment\n",
+  ];
+  const results = sources.map((source) => frontend.parse(source));
+  assert.ok(results.every(({ok}) => ok));
+  assert.equal(results[0].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
+  assert.equal(results[1].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
+});
+
+test('production source frontend has no filesystem, network, VM, or Scratch dependency', async () => {
+  const sources = await Promise.all(
+    ['index.js', 'semantic-validator.js', 'source-frontend.js', 'story-document.js'].map((name) =>
+      readFile(path.join(projectRoot, 'src', 'dsl4', name), 'utf8'),
+    ),
+  );
+  const implementation = sources.join('\n');
+  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
+  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|runtime\.)/);
 });

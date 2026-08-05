@@ -10,5 +10,5 @@
     "target": "ES2023",
     "types": ["node"]
   },
-  "include": ["src/builder/**/*.js", "bin/**/*.mjs"]
+  "include": ["src/**/*.js", "bin/**/*.mjs"]
 }
