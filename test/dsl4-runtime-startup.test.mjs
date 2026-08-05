@@ -1,0 +1,237 @@
+import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import {fileURLToPath} from 'node:url';
+
+import {installDsl4PackagedRuntimeComponent} from '../src/builder/index.js';
+import {
+  createDsl4EmbeddedAssetBundle,
+  createDsl4EmbeddedSourceDescriptor,
+  createDsl4RuntimeArtifactDescriptor,
+  createDsl4RuntimeStartup,
+  createDsl4SourceFrontend,
+  dsl4DefaultFeatureFlags,
+  resolveDsl4FeatureFlags,
+} from '../src/dsl4/index.js';
+
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const schema = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+);
+const frontend = createDsl4SourceFrontend(schema);
+const subtleCrypto = webcrypto.subtle;
+const maxSourceBytes = 8192;
+const maxAssetFiles = 10;
+const maxAssetBytes = 8192;
+const sourceText = `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    development:
+      ArrowLeft: history.previousAction
+      Space: navigation.nextAction
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`;
+
+function baseProject() {
+  return {extensionStorage: {}, targets: [], monitors: []};
+}
+
+async function packagedProject(profile, historyNavigationAvailable = false) {
+  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
+    sourceId: 'main',
+    displayName: 'story.kamishibai.yaml',
+    maxSourceBytes,
+    subtleCrypto,
+  });
+  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    sourceDescriptor,
+    profile,
+    {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
+  );
+  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const assetBundle = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+    {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+  );
+  const project = await installDsl4PackagedRuntimeComponent(
+    baseProject(),
+    parsed.storyDocument,
+    sourceDescriptor,
+    artifactResult.artifact,
+    assetBundle,
+    {
+      channel: 'unbundled',
+      maxSourceBytes,
+      maxAssetFiles,
+      maxAssetBytes,
+      historyNavigationAvailable,
+      subtleCrypto,
+    },
+  );
+  return {project, runtimeArtifact: artifactResult.artifact};
+}
+
+const enabledOptions = (project, extra = {}) => ({
+  featureFlags: {dsl4Runtime: true},
+  project,
+  sourceFrontend: frontend,
+  maxSourceBytes,
+  maxAssetFiles,
+  maxAssetBytes,
+  port: {},
+  subtleCrypto,
+  ...extra,
+});
+
+test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
+  assert.deepEqual(dsl4DefaultFeatureFlags, {dsl4Runtime: false});
+  assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
+  const implicit = await createDsl4RuntimeStartup();
+  const explicit = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: false},
+    project: new Proxy({}, {get: () => assert.fail('project must not be read')}),
+    sourceFrontend: new Proxy({}, {get: () => assert.fail('frontend must not be read')}),
+    port: new Proxy({}, {get: () => assert.fail('port must not be read')}),
+  });
+  for (const result of [implicit, explicit]) {
+    assert.equal(result.ok, true);
+    assert.equal(result.enabled, false);
+    assert.equal(result.session, null);
+    assert.deepEqual(result.featureFlags, {dsl4Runtime: false});
+    assert.equal(Object.isFrozen(result), true);
+  }
+});
+
+test('strictly resolves one immutable startup flag snapshot', async () => {
+  assert.deepEqual(resolveDsl4FeatureFlags(), {dsl4Runtime: false});
+  assert.deepEqual(resolveDsl4FeatureFlags({}), {dsl4Runtime: false});
+  assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {dsl4Runtime: true});
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
+
+  const component = await packagedProject('production');
+  const mutableFlags = {dsl4Runtime: true};
+  const pending = createDsl4RuntimeStartup(
+    enabledOptions(component.project, {featureFlags: mutableFlags}),
+  );
+  mutableFlags.dsl4Runtime = false;
+  const result = await pending;
+  assert.equal(result.ok, true);
+  assert.equal(result.enabled, true);
+  assert.deepEqual(result.featureFlags, {dsl4Runtime: true});
+  assert.equal(Object.isFrozen(result.featureFlags), true);
+  result.session.dispose();
+});
+
+test('withholds component and session when enabled startup validation fails', async () => {
+  const result = await createDsl4RuntimeStartup(enabledOptions(baseProject()));
+  assert.equal(result.ok, false);
+  assert.equal(result.enabled, true);
+  assert.equal(result.diagnostics[0].code, 'K4-SOURCE-CHANNEL-MISSING');
+  assert.equal(Object.hasOwn(result, 'runtimeComponent'), false);
+  assert.equal(Object.hasOwn(result, 'session'), false);
+});
+
+test('creates but does not auto-start or attach a production navigation session', async () => {
+  const component = await packagedProject('production');
+  const calls = [];
+  const events = [];
+  const lifecycle = {
+    prepare(payload, context) {
+      calls.push(['prepare', payload, context]);
+    },
+    setLoading(payload, context) {
+      calls.push(['setLoading', payload, context]);
+    },
+    release(payload) {
+      calls.push(['release', payload]);
+    },
+  };
+  const result = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {
+      port: {
+        wait(payload, context) {
+          calls.push(['wait', payload, context]);
+        },
+      },
+      assetLifecycle: lifecycle,
+      onEvent(event) {
+        events.push(event);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.enabled, true);
+  assert.equal(result.channel, 'unbundled');
+  assert.deepEqual(result.session.getState().keymap, component.runtimeArtifact.resolvedKeymap);
+  assert.equal(result.session.getState().historyEnabled, false);
+  assert.equal(result.session.getState().history, null);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(events, []);
+
+  const finished = await result.session.start();
+  assert.equal(finished.status, 'finished');
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ['prepare', 'wait'],
+  );
+  assert.equal(
+    events.some(({type}) => type === 'action.commit'),
+    true,
+  );
+  result.session.dispose();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(
+    calls.some(([name]) => name === 'release'),
+    true,
+  );
+});
+
+test('uses artifact history activation and requires availability plus finite limits', async () => {
+  const component = await packagedProject('development', true);
+  const unavailable = await createDsl4RuntimeStartup(enabledOptions(component.project));
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.diagnostics[0].code, 'K4-KEYMAP-HISTORY-UNAVAILABLE');
+  assert.equal(Object.hasOwn(unavailable, 'session'), false);
+
+  const unlimited = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {historyNavigationAvailable: true}),
+  );
+  assert.equal(unlimited.ok, false);
+  assert.equal(unlimited.diagnostics[0].code, 'K4-HISTORY-LIMIT-CONFIG-001');
+  assert.equal(Object.hasOwn(unlimited, 'runtimeComponent'), false);
+  assert.equal(Object.hasOwn(unlimited, 'session'), false);
+
+  const enabled = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {
+      historyNavigationAvailable: true,
+      historyLimits: {maxActionEntries: 20, maxSceneVisits: 10},
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  assert.equal(enabled.session.getState().historyEnabled, true);
+  assert.notEqual(enabled.session.getState().history, null);
+  assert.deepEqual(enabled.session.getState().keymap, component.runtimeArtifact.resolvedKeymap);
+  enabled.session.dispose();
+});
+
+test('startup composition core has no global DOM, VM, or Scratch dependency', async () => {
+  const implementation = await readFile(
+    path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'),
+    'utf8',
+  );
+  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
+  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
+});
