@@ -59,6 +59,17 @@ svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up
 action=Hero:setText:タイトル\nサブタイトル:title
 ```
 
+アクターの`say`または`think`吹き出しへ名前付きスタイルを適用する場合は、表示秒数の後にスタイル名を指定します。
+
+```text
+svgTextStyle=baloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right
+
+action=Hero:say:こんにちは:5.0:baloonStyle
+action=Hero:think:どうしよう……:5.0:baloonStyle
+```
+
+書式は`action=ACTOR:say|think:TEXT:SECONDS:STYLE`です。スタイル名を省略した従来の`action=Hero:say:こんにちは`および`action=Hero:say:こんにちは:5.0`は引き続き`default`スタイルを使用します。
+
 ## このリポジトリを開発する
 
 ### 必要な環境
