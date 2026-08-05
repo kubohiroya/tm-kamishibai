@@ -73,6 +73,56 @@ test('canonicalizes BOM and legacy newlines before recording source positions', 
   assert.equal(invalidUtf8.diagnostics[0].code, 'K4-CONVERT-UTF8-001');
 });
 
+test('treats a scene separator as the end of the current scene', () => {
+  const result = convertDsl32ToDsl4(
+    ['kamishibai=3.2', 'sceneLabel=opening', 'action=wait:1', '---', 'action=wait:2'].join('\n'),
+    {sourceId: 'missing-scene-label.txt'},
+  );
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'K4-CONVERT-ACTION-SCENE' && diagnostic.range.start.line === 5,
+    ),
+  );
+});
+
+test('does not hoist scene-local variables or ignore a non-default start scene', () => {
+  const sceneLocal = convertDsl32ToDsl4(
+    ['kamishibai=3.2', 'sceneLabel=opening', 'setRuntimeVariable=score:1', 'action=wait:1'].join(
+      '\n',
+    ),
+    {sourceId: 'scene-variable.txt'},
+  );
+  assert.equal(sceneLocal.ok, false);
+  assert.ok(
+    sceneLocal.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'K4-CONVERT-SCENE-VARIABLE' && diagnostic.range.start.line === 3,
+    ),
+  );
+
+  const alternateStart = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=startSceneIndex:2',
+      'sceneLabel=opening',
+      'action=wait:1',
+      'sceneLabel=ending',
+      'action=wait:1',
+    ].join('\n'),
+    {sourceId: 'alternate-start.txt'},
+  );
+  assert.equal(alternateStart.ok, false);
+  assert.ok(
+    alternateStart.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'K4-CONVERT-START-SCENE' && diagnostic.range.start.line === 2,
+    ),
+  );
+});
+
 test('reports an empty pose step at the original line and returns no partial YAML', async () => {
   const source = await readFile(path.join(fixtureRoot, 'invalid-pose.dsl32.txt'));
   const result = convertDsl32ToDsl4(source, {sourceId: 'invalid-pose.dsl32.txt'});
@@ -109,6 +159,54 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
     {pose: 'help', skin: 'Hero', sound: 'Success'},
     {pose: 'jump'},
   ]);
+});
+
+test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', () => {
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=poseRecog:0.75',
+      'setRuntimeVariable=poseCharge:20',
+      'setRuntimeVariable=poseIdle:0',
+      'asset=Hero,costume',
+      'asset=Idle,sound',
+      'asset=Charge,sound',
+      'actor=Hero,Hero',
+      'setPoseRecognitionSound=Idle,Charge',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'pose-config.txt', poseModels},
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.document?.poseRecognition.sequence, {
+    confidenceThreshold: 0.75,
+    fullConfidenceHoldSeconds: 0.5,
+    idleChargePerSecond: 0,
+  });
+  assert.equal(result.document?.variables.poseCharge, 20);
+
+  const incompatible = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=poseIdle:1',
+      'asset=Hero,costume',
+      'actor=Hero,Hero',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'pose-idle.txt', poseModels},
+  );
+  assert.equal(incompatible.ok, false);
+  assert.ok(
+    incompatible.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'K4-CONVERT-POSE-CONFIG' && diagnostic.range.start.line === 2,
+    ),
+  );
 });
 
 test('requires an explicit local replacement for each scene TMPoseURL', async () => {
@@ -257,4 +355,55 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
     }),
     (error) => error instanceof Dsl32ConversionError && error.reported,
   );
+
+  const invalidManifestPath = path.join(directory, 'invalid-pose-models.json');
+  await writeFile(invalidManifestPath, '{');
+  let manifestStderr = '';
+  await assert.rejects(
+    runCli(
+      [
+        'convert-dsl4',
+        '--input',
+        inputPath,
+        '--output',
+        outputPath,
+        '--pose-models',
+        invalidManifestPath,
+      ],
+      {
+        stdout: {write: () => true},
+        stderr: {write: (chunk) => (manifestStderr += chunk)},
+      },
+    ),
+    (error) => error instanceof Dsl32ConversionError && error.reported,
+  );
+  assert.match(manifestStderr, new RegExp(`${invalidManifestPath}:1:1`, 'u'));
+  assert.equal(manifestStderr.includes(`${inputPath}:1:1`), false);
+
+  await writeFile(
+    invalidManifestPath,
+    JSON.stringify({
+      'https://example.com/models/rescue/': {id: 'invalid id', file: 'pose-models/rescue'},
+    }),
+  );
+  manifestStderr = '';
+  await assert.rejects(
+    runCli(
+      [
+        'convert-dsl4',
+        '--input',
+        inputPath,
+        '--output',
+        outputPath,
+        '--pose-models',
+        invalidManifestPath,
+      ],
+      {
+        stdout: {write: () => true},
+        stderr: {write: (chunk) => (manifestStderr += chunk)},
+      },
+    ),
+    (error) => error instanceof Dsl32ConversionError && error.reported,
+  );
+  assert.match(manifestStderr, new RegExp(`${invalidManifestPath}:1:1`, 'u'));
 });

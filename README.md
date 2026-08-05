@@ -76,6 +76,13 @@ scene、およびDSL 4.0 coreに対応するactionを変換します。型推論
 要素はwarning付きで除外します。Async Inputによる候補1件選択は3.2テキストDSLのactionではなく
 SB3 block graph側の機能であるため、このconverterは`poseInputToChangeScene`を推測生成しません。
 
+headerの`poseRecog`は`sequence.confidenceThreshold`へ変換します。3.2が0.1秒ごとに100を目標として
+`confidence × poseCharge`を加えるため、`poseCharge`は
+`sequence.fullConfidenceHoldSeconds = 10 / poseCharge`へ変換します。`poseIdle=0`はそのまま変換
+できますが、非zero値は3.2だけがconfidenceを乗算するため、意味を変えず自動変換できません。
+scene内の`setRuntimeVariable`と、1以外の`startSceneIndex`も4.0 coreに同等の実行位置がないため
+errorにします。
+
 JavaScriptから副作用なしで変換する場合は、package exportを利用できます。
 
 ```js

@@ -176,7 +176,7 @@ export async function runCli(arguments_, io = {}) {
   if (parsed.action === 'convert') {
     const result = await convertDsl32File(parsed.options);
     for (const diagnostic of result.diagnostics) {
-      stderr.write(`${formatConversionDiagnostic(diagnostic, parsed.options.inputPath)}\n`);
+      stderr.write(`${formatConversionDiagnostic(diagnostic)}\n`);
     }
     if (!result.ok || !result.outputPath) {
       const errorCount = result.diagnostics.filter(

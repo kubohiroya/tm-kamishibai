@@ -87,6 +87,20 @@ function ownObject(entries) {
   return Object.fromEntries(entries);
 }
 
+/** @param {string} file */
+function isSafePoseModelFile(file) {
+  const components = file.split('/');
+  return !(
+    !file ||
+    file.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/u.test(file) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(file) ||
+    file.includes('\\') ||
+    file.includes('\0') ||
+    components.some((component) => component === '.' || component === '..')
+  );
+}
+
 /** @param {unknown} input @returns {Readonly<Record<string, PoseModelReplacement>>} */
 function normalizePoseModels(input) {
   if (input === undefined) return Object.freeze({});
@@ -114,6 +128,16 @@ function normalizePoseModels(input) {
     }
     if (typeof replacement.id !== 'string' || typeof replacement.file !== 'string') {
       throw new TypeError(`poseModels[${sourceUrl}] requires string id and file fields.`);
+    }
+    if (
+      replacement.id !== replacement.id.normalize('NFC') ||
+      !identifierPattern.test(replacement.id) ||
+      dangerousIdentifiers.has(replacement.id)
+    ) {
+      throw new TypeError(`poseModels[${sourceUrl}].id is not a valid DSL 4.0 identifier.`);
+    }
+    if (!isSafePoseModelFile(replacement.file)) {
+      throw new TypeError(`poseModels[${sourceUrl}].file must be a safe project-relative path.`);
     }
     if (
       replacement.loading !== undefined &&
@@ -146,6 +170,8 @@ class Converter {
     this.textStyles = new Map();
     /** @type {Map<string, string | number | boolean>} */
     this.variables = new Map();
+    /** @type {Map<string, Dsl32Command>} */
+    this.variableCommands = new Map();
     /** @type {Map<string, Record<string, any>[]>} */
     this.scenes = new Map();
     /** @type {Map<string, string>} */
@@ -164,7 +190,7 @@ class Converter {
     this.cover = null;
     /** @type {{backdrop?: string, costumes?: string[]} | null} */
     this.loading = null;
-    /** @type {{idleSound: string, chargeSound: string} | null} */
+    /** @type {{idleSound: string, chargeSound: string, sequence?: Record<string, number>} | null} */
     this.poseRecognition = null;
     /** @type {string | null} */
     this.currentScene = null;
@@ -187,7 +213,17 @@ class Converter {
     const commands = [];
     for (const [index, sourceLine] of this.source.split('\n').entries()) {
       const line = sourceLine.trim();
-      if (!line || line.startsWith('#') || line === '---') continue;
+      if (!line || line.startsWith('#')) continue;
+      if (line === '---') {
+        commands.push({
+          key: '---',
+          value: '',
+          lineNumber: index + 1,
+          columnNumber: sourceLine.indexOf(line) + 1,
+          sourceLine,
+        });
+        continue;
+      }
       const separator = line.indexOf('=');
       if (separator < 1) {
         this.error('K4-CONVERT-COMMAND-001', 'DSL 3.2 commands must use key=value syntax.', {
@@ -353,6 +389,14 @@ class Converter {
 
   /** @param {Dsl32Command} command */
   parseVariable(command) {
+    if (this.currentScene) {
+      this.error(
+        'K4-CONVERT-SCENE-VARIABLE',
+        `Scene-local setRuntimeVariable in ${this.currentScene} has no DSL 4.0 core action equivalent and cannot be hoisted safely.`,
+        command,
+      );
+      return;
+    }
     const separator = command.value.indexOf(':');
     if (separator < 1) {
       this.error('K4-CONVERT-VARIABLE-001', 'setRuntimeVariable requires NAME:VALUE.', command);
@@ -380,6 +424,85 @@ class Converter {
       );
     }
     this.variables.set(id, value);
+    this.variableCommands.set(id, command);
+  }
+
+  validateRuntimeCompatibility() {
+    if (this.variables.has('startSceneIndex') && this.variables.get('startSceneIndex') !== 1) {
+      this.error(
+        'K4-CONVERT-START-SCENE',
+        'DSL 4.0 starts from the first declared scene. startSceneIndex can only be converted when its value is 1.',
+        this.variableCommands.get('startSceneIndex') ?? null,
+      );
+    }
+  }
+
+  applyPoseRuntimeConfiguration() {
+    if (this.scenesUsingPose.size === 0) return;
+    const configuredNames = ['poseRecog', 'poseCharge', 'poseIdle'].filter((name) =>
+      this.variables.has(name),
+    );
+    if (configuredNames.length === 0) return;
+
+    /** @param {string} name @param {number} fallback */
+    const valueFor = (name, fallback) =>
+      this.variables.has(name) ? this.variables.get(name) : fallback;
+    const confidenceThreshold = valueFor('poseRecog', 0.5);
+    const poseCharge = valueFor('poseCharge', 10);
+    const poseIdle = valueFor('poseIdle', 0);
+    let valid = true;
+    if (
+      typeof confidenceThreshold !== 'number' ||
+      confidenceThreshold < 0 ||
+      confidenceThreshold > 1
+    ) {
+      this.error(
+        'K4-CONVERT-POSE-CONFIG',
+        'poseRecog must be a number from 0 through 1 for DSL 4.0 conversion.',
+        this.variableCommands.get('poseRecog') ?? null,
+      );
+      valid = false;
+    }
+    if (typeof poseCharge !== 'number' || poseCharge <= 0 || !Number.isFinite(10 / poseCharge)) {
+      this.error(
+        'K4-CONVERT-POSE-CONFIG',
+        'poseCharge must produce a finite elapsed-time hold duration greater than 0.',
+        this.variableCommands.get('poseCharge') ?? null,
+      );
+      valid = false;
+    }
+    if (typeof poseIdle !== 'number' || poseIdle !== 0) {
+      this.error(
+        'K4-CONVERT-POSE-CONFIG',
+        'A non-zero poseIdle multiplies confidence in DSL 3.2 and has no exact DSL 4.0 sequence equivalent. Migrate it manually.',
+        this.variableCommands.get('poseIdle') ?? null,
+      );
+      valid = false;
+    }
+    if (!valid) return;
+
+    const differsFromDefaults = confidenceThreshold !== 0.5 || poseCharge !== 10 || poseIdle !== 0;
+    if (!this.poseRecognition) {
+      if (differsFromDefaults) {
+        this.error(
+          'K4-CONVERT-POSE-CONFIG',
+          'Custom pose recognition values require setPoseRecognitionSound with both sounds so DSL 4.0 can carry sequence configuration.',
+          this.variableCommands.get(configuredNames[0]) ?? null,
+        );
+      }
+      return;
+    }
+
+    /** @type {Record<string, number>} */
+    const sequence = {};
+    if (this.variables.has('poseRecog')) {
+      sequence.confidenceThreshold = /** @type {number} */ (confidenceThreshold);
+    }
+    if (this.variables.has('poseCharge')) {
+      sequence.fullConfidenceHoldSeconds = 10 / /** @type {number} */ (poseCharge);
+    }
+    if (this.variables.has('poseIdle')) sequence.idleChargePerSecond = 0;
+    this.poseRecognition.sequence = sequence;
   }
 
   /** @param {Dsl32Command} command */
@@ -626,16 +749,7 @@ class Converter {
 
   /** @param {string} file @param {Dsl32Command} command */
   validatePoseModelFile(file, command) {
-    const components = file.split('/');
-    if (
-      !file ||
-      file.startsWith('/') ||
-      /^[A-Za-z]:[\\/]/u.test(file) ||
-      /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(file) ||
-      file.includes('\\') ||
-      file.includes('\0') ||
-      components.some((component) => component === '.' || component === '..')
-    ) {
+    if (!isSafePoseModelFile(file)) {
       this.error(
         'K4-CONVERT-POSE-MODEL-MAP',
         `Pose model file must be a safe project-relative path: ${file || '(empty)'}`,
@@ -1095,6 +1209,9 @@ class Converter {
     const commands = this.parseCommands();
     for (const command of commands) {
       switch (command.key) {
+        case '---':
+          this.currentScene = null;
+          break;
         case 'kamishibai':
           this.parseVersion(command);
           break;
@@ -1158,6 +1275,8 @@ class Converter {
         'DSL 4.0 loading configuration requires both setLoadingBackdrop and setLoadingCostume.',
       );
     }
+    this.validateRuntimeCompatibility();
+    this.applyPoseRuntimeConfiguration();
     for (const [sceneId, command] of this.scenesUsingPose) {
       if (!this.scenePoseModels.has(sceneId)) {
         this.error(
@@ -1304,14 +1423,14 @@ export async function convertDsl32File(options) {
   if (options.poseModelMapPath) {
     const poseModelMapPath = path.resolve(options.poseModelMapPath);
     try {
-      poseModels = JSON.parse(await readFile(poseModelMapPath, 'utf8'));
+      poseModels = normalizePoseModels(JSON.parse(await readFile(poseModelMapPath, 'utf8')));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const diagnostic = createDiagnostic(
         poseModelMapPath,
         'K4-CONVERT-POSE-MODEL-MAP',
         'error',
-        `Cannot read the pose model replacement manifest: ${message}`,
+        `Cannot read or validate the pose model replacement manifest: ${message}`,
       );
       return {ok: false, outputPath: null, diagnostics: [diagnostic], yaml: null, document: null};
     }
