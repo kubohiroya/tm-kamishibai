@@ -1,0 +1,126 @@
+import {deepFreeze} from './story-document.js';
+
+/** @param {Iterable<string>} values */
+function sortedUnique(values) {
+  return [...new Set(values)].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+}
+
+/** @param {unknown} value @param {Set<string>} dependencies */
+function addDependency(value, dependencies) {
+  if (typeof value === 'string') dependencies.add(value);
+}
+
+/**
+ * @param {Readonly<Record<string, unknown>>} action
+ * @param {Set<string>} dependencies
+ * @returns {boolean}
+ */
+function addActionDependencies(action, dependencies) {
+  const command = String(action.command);
+  const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
+  if (command === 'stage') addDependency(args.backdrop, dependencies);
+  if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
+  if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
+  if (command !== 'pose') return false;
+
+  const choices = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+    args.choices ?? []
+  );
+  for (const choice of choices) {
+    addDependency(choice.skin, dependencies);
+    addDependency(choice.sound, dependencies);
+  }
+  return true;
+}
+
+/**
+ * Build the immutable preparation index consumed by runtime asset lifecycle adapters.
+ *
+ * Scene `eager` means the asset is already covered by the startup preparation set. Scene
+ * `lazy` contains only direct dependencies that still need background preparation.
+ *
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ */
+export function createDsl4AssetDependencyIndex(storyDocument) {
+  if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
+    throw new TypeError('DSL 4.0 asset dependency index requires a StoryDocument version 4.0');
+  }
+
+  const assets = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    storyDocument.assets ?? {}
+  );
+  const startup = new Set(
+    Object.entries(assets)
+      .filter(([, asset]) => asset.loading !== 'lazy')
+      .map(([assetId]) => assetId),
+  );
+
+  const loading = /** @type {Readonly<Record<string, unknown>> | null} */ (
+    storyDocument.loading ?? null
+  );
+  if (loading) {
+    addDependency(loading.backdrop, startup);
+    for (const costume of /** @type {ReadonlyArray<unknown>} */ (loading.costumes ?? [])) {
+      addDependency(costume, startup);
+    }
+  }
+
+  const coverDependencies = new Set();
+  const cover = /** @type {Readonly<Record<string, unknown>> | null} */ (
+    storyDocument.cover ?? null
+  );
+  if (cover) {
+    addDependency(cover.backdrop, coverDependencies);
+    addDependency(cover.bgm, coverDependencies);
+  }
+
+  const actorDependencies = new Set();
+  for (const costume of Object.values(
+    /** @type {Readonly<Record<string, unknown>>} */ (storyDocument.actors ?? {}),
+  )) {
+    addDependency(costume, actorDependencies);
+  }
+
+  const poseRecognition = /** @type {Readonly<Record<string, unknown>> | null} */ (
+    storyDocument.poseRecognition ?? null
+  );
+  const poseRecognitionDependencies = new Set();
+  if (poseRecognition) {
+    addDependency(poseRecognition.idleSound, poseRecognitionDependencies);
+    addDependency(poseRecognition.chargeSound, poseRecognitionDependencies);
+  }
+
+  const startupAssets = sortedUnique(startup);
+  /** @type {Record<string, Readonly<Record<string, ReadonlyArray<string>>>>} */
+  const scenes = {};
+  for (const scene of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+    storyDocument.scenes ?? []
+  )) {
+    const dependencies = new Set();
+    addDependency(scene.poseModel, dependencies);
+    let usesPoseRecognition = false;
+    for (const action of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene.actions ?? []
+    )) {
+      usesPoseRecognition = addActionDependencies(action, dependencies) || usesPoseRecognition;
+    }
+    if (usesPoseRecognition) {
+      for (const assetId of poseRecognitionDependencies) dependencies.add(assetId);
+    }
+    const all = sortedUnique(dependencies);
+    scenes[String(scene.id)] = deepFreeze({
+      all,
+      eager: all.filter((assetId) => startup.has(assetId)),
+      lazy: all.filter((assetId) => !startup.has(assetId)),
+    });
+  }
+
+  return deepFreeze({
+    formatVersion: 1,
+    startup: startupAssets,
+    cover: sortedUnique(coverDependencies),
+    actors: sortedUnique(actorDependencies),
+    poseRecognition: sortedUnique(poseRecognitionDependencies),
+    scenes,
+  });
+}
