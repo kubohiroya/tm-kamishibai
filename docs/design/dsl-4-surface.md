@@ -168,6 +168,16 @@ sequenceの進捗は、対象poseのconfidenceが`confidenceThreshold`以上な�
 `previous × decayPerSecond^elapsedSeconds + confidence × accumulationPerSecond × elapsedSeconds`
 を計算し、最大scoreが`scoreThreshold`以上になったposeを1件だけ選びます。
 
+二つの認識modeは排他です。`Actor.pose`のsequenceを優先し、sequence開始時に実行中の
+selection待機があればcancelします。sequence中に開始されたselection待機は購読せず、sequence
+終了後にだけ開始します。この間のselection eventでscene遷移してはいけません。
+
+selectionの有効期限は`poseInputToChangeScene`の1回のaction実行です。開始時に以前のselection
+待機を解除し、selection用の蓄積scoreを0へresetしてから購読します。同じruntimeでselectionを
+重ねた場合は直近の1回だけを残し、以前の待機を自動cancelします。候補決定、scene移動、巻き戻し、
+停止、live reload、`Actor.pose`開始、runtime解放で失効し、同じsceneへ再入場した場合も新しい
+selectionとしてscore 0から開始します。selectionのresetでsequenceのstep進捗は変更しません。
+
 ## 5. 環境別keymap
 
 開発用の巻き戻しや早送りは固定キーをシステム的に占有せず、台本の環境別keymapで割り当てます。

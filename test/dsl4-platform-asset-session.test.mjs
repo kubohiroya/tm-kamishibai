@@ -113,6 +113,11 @@ function factories(log, overrides = {}) {
     confidenceOf() {
       return 0;
     },
+    configureAccumulatedPose() {},
+    resetAccumulatedPose() {},
+    subscribeAccumulatedPose() {
+      return () => {};
+    },
     ...overrides.tmpose,
   };
   return {
@@ -158,6 +163,9 @@ test('creates one shared composition pair and routes a complete lifecycle throug
 
   assert.strictEqual(session.assetManagerComposition, setup.created.assetManagerComposition);
   assert.strictEqual(session.tmposeComposition, setup.created.tmposeComposition);
+  assert.equal(typeof session.asyncInputComposition.waitForPoseCandidate, 'function');
+  assert.equal(typeof session.poseActionPort.waitForPose, 'function');
+  assert.equal(typeof session.poseActionPort.poseInputToChangeScene, 'function');
   assert.equal(Object.isFrozen(session), true);
   assert.equal(Object.isFrozen(session.lifecycle), true);
   await session.lifecycle.prepare({assetIds: ['RescuePose', 'Beach']}, context());

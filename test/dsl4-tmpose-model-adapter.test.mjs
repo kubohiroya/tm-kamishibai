@@ -73,10 +73,12 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
   });
   assert.equal(Object.isFrozen(resource), true);
   assert.equal(Object.isFrozen(resource.labels), true);
+  assert.deepEqual(adapter.getPoseModelLabels('RescuePose'), ['idle', 'rescue']);
 
   await adapter.release(resource);
   await adapter.release(resource);
   assert.deepEqual(fake.calls.release, ['RescuePose']);
+  assert.equal(adapter.getPoseModelLabels('RescuePose'), null);
 });
 
 test('rejects malformed pose model bundles before TMPose registration', async () => {
@@ -209,8 +211,8 @@ test('routes media and pose assets to their owners and preserves release ownersh
   await assert.rejects(otherRouter.release(resources[0]), /not owned/u);
 });
 
-test('keeps platform adapters outside the default-off core graph and pins TMPose exactly', async () => {
-  const [coreIndex, startup, adapterSource, routerSource, packageJson, workspace] =
+test('keeps platform adapters outside the default-off core graph and pins pose dependencies', async () => {
+  const [coreIndex, startup, adapterSource, routerSource, packageJson, workspace, lockfile] =
     await Promise.all([
       readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
       readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
@@ -224,6 +226,7 @@ test('keeps platform adapters outside the default-off core graph and pins TMPose
       ),
       readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
       readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
+      readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8'),
     ]);
   assert.doesNotMatch(coreIndex, /\.\/platform|tmpose-model-adapter/u);
   assert.doesNotMatch(startup, /turbowarp-tmpose|tmpose-model-adapter/u);
@@ -231,6 +234,16 @@ test('keeps platform adapters outside the default-off core graph and pins TMPose
     `${adapterSource}\n${routerSource}`,
     /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
-  assert.match(packageJson, /turbowarp-tmpose#d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85/u);
-  assert.match(workspace, /turbowarp-tmpose\/tar\.gz\/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85/u);
+  assert.match(packageJson, /turbowarp-tmpose#9fdc0982a76818c5627fa65a03c467a243fe8110/u);
+  assert.match(workspace, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
+  assert.match(lockfile, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
+  assert.match(packageJson, /turbowarp-async-input#a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u);
+  assert.match(
+    workspace,
+    /turbowarp-async-input\/tar\.gz\/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u,
+  );
+  assert.match(
+    lockfile,
+    /turbowarp-async-input\/tar\.gz\/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u,
+  );
 });

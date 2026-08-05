@@ -191,6 +191,7 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
     pose: 'happy',
+    poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.6,
       fullConfidenceHoldSeconds: 1.5,
@@ -201,6 +202,7 @@ test('dispatches every core action and keeps transition separate from scene move
   });
   assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
     poses: ['happy', 'jump'],
+    poseModel: 'RescuePose',
     recognition: {
       accumulationPerSecond: 2,
       decayPerSecond: 0.8,
