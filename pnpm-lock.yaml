@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
-        specifier: github:kubohiroya/turbowarp-asset-manager#93ea1e5727826501c699a1e2f827176fd923c0e3
-        version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3
+        specifier: github:kubohiroya/turbowarp-asset-manager#1f706d7d046ed491728d9011a0e610e63013d815
+        version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/1f706d7d046ed491728d9011a0e610e63013d815
       '@kubohiroya/turbowarp-async-input':
         specifier: github:kubohiroya/turbowarp-async-input#a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
         version: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
@@ -130,8 +130,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3':
-    resolution: {gitHosted: true, integrity: sha512-88s8gvO8yOF8sfRxVr5ow9/XF556pJ6YuQUVdOc+HFSkZEZ2FdUIGi9TJ6QGBTBXiUKqrppb4/uBeLBTmIbXWQ==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3}
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/1f706d7d046ed491728d9011a0e610e63013d815':
+    resolution: {gitHosted: true, integrity: sha512-CaeQ/OZAz2i4XAvkg8J0sL5y1/sS7FtbF/nmppf4uNwhP5JlqJ6aebr0POxqsBFYWViquebf6gxNWunQkTfe4A==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/1f706d7d046ed491728d9011a0e610e63013d815}
     version: 0.5.0
 
   '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8':
@@ -968,7 +968,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/93ea1e5727826501c699a1e2f827176fd923c0e3': {}
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/1f706d7d046ed491728d9011a0e610e63013d815': {}
 
   '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8': {}
 
