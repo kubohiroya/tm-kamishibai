@@ -23,7 +23,12 @@ export {
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
-export {embedDsl4SourceInSb3, installDsl4EmbeddedSource} from './dsl4-source.js';
+export {
+  embedDsl4RuntimeComponentInSb3,
+  embedDsl4SourceInSb3,
+  installDsl4EmbeddedSource,
+  installDsl4RuntimeComponent,
+} from './dsl4-source.js';
 export {validateAssetManifest} from './manifest.js';
 export {validateBundle} from './validate.js';
 
