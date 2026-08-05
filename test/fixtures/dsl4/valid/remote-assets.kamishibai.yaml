@@ -19,6 +19,15 @@ assets:
       integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
       contentType: image/webp
       size: 654321
+  RemotePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/rescue-pose.zip
+      integrity: sha256-fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      contentType: application/zip
+      size: 7654321
   HeroIdle: costume:Hero
 
 actors:
@@ -29,4 +38,6 @@ scenes:
     - bgm: OpeningMusic
     - goto: ocean
   ocean:
-    - stage: Ocean
+    poseModel: RemotePose
+    actions:
+      - stage: Ocean

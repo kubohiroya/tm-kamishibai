@@ -118,10 +118,13 @@ export function createDsl4TMPoseModelAdapter(options) {
           `TMPose adapter does not support asset kind: ${String(asset.kind)}`,
         );
       }
-      if (!isRecord(asset.source) || asset.source.type !== 'file') {
+      if (
+        !isRecord(asset.source) ||
+        (asset.source.type !== 'file' && asset.source.type !== 'remote')
+      ) {
         throw adapterError(
           'K4-TMPOSE-ADAPTER-001',
-          `Pose model ${assetId} must use an embedded file source`,
+          `Pose model ${assetId} must use a materialized file source`,
         );
       }
       validateFiles(payload.files, assetId);

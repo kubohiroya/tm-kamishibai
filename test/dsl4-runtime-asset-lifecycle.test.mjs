@@ -211,6 +211,41 @@ test('hides Loading and fails before the first action when preparation rejects',
   assert.equal(controller.getTrace().at(-1).type, 'runtime.fail');
 });
 
+test('reports lifecycle failures at the asset StoryPath', async () => {
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Broken:
+    kind: backdrop
+    name: Broken
+    loading: lazy
+scenes:
+  opening:
+    - stage: Broken
+`),
+    port: {stage: async () => assert.fail('scene action must not run')},
+    assetLifecycle: {
+      async prepare(payload) {
+        if (payload.phase === 'startup') return;
+        const error = new Error('integrity mismatch');
+        Object.defineProperties(error, {
+          code: {value: 'K4-ASSET-REMOTE-INTEGRITY-001'},
+          storyPath: {value: '/assets/Broken'},
+        });
+        throw error;
+      },
+      async setLoading() {},
+      async release() {},
+    },
+  });
+  const state = await controller.start();
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-ASSET-REMOTE-INTEGRITY-001');
+  assert.equal(state.diagnostic.storyPath, '/assets/Broken');
+  assert.equal(state.diagnostic.message, 'integrity mismatch');
+});
+
 test('aborts stale preparation on reposition and releases lifecycle state on stop', async () => {
   const openingPreparation = deferred();
   const preparations = [];
@@ -285,6 +320,64 @@ scenes:
   assert.equal(stopPreparation.signal.aborted, true);
   assert.equal((await stoppedRun).status, 'stopped');
   await waitUntil(() => releases.includes('test-stop'));
+});
+
+test('advance during resumed preparation preserves the repositioned action boundary', async () => {
+  const preparations = [];
+  const effects = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  First:
+    kind: backdrop
+    name: First
+    loading: lazy
+  Selected:
+    kind: backdrop
+    name: Selected
+    loading: lazy
+  Last:
+    kind: backdrop
+    name: Last
+    loading: lazy
+scenes:
+  opening:
+    - stage: First
+    - stage: Selected
+    - stage: Last
+`),
+    port: {stage: async ({backdrop}) => effects.push(backdrop)},
+    assetLifecycle: {
+      prepare(payload, preparationContext) {
+        if (payload.phase === 'startup') return Promise.resolve();
+        const pending = deferred();
+        preparations.push({pending, signal: preparationContext.signal});
+        return pending.promise;
+      },
+      async setLoading() {},
+      async release() {},
+    },
+  });
+
+  const staleRun = controller.start();
+  await waitUntil(() => preparations.length === 1);
+  const paused = controller.reposition('opening', {
+    actionIndex: 1,
+    reason: 'history.nextAction',
+  });
+  assert.equal(paused.status, 'paused');
+  assert.equal(preparations[0].signal.aborted, true);
+  await waitUntil(() => preparations.length === 2);
+
+  const resumedRun = controller.resume();
+  const advancedRun = controller.advance('during-loading');
+  preparations[1].pending.resolve();
+  const advanced = await advancedRun;
+  assert.equal(advanced.status, 'finished');
+  assert.deepEqual(effects, ['Selected', 'Last']);
+  preparations[0].pending.resolve();
+  await Promise.all([staleRun, resumedRun]);
 });
 
 test('validates the optional lifecycle contract and keeps platform dependencies outside core', async () => {

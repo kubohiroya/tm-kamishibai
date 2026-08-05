@@ -59,12 +59,12 @@ function storyPathSegment(value) {
 
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
- * @param {string | null} actionPath
+ * @param {string | null} storyPath
  * @param {string} code
  * @param {string} message
  * @returns {Readonly<Record<string, unknown>>}
  */
-function runtimeDiagnostic(storyDocument, actionPath, code, message) {
+function runtimeDiagnostic(storyDocument, storyPath, code, message) {
   const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
   const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
   return deepFreeze({
@@ -73,8 +73,8 @@ function runtimeDiagnostic(storyDocument, actionPath, code, message) {
     severity: 'error',
     message,
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: actionPath ? (sourceMap[actionPath] ?? sourceMap['/']) : sourceMap['/'],
-    ...(actionPath ? {storyPath: actionPath} : {}),
+    range: storyPath ? (sourceMap[storyPath] ?? sourceMap['/']) : sourceMap['/'],
+    ...(storyPath ? {storyPath} : {}),
     related: [],
   });
 }
@@ -419,7 +419,14 @@ export function createDsl4RuntimeController({
         ? /** @type {Record<string, unknown>} */ (error)
         : {};
     const code = typeof errorRecord.code === 'string' ? errorRecord.code : 'K4-RUNTIME-ACTION-001';
-    failureDiagnostic = runtimeDiagnostic(storyDocument, actionPath, code, safeErrorMessage(error));
+    const errorStoryPath =
+      typeof errorRecord.storyPath === 'string' ? errorRecord.storyPath : actionPath;
+    failureDiagnostic = runtimeDiagnostic(
+      storyDocument,
+      errorStoryPath,
+      code,
+      safeErrorMessage(error),
+    );
     emit('runtime.fail', {code});
   }
 

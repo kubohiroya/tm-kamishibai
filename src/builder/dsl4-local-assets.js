@@ -278,6 +278,20 @@ export async function loadDsl4LocalAssetSnapshot(
       loading: asset.loading,
       ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
     };
+    if (asset.delivery === 'remote') {
+      const source = /** @type {Readonly<Record<string, unknown>>} */ (asset.source);
+      manifestAssets.push({
+        ...common,
+        source: {
+          type: 'remote',
+          url: source.url,
+          integrity: source.integrity,
+          contentType: source.contentType,
+          size: source.size,
+        },
+      });
+      continue;
+    }
     if (typeof asset.file !== 'string') {
       manifestAssets.push({
         ...common,

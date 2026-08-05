@@ -125,7 +125,7 @@ assets:
 成果物へ埋め込み、ネットワークなしで動作するself-containedなSB3を生成します。
 
 `delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
-`source.url`はHTTPSだけを認め、期待するbyte列を固定する`integrity`、MIME typeを固定する
+`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。期待するbyte列を固定する`integrity`、MIME typeを固定する
 `contentType`、上限検査に使う`size`をすべて必須とします。`integrity`は
 `sha256-`に続けて64桁の小文字16進SHA-256を記述します。HTTP、検証情報の省略、`name`または`file`との
 併記はschema errorです。
@@ -145,16 +145,27 @@ cacheします。
 
 ### 3.4 runtime境界と失敗
 
-controller coreは`fetch`、filesystem、VMへ直接依存せず、注入された`prepareAsset` portへasset宣言と
-`AbortSignal`を渡します。remote取得を許可するhostだけがこのportへネットワーク権限を与え、必要に
-応じて接続先hostのallowlist、timeout、redirect数、最大byte数をさらに制限します。portは取得後に
-`size`、`contentType`、`integrity`をすべて検証してから登録しなければなりません。
+builderはremote assetの検証情報だけをasset bundle manifestへ格納し、byte列をSB3へ格納しません。
+controller coreは`fetch`、filesystem、VMへ直接依存せず、既存のasset preload coordinatorを通して
+asset lifecycleを呼びます。通常のembedded lifecycleではremote取得を拒否し、hostが
+`createDsl4RemoteAssetLifecycle`へ`loadRemoteAsset`を明示的に注入した場合だけremote modeを有効に
+できます。
 
-準備中は`loading.start`、assetごとの`asset.prepare.start`／`asset.prepare.commit`、完了時は
-`loading.finish` eventを発行します。停止またはnavigationは準備中のsignalをabortし、古い処理の完了を
-状態へ反映しません。準備失敗時は対象assetのStoryPathを持つ`K4-RUNTIME-ASSET-001`診断を表示し、
-遷移先sceneのactionを一つも実行しません。offlineへ切り戻す場合は`delivery: embedded`とローカル
-`file`へ戻します。
+loaderは宣言されたURLと期待値、`AbortSignal`を受け取り、byte列と実際のContent-Typeを返します。
+hostは接続先hostのallowlist、timeout、redirect数、stream受信中の最大byte数を制限します。lifecycleは
+loaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform adapterへ登録します。
+URL credentialはsource frontendで拒否するため、認証情報を作品へ埋め込む用途には使用できません。
+remote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive byte列に加え、
+展開後の`model.json`、`metadata.json`、weights fileを返し、展開後のfile数・合計byte数にも上限を
+適用します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、TMPose adapterが展開済み
+file構成を検証して登録します。
+
+準備済みresourceは停止までcacheし、停止・再起動・dispose時はadapterを通してreleaseします。
+navigationで同じassetの準備を中断した場合、古い処理がsettleしてstale resourceを解放するまで再準備を
+開始しないため、同一assetを同時に二重登録しません。準備中は`assets.startup.start`、
+`assets.preload.start`、`assets.loading.show`／`assets.loading.hide` eventを発行します。準備失敗時は
+対象assetのStoryPathと検証種別ごとの診断codeを表示し、遷移先sceneのactionを一つも実行しません。
+offlineへ切り戻す場合は`delivery: embedded`とローカル`file`へ戻します。
 
 ## 4. 共通設定
 

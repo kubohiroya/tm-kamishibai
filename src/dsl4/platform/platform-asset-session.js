@@ -1,6 +1,9 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
-import {createDsl4EmbeddedAssetLifecycle} from '../embedded-asset-lifecycle.js';
+import {
+  createDsl4EmbeddedAssetLifecycle,
+  createDsl4RemoteAssetLifecycle,
+} from '../embedded-asset-lifecycle.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
@@ -102,6 +105,8 @@ function disposedError() {
  * @param {unknown} options.runtimeComponent
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
+ * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
+ * @param {{digest: Function}} [options.subtleCrypto]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
@@ -112,6 +117,9 @@ export function createDsl4PlatformAssetSession(options) {
   const tmPoseRuntime = validateTMPoseRuntime(options.tmPoseRuntime);
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
+  }
+  if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
+    throw new TypeError('loadRemoteAsset must be a function');
   }
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
@@ -182,11 +190,17 @@ export function createDsl4PlatformAssetSession(options) {
       mediaAdapter,
       poseAdapter: tmpose.adapter,
     });
-    const embeddedLifecycle = createDsl4EmbeddedAssetLifecycle({
+    const lifecycleOptions = {
       runtimeComponent,
       adapter,
       setLoading: options.setLoading,
-    });
+      ...(options.loadRemoteAsset === undefined
+        ? {}
+        : {loadRemoteAsset: options.loadRemoteAsset, subtleCrypto: options.subtleCrypto}),
+    };
+    const assetLifecycle = options.loadRemoteAsset
+      ? createDsl4RemoteAssetLifecycle(lifecycleOptions)
+      : createDsl4EmbeddedAssetLifecycle(lifecycleOptions);
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
@@ -194,17 +208,17 @@ export function createDsl4PlatformAssetSession(options) {
       /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
       prepare(payload, context) {
         if (disposePromise) throw disposedError();
-        return embeddedLifecycle.prepare(payload, context);
+        return assetLifecycle.prepare(payload, context);
       },
       /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
       setLoading(payload, context) {
         if (disposePromise) throw disposedError();
-        return embeddedLifecycle.setLoading(payload, context);
+        return assetLifecycle.setLoading(payload, context);
       },
       /** @param {Readonly<Record<string, unknown>>} payload */
       release(payload) {
         if (disposePromise) return disposePromise;
-        return embeddedLifecycle.release(payload);
+        return assetLifecycle.release(payload);
       },
     });
 
@@ -217,7 +231,7 @@ export function createDsl4PlatformAssetSession(options) {
       disposePromise = (async () => {
         const errors = [];
         for (const release of [
-          () => embeddedLifecycle.release({reason}),
+          () => assetLifecycle.release({reason}),
           () => tmposeComposition.releaseAll(),
           () => assetManagerComposition.releaseAll(),
         ]) {

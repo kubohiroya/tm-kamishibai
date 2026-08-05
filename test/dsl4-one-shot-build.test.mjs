@@ -43,6 +43,26 @@ scenes:
     actions:
       - stage: OpeningImage
 `;
+const remoteSource = `
+kamishibai: '4.0'
+assets:
+  RemoteOpening:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/remote-opening.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 123456
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - stage: RemoteOpening
+`;
 
 function baseProject() {
   return {
@@ -142,6 +162,31 @@ test('builds and startup-validates one deterministic self-contained component pe
     }
     assert.deepEqual(await readFile(sourcePath), sourceBefore);
     assert.deepEqual(await readFile(assetPath), assetBefore);
+  });
+});
+
+test('builds a remote manifest without embedding the remote payload', async () => {
+  await withProject(remoteSource, async (directory) => {
+    const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
+    assert.deepEqual(built.runtimeComponent.assetBundle.files, []);
+    assert.deepEqual(built.runtimeComponent.assetBundle.manifest.assets, [
+      {
+        id: 'RemoteOpening',
+        kind: 'backdrop',
+        loading: 'lazy',
+        source: {
+          type: 'remote',
+          url: 'https://cdn.example.com/remote-opening.svg',
+          integrity: 'sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          contentType: 'image/svg+xml',
+          size: 123456,
+        },
+      },
+    ]);
+    assert.throws(
+      () => built.runtimeComponent.getAssetFile('RemoteOpening', 'remote-opening.svg'),
+      (error) => error.code === 'K4-ASSET-BUNDLE-LOOKUP-001',
+    );
   });
 });
 

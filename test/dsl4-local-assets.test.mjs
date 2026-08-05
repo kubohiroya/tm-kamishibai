@@ -132,6 +132,48 @@ test('snapshots project refs, image, sound, and a poseModel directory determinis
   );
 });
 
+test('records remote metadata without reading or embedding remote bytes', async (t) => {
+  const fixture = await workspace(t);
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  Remote:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/remote.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 123456
+scenes:
+  opening:
+    - stage: Remote
+`);
+  const snapshot = await loadDsl4LocalAssetSnapshot(fixture.root, storyDocument, {
+    ...standardLimits,
+    subtleCrypto: webcrypto.subtle,
+  });
+  assert.deepEqual(snapshot.manifest.assets, [
+    {
+      id: 'Remote',
+      kind: 'backdrop',
+      loading: 'lazy',
+      source: {
+        type: 'remote',
+        url: 'https://cdn.example.com/remote.svg',
+        integrity: 'sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        contentType: 'image/svg+xml',
+        size: 123456,
+      },
+    },
+  ]);
+  assert.throws(
+    () => snapshot.getFile('Remote', 'remote.svg'),
+    (error) => error.code === 'K4-ASSET-LOOKUP-001',
+  );
+});
+
 test('rejects non-normalized and non-local locators before filesystem access', async (t) => {
   const fixture = await workspace(t);
   const base = comprehensiveStory();

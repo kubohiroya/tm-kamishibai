@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -43,6 +44,33 @@ function runtimeComponent() {
     },
     getAssetFile(assetId, filePath) {
       return new Uint8Array(files.get(`${assetId}\0${filePath}`));
+    },
+  };
+}
+
+function remoteRuntimeComponent(remoteBytes) {
+  return {
+    storyDocument: {kind: 'StoryDocument', version: '4.0'},
+    assetBundle: {
+      manifest: {
+        assets: [
+          {
+            id: 'RemoteBeach',
+            kind: 'backdrop',
+            loading: 'lazy',
+            source: {
+              type: 'remote',
+              url: 'https://cdn.example.com/beach.svg',
+              integrity: `sha256-${createHash('sha256').update(remoteBytes).digest('hex')}`,
+              contentType: 'image/svg+xml',
+              size: remoteBytes.byteLength,
+            },
+          },
+        ],
+      },
+    },
+    getAssetFile() {
+      assert.fail('remote platform session must not read embedded bytes');
     },
   };
 }
@@ -204,6 +232,38 @@ test('keeps compositions, resources, and final disposal isolated between session
     ['pose.release-all'],
     ['media.release-all'],
   ]);
+});
+
+test('enables verified remote loading only when the app shell injects a loader', async () => {
+  const remoteBytes = new TextEncoder().encode('<svg id="remote-beach"/>');
+  const component = remoteRuntimeComponent(remoteBytes);
+  const disabledLog = [];
+  const disabled = createDsl4PlatformAssetSession(options(component, disabledLog).value);
+  await assert.rejects(
+    disabled.lifecycle.prepare({assetIds: ['RemoteBeach']}, context()),
+    (error) => error.code === 'K4-ASSET-REMOTE-DISABLED',
+  );
+  await disabled.dispose('disabled-cleanup');
+
+  const enabledLog = [];
+  const setup = options(component, enabledLog);
+  const loads = [];
+  const enabled = createDsl4PlatformAssetSession({
+    ...setup.value,
+    subtleCrypto: webcrypto.subtle,
+    async loadRemoteAsset(payload, loadContext) {
+      loads.push({payload, signal: loadContext.signal});
+      return {bytes: remoteBytes, contentType: 'image/svg+xml'};
+    },
+  });
+  await enabled.lifecycle.prepare({assetIds: ['RemoteBeach']}, context());
+  assert.equal(loads.length, 1);
+  assert.equal(loads[0].payload.url, 'https://cdn.example.com/beach.svg');
+  assert.ok(
+    enabledLog.some(([event, id]) => event === 'media.register-embedded' && id === 'RemoteBeach'),
+  );
+  await enabled.dispose('remote-cleanup');
+  assert.ok(enabledLog.some(([event, id]) => event === 'media.release' && id === 'RemoteBeach'));
 });
 
 test('attempts every final cleanup and aggregates lifecycle and composition failures', async () => {

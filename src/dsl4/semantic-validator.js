@@ -25,6 +25,28 @@ function assetKind(asset) {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCanonicalRemoteHttpsUrl(value) {
+  if (typeof value !== 'string' || !value.startsWith('https://')) return false;
+  const authority = value.slice('https://'.length).split(/[/?#]/u, 1)[0];
+  if (!authority) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname.length > 0 &&
+      url.username.length === 0 &&
+      url.password.length === 0 &&
+      url.hash.length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @param {Record<string, unknown>} action
  * @param {string} key
  * @returns {unknown}
@@ -107,7 +129,18 @@ export function validateDsl4Semantics(story) {
 
   for (const [id, asset] of Object.entries(assets)) {
     if (typeof asset !== 'object' || asset === null) continue;
-    const file = /** @type {Record<string, unknown>} */ (asset).file;
+    const assetRecord = /** @type {Record<string, unknown>} */ (asset);
+    const file = assetRecord.file;
+    if (assetRecord.delivery === 'remote') {
+      const source = /** @type {Record<string, unknown>} */ (assetRecord.source);
+      if (!isCanonicalRemoteHttpsUrl(source.url)) {
+        issues.push({
+          code: 'K4-ASSET-REMOTE-URL-001',
+          path: `$.assets.${id}.source.url`,
+          message: 'Remote asset URL must be an absolute HTTPS URL without credentials or fragment',
+        });
+      }
+    }
     if (typeof file !== 'string') continue;
     const components = file.split('/');
     if (

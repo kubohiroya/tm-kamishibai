@@ -137,15 +137,15 @@ export function createDsl4AssetManagerAdapter(options = {}) {
           name: assetId,
           resourceId: projectResourceId(asset, source),
         });
-      } else if (source.type === 'file') {
+      } else if (source.type === 'file' || source.type === 'remote') {
         if (payload.files.length !== 1 || !isRecord(payload.files[0])) {
           throw adapterError(
             'K4-ASSET-ADAPTER-003',
-            `Embedded ${assetKind} asset ${assetId} must contain exactly one file`,
+            `Materialized ${assetKind} asset ${assetId} must contain exactly one file`,
           );
         }
         const file = payload.files[0];
-        const sourceName = requireNonEmptyString(file.path, 'embedded asset path');
+        const sourceName = requireNonEmptyString(file.path, 'materialized asset source');
         if (!(file.bytes instanceof Uint8Array) || file.bytes.byteLength === 0) {
           throw adapterError(
             'K4-ASSET-ADAPTER-001',
@@ -155,7 +155,10 @@ export function createDsl4AssetManagerAdapter(options = {}) {
         embeddedRegistration = Object.freeze({
           name: assetId,
           sourceName,
-          mimeType: '',
+          mimeType:
+            source.type === 'remote'
+              ? requireNonEmptyString(file.contentType, 'remote asset Content-Type')
+              : '',
           bytes: file.bytes,
         });
       } else {

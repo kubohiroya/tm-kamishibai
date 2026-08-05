@@ -39,6 +39,8 @@ function validateLifecycle(lifecycle) {
 }
 
 /**
+ * @typedef {Readonly<{ok: true}> | Readonly<{ok: false, cancelled: true}> | Readonly<{ok: false, cancelled: false, error: unknown}>} Readiness
+ *
  * @typedef {object} Preparation
  * @property {number} token
  * @property {'startup' | 'scene'} phase
@@ -48,6 +50,7 @@ function validateLifecycle(lifecycle) {
  * @property {AbortController} abortController
  * @property {'pending' | 'ready' | 'failed'} status
  * @property {Promise<void>} promise
+ * @property {Promise<Readiness> | null} waitPromise
  * @property {unknown} error
  */
 
@@ -137,6 +140,7 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
       abortController: new AbortController(),
       status: 'pending',
       promise: Promise.resolve(),
+      waitPromise: null,
       error: null,
     };
     current = preparation;
@@ -186,6 +190,7 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
       abortController: new AbortController(),
       status: scene.lazy.length === 0 ? 'ready' : 'pending',
       promise: Promise.resolve(),
+      waitPromise: null,
       error: null,
     };
     current = preparation;
@@ -195,67 +200,78 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
     }
   }
 
-  /** @param {string} sceneId */
+  /** @param {string} sceneId @returns {Promise<Readiness>} */
   async function waitForScene(sceneId) {
     const preparation = current;
     if (!preparation || preparation.phase !== 'scene' || preparation.sceneId !== sceneId) {
       return Object.freeze({ok: true});
     }
-    await Promise.resolve();
-    if (current !== preparation || preparation.abortController.signal.aborted) {
-      return Object.freeze({ok: false, cancelled: true});
-    }
+    if (!preparation.waitPromise) {
+      preparation.waitPromise = /** @type {Promise<Readiness>} */ (
+        (async () => {
+          await Promise.resolve();
+          if (current !== preparation || preparation.abortController.signal.aborted) {
+            return Object.freeze({ok: false, cancelled: true});
+          }
 
-    let loadingVisible = false;
-    let failure = null;
-    if (preparation.status === 'pending') {
-      try {
-        await port.setLoading(
-          Object.freeze({visible: true, sceneId, loading}),
-          context(preparation),
-        );
-        if (current !== preparation || preparation.abortController.signal.aborted) {
-          return Object.freeze({ok: false, cancelled: true});
-        }
-        loadingVisible = true;
-        onEvent('assets.loading.show', {sceneId});
-      } catch (error) {
-        failure = error;
-      }
+          let loadingVisible = false;
+          let failure = null;
+          if (preparation.status === 'pending') {
+            try {
+              await port.setLoading(
+                Object.freeze({visible: true, sceneId, loading}),
+                context(preparation),
+              );
+              if (current !== preparation || preparation.abortController.signal.aborted) {
+                return Object.freeze({ok: false, cancelled: true});
+              }
+              loadingVisible = true;
+              onEvent('assets.loading.show', {sceneId});
+            } catch (error) {
+              failure = error;
+            }
+          }
+          if (!failure) {
+            try {
+              await preparation.promise;
+            } catch (error) {
+              failure = error;
+            }
+          }
+          if (loadingVisible) {
+            try {
+              await port.setLoading(
+                Object.freeze({visible: false, sceneId, loading}),
+                context(preparation),
+              );
+              if (current === preparation && !preparation.abortController.signal.aborted) {
+                onEvent('assets.loading.hide', {sceneId});
+              }
+            } catch (error) {
+              failure ??= error;
+            }
+          }
+          if (current !== preparation || preparation.abortController.signal.aborted) {
+            return Object.freeze({ok: false, cancelled: true});
+          }
+          current = null;
+          if (failure) {
+            return Object.freeze({
+              ok: false,
+              cancelled: false,
+              error: lifecycleError(
+                failure,
+                'K4-ASSET-PREPARE-001',
+                'Scene asset preparation failed',
+              ),
+            });
+          }
+          onEvent('assets.scene.ready', {sceneId, assetIds: preparation.assetIds});
+          return Object.freeze({ok: true});
+        })()
+      );
     }
-    if (!failure) {
-      try {
-        await preparation.promise;
-      } catch (error) {
-        failure = error;
-      }
-    }
-    if (loadingVisible) {
-      try {
-        await port.setLoading(
-          Object.freeze({visible: false, sceneId, loading}),
-          context(preparation),
-        );
-        if (current === preparation && !preparation.abortController.signal.aborted) {
-          onEvent('assets.loading.hide', {sceneId});
-        }
-      } catch (error) {
-        failure ??= error;
-      }
-    }
-    if (current !== preparation || preparation.abortController.signal.aborted) {
-      return Object.freeze({ok: false, cancelled: true});
-    }
-    current = null;
-    if (failure) {
-      return Object.freeze({
-        ok: false,
-        cancelled: false,
-        error: lifecycleError(failure, 'K4-ASSET-PREPARE-001', 'Scene asset preparation failed'),
-      });
-    }
-    onEvent('assets.scene.ready', {sceneId, assetIds: preparation.assetIds});
-    return Object.freeze({ok: true});
+    return preparation.waitPromise;
   }
 
   /** @param {string} reason */

@@ -6,6 +6,7 @@ const manifestKeys = new Set(['assets', 'formatVersion']);
 const assetKeys = new Set(['id', 'kind', 'loading', 'source', 'target']);
 const projectSourceKeys = new Set(['name', 'type']);
 const fileSourceKeys = new Set(['files', 'inputPath', 'mode', 'type']);
+const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
 const assetKinds = new Set(['backdrop', 'costume', 'poseModel', 'sound']);
@@ -196,6 +197,20 @@ function validateManifest(storyDocument, inputManifest) {
         exactKeys(candidate.source, projectSourceKeys, `Asset ${id} project source`);
         if (typeof storyAsset.file === 'string' || candidate.source.name !== storyAsset.name) {
           fail('K4-ASSET-BUNDLE-MANIFEST-001', `Project asset source does not match: ${id}`);
+        }
+        return deepFreeze({...candidate, source: {...candidate.source}});
+      }
+      if (candidate.source.type === 'remote') {
+        exactKeys(candidate.source, remoteSourceKeys, `Asset ${id} remote source`);
+        const storySource = isRecord(storyAsset.source) ? storyAsset.source : {};
+        if (
+          storyAsset.delivery !== 'remote' ||
+          candidate.source.url !== storySource.url ||
+          candidate.source.integrity !== storySource.integrity ||
+          candidate.source.contentType !== storySource.contentType ||
+          candidate.source.size !== storySource.size
+        ) {
+          fail('K4-ASSET-BUNDLE-MANIFEST-001', `Remote asset source does not match: ${id}`);
         }
         return deepFreeze({...candidate, source: {...candidate.source}});
       }

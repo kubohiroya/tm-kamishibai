@@ -74,8 +74,32 @@ test('remote delivery requires verified metadata and stays independent from load
   });
   assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
   assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
+  assert.equal(result.storyDocument.assets.RemotePose.kind, 'poseModel');
+  assert.equal(result.storyDocument.assets.RemotePose.delivery, 'remote');
   assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
   assert.equal(result.storyDocument.assets.HeroIdle.loading, 'eager');
+});
+
+test('remote delivery rejects malformed or credential-bearing HTTPS URLs semantically', async () => {
+  const fixture = await readFile(
+    path.join(fixtureRoot, 'valid', 'remote-assets.kamishibai.yaml'),
+    'utf8',
+  );
+  for (const url of [
+    'https://?',
+    'https://#fragment',
+    'https:///asset.webp',
+    'https://user:pass@example.com/asset.webp',
+    'https://cdn.example.com/asset.webp#fragment',
+  ]) {
+    const source = fixture.replace('url: https://cdn.example.com/opening.ogg', `url: '${url}'`);
+    const result = frontend.parse(source, {sourceId: 'invalid-remote-url'});
+    assert.equal(result.ok, false, url);
+    assert.ok(
+      result.diagnostics.some(({code}) => code === 'K4-ASSET-REMOTE-URL-001'),
+      url,
+    );
+  }
 });
 
 test('compact and named actions plus short and long scenes normalize identically', async () => {
