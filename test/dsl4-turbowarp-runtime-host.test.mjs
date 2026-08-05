@@ -60,7 +60,7 @@ async function packagedProject(sourceText = waitStory) {
       ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
       source: {type: 'project', name: asset.name},
     }))
-    .sort((left, right) => left.id.localeCompare(right.id, 'en'));
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
     {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
@@ -302,6 +302,8 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result.host), true);
   assert.equal(Object.isFrozen(fixture.runtime), false);
   assert.equal(Object.isFrozen(fixture.runtime.targets[0]), false);
   assert.equal(result.host.getState().runtime.status, 'idle');

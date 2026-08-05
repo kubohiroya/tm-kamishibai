@@ -6,6 +6,11 @@ import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 
+/**
+ * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
+ * @typedef {{wait?: Function, transition?: Function, keyInputToChangeScene?: Function, touchInputToChangeScene?: Function, dispose?: Function}} HostPort
+ */
+
 const hostPortMethods = new Set([
   'wait',
   'transition',
@@ -124,7 +129,7 @@ function createWaitPort(schedule) {
   });
 }
 
-/** @param {unknown} value */
+/** @param {unknown} value @returns {Readonly<HostPort> | HostPort} */
 function validateHostPort(value) {
   if (value === undefined)
     return /** @type {Readonly<Record<string, Function>>} */ (Object.freeze({}));
@@ -140,7 +145,7 @@ function validateHostPort(value) {
       throw new TypeError(`DSL 4.0 host port ${method} must be a function`);
     }
   }
-  return /** @type {Record<string, Function>} */ (value);
+  return /** @type {HostPort} */ (value);
 }
 
 /**
@@ -356,7 +361,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
  * @param {unknown} [options.runtime]
  * @param {unknown} [options.tmPoseRuntime]
  * @param {Function} [options.setLoading]
- * @param {Function} [options.createHostPort]
+ * @param {(context: HostPortContext) => HostPort | Promise<HostPort>} [options.createHostPort]
  * @param {Function} [options.waitSchedule]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
