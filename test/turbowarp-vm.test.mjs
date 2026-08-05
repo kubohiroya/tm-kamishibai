@@ -194,7 +194,7 @@ function assertScriptError(harness, {category, line, message}) {
   assert.equal(Number(harness.getRuntimeVariable('kamishibaiErrorLine')), line);
   assert.match(harness.getRuntimeVariable('kamishibaiErrorMessage'), message);
   assert.match(harness.getRuntimeVariable('kamishibaiErrorSvg'), /^<svg[^>]*>/u);
-  assert.match(harness.getRuntimeVariable('kamishibaiErrorCode'), /^K31-/u);
+  assert.match(harness.getRuntimeVariable('kamishibaiErrorCode'), /^K32-/u);
   assert.ok(Number(harness.getRuntimeVariable('kamishibaiErrorColumn')) >= 1);
   assert.equal(harness.getSprite('prompt').visible, true);
   assert.match(
@@ -217,7 +217,7 @@ function assertScriptError(harness, {category, line, message}) {
 
 function actorActionScript(action, {before = []} = {}) {
   return [
-    'kamishibai=3.1',
+    'kamishibai=3.2',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
     'asset=Hero,costume:Loading:loading',
@@ -239,7 +239,7 @@ function actorActionScript(action, {before = []} = {}) {
 
 function sceneNavigationScript(firstSceneActions, {runtimeVariables = [], branches = []} = {}) {
   return [
-    'kamishibai=3.1',
+    'kamishibai=3.2',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
     'asset=LeftDoor,costume:Loading:loading',
@@ -394,7 +394,7 @@ test('shows an SVG error and stops on an unsupported kamishibai version', async 
   assertScriptError(harness, {
     category: 'unsupported-version',
     line: 1,
-    message: /2\.0.*3\.1/u,
+    message: /2\.0.*3\.1.*3\.2/u,
   });
   assert.equal(harness.getRuntimeVariable('kamishibaiErrorSource'), 'kamishibai=2.0');
 });
@@ -405,14 +405,14 @@ test('reports unsupported top-level and actor action commands with their lines',
       category: 'unsupported-command',
       line: 2,
       message: /teleport/u,
-      script: ['kamishibai=3.1', 'teleport=somewhere'].join('\n'),
+      script: ['kamishibai=3.2', 'teleport=somewhere'].join('\n'),
     },
     {
       category: 'unsupported-action',
       line: 9,
       message: /fly/u,
       script: [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         'asset=Title,backdrop',
         'asset=Stars,backdrop',
         'asset=Hero,costume:Loading:loading',
@@ -437,7 +437,7 @@ test('reports a project-local asset address that cannot be resolved', async (con
 
   await startInvalidScript(
     harness,
-    ['kamishibai=3.1', 'asset=Missing,costume:Loading:not-there'].join('\n'),
+    ['kamishibai=3.2', 'asset=Missing,costume:Loading:not-there'].join('\n'),
   );
 
   assertScriptError(harness, {
@@ -457,7 +457,7 @@ test('reports undefined assets referenced by setSkin and pose', async (context) 
     await startInvalidScript(
       harness,
       [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         'asset=Title,backdrop',
         'asset=Stars,backdrop',
         'asset=Hero,costume:Loading:loading',
@@ -483,7 +483,7 @@ test('reports an undefined scene transition target', async (context) => {
   await startInvalidScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'cover=Title,',
@@ -507,7 +507,7 @@ test('reports Runtime Expression syntax errors at the registerBranch line', asyn
   await startInvalidScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'registerBranch=choose:score = 1:first',
@@ -981,7 +981,7 @@ test('prioritizes the loading backdrop and costumes and reports only regular ass
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=LoadingBackground,backdrop:Title',
       'asset=loading1,costume:Loading:loading',
@@ -1053,7 +1053,7 @@ test('keeps asynchronous URL progress monotonic and flushes it before completion
   await startScriptAsync(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=loading1,costume:Loading:loading',
       'asset=Music,https://example.com/test-music.mp3',
@@ -1103,7 +1103,7 @@ test('keeps the built-in Loading costume separate from the fixed bubble anchor',
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'cover=Title,',
@@ -1257,7 +1257,7 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
   harness.setRuntimeVariable(
     'script',
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'text=ui.prompt:ポーズをとろう！',
       'text=ui.invalidScript:エラー：不正な台本ファイル',
       'text=ui.open:ファイルをひらく',
@@ -1309,49 +1309,110 @@ test('keeps app-shell UI independent from scene 0 while allowing its pose prompt
     harness.extensionState.displayedText.get(savedScriptMenuClones.get('showTitleButton').id),
     appShellLocales.en.ui.about,
   );
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson(), '');
+  assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 0);
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
-test('updates and clears a registered text asset from ordered text actions', async (context) => {
+test('keeps deprecated text assets functional in both DSL 3.1 and 3.2 scripts', async (context) => {
+  for (const dslVersion of ['3.1', '3.2']) {
+    const harness = await loadKamishibaiVm();
+    context.after(() => harness.quit());
+    startScript(
+      harness,
+      [
+        `kamishibai=${dslVersion}`,
+        'asset=Title,backdrop',
+        'asset=Stars,backdrop',
+        'asset=Narration,text',
+        'asset=Caption,text:Narration',
+        'actor=Narration,Narration',
+        'actor=Caption,Caption',
+        'text=ui.prompt:ポーズをとろう！',
+        'textStyle=ui.prompt:color:#ff6666',
+        'text=Narration:本文',
+        'textStyle=Narration:font:Sans Serif',
+        'cover=Title,',
+        '---',
+        'sceneLabel=first',
+        'action=stage:Stars',
+        'action=text:Narration:むかし',
+        'action=Narration:show:Narration:0,0,100',
+        'action=Caption:setSkin:Caption',
+        'action=wait:30',
+      ].join('\n'),
+    );
+
+    harness.runUntil(
+      () =>
+        harness.getRuntimeVariable('text:Narration') === 'むかし' &&
+        harness.getActor('Narration')?.visible === true,
+    );
+
+    assert.equal(harness.getBackdropName(), 'Stars');
+    assert.equal(harness.getActor('Narration')?.visible, true);
+    assert.notEqual(harness.getActor('Caption'), undefined);
+    assert.equal(harness.extensionState.assetRegistrations.includes('Narration'), true);
+    assert.equal(harness.extensionState.assetRegistrations.includes('Caption'), true);
+    assert.equal(harness.getRuntimeVariable('text:Narration'), 'むかし');
+    assert.equal(harness.getRuntimeVariable('textStyle:Narration:font'), 'Sans Serif');
+    assert.equal(harness.hasRuntimeVariable('Narration'), false);
+    assert.deepEqual(
+      JSON.parse(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningJson()),
+      {
+        code: 'LEGACY_TEXT_ASSET_DEPRECATED',
+        dslVersion,
+        names: ['Narration', 'Caption'],
+      },
+    );
+    assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
+
+    harness.extensionState.kamishibaiRuntime.validateScriptOrStop();
+    assert.equal(harness.extensionState.kamishibaiRuntime.getLegacyTextWarningEmissionCount(), 1);
+    assert.deepEqual(harness.extensionState.consoleErrors, []);
+  }
+});
+
+test('uses SVG Text actors alongside deprecated text assets in DSL 3.2', async (context) => {
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
+      'asset=Hero,costume:Loading:loading',
       'asset=Narration,text',
-      'actor=Narration,Narration',
+      'actor=Hero,Hero',
+      'text=Narration:旧テキスト',
+      'svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up',
       'cover=Title,',
       '---',
       'sceneLabel=first',
       'action=stage:Stars',
-      'action=text:Narration:むかし',
-      'action=Narration:show:Narration:0,0,100',
-      'action=wait:0.2',
-      'action=text:Narration:むかし　むかし、',
-      'action=wait:0.2',
-      'action=text:Narration:',
+      'action=text:Narration:移行中も利用可能',
+      'action=Hero:show:Hero:0,0,100',
+      'action=Hero:setText:タイトル\\nサブタイトル:title',
       'action=wait:30',
     ].join('\n'),
   );
 
-  harness.runUntil(
-    () =>
-      harness.getRuntimeVariable('text:Narration') === 'むかし' &&
-      harness.getActor('Narration')?.visible === true,
-  );
-  assert.equal(harness.getActor('Narration')?.visible, true);
-  assert.equal(harness.hasRuntimeVariable('Narration'), false);
-  assert.deepEqual(harness.extensionState.consoleErrors, []);
+  harness.runUntil(() => harness.getActorSvgText('Hero') !== undefined);
 
-  harness.runUntil(() => harness.getRuntimeVariable('text:Narration') === 'むかし　むかし、');
-  assert.equal(Number(harness.getRuntimeVariable('sceneIndex')), 1);
-
-  harness.runUntil(() => harness.getRuntimeVariable('text:Narration') === '');
-  assert.equal(harness.getBackdropName(), 'Stars');
-  assert.equal(harness.getActor('Narration')?.visible, true);
+  assert.deepEqual(harness.extensionState.svgTextStyles.get('title'), {
+    alignment: 'center',
+    backgroundColor: '#112233',
+    direction: 'up',
+    font: 'Noto Sans JP',
+    fontPercent: 150,
+    textColor: '#ffffff',
+  });
+  assert.deepEqual(harness.getActorSvgText('Hero'), {
+    style: 'title',
+    text: 'タイトル\nサブタイトル',
+  });
+  assert.equal(harness.getRuntimeVariable('text:Narration'), '移行中も利用可能');
   assert.deepEqual(harness.extensionState.consoleErrors, []);
 });
 
@@ -1472,7 +1533,7 @@ test('clears pending input at project, cover, stop, and final scene boundaries',
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'cover=Title,',
@@ -1567,7 +1628,7 @@ test('preserves BGM and applies stateful tail actions when Down skips a scene', 
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Music,https://example.com/music.mp3',
@@ -1610,7 +1671,7 @@ test('stops only the current sound when Down skips a scene', async (context) => 
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Music,https://example.com/music.mp3',
@@ -1641,7 +1702,7 @@ test('applies stateful actions when Down skips before they execute', async (cont
   const harness = await loadKamishibaiVm();
   context.after(() => harness.quit());
   const script = [
-    'kamishibai=3.1',
+    'kamishibai=3.2',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
     'asset=Music,https://example.com/music.mp3',
@@ -1697,7 +1758,7 @@ test('plays configured pose recognition sounds and resets them for the next scri
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Hero,costume:Loading:loading',
@@ -1733,7 +1794,7 @@ test('plays configured pose recognition sounds and resets them for the next scri
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Hero,costume:Loading:loading',
@@ -1759,7 +1820,7 @@ test('keeps a single pose recognition sound backward compatible', async (context
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Hero,costume:Loading:loading',
@@ -1857,7 +1918,7 @@ test('stops an asset sound when Right finishes sound-until-done', async (context
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Effect,https://example.com/test-effect.mp3',
@@ -1892,7 +1953,7 @@ test('keeps BGM playing when Right finishes an unrelated wait', async (context) 
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Music,https://example.com/test-music.mp3',
@@ -1953,7 +2014,7 @@ for (const transition of [
     startScript(
       harness,
       [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         'asset=Title,backdrop',
         'asset=Stars,backdrop',
         'cover=Title,',
@@ -1977,7 +2038,7 @@ for (const transition of [
     startScript(
       harness,
       [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         'asset=Title,backdrop',
         'asset=Stars,backdrop',
         'cover=Title,',
@@ -2016,7 +2077,7 @@ test('applies the final image when a later Right input finishes a sequence', asy
   startScript(
     harness,
     [
-      'kamishibai=3.1',
+      'kamishibai=3.2',
       'asset=Title,backdrop',
       'asset=Stars,backdrop',
       'asset=Hero,costume:Loading:loading',

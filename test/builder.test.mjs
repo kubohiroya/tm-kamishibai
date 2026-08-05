@@ -18,7 +18,11 @@ import {
   validateAssetManifest,
   validateBundle,
 } from '../src/builder/index.js';
-import {embeddedScriptVariableId, embeddedScriptVariableName} from '../src/builder/constants.js';
+import {
+  embeddedScriptVariableId,
+  embeddedScriptVariableName,
+  packageVersion,
+} from '../src/builder/constants.js';
 import {createEmbeddedReference} from '../src/builder/script.js';
 import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
@@ -146,7 +150,7 @@ async function writeFileFixture(directory) {
   await writeFile(baseSb3Path, builtBase.archive);
   const sourceScriptPath = path.join(inputDirectory, 'source.txt');
   const source = [
-    'kamishibai=3.1',
+    'kamishibai=3.2',
     '#asset=Commented,https://example.com/unchanged.svg',
     'asset=Scene,file:assets/backdrop.svg',
     'asset=Hero,file:assets/costume.svg',
@@ -312,7 +316,7 @@ test('builds a player with the exact transformed script and starts it from the t
     await writeFile(
       playerSourcePath,
       [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         '# Unicode=日本語のコメント',
         'asset=Scene,file:assets/backdrop.svg',
         'asset=StageAudio,file:assets/stage.wav',
@@ -434,7 +438,7 @@ test('resolves locked HTTP and HTTPS assets through the same builder core', asyn
     await writeFile(
       scriptPath,
       [
-        'kamishibai=3.1',
+        'kamishibai=3.2',
         'asset=HttpScene,http://assets.example/http.svg',
         'asset=HttpsHero,https://assets.example/https.svg',
         '',
@@ -514,7 +518,7 @@ test('rejects missing, escaped, and symlink-escaped file assets with asset conte
         fixture.inputDirectory,
         `unsafe-${cases.indexOf(cases.find((item) => item[0] === uri))}.txt`,
       );
-      await writeFile(scriptPath, `kamishibai=3.1\nasset=Unsafe,${uri}\n`);
+      await writeFile(scriptPath, `kamishibai=3.2\nasset=Unsafe,${uri}\n`);
       await assert.rejects(
         buildSb3Bundle({
           baseSb3: fixture.baseSb3Path,
@@ -542,7 +546,7 @@ test('rejects HTTP failures, redirects, type, size, and hash mismatches', async 
     const contents = Buffer.from('<svg/>');
     const scriptPath = path.join(fixture.inputDirectory, 'failure.txt');
     const uri = 'https://assets.example/failure.svg';
-    await writeFile(scriptPath, `kamishibai=3.1\nasset=Failure,${uri}\n`);
+    await writeFile(scriptPath, `kamishibai=3.2\nasset=Failure,${uri}\n`);
     const baseEntry = imageEntry({
       name: 'Failure',
       uri,
@@ -675,7 +679,7 @@ test('rejects missing mappings, name conflicts, kind conflicts, and existing SB3
   await withTemporaryDirectory(async (directory) => {
     const fixture = await writeFileFixture(directory);
     const sourcePath = path.join(fixture.inputDirectory, 'unmapped.txt');
-    await writeFile(sourcePath, 'kamishibai=3.1\nasset=Other,file:assets/backdrop.svg\n');
+    await writeFile(sourcePath, 'kamishibai=3.2\nasset=Other,file:assets/backdrop.svg\n');
     await assert.rejects(
       buildSb3Bundle({
         baseSb3: fixture.baseSb3Path,
@@ -691,7 +695,7 @@ test('rejects missing mappings, name conflicts, kind conflicts, and existing SB3
 
     const conflictManifest = structuredClone(fixture.manifest);
     conflictManifest.assets[0].sb3Name = 'Title';
-    await writeFile(sourcePath, 'kamishibai=3.1\nasset=Scene,file:assets/backdrop.svg\n');
+    await writeFile(sourcePath, 'kamishibai=3.2\nasset=Scene,file:assets/backdrop.svg\n');
     await assert.rejects(
       buildSb3Bundle({
         baseSb3: fixture.baseSb3Path,
@@ -929,7 +933,8 @@ test('exposes one CLI contract and a fixed installable package version', async (
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@kubohiroya/tmpose-kamishibai');
-  assert.equal(packageJson.version, '3.1.9');
+  assert.equal(packageJson.version, '3.2.2');
+  assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
   assert.equal(packageJson.bin['tmpose-kamishibai'], 'bin/tmpose-kamishibai.mjs');

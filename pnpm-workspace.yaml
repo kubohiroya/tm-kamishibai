@@ -2,8 +2,11 @@ packages:
   - .
 
 allowBuilds:
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/5b3e4b17bb971e038692e27ff3bbdb698ed59e15': true
+  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b': true
   fsevents: false
+
+minimumReleaseAgeExclude:
+  - '@kubohiroya/turbowarp-svg-text@0.1.0'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0
