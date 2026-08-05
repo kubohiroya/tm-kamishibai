@@ -19,6 +19,7 @@ import {buildSb3Archive} from './sb3.js';
 import {validateBundle} from './validate.js';
 
 export {Sb3BuilderError} from './errors.js';
+export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
