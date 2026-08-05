@@ -13,6 +13,9 @@ importers:
 
   .:
     dependencies:
+      '@kubohiroya/turbowarp-asset-manager':
+        specifier: github:kubohiroya/turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4
+        version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4
       '@kubohiroya/turbowarp-svg-text':
         specifier: 0.2.1
         version: 0.2.1
@@ -117,6 +120,10 @@ packages:
     version: 0.4.0
     engines: {node: '>=22.12.0'}
     hasBin: true
+
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4':
+    resolution: {gitHosted: true, integrity: sha512-VyFCJnMT92wx+uEuEnU0nezApQIX8++PvTnxppafyhPm00lmu3iwuu6pyl78GOAxbhkFOfdOuyQEW3MvHq2sdw==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4}
+    version: 0.5.0
 
   '@kubohiroya/turbowarp-svg-text@0.2.1':
     resolution: {integrity: sha512-N5Ainmm8l4IfTytfQGlKZWy/gOTkbJ1P3vTsbVmpKVlaIwt8BcFF8pzAQHrJYgtGm+VoBqV8bQrc7631bBG6oA==}
@@ -938,6 +945,8 @@ snapshots:
   '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b':
     dependencies:
       fflate: 0.8.3
+
+  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4': {}
 
   '@kubohiroya/turbowarp-svg-text@0.2.1': {}
 
