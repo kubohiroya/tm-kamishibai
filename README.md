@@ -105,6 +105,8 @@ CIでも`pnpm sb3:check`を実行し、同じツールチェインで`app/`を�
 
 一般向け、紙芝居DSL作成者向け、開発者向け、および体験会資料は、[公開ドキュメント一覧](https://kubohiroya.github.io/tmpose-kamishibai-docs/)から参照できます。原稿、図版、Vivliostyle設定は[`kubohiroya/tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs)で管理します。
 
+実装前の設計レビュー資料として、[紙芝居DSL 4.0 設計レビュー草案](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-design.md)をこのリポジトリで管理します。
+
 ## 関連プロジェクト
 
 - [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): このリポジトリで利用している、SB3の展開・検証・再構築・埋め込み拡張管理のためのツール
