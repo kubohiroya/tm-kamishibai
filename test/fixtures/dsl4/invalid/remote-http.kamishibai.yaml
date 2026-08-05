@@ -1,0 +1,12 @@
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    source:
+      url: http://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  opening: []

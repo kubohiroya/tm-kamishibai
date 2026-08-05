@@ -57,6 +57,27 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
 });
 
+test('remote delivery requires verified metadata and stays independent from loading policy', async () => {
+  const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.assets.OpeningMusic, {
+    id: 'OpeningMusic',
+    delivery: 'remote',
+    loading: 'eager',
+    kind: 'sound',
+    source: {
+      url: 'https://cdn.example.com/opening.ogg',
+      integrity: 'sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      contentType: 'audio/ogg',
+      size: 123456,
+    },
+  });
+  assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
+  assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
+  assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
+  assert.equal(result.storyDocument.assets.HeroIdle.loading, 'eager');
+});
+
 test('compact and named actions plus short and long scenes normalize identically', async () => {
   const compact = await validateFixture('valid', 'compact-normalization.kamishibai.yaml');
   const named = await validateFixture('valid', 'named-normalization.kamishibai.yaml');
@@ -83,6 +104,10 @@ for (const name of [
   'invalid-loading-policy.kamishibai.yaml',
   'positional-multi-argument.kamishibai.yaml',
   'remote-asset.kamishibai.yaml',
+  'remote-http.kamishibai.yaml',
+  'remote-missing-integrity.kamishibai.yaml',
+  'remote-invalid-integrity.kamishibai.yaml',
+  'remote-invalid-metadata.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
 ]) {
   test(`schema rejects ${name}`, async () => {

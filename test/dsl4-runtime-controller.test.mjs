@@ -221,6 +221,423 @@ scenes:
   );
 });
 
+test('prepares eager remote assets before entering the first scene', async () => {
+  const order = [];
+  let preparationPayload;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach:
+    kind: backdrop
+    delivery: remote
+    loading: eager
+    source:
+      url: https://cdn.example.com/beach.webp
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/webp
+      size: 123456
+scenes:
+  opening:
+    - stage: Beach
+`),
+    port: {
+      prepareAsset: async (payload, context) => {
+        preparationPayload = payload;
+        assert.equal(context.assetId, 'Beach');
+        assert.equal(context.sceneId, null);
+        assert.equal(context.storyPath, '/assets/Beach');
+        order.push('prepare');
+      },
+      stage: async () => order.push('stage'),
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(order, ['prepare', 'stage']);
+  assert.equal(preparationPayload.assetId, 'Beach');
+  assert.equal(preparationPayload.asset.delivery, 'remote');
+  const eventTypes = controller.getTrace().map(({type}) => type);
+  assert.ok(eventTypes.indexOf('asset.prepare.commit') < eventTypes.indexOf('scene.enter'));
+  assert.ok(eventTypes.indexOf('scene.enter') < eventTypes.indexOf('action.start'));
+});
+
+test('prepares lazy assets that are required by startup configuration', async () => {
+  const prepared = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle:
+    kind: costume
+    target: Hero
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/hero-idle.webp
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/webp
+      size: 123456
+actors:
+  Hero: HeroIdle
+scenes:
+  opening: []
+`),
+    port: {
+      prepareAsset: async ({assetId}) => prepared.push(assetId),
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(prepared, ['HeroIdle']);
+  const eventTypes = controller.getTrace().map(({type}) => type);
+  assert.ok(eventTypes.indexOf('asset.prepare.commit') < eventTypes.indexOf('scene.enter'));
+});
+
+test('waits for a lazy remote asset after its destination is selected and before scene entry', async () => {
+  const pending = deferred();
+  const preparationStarted = deferred();
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  opening:
+    - goto: ocean
+  ocean:
+    - stage: Ocean
+`),
+    port: {
+      prepareAsset: (_payload, context) => {
+        assert.equal(context.sceneId, 'ocean');
+        preparationStarted.resolve();
+        return pending.promise;
+      },
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const run = controller.start();
+  await preparationStarted.promise;
+  assert.equal(controller.getState().sceneId, 'ocean');
+  assert.equal(controller.getState().actionIndex, -1);
+  assert.equal(stageCalls, 0);
+  const waitingTrace = controller.getTrace();
+  assert.ok(
+    waitingTrace.some(({type, details}) => type === 'scene.transition' && details.to === 'ocean'),
+  );
+  assert.equal(
+    waitingTrace.some(({type, sceneId}) => type === 'scene.enter' && sceneId === 'ocean'),
+    false,
+  );
+
+  pending.resolve();
+  const state = await run;
+  assert.equal(state.status, 'finished');
+  assert.equal(stageCalls, 1);
+  const completedTrace = controller.getTrace();
+  const preparedAt = completedTrace.findIndex(({type}) => type === 'asset.prepare.commit');
+  const enteredAt = completedTrace.findIndex(
+    ({type, sceneId}) => type === 'scene.enter' && sceneId === 'ocean',
+  );
+  assert.ok(preparedAt < enteredAt);
+});
+
+test('advance waits for lazy assets when it crosses a scene boundary', async () => {
+  const staleAction = deferred();
+  const pendingAsset = deferred();
+  const preparationStarted = deferred();
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  opening:
+    - wait: 1
+  ocean:
+    - stage: Ocean
+`),
+    port: {
+      wait: () => staleAction.promise,
+      prepareAsset: () => {
+        preparationStarted.resolve();
+        return pendingAsset.promise;
+      },
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const staleRun = controller.start();
+  const advancedRun = controller.advance('test-next-scene');
+  await preparationStarted.promise;
+  assert.equal(controller.getState().sceneId, 'ocean');
+  assert.equal(controller.getState().actionIndex, -1);
+  assert.equal(stageCalls, 0);
+
+  pendingAsset.resolve();
+  const advancedState = await advancedRun;
+  assert.equal(advancedState.status, 'finished');
+  assert.equal(stageCalls, 1);
+  staleAction.resolve();
+  await staleRun;
+  assert.equal(stageCalls, 1);
+});
+
+test('reposition stays side-effect free and resume prepares the selected remote scene', async () => {
+  const staleAction = deferred();
+  const pendingAsset = deferred();
+  const preparationStarted = deferred();
+  let preparations = 0;
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  opening:
+    - wait: 1
+  ocean:
+    - stage: Ocean
+`),
+    port: {
+      wait: () => staleAction.promise,
+      prepareAsset: () => {
+        preparations += 1;
+        preparationStarted.resolve();
+        return pendingAsset.promise;
+      },
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const staleRun = controller.start();
+  const paused = controller.reposition('ocean', {reason: 'history.nextScene'});
+  assert.equal(paused.status, 'paused');
+  assert.equal(preparations, 0);
+  assert.equal(stageCalls, 0);
+
+  const resumedRun = controller.resume();
+  await preparationStarted.promise;
+  assert.equal(stageCalls, 0);
+  pendingAsset.resolve();
+  const resumedState = await resumedRun;
+  assert.equal(resumedState.status, 'finished');
+  assert.equal(preparations, 1);
+  assert.equal(stageCalls, 1);
+  staleAction.resolve();
+  await staleRun;
+});
+
+test('caches a prepared lazy asset across repeated scene visits', async () => {
+  let preparations = 0;
+  let stages = 0;
+  let controller;
+  controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  loop:
+    - stage: Ocean
+    - goto: loop
+`),
+    port: {
+      prepareAsset: async () => preparations++,
+      stage: async () => {
+        stages += 1;
+        if (stages === 3) controller.stop('loop-limit');
+      },
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'stopped');
+  assert.equal(stages, 3);
+  assert.equal(preparations, 1);
+});
+
+test('navigation aborts preparation and ignores its stale completion', async () => {
+  const slowPreparation = deferred();
+  const slowStarted = deferred();
+  let slowSignal;
+  const stages = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Slow:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/slow.webp
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/webp
+      size: 123456
+  Fast:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/fast.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+scenes:
+  opening:
+    - goto: slow
+  slow:
+    - stage: Slow
+  fast:
+    - stage: Fast
+`),
+    port: {
+      prepareAsset: ({assetId}, context) => {
+        if (assetId === 'Slow') {
+          slowSignal = context.signal;
+          slowStarted.resolve();
+          return slowPreparation.promise;
+        }
+        return Promise.resolve();
+      },
+      stage: async ({backdrop}) => stages.push(backdrop),
+    },
+  });
+
+  const staleRun = controller.start();
+  await slowStarted.promise;
+  const navigatedRun = controller.navigate('fast', {reason: 'history.nextScene'});
+  assert.equal(slowSignal.aborted, true);
+  const navigatedState = await navigatedRun;
+  assert.equal(navigatedState.status, 'finished');
+  assert.deepEqual(stages, ['Fast']);
+
+  slowPreparation.resolve();
+  await staleRun;
+  assert.equal(
+    controller
+      .getTrace()
+      .some(({type, details}) => type === 'asset.prepare.commit' && details.assetId === 'Slow'),
+    false,
+  );
+});
+
+test('stop aborts remote preparation and ignores its stale completion', async () => {
+  const pending = deferred();
+  const started = deferred();
+  let preparationSignal;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach:
+    kind: backdrop
+    delivery: remote
+    source:
+      url: https://cdn.example.com/beach.webp
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/webp
+      size: 123456
+scenes:
+  opening:
+    - stage: Beach
+`),
+    port: {
+      prepareAsset: (_payload, context) => {
+        preparationSignal = context.signal;
+        started.resolve();
+        return pending.promise;
+      },
+      stage: async () => assert.fail('scene action must not run'),
+    },
+  });
+
+  const run = controller.start();
+  await started.promise;
+  const stopped = controller.stop('test-stop');
+  assert.equal(stopped.status, 'stopped');
+  assert.equal(preparationSignal.aborted, true);
+  pending.resolve();
+  const final = await run;
+  assert.equal(final.status, 'stopped');
+  assert.equal(
+    controller.getTrace().some(({type}) => type === 'asset.prepare.commit'),
+    false,
+  );
+});
+
+test('reports asset preparation failures at the asset StoryPath', async () => {
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach:
+    kind: backdrop
+    delivery: remote
+    source:
+      url: https://cdn.example.com/beach.webp
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/webp
+      size: 123456
+scenes:
+  opening:
+    - stage: Beach
+`),
+    port: {
+      prepareAsset: async () => {
+        throw new Error('integrity mismatch');
+      },
+      stage: async () => assert.fail('scene action must not run'),
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-RUNTIME-ASSET-001');
+  assert.equal(state.diagnostic.storyPath, '/assets/Beach');
+  assert.equal(state.diagnostic.message, 'integrity mismatch');
+});
+
 for (const [label, truthyExpression, destination, evaluated] of [
   ['first matching rule', 'first', 'firstScene', ['first']],
   ['later matching rule', 'second', 'secondScene', ['first', 'second']],

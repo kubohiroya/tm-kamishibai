@@ -7,7 +7,8 @@ Copyright © 2026 Hiroya Kubo.
 関連Issue: [#260](https://github.com/kubohiroya/tmpose-kamishibai/issues/260)、
 [#264](https://github.com/kubohiroya/tmpose-kamishibai/issues/264)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)
+[#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)、
+[#284](https://github.com/kubohiroya/tmpose-kamishibai/issues/284)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)
 
@@ -85,8 +86,9 @@ assets:
 
 ### 3.2 名前付き形式
 
-名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`またはbuilder入力内のローカル相対pathを
-示す`file`のどちらか一方を持ちます。`poseModel`は`file`を必須とします。
+名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`、builder入力内のローカル相対pathを示す
+`file`、または検証情報付きの`source`のいずれか一つを持ちます。`name`と`file`は
+`delivery: embedded`、`source`は明示的な`delivery: remote`で使用します。
 
 ```yaml
 assets:
@@ -106,23 +108,53 @@ assets:
     kind: poseModel
     file: pose-models/rescue
     loading: lazy
+  RemoteOcean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
 ```
 
 `kind`は`backdrop`、`costume`、`sound`、`poseModel`のいずれかです。`costume`は`target`を
 必須とします。`file`に絶対path、`.`または`..` path segment、HTTP(S)を含むURIなどの外部URIを
-指定できません。builderは参照されたbyte列を成果物へ埋め込み、実動作環境でネットワーク取得を
-必要としないself-containedなSB3を生成します。
+指定できません。`delivery`の省略時と短形式は`embedded`です。builderは`embedded`の参照byte列を
+成果物へ埋め込み、ネットワークなしで動作するself-containedなSB3を生成します。
+
+`delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
+`source.url`はHTTPSだけを認め、期待するbyte列を固定する`integrity`、MIME typeを固定する
+`contentType`、上限検査に使う`size`をすべて必須とします。`integrity`は
+`sha256-`に続けて64桁の小文字16進SHA-256を記述します。HTTP、検証情報の省略、`name`または`file`との
+併記はschema errorです。
 
 ### 3.3 読み込み方針
 
-`backdrop`、`costume`、`sound`、`poseModel`の名前付き形式には`loading: eager | lazy`を
-指定できます。省略時と短形式は`eager`です。
+`delivery`はbyte列をどこから供給するか、`loading`はいつ実行可能な状態へ準備するかを表す独立した
+方針です。`backdrop`、`costume`、`sound`、`poseModel`の名前付き形式には
+`loading: eager | lazy`を指定でき、省略時と短形式は`eager`です。
 
-`lazy`は成果物へのbyte列の埋め込みを省略する指定ではありません。decode、登録、モデル初期化など、
-実行可能にするための準備を遅延させる指定です。controllerが次の遷移先sceneを決定した時点で、
-そのsceneから直接必要になる未準備のlazy assetをbackgroundで先読みします。scene開始時に準備が
-終わっていなければLoading表示で待ち、失敗時はscene actionを実行せず診断を表示します。
-準備済みassetは紙芝居停止までcacheします。
+`eager`なremote assetはentry sceneへ入る前に準備します。`lazy`はembedded byte列のdecode、登録、
+モデル初期化、またはremote byte列の取得と検証を遅延させます。controllerが次の遷移先sceneを
+決定した時点で、そのsceneから直接必要になる未準備のlazy assetを先読みします。scene開始時に準備が
+終わっていなければLoading表示で待ちます。`actors`の初期costume、`cover`、`loading`から参照される
+assetは起動時に必要となるため、`lazy`でもentry sceneより前に準備します。準備済みassetは紙芝居停止まで
+cacheします。
+
+### 3.4 runtime境界と失敗
+
+controller coreは`fetch`、filesystem、VMへ直接依存せず、注入された`prepareAsset` portへasset宣言と
+`AbortSignal`を渡します。remote取得を許可するhostだけがこのportへネットワーク権限を与え、必要に
+応じて接続先hostのallowlist、timeout、redirect数、最大byte数をさらに制限します。portは取得後に
+`size`、`contentType`、`integrity`をすべて検証してから登録しなければなりません。
+
+準備中は`loading.start`、assetごとの`asset.prepare.start`／`asset.prepare.commit`、完了時は
+`loading.finish` eventを発行します。停止またはnavigationは準備中のsignalをabortし、古い処理の完了を
+状態へ反映しません。準備失敗時は対象assetのStoryPathを持つ`K4-RUNTIME-ASSET-001`診断を表示し、
+遷移先sceneのactionを一つも実行しません。offlineへ切り戻す場合は`delivery: embedded`とローカル
+`file`へ戻します。
 
 ## 4. 共通設定
 

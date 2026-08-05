@@ -67,10 +67,18 @@ function storyPathSegment(value) {
 function normalizeAsset(asset, id) {
   if (typeof asset === 'string') {
     const [kind, target] = asset.split(':');
-    return {id, kind, name: id, loading: 'eager', ...(target ? {target} : {})};
+    return {
+      id,
+      kind,
+      name: id,
+      delivery: 'embedded',
+      loading: 'eager',
+      ...(target ? {target} : {}),
+    };
   }
   return {
     id,
+    delivery: 'embedded',
     loading: 'eager',
     .../** @type {Record<string, unknown>} */ (cloneValue(asset)),
   };

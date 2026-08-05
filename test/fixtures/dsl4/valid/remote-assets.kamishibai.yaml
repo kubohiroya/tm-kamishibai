@@ -1,0 +1,32 @@
+kamishibai: '4.0'
+
+assets:
+  OpeningMusic:
+    kind: sound
+    delivery: remote
+    loading: eager
+    source:
+      url: https://cdn.example.com/opening.ogg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: audio/ogg
+      size: 123456
+  Ocean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
+  HeroIdle: costume:Hero
+
+actors:
+  Hero: HeroIdle
+
+scenes:
+  opening:
+    - bgm: OpeningMusic
+    - goto: ocean
+  ocean:
+    - stage: Ocean
