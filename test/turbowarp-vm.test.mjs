@@ -215,13 +215,14 @@ function assertScriptError(harness, {category, line, message}) {
   assert.equal(harness.vm.runtime.threads.length, 0);
 }
 
-function actorActionScript(action, {before = []} = {}) {
+function actorActionScript(action, {before = [], declarations = []} = {}) {
   return [
     'kamishibai=3.2',
     'asset=Title,backdrop',
     'asset=Stars,backdrop',
     'asset=Hero,costume:Loading:loading',
     'actor=Hero,Hero',
+    ...declarations,
     'cover=Title,',
     '---',
     'sceneLabel=first',
@@ -1886,6 +1887,50 @@ for (const command of ['say', 'think']) {
 
     assert.equal(harness.getBubbleText('Hero'), '');
     assert.equal(harness.hasRuntimeVariable('skipMode'), false);
+  });
+
+  test(`applies and clears an SVG Text style for a timed ${command} bubble`, async (context) => {
+    const harness = await loadKamishibaiVm();
+    context.after(() => harness.quit());
+    startScript(
+      harness,
+      actorActionScript(`Hero:${command}:message:5.0:baloonStyle`, {
+        declarations: ['svgTextStyle=baloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right'],
+      }),
+    );
+    harness.runUntil(() => harness.getBubbleText('Hero') === 'message');
+
+    const actor = harness.getActor('Hero');
+    assert.deepEqual(harness.extensionState.svgTextBubbleUpdates.at(-1), {
+      message: 'message',
+      style: 'baloonStyle',
+      targetId: actor.id,
+      type: command,
+    });
+
+    harness.step({milliseconds: 5000});
+    harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
+
+    assert.equal(harness.getBubbleText('Hero'), '');
+    assert.equal(harness.hasRuntimeVariable('actionParam3'), false);
+  });
+
+  test(`clears a styled ${command} bubble when Right finishes the action`, async (context) => {
+    const harness = await loadKamishibaiVm();
+    context.after(() => harness.quit());
+    startScript(
+      harness,
+      actorActionScript(`Hero:${command}:message:5.0:baloonStyle`, {
+        declarations: ['svgTextStyle=baloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right'],
+      }),
+    );
+    harness.runUntil(() => harness.getBubbleText('Hero') === 'message');
+
+    harness.pressKey('ArrowRight');
+    harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
+
+    assert.equal(harness.getBubbleText('Hero'), '');
+    assert.equal(harness.hasRuntimeVariable('actionParam3'), false);
   });
 }
 

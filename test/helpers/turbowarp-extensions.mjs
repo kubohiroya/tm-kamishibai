@@ -311,6 +311,7 @@ export function registerKamishibaiTestExtensions(
     runtimeVariableWrites: [],
     svgText: null,
     svgTextActors: new Map(),
+    svgTextBubbleUpdates: [],
     svgTextStyles: new Map(),
     timers: new Map(),
     tempVariables: null,
@@ -1033,8 +1034,22 @@ export function registerKamishibaiTestExtensions(
         text: Cast.toString(args.TEXT).replace(/\\r\\n|\\n|\\r/gu, '\n'),
       });
     }
-    sayWithStyle() {}
-    thinkWithStyle() {}
+    showBubble(type, args, util) {
+      const message = Cast.toString(args.MESSAGE).replace(/\\r\\n|\\n|\\r/gu, '\n');
+      state.svgTextBubbleUpdates.push({
+        message,
+        style: Cast.toString(args.STYLE).trim() || 'default',
+        targetId: util.target.id,
+        type,
+      });
+      vm.runtime.getOpcodeFunction(`looks_${type}`)({MESSAGE: message}, util);
+    }
+    sayWithStyle(args, util) {
+      this.showBubble('say', args, util);
+    }
+    thinkWithStyle(args, util) {
+      this.showBubble('think', args, util);
+    }
   }
 
   class WebLinkExtension {

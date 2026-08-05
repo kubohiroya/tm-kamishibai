@@ -13945,7 +13945,7 @@
         },
         "f;": {
           "opcode": "lmsTempVars2_deleteRuntimeVariable",
-          "next": "M",
+          "next": "actorActionStyleCleanup",
           "parent": "f:",
           "inputs": {
             "VAR": [
@@ -13960,10 +13960,27 @@
           "shadow": false,
           "topLevel": false
         },
+        "actorActionStyleCleanup": {
+          "opcode": "lmsTempVars2_deleteRuntimeVariable",
+          "next": "M",
+          "parent": "f;",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "M": {
           "opcode": "control_if_else",
           "next": null,
-          "parent": "f;",
+          "parent": "actorActionStyleCleanup",
           "inputs": {
             "CONDITION": [
               2,
@@ -17544,7 +17561,7 @@
         },
         "bV": {
           "opcode": "lmsTempVars2_setRuntimeVariable",
-          "next": "gF",
+          "next": "actorStyleParamIf",
           "parent": "U",
           "inputs": {
             "VAR": [
@@ -17621,10 +17638,185 @@
           "shadow": false,
           "topLevel": false
         },
+        "actorStyleParamIf": {
+          "opcode": "control_if",
+          "next": "gF",
+          "parent": "bV",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorHasStyleParam"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorSetStyleParam"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorHasStyleParam": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "actorStyleParamIf",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "actorStyleParamCountTooSmall"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorStyleParamCountTooSmall": {
+          "opcode": "operator_lt",
+          "next": null,
+          "parent": "actorHasStyleParam",
+          "inputs": {
+            "OPERAND1": [
+              3,
+              "actorStyleParamSeparatorCount",
+              [
+                10,
+                "0"
+              ]
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                "4"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorStyleParamSeparatorCount": {
+          "opcode": "strings_count",
+          "next": null,
+          "parent": "actorStyleParamCountTooSmall",
+          "inputs": {
+            "SUBSTRING": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "STRING": [
+              3,
+              "actorStyleParamAction",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorStyleParamAction": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "actorStyleParamSeparatorCount",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorSetStyleParam": {
+          "opcode": "lmsTempVars2_setRuntimeVariable",
+          "next": null,
+          "parent": "actorStyleParamIf",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ],
+            "STRING": [
+              3,
+              "actorStyleParamValue",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorStyleParamValue": {
+          "opcode": "procedures_call",
+          "next": null,
+          "parent": "actorSetStyleParam",
+          "inputs": {
+            "3EuUXc]=fdSRVL$b+,GJ": [
+              1,
+              [
+                10,
+                "5"
+              ]
+            ],
+            "6gg`b%Ljytx;YRj[*Eo{": [
+              1,
+              [
+                10,
+                ":"
+              ]
+            ],
+            "lf^o4yyeS~=(X#Oy_T}y": [
+              3,
+              "actorStyleParamSource",
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false,
+          "mutation": {
+            "tagName": "mutation",
+            "children": [],
+            "proccode": "selectValue # %s separated by %s from %s",
+            "argumentids": "[\"3EuUXc]=fdSRVL$b+,GJ\",\"6gg`b%Ljytx;YRj[*Eo{\",\"lf^o4yyeS~=(X#Oy_T}y\"]",
+            "warp": "true",
+            "return": "1"
+          }
+        },
+        "actorStyleParamSource": {
+          "opcode": "argument_reporter_string_number",
+          "next": null,
+          "parent": "actorStyleParamValue",
+          "inputs": {},
+          "fields": {
+            "VALUE": [
+              "action",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
         "gF": {
           "opcode": "event_broadcastandwait",
           "next": "mu",
-          "parent": "bV",
+          "parent": "actorStyleParamIf",
           "inputs": {
             "BROADCAST_INPUT": [
               1,
@@ -17641,7 +17833,7 @@
         },
         "mu": {
           "opcode": "lmsTempVars2_deleteRuntimeVariable",
-          "next": null,
+          "next": "actorStyleParamDelete",
           "parent": "gF",
           "inputs": {
             "VAR": [
@@ -17649,6 +17841,23 @@
               [
                 10,
                 "actionParam2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorStyleParamDelete": {
+          "opcode": "lmsTempVars2_deleteRuntimeVariable",
+          "next": null,
+          "parent": "mu",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
               ]
             ]
           },
@@ -28759,9 +28968,108 @@
           }
         },
         "cC": {
-          "opcode": "looks_say",
+          "opcode": "control_if_else",
           "next": "actorSayWait",
           "parent": "cB",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorTimedSayHasStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorTimedStyledSay"
+            ],
+            "SUBSTACK2": [
+              2,
+              "actorTimedDefaultSay"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedSayHasStyle": {
+          "opcode": "lmsTempVars2_runtimeVariableExists",
+          "next": null,
+          "parent": "cC",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedStyledSay": {
+          "opcode": "kubohiroyasvgtext_sayWithStyle",
+          "next": null,
+          "parent": "cC",
+          "inputs": {
+            "MESSAGE": [
+              3,
+              "actorTimedStyledSayMessage",
+              [
+                10,
+                "こんにちは!"
+              ]
+            ],
+            "STYLE": [
+              3,
+              "actorTimedSayStyle",
+              [
+                10,
+                "default"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedStyledSayMessage": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorTimedStyledSay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedSayStyle": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorTimedStyledSay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedDefaultSay": {
+          "opcode": "looks_say",
+          "next": null,
+          "parent": "cC",
           "inputs": {
             "MESSAGE": [
               3,
@@ -28779,7 +29087,7 @@
         "n/": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "cC",
+          "parent": "actorTimedDefaultSay",
           "inputs": {
             "VAR": [
               1,
@@ -28811,9 +29119,108 @@
           "topLevel": false
         },
         "h*": {
-          "opcode": "looks_say",
+          "opcode": "control_if_else",
           "next": null,
           "parent": ";",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorPersistentSayHasStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorPersistentStyledSay"
+            ],
+            "SUBSTACK2": [
+              2,
+              "actorPersistentDefaultSay"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentSayHasStyle": {
+          "opcode": "lmsTempVars2_runtimeVariableExists",
+          "next": null,
+          "parent": "h*",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentStyledSay": {
+          "opcode": "kubohiroyasvgtext_sayWithStyle",
+          "next": null,
+          "parent": "h*",
+          "inputs": {
+            "MESSAGE": [
+              3,
+              "actorPersistentStyledSayMessage",
+              [
+                10,
+                "こんにちは!"
+              ]
+            ],
+            "STYLE": [
+              3,
+              "actorPersistentSayStyle",
+              [
+                10,
+                "default"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentStyledSayMessage": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorPersistentStyledSay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentSayStyle": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorPersistentStyledSay",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentDefaultSay": {
+          "opcode": "looks_say",
+          "next": null,
+          "parent": "h*",
           "inputs": {
             "MESSAGE": [
               3,
@@ -28831,7 +29238,7 @@
         "n;": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "h*",
+          "parent": "actorPersistentDefaultSay",
           "inputs": {
             "VAR": [
               1,
@@ -28984,9 +29391,108 @@
           }
         },
         "cE": {
-          "opcode": "looks_think",
+          "opcode": "control_if_else",
           "next": "actorThinkWait",
           "parent": "cD",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorTimedThinkHasStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorTimedStyledThink"
+            ],
+            "SUBSTACK2": [
+              2,
+              "actorTimedDefaultThink"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedThinkHasStyle": {
+          "opcode": "lmsTempVars2_runtimeVariableExists",
+          "next": null,
+          "parent": "cE",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedStyledThink": {
+          "opcode": "kubohiroyasvgtext_thinkWithStyle",
+          "next": null,
+          "parent": "cE",
+          "inputs": {
+            "MESSAGE": [
+              3,
+              "actorTimedStyledThinkMessage",
+              [
+                10,
+                "うーん..."
+              ]
+            ],
+            "STYLE": [
+              3,
+              "actorTimedThinkStyle",
+              [
+                10,
+                "default"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedStyledThinkMessage": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorTimedStyledThink",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedThinkStyle": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorTimedStyledThink",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorTimedDefaultThink": {
+          "opcode": "looks_think",
+          "next": null,
+          "parent": "cE",
           "inputs": {
             "MESSAGE": [
               3,
@@ -29004,7 +29510,7 @@
         "n[": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "cE",
+          "parent": "actorTimedDefaultThink",
           "inputs": {
             "VAR": [
               1,
@@ -29036,9 +29542,108 @@
           "topLevel": false
         },
         "h,": {
-          "opcode": "looks_think",
+          "opcode": "control_if_else",
           "next": null,
           "parent": "?",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "actorPersistentThinkHasStyle"
+            ],
+            "SUBSTACK": [
+              2,
+              "actorPersistentStyledThink"
+            ],
+            "SUBSTACK2": [
+              2,
+              "actorPersistentDefaultThink"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentThinkHasStyle": {
+          "opcode": "lmsTempVars2_runtimeVariableExists",
+          "next": null,
+          "parent": "h,",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentStyledThink": {
+          "opcode": "kubohiroyasvgtext_thinkWithStyle",
+          "next": null,
+          "parent": "h,",
+          "inputs": {
+            "MESSAGE": [
+              3,
+              "actorPersistentStyledThinkMessage",
+              [
+                10,
+                "うーん..."
+              ]
+            ],
+            "STYLE": [
+              3,
+              "actorPersistentThinkStyle",
+              [
+                10,
+                "default"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentStyledThinkMessage": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorPersistentStyledThink",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentThinkStyle": {
+          "opcode": "lmsTempVars2_getRuntimeVariable",
+          "next": null,
+          "parent": "actorPersistentStyledThink",
+          "inputs": {
+            "VAR": [
+              1,
+              [
+                10,
+                "actionParam3"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "actorPersistentDefaultThink": {
+          "opcode": "looks_think",
+          "next": null,
+          "parent": "h,",
           "inputs": {
             "MESSAGE": [
               3,
@@ -29056,7 +29661,7 @@
         "n^": {
           "opcode": "lmsTempVars2_getRuntimeVariable",
           "next": null,
-          "parent": "h,",
+          "parent": "actorPersistentDefaultThink",
           "inputs": {
             "VAR": [
               1,
