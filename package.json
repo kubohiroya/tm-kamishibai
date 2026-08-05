@@ -63,6 +63,7 @@
   "dependencies": {
     "@kubohiroya/turbowarp-asset-manager": "github:kubohiroya/turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4",
     "@kubohiroya/turbowarp-svg-text": "0.2.1",
+    "@kubohiroya/turbowarp-tmpose": "github:kubohiroya/turbowarp-tmpose#d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85",
     "fflate": "0.8.3"
   },
   "devDependencies": {

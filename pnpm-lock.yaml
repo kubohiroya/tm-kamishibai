@@ -19,6 +19,9 @@ importers:
       '@kubohiroya/turbowarp-svg-text':
         specifier: 0.2.1
         version: 0.2.1
+      '@kubohiroya/turbowarp-tmpose':
+        specifier: github:kubohiroya/turbowarp-tmpose#d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85
+        version: https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -127,6 +130,10 @@ packages:
 
   '@kubohiroya/turbowarp-svg-text@0.2.1':
     resolution: {integrity: sha512-N5Ainmm8l4IfTytfQGlKZWy/gOTkbJ1P3vTsbVmpKVlaIwt8BcFF8pzAQHrJYgtGm+VoBqV8bQrc7631bBG6oA==}
+
+  '@kubohiroya/turbowarp-tmpose@https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85':
+    resolution: {gitHosted: true, integrity: sha512-Ze2xR8a/Zy1hVY9wRM32cyvXxB326kUdu0qzsrD4t+nqCAUEzmz6vw5v0fhfOikUbh7r4Tc0DkqBeZ94v1b67g==, tarball: https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85}
+    version: 1.5.0
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -949,6 +956,8 @@ snapshots:
   '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4': {}
 
   '@kubohiroya/turbowarp-svg-text@0.2.1': {}
+
+  '@kubohiroya/turbowarp-tmpose@https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
