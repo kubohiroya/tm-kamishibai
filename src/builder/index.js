@@ -25,9 +25,11 @@ export {
 } from './dsl4-external-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {
+  embedDsl4PackagedRuntimeComponentInSb3,
   embedDsl4RuntimeComponentInSb3,
   embedDsl4SourceInSb3,
   installDsl4EmbeddedSource,
+  installDsl4PackagedRuntimeComponent,
   installDsl4RuntimeComponent,
 } from './dsl4-source.js';
 export {validateAssetManifest} from './manifest.js';

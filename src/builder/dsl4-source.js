@@ -1,8 +1,12 @@
 import {
+  Dsl4AssetBundleError,
+  validateDsl4EmbeddedAssetBundle,
+} from '../dsl4/asset-bundle-descriptor.js';
+import {validateDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
+import {
   Dsl4SourceDescriptorError,
   validateDsl4EmbeddedSourceDescriptor,
 } from '../dsl4/source-descriptor.js';
-import {validateDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 
@@ -166,6 +170,9 @@ export async function embedDsl4SourceInSb3(baseSb3Bytes, descriptor, options) {
  * @param {number} options.maxSourceBytes
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {boolean} [options.replaceExisting]
+ * @param {unknown} [options.assetBundle]
+ * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetBytes]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function installDsl4RuntimeComponent(
@@ -178,6 +185,9 @@ export async function installDsl4RuntimeComponent(
     maxSourceBytes,
     historyNavigationAvailable = false,
     replaceExisting = false,
+    assetBundle,
+    maxAssetFiles,
+    maxAssetBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   },
 ) {
@@ -213,6 +223,22 @@ export async function installDsl4RuntimeComponent(
   const validatedArtifactSuccess = /** @type {{artifact: Readonly<Record<string, unknown>>}} */ (
     /** @type {unknown} */ (validatedArtifact)
   );
+  let validatedAssets = null;
+  if (assetBundle !== undefined) {
+    if (maxAssetFiles === undefined || maxAssetBytes === undefined) {
+      throw new TypeError('maxAssetFiles and maxAssetBytes are required with assetBundle');
+    }
+    try {
+      validatedAssets = await validateDsl4EmbeddedAssetBundle(storyDocument, assetBundle, {
+        maxFiles: maxAssetFiles,
+        maxTotalBytes: maxAssetBytes,
+        subtleCrypto,
+      });
+    } catch (error) {
+      if (error instanceof Dsl4AssetBundleError) fail(error.message, error.code, error);
+      throw error;
+    }
+  }
 
   const output = /** @type {Record<string, unknown>} */ (structuredClone(project));
   const extensionStorage = objectProperty(output, 'extensionStorage');
@@ -220,7 +246,12 @@ export async function installDsl4RuntimeComponent(
     extensionStorage,
     /** @type {'bundled' | 'unbundled'} */ (channel),
   );
-  if (opposite && (opposite.source !== undefined || opposite.artifact !== undefined)) {
+  if (
+    opposite &&
+    (opposite.source !== undefined ||
+      opposite.artifact !== undefined ||
+      opposite.assets !== undefined)
+  ) {
     fail(
       'DSL 4.0 runtime component already exists in the opposite storage channel',
       'K4-RUNTIME-COMPONENT-CHANNEL-AMBIGUOUS',
@@ -228,10 +259,18 @@ export async function installDsl4RuntimeComponent(
   }
   const hasSource = selected.source !== undefined;
   const hasArtifact = selected.artifact !== undefined;
-  if (hasSource !== hasArtifact) {
+  const hasAssets = selected.assets !== undefined;
+  const packaged = validatedAssets !== null;
+  if (hasSource !== hasArtifact || (packaged && hasSource !== hasAssets)) {
     fail(
-      'Existing DSL 4.0 runtime component has only source or artifact',
+      'Existing DSL 4.0 runtime component has only some of source, artifact, and assets',
       'K4-RUNTIME-COMPONENT-PARTIAL',
+    );
+  }
+  if (!packaged && hasAssets) {
+    fail(
+      'Existing packaged DSL 4.0 component cannot be replaced without an asset bundle',
+      'K4-RUNTIME-COMPONENT-ASSET-MODE-001',
     );
   }
   if (hasSource && !replaceExisting) {
@@ -242,7 +281,39 @@ export async function installDsl4RuntimeComponent(
   }
   selected.source = structuredClone(source);
   selected.artifact = structuredClone(validatedArtifactSuccess.artifact);
+  if (validatedAssets) selected.assets = structuredClone(validatedAssets.descriptor);
   return output;
+}
+
+/**
+ * Atomically install source, control artifact, and embedded assets into one component channel.
+ *
+ * @param {unknown} project
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} sourceDescriptor
+ * @param {unknown} runtimeArtifact
+ * @param {unknown} assetBundle
+ * @param {object} options
+ * @param {'bundled' | 'unbundled'} options.channel
+ * @param {number} options.maxSourceBytes
+ * @param {number} options.maxAssetFiles
+ * @param {number} options.maxAssetBytes
+ * @param {boolean} [options.historyNavigationAvailable]
+ * @param {boolean} [options.replaceExisting]
+ * @param {{digest: Function}} [options.subtleCrypto]
+ */
+export function installDsl4PackagedRuntimeComponent(
+  project,
+  storyDocument,
+  sourceDescriptor,
+  runtimeArtifact,
+  assetBundle,
+  options,
+) {
+  return installDsl4RuntimeComponent(project, storyDocument, sourceDescriptor, runtimeArtifact, {
+    ...options,
+    assetBundle,
+  });
 }
 
 /**
@@ -267,6 +338,36 @@ export async function embedDsl4RuntimeComponentInSb3(
     storyDocument,
     sourceDescriptor,
     runtimeArtifact,
+    options,
+  );
+  return {bytes: serializeSb3(archive, outputProject), project: outputProject};
+}
+
+/**
+ * Embed a source, control artifact, and asset bundle without changing targets or other entries.
+ *
+ * @param {Buffer | Uint8Array} baseSb3Bytes
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} sourceDescriptor
+ * @param {unknown} runtimeArtifact
+ * @param {unknown} assetBundle
+ * @param {Parameters<typeof installDsl4PackagedRuntimeComponent>[5]} options
+ */
+export async function embedDsl4PackagedRuntimeComponentInSb3(
+  baseSb3Bytes,
+  storyDocument,
+  sourceDescriptor,
+  runtimeArtifact,
+  assetBundle,
+  options,
+) {
+  const {archive, project} = readSb3(baseSb3Bytes);
+  const outputProject = await installDsl4PackagedRuntimeComponent(
+    project,
+    storyDocument,
+    sourceDescriptor,
+    runtimeArtifact,
+    assetBundle,
     options,
   );
   return {bytes: serializeSb3(archive, outputProject), project: outputProject};
