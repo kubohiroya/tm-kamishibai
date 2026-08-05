@@ -104,6 +104,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 | `extensionBundles`        | 4.0 Compositeの第一候補として維持する                             |
 | 新しい`./composition` API | 現行bundleで不足する契約が実証された場合だけ追加を検討する        |
 | block cleanup             | DSL設計外。必要なbuildでだけ既定OFFオプションを明示的に有効化する |
+| 台本製作者の作業          | 標準テンプレートのblock graphを変更せず、台本の記述だけで完結する |
 
 現行ベースラインの変更履歴と固定仕様は、次を参照します。
 
@@ -135,7 +136,47 @@ DSL 3.2の実行用パーサーはScratchブロックで実装され、JavaScrip
 - パース結果が共有変数へ分散し、構造化データとして再利用しにくい
 - reporterがJavaScriptオブジェクトを直接返せない
 
-### 1.2 維持する価値
+### 1.2 台本製作者のゼロブロック原則 `[決定済み]`
+
+DSL 4.0の最優先の作者体験は、**通常の台本製作者がTurboWarpのブロックを追加、複製、接続、修正せず、
+台本の記述と修正だけで紙芝居を完成できること**です。標準テンプレートを開いた後に台本だけを
+差し替えた作品では、保存されるblock graphがテンプレートから変化してはなりません。
+
+利用者の役割を次のように分けます。
+
+| 役割                      | 通常行う作業                                                     | block組立て  |
+| ------------------------- | ---------------------------------------------------------------- | ------------ |
+| 台本製作者                | YAML台本、アセット、SVG Text styleを記述・修正する               | 必須0        |
+| 作品カスタマイザー        | DSLだけでは表現しない作品固有actionをScratchで任意に追加する     | 任意         |
+| テンプレート保守者        | 起動、停止、再試行、タイトル、Loading等の共通app shellを保守する | 固定済み     |
+| capability／runtime開発者 | parser、Store、controller、標準actionをJavaScriptで実装する      | 作者へ非公開 |
+
+「必須0」は、テンプレート内部に一つもブロックが存在しないという意味ではありません。テンプレート保守者が
+検証済みの起動・UI blockをあらかじめ提供し、台本製作者がそれを組み直さないという意味です。台本の取得経路を
+project variable、asset、builder source、専用editorのどれにする場合も、台本変更のためにblock入力欄を探して
+書き換える操作を標準手順にしません。
+
+標準core actionで表現できる作品については、Scratch Action Registry、Object Store、Iterator、JSONPathの
+blockを一つも配置しなくても実行できなければなりません。複数作品で繰り返し必要になる表現がcustom
+actionを要求する場合は、作者へblock組立てを求め続けず、core actionまたはDSL schemaへ昇格させるかを
+レビューします。
+
+現行`app/project.source.json`は合計1,781 block（Stage 1,349、Actor 221、UI系211）です。4.0の定量目標は
+次とします。作品固有custom actionの演出本体は別集計にします。
+
+| 指標                               | 4.0目標                                      |
+| ---------------------------------- | -------------------------------------------- |
+| 台本製作者が追加する必須block      | 0                                            |
+| 固定テンプレートのDSL接続block     | 30以下                                       |
+| project全体                        | 500以下、目標350以下                         |
+| Stage                              | 150以下                                      |
+| Actor                              | 20以下                                       |
+| DSL実行用`lmsTempVars2_*`          | 0                                            |
+| DSL実行用Scratch list              | 0                                            |
+| 標準core action用Scratch procedure | 0                                            |
+| custom actionの定型overhead        | 1 handlerあたり8 block以下（演出本体を除く） |
+
+### 1.3 維持する価値
 
 DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしません。一方で、3.1／3.2の
 次の長所は維持します。
@@ -144,11 +185,11 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 - 一つの演出が原則として一行で表現される
 - 背景、登場人物、セリフ、待機などの意味が記号に埋もれない
 - 短い台本を少ない記述量で作れる
-- Scratch上で独自アクションを追加し、DSLを拡張する教育活動を残せる
-- 台本とScratchプログラムの対応関係を観察できる
+- 希望する作品カスタマイザーはScratch上で独自アクションを追加し、DSLを拡張する教育活動を行える
+- 任意custom actionでは、台本とScratchプログラムの対応関係を観察できる
 - 名前付きスタイルを再利用するSVG Textにより、テキストの意味と見た目を分離できる
 
-### 1.3 非目標
+### 1.4 非目標
 
 - YAMLの全機能を紙芝居DSLとして公開すること
 - DSLから任意のJavaScriptを実行すること
@@ -156,46 +197,54 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 - reporterから生のJavaScriptオブジェクトを返すこと
 - Temporary Variables拡張へ依存すること
 - 許可後に別の機能拡張コードを動的にダウンロードすること
+- 通常の台本製作者へ、parser、状態機械、標準actionのScratch実装を学習・保守させること
+- block組立てを台本記述と同等の必須作業として残すこと
 
 ## 2. 現時点の設計判断一覧
 
-| ID   | 状態     | 判断                                                                   |
-| ---- | -------- | ---------------------------------------------------------------------- |
-| D-01 | 決定済み | DSL 4.0のパーサーはTurboWarp機能拡張側へ一本化する                     |
-| D-02 | 決定済み | Scratchブロックによる3.1／3.2パーサーを4.0ランタイムには残さない       |
-| D-03 | 決定済み | 3.2に近い簡潔な一行アクションを維持する                                |
-| D-04 | 決定済み | Scratch Action Registryにより、ScratchでDSLアクションを拡張可能にする  |
-| D-05 | 決定済み | オブジェクトはopaque referenceを介してScratchへ渡す                    |
-| D-06 | 決定済み | Object StoreはTemporary Variablesとは別実装・別名前空間にする          |
-| D-07 | 決定済み | Object Store、Iterator、JSONPathは紙芝居固有にしない                   |
-| D-08 | 決定済み | Kamishibai用成果物は静的に合成し、一つの拡張として登録する             |
-| D-09 | 決定済み | 正式な拡張IDは`kubohiroyakamishibai4`とする                            |
-| D-10 | 決定済み | 実行時に子拡張をロードするメタ拡張方式は採用しない                     |
-| D-11 | 決定済み | StoryDocumentは不変データとし、sceneを記述順のordered arrayで保持する  |
-| D-12 | 決定済み | Action IDは内容ハッシュではなく文書内の決定的なStoryPathとする         |
-| D-13 | 決定済み | 正規化後も各nodeから台本位置へ戻れるSource Mapを保持する               |
-| D-14 | 決定済み | Generic Core、TurboWarp Adapter、Kamishibai Adapterの三層に分ける      |
-| D-15 | 決定済み | story／scene／actionの意味と寿命はKamishibai Adapterだけが扱う         |
-| D-16 | 決定済み | Generic Coreの標準かつ正本の保存実装には`MapBackend`を採用する         |
-| D-17 | 決定済み | 上位層への依存とbuildをまたぐobject referenceの共有を禁止する          |
-| D-18 | 決定済み | 再利用可能なcapabilityは独立GitHub projectとして開発・配布可能にする   |
-| D-19 | 決定済み | 個別Standalone成果物を展開ソースの正本として維持する                   |
-| D-20 | 決定済み | 4.0 Compositeの第一候補に`sb3-toolchain`の静的bundleを使用する         |
-| D-21 | 決定済み | Kamishibai固有adapterは本projectに置き、汎用projectから逆依存しない    |
-| D-22 | 決定済み | 外部capabilityのversion／commit、artifact、integrityをsourceに固定する |
-| D-23 | 決定済み | 既存の公開package、repository、Standalone extension IDを維持する       |
-| D-24 | 決定済み | bundleは生成SB3だけを変換し、個別ID／opcode／storageを展開sourceに残す |
-| D-25 | 決定済み | member間`startHats`／`getOpcodeFunction`はbundle namespaceへ変換する   |
-| D-26 | 決定済み | block cleanupはDSL設計外の既定OFF build optionとして扱う               |
-| P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする            |
-| P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する            |
-| P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う         |
-| P-04 | 提案     | 全文検証が成功するまで、アセット読込や紙芝居実行を開始しない           |
-| P-05 | 提案     | 複数エラーを収集し、SVGエラー画面から発生位置と原因を確認可能にする    |
-| P-06 | 提案     | 管理対象参照を参照カウントし、外部参照が残る対象の`free`を拒否する     |
-| P-07 | 提案     | 旧Text Assetを4.0 core schemaへ入れず、SVG Textを標準経路にする        |
-| P-08 | 提案     | 4.0で更新する全managed memberにAPI manifestを要求する                  |
-| P-09 | 提案     | `./composition`は現行bundleで不足が確認されたcapabilityだけに追加する  |
+| ID   | 状態     | 判断                                                                    |
+| ---- | -------- | ----------------------------------------------------------------------- |
+| D-01 | 決定済み | DSL 4.0のパーサーはTurboWarp機能拡張側へ一本化する                      |
+| D-02 | 決定済み | Scratchブロックによる3.1／3.2パーサーを4.0ランタイムには残さない        |
+| D-03 | 決定済み | 3.2に近い簡潔な一行アクションを維持する                                 |
+| D-04 | 決定済み | Scratch Action Registryにより、ScratchでDSLアクションを拡張可能にする   |
+| D-05 | 決定済み | オブジェクトはopaque referenceを介してScratchへ渡す                     |
+| D-06 | 決定済み | Object StoreはTemporary Variablesとは別実装・別名前空間にする           |
+| D-07 | 決定済み | Object Store、Iterator、JSONPathは紙芝居固有にしない                    |
+| D-08 | 決定済み | Kamishibai用成果物は静的に合成し、一つの拡張として登録する              |
+| D-09 | 決定済み | 正式な拡張IDは`kubohiroyakamishibai4`とする                             |
+| D-10 | 決定済み | 実行時に子拡張をロードするメタ拡張方式は採用しない                      |
+| D-11 | 決定済み | StoryDocumentは不変データとし、sceneを記述順のordered arrayで保持する   |
+| D-12 | 決定済み | Action IDは内容ハッシュではなく文書内の決定的なStoryPathとする          |
+| D-13 | 決定済み | 正規化後も各nodeから台本位置へ戻れるSource Mapを保持する                |
+| D-14 | 決定済み | Generic Core、TurboWarp Adapter、Kamishibai Adapterの三層に分ける       |
+| D-15 | 決定済み | story／scene／actionの意味と寿命はKamishibai Adapterだけが扱う          |
+| D-16 | 決定済み | Generic Coreの標準かつ正本の保存実装には`MapBackend`を採用する          |
+| D-17 | 決定済み | 上位層への依存とbuildをまたぐobject referenceの共有を禁止する           |
+| D-18 | 決定済み | 再利用可能なcapabilityは独立GitHub projectとして開発・配布可能にする    |
+| D-19 | 決定済み | 個別Standalone成果物を展開ソースの正本として維持する                    |
+| D-20 | 決定済み | 4.0 Compositeの第一候補に`sb3-toolchain`の静的bundleを使用する          |
+| D-21 | 決定済み | Kamishibai固有adapterは本projectに置き、汎用projectから逆依存しない     |
+| D-22 | 決定済み | 外部capabilityのversion／commit、artifact、integrityをsourceに固定する  |
+| D-23 | 決定済み | 既存の公開package、repository、Standalone extension IDを維持する        |
+| D-24 | 決定済み | bundleは生成SB3だけを変換し、個別ID／opcode／storageを展開sourceに残す  |
+| D-25 | 決定済み | member間`startHats`／`getOpcodeFunction`はbundle namespaceへ変換する    |
+| D-26 | 決定済み | block cleanupはDSL設計外の既定OFF build optionとして扱う                |
+| D-27 | 決定済み | 通常の台本製作者は標準テンプレートのblock graphを変更せず台本だけを書く |
+| D-28 | 決定済み | parser、状態管理、controller、標準action handlerを機能拡張側へ置く      |
+| D-29 | 決定済み | Scratch Action Registryは任意の作品固有拡張であり標準作品には要求しない |
+| D-30 | 決定済み | Object Store／Iterator等の汎用blockを標準作者経路へ露出させない         |
+| D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する     |
+| P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする             |
+| P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する             |
+| P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う          |
+| P-04 | 提案     | 全文検証が成功するまで、アセット読込や紙芝居実行を開始しない            |
+| P-05 | 提案     | 複数エラーを収集し、SVGエラー画面から発生位置と原因を確認可能にする     |
+| P-06 | 提案     | 管理対象参照を参照カウントし、外部参照が残る対象の`free`を拒否する      |
+| P-07 | 提案     | 旧Text Assetを4.0 core schemaへ入れず、SVG Textを標準経路にする         |
+| P-08 | 提案     | 4.0で更新する全managed memberにAPI manifestを要求する                   |
+| P-09 | 提案     | `./composition`は現行bundleで不足が確認されたcapabilityだけに追加する   |
+| P-10 | 提案     | project全体350 block以下を目標、500 block以下を受け入れ上限とする       |
 
 ## 3. DSL 4.0の表層構文
 
@@ -203,6 +252,11 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 
 DSL 4.0はYAML 1.2を基礎とします。ただし、実装が受け付けるのは紙芝居用スキーマで
 定義した構造だけです。YAMLタグによるオブジェクト生成や任意型の復元は許可しません。
+
+この表層構文を、通常の台本製作者にとって唯一の必須programming surfaceとします。標準的な背景、
+登場人物、台詞、音声、待機、分岐、入力、ポーズ認識、遷移、SVG Textは台本だけで記述できなければ
+なりません。これらを成立させるためにTurboWarp blockの追加を要求する仕様はcore actionの不足として
+扱い、block操作手順を利用者文書へ追加することで解決しません。
 
 バージョン宣言は次の形を提案します。
 
@@ -590,14 +644,17 @@ scenes:
 DSL 4.0を解釈する正本は`kubohiroyakamishibai4`機能拡張内のパーサーだけです。
 Scratch側に同じ構文規則を再実装しません。
 
-Scratch側は次を担当します。
+標準テンプレートと機能拡張は、台本製作者の操作なしに次を直列実行します。
 
-- 台本テキストの取得開始
-- パース・検証の開始
-- 成功したStoryDocument参照の受け取り
-- 紙芝居実行の開始
-- Scratchで定義されたカスタムアクションの処理
-- エラー画面からの再試行やタイトル復帰
+- templateが管理するsource channelから台本テキストを取得する
+- パース・検証を開始し、成功したStoryDocumentをruntime内部で受け渡す
+- アセット準備と紙芝居実行を開始する
+- 終了、停止、再試行、タイトル復帰でrealmとresourceを解放する
+- エラーをSVGで表示し、Source Mapから台本の修正位置を示す
+
+Scratch側へ残すのは、テンプレート保守者が管理する固定app shellと、作品カスタマイザーが明示的に
+選んだcustom actionだけです。台本製作者にStoryDocument referenceを変数へ格納させたり、parse、
+validate、startを別々のblockとして接続させたりしません。
 
 ### 4.2 処理段階 `[提案]`
 
@@ -642,6 +699,24 @@ YAML構造を回復できない構文エラーでは、その地点で意味検�
 - `K32-*`と`K4-*`のcodeを同じ意味に見せかけて再利用しない
 - 画面の日本語／英語、source excerpt、SVG escape、安全停止、再試行というUXは共有する
 - 3.2台本を4.0 parserへ渡した場合はconverterを暗黙実行せず、version不一致を返す
+
+### 4.6 標準作者フローとblock graph不変条件 `[決定済み]`
+
+標準的な新規作品の作成手順は次とします。
+
+1. 検証済みのDSL 4.0標準テンプレートを開く
+2. 台本sourceと参照するアセットを編集する
+3. previewを実行する
+4. `K4-*`診断が示す台本位置を修正する
+5. 同じテンプレートからWeb版またはPackager成果物を生成する
+
+この手順にTurboWarpのコード領域を開く操作、blockの複製、接続、broadcast名や変数名の入力を含めません。
+最小台本、全core action台本、分岐・入力・ポーズ認識を含む台本のいずれも、台本sourceを変更するだけで
+実行できることをfixtureで検証します。
+
+台本Aから台本Bへ差し替えたとき、標準テンプレートの`targets[].blocks`はbyte-for-byteで同一であることを
+原則とします。台本保存方式によりblock以外のvariable value、asset、manifestが変化することは許容します。
+source channelの具体形式は実装前に決めますが、このblock graph不変条件を破る方式は採用しません。
 
 ## 5. 診断情報とSVGエラー画面
 
@@ -895,9 +970,10 @@ scope解放も同じ判定を使います。配下のいずれかへ外部参照
 #### 7.3.5 失敗の表現と不変条件
 
 Generic Coreの公開操作は概念上`Result<Value, StoreException>`を返します。TurboWarp Adapterは
-失敗をScratch reporterで運べる`ExceptionRef`または同等のscalar値へ変換し、Scratch側が
-`<例外か?>`に相当するpredicateで分岐できるようにします。JavaScript例外をScratchとの境界の外へ
-投げたままにしません。scalarの正確な符号化とblock APIは7.5のレビュー項目として保留します。
+標準Kamishibai Runtimeでは失敗を`K4-*`診断へ変換してcontrollerへ返します。Standalone／上級利用向け
+block facadeを公開する場合だけ、Scratch reporterで運べる`ExceptionRef`または同等のscalar値へ変換し、
+Scratch側が`<例外か?>`に相当するpredicateで分岐できるようにします。JavaScript例外をScratchとの境界の
+外へ投げたままにしません。scalarの正確な符号化とadvanced block APIは7.5のレビュー項目として保留します。
 
 最低限、次の汎用error codeを区別します。
 
@@ -970,9 +1046,9 @@ Generic Coreが特別扱いすることは禁止します。
 本項のレビューは、7.3の失敗モデルとleaseの設計が解決した後に行います。特にreporterが返す
 `ExceptionRef`の符号化、判定block、診断内容の取得方法は、この項で決定します。
 
-- opaque referenceをScratch stringとして受け渡すblock facadeを提供する
+- Standalone／上級利用向けに、opaque referenceをScratch stringとして受け渡すblock facadeを提供可能にする
 - Scratchのnumber、string、BooleanとGeneric Coreのscalarを変換する
-- `new`、`free`、参照作成・release、scope作成・解放をScratch blockとして公開する
+- `new`、`free`、参照作成・release、scope作成・解放の内部adapter APIを提供する
 - `util.thread`などTurboWarp固有contextを必要なadapterへ渡す
 - 必要な場合だけruntime変数への読み取り専用projectionを実装する
 - Generic Store ErrorをScratchから扱えるscalar結果または診断参照へ変換する
@@ -980,6 +1056,12 @@ Generic Coreが特別扱いすることは禁止します。
 この層には`StoryDocument`を検索するblockや`action scope`という名前のAPIを置きません。
 汎用buildのruntime変数名へprefixが必要なら、例えば`@sd1/`のようにbuild manifestから注入し、
 Generic Coreへ固定しません。
+
+Kamishibai標準テンプレートでは、Kamishibai Runtimeがこのadapter APIをJavaScriptから直接利用します。
+台本製作者へ`new`、`free`、scope、lease、iteratorのblockを表示または配置させません。汎用Structured Data
+Standalone版でblock facadeを公開する場合は、別extension IDを明示的に導入したprojectだけでpaletteを
+表示します。Kamishibai開発・診断用blockが必要な場合も別debug buildとし、標準テンプレートへ読み込まず、
+標準テンプレートのblock数へ含めません。
 
 ### 7.6 Kamishibai Adapterの責務 `[決定済み]`
 
@@ -1045,7 +1127,10 @@ Variablesとは別実装にし、その状態や名前空間へ依存させま�
 JSONPathは[IETF RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html)互換の読み取り専用
 subsetから始めます。初版でfilter式まで実装するかは未決です。
 
-### 8.2 汎用blockの概念案 `[提案]`
+### 8.2 Standalone／上級利用向け汎用blockの概念案 `[提案]`
+
+次のblockはGeneric Coreを独立利用するproject、デバッグ、Structured Data教材向けの候補です。
+Kamishibaiの通常実行に必要なblock一覧ではありません。
 
 ```text
 (new object store entry from JSON [text] owned by scope [scopeRef])
@@ -1064,6 +1149,9 @@ free object owned by [ownerRef]
 所有し、collectionの解放時にまとめてreleaseします。型の曖昧さを避けるため、常にreferenceを
 返す別blockを用意する案もレビュー対象です。
 
+Kamishibai標準テンプレートはこれらを配置せず、StoryIteratorとscope管理をruntime内部で呼び出します。
+台本の内容が複雑になるほど作者が`query`や`free`のblockを増やす構造にはしません。
+
 ### 8.3 Kamishibaiでの利用 `[提案]`
 
 実行本体が毎actionを任意JSONPath文字列で検索する設計にはしません。型付きStoryIteratorを
@@ -1077,8 +1165,9 @@ free object owned by [ownerRef]
 6. 完了後にaction scopeを解放する
 7. 次のactionへ進む
 
-JSONPathは、Scratchカスタムアクション、デバッグ、教材、将来の汎用拡張でActionViewや
-StoryDocumentを調べるために使います。
+JSONPathは、上級Scratchカスタムアクション、デバッグ、教材、将来の汎用拡張でActionViewや
+StoryDocumentを調べるために使います。通常のcustom actionではtargetと引数の専用reporterを優先し、
+作者へJSONPath、reference lease、release blockの組合せを要求しません。
 
 ### 8.4 Iteratorの状態 `[提案]`
 
@@ -1110,6 +1199,10 @@ sourceの`OwnerRef`を`free`しようとすると、`STORE-OBJECT-IN-USE`で失�
 4.0ではJavaScriptパーサーへ一本化しますが、DSLの拡張方法までJavaScriptだけに閉じません。
 Scratch利用者が新しいアクションを定義し、台本から呼び出せる仕組みを提供します。
 
+ただしAction Registryは、台本製作者が紙芝居を動かすための必須手順ではありません。全core actionは
+台本だけで実行でき、Scratch側にcustom actionが0件でも完全な作品を作れることを標準とします。
+Action Registryは、Scratchで作品固有の工夫を加えたいカスタマイザーが明示的に選ぶescape hatchです。
+
 台本例:
 
 ```yaml
@@ -1126,24 +1219,24 @@ Scratch側の概念例:
   現在のactionを完了する
 ```
 
-### 9.2 登録方法 `[提案]`
+### 9.2 登録方法 `[決定済み／詳細提案]`
 
-カスタムaction用hat blockをproject内から検出し、台本のパース前にRegistry Snapshotを作る
-方式を提案します。
+カスタムaction用hat blockをproject内から検出し、台本のパース前にRegistry Snapshotを作ります。
 
 ```text
 when kamishibai action [wave]
 ```
 
 hatの存在自体を登録とみなすため、別の初期化scriptで登録blockを実行する必要がありません。
-明示的な`register action` blockをgreen flag時に実行する方式との比較は必要です。
+green flag時に明示的な`register action` blockを実行する方式は、作者の初期化作業、実行順依存、
+登録漏れを増やすため標準方式に採用しません。parameter schemaの宣言方法は詳細提案として残します。
 
 ### 9.3 dispatchとthread context `[提案]`
 
 1. runtimeが`wave` handlerに対応するhatを`startHats`で開始する
 2. 開始した各Scratch threadへActionContext referenceを関連付ける
 3. handler内の`current action` reporterは`util.thread`から対応contextを解決する
-4. handlerはActionViewをJSONPathまたは専用reporterで読む
+4. handlerは専用reporterを優先してtargetと引数を読み、上級用途だけActionViewをJSONPathで読む
 5. `complete`、`fail`、`goto`のいずれかで制御をruntimeへ返す
 6. thread終了とaction scope解放を確認する
 
@@ -1179,6 +1272,25 @@ parameter schemaをScratch上でどの程度宣言できるようにするかは
 小学生向けの分かりやすさと、再利用可能なScratchモジュール間の衝突回避を比較する必要が
 あります。
 
+### 9.6 custom actionの作者工数budget `[決定済み]`
+
+custom action一件に必要な定型blockは、演出本体を除いて8個以下にします。単純なhandlerでは次の
+2〜4個を標準とします。
+
+```text
+when kamishibai action [wave]
+  [必要な場合だけ] current action argument [speed]
+  Scratchで作品固有の演出を行う
+  complete current action
+```
+
+別の登録script、初期化用broadcast、action index、Temporary Variables、完了待ちloop、明示的なscope
+解放は要求しません。`complete`を省略してthread正常終了を暗黙完了とみなすかは未決ですが、どちらを
+採用しても定型block数を増やさないことを判断基準にします。
+
+同じcustom actionが複数作品で繰り返し利用され、DSL記述だけでは作品を作れない状況になった場合は、
+次のminor versionでcore actionまたは再利用可能capabilityへ昇格する候補として記録します。
+
 ## 10. 実行制御
 
 ### 10.1 状態機械 `[提案]`
@@ -1201,7 +1313,7 @@ parsing / validating / loadingAssets / runningScene / waitingAction
 `error`へ入った後は通常のscene iteratorを進めません。再試行では以前のstory、scene、action
 scopeをすべて破棄し、新しいrealmでパースからやり直します。
 
-### 10.2 core action handler `[提案]`
+### 10.2 core action handler `[決定済み／詳細提案]`
 
 core actionも巨大なswitch文へ固定せず、Action Registryと同様のschema registryへ登録します。
 ただしcore handlerはJavaScript側で実行し、Scratch custom handlerと区別します。
@@ -1212,11 +1324,63 @@ command name -> argument schema -> validator -> executor
 
 これにより、パーサー、検証器、実行器が同じcommand定義を参照できます。
 
+標準core actionをScratch procedure、broadcast dispatcher、Temporary Variablesで実装する経路は4.0へ
+持ち込みません。Stage、Actor、入力、ポーズ認識にまたがる標準actionの状態と待機はcontrollerとadapterが
+所有します。Scratch custom handlerだけを`waitingAction`として待機し、core actionはJavaScript handlerの
+完了結果で状態機械を進めます。
+
 ### 10.3 例外の境界 `[提案]`
 
 非サンドボックス拡張のblock関数から未処理例外を外へ投げません。内部例外はDiagnosticへ
 変換し、controllerへ失敗結果を返します。プログラミングエラーまで利用者向けエラーとして
 隠さず、console用causeと画面用messageを分離します。
+
+### 10.4 固定テンプレートのblock facade `[提案]`
+
+標準テンプレートと任意custom actionが利用するKamishibai固有block typeは、概ね次の11種以内に制限します。
+
+```text
+start kamishibai from configured source
+stop kamishibai
+retry kamishibai
+when kamishibai finished
+when kamishibai failed
+when kamishibai action [name]
+current action target
+current action argument [name]
+complete current action
+fail current action [message]
+go to scene [name] from current action
+```
+
+最初の五つはテンプレート保守者が固定app shellで使用し、通常の台本製作者が配置しません。後半は
+作品カスタマイザーだけが必要に応じて使用します。parse、validate、StoryDocument作成、iterator操作、
+asset準備を個別command blockとして接続させないため、標準作者フローでは開始block一回から成功時の
+実行または失敗時の診断までをruntimeがtransactionとして進めます。
+
+固定テンプレート内のDSL接続blockは30個以下とし、台本sourceだけを差し替えたprojectで増減しないことを
+受け入れ基準にします。app shell全体を含むproject block数は500以下、目標350以下とします。
+
+#### 10.4.1 paletteと配布面の分離
+
+標準作者用と開発者用の全blockを一つのpaletteへ並べません。ただしTurboWarp内で利用者roleを切り替える
+二つのpalette profileを設けるのでもなく、次の配布面に分けます。
+
+| 配布面                        | 標準テンプレートでの状態 | paletteに表示するもの                                        |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------ |
+| Kamishibai標準Composite       | 読み込み済み             | 任意custom action用のhat、target、argument、完了／失敗／遷移 |
+| template内部control           | 保存済み                 | `hideFromPalette`にしたstart／stop／retry／終了hat           |
+| Structured Data Standalone    | 読み込まない             | Store、scope、lease、Iterator、JSONPath                      |
+| Kamishibai developer／debug版 | 読み込まない             | 診断、realm、adapter、lifecycle検査block                     |
+
+標準Compositeのcustom action blockは見えていても必須ではなく、台本だけを書く利用者は触れません。template
+内部controlは保存済みprojectで実行できますが、新規配置を促さないよう`hideFromPalette: true`とします。
+テンプレート保守者はbuilderの生成fixtureで保存済みblockを保守し、標準配布の`getInfo()`では同じopcodeを
+非表示にします。
+
+開発者向け操作は可能な限りJavaScript APIとtest harnessで行い、debug block自体を必須にはしません。
+debug版を用意する場合は標準版とAPI manifest／extension ID／配布物を区別し、debug projectを標準作品として
+公開しないようbuild時に検出します。
 
 ## 11. 独立capability projectとKamishibai Bundle
 
@@ -1511,15 +1675,18 @@ capability coreでは次を禁止します。
   Standalone extension ID: kubohiroyaruntimeexpression
 
 @kubohiroya/turbowarp-structured-data
-  Standalone extension ID: kubohiroyastructdata1
+  Pure library: Kamishibai Runtimeがsource-levelで利用
+  Standalone extension ID: kubohiroyastructdata1（標準Kamishibaiには登録しない）
 
-上記memberを集約した生成SB3
+first-party Kamishibai Runtimeと必要なStandalone memberを集約した生成SB3
   extension ID: kubohiroyakamishibai4
   register: sb3-toolchainのruntime wrapperが1回だけ実行
 ```
 
-Kamishibaiは固定済みの`kubohiroyastructdata1.js`や`asset-manager.js`を個別ファイルとして展開ソースに
-保持します。生成SB3ではこれらを別URLからdownloadせず、toolchainが一つのdata URLへ埋め込みます。
+KamishibaiはStructured Dataのpure libraryをfirst-party runtimeへsource-levelで組み込みます。Standalone
+browser成果物`kubohiroyastructdata1.js`は標準Kamishibaiのbundle memberにせず、汎用projectが明示的に
+読み込む別配布面にします。Asset Manager等の実際のbundle memberは個別ファイルとして展開ソースに保持し、
+生成SB3では別URLからdownloadせず、toolchainが一つのdata URLへ埋め込みます。
 
 Composite Bundle内でmemberのStandalone extension IDをTurboWarpへ登録しませんが、個別ID、source
 provider、version／commit、artifact、integrity、任意のAPI manifestを展開ソースへ保持します。
@@ -1593,6 +1760,10 @@ turbowarp/composition-root
 
 紙芝居固有の意味をこのrepositoryへ置く方針は決定済みです。上の具体的なmodule分割は提案であり、
 実装Issueで小さな単位へ分けます。
+
+`turbowarp/block-facade`はruntime controllerをScratchから再構築するAPIではなく、固定テンプレートと
+任意custom actionに必要な最小境界だけを公開します。parser、Store、iterator、標準command handlerを
+block contributionとして公開することをmodule分割の目標にしません。
 
 外部capabilityは、公開形態に応じてGitHub providerまたはnpm providerで固定します。
 
@@ -1758,11 +1929,12 @@ converterは変換結果だけでなく、変換元行番号を含むwarningを�
 2. 汎用Object Store、Iterator、JSONPathを単体テストする
 3. parserを副作用なしで実装する
 4. feature flag既定OFFで4.0 runtimeを追加する
-5. 最小台本とエラー台本で自動検証する
-6. Scratch Action Registryを追加する
-7. 4.0 memberを個別sourceとして追加し、API manifestと静的bundleを検証する
-8. 3.1／3.2 converterを追加する
-9. 4.0用SB3を3.2成果物と別名で配布する
+5. 標準テンプレートを固定し、台本差し替え前後のblock graph不変fixtureを追加する
+6. 最小台本、全core action台本、エラー台本を台本編集だけで自動検証する
+7. 任意機能としてScratch Action Registryを追加する
+8. 4.0 memberを個別sourceとして追加し、API manifestと静的bundleを検証する
+9. 3.1／3.2 converterを追加する
+10. 4.0用SB3を3.2成果物と別名で配布する
 
 各段階は独立したIssueと小さなPRに分けます。feature flagをOFFにすれば3.1／3.2成果物へ影響しない
 状態を、4.0正式化まで維持します。
@@ -1825,6 +1997,7 @@ runtimeで追加コードをdownloadしません。
 
 - 最小台本
 - 3.2相当の全core actionを含む台本
+- 分岐、key／touch入力、ポーズ認識を含み、追加Scratch blockを必要としない台本
 - 旧Text Assetを含む3.1／3.2入力のconverter warningとSVG Text変換
 - compact表記とnamed表記が同じStoryDocumentになること
 - 行末、空行、コメント、引用符、Unicode
@@ -1849,6 +2022,15 @@ runtimeで追加コードをdownloadしません。
 
 ### 14.3 TurboWarp統合
 
+- 標準テンプレートへ台本A／Bを適用しても`targets[].blocks`が同一である
+- 最小台本と全core action台本で、台本製作者が追加する必須blockが0である
+- 固定テンプレートのDSL接続blockが30以下である
+- 標準Compositeのvisible paletteが任意custom action用の6 block type以下である
+- template内部controlが保存済みprojectで実行でき、paletteでは非表示である
+- Structured Data Standaloneとdeveloper／debug blockが標準テンプレートへ読み込まれない
+- project全体が500 block以下、目標fixtureでは350 block以下である
+- Stageが150 block以下、Actorが20 block以下である
+- DSL実行用`lmsTempVars2_*`、Scratch list、標準core action procedureが0である
 - SB3新規読込で拡張許可が一回で済む
 - 個別sourceのID／opcode／storageを保持し、生成SB3だけがComposite namespaceを使う
 - member間`startHats()`／`getOpcodeFunction()`がComposite opcodeへ変換される
@@ -1857,6 +2039,7 @@ runtimeで追加コードをdownloadしません。
 - parse error時にgreen flag処理が実行へ進まない
 - SVGにline、column、excerpt、messageが表示される
 - custom action hatへ正しいActionContextが渡る
+- custom action一件の定型overheadが演出本体を除いて8 block以下である
 - handler失敗・未完了・thread停止を検出できる
 - scene遷移時にscene/action scopeが解放される
 - 台本再読込時に以前のrealm referenceが無効になる
@@ -1865,6 +2048,18 @@ runtimeで追加コードをdownloadしません。
 block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受け入れ基準へ混在させません。
 
 ## 15. レビューが必要な未決事項
+
+### 作者体験
+
+- [x] 通常の台本製作者は標準テンプレートのblock graphを変更せず、台本だけを記述する
+- [x] 全core actionは追加Scratch blockなしで実行できる
+- [x] parser、状態管理、scene／action controller、標準action handlerを機能拡張側へ置く
+- [x] Object Store、Iterator、JSONPath blockを標準作者経路へ露出させない
+- [x] 標準Composite、Standalone汎用palette、developer／debug配布を分離する
+- [x] Scratch Action Registryを任意の作品固有拡張とし、標準作品には要求しない
+- [x] custom actionの定型overheadを一件8 block以下とする
+- [ ] 台本source channelをproject variable、asset、builder source、専用editorのどれにするか
+- [ ] 標準テンプレートのapp shellをどこまでScratch blockとして残すか
 
 ### 表層構文
 
@@ -1884,6 +2079,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [x] Source MapはStoryPathから元の台本位置を引ける形で保持する
 - [x] Generic Core、TurboWarp Adapter、Kamishibai Adapterを分離する
 - [x] `MapBackend`をGeneric Coreの標準かつ唯一の正本とする
+- [x] 標準作者経路ではStore、scope、leaseの寿命をruntimeが自動管理する
 - [ ] 7.3の管理対象参照、参照カウント、解放closureの意味を承認する
 - [ ] 所有closureをまたぐ強い参照cycleの扱いを決める
 - [ ] reporterが返す例外scalarの符号化と操作blockを決める
@@ -1896,7 +2092,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 
 ### Scratch拡張
 
-- [ ] custom action登録をhat検出にするか、明示的register blockにするか
+- [x] custom action登録はhat検出とし、明示的register blockを要求しない
 - [ ] custom actionのparameter schemaをScratchで宣言可能にするか
 - [ ] custom action名へnamespaceを要求するか
 - [ ] handlerが`complete`を呼ばず終了した場合の扱い
@@ -1931,17 +2127,19 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 
 各提案を次の観点で評価します。
 
-1. 小学生が最小例を見て、上から順に意味を推測できるか
-2. 3.2より記述量が過度に増えていないか
-3. 同じ意味を表す表記を増やしすぎていないか
-4. パーサーが実行前に参照と式を検証できるか
-5. エラーから台本の修正位置へ直接戻れるか
-6. Scratchで独自アクションを作る教育的価値が残るか
-7. 汎用モジュールと紙芝居固有コードの境界が明確か
-8. Object Storeの参照と寿命を利用者が管理できるか
-9. 非サンドボックス権限を不必要に拡大していないか
-10. 3.1／3.2作品を壊さず段階導入・ロールバックできるか
-11. 汎用capabilityがKamishibaiなしで独立して開発・test・release・再利用できるか
+1. 通常の台本製作者がTurboWarpのコード領域を開かず、台本だけで作品を完成できるか
+2. 台本を差し替えても標準テンプレートのblock graphが変化しないか
+3. 小学生が最小例を見て、上から順に意味を推測できるか
+4. 3.2より記述量が過度に増えていないか
+5. 同じ意味を表す表記を増やしすぎていないか
+6. パーサーが実行前に参照と式を検証できるか
+7. エラーから台本の修正位置へ直接戻れるか
+8. 作品固有の工夫を行いたい利用者だけが、少ないblockでcustom actionを追加できるか
+9. 標準作者がObject Storeの参照、scope、寿命を手動管理せずに済むか
+10. 汎用モジュールと紙芝居固有コードの境界が明確か
+11. 非サンドボックス権限を不必要に拡大していないか
+12. 3.1／3.2作品を壊さず段階導入・ロールバックできるか
+13. 汎用capabilityがKamishibaiなしで独立して開発・test・release・再利用できるか
 
 ## 17. 次の成果物
 
@@ -1950,7 +2148,10 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - DSL 4.0の機械可読schema
 - 正常fixtureと期待StoryDocument
 - error code catalogと異常fixture
-- Scratch block API一覧
+- 台本だけを編集する標準作者workflowとsource channel契約
+- 台本差し替え前後のblock graph不変fixture
+- 固定テンプレート、Stage、Actor、custom actionのblock budget検証
+- 固定テンプレート用と任意custom action用を分けたScratch block API一覧
 - 各独立capabilityのrepository、source provider、Standalone ID、API manifest採用表
 - 現行静的bundleで不足が確認された場合だけ、`./composition`の追加contract
 - Kamishibai adapterのport一覧と依存関係図
