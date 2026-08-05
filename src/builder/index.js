@@ -23,6 +23,7 @@ export {
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
+export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {
   embedDsl4RuntimeComponentInSb3,
   embedDsl4SourceInSb3,
