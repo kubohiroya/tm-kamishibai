@@ -108,6 +108,10 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
       factoryCalls += 1;
       assert.fail('asset lifecycle factory must not be called');
     },
+    createRuntimeEnvironment() {
+      factoryCalls += 1;
+      assert.fail('runtime environment factory must not be called');
+    },
   });
   assert.equal(factoryCalls, 0);
   for (const result of [implicit, explicit]) {
@@ -277,6 +281,106 @@ test('creates isolated lifecycle instances for separate startups', async () => {
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(releases.sort(), [1, 2]);
+});
+
+test('creates an atomic runtime environment only after component validation', async () => {
+  const component = await packagedProject('production');
+  const calls = [];
+  let receivedComponent;
+  let receivedContext;
+  const result = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: true},
+    project: component.project,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxAssetBytes,
+    subtleCrypto,
+    createRuntimeEnvironment(runtimeComponent, startupContext) {
+      receivedComponent = runtimeComponent;
+      receivedContext = startupContext;
+      calls.push('create');
+      return {
+        port: {wait() {}},
+        assetLifecycle: {prepare() {}, setLoading() {}, release() {}},
+        dispose(reason) {
+          calls.push(`dispose:${reason}`);
+        },
+      };
+    },
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.strictEqual(receivedComponent, result.runtimeComponent);
+  assert.deepEqual(receivedContext, {
+    channel: 'unbundled',
+    featureFlags: {dsl4Runtime: true},
+  });
+  assert.deepEqual(calls, ['create']);
+  assert.equal(result.session.getState().runtime.status, 'idle');
+  result.session.dispose();
+});
+
+test('cleans an atomic runtime environment when navigation session creation is rejected', async () => {
+  const component = await packagedProject('development', true);
+  const calls = [];
+  const result = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: true},
+    project: component.project,
+    sourceFrontend: frontend,
+    maxSourceBytes,
+    maxAssetFiles,
+    maxAssetBytes,
+    historyNavigationAvailable: true,
+    subtleCrypto,
+    createRuntimeEnvironment() {
+      calls.push('create');
+      return {
+        port: {wait() {}},
+        dispose(reason) {
+          calls.push(`dispose:${reason}`);
+        },
+      };
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.diagnostics[0].code, 'K4-HISTORY-LIMIT-CONFIG-001');
+  assert.deepEqual(calls, ['create', 'dispose:navigation-session-rejected']);
+});
+
+test('rejects conflicting or malformed atomic runtime environment options', async () => {
+  const component = await packagedProject('production');
+  await assert.rejects(
+    createDsl4RuntimeStartup({
+      ...enabledOptions(component.project),
+      createRuntimeEnvironment() {},
+    }),
+    /cannot be combined/u,
+  );
+  await assert.rejects(
+    createDsl4RuntimeStartup({
+      ...enabledOptions(component.project),
+      port: undefined,
+      createRuntimeEnvironment: /** @type {any} */ ({}),
+    }),
+    /must be a function/u,
+  );
+  const calls = [];
+  await assert.rejects(
+    createDsl4RuntimeStartup({
+      ...enabledOptions(component.project),
+      port: undefined,
+      createRuntimeEnvironment() {
+        return {
+          port: {wait: 1},
+          dispose(reason) {
+            calls.push(reason);
+          },
+        };
+      },
+    }),
+    /port values must be functions/u,
+  );
+  assert.deepEqual(calls, ['invalid-runtime-environment']);
 });
 
 test('creates but does not auto-start or attach a production navigation session', async () => {

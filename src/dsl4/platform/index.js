@@ -7,3 +7,4 @@ export {createDsl4PoseActionPort} from './pose-action-port.js';
 export {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 export {createDsl4TMPoseModelAdapter, createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
+export {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
