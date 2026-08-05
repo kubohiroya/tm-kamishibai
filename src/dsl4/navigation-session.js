@@ -1,0 +1,270 @@
+import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
+import {createDsl4HistoryReducer} from './history-reducer.js';
+import {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
+import {createDsl4RuntimeController} from './runtime-controller.js';
+import {deepFreeze} from './story-document.js';
+
+/**
+ * @typedef {Readonly<{ok: true, profile: string, keymap: Readonly<Record<string, string>>, canonicalKeymap: string, historyEnabled: boolean, diagnostics: ReadonlyArray<never>}>} ResolvedControlProfile
+ * @typedef {ReturnType<typeof createDsl4HistoryReducer>} HistoryReducer
+ * @typedef {ReturnType<HistoryReducer['initialState']>} HistoryState
+ * @typedef {ReturnType<typeof createDsl4RuntimeController>} RuntimeController
+ * @typedef {ReturnType<typeof diagnostic>} SessionDiagnostic
+ */
+
+/**
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {string} code
+ * @param {string} message
+ * @param {Record<string, unknown>} [details]
+ */
+function diagnostic(storyDocument, code, message, details = {}) {
+  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  return deepFreeze({
+    version: 1,
+    code,
+    severity: 'error',
+    message,
+    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
+    range:
+      sourceMap['/'] ??
+      deepFreeze({
+        start: {line: 1, column: 1, offset: 0},
+        end: {line: 1, column: 1, offset: 0},
+      }),
+    related: [],
+    details,
+  });
+}
+
+/**
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {string} code
+ * @param {string} message
+ * @param {Record<string, unknown>} [details]
+ */
+function creationFailure(storyDocument, code, message, details = {}) {
+  return deepFreeze({ok: false, diagnostics: [diagnostic(storyDocument, code, message, details)]});
+}
+
+/**
+ * @param {unknown} result
+ * @returns {{code: string, message: string, details: Record<string, unknown>}}
+ */
+function historyFailure(result) {
+  return /** @type {{diagnostic: {code: string, message: string, details: Record<string, unknown>}}} */ (
+    result
+  ).diagnostic;
+}
+
+/**
+ * @param {object} options
+ * @param {Readonly<Record<string, unknown>>} options.storyDocument
+ * @param {string} options.controlProfile
+ * @param {boolean} [options.historyNavigationAvailable]
+ * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
+ * @param {Record<string, Function>} options.port
+ * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
+ * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
+ * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
+ */
+export function createDsl4NavigationSession({
+  storyDocument,
+  controlProfile,
+  historyNavigationAvailable = false,
+  historyLimits,
+  port,
+  evaluateCondition,
+  onEvent,
+  onInputError,
+}) {
+  const profileResult = resolveDsl4ControlProfile(storyDocument, controlProfile, {
+    historyNavigationAvailable,
+  });
+  if (!profileResult.ok) return profileResult;
+  const profile = /** @type {ResolvedControlProfile} */ (/** @type {unknown} */ (profileResult));
+
+  /** @type {HistoryReducer | null} */
+  let historyReducer = null;
+  /** @type {HistoryState | null} */
+  let historyState = null;
+  if (profile.historyEnabled) {
+    if (
+      !historyLimits ||
+      !Number.isInteger(historyLimits.maxActionEntries) ||
+      historyLimits.maxActionEntries < 1 ||
+      !Number.isInteger(historyLimits.maxSceneVisits) ||
+      historyLimits.maxSceneVisits < 1
+    ) {
+      return creationFailure(
+        storyDocument,
+        'K4-HISTORY-LIMIT-CONFIG-001',
+        'History-enabled profiles require finite positive history limits',
+      );
+    }
+    historyReducer = createDsl4HistoryReducer(historyLimits);
+    historyState = historyReducer.initialState();
+  }
+
+  let disposed = false;
+  /** @type {SessionDiagnostic | null} */
+  let sessionDiagnostic = null;
+  /** @type {RuntimeController} */
+  let controller;
+
+  function resetHistory() {
+    if (historyReducer) historyState = historyReducer.initialState();
+  }
+
+  /**
+   * @param {Readonly<Record<string, unknown>>} event
+   */
+  function handleRuntimeEvent(event) {
+    if (
+      historyReducer &&
+      historyState &&
+      (event.type === 'scene.enter' || event.type === 'action.commit')
+    ) {
+      const result = historyReducer.reduce(historyState, event);
+      if (result.ok) {
+        historyState = result.state;
+      } else {
+        const failure = historyFailure(result);
+        sessionDiagnostic = diagnostic(
+          storyDocument,
+          failure.code,
+          failure.message,
+          failure.details,
+        );
+        controller?.stop('history-failure');
+      }
+    }
+    onEvent?.(event);
+  }
+
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    port,
+    evaluateCondition,
+    onEvent: handleRuntimeEvent,
+  });
+
+  function snapshot() {
+    return deepFreeze({
+      controlProfile: profile.profile,
+      keymap: profile.keymap,
+      canonicalKeymap: profile.canonicalKeymap,
+      historyEnabled: profile.historyEnabled,
+      runtime: controller.getState(),
+      history: historyState,
+      diagnostic: sessionDiagnostic,
+      disposed,
+    });
+  }
+
+  /**
+   * @param {string} code
+   * @param {string} message
+   */
+  function commandFailure(code, message) {
+    return deepFreeze({
+      ok: false,
+      changed: false,
+      state: snapshot(),
+      diagnostics: [diagnostic(storyDocument, code, message)],
+    });
+  }
+
+  /**
+   * @param {string} command
+   */
+  function dispatchCommand(command) {
+    if (disposed) return commandFailure('K4-NAVIGATION-DISPOSED', 'Navigation session is disposed');
+    if (!Object.values(profile.keymap).includes(command)) {
+      return commandFailure(
+        'K4-KEYMAP-COMMAND-INACTIVE',
+        `Navigation command ${command} is not active in profile ${profile.profile}`,
+      );
+    }
+    if (sessionDiagnostic) {
+      return commandFailure(
+        String(sessionDiagnostic.code),
+        'Navigation session stopped after a history failure',
+      );
+    }
+
+    if (command === 'navigation.nextAction') {
+      if (historyReducer && historyState?.mode === 'history') {
+        const result = historyReducer.reduce(historyState, {type: 'resume'});
+        if (!result.ok) {
+          const failure = historyFailure(result);
+          return commandFailure(failure.code, failure.message);
+        }
+        historyState = result.state;
+        void controller.resume(command);
+      } else {
+        void controller.advance(command);
+      }
+      return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
+    }
+
+    if (!historyReducer || !historyState) {
+      return commandFailure(
+        'K4-HISTORY-DISABLED',
+        'History navigation is disabled for the selected profile',
+      );
+    }
+    const result = historyReducer.reduce(historyState, {type: command});
+    if (!result.ok) {
+      const failure = historyFailure(result);
+      return commandFailure(failure.code, failure.message);
+    }
+    historyState = result.state;
+    if (!result.changed || !result.destination) {
+      return deepFreeze({ok: true, changed: false, state: snapshot(), diagnostics: []});
+    }
+    controller.reposition(result.destination.sceneId, {
+      actionIndex: result.destination.actionIndex,
+      reason: command,
+    });
+    return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
+  }
+
+  const inputAdapter = createDsl4KeymapInputAdapter({
+    keymap: profile.keymap,
+    dispatchCommand,
+    onError: onInputError,
+  });
+
+  const session = Object.freeze({
+    /** @param {{sceneId?: string}} [options] */
+    start(options = {}) {
+      if (disposed) return Promise.resolve(snapshot());
+      sessionDiagnostic = null;
+      resetHistory();
+      return controller.start(options);
+    },
+    stop(reason = 'stop') {
+      const state = controller.stop(reason);
+      resetHistory();
+      return state;
+    },
+    dispatchCommand,
+    attach: inputAdapter.attach,
+    detach: inputAdapter.detach,
+    handleKeyDown: inputAdapter.handleKeyDown,
+    whenInputIdle: inputAdapter.whenIdle,
+    getState: snapshot,
+    getRunPromise: controller.getRunPromise,
+    dispose() {
+      if (disposed) return;
+      inputAdapter.dispose();
+      controller.stop('dispose');
+      resetHistory();
+      disposed = true;
+    },
+  });
+
+  return deepFreeze({ok: true, session, diagnostics: []});
+}

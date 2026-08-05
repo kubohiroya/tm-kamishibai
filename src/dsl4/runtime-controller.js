@@ -549,7 +549,7 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
    * @returns {Readonly<Record<string, unknown>>}
    */
   function reposition(sceneId, {actionIndex = 0, reason = 'navigation.reposition'} = {}) {
-    if (status !== 'running' && status !== 'paused') return snapshot();
+    if (status !== 'running' && status !== 'paused' && status !== 'finished') return snapshot();
     const target = resolvePosition(sceneId, actionIndex);
     if (!target) {
       fail(

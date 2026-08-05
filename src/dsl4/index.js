@@ -2,4 +2,5 @@ export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-fronten
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
+export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4RuntimeController} from './runtime-controller.js';
