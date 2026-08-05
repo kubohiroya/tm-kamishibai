@@ -66,6 +66,7 @@ function historyFailure(result) {
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {Record<string, Function>} options.port
  * @param {{prepare: Function, setLoading: Function, release: Function}} [options.assetLifecycle]
+ * @param {() => {prepare: Function, setLoading: Function, release: Function}} [options.createAssetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -77,10 +78,17 @@ export function createDsl4NavigationSession({
   historyLimits,
   port,
   assetLifecycle,
+  createAssetLifecycle,
   evaluateCondition,
   onEvent,
   onInputError,
 }) {
+  if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
+    throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
+  }
+  if (createAssetLifecycle !== undefined && typeof createAssetLifecycle !== 'function') {
+    throw new TypeError('createAssetLifecycle must be a function');
+  }
   const profileResult = resolveDsl4ControlProfile(storyDocument, controlProfile, {
     historyNavigationAvailable,
   });
@@ -107,6 +115,17 @@ export function createDsl4NavigationSession({
     }
     historyReducer = createDsl4HistoryReducer(historyLimits);
     historyState = historyReducer.initialState();
+  }
+
+  const resolvedAssetLifecycle = createAssetLifecycle ? createAssetLifecycle() : assetLifecycle;
+  if (
+    (createAssetLifecycle || resolvedAssetLifecycle !== undefined) &&
+    (!resolvedAssetLifecycle ||
+      typeof resolvedAssetLifecycle.prepare !== 'function' ||
+      typeof resolvedAssetLifecycle.setLoading !== 'function' ||
+      typeof resolvedAssetLifecycle.release !== 'function')
+  ) {
+    throw new TypeError('asset lifecycle must provide prepare, setLoading, and release methods');
   }
 
   let disposed = false;
@@ -148,7 +167,7 @@ export function createDsl4NavigationSession({
   controller = createDsl4RuntimeController({
     storyDocument,
     port,
-    assetLifecycle,
+    assetLifecycle: resolvedAssetLifecycle,
     evaluateCondition,
     onEvent: handleRuntimeEvent,
   });
