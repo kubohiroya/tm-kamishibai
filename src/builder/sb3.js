@@ -61,6 +61,24 @@ export function readSb3(archiveBytes) {
   return {archive, project};
 }
 
+/**
+ * @param {Record<string, Uint8Array>} archive
+ * @param {Record<string, unknown>} project
+ */
+export function serializeSb3(archive, project) {
+  const outputArchive = {...archive, 'project.json': strToU8(`${JSON.stringify(project)}\n`)};
+  const orderedEntries = Object.fromEntries(
+    Object.entries(outputArchive)
+      .filter(([entryName]) => !entryName.endsWith('/'))
+      .sort(([left], [right]) => {
+        if (left === 'project.json') return -1;
+        if (right === 'project.json') return 1;
+        return left.localeCompare(right, 'en');
+      }),
+  );
+  return Buffer.from(zipSync(orderedEntries, {level: 6, mtime: fixedZipTimestamp}));
+}
+
 /** @param {Record<string, unknown>} project @param {string} targetName */
 function findTarget(project, targetName) {
   const targets = /** @type {Record<string, unknown>[]} */ (project.targets);
@@ -150,16 +168,6 @@ export function buildSb3Archive(baseArchiveBytes, resolvedAssets, options) {
       throw toAssetError(error, {assetName: entry.name, inputUri: entry.uri, stage: 'build-sb3'});
     }
   }
-  archive['project.json'] = strToU8(`${JSON.stringify(project)}\n`);
-  const orderedEntries = Object.fromEntries(
-    Object.entries(archive)
-      .filter(([entryName]) => !entryName.endsWith('/'))
-      .sort(([left], [right]) => {
-        if (left === 'project.json') return -1;
-        if (right === 'project.json') return 1;
-        return left.localeCompare(right, 'en');
-      }),
-  );
-  const bytes = Buffer.from(zipSync(orderedEntries, {level: 6, mtime: fixedZipTimestamp}));
+  const bytes = serializeSb3(archive, project);
   return {bytes, mappings, project};
 }
