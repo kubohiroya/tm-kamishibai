@@ -19,6 +19,7 @@ import {buildSb3Archive} from './sb3.js';
 import {validateBundle} from './validate.js';
 
 export {Sb3BuilderError} from './errors.js';
+export {embedDsl4SourceInSb3, installDsl4EmbeddedSource} from './dsl4-source.js';
 export {validateAssetManifest} from './manifest.js';
 export {validateBundle} from './validate.js';
 
