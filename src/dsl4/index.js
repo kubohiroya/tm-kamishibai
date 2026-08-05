@@ -5,6 +5,11 @@ export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4RuntimeController} from './runtime-controller.js';
 export {
+  createDsl4RuntimeArtifactDescriptor,
+  validateDsl4RuntimeArtifactDescriptor,
+} from './runtime-artifact-descriptor.js';
+export {
+  computeDsl4Sha256Integrity,
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
   dsl4SourceStoragePaths,
