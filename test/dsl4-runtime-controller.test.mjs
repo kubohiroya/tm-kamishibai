@@ -436,6 +436,213 @@ scenes:
   );
 });
 
+test('advance cancels the current action and executes the next action once', async () => {
+  const pending = deferred();
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach: backdrop
+variables:
+  score: 1
+scenes:
+  opening:
+    - wait: 1
+    - stage: Beach
+`),
+    port: {
+      wait: (_payload, context) => {
+        context.setVariable('score', 2);
+        return pending.promise;
+      },
+      stage: async () => stageCalls++,
+    },
+  });
+  const staleRun = controller.start();
+  const advancedState = await controller.advance();
+  assert.equal(advancedState.status, 'finished');
+  assert.equal(advancedState.variables.score, 2);
+  assert.equal(stageCalls, 1);
+  pending.resolve();
+  await staleRun;
+  assert.equal(stageCalls, 1);
+  const advanceEvent = controller.getTrace().find(({type}) => type === 'navigation.advance');
+  assert.deepEqual(
+    [advanceEvent.details.fromStoryPath, advanceEvent.details.toStoryPath],
+    ['/scenes/opening/actions/0', '/scenes/opening/actions/1'],
+  );
+});
+
+test('advance crosses a scene boundary and finishes at the final action boundary', async () => {
+  const firstWait = deferred();
+  const finalWait = deferred();
+  let waits = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+scenes:
+  first:
+    - wait: 1
+  final:
+    - wait: 1
+`),
+    port: {
+      wait: () => {
+        waits += 1;
+        return waits === 1 ? firstWait.promise : finalWait.promise;
+      },
+    },
+  });
+  const firstRun = controller.start();
+  const finalRun = controller.advance('test-next-scene');
+  assert.equal(controller.getState().sceneId, 'final');
+  const finished = await controller.advance('test-finish');
+  assert.equal(finished.status, 'finished');
+  assert.equal(waits, 2);
+  firstWait.resolve();
+  finalWait.resolve();
+  await Promise.all([firstRun, finalRun]);
+  assert.equal(controller.getState().status, 'finished');
+});
+
+test('reposition pauses without presentation effects and resume starts at the selected action', async () => {
+  const pending = deferred();
+  const effects = [];
+  let presentationState = 'initial';
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach: backdrop
+  Effect: sound
+variables:
+  score: 1
+scenes:
+  opening:
+    - wait: 1
+  destination:
+    - stage: Beach
+    - sound: Effect
+`),
+    port: {
+      wait: (_payload, context) => {
+        context.setVariable('score', 2);
+        presentationState = 'changed-by-running-action';
+        return pending.promise;
+      },
+      stage: async () => effects.push('stage'),
+      sound: async () => effects.push('sound'),
+    },
+  });
+  const staleRun = controller.start();
+  const soundPosition = controller.reposition('destination', {
+    actionIndex: 1,
+    reason: 'history.previousAction',
+  });
+  assert.equal(soundPosition.status, 'paused');
+  assert.equal(soundPosition.actionIndex, 1);
+  assert.equal(soundPosition.actionPath, '/scenes/destination/actions/1');
+  assert.equal(soundPosition.variables.score, 2);
+  assert.deepEqual(effects, []);
+  assert.equal(presentationState, 'changed-by-running-action');
+
+  const stagePosition = controller.reposition('destination', {
+    actionIndex: 0,
+    reason: 'history.previousScene',
+  });
+  assert.equal(stagePosition.status, 'paused');
+  assert.equal(stagePosition.actionPath, '/scenes/destination/actions/0');
+  assert.deepEqual(effects, []);
+  assert.equal(presentationState, 'changed-by-running-action');
+
+  const resumed = await controller.resume('navigation.nextAction');
+  assert.equal(resumed.status, 'finished');
+  assert.equal(resumed.variables.score, 2);
+  assert.deepEqual(effects, ['stage', 'sound']);
+  pending.resolve();
+  await staleRun;
+  assert.deepEqual(effects, ['stage', 'sound']);
+
+  const moves = controller.getTrace().filter(({type}) => type === 'navigation.reposition');
+  assert.deepEqual(
+    moves.map(({details}) => [details.fromStoryPath, details.toStoryPath, details.reason]),
+    [
+      ['/scenes/opening/actions/0', '/scenes/destination/actions/1', 'history.previousAction'],
+      ['/scenes/destination/actions/1', '/scenes/destination/actions/0', 'history.previousScene'],
+    ],
+  );
+});
+
+test('reposition and resume support an empty scene', async () => {
+  const pending = deferred();
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach: backdrop
+scenes:
+  opening:
+    - wait: 1
+  empty: []
+  ending:
+    - stage: Beach
+`),
+    port: {
+      wait: () => pending.promise,
+      stage: async () => stageCalls++,
+    },
+  });
+  const staleRun = controller.start();
+  const paused = controller.reposition('empty', {actionIndex: 0});
+  assert.equal(paused.status, 'paused');
+  assert.equal(paused.sceneId, 'empty');
+  assert.equal(paused.actionIndex, 0);
+  assert.equal(paused.actionPath, null);
+  assert.equal(stageCalls, 0);
+  const resumed = await controller.resume();
+  assert.equal(resumed.status, 'finished');
+  assert.equal(stageCalls, 1);
+  pending.resolve();
+  await staleRun;
+  assert.equal(stageCalls, 1);
+});
+
+test('paused execution can stop and restart deterministically', async () => {
+  const pending = deferred();
+  let waits = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 1
+scenes:
+  opening:
+    - wait: 1
+  destination: []
+`),
+    port: {
+      wait: (_payload, context) => {
+        waits += 1;
+        context.setVariable('score', 2);
+        return pending.promise;
+      },
+    },
+  });
+  const staleRun = controller.start();
+  controller.reposition('destination');
+  const stopped = controller.stop('paused-stop');
+  assert.equal(stopped.status, 'stopped');
+  const restarted = await controller.start({sceneId: 'destination'});
+  assert.equal(restarted.status, 'finished');
+  assert.equal(restarted.variables.score, 1);
+  assert.equal(waits, 1);
+  pending.resolve();
+  await staleRun;
+  assert.equal(controller.getState().status, 'finished');
+});
+
 test('keeps variables outside StoryDocument and rejects stale or mistyped writes', async () => {
   const story = parseStory(`
 kamishibai: '4.0'

@@ -3,7 +3,7 @@ import {deepFreeze} from './story-document.js';
 const terminalStatuses = new Set(['failed', 'finished', 'stopped']);
 
 /**
- * @typedef {'idle' | 'running' | 'failed' | 'finished' | 'stopped'} RuntimeStatus
+ * @typedef {'idle' | 'running' | 'paused' | 'failed' | 'finished' | 'stopped'} RuntimeStatus
  *
  * @typedef {object} RuntimeEvent
  * @property {number} sequence
@@ -129,6 +129,44 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
       currentScene()?.actions ?? []
     );
     return actions[currentActionIndex];
+  }
+
+  /**
+   * @param {number} scenePosition
+   * @param {number} actionPosition
+   * @returns {string}
+   */
+  function storyPathAt(scenePosition, actionPosition) {
+    const scene = scenes[scenePosition];
+    if (!scene) return '/';
+    const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene.actions ?? []
+    );
+    const action = actions[actionPosition];
+    return typeof action?.id === 'string'
+      ? action.id
+      : `/scenes/${storyPathSegment(String(scene.id))}`;
+  }
+
+  /**
+   * @param {string} sceneId
+   * @param {number} actionIndex
+   * @returns {{sceneIndex: number} | null}
+   */
+  function resolvePosition(sceneId, actionIndex) {
+    const nextSceneIndex = sceneIndex.get(sceneId);
+    const nextScene = nextSceneIndex === undefined ? undefined : scenes[nextSceneIndex];
+    const nextActions = /** @type {ReadonlyArray<unknown>} */ (nextScene?.actions ?? []);
+    if (
+      nextSceneIndex === undefined ||
+      !Number.isInteger(actionIndex) ||
+      actionIndex < 0 ||
+      (nextActions.length > 0 && actionIndex >= nextActions.length) ||
+      (nextActions.length === 0 && actionIndex !== 0)
+    ) {
+      return null;
+    }
+    return {sceneIndex: nextSceneIndex};
   }
 
   /**
@@ -410,7 +448,7 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
    * @returns {Promise<Readonly<Record<string, unknown>>>}
    */
   function start({sceneId} = {}) {
-    if (status === 'running') stop('restart');
+    if (status === 'running' || status === 'paused') stop('restart');
     variables = /** @type {Record<string, string | number | boolean>} */ (
       cloneValue(initialVariables)
     );
@@ -442,14 +480,125 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
    * @returns {Readonly<Record<string, unknown>>}
    */
   function stop(reason = 'stop') {
-    if (status !== 'running') return snapshot();
+    if (status !== 'running' && status !== 'paused') return snapshot();
+    const action = currentAction();
+    const wasRunning = status === 'running';
+    if (wasRunning) actionAbortController?.abort(reason);
+    generation += 1;
+    if (wasRunning && action) emit('action.cancel', {reason});
+    status = 'stopped';
+    emit('runtime.stop', {reason});
+    return snapshot();
+  }
+
+  /**
+   * Cancel the current action and continue at the next normal execution boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advance(reason = 'navigation.nextAction') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    const scene = currentScene();
+    const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene?.actions ?? []
+    );
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
     const action = currentAction();
     actionAbortController?.abort(reason);
     generation += 1;
     if (action) emit('action.cancel', {reason});
-    status = 'stopped';
-    emit('runtime.stop', {reason});
+    actionAbortController = null;
+    runId += 1;
+    runPromise = null;
+
+    const nextActionIndex = currentActionIndex + 1;
+    if (nextActionIndex < actions.length) {
+      emit('navigation.advance', {
+        fromStoryPath,
+        toStoryPath: storyPathAt(currentSceneIndex, nextActionIndex),
+        reason,
+      });
+      runPromise = run(runId);
+      return runPromise;
+    }
+    if (currentSceneIndex + 1 < scenes.length) {
+      const nextSceneId = String(scenes[currentSceneIndex + 1].id);
+      emit('navigation.advance', {
+        fromStoryPath,
+        toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
+        reason,
+      });
+      transitionTo(nextSceneId, reason);
+      runPromise = run(runId);
+      return runPromise;
+    }
+
+    status = 'finished';
+    currentActionIndex = actions.length;
+    emit('navigation.advance', {fromStoryPath, toStoryPath: null, reason});
+    emit('runtime.finish');
+    return Promise.resolve(snapshot());
+  }
+
+  /**
+   * Move to an action start without executing it or restoring non-position state.
+   *
+   * @param {string} sceneId
+   * @param {{actionIndex?: number, reason?: string}} [options]
+   * @returns {Readonly<Record<string, unknown>>}
+   */
+  function reposition(sceneId, {actionIndex = 0, reason = 'navigation.reposition'} = {}) {
+    if (status !== 'running' && status !== 'paused') return snapshot();
+    const target = resolvePosition(sceneId, actionIndex);
+    if (!target) {
+      fail(
+        Object.assign(new Error(`Invalid navigation target: ${sceneId} action ${actionIndex}`), {
+          code: 'K4-RUNTIME-NAVIGATION-001',
+        }),
+      );
+      return snapshot();
+    }
+
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const wasRunning = status === 'running';
+    const action = currentAction();
+    if (wasRunning) actionAbortController?.abort(reason);
+    generation += 1;
+    if (wasRunning && action) emit('action.cancel', {reason});
+    actionAbortController = null;
+    runId += 1;
+    runPromise = null;
+    currentSceneIndex = target.sceneIndex;
+    currentActionIndex = actionIndex;
+    status = 'paused';
+    emit('navigation.reposition', {
+      fromStoryPath,
+      toStoryPath: storyPathAt(currentSceneIndex, currentActionIndex),
+      reason,
+    });
     return snapshot();
+  }
+
+  /**
+   * Resume normal execution from the action selected by reposition.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function resume(reason = 'navigation.resume') {
+    if (status !== 'paused') return Promise.resolve(snapshot());
+    const targetActionIndex = currentActionIndex;
+    generation += 1;
+    emit('runtime.resume', {
+      storyPath: storyPathAt(currentSceneIndex, targetActionIndex),
+      reason,
+    });
+    status = 'running';
+    currentActionIndex = targetActionIndex - 1;
+    runId += 1;
+    runPromise = run(runId);
+    return runPromise;
   }
 
   /**
@@ -461,16 +610,8 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
    */
   function navigate(sceneId, {actionIndex = 0, reason = 'navigation'} = {}) {
     if (status !== 'running') return Promise.resolve(snapshot());
-    const nextSceneIndex = sceneIndex.get(sceneId);
-    const nextScene = nextSceneIndex === undefined ? undefined : scenes[nextSceneIndex];
-    const nextActions = /** @type {ReadonlyArray<unknown>} */ (nextScene?.actions ?? []);
-    if (
-      nextSceneIndex === undefined ||
-      !Number.isInteger(actionIndex) ||
-      actionIndex < 0 ||
-      (nextActions.length > 0 && actionIndex >= nextActions.length) ||
-      (nextActions.length === 0 && actionIndex !== 0)
-    ) {
+    const target = resolvePosition(sceneId, actionIndex);
+    if (!target) {
       fail(
         Object.assign(new Error(`Invalid navigation target: ${sceneId} action ${actionIndex}`), {
           code: 'K4-RUNTIME-NAVIGATION-001',
@@ -493,7 +634,10 @@ export function createDsl4RuntimeController({storyDocument, port, evaluateCondit
   return Object.freeze({
     start,
     stop,
+    advance,
     navigate,
+    reposition,
+    resume,
     getState: snapshot,
     getTrace() {
       return deepFreeze(trace.map((event) => cloneValue(event)));
