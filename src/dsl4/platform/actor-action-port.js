@@ -163,6 +163,8 @@ async function runPresentationOperation(operation, signal) {
   let started = false;
   let settled = false;
   let cancelled = false;
+  /** @type {Error | undefined} */
+  let cancellationError;
   const aborted = new Promise((_resolve, reject) => {
     rejectAbort = reject;
   });
@@ -175,7 +177,8 @@ async function runPresentationOperation(operation, signal) {
     } catch (error) {
       finishError = error;
     }
-    rejectAbort(abortError(finishError));
+    cancellationError = abortError(finishError);
+    rejectAbort(cancellationError);
   };
   signal.addEventListener('abort', handleAbort, {once: true});
   if (signal.aborted) {
@@ -194,10 +197,12 @@ async function runPresentationOperation(operation, signal) {
   const trackedPresentation = presentation.then(
     (result) => {
       settled = true;
+      if (cancelled) throw cancellationError ?? abortError();
       return result;
     },
     (error) => {
       settled = true;
+      if (cancelled) throw cancellationError ?? abortError();
       throw error;
     },
   );

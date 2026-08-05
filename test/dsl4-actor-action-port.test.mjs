@@ -167,6 +167,34 @@ test('synchronously finishes moveTo at its destination before cancellation rejec
   await Promise.resolve();
 });
 
+test('keeps AbortError when finish synchronously settles the presentation promise', async () => {
+  const movement = deferred();
+  const started = deferred();
+  const presentation = fakeHost({
+    createMove() {
+      return {
+        start() {
+          started.resolve();
+          return movement.promise;
+        },
+        finish() {
+          movement.resolve();
+        },
+      };
+    },
+  });
+  const port = actorPort({host: presentation.host});
+  const controller = new AbortController();
+  const pending = port.moveTo(
+    {target: 'Hero', x: 100, y: 50, seconds: 3},
+    actionContext(controller),
+  );
+  await started.promise;
+  controller.abort('advance');
+
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+});
+
 test('synchronously clears say before cancellation rejects', async () => {
   const speech = deferred();
   const started = deferred();
