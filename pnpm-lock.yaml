@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-svg-text':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.2.1
+        version: 0.2.1
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -112,8 +112,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-svg-text@0.2.0':
-    resolution: {integrity: sha512-8uOmgaqpWGqwllYmK7niWrA0y09bEYQbh9JC5pnTFE2usSQIKyEYZqrsesTalGuPfB3D5KzwSfQT1aSqsjW2tA==}
+  '@kubohiroya/turbowarp-svg-text@0.2.1':
+    resolution: {integrity: sha512-N5Ainmm8l4IfTytfQGlKZWy/gOTkbJ1P3vTsbVmpKVlaIwt8BcFF8pzAQHrJYgtGm+VoBqV8bQrc7631bBG6oA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -915,7 +915,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@kubohiroya/turbowarp-svg-text@0.2.0': {}
+  '@kubohiroya/turbowarp-svg-text@0.2.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

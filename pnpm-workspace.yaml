@@ -6,7 +6,7 @@ allowBuilds:
   fsevents: false
 
 minimumReleaseAgeExclude:
-  - '@kubohiroya/turbowarp-svg-text@0.1.0 || 0.2.0'
+  - '@kubohiroya/turbowarp-svg-text@0.1.0 || 0.2.0 || 0.2.1'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0
