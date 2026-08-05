@@ -9,6 +9,10 @@ export {
   validateDsl4RuntimeArtifactDescriptor,
 } from './runtime-artifact-descriptor.js';
 export {
+  dsl4RuntimeArtifactStoragePaths,
+  loadDsl4RuntimeArtifact,
+} from './runtime-artifact-loader.js';
+export {
   computeDsl4Sha256Integrity,
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,

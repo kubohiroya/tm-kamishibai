@@ -2,6 +2,7 @@ import {
   Dsl4SourceDescriptorError,
   validateDsl4EmbeddedSourceDescriptor,
 } from '../dsl4/source-descriptor.js';
+import {validateDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 
@@ -150,5 +151,123 @@ export async function installDsl4EmbeddedSource(
 export async function embedDsl4SourceInSb3(baseSb3Bytes, descriptor, options) {
   const {archive, project} = readSb3(baseSb3Bytes);
   const outputProject = await installDsl4EmbeddedSource(project, descriptor, options);
+  return {bytes: serializeSb3(archive, outputProject), project: outputProject};
+}
+
+/**
+ * Atomically install a validated source and its runtime artifact into one component channel.
+ *
+ * @param {unknown} project
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} sourceDescriptor
+ * @param {unknown} runtimeArtifact
+ * @param {object} options
+ * @param {'bundled' | 'unbundled'} options.channel
+ * @param {number} options.maxSourceBytes
+ * @param {boolean} [options.historyNavigationAvailable]
+ * @param {boolean} [options.replaceExisting]
+ * @param {{digest: Function}} [options.subtleCrypto]
+ */
+export async function installDsl4RuntimeComponent(
+  project,
+  storyDocument,
+  sourceDescriptor,
+  runtimeArtifact,
+  {
+    channel,
+    maxSourceBytes,
+    historyNavigationAvailable = false,
+    replaceExisting = false,
+    subtleCrypto = globalThis.crypto?.subtle,
+  },
+) {
+  if (!isRecord(project)) {
+    fail('SB3 project must be an object', 'K4-RUNTIME-COMPONENT-STORAGE-001');
+  }
+  if (!channels.has(channel)) {
+    fail('DSL 4.0 runtime component channel must be bundled or unbundled', 'K4-SOURCE-CHANNEL-001');
+  }
+  if (typeof replaceExisting !== 'boolean') {
+    throw new TypeError('replaceExisting must be a boolean');
+  }
+  let source;
+  try {
+    source = await validateDsl4EmbeddedSourceDescriptor(sourceDescriptor, {
+      maxSourceBytes,
+      subtleCrypto,
+    });
+  } catch (error) {
+    if (error instanceof Dsl4SourceDescriptorError) fail(error.message, error.code, error);
+    throw error;
+  }
+  const validatedArtifact = await validateDsl4RuntimeArtifactDescriptor(
+    storyDocument,
+    source,
+    runtimeArtifact,
+    {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
+  );
+  if (!validatedArtifact.ok) {
+    const firstDiagnostic = validatedArtifact.diagnostics[0];
+    fail(firstDiagnostic.message, firstDiagnostic.code);
+  }
+  const validatedArtifactSuccess = /** @type {{artifact: Readonly<Record<string, unknown>>}} */ (
+    /** @type {unknown} */ (validatedArtifact)
+  );
+
+  const output = /** @type {Record<string, unknown>} */ (structuredClone(project));
+  const extensionStorage = objectProperty(output, 'extensionStorage');
+  const {selected, opposite} = sourceContainers(
+    extensionStorage,
+    /** @type {'bundled' | 'unbundled'} */ (channel),
+  );
+  if (opposite && (opposite.source !== undefined || opposite.artifact !== undefined)) {
+    fail(
+      'DSL 4.0 runtime component already exists in the opposite storage channel',
+      'K4-RUNTIME-COMPONENT-CHANNEL-AMBIGUOUS',
+    );
+  }
+  const hasSource = selected.source !== undefined;
+  const hasArtifact = selected.artifact !== undefined;
+  if (hasSource !== hasArtifact) {
+    fail(
+      'Existing DSL 4.0 runtime component has only source or artifact',
+      'K4-RUNTIME-COMPONENT-PARTIAL',
+    );
+  }
+  if (hasSource && !replaceExisting) {
+    fail(
+      'DSL 4.0 runtime component already exists; replacement requires explicit authorization',
+      'K4-RUNTIME-COMPONENT-STORAGE-EXISTS',
+    );
+  }
+  selected.source = structuredClone(source);
+  selected.artifact = structuredClone(validatedArtifactSuccess.artifact);
+  return output;
+}
+
+/**
+ * Embed a complete DSL 4.0 runtime component without changing target graph or assets.
+ *
+ * @param {Buffer | Uint8Array} baseSb3Bytes
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} sourceDescriptor
+ * @param {unknown} runtimeArtifact
+ * @param {Parameters<typeof installDsl4RuntimeComponent>[4]} options
+ */
+export async function embedDsl4RuntimeComponentInSb3(
+  baseSb3Bytes,
+  storyDocument,
+  sourceDescriptor,
+  runtimeArtifact,
+  options,
+) {
+  const {archive, project} = readSb3(baseSb3Bytes);
+  const outputProject = await installDsl4RuntimeComponent(
+    project,
+    storyDocument,
+    sourceDescriptor,
+    runtimeArtifact,
+    options,
+  );
   return {bytes: serializeSb3(archive, outputProject), project: outputProject};
 }
