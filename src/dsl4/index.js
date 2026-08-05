@@ -4,3 +4,10 @@ export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4RuntimeController} from './runtime-controller.js';
+export {
+  createDsl4EmbeddedSourceDescriptor,
+  Dsl4SourceDescriptorError,
+  dsl4SourceStoragePaths,
+  resolveDsl4EmbeddedSource,
+  validateDsl4EmbeddedSourceDescriptor,
+} from './source-descriptor.js';
