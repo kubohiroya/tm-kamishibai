@@ -179,13 +179,23 @@ export function validateDsl4Semantics(story) {
   }
 
   for (const [sceneId, scene] of Object.entries(scenes)) {
+    const sceneRecord = Array.isArray(scene)
+      ? null
+      : /** @type {Record<string, unknown>} */ (scene);
+    const scenePoseModel = sceneRecord?.poseModel;
     if (!Array.isArray(scene)) {
-      const poseModel = /** @type {Record<string, unknown>} */ (scene).poseModel;
-      if (poseModel) {
-        addReferenceIssue(issues, assets, poseModel, 'poseModel', `$.scenes.${sceneId}.poseModel`);
+      if (scenePoseModel) {
+        addReferenceIssue(
+          issues,
+          assets,
+          scenePoseModel,
+          'poseModel',
+          `$.scenes.${sceneId}.poseModel`,
+        );
       }
     }
 
+    let usesPoseRecognition = false;
     const actionBasePath = Array.isArray(scene)
       ? `$.scenes.${sceneId}`
       : `$.scenes.${sceneId}.actions`;
@@ -217,16 +227,20 @@ export function validateDsl4Semantics(story) {
         addReferenceIssue(issues, scenes, actionArgument(action, key), undefined, actionPath);
       } else if (key === 'branch') {
         addReferenceIssue(issues, branches, actionArgument(action, key), undefined, actionPath);
-      } else if (key === 'keyInputToChangeScene' || key === 'touchInputToChangeScene') {
+      } else if (
+        key === 'keyInputToChangeScene' ||
+        key === 'touchInputToChangeScene' ||
+        key === 'poseInputToChangeScene'
+      ) {
         const argumentRecord = /** @type {Record<string, unknown>} */ (value);
         const routes = /** @type {Record<string, string>} */ (
           argumentRecord.routes ?? argumentRecord
         );
         for (const [route, destination] of Object.entries(routes)) {
-          if (route === 'stableId') continue;
           if (key === 'keyInputToChangeScene') storyInputCodes.set(route, `${actionPath}.${route}`);
           addReferenceIssue(issues, scenes, destination, undefined, `${actionPath}.${route}`);
         }
+        if (key === 'poseInputToChangeScene') usesPoseRecognition = true;
       } else if (key.includes('.')) {
         const separator = key.lastIndexOf('.');
         const actor = key.slice(0, separator);
@@ -253,38 +267,47 @@ export function validateDsl4Semantics(story) {
           const style = /** @type {Record<string, unknown>} */ (value).style;
           addReferenceIssue(issues, styles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'pose') {
-          const choices = /** @type {{skin: string, sound: string}[]} */ (
-            /** @type {Record<string, unknown>} */ (value).choices
+          usesPoseRecognition = true;
+          const steps = /** @type {{pose: string, skin?: string, sound?: string}[]} */ (
+            /** @type {Record<string, unknown>} */ (value).steps
           );
-          choices.forEach((choice, choiceIndex) => {
+          steps.forEach((step, stepIndex) => {
             addReferenceIssue(
               issues,
               assets,
-              choice.skin,
+              step.skin,
               'costume',
-              `${actionPath}.choices[${choiceIndex}].skin`,
+              `${actionPath}.steps[${stepIndex}].skin`,
             );
             if (
-              Object.hasOwn(assets, choice.skin) &&
-              assetKind(assets[choice.skin]).target !== actor
+              typeof step.skin === 'string' &&
+              Object.hasOwn(assets, step.skin) &&
+              assetKind(assets[step.skin]).target !== actor
             ) {
               issues.push({
                 code: 'K4-REF-003',
-                path: `${actionPath}.choices[${choiceIndex}].skin`,
-                message: `Costume ${choice.skin} must target actor ${actor}`,
+                path: `${actionPath}.steps[${stepIndex}].skin`,
+                message: `Costume ${step.skin} must target actor ${actor}`,
               });
             }
             addReferenceIssue(
               issues,
               assets,
-              choice.sound,
+              step.sound,
               'sound',
-              `${actionPath}.choices[${choiceIndex}].sound`,
+              `${actionPath}.steps[${stepIndex}].sound`,
             );
           });
         }
       }
     });
+    if (usesPoseRecognition && typeof scenePoseModel !== 'string') {
+      issues.push({
+        code: 'K4-POSE-MODEL-001',
+        path: `$.scenes.${sceneId}`,
+        message: 'A scene with pose actions must use the long form and declare poseModel',
+      });
+    }
   }
 
   const controls = /** @type {Record<string, unknown> | undefined} */ (story.controls);

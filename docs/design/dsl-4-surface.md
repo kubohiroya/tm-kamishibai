@@ -136,6 +136,14 @@ cover:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 
 textStyles:
   title:
@@ -148,6 +156,17 @@ textStyles:
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
+
+`sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
+`fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
+`selection`は`poseInputToChangeScene`が候補から1件を選ぶ時間減衰付き蓄積スコアであり、
+`sequence`のチャージとは状態を共有しません。省略した数値には上の例の値を既定値として使います。
+
+sequenceの進捗は、対象poseのconfidenceが`confidenceThreshold`以上なら
+`confidence / fullConfidenceHoldSeconds × elapsedSeconds`、未満なら
+`idleChargePerSecond × elapsedSeconds`を加え、1以上で成立します。selectionは各poseについて
+`previous × decayPerSecond^elapsedSeconds + confidence × accumulationPerSecond × elapsedSeconds`
+を計算し、最大scoreが`scoreThreshold`以上になったposeを1件だけ選びます。
 
 ## 5. 環境別keymap
 
@@ -218,6 +237,7 @@ scenes:
 | `branch`                  | branch ID、または`{branch, stableId?}`      |
 | `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping |
 | `touchInputToChangeScene` | actor IDからscene IDへのmapping             |
+| `poseInputToChangeScene`  | pose IDからscene IDへのmapping              |
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
@@ -231,7 +251,7 @@ scenes:
 | `Actor.say`     | `{text, seconds, stableId?}`       |
 | `Actor.setSkin` | skin ID、または`{skin, stableId?}` |
 | `Actor.setText` | `{text, style, stableId?}`         |
-| `Actor.pose`    | `{choices, stableId?}`             |
+| `Actor.pose`    | `{steps, stableId?}`               |
 
 ```yaml
 - Hero.show:
@@ -246,14 +266,21 @@ scenes:
     text: おしまい
     style: title
 - Hero.pose:
-    choices:
+    steps:
       - pose: help
         skin: HeroHelp
         sound: Success
       - pose: jump
         skin: HeroHappy
         sound: Success
+- poseInputToChangeScene:
+    help: ending
+    jump: retry
 ```
+
+`Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
+チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。
+`poseInputToChangeScene`は同時に待つ候補であり、最初に選ばれた1件だけのsceneへ移動します。
 
 一つのaction mappingに複数のaction keyを置けません。`stableId`は任意ですが、指定した場合は
 文書全体で一意にします。独自actionのschemaと登録契約はIssue #264で定義します。

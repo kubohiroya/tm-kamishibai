@@ -1,0 +1,14 @@
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps: []

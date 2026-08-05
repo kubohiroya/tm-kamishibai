@@ -1,0 +1,6 @@
+kamishibai: '4.0'
+scenes:
+  opening:
+    - poseInputToChangeScene:
+        help: ending
+  ending: []

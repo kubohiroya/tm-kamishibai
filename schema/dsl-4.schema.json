@@ -170,7 +170,27 @@
       "required": ["idleSound", "chargeSound"],
       "properties": {
         "idleSound": {"$ref": "#/$defs/assetId"},
-        "chargeSound": {"$ref": "#/$defs/assetId"}
+        "chargeSound": {"$ref": "#/$defs/assetId"},
+        "sequence": {"$ref": "#/$defs/poseSequenceRecognition"},
+        "selection": {"$ref": "#/$defs/poseSelectionRecognition"}
+      }
+    },
+    "poseSequenceRecognition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confidenceThreshold": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "fullConfidenceHoldSeconds": {"type": "number", "exclusiveMinimum": 0, "default": 1},
+        "idleChargePerSecond": {"type": "number", "minimum": 0, "default": 0}
+      }
+    },
+    "poseSelectionRecognition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accumulationPerSecond": {"type": "number", "minimum": 0, "default": 1},
+        "decayPerSecond": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.9},
+        "scoreThreshold": {"type": "number", "minimum": 0, "default": 0}
       }
     },
     "keyCode": {
@@ -355,6 +375,26 @@
         }
       ]
     },
+    "poseRoutes": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/sceneId"}
+    },
+    "poseInputArgs": {
+      "oneOf": [
+        {"$ref": "#/$defs/poseRoutes"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["routes"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "routes": {"$ref": "#/$defs/poseRoutes"}
+          }
+        }
+      ]
+    },
     "showArgs": {
       "type": "object",
       "additionalProperties": false,
@@ -412,10 +452,10 @@
         "style": {"$ref": "#/$defs/styleId"}
       }
     },
-    "poseChoice": {
+    "poseStep": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["pose", "skin", "sound"],
+      "required": ["pose"],
       "properties": {
         "pose": {"$ref": "#/$defs/id"},
         "skin": {"$ref": "#/$defs/assetId"},
@@ -425,13 +465,13 @@
     "poseArgs": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["choices"],
+      "required": ["steps"],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
-        "choices": {
+        "steps": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/poseChoice"}
+          "items": {"$ref": "#/$defs/poseStep"}
         }
       }
     },
@@ -491,6 +531,14 @@
       "required": ["touchInputToChangeScene"],
       "properties": {
         "touchInputToChangeScene": {"$ref": "#/$defs/touchInputArgs"}
+      }
+    },
+    "poseInputAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["poseInputToChangeScene"],
+      "properties": {
+        "poseInputToChangeScene": {"$ref": "#/$defs/poseInputArgs"}
       }
     },
     "showAction": {
@@ -558,6 +606,7 @@
         {"$ref": "#/$defs/branchAction"},
         {"$ref": "#/$defs/keyInputAction"},
         {"$ref": "#/$defs/touchInputAction"},
+        {"$ref": "#/$defs/poseInputAction"},
         {"$ref": "#/$defs/showAction"},
         {"$ref": "#/$defs/moveToAction"},
         {"$ref": "#/$defs/sayAction"},

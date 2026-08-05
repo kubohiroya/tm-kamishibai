@@ -2,6 +2,16 @@ import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js'
 import {deepFreeze} from './story-document.js';
 
 const terminalStatuses = new Set(['failed', 'finished', 'stopped']);
+const defaultPoseSequenceRecognition = Object.freeze({
+  confidenceThreshold: 0.5,
+  fullConfidenceHoldSeconds: 1,
+  idleChargePerSecond: 0,
+});
+const defaultPoseSelectionRecognition = Object.freeze({
+  accumulationPerSecond: 1,
+  decayPerSecond: 0.9,
+  scoreThreshold: 0,
+});
 
 /**
  * @typedef {'idle' | 'running' | 'paused' | 'failed' | 'finished' | 'stopped'} RuntimeStatus
@@ -108,6 +118,20 @@ export function createDsl4RuntimeController({
   const initialVariables = /** @type {Record<string, string | number | boolean>} */ (
     storyDocument.variables ?? {}
   );
+  const poseRecognition = /** @type {Readonly<Record<string, unknown>>} */ (
+    storyDocument.poseRecognition ?? {}
+  );
+  const poseSequenceRecognition = deepFreeze({
+    ...defaultPoseSequenceRecognition,
+    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.sequence ?? {}),
+    idleSound: typeof poseRecognition.idleSound === 'string' ? poseRecognition.idleSound : null,
+    chargeSound:
+      typeof poseRecognition.chargeSound === 'string' ? poseRecognition.chargeSound : null,
+  });
+  const poseSelectionRecognition = deepFreeze({
+    ...defaultPoseSelectionRecognition,
+    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.selection ?? {}),
+  });
   /** @type {Record<string, string | number | boolean>} */
   let variables = /** @type {Record<string, string | number | boolean>} */ (
     cloneValue(initialVariables)
@@ -387,19 +411,42 @@ export function createDsl4RuntimeController({
       }
       return {sceneId: routes[selected], reason: 'touchInput'};
     }
-    if (command === 'pose') {
-      const choices = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.choices);
-      const selected = await invokePort(command, {target, choices: cloneValue(choices)}, context);
-      ensureActive(context);
-      const choice = choices.find(({pose}) => pose === selected);
-      if (!choice) {
-        const error = new Error(`Invalid pose result: ${String(selected)}`);
+    if (command === 'poseInputToChangeScene') {
+      const routes = /** @type {Record<string, string>} */ (args.routes);
+      const selected = await invokePort(
+        command,
+        {poses: Object.keys(routes), recognition: cloneValue(poseSelectionRecognition)},
+        context,
+      );
+      if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
+        const error = new Error(`Invalid pose input result: ${String(selected)}`);
         Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
         throw error;
       }
-      await invokePort('setSkin', {target, skin: choice.skin}, context);
-      ensureActive(context);
-      await invokePort('sound', {sound: choice.sound}, context);
+      return {sceneId: routes[selected], reason: 'poseInput'};
+    }
+    if (command === 'pose') {
+      const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
+      for (const step of steps) {
+        if (typeof step.skin === 'string') {
+          await invokePort('setSkin', {target, skin: step.skin}, context);
+          ensureActive(context);
+        }
+        await invokePort(
+          'waitForPose',
+          {
+            target,
+            pose: step.pose,
+            recognition: cloneValue(poseSequenceRecognition),
+          },
+          context,
+        );
+        ensureActive(context);
+        if (typeof step.sound === 'string') {
+          await invokePort('sound', {sound: step.sound}, context);
+          ensureActive(context);
+        }
+      }
       return null;
     }
     await invokePort(command, target === null ? {...args} : {target, ...args}, context);
