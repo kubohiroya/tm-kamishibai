@@ -62,7 +62,7 @@
   "license": "MPL-2.0",
   "dependencies": {
     "@kubohiroya/turbowarp-asset-manager": "github:kubohiroya/turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4",
-    "@kubohiroya/turbowarp-svg-text": "0.2.1",
+    "@kubohiroya/turbowarp-svg-text": "github:kubohiroya/turbowarp-svg-text#0a98e72b547c43b92bc76e71a54d66efb3fb4d39",
     "@kubohiroya/turbowarp-tmpose": "github:kubohiroya/turbowarp-tmpose#d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85",
     "fflate": "0.8.3"
   },
