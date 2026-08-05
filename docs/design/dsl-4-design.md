@@ -53,7 +53,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   preflight、行・列付き`K32-*`診断、SVGエラー表示、安全停止を担当する
 - 旧Text Assetは3.1／3.2で実行可能だがdeprecatedであり、3.2系列だけの移行互換とする
 - 新規テキスト表示は、名前付きスタイルと`setText`を提供するSVG Textを使用する
-- SVG Textは`@kubohiroya/turbowarp-svg-text@0.1.0`、成果物のSHA-256、API manifestを固定する
+- SVG Textは`./composition` APIを含むGit commit、成果物のSHA-256、API manifestを固定する
 
 4.0はこの診断UXを維持しつつ、preflightとScratchパーサーの二段構成を、Source Mapを持つ
 単一のJavaScriptパーサーへ置き換える提案です。
@@ -103,7 +103,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 | SVG Text                  | 4.0の標準テキスト表示候補として維持する                           |
 | 個別の機能拡張source      | provider、version／commit、integrityを正本として維持する          |
 | `extensionBundles`        | 4.0 Compositeの第一候補として維持する                             |
-| 新しい`./composition` API | 現行bundleで不足する契約が実証された場合だけ追加を検討する        |
+| 新しい`./composition` API | block登録なしの直接合成契約が必要なcapabilityに限定して公開する  |
 | block cleanup             | DSL設計外。必要なbuildでだけ既定OFFオプションを明示的に有効化する |
 | 台本製作者の作業          | 標準テンプレートのblock graphを変更せず、台本の記述だけで完結する |
 
@@ -113,6 +113,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   Animated Textを含む静的bundleとmember間動的opcode変換
 - [`tmpose-kamishibai` PR #252](https://github.com/kubohiroya/tmpose-kamishibai/pull/252):
   DSL 3.2、SVG Text、npm source provider
+- [`turbowarp-svg-text` PR #14](https://github.com/kubohiroya/turbowarp-svg-text/pull/14):
+  SVG Textのblock登録なし`./composition` API
 - [`sb3-toolchain` PR #31](https://github.com/kubohiroya/sb3-toolchain/pull/31):
   `getOpcodeFunction()`のmember間変換
 - [`sb3-toolchain` PR #32](https://github.com/kubohiroya/sb3-toolchain/pull/32):
@@ -509,11 +511,21 @@ loading:
   costumes: [Loading1, Loading2, Loading3]
 
 poseRecognition:
-  sounds: [ClockTicking, Success]
+  idleSound: ClockTicking
+  chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 ```
 
 3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
-mappingへまとめます。
+mappingへまとめます。sequenceとselectionは排他でActor sequenceを優先し、selectionはaction
+実行ごとに蓄積scoreをresetします。重複するselectionは直近の1回だけを有効にします。
 
 ### 3.11 分岐 `[提案]`
 
@@ -621,7 +633,16 @@ variables:
   score: 1
 
 poseRecognition:
-  sounds: [ClockTicking, Success]
+  idleSound: ClockTicking
+  chargeSound: Success
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  selection:
+    accumulationPerSecond: 1
+    decayPerSecond: 0.9
+    scoreThreshold: 0
 
 branches:
   chooseRoute:
@@ -1597,7 +1618,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | ------------------ | --------------------------- | ----------------------------- | ------------------------------- |
 | Asset Manager      | GitHub固定commit            | `kubohiroyaassetmanager`      | asset、skin、sound              |
 | Animated Text      | TurboWarp GitHub固定commit  | `text`                        | 3.2互換表示。4.0での要否は監査  |
-| SVG Text           | npm完全固定version          | `kubohiroyasvgtext`           | 標準テキスト表示                |
+| SVG Text           | GitHub固定commit            | `kubohiroyasvgtext`           | 標準テキスト表示                |
 | Runtime Expression | GitHub固定commit            | `kubohiroyaruntimeexpression` | branch条件の事前検証と実行      |
 | Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
 | Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
@@ -1605,9 +1626,10 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`候補   | StoryDocumentと実行時viewの保持 |
 
 Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
-展開ソースはGitHub providerを使用しています。SVG Textだけはnpm provider、API manifest、完全固定versionを
-実運用しています。4.0はcapabilityごとに適したproviderを選び、bundle化だけを理由に別名の`*-core`
-packageや`./composition` entrypointを新設しません。
+展開ソースはGitHub providerを使用しています。SVG Textも4.0の直接合成APIを含むGitHub commitへ固定します。
+4.0はcapabilityごとに適したproviderを選び、Standalone extensionのblock登録を経由せず、各packageが
+公開する`./composition` entrypointをapp shellから直接使用します。bundle化だけを理由に別名の`*-core`
+packageは新設しません。
 
 Structured Dataは新しい独立GitHub projectとnpm packageとして、次のように関連度の高いmoduleを一つの
 repositoryで管理する案です。実際のrepository名とpackage名は作成Issueで確定します。
@@ -1904,13 +1926,13 @@ block contributionとして公開することをmodule分割の目標にしま�
 
 ```yaml
 dependencies:
-  '@kubohiroya/turbowarp-svg-text': '<exact version>'
+  '@kubohiroya/turbowarp-svg-text': 'github:kubohiroya/turbowarp-svg-text#<commit>'
 devDependencies:
   '@kubohiroya/sb3-toolchain': 'github:kubohiroya/sb3-toolchain#<commit>'
 ```
 
-GitHub providerのcapabilityは`embedded-extensions.json`でresolved commitとartifactを固定します。
-npm providerのcapabilityは`package.json`／lockfileの完全固定versionと、同manifestのartifact／integrityを
+GitHub providerのcapabilityは`package.json`／lockfileまたは`embedded-extensions.json`でresolved commitと
+artifactを固定します。npm providerのcapabilityは完全固定versionと、manifestのartifact／integrityを
 一致させます。すべてをnpm依存へ揃えること自体を目標にしません。
 
 Kamishibai 4用buildは、固定した個別memberと紙芝居固有memberを`extensionBundles`で指定し、

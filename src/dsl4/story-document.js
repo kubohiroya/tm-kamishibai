@@ -106,8 +106,11 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   let args;
 
   if (typeof sourceArguments === 'object' && sourceArguments !== null) {
-    const routeCommand =
-      command === 'keyInputToChangeScene' || command === 'touchInputToChangeScene';
+    const routeCommand = [
+      'keyInputToChangeScene',
+      'touchInputToChangeScene',
+      'poseInputToChangeScene',
+    ].includes(command);
     const argumentRecord = /** @type {Record<string, unknown>} */ (sourceArguments);
     args = /** @type {Record<string, unknown>} */ (
       cloneValue(routeCommand && !argumentRecord.routes ? {routes: argumentRecord} : argumentRecord)

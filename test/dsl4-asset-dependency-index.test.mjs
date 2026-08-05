@@ -51,7 +51,7 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
       eager: ['ClockTicking', 'HeroHappy', 'HeroHelp', 'Success'],
       lazy: ['Ocean', '救助Pose'],
     },
-    seaRoute: {all: [], eager: [], lazy: []},
+    seaRoute: {all: ['救助Pose'], eager: [], lazy: ['救助Pose']},
     ending: {all: ['Beach'], eager: ['Beach'], lazy: []},
   });
 });

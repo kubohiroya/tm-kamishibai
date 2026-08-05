@@ -1,4 +1,5 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 
 import {
   createDsl4EmbeddedAssetLifecycle,
@@ -6,6 +7,7 @@ import {
 } from '../embedded-asset-lifecycle.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
+import {createDsl4PoseActionPort} from './pose-action-port.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -110,6 +112,9 @@ function disposedError() {
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
+ * @param {Function} [options.createAsyncInputComposition]
+ * @param {Function} [options.poseSchedule]
+ * @param {Function} [options.poseNow]
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
@@ -134,6 +139,17 @@ export function createDsl4PlatformAssetSession(options) {
     typeof options.createTMPoseComposition !== 'function'
   ) {
     throw new TypeError('createTMPoseComposition must be a function');
+  }
+  const createAsyncInput =
+    options.createAsyncInputComposition ?? createDefaultAsyncInputComposition;
+  if (typeof createAsyncInput !== 'function') {
+    throw new TypeError('createAsyncInputComposition must be a function');
+  }
+  if (options.poseSchedule !== undefined && typeof options.poseSchedule !== 'function') {
+    throw new TypeError('poseSchedule must be a function');
+  }
+  if (options.poseNow !== undefined && typeof options.poseNow !== 'function') {
+    throw new TypeError('poseNow must be a function');
   }
 
   const created = [];
@@ -185,7 +201,35 @@ export function createDsl4PlatformAssetSession(options) {
       'currentPose',
       'confidence',
       'confidenceOf',
+      'configureAccumulatedPose',
+      'resetAccumulatedPose',
+      'subscribeAccumulatedPose',
     ]);
+    const asyncInputCandidate = createAsyncInput({poseSource: tmposeComposition});
+    created.push(asyncInputCandidate);
+    const asyncInputComposition = validateCompositionMethods(
+      asyncInputCandidate,
+      'Async Input composition',
+      ['waitForPoseCandidate', 'releaseAll'],
+    );
+    const poseActionPort = createDsl4PoseActionPort({
+      tmposeComposition,
+      asyncInputComposition,
+      getPoseModelLabels: (poseModel) => tmpose.adapter.getPoseModelLabels(poseModel),
+      playSound: (sound) => assetManagerComposition.playSound(sound),
+      stopSound: (sound) => assetManagerComposition.stopSound(sound),
+      ...(options.poseSchedule === undefined
+        ? {}
+        : {
+            schedule:
+              /** @type {(callback: () => void, delayMilliseconds: number) => () => void} */ (
+                options.poseSchedule
+              ),
+          }),
+      ...(options.poseNow === undefined
+        ? {}
+        : {now: /** @type {() => number} */ (options.poseNow)}),
+    });
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,
       poseAdapter: tmpose.adapter,
@@ -231,7 +275,9 @@ export function createDsl4PlatformAssetSession(options) {
       disposePromise = (async () => {
         const errors = [];
         for (const release of [
+          () => poseActionPort.dispose(),
           () => assetLifecycle.release({reason}),
+          () => asyncInputComposition.releaseAll(),
           () => tmposeComposition.releaseAll(),
           () => assetManagerComposition.releaseAll(),
         ]) {
@@ -252,6 +298,8 @@ export function createDsl4PlatformAssetSession(options) {
       lifecycle,
       assetManagerComposition,
       tmposeComposition,
+      asyncInputComposition,
+      poseActionPort,
       dispose,
     });
   } catch (error) {

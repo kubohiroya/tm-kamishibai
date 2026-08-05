@@ -1,0 +1,10 @@
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.pose:
+        steps:
+          - pose: help

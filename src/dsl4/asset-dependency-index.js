@@ -23,12 +23,10 @@ function addActionDependencies(action, dependencies) {
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
   if (command !== 'pose') return false;
 
-  const choices = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
-    args.choices ?? []
-  );
-  for (const choice of choices) {
-    addDependency(choice.skin, dependencies);
-    addDependency(choice.sound, dependencies);
+  const steps = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (args.steps ?? []);
+  for (const step of steps) {
+    addDependency(step.skin, dependencies);
+    addDependency(step.sound, dependencies);
   }
   return true;
 }
