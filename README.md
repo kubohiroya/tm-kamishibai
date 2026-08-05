@@ -33,6 +33,58 @@ pnpm exec tmpose-kamishibai build-sb3 \
 
 API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
+### DSL 3.2から4.0への変換
+
+外部テキストのDSL 3.2台本を、DSL 4.0 YAMLへ明示的に変換できます。入力ファイルは変更せず、
+変換に成功した場合だけ出力をatomicに作成または置換します。
+
+```bash
+pnpm exec tmpose-kamishibai convert-dsl4 \
+  --input source.txt \
+  --output story.kamishibai.yaml \
+  --pose-models pose-models.json
+```
+
+3.2の`TMPoseURL`はremote URLのまま4.0へ移せません。ポーズを使う台本では、URLとlocal
+`poseModel` assetの対応をJSONで明示します。converterはURLを取得せず、指定したproject-relative
+pathだけを台本へ記録します。
+
+```json
+{
+  "https://example.com/models/rescue/": {
+    "id": "RescuePose",
+    "file": "pose-models/rescue",
+    "loading": "lazy"
+  }
+}
+```
+
+asset、actor、cover、runtime variable、loading、pose recognition sound、SVG Text style、branch、
+scene、およびDSL 4.0 coreに対応するactionを変換します。型推論、costumeのlogical actorへの付け替え、
+3.2に秒数指定がないtransitionには、元ファイルの行・列を含むwarningを標準エラー出力へ表示します。
+
+意味を保てない次の入力は、変換結果を部分出力せずerrorにします。
+
+- DSL 3.1、旧Text Asset、remote／cache asset、`TMPoseURL`
+- 秒数なしの永続`say`、style付き`say`、`think`、`hide`など4.0 coreにないaction
+- 4.0で必須のcharge soundがないpose recognition設定
+- local model置換がない`TMPoseURL`、空のpose名、要素数が異なるbranch／key／touch inputのparallel list
+- 最後の無条件遷移がないbranch
+
+3.2の`Actor:pose`は候補選択ではなく、pose名の順にすべて成立させる4.0
+`Actor.pose.steps`へ変換します。skin／soundの不足要素は3.2と同じく省略扱い、pose数を超える余分な
+要素はwarning付きで除外します。Async Inputによる候補1件選択は3.2テキストDSLのactionではなく
+SB3 block graph側の機能であるため、このconverterは`poseInputToChangeScene`を推測生成しません。
+
+JavaScriptから副作用なしで変換する場合は、package exportを利用できます。
+
+```js
+import {convertDsl32ToDsl4} from '@kubohiroya/tmpose-kamishibai/converter';
+
+const result = convertDsl32ToDsl4(sourceText, {sourceId: 'source.txt'});
+if (result.ok) console.log(result.yaml);
+```
+
 ## DSL 3.2の互換性
 
 tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`の台本を読み込めます。既存の3.1台本は冒頭を書き換えずに実行でき、新規の台本には`kamishibai=3.2`を推奨します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
