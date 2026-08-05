@@ -12,6 +12,11 @@ export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4RuntimeController} from './runtime-controller.js';
 export {
+  createDsl4RuntimeStartup,
+  dsl4DefaultFeatureFlags,
+  resolveDsl4FeatureFlags,
+} from './runtime-startup.js';
+export {
   createDsl4RuntimeArtifactDescriptor,
   validateDsl4RuntimeArtifactDescriptor,
 } from './runtime-artifact-descriptor.js';
