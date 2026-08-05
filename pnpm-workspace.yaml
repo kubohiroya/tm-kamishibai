@@ -4,6 +4,7 @@ packages:
 allowBuilds:
   '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b': true
   '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4': true
+  '@kubohiroya/turbowarp-tmpose@https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/d0b7b5ca3b9c1a28c2ecb75b82e9dc31a2cabc85': true
   fsevents: false
 
 minimumReleaseAgeExclude:
