@@ -8,7 +8,7 @@ Copyright © 2026 Hiroya Kubo.
 
 関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)
 
-現行実装: [`tmpose-kamishibai 3.2.2`](../../README.md#dsl-32の互換性)
+現行実装: [`tmpose-kamishibai 3.2.3`](../../README.md#dsl-32の互換性)
 
 機能拡張構成: [`app/embedded-extensions.json`](../../app/embedded-extensions.json)
 調査基準日: 2026-08-05
@@ -23,7 +23,7 @@ Copyright © 2026 Hiroya Kubo.
 
 | 状態     | 意味                                                      |
 | -------- | --------------------------------------------------------- |
-| 現行事実 | 3.2.2または固定ツールチェインですでに実装・検証されている |
+| 現行事実 | 3.2.3または固定ツールチェインですでに実装・検証されている |
 | 決定済み | これまでの設計議論で4.0でも採用する方向が合意されている   |
 | 提案     | 本文書がレビュー対象として提示する具体案                  |
 | 保留     | 先に依存する設計のレビューを終えるまで判断を進めない      |
@@ -46,7 +46,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 ### 0.1 DSLと診断 `[現行事実]`
 
-- 3.2.2は`kamishibai=3.1`と`kamishibai=3.2`を受理し、新規台本には3.2を推奨する
+- 3.2.3は`kamishibai=3.1`と`kamishibai=3.2`を受理し、新規台本には3.2を推奨する
 - 実行用の台本解析は引き続きScratch側が担当し、起動時固定・既定OFFの
   `featureDetailedScriptErrors`を有効にした場合は`kubohiroyakamishibairuntime`が副作用前の
   preflight、行・列付き`K32-*`診断、SVGエラー表示、安全停止を担当する
@@ -720,7 +720,7 @@ source channelの具体形式は実装前に決めますが、このblock graph�
 
 ## 5. 診断情報とSVGエラー画面
 
-3.2.2は`featureDetailedScriptErrors`が有効な場合、最初のfatal diagnosticをJSONとして保持し、
+3.2.3は`featureDetailedScriptErrors`が有効な場合、最初のfatal diagnosticをJSONとして保持し、
 行・列・該当行をXML escapeしたSVGへ描画して、安全停止と再試行を行います。4.0ではこの表示契約を
 置き換えるのではなく、
 複数診断、関連位置、正規化nodeへのpathを追加します。
@@ -1455,7 +1455,7 @@ public capability repository／npm package
 repositoryを分ける基準は、Kamishibaiなしで単独利用する意味があり、独立した公開API、version、
 test、releaseを持てることです。小さな内部moduleごとには分割しません。
 
-2026-08-05時点の3.2.2で、次のprojectとsource providerを使用しています。既存のrepository、
+2026-08-05時点の3.2.3で、次のprojectとsource providerを使用しています。既存のrepository、
 package名、Standalone extension IDを置き換えず、4.0でも個別更新可能な境界を維持します。
 
 | capability         | 現行source                  | Standalone extension ID       | 4.0での用途                     |
@@ -1469,7 +1469,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | TMPose             | GitHub固定commit            | `tmpose`                      | `TMPoseURL`と`pose` action      |
 | Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`候補   | StoryDocumentと実行時viewの保持 |
 
-Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.2の
+Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
 展開ソースはGitHub providerを使用しています。SVG Textだけはnpm provider、API manifest、完全固定versionを
 実運用しています。4.0はcapabilityごとに適したproviderを選び、bundle化だけを理由に別名の`*-core`
 packageや`./composition` entrypointを新設しません。
@@ -1518,7 +1518,7 @@ fixtureで再現してから検討します。
 
 #### 11.3.2 現行memberの依存監査
 
-3.2.2のmemberは、次の方法で他機能へ接続しています。
+3.2.3のmemberは、次の方法で他機能へ接続しています。
 
 | 接続方法                      | 現行例                                                 | 現行bundle契約                                          |
 | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
@@ -1892,7 +1892,7 @@ metadataをtransactionで更新します。外部projectのsourceを由来情報
 
 ### 12.1 ランタイムの分離 `[提案]`
 
-- 3.1／3.2作品は3.2.2以降の3.2アプリで引き続き実行する
+- 3.1／3.2作品は3.2.3以降の3.2アプリで引き続き実行する
 - 4.0アプリは4.0台本だけを実行する
 - 4.0パーサー内へ3.1／3.2構文解析や旧Text Asset互換を残さない
 - 3.1／3.2から4.0への変換はruntime外のconverterで行う
