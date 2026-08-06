@@ -67,7 +67,7 @@ function decodeSource(input) {
   if (input instanceof Uint8Array) {
     return new TextDecoder('utf-8', {fatal: true}).decode(input);
   }
-  throw new TypeError('DSL 3.2 source must be a string or Uint8Array.');
+  throw new TypeError('DSL 3.1/3.2 source must be a string or Uint8Array.');
 }
 
 /** @param {string | Uint8Array} input */
@@ -105,7 +105,9 @@ function isSafePoseModelFile(file) {
 function normalizePoseModels(input) {
   if (input === undefined) return Object.freeze({});
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    throw new TypeError('poseModels must be an object keyed by exact DSL 3.2 TMPoseURL values.');
+    throw new TypeError(
+      'poseModels must be an object keyed by exact DSL 3.1/3.2 TMPoseURL values.',
+    );
   }
   const normalized = new Map();
   for (const [sourceUrl, rawReplacement] of Object.entries(input)) {
@@ -226,7 +228,7 @@ class Converter {
       }
       const separator = line.indexOf('=');
       if (separator < 1) {
-        this.error('K4-CONVERT-COMMAND-001', 'DSL 3.2 commands must use key=value syntax.', {
+        this.error('K4-CONVERT-COMMAND-001', 'DSL 3.1/3.2 commands must use key=value syntax.', {
           key: '',
           value: '',
           lineNumber: index + 1,
@@ -276,10 +278,18 @@ class Converter {
     if (this.versionCommands > 1) {
       this.error('K4-CONVERT-VERSION-DUPLICATE', 'kamishibai is declared more than once.', command);
     }
-    if (command.value !== '3.2') {
+    if (command.value !== '3.1' && command.value !== '3.2') {
       this.error(
         'K4-CONVERT-VERSION-001',
-        `convert-dsl4 only accepts kamishibai=3.2, received ${command.value || '(empty)'}.`,
+        `convert-dsl4 only accepts kamishibai=3.1 or kamishibai=3.2, received ${command.value || '(empty)'}.`,
+        command,
+      );
+      return;
+    }
+    if (command.value === '3.1') {
+      this.warning(
+        'K4-CONVERT-VERSION-31-COMPAT',
+        'DSL 3.1 is interpreted through the maintained DSL 3.2 compatibility grammar; review every conversion warning before replacing the original work.',
         command,
       );
     }
@@ -316,7 +326,7 @@ class Converter {
     if (scheme === 'text') {
       this.error(
         'K4-CONVERT-LEGACY-TEXT',
-        `Legacy Text Asset ${id} has no automatic DSL 4.0 conversion. Replace it with an SVG Text actor and setText action.`,
+        `Legacy Text Asset ${id} has no automatic DSL 4.0 conversion. Add an SVG Text actor and replace legacy text, textStyle, show, and setSkin usage with textStyles and Actor.setText.`,
         command,
       );
       return null;
@@ -346,7 +356,7 @@ class Converter {
     }
     this.error(
       'K4-CONVERT-ASSET-ADDRESS',
-      `Unsupported DSL 3.2 asset address: ${address}`,
+      `Unsupported DSL 3.1/3.2 asset address: ${address}`,
       command,
     );
     return null;
@@ -412,14 +422,14 @@ class Converter {
       value = raw === 'true';
       this.warning(
         'K4-CONVERT-VARIABLE-TYPE',
-        `Variable ${id} was a DSL 3.2 string and is emitted as a DSL 4.0 boolean. Review expression semantics.`,
+        `Variable ${id} was a DSL 3.1/3.2 string and is emitted as a DSL 4.0 boolean. Review expression semantics.`,
         command,
       );
     } else if (numberPattern.test(raw) && Number.isFinite(Number(raw))) {
       value = Number(raw);
       this.warning(
         'K4-CONVERT-VARIABLE-TYPE',
-        `Variable ${id} was a DSL 3.2 string and is emitted as a DSL 4.0 number. Review expression semantics.`,
+        `Variable ${id} was a DSL 3.1/3.2 string and is emitted as a DSL 4.0 number. Review expression semantics.`,
         command,
       );
     }
@@ -474,7 +484,7 @@ class Converter {
     if (typeof poseIdle !== 'number' || poseIdle !== 0) {
       this.error(
         'K4-CONVERT-POSE-CONFIG',
-        'A non-zero poseIdle multiplies confidence in DSL 3.2 and has no exact DSL 4.0 sequence equivalent. Migrate it manually.',
+        'A non-zero poseIdle multiplies confidence in DSL 3.1/3.2 and has no exact DSL 4.0 sequence equivalent. Migrate it manually.',
         this.variableCommands.get('poseIdle') ?? null,
       );
       valid = false;
@@ -645,7 +655,7 @@ class Converter {
     if (finalCondition !== '' && finalCondition !== 'true') {
       this.error(
         'K4-CONVERT-BRANCH-ELSE',
-        'DSL 4.0 branches require an unconditional final route. End the DSL 3.2 condition list with an empty item or true.',
+        'DSL 4.0 branches require an unconditional final route. End the DSL 3.1/3.2 condition list with an empty item or true.',
         command,
       );
       return;
@@ -831,7 +841,7 @@ class Converter {
       }
       this.warning(
         'K4-CONVERT-TRANSITION-DURATION',
-        'DSL 3.2 transition has no duration argument; the DSL 4.0 transition duration is set to 0 seconds.',
+        'DSL 3.1/3.2 transition has no duration argument; the DSL 4.0 transition duration is set to 0 seconds.',
         command,
       );
       this.validateIdentifier(parts[1], 'Transition effect', command);
@@ -933,7 +943,7 @@ class Converter {
       if (parts.length === 3) {
         this.error(
           'K4-CONVERT-PERSISTENT-SPEECH',
-          'A DSL 3.2 say action without seconds is persistent and has no equivalent DSL 4.0 core action.',
+          'A DSL 3.1/3.2 say action without seconds is persistent and has no equivalent DSL 4.0 core action.',
           command,
         );
         return null;
@@ -995,7 +1005,7 @@ class Converter {
       if (skins.length > poses.length || sounds.length > poses.length) {
         this.warning(
           'K4-CONVERT-POSE-EXTRA',
-          'DSL 3.2 ignores skin or sound entries after the final pose; the converter omitted those extra entries.',
+          'DSL 3.1/3.2 ignores skin or sound entries after the final pose; the converter omitted those extra entries.',
           command,
         );
       }
@@ -1015,7 +1025,7 @@ class Converter {
     }
     this.error(
       'K4-CONVERT-ACTION-UNSUPPORTED',
-      `DSL 3.2 actor action ${actionName || '(empty)'} has no DSL 4.0 core equivalent.`,
+      `DSL 3.1/3.2 actor action ${actionName || '(empty)'} has no DSL 4.0 core equivalent.`,
       command,
     );
     return null;
@@ -1154,7 +1164,7 @@ class Converter {
         if (asset.sourceTarget !== 'Stage') {
           this.warning(
             'K4-CONVERT-SOUND-TARGET',
-            `DSL 4.0 sound assets do not retain the DSL 3.2 source sprite ${asset.sourceTarget}; verify that sound name ${asset.name} is unique.`,
+            `DSL 4.0 sound assets do not retain the DSL 3.1/3.2 source sprite ${asset.sourceTarget}; verify that sound name ${asset.name} is unique.`,
             asset.command,
           );
         }
@@ -1166,7 +1176,7 @@ class Converter {
         if (target !== asset.sourceTarget) {
           this.warning(
             'K4-CONVERT-COSTUME-RETARGETED',
-            `Costume ${id} is retargeted from its DSL 3.2 source sprite ${asset.sourceTarget} to logical actor ${target}.`,
+            `Costume ${id} is retargeted from its DSL 3.1/3.2 source sprite ${asset.sourceTarget} to logical actor ${target}.`,
             asset.command,
           );
         }
@@ -1258,13 +1268,16 @@ class Converter {
         default:
           this.error(
             'K4-CONVERT-COMMAND-UNSUPPORTED',
-            `Unsupported DSL 3.2 command: ${command.key}`,
+            `Unsupported DSL 3.1/3.2 command: ${command.key}`,
             command,
           );
       }
     }
     if (this.versionCommands === 0) {
-      this.error('K4-CONVERT-VERSION-001', 'The source must declare kamishibai=3.2.');
+      this.error(
+        'K4-CONVERT-VERSION-001',
+        'The source must declare kamishibai=3.1 or kamishibai=3.2.',
+      );
     }
     if (this.scenes.size === 0) {
       this.error('K4-CONVERT-SCENE-001', 'The source must declare at least one sceneLabel.');
@@ -1320,7 +1333,7 @@ class Converter {
 }
 
 /**
- * Convert one DSL 3.2 source string into deterministic DSL 4.0 YAML without I/O.
+ * Convert one DSL 3.1 or DSL 3.2 source string into deterministic DSL 4.0 YAML without I/O.
  *
  * @param {string | Uint8Array} input
  * @param {{sourceId?: string, poseModels?: Readonly<Record<string, PoseModelReplacement>>}} [options]
@@ -1339,7 +1352,7 @@ export function convertDsl32ToDsl4(input, options = {}) {
           sourceId,
           'K4-CONVERT-INPUT-001',
           'error',
-          'DSL 3.2 source must be a string or Uint8Array.',
+          'DSL 3.1/3.2 source must be a string or Uint8Array.',
         ),
       ],
     };
@@ -1415,7 +1428,7 @@ export async function convertDsl32File(options) {
       inputPath,
       'K4-CONVERT-OUTPUT-SOURCE',
       'error',
-      'Input and output paths must be different; the DSL 3.2 source is never modified.',
+      'Input and output paths must be different; the DSL 3.1/3.2 source is never modified.',
     );
     return {ok: false, outputPath: null, diagnostics: [diagnostic], yaml: null, document: null};
   }
