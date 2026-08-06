@@ -27,6 +27,25 @@ cloneに複製されたhat、実行中に作られたhat、green flag後にmutat
 変更を反映するにはproject restartまたはlive reloadの新candidate generationを作る。hat検出はblockを実行せず、
 別のregister script、broadcast、初期化順序に依存しない。
 
+hat opcodeはStandalone／Compositeの物理namespaceをdetector内で推測せず、toolchainまたはapp shellが解決した
+完全なopcodeを起動時に注入する。mutationは`tagName: "mutation"`、空の`children`、一つの
+`dsl4action`属性だけを持つ。TurboWarp VMのXML mutation adapterは属性名を小文字化するため、
+camelCaseの`dsl4Action`はwire keyとして使わない。`dsl4action`は次のdeclarative JSONであり、version 1以外、unknown key、
+procedure、list、runtime variable、実行可能コードを受理しない。
+
+```json
+{
+  "version": 1,
+  "name": "wave",
+  "target": "actor",
+  "parameters": [{"name": "speed", "type": "string", "required": true}],
+  "quiesce": "finish-only"
+}
+```
+
+`required`と`quiesce`はmutationでは省略可能であり、CoreのSnapshot生成時にそれぞれ`true`と
+`finish-only`へ正規化する。
+
 一つのaction名へ複数hatが見つかった場合、同一target内か別targetか、originalかcloneかにかかわらず、original
 targetの候補が複数なら`K4-REGISTRY-COLLISION-001`でsnapshot全体を拒否する。cloneのhatは候補数へ含めない。
 
@@ -70,6 +89,7 @@ Snapshot v1は`quiesce`を持たないlegacy入力として読み、全actionを
 | custom action数               | 64      |
 | actionあたりparameter数       | 16      |
 | action／parameter名scalar数   | 64      |
+| mutation JSON code unit数     | 8192    |
 
 上限超過、malformed mutation、source locator欠落では部分snapshotを返さない。hat mutationはdeclarative JSON
 だけを受理し、JavaScript、procedure、list、runtime variableをschemaとして評価しない。
