@@ -266,6 +266,26 @@ export async function createDsl4BinaryEntryAssetBundle(storyDocument, snapshot, 
     throw new TypeError('asset snapshot must provide manifest and getFile');
   }
   const manifest = validateDsl4AssetBundleManifest(storyDocument, snapshot.manifest);
+  const fileLimit = positiveLimit(options.maxFiles, 'maxFiles');
+  const perFileLimit = positiveLimit(options.maxFileBytes, 'maxFileBytes');
+  const totalLimit = positiveLimit(options.maxTotalBytes, 'maxTotalBytes');
+  let declaredFiles = 0;
+  let declaredBytes = 0;
+  for (const asset of /** @type {ReadonlyArray<Record<string, any>>} */ (manifest.assets)) {
+    if (asset.source.type !== 'file') continue;
+    for (const file of asset.source.files) {
+      declaredFiles += 1;
+      declaredBytes += file.size;
+      if (
+        declaredFiles > fileLimit ||
+        file.size > perFileLimit ||
+        !Number.isSafeInteger(declaredBytes) ||
+        declaredBytes > totalLimit
+      ) {
+        fail('K4-ASSET-ENTRY-LIMIT-001', 'Binary entry bundle exceeds a declared resource limit');
+      }
+    }
+  }
   const files = [];
   const entries = new Map();
   for (const asset of /** @type {ReadonlyArray<Record<string, any>>} */ (manifest.assets)) {

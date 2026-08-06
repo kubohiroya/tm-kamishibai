@@ -292,6 +292,23 @@ test('rejects descriptor mutation, unsafe paths, noncanonical integrity, and res
     }),
     'K4-ASSET-ENTRY-LIMIT-001',
   );
+  const oversizedSnapshot = assetSnapshot();
+  let reads = 0;
+  await rejectsEntryCode(
+    createDsl4BinaryEntryAssetBundle(
+      component.storyDocument,
+      {
+        manifest: oversizedSnapshot.manifest,
+        getFile(assetId, filePath) {
+          reads += 1;
+          return oversizedSnapshot.getFile(assetId, filePath);
+        },
+      },
+      {...bundleOptions, maxFileBytes: 128},
+    ),
+    'K4-ASSET-ENTRY-LIMIT-001',
+  );
+  assert.equal(reads, 0, 'declared limits must fail before payload reads');
 });
 
 test('consumes each asset once and drops reader references on completion or release', async () => {
