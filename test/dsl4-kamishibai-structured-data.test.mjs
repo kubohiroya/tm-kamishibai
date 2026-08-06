@@ -182,6 +182,79 @@ test('rejects invalid typed positions without partially changing Store ownership
   session.dispose();
 });
 
+test('fails closed without a resumable partial Iterator when scoped Store creation fails', () => {
+  const sizingStore = createDsl4ObjectStore();
+  const sizingSession = createDsl4KamishibaiStructuredDataSession({
+    storyDocument: story,
+    store: sizingStore,
+  });
+  sizingSession.beginStory();
+  const storyNodeCount = sizingStore.debugSnapshot().counts.nodes;
+  sizingSession.dispose();
+
+  const limitedStore = createDsl4ObjectStore({limits: {maxNodes: storyNodeCount}});
+  const limitedSession = createDsl4KamishibaiStructuredDataSession({
+    storyDocument: story,
+    store: limitedStore,
+  });
+  limitedSession.beginStory();
+  limitedSession.enterScene('opening');
+  assert.throws(
+    () => limitedSession.beginNextAction(),
+    (error) => {
+      assert.equal(error.code, 'K4-STRUCTURED-DATA-001');
+      return true;
+    },
+  );
+  assert.equal(limitedSession.debugSnapshot().state, 'idle');
+  assert.deepEqual(limitedSession.debugSnapshot().counts, {
+    scopes: 1,
+    entries: 0,
+    nodes: 0,
+    leases: 0,
+    handles: 4,
+    tombstones: 3,
+    referenceEdges: 0,
+  });
+  limitedSession.dispose();
+
+  const backingStore = createDsl4ObjectStore();
+  let sceneScopeCalls = 0;
+  const failingStore = {
+    rootScopeRef: backingStore.rootScopeRef,
+    createScope(...args) {
+      sceneScopeCalls += 1;
+      if (sceneScopeCalls === 2) {
+        return {ok: false, error: new Error('injected scene scope failure')};
+      }
+      return backingStore.createScope(...args);
+    },
+    createScopeBundle: backingStore.createScopeBundle,
+    debugSnapshot: backingStore.debugSnapshot,
+    disposeRealm: backingStore.disposeRealm,
+    readValue: backingStore.readValue,
+    releaseScope: backingStore.releaseScope,
+  };
+  const failingSession = createDsl4KamishibaiStructuredDataSession({
+    storyDocument: story,
+    store: failingStore,
+  });
+  failingSession.beginStory();
+  failingSession.enterScene('opening');
+  assert.throws(
+    () => failingSession.enterScene('ending'),
+    (error) => {
+      assert.equal(error.code, 'K4-STRUCTURED-DATA-001');
+      return true;
+    },
+  );
+  assert.equal(failingSession.debugSnapshot().state, 'idle');
+  assert.equal(failingSession.debugSnapshot().counts.scopes, 1);
+  assert.equal(failingSession.debugSnapshot().counts.entries, 0);
+  assert.equal(failingSession.debugSnapshot().counts.nodes, 0);
+  failingSession.dispose();
+});
+
 test('keeps the Kamishibai adapter free of Scratch, platform, JSONPath, and I/O dependencies', async () => {
   const source = await readFile(
     new URL('../src/dsl4/kamishibai-structured-data.js', import.meta.url),

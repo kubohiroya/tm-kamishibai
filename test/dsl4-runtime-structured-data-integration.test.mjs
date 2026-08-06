@@ -169,6 +169,11 @@ test('navigate releases stale ownership and finished reposition opens a fresh ty
   assert.equal(navigated.status, 'finished');
   assert.equal(store.classifyHandle(resources[0].actionViewRef).ok, false);
 
+  const invalid = controller.reposition('missing', {reason: 'test-invalid-reposition'});
+  assert.equal(invalid.status, 'finished');
+  assert.equal(invalid.diagnostic, null);
+  assert.equal(integration.debugSnapshot().state, 'idle');
+
   const repositioned = controller.reposition('opening', {
     actionIndex: 0,
     reason: 'test-reposition',

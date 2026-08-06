@@ -542,7 +542,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;

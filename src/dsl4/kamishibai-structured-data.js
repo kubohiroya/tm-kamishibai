@@ -275,24 +275,24 @@ export function createDsl4KamishibaiStructuredDataSession({
     }
   }
 
-  /** @param {string} reason */
-  function releaseAction(reason = 'action-complete') {
+  /** @param {string} _reason */
+  function releaseAction(_reason = 'action-complete') {
     requireUsable();
     if (!actionScopeRef) return false;
     const storyPath = typeof activeAction?.id === 'string' ? activeAction.id : '/';
-    requireCleanupResult(store.releaseScope(actionScopeRef), reason, storyPath);
+    requireCleanupResult(store.releaseScope(actionScopeRef), 'releaseAction', storyPath);
     actionScopeRef = null;
     actionViewRef = null;
     activeAction = null;
     return true;
   }
 
-  /** @param {string} reason */
-  function releaseScene(reason = 'scene-exit') {
+  /** @param {string} _reason */
+  function releaseScene(_reason = 'scene-exit') {
     requireUsable();
     if (!sceneScopeRef) return false;
     const scenePath = typeof activeScene?.id === 'string' ? `/scenes/${activeScene.id}` : '/';
-    requireCleanupResult(store.releaseScope(sceneScopeRef), reason, scenePath);
+    requireCleanupResult(store.releaseScope(sceneScopeRef), 'releaseScene', scenePath);
     sceneIterator?.release();
     sceneScopeRef = null;
     sceneIterator = null;
@@ -303,8 +303,8 @@ export function createDsl4KamishibaiStructuredDataSession({
     return true;
   }
 
-  /** @param {string} reason */
-  function endStory(reason = 'story-end') {
+  /** @param {string} _reason */
+  function endStory(_reason = 'story-end') {
     requireUsable();
     if (!storyScopeRef) return false;
     const released = store.releaseScope(storyScopeRef);
@@ -321,7 +321,7 @@ export function createDsl4KamishibaiStructuredDataSession({
       actionScopeRef = null;
       actionViewRef = null;
       activeAction = null;
-      requireCleanupResult(released, reason);
+      requireCleanupResult(released, 'endStory');
     }
     storyIterator?.release();
     sceneIterator?.release();
@@ -392,11 +392,18 @@ export function createDsl4KamishibaiStructuredDataSession({
     }
     const nextIterator = createDsl4SceneActionIterator(selected.scene, {startIndex: actionIndex});
     releaseScene('scene-transition');
-    const nextScopeRef = requireStoreResult(
-      store.createScope(activeStoryScopeRef, 'kamishibai.scene'),
-      'enterScene',
-      `/scenes/${selected.scene.id}`,
-    );
+    let nextScopeRef;
+    try {
+      nextScopeRef = requireStoreResult(
+        store.createScope(activeStoryScopeRef, 'kamishibai.scene'),
+        'enterScene',
+        `/scenes/${selected.scene.id}`,
+      );
+    } catch (error) {
+      nextIterator.release();
+      endStory('scene-transition-failed');
+      throw error;
+    }
     sceneScopeRef = nextScopeRef;
     sceneIterator = nextIterator;
     activeScene = selected.scene;
@@ -424,17 +431,23 @@ export function createDsl4KamishibaiStructuredDataSession({
       arguments: action.args,
       storyPath,
     };
-    const created = requireStoreResult(
-      store.createScopeBundle({
-        ownerScopeRef: sceneScopeRef,
-        label: 'kamishibai.action',
-        typeTag: actionViewTypeTag,
-        value: actionView,
-        references: [],
-      }),
-      'beginAction',
-      storyPath,
-    );
+    let created;
+    try {
+      created = requireStoreResult(
+        store.createScopeBundle({
+          ownerScopeRef: sceneScopeRef,
+          label: 'kamishibai.action',
+          typeTag: actionViewTypeTag,
+          value: actionView,
+          references: [],
+        }),
+        'beginAction',
+        storyPath,
+      );
+    } catch (error) {
+      endStory('begin-action-failed');
+      throw error;
+    }
     actionScopeRef = created.scopeRef;
     actionViewRef = created.ownerRef;
     activeAction = action;

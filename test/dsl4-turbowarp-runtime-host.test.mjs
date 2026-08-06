@@ -334,6 +334,7 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
   };
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, structuredDataIntegrationEnabled: true},
       createRuntimeExpressionComposition() {
         log.push(['expression.create']);
         return {
@@ -350,6 +351,11 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
         assert.strictEqual(context.runtime, fixture.runtime);
         assert.equal(Object.isFrozen(context), true);
         return {
+          wait(_payload, actionContext) {
+            assert.match(actionContext.structuredData.actionScopeRef, /^@os1\./u);
+            assert.match(actionContext.structuredData.actionViewRef, /^@os1\./u);
+            assert.equal(Object.isFrozen(actionContext.structuredData), true);
+          },
           dispose() {
             log.push(['story-input.dispose']);
           },

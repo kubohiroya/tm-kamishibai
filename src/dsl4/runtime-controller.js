@@ -620,7 +620,13 @@ export function createDsl4RuntimeController({
    * @param {boolean} [cleanupStructuredData]
    */
   function fail(error, cleanupStructuredData = true) {
-    if (status === 'failed' || status === 'stopped') return;
+    if (
+      status === 'failed' ||
+      status === 'stopped' ||
+      (status === 'finished' && !structuredStoryActive)
+    ) {
+      return;
+    }
     let terminalError = error;
     if (cleanupStructuredData && structuredDataIntegration) {
       try {
