@@ -1,0 +1,28 @@
+kamishibai: '4.0'
+
+assets:
+  海辺: backdrop
+  主人公衣装: costume:主人公
+
+actors:
+  主人公: 主人公衣装
+
+variables:
+  得点: 1
+
+scenes:
+  開始:
+    - stage: 海辺
+    - 主人公.show:
+        stableId: 開始表示
+        skin: 主人公衣装
+        x: 0
+        y: 0
+        scale: 100
+    - goto: Scene
+
+  Scene:
+    - goto: scene
+
+  scene:
+    - wait: 0
