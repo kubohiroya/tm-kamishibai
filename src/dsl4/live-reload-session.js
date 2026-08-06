@@ -72,6 +72,7 @@ function optionalIntegrity(value, name) {
  * @param {Record<string, Function>} [options.initialSession]
  * @param {string} [options.initialSourceIntegrity]
  * @param {(error: unknown) => void} [options.onRunError]
+ * @param {(value: unknown) => boolean} [options.isException]
  */
 export function createDsl4LiveReloadSession({
   createSession,
@@ -79,10 +80,14 @@ export function createDsl4LiveReloadSession({
   initialSession,
   initialSourceIntegrity,
   onRunError,
+  isException,
 }) {
   if (typeof createSession !== 'function') throw new TypeError('createSession must be a function');
   if (onRunError !== undefined && typeof onRunError !== 'function') {
     throw new TypeError('onRunError must be a function');
+  }
+  if (isException !== undefined && typeof isException !== 'function') {
+    throw new TypeError('isException must be a function');
   }
   if ((initialStoryDocument === undefined) !== (initialSession === undefined)) {
     throw new TypeError('initialStoryDocument and initialSession must be provided together');
@@ -234,6 +239,7 @@ export function createDsl4LiveReloadSession({
         currentStoryDocument: current.storyDocument,
         candidateStoryDocument: storyDocument,
         currentExecution: executionState(current.session),
+        isException,
       });
       candidate = {id: nextCandidateId++, storyDocument, integrity, plan};
       diagnostics = plan.diagnostics;

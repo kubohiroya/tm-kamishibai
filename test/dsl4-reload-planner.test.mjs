@@ -111,6 +111,66 @@ scenes:
   assert.equal(plan.options.currentAction.preserveManagedPresentation, true);
 });
 
+test('resets Object Store and ExceptionRef variables instead of transferring runtime handles', () => {
+  const current = parseStory(`
+kamishibai: '4.0'
+variables:
+  objectHandle: initial-object
+  exceptionToken: initial-exception
+  forgedToken: initial-forged
+  preserved: initial
+scenes:
+  opening:
+    - wait: 1
+`);
+  const candidate = parseStory(`
+kamishibai: '4.0'
+variables:
+  objectHandle: next-object
+  exceptionToken: next-exception
+  forgedToken: next-forged
+  preserved: next
+scenes:
+  opening:
+    - wait: 2
+`);
+  const runtimeOnlyValues = {
+    objectHandle: '@os1.private-realm.private-handle',
+    exceptionToken: '@sdx1.private-realm.private-exception',
+    forgedToken: '@sdx1.forged-realm.forged-exception',
+    preserved: 'live-value',
+  };
+  const plan = createDsl4ReloadPlan({
+    currentStoryDocument: current,
+    candidateStoryDocument: candidate,
+    currentExecution: execution(current, 'opening', 0, runtimeOnlyValues),
+    isException: (value) => value === runtimeOnlyValues.exceptionToken,
+  });
+
+  const expectedVariables = {
+    objectHandle: 'next-object',
+    exceptionToken: 'next-exception',
+    forgedToken: runtimeOnlyValues.forgedToken,
+    preserved: 'live-value',
+  };
+  assert.deepEqual(plan.options.currentScene.variables, expectedVariables);
+  assert.deepEqual(plan.options.currentAction.variables, expectedVariables);
+  assert.deepEqual(
+    plan.diagnostics
+      .filter((entry) => entry.code === 'K4-RELOAD-VARIABLE-REFERENCE-RESET')
+      .map((entry) => [entry.details.name, entry.details.referenceKind]),
+    [
+      ['objectHandle', 'object-store'],
+      ['exceptionToken', 'exception'],
+    ],
+  );
+  const serialized = JSON.stringify(plan);
+  for (const value of [runtimeOnlyValues.objectHandle, runtimeOnlyValues.exceptionToken]) {
+    assert.equal(serialized.includes(value), false);
+  }
+  assert.equal(serialized.includes(runtimeOnlyValues.forgedToken), true);
+});
+
 test('uses stableId before location and follows a moved action across scenes', () => {
   const current = parseStory(currentSource);
   const candidate = parseStory(`
@@ -285,6 +345,16 @@ test('returns deeply immutable data and rejects invalid planner boundaries', () 
         currentExecution: {},
       }),
     /currentStoryDocument must be a DSL 4\.0 StoryDocument/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4ReloadPlan({
+        currentStoryDocument: current,
+        candidateStoryDocument: current,
+        currentExecution: execution(current, 'opening', 0),
+        isException: true,
+      }),
+    /isException must be a function/u,
   );
 });
 

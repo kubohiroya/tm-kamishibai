@@ -1651,6 +1651,18 @@ export function createDsl4ObjectStore({
     });
   }
 
+  /** @param {unknown} source */
+  function classifyHandle(source) {
+    return executeRead('classifyHandle', (working) => {
+      const handle = resolveHandle(working, context, source, handleKinds);
+      if (handle.kind === 'scope') return {kind: 'scope'};
+      const selected = resolveSourceNode(working, context, source).node;
+      const entry = working.entries.get(selected.entrySlot);
+      if (!entry) throw new StoreInvariantFailure('Selected node has no entry');
+      return {kind: handle.kind, typeTag: entry.typeTag};
+    });
+  }
+
   function debugSnapshot() {
     const {root, revision} = readDsl4MapBackend(backend);
     return createDebugSnapshot(root, context.realmState, revision);
@@ -1695,6 +1707,7 @@ export function createDsl4ObjectStore({
   }
 
   return Object.freeze({
+    limits,
     rootScopeRef,
     createScope,
     newEntry,
@@ -1708,6 +1721,7 @@ export function createDsl4ObjectStore({
     releaseScope,
     readValue,
     readNodeView,
+    classifyHandle,
     debugSnapshot,
     backendStatus: () => backend.debugStatus(),
     disposeRealm,

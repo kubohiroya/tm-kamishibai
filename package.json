@@ -15,6 +15,7 @@
   "exports": {
     "./builder": "./src/builder/index.js",
     "./converter": "./src/converter/index.js",
+    "./dsl4": "./src/dsl4/index.js",
     "./package.json": "./package.json"
   },
   "bin": {

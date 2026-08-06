@@ -249,6 +249,8 @@ expiredにはしない。release／expiryはactive枠を直ちに空け、別枠
 
 - `isException(value)`は現在のAdapter tableのactive recordまたは保持中のreleased／expired tombstoneに
   一致する場合だけtrueを返す。
+- live reload plannerは現在のAdapterの`isException` predicateをsession起動時に受け取り、trueになった
+  scalarだけを移送対象から外す。`@sdx1.`に似た未知tokenをprefixだけでExceptionRefと推測しない。
 - `exceptionCode`、`exceptionOperation`、`exceptionMessage`はactive recordだけを読める。
 - released／expired recordは`SD-EXCEPTION-EXPIRED`を返す。別realm／未知tokenは通常のstringであり、
   `isException`はfalseとする。
@@ -332,6 +334,10 @@ Standard fixtureの受け入れ条件は次とする。
 pure libraryは既存runtimeから未参照で導入する。Standalone paletteは起動時固定の
 `structuredDataStandaloneEnabled`、developer surfaceは`structuredDataDebugEnabled`で個別に既定OFFとする。
 Kamishibai内部統合はさらに別の既定OFF flagにし、Standalone有効化と連動させない。
+
+実装は`./dsl4` package subpathから、既定OFFのflag snapshot、Adapter、TurboWarp surface factoryを公開する。
+factory生成だけでは登録せず、app shellが起動時に一度だけ`register()`を呼ぶ。両flagがOFFならScratch hostと
+Adapterを参照せず、Standard manifest／palette／SB3へextension IDまたはopcodeを追加しない。
 
 問題時は各flagをOFFにし、implementation PRをrevertする。Standard Kamishibai fixtureと3.2 runtimeは
 Structured Data visible extensionへ依存しないため、そのまま実行できる。
