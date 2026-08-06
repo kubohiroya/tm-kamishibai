@@ -1,4 +1,5 @@
 import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
+import {createDsl4ActionQuiesceResolver} from './action-quiesce.js';
 import {createDsl4HistoryReducer} from './history-reducer.js';
 import {createDsl4KamishibaiStructuredDataSession} from './kamishibai-structured-data.js';
 import {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
@@ -72,6 +73,10 @@ function historyFailure(result) {
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
  * @param {boolean} [options.structuredDataIntegrationEnabled]
+ * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
+ * @param {unknown} [options.actionRegistrySnapshot]
+ * @param {number} [options.quiesceTimeoutMs]
+ * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
 export function createDsl4NavigationSession({
   storyDocument,
@@ -85,6 +90,10 @@ export function createDsl4NavigationSession({
   onEvent,
   onInputError,
   structuredDataIntegrationEnabled = false,
+  resolveActionQuiesceMode,
+  actionRegistrySnapshot,
+  quiesceTimeoutMs,
+  scheduleQuiesceTimeout,
 }) {
   if (typeof structuredDataIntegrationEnabled !== 'boolean') {
     throw new TypeError('structuredDataIntegrationEnabled must be boolean');
@@ -95,6 +104,17 @@ export function createDsl4NavigationSession({
   if (createAssetLifecycle !== undefined && typeof createAssetLifecycle !== 'function') {
     throw new TypeError('createAssetLifecycle must be a function');
   }
+  if (resolveActionQuiesceMode !== undefined && typeof resolveActionQuiesceMode !== 'function') {
+    throw new TypeError('resolveActionQuiesceMode must be a function');
+  }
+  if (resolveActionQuiesceMode !== undefined && actionRegistrySnapshot !== undefined) {
+    throw new TypeError('Provide resolveActionQuiesceMode or actionRegistrySnapshot, not both');
+  }
+  const actionQuiesceMode =
+    resolveActionQuiesceMode ??
+    createDsl4ActionQuiesceResolver(
+      actionRegistrySnapshot === undefined ? undefined : {registrySnapshot: actionRegistrySnapshot},
+    );
   const profileResult = resolveDsl4ControlProfile(storyDocument, controlProfile, {
     historyNavigationAvailable,
   });
@@ -184,6 +204,8 @@ export function createDsl4NavigationSession({
       evaluateCondition,
       onEvent: handleRuntimeEvent,
       structuredDataIntegration: structuredDataIntegration ?? undefined,
+      quiesceTimeoutMs,
+      scheduleQuiesceTimeout,
     });
   } catch (error) {
     structuredDataIntegration?.dispose();
@@ -277,6 +299,15 @@ export function createDsl4NavigationSession({
     onError: onInputError,
   });
 
+  const actionsByPath = new Map(
+    /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (storyDocument.scenes).flatMap(
+      (scene) =>
+        /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions).map(
+          (action) => [action.id, action],
+        ),
+    ),
+  );
+
   const session = Object.freeze({
     /** @param {{sceneId?: string, actionIndex?: number, variables?: Readonly<Record<string, string | number | boolean>>}} [options] */
     start(options = {}) {
@@ -297,6 +328,23 @@ export function createDsl4NavigationSession({
     whenInputIdle: inputAdapter.whenIdle,
     getState: snapshot,
     getRunPromise: controller.getRunPromise,
+    /** @param {{candidateId: number}} options */
+    quiesce({candidateId}) {
+      const runtime = controller.getState();
+      const action =
+        typeof runtime.actionPath === 'string'
+          ? (actionsByPath.get(runtime.actionPath) ?? null)
+          : null;
+      const mode = actionQuiesceMode(action);
+      if (mode !== 'finish-only' && mode !== 'cancel-replay-safe') {
+        return Promise.reject(new TypeError('resolveActionQuiesceMode returned an invalid mode'));
+      }
+      return controller.quiesce({candidateId, mode});
+    },
+    /** @param {number} candidateId */
+    resumeQuiesce(candidateId) {
+      return controller.resumeQuiesce(candidateId);
+    },
     dispose() {
       if (disposed) return;
       inputAdapter.dispose();

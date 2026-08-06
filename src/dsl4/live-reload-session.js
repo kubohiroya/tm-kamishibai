@@ -28,13 +28,168 @@ function validateRuntimeSession(value) {
     typeof value.start !== 'function' ||
     typeof value.stop !== 'function' ||
     typeof value.dispose !== 'function' ||
-    typeof value.getState !== 'function'
+    typeof value.getState !== 'function' ||
+    typeof value.quiesce !== 'function' ||
+    typeof value.resumeQuiesce !== 'function'
   ) {
     throw new TypeError(
-      'live reload runtime session must provide start, stop, dispose, and getState',
+      'live reload runtime session must provide start, stop, dispose, getState, quiesce, and resumeQuiesce',
     );
   }
   return /** @type {Record<string, Function>} */ (value);
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} candidateId
+ * @param {Readonly<Record<string, unknown>>} currentStoryDocument
+ */
+function validateQuiesceToken(value, candidateId, currentStoryDocument) {
+  if (!isRecord(value)) {
+    throw new TypeError('live reload runtime returned an invalid QuiesceToken');
+  }
+  const token = /** @type {Record<string, any>} */ (value);
+  const keys = Object.keys(token).sort();
+  const expectedKeys = [
+    'actionIndex',
+    'actionSignature',
+    'candidateId',
+    'kind',
+    'resumeMode',
+    'runtimeGeneration',
+    'sceneId',
+    'storyPath',
+    'variables',
+    'version',
+  ];
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index]) ||
+    token.kind !== 'Dsl4QuiesceToken' ||
+    token.version !== 1 ||
+    token.candidateId !== candidateId ||
+    !Number.isSafeInteger(token.runtimeGeneration) ||
+    token.runtimeGeneration < 0 ||
+    typeof token.storyPath !== 'string' ||
+    token.storyPath.length === 0 ||
+    (typeof token.sceneId !== 'string' && token.sceneId !== null) ||
+    (typeof token.sceneId === 'string' && token.sceneId.length === 0) ||
+    !Number.isSafeInteger(token.actionIndex) ||
+    token.actionIndex < 0 ||
+    !isRecord(token.variables) ||
+    Object.values(token.variables).some(
+      (runtimeValue) =>
+        typeof runtimeValue !== 'string' &&
+        typeof runtimeValue !== 'number' &&
+        typeof runtimeValue !== 'boolean',
+    ) ||
+    !['next-action', 'replay-action', 'finished'].includes(String(token.resumeMode))
+  ) {
+    throw new TypeError('live reload runtime returned an invalid QuiesceToken');
+  }
+  if (token.actionSignature !== null) {
+    if (!isRecord(token.actionSignature)) {
+      throw new TypeError('live reload QuiesceToken action signature is invalid');
+    }
+    const signatureKeys = Object.keys(token.actionSignature).sort();
+    if (
+      signatureKeys.length !== 3 ||
+      signatureKeys[0] !== 'command' ||
+      signatureKeys[1] !== 'handler' ||
+      signatureKeys[2] !== 'target' ||
+      typeof token.actionSignature.command !== 'string' ||
+      token.actionSignature.command.length === 0 ||
+      (typeof token.actionSignature.target !== 'string' && token.actionSignature.target !== null) ||
+      (typeof token.actionSignature.target === 'string' &&
+        token.actionSignature.target.length === 0) ||
+      !['core', 'custom'].includes(String(token.actionSignature.handler))
+    ) {
+      throw new TypeError('live reload QuiesceToken action signature is invalid');
+    }
+  }
+  const scenes = /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
+    currentStoryDocument.scenes
+  );
+  const declaredVariables = /** @type {Readonly<Record<string, string | number | boolean>>} */ (
+    currentStoryDocument.variables ?? {}
+  );
+  const declaredVariableNames = Object.keys(declaredVariables).sort();
+  const tokenVariableNames = Object.keys(token.variables).sort();
+  if (
+    declaredVariableNames.length !== tokenVariableNames.length ||
+    declaredVariableNames.some((name, index) => name !== tokenVariableNames[index]) ||
+    declaredVariableNames.some(
+      (name) => typeof token.variables[name] !== typeof declaredVariables[name],
+    )
+  ) {
+    throw new TypeError('live reload QuiesceToken variable snapshot is inconsistent');
+  }
+  const scene = scenes.find((currentScene) => currentScene.id === token.sceneId) ?? null;
+  const actions = /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
+    scene?.actions ?? []
+  );
+  const action = actions[token.actionIndex] ?? null;
+  if (token.actionSignature) {
+    if (
+      token.resumeMode === 'finished' ||
+      !action ||
+      action.id !== token.storyPath ||
+      action.command !== token.actionSignature.command ||
+      action.target !== token.actionSignature.target ||
+      String(action.handler ?? 'core') !== token.actionSignature.handler
+    ) {
+      throw new TypeError('live reload QuiesceToken action anchor is inconsistent');
+    }
+  } else if (
+    token.resumeMode !== 'finished' ||
+    !scene ||
+    token.actionIndex !== actions.length ||
+    token.storyPath !== `/scenes/${String(scene.id).replaceAll('~', '~0').replaceAll('/', '~1')}`
+  ) {
+    throw new TypeError('live reload QuiesceToken terminal anchor is inconsistent');
+  }
+  return deepFreeze(cloneValue(token));
+}
+
+/** @param {Readonly<Record<string, any>>} token */
+function executionFromQuiesceToken(token) {
+  return deepFreeze({
+    status: token.resumeMode === 'finished' ? 'finished' : 'paused',
+    sceneId: token.sceneId,
+    actionIndex: token.actionIndex,
+    actionPath: token.actionSignature ? token.storyPath : null,
+    variables: cloneValue(token.variables),
+    generation: token.runtimeGeneration,
+  });
+}
+
+/**
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} error
+ */
+function quiesceDiagnostic(storyDocument, error) {
+  const record = isRecord(error) ? error : {};
+  const code =
+    typeof record.code === 'string' &&
+    ['K4-RELOAD-QUIESCE-TIMEOUT', 'K4-RELOAD-QUIESCE-FAILED'].includes(record.code)
+      ? record.code
+      : 'K4-RELOAD-QUIESCE-FAILED';
+  const storyPath = typeof record.storyPath === 'string' ? record.storyPath : '/';
+  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  return deepFreeze({
+    version: 1,
+    code,
+    severity: 'error',
+    message:
+      code === 'K4-RELOAD-QUIESCE-TIMEOUT'
+        ? 'Live reload could not stop the current action before the quiesce timeout'
+        : 'Live reload could not establish a safe action boundary',
+    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
+    range: sourceMap[storyPath] ?? sourceMap['/'],
+    ...(storyPath !== '/' ? {storyPath} : {}),
+    related: [],
+  });
 }
 
 /** @param {Record<string, Function>} session */
@@ -104,9 +259,9 @@ export function createDsl4LiveReloadSession({
           session: validateRuntimeSession(initialSession),
           integrity: optionalIntegrity(initialSourceIntegrity, 'initialSourceIntegrity'),
         };
-  /** @type {{id: number, storyDocument: Readonly<Record<string, unknown>>, integrity: string | null, plan: Readonly<Record<string, any>>} | null} */
+  /** @type {{id: number, storyDocument: Readonly<Record<string, unknown>>, integrity: string | null, plan: Readonly<Record<string, any>> | null, token: Readonly<Record<string, any>> | null} | null} */
   let candidate = null;
-  /** @type {'waiting' | 'active' | 'invalid' | 'pending' | 'deferred' | 'failed' | 'disposed'} */
+  /** @type {'waiting' | 'active' | 'invalid' | 'quiescing' | 'pending' | 'failed' | 'disposed'} */
   let status = current ? 'active' : 'waiting';
   let generation = current ? 1 : 0;
   let nextCandidateId = 1;
@@ -114,6 +269,7 @@ export function createDsl4LiveReloadSession({
   let diagnostics = [];
   let disposed = false;
   let operationQueue = Promise.resolve();
+  const pendingStages = new Set();
 
   function snapshot() {
     const runtime = current ? executionState(current.session) : null;
@@ -192,7 +348,7 @@ export function createDsl4LiveReloadSession({
 
   /** @param {unknown} input */
   function stage(input) {
-    return enqueue(async () => {
+    const begun = enqueue(async () => {
       if (disposed) throw new TypeError('live reload session is disposed');
       if (!isRecord(input) || typeof input.ok !== 'boolean') {
         throw new TypeError('stage requires a source frontend result');
@@ -202,12 +358,13 @@ export function createDsl4LiveReloadSession({
         if (!Array.isArray(input.diagnostics)) {
           throw new TypeError('invalid source result must provide diagnostics');
         }
+        if (candidate && current) await current.session.resumeQuiesce(candidate.id);
         candidate = null;
         diagnostics = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
           cloneValue(input.diagnostics)
         );
         status = 'invalid';
-        return snapshot();
+        return {kind: 'snapshot', state: snapshot()};
       }
 
       const storyDocument = validateStoryDocument(input.storyDocument);
@@ -232,26 +389,99 @@ export function createDsl4LiveReloadSession({
         generation += 1;
         status = 'active';
         observeRun(run);
-        return snapshot();
+        return {kind: 'snapshot', state: snapshot()};
       }
 
-      const plan = createDsl4ReloadPlan({
-        currentStoryDocument: current.storyDocument,
-        candidateStoryDocument: storyDocument,
-        currentExecution: executionState(current.session),
-        isException,
-      });
-      candidate = {id: nextCandidateId++, storyDocument, integrity, plan};
-      diagnostics = plan.diagnostics;
-      status = 'pending';
-      return snapshot();
+      const candidateId = nextCandidateId++;
+      candidate = {id: candidateId, storyDocument, integrity, plan: null, token: null};
+      status = 'quiescing';
+      let quiescePromise;
+      try {
+        quiescePromise = Promise.resolve(current.session.quiesce({candidateId}));
+      } catch (error) {
+        try {
+          await current.session.stop('live-reload-quiesce-failed');
+        } catch {
+          // The fixed quiesce diagnostic remains authoritative.
+        }
+        candidate = null;
+        diagnostics = [quiesceDiagnostic(storyDocument, error)];
+        status = 'failed';
+        return {kind: 'snapshot', state: snapshot()};
+      }
+      return {kind: 'candidate', candidateId, quiescePromise};
     });
+
+    const completion = begun.then(async (resultInput) => {
+      const result = /** @type {Record<string, any>} */ (resultInput);
+      if (result.kind === 'snapshot') return result.state;
+      let tokenInput;
+      try {
+        tokenInput = await result.quiescePromise;
+      } catch (error) {
+        return enqueue(async () => {
+          if (!candidate || candidate.id !== result.candidateId) {
+            throw new TypeError('live reload candidate was replaced while quiescing');
+          }
+          if (current) {
+            try {
+              await current.session.stop('live-reload-quiesce-failed');
+            } catch {
+              // The fixed quiesce diagnostic remains authoritative.
+            }
+          }
+          diagnostics = [quiesceDiagnostic(candidate.storyDocument, error)];
+          candidate = null;
+          status = 'failed';
+          return snapshot();
+        });
+      }
+      return enqueue(async () => {
+        if (!candidate || candidate.id !== result.candidateId) {
+          throw new TypeError('live reload candidate was replaced while quiescing');
+        }
+        if (!current) throw new TypeError('live reload has no current runtime');
+        try {
+          const token = validateQuiesceToken(tokenInput, candidate.id, current.storyDocument);
+          const plan = createDsl4ReloadPlan({
+            currentStoryDocument: current.storyDocument,
+            candidateStoryDocument: candidate.storyDocument,
+            currentExecution: executionFromQuiesceToken(token),
+            isException,
+          });
+          candidate = {...candidate, token, plan};
+          diagnostics = plan.diagnostics;
+          status = 'pending';
+          return snapshot();
+        } catch (error) {
+          try {
+            await current.session.stop('live-reload-quiesce-invalid');
+          } catch {
+            // The fixed quiesce diagnostic remains authoritative.
+          }
+          diagnostics = [quiesceDiagnostic(candidate.storyDocument, error)];
+          candidate = null;
+          status = 'failed';
+          return snapshot();
+        }
+      });
+    });
+    const idleStage = completion.then(
+      () => undefined,
+      () => undefined,
+    );
+    pendingStages.add(idleStage);
+    void idleStage.then(() => pendingStages.delete(idleStage));
+    return completion;
   }
 
   /** Discard author-visible candidate state while leaving the current runtime untouched. */
   function discardCandidate() {
-    return enqueue(() => {
+    return enqueue(async () => {
       if (disposed) throw new TypeError('live reload session is disposed');
+      if (candidate && current && status !== 'failed') {
+        await current.session.resumeQuiesce(candidate.id);
+      }
       candidate = null;
       diagnostics = [];
       if (status !== 'failed') status = current ? 'active' : 'waiting';
@@ -261,12 +491,16 @@ export function createDsl4LiveReloadSession({
 
   /** @param {number} candidateId */
   function defer(candidateId) {
-    return enqueue(() => {
+    return enqueue(async () => {
       if (disposed) throw new TypeError('live reload session is disposed');
       if (!candidate || candidate.id !== candidateId) {
         throw new TypeError('live reload candidate is stale or missing');
       }
-      status = 'deferred';
+      if (!current) throw new TypeError('live reload has no current runtime');
+      await current.session.resumeQuiesce(candidateId);
+      candidate = null;
+      diagnostics = [];
+      if (status !== 'failed') status = 'active';
       return snapshot();
     });
   }
@@ -281,9 +515,18 @@ export function createDsl4LiveReloadSession({
       if (!candidate || candidate.id !== candidateId) {
         throw new TypeError('live reload candidate is stale or missing');
       }
+      if (!candidate.plan || !candidate.token) {
+        throw new TypeError('live reload candidate has not reached a safe boundary');
+      }
       const option = candidate.plan.options[choice];
       if (!option?.enabled) throw new TypeError(`live reload choice ${choice} is disabled`);
       if (!current) throw new TypeError('live reload has no current runtime');
+      const previousRuntime = executionState(current.session);
+      if (previousRuntime.status === 'failed' || previousRuntime.status === 'stopped') {
+        candidate = null;
+        status = 'failed';
+        throw new TypeError('live reload current runtime stopped before commit');
+      }
 
       const previous = current;
       const next = await makeSession(
@@ -366,8 +609,10 @@ export function createDsl4LiveReloadSession({
     commit,
     dispose,
     getState: snapshot,
-    whenIdle() {
-      return operationQueue.then(snapshot);
+    async whenIdle() {
+      await Promise.all([...pendingStages, operationQueue]);
+      await operationQueue;
+      return snapshot();
     },
   });
 }

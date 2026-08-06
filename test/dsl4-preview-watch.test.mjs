@@ -395,6 +395,7 @@ test('feeds initial, invalid, and recovered snapshots directly into live reload'
         actionPath: null,
         variables: storyDocument.variables,
       };
+      let quiesceToken = null;
       return {
         start(options = {}) {
           events.push(['start', options]);
@@ -404,12 +405,37 @@ test('feeds initial, invalid, and recovered snapshots directly into live reload'
         stop(reason) {
           events.push(['stop', reason]);
           state = {...state, status: 'stopped'};
+          quiesceToken = null;
         },
         dispose(reason) {
           events.push(['dispose', reason]);
         },
         getState() {
           return {runtime: state};
+        },
+        quiesce({candidateId}) {
+          quiesceToken = Object.freeze({
+            kind: 'Dsl4QuiesceToken',
+            version: 1,
+            candidateId,
+            runtimeGeneration: 1,
+            storyPath: '/scenes/opening',
+            actionSignature: null,
+            sceneId: 'opening',
+            actionIndex: 0,
+            variables: {...state.variables},
+            resumeMode: 'finished',
+          });
+          state = {...state, status: 'paused'};
+          return quiesceToken;
+        },
+        resumeQuiesce(candidateId) {
+          if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
+            throw new TypeError('stale quiesce candidate');
+          }
+          quiesceToken = null;
+          state = {...state, status: 'running'};
+          return state;
         },
       };
     },

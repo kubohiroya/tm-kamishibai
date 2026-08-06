@@ -17,6 +17,7 @@ export {
   dsl4CustomActionTimeoutDefaults,
   Dsl4CustomActionError,
 } from './action-invocation-adapter.js';
+export {createDsl4ActionQuiesceResolver, dsl4CoreActionQuiesceModes} from './action-quiesce.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
@@ -50,7 +51,7 @@ export {
   Dsl4PreviewProtocolError,
 } from './preview-protocol.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
-export {createDsl4RuntimeController} from './runtime-controller.js';
+export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
 export {
   createDsl4RuntimeStartup,
   dsl4DefaultFeatureFlags,

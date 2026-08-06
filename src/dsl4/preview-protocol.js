@@ -169,6 +169,7 @@ export function createDsl4PreviewProtocolSession({liveReloadSession, runtimeCapa
   /** @type {{sessionId: string, capabilities: ReadonlySet<string>, latestRevision: number, candidate: {revision: number, id: number} | null} | null} */
   let connection = null;
   let operationQueue = Promise.resolve();
+  const pendingStages = new Set();
 
   /** @param {() => unknown | Promise<unknown>} operation */
   function enqueue(operation) {
@@ -243,7 +244,7 @@ export function createDsl4PreviewProtocolSession({liveReloadSession, runtimeCapa
 
   /** @param {unknown} input */
   function stage(input) {
-    return enqueue(async () => {
+    const begun = enqueue(() => {
       const request = message(input, messageTypes.stage);
       rejectUnknownKeys(request, new Set(['type', 'sessionId', 'revision', 'result']));
       const requestedSessionId = sessionId(request.sessionId);
@@ -253,22 +254,49 @@ export function createDsl4PreviewProtocolSession({liveReloadSession, runtimeCapa
         fail('K4-PREVIEW-PROTOCOL-REVISION', 'Preview source revision is stale');
       }
       const integrity = stagedSourceIntegrity(request.result);
-      const state = await liveReload.stage(request.result);
       active.latestRevision = revision;
-      active.candidate = state.candidate ? {revision, id: state.candidate.id} : null;
-      return deepFreeze({
-        type: 'preview.source.staged',
-        sessionId: requestedSessionId,
-        revision,
-        sourceIntegrity: integrity,
-        status: state.status,
-        candidate: state.candidate
-          ? {id: state.candidate.id, options: state.candidate.plan.options}
-          : null,
-        current: currentSummary(state),
-        diagnostics: state.diagnostics,
+      active.candidate = null;
+      const staged = liveReload.stage(request.result);
+      return {active, requestedSessionId, revision, integrity, staged};
+    });
+
+    const completion = begun.then(async (begunInput) => {
+      const {active, requestedSessionId, revision, integrity, staged} = /** @type {any} */ (
+        begunInput
+      );
+      const state = await staged;
+      return enqueue(() => {
+        if (!connection || connection !== active || connection.sessionId !== requestedSessionId) {
+          fail('K4-PREVIEW-PROTOCOL-SESSION', 'Preview source belongs to a stale session');
+        }
+        if (revision !== active.latestRevision && state.candidate) {
+          fail('K4-PREVIEW-PROTOCOL-REVISION', 'Preview source revision was replaced');
+        }
+        const stagedCandidate = revision === active.latestRevision ? state.candidate : null;
+        if (revision === active.latestRevision) {
+          active.candidate = stagedCandidate ? {revision, id: stagedCandidate.id} : null;
+        }
+        return deepFreeze({
+          type: 'preview.source.staged',
+          sessionId: requestedSessionId,
+          revision,
+          sourceIntegrity: integrity,
+          status: state.status,
+          candidate: stagedCandidate
+            ? {id: stagedCandidate.id, options: stagedCandidate.plan.options}
+            : null,
+          current: currentSummary(state),
+          diagnostics: state.diagnostics,
+        });
       });
     });
+    const idleStage = completion.then(
+      () => undefined,
+      () => undefined,
+    );
+    pendingStages.add(idleStage);
+    void idleStage.then(() => pendingStages.delete(idleStage));
+    return completion;
   }
 
   /** @param {unknown} input */
@@ -291,6 +319,7 @@ export function createDsl4PreviewProtocolSession({liveReloadSession, runtimeCapa
         fail('K4-PREVIEW-PROTOCOL-CANDIDATE', 'Preview candidate is stale or missing');
       }
       const state = await liveReload.defer(candidateId);
+      active.candidate = null;
       return deepFreeze({
         type: 'preview.source.deferred',
         sessionId: requestedSessionId,
@@ -376,8 +405,10 @@ export function createDsl4PreviewProtocolSession({liveReloadSession, runtimeCapa
     commit,
     disconnect,
     getState: snapshot,
-    whenIdle() {
-      return operationQueue.then(snapshot);
+    async whenIdle() {
+      await Promise.all([...pendingStages, operationQueue]);
+      await operationQueue;
+      return snapshot();
     },
   });
 }

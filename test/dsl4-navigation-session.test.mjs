@@ -138,6 +138,60 @@ scenes:
   assert.equal(created.session.getState().history, null);
 });
 
+test('exposes the runtime quiesce gate with the startup-fixed core action policy', async () => {
+  const cleanup = deferred();
+  let calls = 0;
+  let aborted = false;
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+scenes:
+  opening:
+    - wait: 1
+    - wait: 2
+`);
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    port: {
+      wait(_payload, context) {
+        calls += 1;
+        if (calls > 1) return Promise.resolve();
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              cleanup.promise.then(() => {
+                const error = new Error('cancelled');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            },
+            {once: true},
+          );
+        });
+      },
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  const initialRun = created.session.start();
+  await waitFor(() => calls === 1, 'first action did not start');
+  const quiesced = created.session.quiesce({candidateId: 9});
+  assert.equal(aborted, true);
+  cleanup.resolve();
+
+  const token = await quiesced;
+  assert.equal(token.resumeMode, 'replay-action');
+  assert.equal(token.storyPath, '/scenes/opening/actions/0');
+  await initialRun;
+  await created.session.resumeQuiesce(9);
+  await created.session.getRunPromise();
+  assert.equal(calls, 3);
+  assert.equal(created.session.getState().runtime.status, 'finished');
+  created.session.dispose();
+});
+
 test('history profile requires availability and explicit finite limits', () => {
   const story = parseStory(`
 kamishibai: '4.0'
