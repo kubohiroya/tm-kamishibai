@@ -1,0 +1,24 @@
+kamishibai: '4.0'
+
+variables:
+  score: 1
+
+controls:
+  keymaps:
+    crossSurface:
+      Space: navigation.nextAction
+      ArrowLeft: history.previousAction
+      ArrowUp: history.previousScene
+      ArrowDown: history.nextScene
+
+scenes:
+  opening:
+    - wait: 1
+    - goto: middle
+
+  middle:
+    - wait: 1
+    - goto: ending
+
+  ending:
+    - wait: 1
