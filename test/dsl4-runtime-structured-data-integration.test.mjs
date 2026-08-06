@@ -202,6 +202,66 @@ test('navigate releases stale ownership and finished reposition opens a fresh ty
   controller.dispose();
 });
 
+test('advance fails closed when the next scene scope cannot be created', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - wait: 10
+  ending: []
+`);
+  const backingStore = createDsl4ObjectStore();
+  let sceneScopeCalls = 0;
+  const failingStore = {
+    rootScopeRef: backingStore.rootScopeRef,
+    createScope(...args) {
+      sceneScopeCalls += 1;
+      if (sceneScopeCalls === 2) {
+        return {ok: false, error: new Error('injected scene scope failure')};
+      }
+      return backingStore.createScope(...args);
+    },
+    createScopeBundle: backingStore.createScopeBundle,
+    debugSnapshot: backingStore.debugSnapshot,
+    disposeRealm: backingStore.disposeRealm,
+    readValue: backingStore.readValue,
+    releaseScope: backingStore.releaseScope,
+  };
+  const integration = createDsl4KamishibaiStructuredDataSession({
+    storyDocument,
+    store: failingStore,
+  });
+  const pending = deferred();
+  let calls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    structuredDataIntegration: integration,
+    port: {
+      wait() {
+        calls += 1;
+        return pending.promise;
+      },
+    },
+  });
+
+  const initialRun = controller.start();
+  await waitUntil(() => calls === 1);
+  const advanced = await controller.advance('test-cross-scene-failure');
+  assert.equal(advanced.status, 'failed');
+  assert.equal(advanced.diagnostic.code, 'K4-STRUCTURED-DATA-001');
+  assert.equal(integration.debugSnapshot().state, 'idle');
+  assert.deepEqual(activeCounts(backingStore), {
+    scopes: 1,
+    entries: 0,
+    nodes: 0,
+    leases: 0,
+    referenceEdges: 0,
+  });
+  pending.resolve();
+  await initialRun;
+  controller.dispose();
+});
+
 test('stop and action failure release story, scene, and action ownership exactly once', async () => {
   const storyDocument = parseStory(cancellableStory);
   {

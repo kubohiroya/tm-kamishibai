@@ -930,7 +930,12 @@ export function createDsl4RuntimeController({
       });
       const activeRunId = runId;
       if (!assetCoordinator) {
-        transitionTo(nextSceneId, reason);
+        try {
+          transitionTo(nextSceneId, reason);
+        } catch (error) {
+          fail(error);
+          return Promise.resolve(snapshot());
+        }
         runPromise = run(activeRunId);
         return runPromise;
       }
