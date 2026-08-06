@@ -271,6 +271,7 @@ function createExtension(Scratch, manifest, handlers) {
           opcode: definition.opcode,
           blockType: Scratch.BlockType[definition.blockType],
           text: definition.text,
+          ...(definition.blockType === 'REPORTER' ? {disableMonitor: true} : {}),
           arguments: Object.fromEntries(
             Object.entries(definition.arguments).map(([name, argument]) => [
               name,

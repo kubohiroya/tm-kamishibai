@@ -155,6 +155,12 @@ test('registers only enabled palettes once and forwards Scratch-cast arguments',
     surfaces.standalone.getInfo().blocks.map((definition) => definition.opcode),
     expectedStandaloneContract.map(([opcode]) => opcode),
   );
+  for (const definition of surfaces.standalone.getInfo().blocks) {
+    assert.equal(
+      definition.disableMonitor,
+      definition.blockType === Scratch.BlockType.REPORTER ? true : undefined,
+    );
+  }
   assert.equal(surfaces.developer, null);
   assert.deepEqual(surfaces.register(), {registered: true});
   assert.deepEqual(surfaces.register(), {registered: false});
