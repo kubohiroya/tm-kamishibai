@@ -11,6 +11,7 @@ export default [
     ignores: [
       'dist/**',
       'node_modules/**',
+      'release-sources/**',
       'tmp/**',
       // These files are immutable build artifacts synchronized from their upstream repositories.
       'app/extensions/kubohiroyaassetmanager.js',
