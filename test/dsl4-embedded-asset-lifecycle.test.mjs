@@ -255,6 +255,56 @@ test('deduplicates pending and ready preparation and caches failures until relea
   await lifecycle.release({reason: 'dispose'});
 });
 
+test('selectively releases one resource and serializes its next preparation', async () => {
+  const component = await runtimeComponent();
+  const attempts = new Map();
+  const releases = [];
+  let finishSelectiveRelease;
+  const lifecycle = createDsl4EmbeddedAssetLifecycle({
+    runtimeComponent: component,
+    adapter: {
+      prepare({asset}) {
+        attempts.set(asset.id, (attempts.get(asset.id) ?? 0) + 1);
+        return {id: asset.id};
+      },
+      release(resource, details) {
+        releases.push([resource.id, details.reason]);
+        if (resource.id === 'OpeningImage' && details.reason === 'scene-transition') {
+          return new Promise((resolve) => {
+            finishSelectiveRelease = resolve;
+          });
+        }
+      },
+    },
+    setLoading() {},
+  });
+  await lifecycle.prepare({assetIds: ['OpeningImage', 'OpeningSound']}, context());
+
+  const selectiveRelease = lifecycle.releaseAssets({
+    assetIds: ['OpeningImage'],
+    reason: 'scene-transition',
+  });
+  while (finishSelectiveRelease === undefined)
+    await new Promise((resolve) => setImmediate(resolve));
+  const retry = lifecycle.prepare({assetIds: ['OpeningImage']}, context(undefined, 2));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(attempts.get('OpeningImage'), 1);
+  assert.equal(attempts.get('OpeningSound'), 1);
+
+  finishSelectiveRelease();
+  await Promise.all([selectiveRelease, retry]);
+  assert.equal(attempts.get('OpeningImage'), 2);
+  await lifecycle.prepare({assetIds: ['OpeningSound']}, context(undefined, 2));
+  assert.equal(attempts.get('OpeningSound'), 1);
+
+  await lifecycle.release({reason: 'dispose'});
+  assert.deepEqual(releases, [
+    ['OpeningImage', 'scene-transition'],
+    ['OpeningImage', 'dispose'],
+    ['OpeningSound', 'dispose'],
+  ]);
+});
+
 test('releases a late stale resource after Abort and permits a clean retry', async () => {
   const component = await runtimeComponent();
   const pending = [];

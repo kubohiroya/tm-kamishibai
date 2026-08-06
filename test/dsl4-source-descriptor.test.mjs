@@ -66,6 +66,33 @@ test('validates a JSON-round-tripped descriptor into a frozen copy', async () =>
   assert.equal(Object.isFrozen(validated), true);
 });
 
+test('embeds and validates the persisted story cache identity without a filesystem path', async () => {
+  const cacheIdentity = {
+    id: 'story000000000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
+  };
+  const descriptor = await createDsl4EmbeddedSourceDescriptor("kamishibai: '4.0'\nscenes: {}\n", {
+    sourceId: 'main',
+    displayName: 'story.kamishibai.yaml',
+    cacheIdentity,
+    ...options,
+  });
+  assert.deepEqual(descriptor.cacheIdentity, cacheIdentity);
+  assert.equal(Object.isFrozen(descriptor.cacheIdentity), true);
+  assert.deepEqual(
+    await validateDsl4EmbeddedSourceDescriptor(structuredClone(descriptor), options),
+    descriptor,
+  );
+  await rejectsCode(
+    validateDsl4EmbeddedSourceDescriptor(
+      {...descriptor, cacheIdentity: {...cacheIdentity, databaseName: '/tmp/private'}},
+      options,
+    ),
+    'K4-SOURCE-DESCRIPTOR-001',
+  );
+});
+
 test('rejects non-canonical text, unknown keys, and mismatched metadata', async () => {
   const descriptor = await createDsl4EmbeddedSourceDescriptor("kamishibai: '4.0'\nscenes: {}\n", {
     sourceId: 'main',

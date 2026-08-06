@@ -5,6 +5,7 @@ import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
 } from '../embedded-asset-lifecycle.js';
+import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
@@ -50,39 +51,6 @@ function validateTMPoseRuntime(value) {
     throw new TypeError('tmPoseRuntime must provide Webcam and loadFromFiles');
   }
   return value;
-}
-
-/** @param {unknown} value */
-function validateCacheIdentity(value) {
-  if (!isRecord(value)) {
-    throw new TypeError('cacheIdentity must be an object when remote loading is enabled');
-  }
-  const id = value.id;
-  const label = value.label;
-  const databaseName = value.databaseName;
-  if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9_-]{7,63}$/u.test(id)) {
-    throw new TypeError('cacheIdentity.id must be a stable 8 to 64 character identifier');
-  }
-  if (
-    typeof label !== 'string' ||
-    label.length === 0 ||
-    label.length > 256 ||
-    label.includes('/') ||
-    label.includes('\\') ||
-    /[\u0000-\u001f\u007f]/u.test(label)
-  ) {
-    throw new TypeError('cacheIdentity.label must be a basename without control characters');
-  }
-  if (
-    typeof databaseName !== 'string' ||
-    databaseName.length > 160 ||
-    !databaseName.startsWith('tw-kamishibai-assets-v1--') ||
-    !databaseName.endsWith(`--${id}`) ||
-    !/^[\p{Letter}\p{Number}._-]+$/u.test(databaseName)
-  ) {
-    throw new TypeError('cacheIdentity.databaseName must be the persisted story cache name');
-  }
-  return Object.freeze({id, label, databaseName});
 }
 
 /** @param {unknown} value @param {string} label @param {string[]} methods */
@@ -167,7 +135,13 @@ export function createDsl4PlatformAssetSession(options) {
   }
   const remoteEnabled = typeof options.loadRemoteAsset === 'function';
   const remoteLoader = remoteEnabled ? /** @type {Function} */ (options.loadRemoteAsset) : null;
-  const cacheIdentity = remoteEnabled ? validateCacheIdentity(options.cacheIdentity) : null;
+  let cacheIdentity = null;
+  if (remoteEnabled) {
+    if (options.cacheIdentity === undefined) {
+      throw new TypeError('cacheIdentity must be an object when remote loading is enabled');
+    }
+    cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
+  }
   const componentAssetBundle = /** @type {Record<string, any>} */ (runtimeComponent.assetBundle);
   const remotePoseRequired = componentAssetBundle.manifest.assets.some(
     /** @param {unknown} asset */ (asset) =>
@@ -407,6 +381,10 @@ export function createDsl4PlatformAssetSession(options) {
             if (disposePromise) throw disposedError();
             return assetManagerComposition.renewVerifiedRemoteStoryCacheLease();
           },
+          releaseLease() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.releaseVerifiedRemoteStoryCacheLease();
+          },
           getStats() {
             if (disposePromise) throw disposedError();
             return assetManagerComposition.getVerifiedRemoteCacheStats();
@@ -444,6 +422,11 @@ export function createDsl4PlatformAssetSession(options) {
       setLoading(payload, context) {
         if (disposePromise) throw disposedError();
         return assetLifecycle.setLoading(payload, context);
+      },
+      /** @param {Readonly<Record<string, unknown>>} payload */
+      releaseAssets(payload) {
+        if (disposePromise) return disposePromise;
+        return assetLifecycle.releaseAssets(payload);
       },
       /** @param {Readonly<Record<string, unknown>>} payload */
       release(payload) {

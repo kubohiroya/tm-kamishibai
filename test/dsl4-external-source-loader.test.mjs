@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   Sb3BuilderError,
   validateDsl4ExternalSourceManifest,
@@ -18,6 +19,38 @@ const validManifest = Object.freeze({
   mode: 'external',
   sourceId: 'main',
   path: 'scripts/story.kamishibai.yaml',
+});
+
+test('creates one stable cache identity and preserves its database name across renames', async () => {
+  const created = ensureDsl4ExternalSourceCacheIdentity(validManifest, {
+    createStableId: () => 'story000000000001',
+  });
+  assert.equal(created.created, true);
+  assert.deepEqual(created.cacheIdentity, {
+    id: 'story000000000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
+  });
+  const renamed = ensureDsl4ExternalSourceCacheIdentity({
+    ...created.manifest,
+    path: 'scripts/renamed.kamishibai.yaml',
+  });
+  assert.equal(renamed.created, false);
+  assert.equal(renamed.cacheIdentity.label, 'renamed.kamishibai.yaml');
+  assert.equal(renamed.cacheIdentity.databaseName, created.cacheIdentity.databaseName);
+
+  await withTemporaryDirectory(async (directory) => {
+    await mkdir(path.join(directory, 'scripts'));
+    await writeFile(
+      path.join(directory, 'scripts', 'story.kamishibai.yaml'),
+      "kamishibai: '4.0'\nscenes: {}\n",
+    );
+    const loaded = await loadDsl4ExternalSource(directory, created.manifest, {
+      maxSourceBytes,
+      subtleCrypto,
+    });
+    assert.deepEqual(loaded.descriptor.cacheIdentity, created.cacheIdentity);
+  });
 });
 
 async function withTemporaryDirectory(callback) {
@@ -50,6 +83,8 @@ test('strictly validates the external manifest and returns an immutable copy', (
     {...validManifest, mode: 'embedded'},
     {...validManifest, extra: true},
     {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    {...validManifest, cacheId: 'story000000000001'},
+    {...validManifest, cacheDatabaseName: 'tw-kamishibai-assets-v1--story--story000000000001'},
   ]) {
     assert.throws(
       () => validateDsl4ExternalSourceManifest(invalid),

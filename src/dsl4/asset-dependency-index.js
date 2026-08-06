@@ -47,6 +47,11 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
   const assets = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     storyDocument.assets ?? {}
   );
+  const sceneRetainedAssets = new Set(
+    Object.entries(assets)
+      .filter(([, asset]) => asset.retention === 'scene')
+      .map(([assetId]) => assetId),
+  );
   const startup = new Set(
     Object.entries(assets)
       .filter(([, asset]) => asset.loading !== 'lazy')
@@ -56,11 +61,13 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
   const loading = /** @type {Readonly<Record<string, unknown>> | null} */ (
     storyDocument.loading ?? null
   );
+  const loadingDependencies = new Set();
   if (loading) {
-    addDependency(loading.backdrop, startup);
+    addDependency(loading.backdrop, loadingDependencies);
     for (const costume of /** @type {ReadonlyArray<unknown>} */ (loading.costumes ?? [])) {
-      addDependency(costume, startup);
+      addDependency(costume, loadingDependencies);
     }
+    for (const assetId of loadingDependencies) startup.add(assetId);
   }
 
   const coverDependencies = new Set();
@@ -110,6 +117,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
       all,
       eager: all.filter((assetId) => startup.has(assetId)),
       lazy: all.filter((assetId) => !startup.has(assetId)),
+      sceneRetained: all.filter((assetId) => sceneRetainedAssets.has(assetId)),
     });
   }
 
@@ -118,7 +126,9 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     startup: startupAssets,
     cover: sortedUnique(coverDependencies),
     actors: sortedUnique(actorDependencies),
+    loading: sortedUnique(loadingDependencies),
     poseRecognition: sortedUnique(poseRecognitionDependencies),
+    sceneRetained: sortedUnique(sceneRetainedAssets),
     scenes,
   });
 }

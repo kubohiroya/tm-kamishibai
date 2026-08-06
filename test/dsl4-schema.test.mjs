@@ -64,6 +64,7 @@ test('remote delivery requires verified metadata and stays independent from load
     id: 'OpeningMusic',
     delivery: 'remote',
     loading: 'eager',
+    retention: 'story',
     kind: 'sound',
     source: {
       url: 'https://cdn.example.com/opening.ogg',
@@ -74,10 +75,39 @@ test('remote delivery requires verified metadata and stays independent from load
   });
   assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
   assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
+  assert.equal(result.storyDocument.assets.Ocean.retention, 'story');
   assert.equal(result.storyDocument.assets.RemotePose.kind, 'poseModel');
   assert.equal(result.storyDocument.assets.RemotePose.delivery, 'remote');
+  assert.equal(result.storyDocument.assets.RemotePose.retention, 'scene');
   assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
   assert.equal(result.storyDocument.assets.HeroIdle.loading, 'eager');
+  assert.equal(result.storyDocument.assets.HeroIdle.retention, 'story');
+});
+
+test('normalizes memory retention defaults while preserving explicit overrides', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  SceneImage:
+    kind: backdrop
+    name: SceneImage
+    retention: scene
+  StoryPose:
+    kind: poseModel
+    file: pose/story
+    retention: story
+  DefaultSound: sound
+  DefaultPose:
+    kind: poseModel
+    file: pose/default
+scenes:
+  opening: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.SceneImage.retention, 'scene');
+  assert.equal(result.storyDocument.assets.StoryPose.retention, 'story');
+  assert.equal(result.storyDocument.assets.DefaultSound.retention, 'story');
+  assert.equal(result.storyDocument.assets.DefaultPose.retention, 'scene');
 });
 
 test('remote delivery rejects malformed or credential-bearing HTTPS URLs semantically', async () => {
@@ -128,6 +158,7 @@ for (const name of [
   'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',
   'invalid-loading-policy.kamishibai.yaml',
+  'invalid-retention-policy.kamishibai.yaml',
   'positional-multi-argument.kamishibai.yaml',
   'remote-asset.kamishibai.yaml',
   'remote-http.kamishibai.yaml',

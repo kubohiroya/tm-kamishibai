@@ -98,6 +98,9 @@ test('preloads the resolved target before transition and waits behind Loading', 
       async setLoading(payload) {
         calls.push({method: 'setLoading', payload});
       },
+      async releaseAssets(payload) {
+        calls.push({method: 'releaseAssets', payload});
+      },
       async release(payload) {
         calls.push({method: 'release', payload});
       },
@@ -130,11 +133,12 @@ test('preloads the resolved target before transition and waits behind Loading', 
     ({type, sceneId}) => type === 'scene.enter' && sceneId === 'next',
   );
   const loadingIndex = traceBeforeReady.findIndex(
-    ({type, sceneId}) => type === 'assets.loading.show' && sceneId === 'next',
+    ({type, details}) => type === 'assets.loading.show' && details.sceneId === 'next',
   );
-  assert.ok(preloadIndex < transitionIndex);
-  assert.ok(transitionIndex < enterIndex);
-  assert.ok(enterIndex < loadingIndex);
+  assert.ok(preloadIndex >= 0);
+  assert.ok(loadingIndex > preloadIndex);
+  assert.equal(transitionIndex, -1);
+  assert.equal(enterIndex, -1);
 
   pendingScene.resolve();
   const state = await run;
@@ -145,6 +149,13 @@ test('preloads the resolved target before transition and waits behind Loading', 
     [true, false],
   );
   const trace = controller.getTrace();
+  const readyIndex = trace.findIndex(
+    ({type, details}) => type === 'assets.scene.ready' && details.sceneId === 'next',
+  );
+  const committedTransitionIndex = trace.findIndex(
+    ({type, details}) => type === 'scene.transition' && details.to === 'next',
+  );
+  assert.ok(readyIndex < committedTransitionIndex);
   assert.ok(
     trace.findIndex(({type}) => type === 'assets.loading.hide') <
       trace.findIndex(({type, sceneId}) => type === 'action.start' && sceneId === 'next'),
@@ -168,6 +179,7 @@ test('does not show Loading when scene preparation is already fulfilled', async 
       async setLoading(payload) {
         loadingCalls.push(payload);
       },
+      async releaseAssets() {},
       async release() {},
     },
   });
@@ -179,6 +191,134 @@ test('does not show Loading when scene preparation is already fulfilled', async 
     controller.getTrace().some(({type}) => type === 'assets.loading.show'),
     false,
   );
+});
+
+test('keeps the current scene resources until the next scene is ready and bounds pose models', async () => {
+  const nextPreparation = deferred();
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  FirstPose:
+    kind: poseModel
+    file: pose/first
+    loading: lazy
+  NextPose:
+    kind: poseModel
+    file: pose/next
+    loading: lazy
+  PersistentSound:
+    kind: sound
+    name: PersistentSound
+    loading: lazy
+scenes:
+  first:
+    poseModel: FirstPose
+    actions:
+      - goto: next
+  next:
+    poseModel: NextPose
+    actions:
+      - sound: PersistentSound
+`),
+    port: {sound: async () => {}},
+    assetLifecycle: {
+      prepare(payload) {
+        calls.push({method: 'prepare', payload});
+        return payload.sceneId === 'next' ? nextPreparation.promise : Promise.resolve();
+      },
+      async setLoading(payload) {
+        calls.push({method: 'setLoading', payload});
+      },
+      async releaseAssets(payload) {
+        calls.push({method: 'releaseAssets', payload});
+      },
+      async release() {},
+    },
+  });
+
+  const run = controller.start();
+  await waitUntil(() =>
+    calls.some(({method, payload}) => method === 'setLoading' && payload.sceneId === 'next'),
+  );
+  assert.equal(controller.getState().sceneId, 'first');
+  assert.equal(
+    controller
+      .getTrace()
+      .some(({type, details}) => type === 'scene.transition' && details.to === 'next'),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      ({method, payload}) => method === 'releaseAssets' && payload.assetIds.includes('FirstPose'),
+    ),
+    false,
+  );
+
+  nextPreparation.resolve();
+  const state = await run;
+  assert.equal(state.status, 'finished');
+  assert.equal(state.sceneId, 'next');
+  const transitionIndex = controller
+    .getTrace()
+    .findIndex(({type, details}) => type === 'scene.transition' && details.to === 'next');
+  const releaseIndex = controller
+    .getTrace()
+    .findIndex(
+      ({type, details}) => type === 'assets.release' && details.assetIds.includes('FirstPose'),
+    );
+  assert.ok(transitionIndex >= 0 && transitionIndex < releaseIndex);
+  assert.ok(
+    calls.some(
+      ({method, payload}) =>
+        method === 'releaseAssets' &&
+        payload.assetIds.includes('FirstPose') &&
+        !payload.assetIds.includes('PersistentSound'),
+    ),
+  );
+});
+
+test('reports scene-retained release failures with a stable asset diagnostic', async () => {
+  let secondActionCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  FirstPose:
+    kind: poseModel
+    file: pose/first
+    loading: lazy
+  NextPose:
+    kind: poseModel
+    file: pose/next
+    loading: lazy
+scenes:
+  first:
+    poseModel: FirstPose
+    actions:
+      - goto: next
+  next:
+    poseModel: NextPose
+    actions:
+      - wait: 0
+`),
+    port: {wait: async () => secondActionCalls++},
+    assetLifecycle: {
+      async prepare() {},
+      async setLoading() {},
+      async releaseAssets({assetIds}) {
+        if (assetIds.includes('FirstPose')) throw new Error('model dispose failed');
+      },
+      async release() {},
+    },
+  });
+  const state = await controller.start();
+  assert.equal(state.status, 'failed');
+  assert.equal(state.sceneId, 'next');
+  assert.equal(state.diagnostic.code, 'K4-ASSET-RELEASE-001');
+  assert.match(state.diagnostic.message, /could not release/u);
+  assert.equal(secondActionCalls, 0);
 });
 
 test('hides Loading and fails before the first action when preparation rejects', async () => {
@@ -195,6 +335,7 @@ test('hides Loading and fails before the first action when preparation rejects',
       async setLoading(payload) {
         loadingCalls.push(payload.visible);
       },
+      async releaseAssets() {},
       async release() {},
     },
   });
@@ -236,6 +377,7 @@ scenes:
         throw error;
       },
       async setLoading() {},
+      async releaseAssets() {},
       async release() {},
     },
   });
@@ -275,6 +417,7 @@ scenes:
         return payload.sceneId === 'opening' ? openingPreparation.promise : Promise.resolve();
       },
       async setLoading() {},
+      async releaseAssets() {},
       async release(payload) {
         releases.push(payload.reason);
       },
@@ -307,6 +450,7 @@ scenes:
         return new Promise(() => {});
       },
       async setLoading() {},
+      async releaseAssets() {},
       async release(payload) {
         releases.push(payload.reason);
       },
@@ -356,6 +500,7 @@ scenes:
         return pending.promise;
       },
       async setLoading() {},
+      async releaseAssets() {},
       async release() {},
     },
   });
@@ -388,7 +533,7 @@ scenes:
 `);
   assert.throws(
     () => createDsl4RuntimeController({storyDocument, port: {}, assetLifecycle: {}}),
-    /prepare, setLoading, and release/u,
+    /prepare, setLoading, releaseAssets, and release/u,
   );
   const implementation = await readFile(
     path.join(projectRoot, 'src', 'dsl4', 'asset-preload-coordinator.js'),
@@ -425,6 +570,7 @@ scenes:
         preparations.push(payload);
       },
       async setLoading() {},
+      async releaseAssets() {},
       async release(payload) {
         releases.push(payload.reason);
       },

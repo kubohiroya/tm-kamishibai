@@ -1,5 +1,6 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 
+import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
@@ -22,6 +23,14 @@ const hostPortMethods = new Set([
   'touchInputToChangeScene',
 ]);
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
+const defaultCacheLeaseHeartbeatMs = 30_000;
+
+/** @param {() => void} callback @param {number} milliseconds */
+function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
+  const timer = setInterval(callback, milliseconds);
+  if (typeof timer.unref === 'function') timer.unref();
+  return () => clearInterval(timer);
+}
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -211,11 +220,13 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
 /**
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
+ * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
  */
-async function createRuntimeEnvironment(options, runtimeComponent) {
-  const component = /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>}>} */ (
-    /** @type {unknown} */ (runtimeComponent)
-  );
+async function createRuntimeEnvironment(options, runtimeComponent, publishVerifiedRemoteCache) {
+  const component =
+    /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
+      /** @type {unknown} */ (runtimeComponent)
+    );
   /** @type {ReturnType<typeof createDsl4PlatformAssetSession> | null} */
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
@@ -224,6 +235,27 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
   let runtimeExpressionComposition = null;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
+  const embeddedCacheIdentity =
+    component.sourceDescriptor?.cacheIdentity === undefined
+      ? undefined
+      : validateDsl4CacheIdentity(component.sourceDescriptor.cacheIdentity);
+  const injectedCacheIdentity =
+    options.cacheIdentity === undefined
+      ? undefined
+      : validateDsl4CacheIdentity(options.cacheIdentity);
+  if (
+    injectedCacheIdentity !== undefined &&
+    embeddedCacheIdentity !== undefined &&
+    (injectedCacheIdentity.id !== embeddedCacheIdentity.id ||
+      injectedCacheIdentity.label !== embeddedCacheIdentity.label ||
+      injectedCacheIdentity.databaseName !== embeddedCacheIdentity.databaseName)
+  ) {
+    throw hostError(
+      'K4-HOST-CACHE-IDENTITY-001',
+      'Injected cache identity does not match the packaged story identity',
+    );
+  }
+  const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
     const actorPlatform = createDsl4TurboWarpActorPlatform({
@@ -238,7 +270,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       tmPoseRuntime: options.tmPoseRuntime,
       setLoading: options.setLoading,
       ...(options.loadRemoteAsset === undefined ? {} : {loadRemoteAsset: options.loadRemoteAsset}),
-      ...(options.cacheIdentity === undefined ? {} : {cacheIdentity: options.cacheIdentity}),
+      ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
       ...(options.verifiedRemoteCacheOptions === undefined
         ? {}
         : {verifiedRemoteCacheOptions: options.verifiedRemoteCacheOptions}),
@@ -378,6 +410,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
         return disposePromise;
       },
     };
+    publishVerifiedRemoteCache(assetSession.verifiedRemoteCache);
     return Object.freeze(environment);
   } catch (error) {
     const cleanupErrors = [];
@@ -422,6 +455,8 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
  * @param {Function} [options.setLoading]
  * @param {Function} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
+ * @param {number} [options.cacheLeaseHeartbeatMs]
+ * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleCacheLeaseHeartbeat]
  * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
  * @param {Readonly<Record<string, unknown>>} [options.poseArchiveLimits]
  * @param {(context: HostPortContext) => HostPort | Promise<HostPort>} [options.createHostPort]
@@ -456,6 +491,18 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (options.evaluateCondition !== undefined && typeof options.evaluateCondition !== 'function') {
     throw new TypeError('evaluateCondition must be a function');
   }
+  const cacheLeaseHeartbeatMs = options.cacheLeaseHeartbeatMs ?? defaultCacheLeaseHeartbeatMs;
+  if (!Number.isSafeInteger(cacheLeaseHeartbeatMs) || cacheLeaseHeartbeatMs < 1) {
+    throw new TypeError('cacheLeaseHeartbeatMs must be a positive safe integer');
+  }
+  const scheduleCacheLeaseHeartbeat =
+    options.scheduleCacheLeaseHeartbeat ?? defaultCacheLeaseHeartbeatSchedule;
+  if (typeof scheduleCacheLeaseHeartbeat !== 'function') {
+    throw new TypeError('scheduleCacheLeaseHeartbeat must be a function');
+  }
+
+  /** @type {Record<string, any> | null} */
+  let verifiedRemoteCache = null;
   if (
     options.createRuntimeExpressionComposition !== undefined &&
     typeof options.createRuntimeExpressionComposition !== 'function'
@@ -487,7 +534,9 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     async createRuntimeEnvironment(
       /** @type {Readonly<Record<string, unknown>>} */ runtimeComponent,
     ) {
-      return createRuntimeEnvironment(options, runtimeComponent);
+      return createRuntimeEnvironment(options, runtimeComponent, (/** @type {any} */ cache) => {
+        verifiedRemoteCache = cache;
+      });
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
@@ -497,8 +546,58 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
+  const cachePort = /** @type {Record<string, any> | null} */ (
+    /** @type {unknown} */ (verifiedRemoteCache)
+  );
   /** @type {Promise<void> | null} */
   let disposePromise = null;
+  /** @type {null | (() => void)} */
+  let cancelCacheHeartbeat = null;
+  let cacheLeaseOperation = Promise.resolve();
+  /** @type {unknown} */
+  let cacheLeaseError = null;
+  let cacheLeaseActive = cachePort !== null;
+  let cacheExecutionId = 0;
+
+  /** @param {() => unknown | Promise<unknown>} operation */
+  function queueCacheLeaseOperation(operation, clearErrorOnSuccess = false) {
+    if (!cachePort) return cacheLeaseOperation;
+    cacheLeaseOperation = cacheLeaseOperation.then(async () => {
+      try {
+        await operation();
+        if (clearErrorOnSuccess) cacheLeaseError = null;
+      } catch (error) {
+        cacheLeaseError = error;
+      }
+    });
+    return cacheLeaseOperation;
+  }
+
+  function startCacheHeartbeat() {
+    if (!cachePort || cancelCacheHeartbeat) return;
+    const cancel = scheduleCacheLeaseHeartbeat(() => {
+      void queueCacheLeaseOperation(() => cachePort.renewLease(), true);
+    }, cacheLeaseHeartbeatMs);
+    if (typeof cancel !== 'function') {
+      throw new TypeError('scheduleCacheLeaseHeartbeat must return a cancellation function');
+    }
+    cancelCacheHeartbeat = cancel;
+  }
+
+  async function activateCacheLease() {
+    if (!cachePort) return;
+    await queueCacheLeaseOperation(() => cachePort.renewLease(), true);
+    cacheLeaseActive = true;
+    startCacheHeartbeat();
+  }
+
+  async function deactivateCacheLease() {
+    cancelCacheHeartbeat?.();
+    cancelCacheHeartbeat = null;
+    if (!cachePort || !cacheLeaseActive) return;
+    cacheLeaseActive = false;
+    await queueCacheLeaseOperation(() => cachePort.releaseLease());
+  }
   function ensureActive() {
     if (disposePromise) throw hostError('K4-HOST-DISPOSED', 'DSL 4.0 TurboWarp host is disposed');
   }
@@ -506,12 +605,26 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     /** @param {{sceneId?: string}} [startOptions] */
     start(startOptions) {
       ensureActive();
-      return session.start(startOptions);
+      cacheExecutionId += 1;
+      const activeCacheExecutionId = cacheExecutionId;
+      return (async () => {
+        try {
+          await activateCacheLease();
+          if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
+          ensureActive();
+          return await session.start(startOptions);
+        } finally {
+          if (cacheExecutionId === activeCacheExecutionId) await deactivateCacheLease();
+        }
+      })();
     },
     /** @param {string} [reason] */
     stop(reason) {
       ensureActive();
-      return session.stop(reason);
+      cacheExecutionId += 1;
+      const state = session.stop(reason);
+      void deactivateCacheLease();
+      return state;
     },
     /** @param {unknown} target */
     attach(target) {
@@ -541,16 +654,35 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     getRunPromise() {
       return session.getRunPromise();
     },
+    verifiedRemoteCache:
+      cachePort === null
+        ? null
+        : Object.freeze({
+            identity: cachePort.identity,
+            getWarnings: cachePort.getWarnings,
+            takeWarnings: cachePort.takeWarnings,
+            getStats: cachePort.getStats,
+            prune: cachePort.prune,
+            clear: cachePort.clear,
+            listStoryCaches: cachePort.listStoryCaches,
+            pruneStoryCaches: cachePort.pruneStoryCaches,
+            deleteStoryCache: cachePort.deleteStoryCache,
+            getHeartbeatError() {
+              return cacheLeaseError;
+            },
+          }),
     /** @param {string} [reason] */
     dispose(reason = 'dispose') {
       if (disposePromise) return disposePromise;
       if (typeof reason !== 'string' || reason.length === 0) {
         return Promise.reject(new TypeError('dispose reason must be a non-empty string'));
       }
+      cacheExecutionId += 1;
       disposePromise = (async () => {
         const errors = [];
         const pending = [];
         try {
+          await deactivateCacheLease();
           const activeRun = session.getRunPromise();
           const sessionDisposal = session.dispose(reason);
           pending.push(Promise.resolve(session.whenInputIdle()));

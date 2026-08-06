@@ -485,6 +485,91 @@ test('extracts a verified remote pose archive inside the platform boundary', asy
   assert.ok(log.some(([event, name]) => event === 'pose.release' && name === 'RemotePose'));
 });
 
+test('bounds repeated remote pose materialization and persistent cache bytes', async () => {
+  const remoteBytes = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"model":true}'),
+    'weights.bin': Uint8Array.from([1, 2, 3]),
+  });
+  const indexedDB = new IDBFactory();
+  const component = remotePoseRuntimeComponent(remoteBytes);
+  const log = [];
+  let networkLoads = 0;
+  let activeModels = 0;
+  let maximumActiveModels = 0;
+  let registrations = 0;
+  let modelReleases = 0;
+  const setup = options(component, log, {
+    tmpose: {
+      async registerPoseModel(input) {
+        registrations += 1;
+        activeModels += 1;
+        maximumActiveModels = Math.max(maximumActiveModels, activeModels);
+        return {name: input.name, labels: ['rescue']};
+      },
+      async releasePoseModel() {
+        modelReleases += 1;
+        activeModels -= 1;
+      },
+    },
+  });
+  const session = createDsl4PlatformAssetSession({
+    ...setup.value,
+    cacheIdentity,
+    poseArchiveLimits: poseArchiveLimits(),
+    subtleCrypto: webcrypto.subtle,
+    verifiedRemoteCacheOptions: {
+      indexedDB,
+      subtleCrypto: webcrypto.subtle,
+      estimateStorage: async () => ({quota: 64 * 1024 * 1024, usage: 0}),
+    },
+    async loadRemoteAsset() {
+      networkLoads += 1;
+      return {bytes: Uint8Array.from(remoteBytes), contentType: 'application/zip'};
+    },
+    createAssetManagerComposition(_featureFlags, compositionOptions) {
+      const cache = createVerifiedRemoteBinaryCache(compositionOptions.verifiedRemoteCache);
+      return Object.freeze({
+        ...setup.created.assetManagerComposition,
+        resolveVerifiedRemoteBinary: (input, resolveOptions) =>
+          cache.resolve(input, resolveOptions),
+        getVerifiedRemoteCacheStats: () => cache.getStats(),
+        pruneVerifiedRemoteCache: () => cache.prune(),
+        clearVerifiedRemoteCache: () => cache.clear(),
+        listVerifiedRemoteStoryCaches: () => cache.listStoryCaches(),
+        pruneVerifiedRemoteStoryCaches: () => cache.pruneStoryCaches(),
+        deleteVerifiedRemoteStoryCache: (databaseName) => cache.deleteStoryCache(databaseName),
+        renewVerifiedRemoteStoryCacheLease: () => cache.renewStoryCacheLease(),
+        releaseVerifiedRemoteStoryCacheLease: () => cache.releaseStoryCacheLease(),
+      });
+    },
+  });
+
+  for (let visit = 0; visit < 12; visit += 1) {
+    await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
+    assert.equal(activeModels, 1);
+    const stats = await session.verifiedRemoteCache.getStats();
+    assert.equal(stats.entries, 1);
+    assert.equal(stats.bytes, remoteBytes.byteLength);
+    await session.lifecycle.releaseAssets({
+      assetIds: ['RemotePose'],
+      reason: 'scene-transition',
+    });
+    assert.equal(activeModels, 0);
+  }
+
+  assert.equal(networkLoads, 1);
+  assert.equal(maximumActiveModels, 1);
+  assert.equal(registrations, 12);
+  assert.equal(modelReleases, 12);
+  assert.deepEqual(
+    await session.verifiedRemoteCache.getStats().then(({entries, bytes}) => ({entries, bytes})),
+    {entries: 1, bytes: remoteBytes.byteLength},
+  );
+  await session.dispose('bounded-repetition-complete');
+  assert.equal(activeModels, 0);
+});
+
 test('attempts every final cleanup and aggregates lifecycle and composition failures', async () => {
   const log = [];
   const failure = new Error('release failed');

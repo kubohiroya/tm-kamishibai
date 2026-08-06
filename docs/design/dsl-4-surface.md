@@ -205,6 +205,10 @@ DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にs
 tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
 ```
 
+`project.source.json`ではstable IDを`cacheId`、生成済みdatabase名を`cacheDatabaseName`として保持します。
+正常な初回buildが両fieldをatomicに追記し、生成SB3のsource descriptorにも`cacheIdentity`として埋め込みます。
+runtime hostは埋め込みidentityを正本として使用し、異なるidentityの外部注入を拒否します。
+
 可読部分にはUnicodeの文字と数字を残し、pathは保存しません。同名台本はstable IDで分離し、台本名を変更しても
 manifestに保存済みのdatabase名を継続利用します。database内のidentity metadataとapp shellの管理画面には、
 台本表示名、database名、使用量、entry数、最終cleanupを表示し、台本単位でstats、prune、clearを実行できます。
@@ -221,6 +225,10 @@ leaseは期限切れ後に掃除します。TTLを超えて開かれていない
 列挙してdatabaseごと削除できます。lease取得とcatalog更新は一つのtransactionで行い、database deleteは先に
 排他的なdeletion markerを取得します。明示deleteはcurrent runtimeのleaseを自動解除せず、story stop／disposeと
 lease releaseの完了後だけ実行します。
+
+TurboWarp runtime hostは作品実行中だけ既定30秒間隔でleaseをrenewし、終了、停止、disposeでheartbeatを解除して
+leaseをreleaseします。hostの非palette APIはcurrent storyのstats／prune／clearとcatalogのlist／prune／deleteを
+公開し、app shell管理画面はこのAPIを使用します。
 
 他のactive台本が使用しているbytesはcurrent台本の実効cache上限から差し引きます。active leaseをpinした結果、
 新しいassetをorigin全体のhigh-water内へ格納できない場合は、検証済みbytesをmemory上で使用してIndexedDBへの
@@ -241,7 +249,11 @@ runtimeが扱う寿命は次の四段階です。
 
 source bytesと一時objectはtransactionまたは登録完了後にapplicationからの参照を破棄してGC対象にします。
 物理メモリから即時消去されることは保証しません。2はstorage policy、4は`retention`で解放します。この契約の
-runtime／schema接続はIssue #327のmerge条件です。
+実ブラウザ検証には`test/fixtures/dsl4/browser/remote-cache-retention.html`を使います。repository rootを
+HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同時保持数が1、解放後が0、IndexedDBが
+1 entry／archive byte数のまま増えないこと、および明示cleanup後に0 entry／0 bytesとなることを表示します。
+runtime／schema接続はIssue #284で実装し、TMPose classifier／PoseNet自体の完全dispose契約はIssue #327で
+引き続き追跡します。
 
 ## 4. 共通設定
 

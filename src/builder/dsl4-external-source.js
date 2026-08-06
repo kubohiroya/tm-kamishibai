@@ -1,6 +1,10 @@
+import {randomBytes} from 'node:crypto';
 import {lstat, open, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
+import {createVerifiedRemoteCacheDatabaseName} from '@kubohiroya/turbowarp-asset-manager/composition';
+
+import {validateDsl4CacheIdentity} from '../dsl4/cache-identity.js';
 import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
@@ -8,7 +12,8 @@ import {
 import {deepFreeze} from '../dsl4/story-document.js';
 import {Sb3BuilderError} from './errors.js';
 
-const manifestKeys = new Set(['formatVersion', 'mode', 'path', 'sourceId']);
+const requiredManifestKeys = new Set(['formatVersion', 'mode', 'path', 'sourceId']);
+const manifestKeys = new Set([...requiredManifestKeys, 'cacheId', 'cacheDatabaseName']);
 const defaultFileSystem = Object.freeze({lstat, open, realpath});
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -41,6 +46,19 @@ function nonEmptyString(value, name) {
     fail(`${name} must be a non-empty string without NUL`, 'K4-SOURCE-MANIFEST-001');
   }
   return /** @type {string} */ (value);
+}
+
+/** @param {unknown} value */
+function cacheIdentity(value) {
+  try {
+    return validateDsl4CacheIdentity(value);
+  } catch (error) {
+    fail(
+      error instanceof Error ? error.message : 'Cache identity is invalid',
+      'K4-SOURCE-MANIFEST-001',
+      error,
+    );
+  }
 }
 
 /** @param {unknown} value */
@@ -135,7 +153,7 @@ export function validateDsl4ExternalSourceManifest(input) {
   }
   const keys = Object.keys(input);
   const unknown = keys.filter((key) => !manifestKeys.has(key));
-  const missing = [...manifestKeys].filter((key) => !Object.hasOwn(input, key));
+  const missing = [...requiredManifestKeys].filter((key) => !Object.hasOwn(input, key));
   if (unknown.length > 0 || missing.length > 0) {
     fail(
       `External source manifest keys are invalid (unknown: ${unknown.sort().join(', ') || 'none'}; missing: ${missing.sort().join(', ') || 'none'})`,
@@ -145,11 +163,69 @@ export function validateDsl4ExternalSourceManifest(input) {
   if (input.formatVersion !== 1 || input.mode !== 'external') {
     fail('External source manifest formatVersion or mode is invalid', 'K4-SOURCE-MANIFEST-001');
   }
+  const source = sourcePath(input.path);
+  const hasCacheId = Object.hasOwn(input, 'cacheId');
+  const hasCacheDatabaseName = Object.hasOwn(input, 'cacheDatabaseName');
+  if (hasCacheId !== hasCacheDatabaseName) {
+    fail(
+      'cacheId and cacheDatabaseName must either both be present or both be absent',
+      'K4-SOURCE-MANIFEST-001',
+    );
+  }
+  const cache = hasCacheId
+    ? cacheIdentity({
+        id: input.cacheId,
+        label: path.posix.basename(source),
+        databaseName: input.cacheDatabaseName,
+      })
+    : null;
   return deepFreeze({
     formatVersion: 1,
     mode: 'external',
     sourceId: nonEmptyString(input.sourceId, 'sourceId'),
-    path: sourcePath(input.path),
+    path: source,
+    ...(cache ? {cacheId: cache.id, cacheDatabaseName: cache.databaseName} : {}),
+  });
+}
+
+/**
+ * Add a stable cache identity to a source manifest once. Existing identities are preserved,
+ * including their database name when the script is renamed.
+ *
+ * @param {unknown} input
+ * @param {object} [options]
+ * @param {() => string} [options.createStableId]
+ */
+export function ensureDsl4ExternalSourceCacheIdentity(
+  input,
+  {createStableId = () => randomBytes(16).toString('hex')} = {},
+) {
+  if (typeof createStableId !== 'function')
+    throw new TypeError('createStableId must be a function');
+  const manifest = validateDsl4ExternalSourceManifest(input);
+  const label = path.posix.basename(manifest.path);
+  if (manifest.cacheId !== undefined) {
+    return deepFreeze({
+      created: false,
+      manifest,
+      cacheIdentity: cacheIdentity({
+        id: manifest.cacheId,
+        label,
+        databaseName: manifest.cacheDatabaseName,
+      }),
+    });
+  }
+  const id = createStableId();
+  const databaseName = createVerifiedRemoteCacheDatabaseName({id, label});
+  const identity = cacheIdentity({id, label, databaseName});
+  return deepFreeze({
+    created: true,
+    manifest: {
+      ...manifest,
+      cacheId: identity.id,
+      cacheDatabaseName: identity.databaseName,
+    },
+    cacheIdentity: identity,
   });
 }
 
@@ -178,6 +254,14 @@ export async function loadDsl4ExternalSource(
     throw new TypeError('projectRoot must be a non-empty string');
   }
   const manifest = validateDsl4ExternalSourceManifest(inputManifest);
+  const identity =
+    manifest.cacheId === undefined
+      ? null
+      : cacheIdentity({
+          id: manifest.cacheId,
+          label: path.posix.basename(manifest.path),
+          databaseName: manifest.cacheDatabaseName,
+        });
   const limit = maximumBytes(maxSourceBytes);
   const fs = validateFileSystem(fileSystem);
   if (readSource !== undefined && typeof readSource !== 'function') {
@@ -255,6 +339,7 @@ export async function loadDsl4ExternalSource(
       sourceId: manifest.sourceId,
       displayName: path.posix.basename(manifest.path),
       maxSourceBytes: limit,
+      ...(identity ? {cacheIdentity: identity} : {}),
       subtleCrypto,
     });
   } catch (error) {

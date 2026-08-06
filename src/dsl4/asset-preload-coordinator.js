@@ -31,15 +31,20 @@ function validateLifecycle(lifecycle) {
   if (
     typeof candidate.prepare !== 'function' ||
     typeof candidate.setLoading !== 'function' ||
+    typeof candidate.releaseAssets !== 'function' ||
     typeof candidate.release !== 'function'
   ) {
-    throw new TypeError('assetLifecycle must provide prepare, setLoading, and release methods');
+    throw new TypeError(
+      'assetLifecycle must provide prepare, setLoading, releaseAssets, and release methods',
+    );
   }
-  return /** @type {{prepare: Function, setLoading: Function, release: Function}} */ (lifecycle);
+  return /** @type {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} */ (
+    lifecycle
+  );
 }
 
 /**
- * @typedef {Readonly<{ok: true}> | Readonly<{ok: false, cancelled: true}> | Readonly<{ok: false, cancelled: false, error: unknown}>} Readiness
+ * @typedef {Readonly<{ok: true, prepared: boolean}> | Readonly<{ok: false, cancelled: true}> | Readonly<{ok: false, cancelled: false, error: unknown}>} Readiness
  *
  * @typedef {object} Preparation
  * @property {number} token
@@ -68,11 +73,40 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
     throw new TypeError('asset preload onEvent must be a function');
   const index = createDsl4AssetDependencyIndex(storyDocument);
   const startupAssetIds = sortedUnique([...index.startup, ...index.cover, ...index.actors]);
+  const sceneRetainedAssetIds = new Set(index.sceneRetained);
+  const persistentSceneAssetIds = new Set([...index.loading, ...index.actors]);
   const loading = storyDocument.loading ?? null;
   /** @type {Preparation | null} */
   let current = null;
   let nextToken = 1;
   let releasePromise = Promise.resolve();
+  let cleanupPromise = Promise.resolve();
+  /** @type {unknown[]} */
+  let cleanupErrors = [];
+  let committedRequiredAssetIds = new Set([...index.cover, ...index.loading, ...index.actors]);
+
+  /** @param {ReadonlyArray<string>} assetIds @param {string} reason @param {string | null} sceneId */
+  function scheduleAssetRelease(assetIds, reason, sceneId) {
+    const selected = sortedUnique(assetIds);
+    if (selected.length === 0) return cleanupPromise;
+    cleanupPromise = cleanupPromise.then(async () => {
+      try {
+        await port.releaseAssets(Object.freeze({assetIds: selected, reason, sceneId}));
+        onEvent('assets.release', {assetIds: selected, reason, sceneId});
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    });
+    return cleanupPromise;
+  }
+
+  /** @param {string} message */
+  function takeCleanupFailure(message) {
+    if (cleanupErrors.length === 0) return null;
+    const errors = cleanupErrors;
+    cleanupErrors = [];
+    return new AggregateError(errors, message);
+  }
 
   /** @param {Preparation} preparation */
   function context(preparation) {
@@ -125,6 +159,16 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
     if (!preparation) return;
     preparation.abortController.abort(reason);
     current = null;
+    if (preparation.phase === 'scene') {
+      scheduleAssetRelease(
+        preparation.assetIds.filter(
+          (assetId) =>
+            sceneRetainedAssetIds.has(assetId) && !committedRequiredAssetIds.has(assetId),
+        ),
+        reason,
+        preparation.sceneId,
+      );
+    }
   }
 
   /** @param {number} generation */
@@ -161,7 +205,7 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
       }
       current = null;
       onEvent('assets.startup.ready', {assetIds: startupAssetIds});
-      return Object.freeze({ok: true});
+      return Object.freeze({ok: true, prepared: true});
     } catch (error) {
       if (current === preparation) current = null;
       if (preparation.abortController.signal.aborted) {
@@ -204,7 +248,7 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
   async function waitForScene(sceneId) {
     const preparation = current;
     if (!preparation || preparation.phase !== 'scene' || preparation.sceneId !== sceneId) {
-      return Object.freeze({ok: true});
+      return Object.freeze({ok: true, prepared: false});
     }
     if (!preparation.waitPromise) {
       preparation.waitPromise = /** @type {Promise<Readiness>} */ (
@@ -256,6 +300,23 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
           }
           current = null;
           if (failure) {
+            await scheduleAssetRelease(
+              preparation.assetIds.filter(
+                (assetId) =>
+                  sceneRetainedAssetIds.has(assetId) && !committedRequiredAssetIds.has(assetId),
+              ),
+              'scene-prepare-failed',
+              sceneId,
+            );
+            const cleanupError = takeCleanupFailure(
+              'Scene preparation cleanup could not release one or more assets',
+            );
+            if (cleanupError) {
+              failure = new AggregateError(
+                [failure, cleanupError],
+                'Scene asset preparation and cleanup failed',
+              );
+            }
             return Object.freeze({
               ok: false,
               cancelled: false,
@@ -267,11 +328,34 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
             });
           }
           onEvent('assets.scene.ready', {sceneId, assetIds: preparation.assetIds});
-          return Object.freeze({ok: true});
+          return Object.freeze({ok: true, prepared: true});
         })()
       );
     }
     return preparation.waitPromise;
+  }
+
+  /** @param {string} sceneId @param {string} reason */
+  async function commitScene(sceneId, reason) {
+    const scene = index.scenes[sceneId];
+    if (!scene) throw new TypeError(`Unknown asset dependency scene: ${sceneId}`);
+    try {
+      await cleanupPromise;
+      const pendingFailure = takeCleanupFailure(
+        'A superseded scene could not release one or more assets',
+      );
+      if (pendingFailure) throw pendingFailure;
+      const required = new Set([...persistentSceneAssetIds, ...scene.all]);
+      const releaseAssetIds = index.sceneRetained.filter((assetId) => !required.has(assetId));
+      await scheduleAssetRelease(releaseAssetIds, reason, sceneId);
+      const releaseFailure = takeCleanupFailure(
+        'The previous scene could not release one or more assets',
+      );
+      if (releaseFailure) throw releaseFailure;
+      committedRequiredAssetIds = required;
+    } catch (error) {
+      throw lifecycleError(error, 'K4-ASSET-RELEASE-001', 'Scene-retained asset release failed');
+    }
   }
 
   /** @param {string} reason */
@@ -279,11 +363,29 @@ export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onE
     cancelCurrent(reason);
     releasePromise = releasePromise
       .catch(() => {})
-      .then(() => port.release(Object.freeze({reason})))
-      .then(() => undefined);
+      .then(async () => {
+        await cleanupPromise;
+        const errors = cleanupErrors;
+        cleanupErrors = [];
+        try {
+          await port.release(Object.freeze({reason}));
+        } catch (error) {
+          errors.push(error);
+        }
+        if (errors.length > 0) {
+          throw new AggregateError(errors, 'One or more asset lifecycle releases failed');
+        }
+      });
     void releasePromise.catch(() => {});
     return releasePromise;
   }
 
-  return Object.freeze({prepareStartup, beginScene, waitForScene, cancel: cancelCurrent, release});
+  return Object.freeze({
+    prepareStartup,
+    beginScene,
+    waitForScene,
+    commitScene,
+    cancel: cancelCurrent,
+    release,
+  });
 }

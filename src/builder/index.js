@@ -22,6 +22,7 @@ export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
 export {
+  ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';

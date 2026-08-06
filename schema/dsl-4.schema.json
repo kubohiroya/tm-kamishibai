@@ -33,6 +33,10 @@
       "enum": ["eager", "lazy"],
       "default": "eager"
     },
+    "retentionPolicy": {
+      "type": "string",
+      "enum": ["scene", "story"]
+    },
     "deliveryPolicy": {
       "type": "string",
       "enum": ["embedded", "remote"],
@@ -77,7 +81,8 @@
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
         {
@@ -122,7 +127,8 @@
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
         {
@@ -168,7 +174,8 @@
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
         {
@@ -212,7 +219,8 @@
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
         {

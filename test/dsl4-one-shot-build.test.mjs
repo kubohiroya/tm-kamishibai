@@ -22,6 +22,8 @@ const sourceManifest = Object.freeze({
   mode: 'external',
   sourceId: 'main',
   path: 'scripts/story.kamishibai.yaml',
+  cacheId: 'story000000000001',
+  cacheDatabaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
 });
 const validSource = `
 kamishibai: '4.0'
@@ -169,6 +171,11 @@ test('builds a remote manifest without embedding the remote payload', async () =
   await withProject(remoteSource, async (directory) => {
     const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
     assert.deepEqual(built.runtimeComponent.assetBundle.files, []);
+    assert.deepEqual(built.runtimeComponent.sourceDescriptor.cacheIdentity, {
+      id: 'story000000000001',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
+    });
     assert.deepEqual(built.runtimeComponent.assetBundle.manifest.assets, [
       {
         id: 'RemoteOpening',

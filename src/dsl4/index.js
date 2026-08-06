@@ -1,5 +1,6 @@
 export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-frontend.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
   createDsl4EmbeddedAssetBundle,
   dsl4AssetBundleStoragePaths,

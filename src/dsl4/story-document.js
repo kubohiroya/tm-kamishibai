@@ -73,14 +73,17 @@ function normalizeAsset(asset, id) {
       name: id,
       delivery: 'embedded',
       loading: 'eager',
+      retention: kind === 'poseModel' ? 'scene' : 'story',
       ...(target ? {target} : {}),
     };
   }
+  const sourceAsset = /** @type {Record<string, unknown>} */ (cloneValue(asset));
   return {
     id,
     delivery: 'embedded',
     loading: 'eager',
-    .../** @type {Record<string, unknown>} */ (cloneValue(asset)),
+    retention: sourceAsset.kind === 'poseModel' ? 'scene' : 'story',
+    ...sourceAsset,
   };
 }
 

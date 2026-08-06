@@ -110,6 +110,8 @@ export function createDsl4EmbeddedAssetLifecycle({
   let epoch = 0;
   /** @type {Map<string, Record<string, any>>} */
   const cache = new Map();
+  /** @type {Map<string, Promise<void>>} */
+  const releaseLocks = new Map();
 
   /** @param {Record<string, any>} asset @param {Readonly<Record<string, any>>} context */
   function materialize(asset, context) {
@@ -354,6 +356,8 @@ export function createDsl4EmbeddedAssetLifecycle({
     }
     const entries = await Promise.all(
       assetIds.map(async (assetId) => {
+        const releaseLock = releaseLocks.get(assetId);
+        if (releaseLock) await releaseLock;
         let existing = cache.get(assetId);
         if (existing?.status === 'pending' && existing.signal?.aborted) {
           await existing.promise.catch(() => {});
@@ -366,6 +370,56 @@ export function createDsl4EmbeddedAssetLifecycle({
   }
 
   /** @param {Readonly<Record<string, unknown>>} payload */
+  async function releaseAssets(payload) {
+    if (!isRecord(payload) || !Array.isArray(payload.assetIds)) {
+      throw new TypeError('asset release payload must provide assetIds');
+    }
+    const requested = payload.assetIds;
+    if (requested.some((assetId) => typeof assetId !== 'string')) {
+      throw new TypeError('release assetIds must contain strings');
+    }
+    const assetIds = sortedUnique(/** @type {string[]} */ (requested));
+    for (const assetId of assetIds) {
+      if (!manifest.has(assetId)) throw new TypeError(`Unknown embedded asset: ${assetId}`);
+    }
+    const reason = typeof payload.reason === 'string' ? payload.reason : 'asset-release';
+    /** @type {unknown[]} */
+    const errors = [];
+    await Promise.all(
+      assetIds.map(async (assetId) => {
+        const existingLock = releaseLocks.get(assetId);
+        if (existingLock) {
+          try {
+            await existingLock;
+          } catch (error) {
+            errors.push(error);
+          }
+          return;
+        }
+        const entry = cache.get(assetId);
+        if (!entry) return;
+        if (cache.get(assetId) === entry) cache.delete(assetId);
+        const operation = Promise.resolve().then(async () => {
+          await entry.promise.catch(() => {});
+          if (!entry.released) await releaseEntry(entry, reason);
+          if (entry.releaseError) throw entry.releaseError;
+        });
+        releaseLocks.set(assetId, operation);
+        try {
+          await operation;
+        } catch (error) {
+          errors.push(error);
+        } finally {
+          if (releaseLocks.get(assetId) === operation) releaseLocks.delete(assetId);
+        }
+      }),
+    );
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'One or more selected assets could not be released');
+    }
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} payload */
   async function release(payload) {
     const reason =
       isRecord(payload) && typeof payload.reason === 'string' ? payload.reason : 'release';
@@ -373,6 +427,14 @@ export function createDsl4EmbeddedAssetLifecycle({
     const entries = [...cache.values()].reverse();
     cache.clear();
     const errors = [];
+    for (const operation of releaseLocks.values()) {
+      try {
+        await operation;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    releaseLocks.clear();
     for (const entry of entries) {
       await entry.promise.catch(() => {});
       if (!entry.released) {
@@ -398,6 +460,7 @@ export function createDsl4EmbeddedAssetLifecycle({
     setLoading(payload, context) {
       return setLoading(payload, context);
     },
+    releaseAssets,
     release,
   });
 }
