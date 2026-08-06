@@ -28,7 +28,7 @@ visible blockは本書の上に構築し、それぞれIssue #261で定義する
 class instance、function、symbol、bigint、accessor、symbol key、prototype pollution key、非有限number、
 JavaScript object identityの共有、構造cycleは受理しない。
 
-### 2.2 公開handleと内部edge
+### 2.2 公開Core handleと内部edge
 
 | 種類             | 公開値         | 作成方法                        | 状態                | countへの影響  |
 | ---------------- | -------------- | ------------------------------- | ------------------- | -------------- |
@@ -45,11 +45,15 @@ JavaScript object identityの共有、構造cycleは受理しない。
 `OwnerRef`はentryの唯一の解放権限を表すが、自分自身への外部参照には数えない。`OwnerRef`文字列をcopy
 しても所有権は増えず、いずれかのaliasから`free`した時点で全aliasがstaleになる。
 
+`ExceptionRef`はCoreのobject handleではなく、TurboWarp Adapterが`StoreResult.error`をScratch scalarへ
+投影する場合だけ作る。符号化、predicate、diagnostic reporter、expiryはIssue #261で定義し、Coreの
+`@os1` handle tableへ登録しない。
+
 ## 3. opaque handle
 
 ### 3.1 形式
 
-handleは次のruntime-only形式を使用する。
+`ScopeRef`、`OwnerRef`、`ReferenceLease`は次のruntime-only形式を使用する。
 
 ```text
 @os1.<realmNonce>.<handleNonce>
@@ -272,6 +276,7 @@ objectだけからなる非循環valueは新しい構造へdeep copyする。次
 
 - `RefValue` branded record
 - `@os1.` reserved prefixのopaque handle string
+- TurboWarp Adapterが`ExceptionRef`と判定するscalar
 - function、symbol、bigint、class instance、accessor、非有限number
 - JavaScript cycleまたは共有object identity
 
