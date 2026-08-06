@@ -100,7 +100,7 @@ test('freezes zero-author-block, bounded-shell, and no-list budgets', () => {
   assert.ok(contract.budgets.targetProjectBlocks <= contract.budgets.maximumProjectBlocks);
 });
 
-test('excludes preview UI and optional palettes from production surfaces', () => {
+test('excludes preview UI and optional palettes from Standard production surfaces', () => {
   const productionSurfaces = Object.values(contract.surfaces).filter(
     (surface) => surface.productionArtifact,
   );
@@ -110,6 +110,6 @@ test('excludes preview UI and optional palettes from production surfaces', () =>
   const optionalIds = Object.values(contract.optionalSurfaces)
     .filter((surface) => surface.extensionId && !surface.registeredInStandard)
     .map((surface) => surface.extensionId);
-  assert.deepEqual(contract.productionForbidden.extensionIds, optionalIds);
-  assert.ok(contract.productionForbidden.persistedFields.length > 0);
+  assert.deepEqual(contract.standardProductionForbidden.extensionIds, optionalIds);
+  assert.ok(contract.standardProductionForbidden.persistedFields.length > 0);
 });
