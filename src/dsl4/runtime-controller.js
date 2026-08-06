@@ -1,7 +1,6 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {deepFreeze} from './story-document.js';
 
-const terminalStatuses = new Set(['failed', 'finished', 'stopped']);
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
   fullConfidenceHoldSeconds: 1,
@@ -31,6 +30,7 @@ const defaultPoseSelectionRecognition = Object.freeze({
  * @property {string} sceneId
  * @property {string} actionPath
  * @property {Readonly<Record<string, string | number | boolean>>} variables
+ * @property {Readonly<{actionScopeRef: string, actionViewRef: string}>} [structuredData]
  * @property {(name: string) => string | number | boolean | undefined} getVariable
  * @property {(name: string, value: string | number | boolean) => boolean} setVariable
  */
@@ -101,6 +101,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.assetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: ActionContext) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
+ * @param {Record<string, Function>} [options.structuredDataIntegration]
  */
 export function createDsl4RuntimeController({
   storyDocument,
@@ -108,9 +109,28 @@ export function createDsl4RuntimeController({
   assetLifecycle,
   evaluateCondition,
   onEvent,
+  structuredDataIntegration,
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime requires a StoryDocument version 4.0');
+  }
+  if (structuredDataIntegration !== undefined) {
+    if (!isRecord(structuredDataIntegration)) {
+      throw new TypeError('structuredDataIntegration must be an object');
+    }
+    for (const method of [
+      'beginStory',
+      'enterScene',
+      'beginNextAction',
+      'currentActionResources',
+      'releaseAction',
+      'endStory',
+      'dispose',
+    ]) {
+      if (typeof structuredDataIntegration[method] !== 'function') {
+        throw new TypeError(`structuredDataIntegration.${method} is required`);
+      }
+    }
   }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
@@ -164,6 +184,15 @@ export function createDsl4RuntimeController({
       })
     : null;
   let assetsReleased = true;
+  let controllerDisposed = false;
+  /** @type {Readonly<Record<string, any>> | null} */
+  let structuredScene = null;
+  /** @type {Readonly<Record<string, any>> | null} */
+  let structuredAction = null;
+  /** @type {Readonly<{actionScopeRef: string, actionViewRef: string}> | null} */
+  let structuredActionResources = null;
+  let structuredStoryActive = false;
+  let structuredActionActive = false;
 
   /** @param {string} reason */
   function releaseAssets(reason) {
@@ -173,14 +202,63 @@ export function createDsl4RuntimeController({
   }
 
   function currentScene() {
-    return scenes[currentSceneIndex];
+    return structuredScene ?? scenes[currentSceneIndex];
   }
 
   function currentAction() {
+    if (structuredAction) return structuredAction;
     const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       currentScene()?.actions ?? []
     );
     return actions[currentActionIndex];
+  }
+
+  /** @param {string} reason */
+  function releaseStructuredAction(reason) {
+    if (!structuredDataIntegration || !structuredActionActive) return;
+    try {
+      structuredDataIntegration.releaseAction(reason);
+    } finally {
+      structuredActionActive = false;
+      structuredAction = null;
+      structuredActionResources = null;
+    }
+  }
+
+  /** @param {string} reason */
+  function endStructuredStory(reason) {
+    if (!structuredDataIntegration || !structuredStoryActive) return;
+    try {
+      structuredDataIntegration.endStory(reason);
+    } finally {
+      structuredStoryActive = false;
+      structuredActionActive = false;
+      structuredScene = null;
+      structuredAction = null;
+      structuredActionResources = null;
+    }
+  }
+
+  function beginStructuredStory() {
+    if (!structuredDataIntegration || structuredStoryActive) return;
+    structuredDataIntegration.beginStory();
+    structuredStoryActive = true;
+  }
+
+  /** @param {string} sceneId @param {number} actionIndex */
+  function bindStructuredScene(sceneId, actionIndex) {
+    if (!structuredDataIntegration) return null;
+    const entered = structuredDataIntegration.enterScene(sceneId, {actionIndex});
+    if (!isRecord(entered) || !isRecord(entered.scene) || entered.scene.id !== sceneId) {
+      const error = new Error('Structured Data integration returned an invalid scene');
+      Object.defineProperty(error, 'code', {value: 'K4-STRUCTURED-DATA-001'});
+      throw error;
+    }
+    structuredScene = /** @type {Readonly<Record<string, any>>} */ (entered.scene);
+    structuredActionActive = false;
+    structuredAction = null;
+    structuredActionResources = null;
+    return structuredScene;
   }
 
   /**
@@ -319,6 +397,9 @@ export function createDsl4RuntimeController({
       sceneId,
       actionPath,
       variables: deepFreeze({...variables}),
+      ...(structuredDataIntegration && structuredActionResources
+        ? {structuredData: structuredActionResources}
+        : {}),
       getVariable(name) {
         return variables[name];
       },
@@ -362,8 +443,9 @@ export function createDsl4RuntimeController({
   /**
    * @param {string} sceneId
    * @param {string} reason
+   * @param {number} [actionIndex]
    */
-  function transitionTo(sceneId, reason) {
+  function transitionTo(sceneId, reason, actionIndex = 0) {
     const nextIndex = sceneIndex.get(sceneId);
     if (nextIndex === undefined) {
       const error = new Error(`Unknown scene: ${sceneId}`);
@@ -371,8 +453,9 @@ export function createDsl4RuntimeController({
       throw error;
     }
     const from = currentScene()?.id ?? null;
+    bindStructuredScene(sceneId, actionIndex);
     currentSceneIndex = nextIndex;
-    currentActionIndex = -1;
+    currentActionIndex = actionIndex - 1;
     emit('scene.transition', {from, to: sceneId, reason});
     emit('scene.enter', {reason});
   }
@@ -383,9 +466,10 @@ export function createDsl4RuntimeController({
    * @param {string} sceneId
    * @param {string} reason
    * @param {number} activeRunId
+   * @param {number} [actionIndex]
    * @returns {Promise<boolean>}
    */
-  async function enterScene(sceneId, reason, activeRunId) {
+  async function enterScene(sceneId, reason, activeRunId, actionIndex = 0) {
     if (assetCoordinator) {
       assetCoordinator.beginScene(sceneId, generation);
       const readiness = await assetCoordinator.waitForScene(sceneId);
@@ -395,7 +479,12 @@ export function createDsl4RuntimeController({
         return false;
       }
     }
-    transitionTo(sceneId, reason);
+    try {
+      transitionTo(sceneId, reason, actionIndex);
+    } catch (error) {
+      if (runId === activeRunId && status === 'running') fail(error);
+      return false;
+    }
     if (assetCoordinator) {
       try {
         await assetCoordinator.commitScene(sceneId, 'scene-transition');
@@ -528,15 +617,24 @@ export function createDsl4RuntimeController({
 
   /**
    * @param {unknown} error
+   * @param {boolean} [cleanupStructuredData]
    */
-  function fail(error) {
-    if (terminalStatuses.has(status)) return;
+  function fail(error, cleanupStructuredData = true) {
+    if (status === 'failed' || status === 'stopped') return;
+    let terminalError = error;
+    if (cleanupStructuredData && structuredDataIntegration) {
+      try {
+        endStructuredStory('runtime-failed');
+      } catch (cleanupError) {
+        terminalError = cleanupError;
+      }
+    }
     status = 'failed';
     actionAbortController?.abort('runtime-failed');
     const actionPath = typeof currentAction()?.id === 'string' ? String(currentAction().id) : null;
     const errorRecord =
-      typeof error === 'object' && error !== null
-        ? /** @type {Record<string, unknown>} */ (error)
+      typeof terminalError === 'object' && terminalError !== null
+        ? /** @type {Record<string, unknown>} */ (terminalError)
         : {};
     const code = typeof errorRecord.code === 'string' ? errorRecord.code : 'K4-RUNTIME-ACTION-001';
     const errorStoryPath =
@@ -545,7 +643,7 @@ export function createDsl4RuntimeController({
       storyDocument,
       errorStoryPath,
       code,
-      safeErrorMessage(error),
+      safeErrorMessage(terminalError),
     );
     emit('runtime.fail', {code});
   }
@@ -584,6 +682,12 @@ export function createDsl4RuntimeController({
         );
         if (currentActionIndex + 1 >= actions.length) {
           if (currentSceneIndex + 1 >= scenes.length) {
+            try {
+              endStructuredStory('runtime-finished');
+            } catch (error) {
+              fail(error, false);
+              break;
+            }
             status = 'finished';
             currentActionIndex = actions.length;
             emit('runtime.finish');
@@ -598,6 +702,43 @@ export function createDsl4RuntimeController({
         }
 
         currentActionIndex += 1;
+        if (structuredDataIntegration) {
+          try {
+            const next = structuredDataIntegration.beginNextAction();
+            if (
+              !isRecord(next) ||
+              next.status !== 'item' ||
+              next.index !== currentActionIndex ||
+              !isRecord(next.action) ||
+              !isRecord(next.resources) ||
+              typeof next.resources.actionScopeRef !== 'string' ||
+              typeof next.resources.actionViewRef !== 'string'
+            ) {
+              const error = new Error('Structured Data action Iterator is inconsistent');
+              Object.defineProperty(error, 'code', {value: 'K4-STRUCTURED-DATA-001'});
+              throw error;
+            }
+            const currentResources = structuredDataIntegration.currentActionResources();
+            if (
+              !isRecord(currentResources) ||
+              currentResources.actionScopeRef !== next.resources.actionScopeRef ||
+              currentResources.actionViewRef !== next.resources.actionViewRef
+            ) {
+              const error = new Error('Structured Data action resources are inconsistent');
+              Object.defineProperty(error, 'code', {value: 'K4-STRUCTURED-DATA-001'});
+              throw error;
+            }
+            structuredActionActive = true;
+            structuredAction = /** @type {Readonly<Record<string, any>>} */ (next.action);
+            structuredActionResources = deepFreeze({
+              actionScopeRef: currentResources.actionScopeRef,
+              actionViewRef: currentResources.actionViewRef,
+            });
+          } catch (error) {
+            fail(error);
+            break;
+          }
+        }
         generation += 1;
         const actionGeneration = generation;
         actionAbortController = new AbortController();
@@ -612,6 +753,12 @@ export function createDsl4RuntimeController({
           break;
         }
         if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
+        try {
+          releaseStructuredAction('action-complete');
+        } catch (error) {
+          fail(error);
+          break;
+        }
         emit('action.commit');
         actionAbortController = null;
         if (transition && !(await enterScene(transition.sceneId, transition.reason, activeRunId))) {
@@ -642,8 +789,9 @@ export function createDsl4RuntimeController({
         if (!readiness.cancelled) fail(readiness.error);
         return snapshot();
       }
-      if (!(await enterScene(entrySceneId, 'start', activeRunId))) return snapshot();
-      currentActionIndex = entryActionIndex - 1;
+      if (!(await enterScene(entrySceneId, 'start', activeRunId, entryActionIndex))) {
+        return snapshot();
+      }
       delegatedToRun = true;
       return await run(activeRunId);
     } finally {
@@ -656,6 +804,7 @@ export function createDsl4RuntimeController({
    * @returns {Promise<Readonly<Record<string, unknown>>>}
    */
   function start({sceneId, actionIndex = 0, variables: startVariables} = {}) {
+    if (controllerDisposed) return Promise.resolve(snapshot());
     const entrySceneId = sceneId ?? String(scenes[0]?.id ?? '');
     if (!entrySceneId || !resolvePosition(entrySceneId, actionIndex)) {
       throw new TypeError(`Invalid runtime start position: ${entrySceneId} action ${actionIndex}`);
@@ -673,13 +822,25 @@ export function createDsl4RuntimeController({
     sequence = 0;
     trace.length = 0;
     emit('runtime.start');
+    if (structuredDataIntegration) {
+      try {
+        beginStructuredStory();
+      } catch (error) {
+        fail(error);
+        return Promise.resolve(snapshot());
+      }
+    }
     if (assetCoordinator) assetsReleased = false;
     runId += 1;
     if (assetCoordinator) {
       runPromise = runWithAssetStartup(entrySceneId, actionIndex, runId);
     } else {
-      transitionTo(entrySceneId, 'start');
-      currentActionIndex = actionIndex - 1;
+      try {
+        transitionTo(entrySceneId, 'start', actionIndex);
+      } catch (error) {
+        fail(error);
+        return Promise.resolve(snapshot());
+      }
       runPromise = run(runId);
     }
     return runPromise;
@@ -691,6 +852,11 @@ export function createDsl4RuntimeController({
    */
   function stop(reason = 'stop') {
     if (status !== 'running' && status !== 'paused') {
+      try {
+        endStructuredStory(reason);
+      } catch (error) {
+        fail(error, false);
+      }
       releaseAssets(reason);
       return snapshot();
     }
@@ -699,6 +865,13 @@ export function createDsl4RuntimeController({
     if (wasRunning) actionAbortController?.abort(reason);
     generation += 1;
     if (wasRunning && action) emit('action.cancel', {reason});
+    try {
+      endStructuredStory(reason);
+    } catch (error) {
+      fail(error, false);
+      releaseAssets(reason);
+      return snapshot();
+    }
     status = 'stopped';
     emit('runtime.stop', {reason});
     releaseAssets(reason);
@@ -722,6 +895,12 @@ export function createDsl4RuntimeController({
     actionAbortController?.abort(reason);
     generation += 1;
     if (action) emit('action.cancel', {reason});
+    try {
+      releaseStructuredAction(reason);
+    } catch (error) {
+      fail(error);
+      return Promise.resolve(snapshot());
+    }
     actionAbortController = null;
     runId += 1;
     runPromise = null;
@@ -756,8 +935,14 @@ export function createDsl4RuntimeController({
       return runPromise;
     }
 
-    status = 'finished';
     currentActionIndex = actions.length;
+    try {
+      endStructuredStory('runtime-finished');
+    } catch (error) {
+      fail(error, false);
+      return Promise.resolve(snapshot());
+    }
+    status = 'finished';
     emit('navigation.advance', {fromStoryPath, toStoryPath: null, reason});
     emit('runtime.finish');
     return Promise.resolve(snapshot());
@@ -788,6 +973,14 @@ export function createDsl4RuntimeController({
     if (wasRunning) actionAbortController?.abort(reason);
     generation += 1;
     if (wasRunning && action) emit('action.cancel', {reason});
+    try {
+      beginStructuredStory();
+      releaseStructuredAction(reason);
+      bindStructuredScene(sceneId, actionIndex);
+    } catch (error) {
+      fail(error);
+      return snapshot();
+    }
     actionAbortController = null;
     runId += 1;
     runPromise = null;
@@ -847,17 +1040,26 @@ export function createDsl4RuntimeController({
     actionAbortController?.abort(reason);
     generation += 1;
     if (action) emit('action.cancel', {reason});
+    try {
+      releaseStructuredAction(reason);
+    } catch (error) {
+      fail(error);
+      return Promise.resolve(snapshot());
+    }
     runId += 1;
     const activeRunId = runId;
     if (!assetCoordinator) {
-      transitionTo(sceneId, reason);
-      currentActionIndex = actionIndex - 1;
+      try {
+        transitionTo(sceneId, reason, actionIndex);
+      } catch (error) {
+        fail(error);
+        return Promise.resolve(snapshot());
+      }
       runPromise = run(activeRunId);
       return runPromise;
     }
     runPromise = (async () => {
-      if (!(await enterScene(sceneId, reason, activeRunId))) return snapshot();
-      currentActionIndex = actionIndex - 1;
+      if (!(await enterScene(sceneId, reason, activeRunId, actionIndex))) return snapshot();
       return run(activeRunId);
     })();
     return runPromise;
@@ -876,6 +1078,17 @@ export function createDsl4RuntimeController({
     },
     getRunPromise() {
       return runPromise;
+    },
+    dispose() {
+      if (controllerDisposed) return;
+      stop('dispose');
+      structuredDataIntegration?.dispose();
+      structuredScene = null;
+      structuredAction = null;
+      structuredActionResources = null;
+      structuredStoryActive = false;
+      structuredActionActive = false;
+      controllerDisposed = true;
     },
   });
 }
