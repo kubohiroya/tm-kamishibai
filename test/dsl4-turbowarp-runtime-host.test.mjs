@@ -450,6 +450,54 @@ scenes:
   await result.host.dispose();
 });
 
+test('contains a cache heartbeat cancellation failure and still releases the lease', async () => {
+  const cacheIdentity = {
+    id: 'cancelerror00001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--cancelerror00001',
+  };
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteUnused:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/unused.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`,
+    {cacheIdentity},
+  );
+  const log = [];
+  const cancellationFailure = new Error('heartbeat cancellation failed');
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+      scheduleCacheLeaseHeartbeat() {
+        return () => {
+          throw cancellationFailure;
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal((await result.host.start()).status, 'finished');
+  assert.strictEqual(result.host.verifiedRemoteCache.getHeartbeatError(), cancellationFailure);
+  assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 1);
+  await result.host.dispose();
+});
+
 test('a restarted run keeps the latest cache lease heartbeat active', async () => {
   const cacheIdentity = {
     id: 'restartheartbeat1',

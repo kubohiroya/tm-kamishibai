@@ -592,8 +592,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   }
 
   async function deactivateCacheLease() {
-    cancelCacheHeartbeat?.();
+    const cancel = cancelCacheHeartbeat;
     cancelCacheHeartbeat = null;
+    try {
+      cancel?.();
+    } catch (error) {
+      cacheLeaseError = error;
+    }
     if (!cachePort || !cacheLeaseActive) return;
     cacheLeaseActive = false;
     await queueCacheLeaseOperation(() => cachePort.releaseLease());
