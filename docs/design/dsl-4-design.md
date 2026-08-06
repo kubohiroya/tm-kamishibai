@@ -1673,7 +1673,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
 | Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
 | TMPose             | GitHub固定commit            | `tmpose`                      | `TMPoseURL`と`pose` action      |
-| Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`候補   | StoryDocumentと実行時viewの保持 |
+| Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`       | StoryDocumentと実行時viewの保持 |
 
 Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
 展開ソースはGitHub providerを使用しています。SVG Textも4.0の直接合成APIを含むGitHub commitへ固定します。
