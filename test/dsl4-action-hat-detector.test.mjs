@@ -14,7 +14,7 @@ function mutation(declaration) {
   return {
     tagName: 'mutation',
     children: [],
-    dsl4Action: JSON.stringify(declaration),
+    dsl4action: JSON.stringify(declaration),
   };
 }
 
@@ -169,9 +169,10 @@ test('rejects malformed graph and mutation inputs without a partial snapshot', (
   const invalidMutations = [
     null,
     {},
-    {tagName: 'mutation', children: [], dsl4Action: '{'},
-    {tagName: 'wrong', children: [], dsl4Action: '{}'},
-    {tagName: 'mutation', children: [{}], dsl4Action: '{}'},
+    {tagName: 'mutation', children: [], dsl4action: '{'},
+    {tagName: 'wrong', children: [], dsl4action: '{}'},
+    {tagName: 'mutation', children: [{}], dsl4action: '{}'},
+    {tagName: 'mutation', children: [], dsl4Action: '{}'},
     {...mutation(declaration('wave')), unexpected: true},
     mutation(null),
     mutation({...declaration('wave'), version: 2}),

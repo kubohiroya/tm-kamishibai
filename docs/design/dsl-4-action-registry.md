@@ -29,7 +29,8 @@ cloneに複製されたhat、実行中に作られたhat、green flag後にmutat
 
 hat opcodeはStandalone／Compositeの物理namespaceをdetector内で推測せず、toolchainまたはapp shellが解決した
 完全なopcodeを起動時に注入する。mutationは`tagName: "mutation"`、空の`children`、一つの
-`dsl4Action`属性だけを持つ。`dsl4Action`は次のdeclarative JSONであり、version 1以外、unknown key、
+`dsl4action`属性だけを持つ。TurboWarp VMのXML mutation adapterは属性名を小文字化するため、
+camelCaseの`dsl4Action`はwire keyとして使わない。`dsl4action`は次のdeclarative JSONであり、version 1以外、unknown key、
 procedure、list、runtime variable、実行可能コードを受理しない。
 
 ```json

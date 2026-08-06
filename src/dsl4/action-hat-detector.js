@@ -1,6 +1,6 @@
 import {createDsl4ActionRegistrySnapshot, Dsl4ActionRegistryError} from './action-registry.js';
 
-const mutationKeys = new Set(['tagName', 'children', 'dsl4Action']);
+const mutationKeys = new Set(['tagName', 'children', 'dsl4action']);
 const declarationKeys = new Set(['version', 'name', 'target', 'parameters', 'quiesce']);
 const parameterKeys = new Set(['name', 'type', 'required']);
 const parameterTypes = new Set(['string', 'number', 'boolean']);
@@ -96,20 +96,20 @@ function readDeclaration(block, limits, targetId, blockId) {
     mutation.tagName !== 'mutation' ||
     !Array.isArray(mutation.children) ||
     mutation.children.length !== 0 ||
-    typeof mutation.dsl4Action !== 'string'
+    typeof mutation.dsl4action !== 'string'
   ) {
     fail(
       'K4-REGISTRY-MUTATION-001',
-      'Custom action hat mutation must contain tagName, empty children, and dsl4Action JSON',
+      'Custom action hat mutation must contain tagName, empty children, and dsl4action JSON',
     );
   }
-  if (mutation.dsl4Action.length > limits.maxMutationCodeUnits) {
+  if (mutation.dsl4action.length > limits.maxMutationCodeUnits) {
     fail('K4-REGISTRY-LIMIT-001', 'Custom action hat mutation exceeds its JSON size limit');
   }
   /** @type {unknown} */
   let parsed;
   try {
-    parsed = JSON.parse(mutation.dsl4Action);
+    parsed = JSON.parse(mutation.dsl4action);
   } catch {
     fail('K4-REGISTRY-MUTATION-001', 'Custom action hat declaration is invalid JSON');
   }
