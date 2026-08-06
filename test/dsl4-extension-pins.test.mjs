@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import {fileURLToPath} from 'node:url';
+
+import {parse} from 'yaml';
+
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const expectedVersions = Object.freeze({
+  '@kubohiroya/turbowarp-async-input': '0.3.0',
+  '@kubohiroya/turbowarp-asset-manager': '0.6.0',
+  '@kubohiroya/turbowarp-runtime-expression': '0.3.0',
+  '@kubohiroya/turbowarp-svg-text': '0.3.0',
+  '@kubohiroya/turbowarp-tmpose': '1.5.0',
+});
+
+test('pins every DSL4 extension to an exact npm release and matching lock entry', async () => {
+  const [packageJsonSource, lockfileSource, workspaceSource] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
+    readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8'),
+    readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
+  ]);
+  const packageJson = JSON.parse(packageJsonSource);
+  const lockfile = parse(lockfileSource);
+  const workspace = parse(workspaceSource);
+  const allowedBuilds = Object.keys(workspace.allowBuilds ?? {});
+  const ageExclusions = new Set(workspace.minimumReleaseAgeExclude ?? []);
+
+  for (const [name, version] of Object.entries(expectedVersions)) {
+    assert.equal(packageJson.dependencies[name], version, `${name} package pin`);
+    assert.deepEqual(lockfile.importers['.'].dependencies[name], {specifier: version, version});
+    const packageEntry = lockfile.packages[`${name}@${version}`];
+    assert.equal(typeof packageEntry?.resolution?.integrity, 'string', `${name} lock integrity`);
+    assert.match(packageEntry.resolution.integrity, /^sha512-/u);
+    assert.equal(
+      allowedBuilds.some((entry) => entry.startsWith(`${name}@`)),
+      false,
+      `${name} must use the prebuilt npm artifact`,
+    );
+    assert.equal(ageExclusions.has(`${name}@${version}`), true, `${name} exact age exception`);
+  }
+});
