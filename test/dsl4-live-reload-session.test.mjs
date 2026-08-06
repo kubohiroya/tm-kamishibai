@@ -388,6 +388,77 @@ test('clears a pending candidate on a later invalid source and disposes once', a
   await assert.rejects(liveReload.stage(parse(initialSource)), /disposed/u);
 });
 
+test('preserves source integrity and discards candidate state without stopping current runtime', async () => {
+  const events = [];
+  const currentStory = parse(initialSource).storyDocument;
+  const currentSession = fakeSession(
+    {
+      status: 'running',
+      sceneId: 'opening',
+      actionIndex: 0,
+      actionPath: '/scenes/opening/actions/0',
+      variables: {score: 1},
+    },
+    events,
+    'current',
+  );
+  const liveReload = createDsl4LiveReloadSession({
+    initialStoryDocument: currentStory,
+    initialSession: currentSession,
+    initialSourceIntegrity: 'sha256-current',
+    createSession() {
+      assert.fail('discard must not create a replacement session');
+    },
+  });
+  const next = {
+    ...parse(initialSource.replace('seconds: 1', 'seconds: 2')),
+    sourceSnapshot: {sourceId: 'main', integrity: 'sha256-next'},
+  };
+  const pending = await liveReload.stage(next);
+  assert.equal(pending.current.integrity, 'sha256-current');
+  assert.equal(pending.candidate.integrity, 'sha256-next');
+
+  const active = await liveReload.discardCandidate();
+  assert.equal(active.status, 'active');
+  assert.equal(active.candidate, null);
+  assert.equal(active.current.integrity, 'sha256-current');
+  assert.deepEqual(events, []);
+});
+
+test('discarding a candidate does not revive a runtime after commit failure', async () => {
+  const events = [];
+  const currentStory = parse(initialSource).storyDocument;
+  const liveReload = createDsl4LiveReloadSession({
+    initialStoryDocument: currentStory,
+    initialSession: fakeSession(
+      {
+        status: 'running',
+        sceneId: 'opening',
+        actionIndex: 0,
+        actionPath: '/scenes/opening/actions/0',
+        variables: {score: 1},
+      },
+      events,
+      'current',
+    ),
+    createSession() {
+      const next = fakeSession(
+        {status: 'idle', sceneId: null, actionIndex: -1, actionPath: null, variables: {}},
+        events,
+        'next',
+      );
+      return {...next, start: () => assert.fail('replacement start failed')};
+    },
+  });
+  const pending = await liveReload.stage(parse(initialSource.replace('seconds: 1', 'seconds: 2')));
+  await assert.rejects(
+    liveReload.commit(pending.candidate.id, 'currentAction'),
+    /replacement start failed/u,
+  );
+  assert.equal(liveReload.getState().status, 'failed');
+  assert.equal((await liveReload.discardCandidate()).status, 'failed');
+});
+
 test('live reload core has no filesystem, network, DOM, transport, VM, or Scratch dependency', async () => {
   const implementation = await readFile(
     path.join(projectRoot, 'src', 'dsl4', 'live-reload-session.js'),

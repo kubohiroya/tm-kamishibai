@@ -44,6 +44,24 @@ function executionState(session) {
   return isRecord(state.runtime) ? state.runtime : state;
 }
 
+/** @param {unknown} input */
+function sourceIntegrity(input) {
+  if (!isRecord(input) || input.sourceSnapshot === undefined || input.sourceSnapshot === null) {
+    return null;
+  }
+  if (!isRecord(input.sourceSnapshot) || typeof input.sourceSnapshot.integrity !== 'string') {
+    throw new TypeError('sourceSnapshot must provide an integrity string');
+  }
+  return input.sourceSnapshot.integrity;
+}
+
+/** @param {unknown} value @param {string} name */
+function optionalIntegrity(value, name) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') throw new TypeError(`${name} must be a string`);
+  return value;
+}
+
 /**
  * Coordinate author-visible DSL 4.0 source reload behavior without owning filesystem watch,
  * transport, or modal UI.
@@ -52,12 +70,14 @@ function executionState(session) {
  * @param {(context: Readonly<{storyDocument: Readonly<Record<string, unknown>>, previousSession: Record<string, Function> | null, preserveManagedPresentation: boolean}>) => Record<string, Function> | Promise<Record<string, Function>>} options.createSession
  * @param {Readonly<Record<string, unknown>>} [options.initialStoryDocument]
  * @param {Record<string, Function>} [options.initialSession]
+ * @param {string} [options.initialSourceIntegrity]
  * @param {(error: unknown) => void} [options.onRunError]
  */
 export function createDsl4LiveReloadSession({
   createSession,
   initialStoryDocument,
   initialSession,
+  initialSourceIntegrity,
   onRunError,
 }) {
   if (typeof createSession !== 'function') throw new TypeError('createSession must be a function');
@@ -67,6 +87,9 @@ export function createDsl4LiveReloadSession({
   if ((initialStoryDocument === undefined) !== (initialSession === undefined)) {
     throw new TypeError('initialStoryDocument and initialSession must be provided together');
   }
+  if (initialStoryDocument === undefined && initialSourceIntegrity !== undefined) {
+    throw new TypeError('initialSourceIntegrity requires an initial runtime session');
+  }
 
   let current =
     initialStoryDocument === undefined
@@ -74,8 +97,9 @@ export function createDsl4LiveReloadSession({
       : {
           storyDocument: validateStoryDocument(initialStoryDocument),
           session: validateRuntimeSession(initialSession),
+          integrity: optionalIntegrity(initialSourceIntegrity, 'initialSourceIntegrity'),
         };
-  /** @type {{id: number, storyDocument: Readonly<Record<string, unknown>>, plan: Readonly<Record<string, any>>} | null} */
+  /** @type {{id: number, storyDocument: Readonly<Record<string, unknown>>, integrity: string | null, plan: Readonly<Record<string, any>>} | null} */
   let candidate = null;
   /** @type {'waiting' | 'active' | 'invalid' | 'pending' | 'deferred' | 'failed' | 'disposed'} */
   let status = current ? 'active' : 'waiting';
@@ -99,10 +123,13 @@ export function createDsl4LiveReloadSession({
       current: current
         ? {
             sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
+            integrity: current.integrity,
             runtime: cloneValue(runtime),
           }
         : null,
-      candidate: candidate ? {id: candidate.id, plan: candidate.plan} : null,
+      candidate: candidate
+        ? {id: candidate.id, integrity: candidate.integrity, plan: candidate.plan}
+        : null,
       diagnostics: cloneValue(diagnostics),
       disposed,
     });
@@ -165,6 +192,7 @@ export function createDsl4LiveReloadSession({
       if (!isRecord(input) || typeof input.ok !== 'boolean') {
         throw new TypeError('stage requires a source frontend result');
       }
+      const integrity = sourceIntegrity(input);
       if (!input.ok) {
         if (!Array.isArray(input.diagnostics)) {
           throw new TypeError('invalid source result must provide diagnostics');
@@ -195,7 +223,7 @@ export function createDsl4LiveReloadSession({
           }
           throw error;
         }
-        current = {storyDocument, session};
+        current = {storyDocument, session, integrity};
         generation += 1;
         status = 'active';
         observeRun(run);
@@ -207,9 +235,20 @@ export function createDsl4LiveReloadSession({
         candidateStoryDocument: storyDocument,
         currentExecution: executionState(current.session),
       });
-      candidate = {id: nextCandidateId++, storyDocument, plan};
+      candidate = {id: nextCandidateId++, storyDocument, integrity, plan};
       diagnostics = plan.diagnostics;
       status = 'pending';
+      return snapshot();
+    });
+  }
+
+  /** Discard author-visible candidate state while leaving the current runtime untouched. */
+  function discardCandidate() {
+    return enqueue(() => {
+      if (disposed) throw new TypeError('live reload session is disposed');
+      candidate = null;
+      diagnostics = [];
+      if (status !== 'failed') status = current ? 'active' : 'waiting';
       return snapshot();
     });
   }
@@ -259,7 +298,11 @@ export function createDsl4LiveReloadSession({
           actionIndex: option.destination.actionIndex,
           variables: option.variables,
         });
-        current = {storyDocument: candidate.storyDocument, session: next};
+        current = {
+          storyDocument: candidate.storyDocument,
+          session: next,
+          integrity: candidate.integrity,
+        };
         candidate = null;
         diagnostics = [];
         generation += 1;
@@ -313,6 +356,7 @@ export function createDsl4LiveReloadSession({
   return Object.freeze({
     stage,
     defer,
+    discardCandidate,
     commit,
     dispose,
     getState: snapshot,
