@@ -12,6 +12,11 @@ export {
   detectDsl4ActionRegistrySnapshot,
   dsl4ActionHatDetectorDefaultLimits,
 } from './action-hat-detector.js';
+export {
+  createDsl4ActionInvocationAdapter,
+  dsl4CustomActionTimeoutDefaults,
+  Dsl4CustomActionError,
+} from './action-invocation-adapter.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {

@@ -535,12 +535,25 @@ export function createDsl4RuntimeController({
     const target = action.target === null ? null : String(action.target);
     const args = /** @type {Record<string, unknown>} */ (action.args);
     if (action.handler === 'custom') {
-      await invokePort(
+      const outcome = await invokePort(
         'customAction',
         {name: command, target, arguments: cloneValue(args)},
         context,
       );
-      return null;
+      if (outcome === undefined || outcome === null) return null;
+      if (isRecord(outcome) && outcome.outcome === 'completed' && Object.keys(outcome).length === 1)
+        return null;
+      if (
+        isRecord(outcome) &&
+        outcome.outcome === 'transitioned' &&
+        typeof outcome.sceneId === 'string' &&
+        Object.keys(outcome).length === 2
+      ) {
+        return {sceneId: outcome.sceneId, reason: 'customAction'};
+      }
+      const error = new Error('Invalid custom action runtime result');
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
+      throw error;
     }
     if (command === 'goto') return {sceneId: String(args.scene), reason: 'goto'};
     if (command === 'branch') {
