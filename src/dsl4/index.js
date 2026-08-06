@@ -17,6 +17,13 @@ export {
   dsl4CustomActionTimeoutDefaults,
   Dsl4CustomActionError,
 } from './action-invocation-adapter.js';
+export {
+  createDsl4ActionContextTurboWarpSurface,
+  dsl4ActionContextBlockBudget,
+  dsl4ActionContextDefaultFeatureFlags,
+  dsl4ActionContextManifest,
+  resolveDsl4ActionContextFeatureFlags,
+} from './action-context-turbowarp.js';
 export {createDsl4ActionQuiesceResolver, dsl4CoreActionQuiesceModes} from './action-quiesce.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';

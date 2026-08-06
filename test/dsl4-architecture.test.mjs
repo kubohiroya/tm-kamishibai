@@ -133,6 +133,7 @@ test('keeps custom action discovery and invocation outside default runtime graph
     const files = [...graph.keys()].map((filename) => path.relative(dsl4Root, filename));
     assert.equal(files.includes('action-hat-detector.js'), false, entry);
     assert.equal(files.includes('action-invocation-adapter.js'), false, entry);
+    assert.equal(files.includes('action-context-turbowarp.js'), false, entry);
   }
 });
 

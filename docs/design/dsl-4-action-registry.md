@@ -224,6 +224,16 @@ scope release blockを要求しない。ActionViewのJSONPath accessはStructure
 `K4-CUSTOM-ARGUMENT-UNKNOWN`でInvocationをfailする。required欠落と型不一致は台本検証時に拒否されるため、
 正常runtimeでは到達しない。
 
+実装は`createDsl4ActionContextTurboWarpSurface`のexact manifestで上表の8 opcodeを固定する。
+`dsl4CustomActionsEnabled`は起動時固定・既定OFFとし、OFFではScratch host、Invocation Adapter、extension
+registrationを参照しない。surfaceはScratch入力の`NAME`／`MESSAGE`／`SCENE`だけを文字列castし、argument
+reporterの`string`／`number`／`boolean`出力は再castしない。primary thread外のcontext errorはAdapter診断を
+維持したままblock境界でcontainし、空文字／falseへ縮退する。
+
+このsurfaceはdeveloper配布面であり、標準作者の台本実行に読み込みを要求しない。runtime startup／Composite
+bundleへの接続とhat declarationのmutation editorは別のcomposition作業とし、このsurfaceを生成しただけでは
+登録しない。
+
 ### 5.2 action scope sequence
 
 ```text
@@ -264,17 +274,22 @@ navigation、scene遷移、live reloadのすべてで一回だけ解放する。
 
 ## 7. custom actionのblock budget
 
-| handler                  | 定型block数 | 内容                                  |
-| ------------------------ | ----------- | ------------------------------------- |
-| 引数なし、最後まで実行   | 1           | hatだけ。正常thread endを暗黙complete |
-| targetを使う             | 2           | hat＋target reporter                  |
-| parameterを一つ使う      | 2           | hat＋argument reporter                |
-| optional parameterを分岐 | 3           | hat＋has-argument＋argument reporter  |
-| 途中で終了               | 2           | hat＋explicit complete                |
-| fail／goto               | 2           | hat＋terminal block                   |
+| handler                  | 定型block数 | 内容                                     |
+| ------------------------ | ----------- | ---------------------------------------- |
+| 引数なし、最後まで実行   | 1           | hatだけ。正常thread endを暗黙complete    |
+| targetを使う             | 2           | hat＋target reporter                     |
+| parameterを一つ使う      | 2           | hat＋argument reporter                   |
+| optional parameterを分岐 | 4           | hat＋has-argument＋if＋argument reporter |
+| 途中で終了               | 2           | hat＋explicit complete                   |
+| fail／goto               | 2           | hat＋terminal block                      |
 
 演出本体を除く定型overheadは常に8 block以下である。register script、初期化broadcast、action index variable、
 Temporary Variables、完了待ちloop、scope releaseは数にも手順にも含めない。
+
+`test/fixtures/dsl4/custom-action-block-budget.json`を機械検証の正本とし、引数なし、target、required／optional
+argument、explicit complete／fail／gotoの各handlerでKamishibai固有overheadを数える。performance blockは
+作品固有本体として別集計し、fixtureにregister、Temporary Variables、完了待ち、scope／JSONPath／Iterator
+scaffoldingを含めない。
 
 ## 8. live reload quiesce
 

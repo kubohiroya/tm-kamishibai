@@ -1337,7 +1337,7 @@ quiesce mode、検出元のoriginal target／hat block IDを一つのRegistry Sn
 ### 9.6 custom actionの作者工数budget `[決定済み #264]`
 
 custom action一件に必要な定型blockは、演出本体を除いて8個以下にします。単純なhandlerでは次の
-1〜3個を標準とします。
+1〜4個を標準とします。
 
 ```text
 when kamishibai action [wave]
@@ -1456,6 +1456,11 @@ asset準備を個別command blockとして接続させないため、標準作�
 開発者向け操作は可能な限りJavaScript APIとtest harnessで行い、debug block自体を必須にはしません。
 debug版を用意する場合は標準版とAPI manifest／extension ID／配布物を区別し、debug projectを標準作品として
 公開しないようbuild時に検出します。
+
+Action Contextのdeveloper surfaceは`dsl4CustomActionsEnabled`既定OFFで、hat、action name／target、
+optional argument存在判定、typed argument、complete／fail／gotoの8 opcodeを公開します。標準作者のruntime
+startupへ自動登録せず、作品固有custom actionを作る配布面だけが明示的に登録します。custom handlerのblock
+budgetは`test/fixtures/dsl4/custom-action-block-budget.json`で8 block以下を検証します。
 
 ### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装待ち #327]`
 
