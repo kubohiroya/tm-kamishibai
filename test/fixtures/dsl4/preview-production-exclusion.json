@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "developmentOnlyModule": "src/builder/dsl4-preview-shell.js",
+  "extensionId": null,
+  "forbiddenProductionExtensionIds": ["kubohiroyakamishibai4preview"],
+  "forbiddenProductionOpcodePrefixes": ["kubohiroyakamishibai4preview_"],
+  "forbiddenProductionPersistedFields": [
+    "previewBridge",
+    "previewToken",
+    "reloadCandidate",
+    "reloadModalState"
+  ]
+}
