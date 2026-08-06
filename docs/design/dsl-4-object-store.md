@@ -201,6 +201,11 @@ copy-on-write working mapsを持ち、commit成功時だけroot pointerとrevisi
 conflict、limit、backend failureでは旧rootを保持する。observerやprojectionはcommit後のsnapshotだけを
 受け取り、途中状態を観測しない。
 
+Iterator／collection実装は、非公開の子scope、type tag付きentry、source／item leaseを一つの
+`createScopeBundle` transactionで作る。この限定的なcomposition primitiveは`MapBackend`のprivate mapを
+公開せず、全handleとcountを一回のcommitで追加する。作成失敗はbundle全体をrollbackし、解放は既存の
+`releaseScope`でentryと全所有leaseを同時に解放する。
+
 ### 8.1 例: nested valueとlease
 
 ```text
