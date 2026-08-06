@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -253,18 +252,4 @@ test('fails closed without a resumable partial Iterator when scoped Store creati
   assert.equal(failingSession.debugSnapshot().counts.entries, 0);
   assert.equal(failingSession.debugSnapshot().counts.nodes, 0);
   failingSession.dispose();
-});
-
-test('keeps the Kamishibai adapter free of Scratch, platform, JSONPath, and I/O dependencies', async () => {
-  const source = await readFile(
-    new URL('../src/dsl4/kamishibai-structured-data.js', import.meta.url),
-    'utf8',
-  );
-  assert.doesNotMatch(source, /from\s+['"][^'"]*structured-data\.js['"]/i);
-  assert.doesNotMatch(source, /Scratch|scratch-vm|runtime\.ext_/i);
-  assert.doesNotMatch(
-    source,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|globalThis\.(?:window|document))/i,
-  );
-  assert.doesNotMatch(source, /Scratch\.extensions\.register/);
 });

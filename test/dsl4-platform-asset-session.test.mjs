@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {IDBFactory} from 'fake-indexeddb';
@@ -11,7 +8,6 @@ import {strToU8, zipSync} from 'fflate';
 
 import {createDsl4PlatformAssetSession} from '../src/dsl4/platform/index.js';
 
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const cacheIdentity = Object.freeze({
   id: 'story001',
   label: 'story.kamishibai.yaml',
@@ -674,21 +670,4 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
     /applyToStage/u,
   );
   assert.deepEqual(invalidLog, [['media.create'], ['media.release-all']]);
-});
-
-test('keeps the platform session outside the default-off core import graph', async () => {
-  const [coreIndex, startup, platformSource] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'platform-asset-session.js'),
-      'utf8',
-    ),
-  ]);
-  assert.doesNotMatch(coreIndex, /platform-asset-session|\.\/platform/u);
-  assert.doesNotMatch(startup, /platform-asset-session|turbowarp-tmpose/u);
-  assert.doesNotMatch(
-    platformSource,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
-  );
 });

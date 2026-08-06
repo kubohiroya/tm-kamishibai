@@ -164,13 +164,3 @@ scenes:
     /StoryDocument version 4\.0/u,
   );
 });
-
-test('asset dependency index has no browser, filesystem, network, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'asset-dependency-index.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

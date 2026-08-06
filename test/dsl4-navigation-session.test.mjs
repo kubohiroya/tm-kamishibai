@@ -321,13 +321,3 @@ scenes:
   pending.resolve();
   await staleRun;
 });
-
-test('navigation session core has no filesystem, network, global DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'navigation-session.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

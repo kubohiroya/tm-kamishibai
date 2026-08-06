@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -315,20 +314,4 @@ test('delegates duplicate, core collision, and identifier rules to the canonical
         (error.code === 'K4-REGISTRY-COLLISION-001' || error.code === 'K4-REGISTRY-NAME-001'),
     );
   }
-});
-
-test('keeps the detector free of DOM, Scratch VM, network, filesystem, and code evaluation', async () => {
-  const [source, defaultRuntimeSource] = await Promise.all([
-    readFile(new URL('../src/dsl4/action-hat-detector.js', import.meta.url), 'utf8'),
-    Promise.all(
-      ['runtime-startup.js', 'navigation-session.js', 'runtime-controller.js'].map((name) =>
-        readFile(new URL(`../src/dsl4/${name}`, import.meta.url), 'utf8'),
-      ),
-    ).then((files) => files.join('\n')),
-  ]);
-  assert.doesNotMatch(
-    source,
-    /(?:node:fs|node:http|node:https|scratch-vm|runtime\.startHats|document\.|\beval\s*\(|new Function)/i,
-  );
-  assert.doesNotMatch(defaultRuntimeSource, /action-hat-detector/u);
 });

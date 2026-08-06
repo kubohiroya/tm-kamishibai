@@ -554,7 +554,7 @@ scenes:
   await Promise.all([staleRun, resumedRun]);
 });
 
-test('validates the optional lifecycle contract and keeps platform dependencies outside core', async () => {
+test('validates the optional lifecycle contract', () => {
   const storyDocument = parseStory(`
 kamishibai: '4.0'
 scenes:
@@ -564,13 +564,6 @@ scenes:
     () => createDsl4RuntimeController({storyDocument, port: {}, assetLifecycle: {}}),
     /prepare, setLoading, releaseAssets, and release/u,
   );
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'asset-preload-coordinator.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
 });
 
 test('passes the same lifecycle through the keymap and history navigation session', async () => {

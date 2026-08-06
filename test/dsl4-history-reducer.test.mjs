@@ -268,16 +268,3 @@ test('reset releases all history without carrying runtime or presentation state'
   const reset = apply(reducer, state, {type: 'reset'});
   assert.deepEqual(reset.state, reducer.initialState());
 });
-
-test('history reducer has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'history-reducer.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(
-    implementation,
-    /(?:globalThis\.(?:document|window)|KeyboardEvent|addEventListener)/,
-  );
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

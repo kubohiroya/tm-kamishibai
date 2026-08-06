@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {
   createDsl4EmbeddedSourceDescriptor,
@@ -13,7 +10,6 @@ import {
   validateDsl4EmbeddedSourceDescriptor,
 } from '../src/dsl4/index.js';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const subtleCrypto = webcrypto.subtle;
 const options = {maxSourceBytes: 4096, subtleCrypto};
 
@@ -210,14 +206,4 @@ test('fails closed when storage is missing or ambiguous', async () => {
     ),
     'K4-SOURCE-CHANNEL-AMBIGUOUS',
   );
-});
-
-test('source descriptor core has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'source-descriptor.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
 });

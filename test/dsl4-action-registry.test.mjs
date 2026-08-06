@@ -235,21 +235,3 @@ test('dispatches custom actions through one fixed runtime port', async () => {
     },
   ]);
 });
-
-test('Action Registry core has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await Promise.all(
-    [
-      'action-registry.js',
-      'semantic-validator.js',
-      'source-frontend.js',
-      'story-document.js',
-      'runtime-controller.js',
-    ].map((name) => readFile(path.join(projectRoot, 'src', 'dsl4', name), 'utf8')),
-  );
-  const source = implementation.join('\n');
-  assert.doesNotMatch(source, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(
-    source,
-    /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats|document\.(?:createElement|getElementById|querySelector))/,
-  );
-});

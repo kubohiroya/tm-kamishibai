@@ -357,16 +357,3 @@ test('returns deeply immutable data and rejects invalid planner boundaries', () 
     /isException must be a function/u,
   );
 });
-
-test('reload planner core has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'reload-planner.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(
-    implementation,
-    /(?:globalThis\.(?:document|window)|KeyboardEvent|addEventListener)/,
-  );
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

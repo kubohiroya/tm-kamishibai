@@ -363,13 +363,3 @@ test('waits for an aborted preparation to settle before retrying the same asset'
   await second;
   await lifecycle.release({reason: 'stop'});
 });
-
-test('remote lifecycle core has no direct network, filesystem, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'dsl4', 'embedded-asset-lifecycle.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

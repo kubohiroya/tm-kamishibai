@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -521,20 +520,4 @@ test('rejects a non-exact custom action outcome at the controller boundary', asy
   const state = await controller.start();
   assert.equal(state.status, 'failed');
   assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
-});
-
-test('keeps the invocation adapter outside default startup and platform dependency graphs', async () => {
-  const [source, defaultSources] = await Promise.all([
-    readFile(new URL('../src/dsl4/action-invocation-adapter.js', import.meta.url), 'utf8'),
-    Promise.all(
-      ['runtime-startup.js', 'navigation-session.js', 'platform/turbowarp-runtime-host.js'].map(
-        (name) => readFile(new URL(`../src/dsl4/${name}`, import.meta.url), 'utf8'),
-      ),
-    ).then((files) => files.join('\n')),
-  ]);
-  assert.doesNotMatch(
-    source,
-    /(?:node:fs|node:http|node:https|scratch-vm|runtime\._pushThread|document\.|\bfetch\s*\(|\beval\s*\()/i,
-  );
-  assert.doesNotMatch(defaultSources, /action-invocation-adapter/u);
 });

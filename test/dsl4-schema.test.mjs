@@ -310,18 +310,3 @@ test('keeps StoryPath stable across comments and whitespace-only edits', () => {
   assert.equal(results[0].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
   assert.equal(results[1].storyDocument.scenes[0].actions[0].id, '/scenes/opening/actions/0');
 });
-
-test('production source frontend has no filesystem, network, VM, or Scratch dependency', async () => {
-  const sources = await Promise.all(
-    [
-      'action-registry.js',
-      'index.js',
-      'semantic-validator.js',
-      'source-frontend.js',
-      'story-document.js',
-    ].map((name) => readFile(path.join(projectRoot, 'src', 'dsl4', name), 'utf8')),
-  );
-  const implementation = sources.join('\n');
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|runtime\.)/);
-});

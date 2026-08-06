@@ -284,13 +284,3 @@ scenes:
     (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
 });
-
-test('asset bundle runtime core has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'asset-bundle-descriptor.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

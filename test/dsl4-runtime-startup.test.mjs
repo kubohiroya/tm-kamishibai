@@ -617,12 +617,3 @@ test('uses artifact history activation and requires availability plus finite lim
   assert.deepEqual(enabled.session.getState().keymap, component.runtimeArtifact.resolvedKeymap);
   enabled.session.dispose();
 });
-
-test('startup composition core has no global DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

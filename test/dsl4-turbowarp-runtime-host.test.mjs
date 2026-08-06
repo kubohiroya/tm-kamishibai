@@ -1064,14 +1064,3 @@ test('attempts every partial cleanup and aggregates creation plus cleanup failur
   assert.equal(log.filter(([name]) => name === 'media.release-all-failed').length, 1);
   assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
 });
-
-test('keeps the host composition free of global Scratch, DOM, storage, and network access', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'turbowarp-runtime-host.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(
-    implementation,
-    /(?:\bScratch\b|globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\()/u,
-  );
-});

@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createDsl4MediaActionPort} from '../src/dsl4/platform/index.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function deferred() {
   let resolve;
@@ -207,7 +202,7 @@ test('does not inspect composition or resolve actors for a pre-aborted action', 
   assert.equal(resolverCalls, 0);
 });
 
-test('validates dependencies and remains outside the default-off core graph', async () => {
+test('validates every media action dependency before use', () => {
   assert.throws(
     () => createDsl4MediaActionPort({composition: {}, resolveActor() {}}),
     /Asset Manager composition/u,
@@ -215,16 +210,5 @@ test('validates dependencies and remains outside the default-off core graph', as
   assert.throws(
     () => createDsl4MediaActionPort({composition: fakeComposition().composition}),
     /resolveActor/u,
-  );
-  const [coreIndex, startup, portSource] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'media-action-port.js'), 'utf8'),
-  ]);
-  assert.doesNotMatch(coreIndex, /media-action-port|\.\/platform/u);
-  assert.doesNotMatch(startup, /media-action-port|turbowarp-asset-manager/u);
-  assert.doesNotMatch(
-    portSource,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
 });

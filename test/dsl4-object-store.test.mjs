@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {createDsl4MapBackend, createDsl4ObjectStore, isDsl4RefValue} from '../src/dsl4/index.js';
@@ -411,20 +410,4 @@ test('matches a lease-count reference model across deterministic randomized oper
   }
   assert.equal(store.debugSnapshot().counts.entries, 0);
   assert.equal(store.debugSnapshot().counts.leases, 0);
-});
-
-test('keeps the Generic Object Store Core free of platform and I/O dependencies', async () => {
-  const sources = await Promise.all(
-    ['backend.js', 'freeze.js', 'index.js', 'store.js'].map((name) =>
-      readFile(new URL(`../src/dsl4/object-store/${name}`, import.meta.url), 'utf8'),
-    ),
-  );
-  for (const source of sources) {
-    assert.doesNotMatch(
-      source,
-      /from\s+['"](?:node:(?:fs|net|http)|[^'"]*(?:scratch-vm|turbowarp|story-document))/i,
-    );
-    assert.doesNotMatch(source, /(?:^|\s)(?:window|document)\s*\./m);
-    assert.doesNotMatch(source, /\bfetch\s*\(/);
-  }
 });

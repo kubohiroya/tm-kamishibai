@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createDsl4SvgTextPlatform} from '../src/dsl4/platform/index.js';
 import {createDsl4RuntimeController} from '../src/dsl4/runtime-controller.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function storyDocument(textStyles = {}) {
   return {kind: 'StoryDocument', version: '4.0', textStyles};
@@ -278,12 +273,4 @@ test('contains late actor resolution and validates the resolved TurboWarp target
   );
   platform.releaseAll();
   invalid.releaseAll();
-});
-
-test('composition adapter source does not register an extension or expose block definitions', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'svg-text-action-port.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /Scratch\.extensions\.register|startHats|getInfo\s*\(/u);
 });

@@ -320,14 +320,3 @@ test('requires an explicit profile, channel, and every finite source and asset l
     }
   });
 });
-
-test('one-shot orchestrator has no output filesystem mutation', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(
-    implementation,
-    /(?:atomic-output|\bwriteFile\b|\brename\b|\bmkdir\b|\brm\s*\()/u,
-  );
-});

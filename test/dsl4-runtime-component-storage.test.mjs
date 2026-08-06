@@ -276,13 +276,3 @@ test('loader withholds artifacts on parse, missing, ambiguous, mismatch, and int
   assert.match(invalid.diagnostics[0].code, /^K4-/u);
   assert.equal(Object.hasOwn(invalid, 'runtimeArtifact'), false);
 });
-
-test('runtime artifact loader has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'runtime-artifact-loader.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

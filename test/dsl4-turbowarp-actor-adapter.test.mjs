@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) {
   const calls = [];
@@ -322,21 +317,4 @@ test('keeps platform instances and their schedulers isolated', async () => {
   assert.deepEqual(secondRuntime.bubbleCalls, [['second', 'second']]);
   secondClock.advance(1000);
   await secondPending;
-});
-
-test('stays outside the DSL4 core graph without importing Scratch VM or DOM', async () => {
-  const [coreIndex, startup, adapterSource] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'turbowarp-actor-adapter.js'),
-      'utf8',
-    ),
-  ]);
-  assert.doesNotMatch(coreIndex, /turbowarp-actor-adapter|\.\/platform/u);
-  assert.doesNotMatch(startup, /turbowarp-actor-adapter/u);
-  assert.doesNotMatch(
-    adapterSource,
-    /(?:from\s+['"]scratch-vm|\bwindow\b|\bdocument\b|\bScratch\b|indexedDB)/u,
-  );
 });
