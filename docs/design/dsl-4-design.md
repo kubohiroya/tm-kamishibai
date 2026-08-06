@@ -205,53 +205,56 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 
 ## 2. 現時点の設計判断一覧
 
-| ID   | 状態     | 判断                                                                    |
-| ---- | -------- | ----------------------------------------------------------------------- |
-| D-01 | 決定済み | DSL 4.0のパーサーはTurboWarp機能拡張側へ一本化する                      |
-| D-02 | 決定済み | Scratchブロックによる3.1／3.2パーサーを4.0ランタイムには残さない        |
-| D-03 | 決定済み | 3.2に近い簡潔な一行アクションを維持する                                 |
-| D-04 | 決定済み | Scratch Action Registryにより、ScratchでDSLアクションを拡張可能にする   |
-| D-05 | 決定済み | オブジェクトはopaque referenceを介してScratchへ渡す                     |
-| D-06 | 決定済み | Object StoreはTemporary Variablesとは別実装・別名前空間にする           |
-| D-07 | 決定済み | Object Store、Iterator、JSONPathは紙芝居固有にしない                    |
-| D-08 | 決定済み | Kamishibai用成果物は静的に合成し、一つの拡張として登録する              |
-| D-09 | 決定済み | 正式な拡張IDは`kubohiroyakamishibai4`とする                             |
-| D-10 | 決定済み | 実行時に子拡張をロードするメタ拡張方式は採用しない                      |
-| D-11 | 決定済み | StoryDocumentは不変データとし、sceneを記述順のordered arrayで保持する   |
-| D-12 | 決定済み | Action IDは内容ハッシュではなく文書内の決定的なStoryPathとする          |
-| D-13 | 決定済み | 正規化後も各nodeから台本位置へ戻れるSource Mapを保持する                |
-| D-14 | 決定済み | Generic Core、TurboWarp Adapter、Kamishibai Adapterの三層に分ける       |
-| D-15 | 決定済み | story／scene／actionの意味と寿命はKamishibai Adapterだけが扱う          |
-| D-16 | 決定済み | Generic Coreの標準かつ正本の保存実装には`MapBackend`を採用する          |
-| D-17 | 決定済み | 上位層への依存とbuildをまたぐobject referenceの共有を禁止する           |
-| D-18 | 決定済み | 再利用可能なcapabilityは独立GitHub projectとして開発・配布可能にする    |
-| D-19 | 決定済み | 個別Standalone成果物を展開ソースの正本として維持する                    |
-| D-20 | 決定済み | 4.0 Compositeの第一候補に`sb3-toolchain`の静的bundleを使用する          |
-| D-21 | 決定済み | Kamishibai固有adapterは本projectに置き、汎用projectから逆依存しない     |
-| D-22 | 決定済み | 外部capabilityのversion／commit、artifact、integrityをsourceに固定する  |
-| D-23 | 決定済み | 既存の公開package、repository、Standalone extension IDを維持する        |
-| D-24 | 決定済み | bundleは生成SB3だけを変換し、個別ID／opcode／storageを展開sourceに残す  |
-| D-25 | 決定済み | member間`startHats`／`getOpcodeFunction`はbundle namespaceへ変換する    |
-| D-26 | 決定済み | block cleanupはDSL設計外の既定OFF build optionとして扱う                |
-| D-27 | 決定済み | 通常の台本製作者は標準テンプレートのblock graphを変更せず台本だけを書く |
-| D-28 | 決定済み | parser、状態管理、controller、標準action handlerを機能拡張側へ置く      |
-| D-29 | 決定済み | Scratch Action Registryは任意の作品固有拡張であり標準作品には要求しない |
-| D-30 | 決定済み | Object Store／Iterator等の汎用blockを標準作者経路へ露出させない         |
-| D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する     |
-| D-32 | 決定済み | delivery、loading、memory retention、永続cacheの寿命を独立させる        |
-| D-33 | 決定済み | poseModelの既定retentionをscene、mediaの既定をstoryとする               |
-| D-34 | 決定済み | binary DBを台本単位で分離し、可読名と共通metadata catalogで管理する     |
-| D-35 | 決定済み | selected next sceneだけを先読みし、遷移commit時に不要resourceを解放する |
-| P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする             |
-| P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する             |
-| P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う          |
-| P-04 | 提案     | 全文検証が成功するまで、アセット読込や紙芝居実行を開始しない            |
-| P-05 | 提案     | 複数エラーを収集し、SVGエラー画面から発生位置と原因を確認可能にする     |
-| P-06 | 提案     | 管理対象参照を参照カウントし、外部参照が残る対象の`free`を拒否する      |
-| P-07 | 提案     | 旧Text Assetを4.0 core schemaへ入れず、SVG Textを標準経路にする         |
-| P-08 | 提案     | 4.0で更新する全managed memberにAPI manifestを要求する                   |
-| P-09 | 提案     | `./composition`は現行bundleで不足が確認されたcapabilityだけに追加する   |
-| P-10 | 提案     | project全体350 block以下を目標、500 block以下を受け入れ上限とする       |
+| ID   | 状態     | 判断                                                                     |
+| ---- | -------- | ------------------------------------------------------------------------ |
+| D-01 | 決定済み | DSL 4.0のパーサーはTurboWarp機能拡張側へ一本化する                       |
+| D-02 | 決定済み | Scratchブロックによる3.1／3.2パーサーを4.0ランタイムには残さない         |
+| D-03 | 決定済み | 3.2に近い簡潔な一行アクションを維持する                                  |
+| D-04 | 決定済み | Scratch Action Registryにより、ScratchでDSLアクションを拡張可能にする    |
+| D-05 | 決定済み | オブジェクトはopaque referenceを介してScratchへ渡す                      |
+| D-06 | 決定済み | Object StoreはTemporary Variablesとは別実装・別名前空間にする            |
+| D-07 | 決定済み | Object Store、Iterator、JSONPathは紙芝居固有にしない                     |
+| D-08 | 決定済み | Kamishibai用成果物は静的に合成し、一つの拡張として登録する               |
+| D-09 | 決定済み | 正式な拡張IDは`kubohiroyakamishibai4`とする                              |
+| D-10 | 決定済み | 実行時に子拡張をロードするメタ拡張方式は採用しない                       |
+| D-11 | 決定済み | StoryDocumentは不変データとし、sceneを記述順のordered arrayで保持する    |
+| D-12 | 決定済み | Action IDは内容ハッシュではなく文書内の決定的なStoryPathとする           |
+| D-13 | 決定済み | 正規化後も各nodeから台本位置へ戻れるSource Mapを保持する                 |
+| D-14 | 決定済み | Generic Core、TurboWarp Adapter、Kamishibai Adapterの三層に分ける        |
+| D-15 | 決定済み | story／scene／actionの意味と寿命はKamishibai Adapterだけが扱う           |
+| D-16 | 決定済み | Generic Coreの標準かつ正本の保存実装には`MapBackend`を採用する           |
+| D-17 | 決定済み | 上位層への依存とbuildをまたぐobject referenceの共有を禁止する            |
+| D-18 | 決定済み | 再利用可能なcapabilityは独立GitHub projectとして開発・配布可能にする     |
+| D-19 | 決定済み | 個別Standalone成果物を展開ソースの正本として維持する                     |
+| D-20 | 決定済み | 4.0 Compositeの第一候補に`sb3-toolchain`の静的bundleを使用する           |
+| D-21 | 決定済み | Kamishibai固有adapterは本projectに置き、汎用projectから逆依存しない      |
+| D-22 | 決定済み | 外部capabilityのversion／commit、artifact、integrityをsourceに固定する   |
+| D-23 | 決定済み | 既存の公開package、repository、Standalone extension IDを維持する         |
+| D-24 | 決定済み | bundleは生成SB3だけを変換し、個別ID／opcode／storageを展開sourceに残す   |
+| D-25 | 決定済み | member間`startHats`／`getOpcodeFunction`はbundle namespaceへ変換する     |
+| D-26 | 決定済み | block cleanupはDSL設計外の既定OFF build optionとして扱う                 |
+| D-27 | 決定済み | 通常の台本製作者は標準テンプレートのblock graphを変更せず台本だけを書く  |
+| D-28 | 決定済み | parser、状態管理、controller、標準action handlerを機能拡張側へ置く       |
+| D-29 | 決定済み | Scratch Action Registryは任意の作品固有拡張であり標準作品には要求しない  |
+| D-30 | 決定済み | Object Store／Iterator等の汎用blockを標準作者経路へ露出させない          |
+| D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する      |
+| D-32 | 決定済み | delivery、loading、memory retention、永続cacheの寿命を独立させる         |
+| D-33 | 決定済み | poseModelの既定retentionをscene、mediaの既定をstoryとする                |
+| D-34 | 決定済み | binary DBを台本単位で分離し、可読名と共通metadata catalogで管理する      |
+| D-35 | 決定済み | selected next sceneだけを先読みし、遷移commit時に不要resourceを解放する  |
+| D-36 | 決定済み | Storeはlease／RefValueをcountし、外部参照が残るclosureをatomicに拒否する |
+| D-37 | 決定済み | cross-owner strong cycleを作成時拒否し、初版でweak／multi-freeを持たない |
+| D-38 | 決定済み | Store handleはruntime-onlyの128-bit nonceによるopaque tokenとする        |
+| D-39 | 決定済み | live reloadは参照を含まないplain valueだけを新realmへdeep copyする       |
+| P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする              |
+| P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する              |
+| P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う           |
+| P-04 | 提案     | 全文検証が成功するまで、アセット読込や紙芝居実行を開始しない             |
+| P-05 | 提案     | 複数エラーを収集し、SVGエラー画面から発生位置と原因を確認可能にする      |
+| P-07 | 提案     | 旧Text Assetを4.0 core schemaへ入れず、SVG Textを標準経路にする          |
+| P-08 | 提案     | 4.0で更新する全managed memberにAPI manifestを要求する                    |
+| P-09 | 提案     | `./composition`は現行bundleで不足が確認されたcapabilityだけに追加する    |
+| P-10 | 提案     | project全体350 block以下を目標、500 block以下を受け入れ上限とする        |
 
 ## 3. DSL 4.0の表層構文
 
@@ -931,16 +934,20 @@ Scratch reporterは構造化オブジェクトを公開値として扱うこと�
 そこで、Generic Coreが構造化valueを保持し、呼び出し側へは文字列のopaque referenceだけを
 返します。Generic Core自身は、このreferenceがScratch reporterを通過することを知りません。
 
-参照文字列の候補:
+参照文字列はruntime-onlyのopaque tokenとします。
 
 ```text
-@obj/<realm>/<kind>/<slot>/<generation>
+@os1.<realmNonce>.<handleNonce>
 ```
 
-これは説明用であり、最終的な符号化形式は未決です。利用側は文字列を分解せず、Generic Core
-またはadapterの公開APIへそのまま渡します。
+二つのnonceはそれぞれ128 bit以上の暗号学的乱数とし、kind、slot、generationを公開値へ含めません。
+利用側は文字列を分解せず、Generic Coreまたはadapterの公開APIへそのまま渡します。
 
-### 7.3 Generic Coreの参照と解放 `[提案・再レビュー対象]`
+### 7.3 Generic Coreの参照と解放 `[決定済み #259]`
+
+参照モデル、opaque handle、Result、atomic transaction、cycle、property test、live reload境界の正本は
+[`DSL 4.0 Generic Object Store参照モデル`](dsl-4-object-store.md)とします。以下は判断経緯と要約であり、
+矛盾する場合は専用文書を優先します。
 
 #### 7.3.1 参照カウントとrealm／generationの役割
 
@@ -1012,7 +1019,7 @@ Generic Coreの公開操作は概念上`Result<Value, StoreException>`を返し�
 標準Kamishibai Runtimeでは失敗を`K4-*`診断へ変換してcontrollerへ返します。Standalone／上級利用向け
 block facadeを公開する場合だけ、Scratch reporterで運べる`ExceptionRef`または同等のscalar値へ変換し、
 Scratch側が`<例外か?>`に相当するpredicateで分岐できるようにします。JavaScript例外をScratchとの境界の
-外へ投げたままにしません。scalarの正確な符号化とadvanced block APIは7.5のレビュー項目として保留します。
+外へ投げたままにしません。ExceptionRefのopcode、predicate、diagnostic reporterはIssue #261で定義します。
 
 最低限、次の汎用error codeを区別します。
 
@@ -1027,9 +1034,9 @@ Scratch側が`<例外か?>`に相当するpredicateで分岐できるように�
 参照の作成・置換・削除とcount更新は、必ず同じtransactionで行います。各entryについて「countが生きた
 管理対象流入edge数と一致する」という不変条件を検証できるデバッグAPIを用意します。
 
-異なる`OwnerRef`のclosure同士が強い`RefValue`でcycleを作ると、個別の`free`は双方とも失敗します。
-同一closure内のcycleはatomicに解放できますが、所有closureをまたぐcycleについては、作成禁止、
-weak reference、複数closureのatomic freeのいずれを採用するかが未決です。
+異なる`OwnerRef`のclosure同士にstrong `RefValue` cycleを作る操作は、作成時に
+`STORE-STRONG-CYCLE`でatomicに拒否します。同一closure内のcycleはatomicに解放できます。初版では
+weak referenceと任意OwnerRef集合のmulti-freeを提供しません。
 
 #### 7.3.6 操作例
 
@@ -1052,10 +1059,10 @@ JSONPathで得た参照が`free`を止める例は次のとおりです。
 親子scopeを管理し、backendをinterfaceとして分離します。`StoryDocument`、`ActionView`、
 `DiagnosticList`は組み込み型にせず、上位層がtype tagを登録します。
 
-### 7.4 Generic scope `[保留: 7.3の再レビュー後]`
+### 7.4 Generic scope `[決定済み #259]`
 
-本項のレビューは、7.3の参照カウントと解放closureの設計が解決した後に行います。以下は比較の
-土台として残す暫定案であり、まだ承認対象としません。
+scope releaseは配下scope、entry、所有leaseを一つの解放closureとして扱い、外部流入参照が一件でも
+あれば全体を変更せず失敗します。
 
 Generic Coreのscopeは、紙芝居上の意味を持たない所有関係です。
 
@@ -1080,10 +1087,10 @@ free(ownerRef)
 `label`は診断用の文字列であり、lifecycleを決定しません。`action`、`scene`、`story`という文字列を
 Generic Coreが特別扱いすることは禁止します。
 
-### 7.5 TurboWarp Adapterの責務 `[保留: 7.3の再レビュー後]`
+### 7.5 TurboWarp Adapterの責務 `[決定済み #259／block詳細は#261]`
 
-本項のレビューは、7.3の失敗モデルとleaseの設計が解決した後に行います。特にreporterが返す
-`ExceptionRef`の符号化、判定block、診断内容の取得方法は、この項で決定します。
+Coreはimmutableな`StoreResult`を返し、TurboWarp Adapterだけが失敗をScratch scalarの
+`ExceptionRef`へ変換できます。具体的なopcode、predicate、diagnostic reporterはIssue #261で決定します。
 
 - Standalone／上級利用向けに、opaque referenceをScratch stringとして受け渡すblock facadeを提供可能にする
 - Scratchのnumber、string、BooleanとGeneric Coreのscalarを変換する
@@ -2220,8 +2227,10 @@ runtimeで追加コードをdownloadしません。
 - lease文字列をcopyしても参照カウントが増えない
 - 外部参照があるclosureの`free`は、何も削除せず失敗する
 - closure内部だけの参照cycleはatomicに解放できる
+- cross-owner strong cycleを作るedgeは状態を変えず拒否される
 - countが管理対象流入edgeの実数と常に一致する
 - releaseの二重実行とcount underflowを検出する
+- live reloadのplain value copyが旧realmのobject identity／leaseを共有しない
 
 ### 14.3 TurboWarp統合
 
