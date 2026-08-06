@@ -23,6 +23,8 @@
   "files": [
     "bin/",
     "src/builder/",
+    "src/dsl4/*.js",
+    "schema/dsl-4.schema.json",
     "src/converter/",
     "README.md",
     "LICENSE",
