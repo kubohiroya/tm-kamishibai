@@ -45,6 +45,7 @@ async function sha256Hex(bytes, subtleCrypto) {
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.resolveVerifiedRemoteAsset]
+ * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.extractRemotePoseArchive]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export function createDsl4EmbeddedAssetLifecycle({
@@ -53,6 +54,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   setLoading,
   loadRemoteAsset,
   resolveVerifiedRemoteAsset,
+  extractRemotePoseArchive,
   subtleCrypto = globalThis.crypto?.subtle,
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
@@ -87,9 +89,14 @@ export function createDsl4EmbeddedAssetLifecycle({
   ) {
     throw new TypeError('resolveVerifiedRemoteAsset must be a function');
   }
+  if (extractRemotePoseArchive !== undefined && typeof extractRemotePoseArchive !== 'function') {
+    throw new TypeError('extractRemotePoseArchive must be a function');
+  }
   const remoteLoader = typeof loadRemoteAsset === 'function' ? loadRemoteAsset : null;
   const verifiedRemoteResolver =
     typeof resolveVerifiedRemoteAsset === 'function' ? resolveVerifiedRemoteAsset : null;
+  const poseArchiveExtractor =
+    typeof extractRemotePoseArchive === 'function' ? extractRemotePoseArchive : null;
   const getAssetFile = /** @type {Function} */ (runtimeComponent.getAssetFile);
 
   const manifest = new Map();
@@ -184,11 +191,64 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (asset.kind === 'poseModel') {
-          throw assetError(
-            asset.id,
-            'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
-            `Remote pose model loading requires a trusted archive extractor: ${asset.id}`,
-          );
+          if (!poseArchiveExtractor) {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
+              `Remote pose model loading requires a trusted archive extractor: ${asset.id}`,
+            );
+          }
+          let extracted;
+          try {
+            extracted = await poseArchiveExtractor(
+              Object.freeze({
+                assetId: asset.id,
+                bytes,
+                archiveIntegrity: integrity,
+                contentType: source.contentType,
+              }),
+              context,
+            );
+          } catch (error) {
+            if (context.signal?.aborted) throw abortError();
+            if (isRecord(error) && typeof error.code === 'string') throw error;
+            throw assetError(
+              asset.id,
+              'K4-ASSET-REMOTE-POSE-EXTRACTOR-002',
+              `Remote pose archive extraction failed: ${asset.id}`,
+              error,
+            );
+          }
+          if (context.signal?.aborted) throw abortError();
+          if (
+            !isRecord(extracted) ||
+            extracted.archiveIntegrity !== integrity ||
+            typeof extracted.extractorFormat !== 'string' ||
+            extracted.extractorFormat.length === 0 ||
+            !Array.isArray(extracted.files) ||
+            extracted.files.some(
+              (file) =>
+                !isRecord(file) ||
+                !(file.bytes instanceof Uint8Array) ||
+                file.archiveIntegrity !== integrity ||
+                file.extractorFormat !== extracted.extractorFormat ||
+                typeof file.integrity !== 'string',
+            )
+          ) {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-REMOTE-POSE-BINDING-001',
+              `Remote pose archive extraction is not bound to the verified archive: ${asset.id}`,
+            );
+          }
+          return Object.freeze({
+            asset,
+            archiveBinding: Object.freeze({
+              integrity,
+              extractorFormat: extracted.extractorFormat,
+            }),
+            files: Object.freeze([...extracted.files]),
+          });
         }
         return Object.freeze({
           asset,

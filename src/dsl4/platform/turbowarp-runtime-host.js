@@ -237,6 +237,15 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       runtimeComponent,
       tmPoseRuntime: options.tmPoseRuntime,
       setLoading: options.setLoading,
+      ...(options.loadRemoteAsset === undefined ? {} : {loadRemoteAsset: options.loadRemoteAsset}),
+      ...(options.cacheIdentity === undefined ? {} : {cacheIdentity: options.cacheIdentity}),
+      ...(options.verifiedRemoteCacheOptions === undefined
+        ? {}
+        : {verifiedRemoteCacheOptions: options.verifiedRemoteCacheOptions}),
+      ...(options.poseArchiveLimits === undefined
+        ? {}
+        : {poseArchiveLimits: options.poseArchiveLimits}),
+      ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
       ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
       ...(options.createAssetManagerComposition === undefined
         ? {}
@@ -411,6 +420,10 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
  * @param {unknown} [options.runtime]
  * @param {unknown} [options.tmPoseRuntime]
  * @param {Function} [options.setLoading]
+ * @param {Function} [options.loadRemoteAsset]
+ * @param {unknown} [options.cacheIdentity]
+ * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
+ * @param {Readonly<Record<string, unknown>>} [options.poseArchiveLimits]
  * @param {(context: HostPortContext) => HostPort | Promise<HostPort>} [options.createHostPort]
  * @param {Function} [options.waitSchedule]
  * @param {Function} [options.createFile]

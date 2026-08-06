@@ -229,6 +229,111 @@ test('rejects remote pose files until a trusted archive extractor is connected',
   await lifecycle.release({reason: 'stop'});
 });
 
+test('materializes remote pose files only from an archive-bound trusted extractor result', async () => {
+  const archive = new TextEncoder().encode('verified-pose-archive');
+  const archiveIntegrity = integrity(archive);
+  const extractedFiles = [
+    {path: 'metadata.json', bytes: new TextEncoder().encode('{"labels":["rescue"]}')},
+    {path: 'model.json', bytes: new TextEncoder().encode('{"model":true}')},
+    {path: 'weights.bin', bytes: new Uint8Array([1, 2, 3])},
+  ].map((file) =>
+    Object.freeze({
+      ...file,
+      size: file.bytes.byteLength,
+      integrity: integrity(file.bytes),
+      archiveIntegrity,
+      extractorFormat: 'tmpose-zip-v1',
+    }),
+  );
+  const extractions = [];
+  const prepared = [];
+  const lifecycle = createDsl4RemoteAssetLifecycle({
+    runtimeComponent: component(
+      {
+        url: 'https://cdn.example.com/pose.zip',
+        integrity: archiveIntegrity,
+        contentType: 'application/zip',
+        size: archive.byteLength,
+      },
+      'poseModel',
+    ),
+    loadRemoteAsset: async () => ({
+      bytes: archive,
+      contentType: 'application/zip',
+      files: [{path: 'untrusted.bin', bytes: new Uint8Array([9])}],
+    }),
+    async extractRemotePoseArchive(payload, extractContext) {
+      extractions.push({payload, signal: extractContext.signal});
+      return {
+        archiveIntegrity,
+        extractorFormat: 'tmpose-zip-v1',
+        files: extractedFiles,
+      };
+    },
+    adapter: {
+      prepare(payload) {
+        prepared.push(payload);
+        return {id: payload.asset.id};
+      },
+      release() {},
+    },
+    setLoading() {},
+    subtleCrypto: webcrypto.subtle,
+  });
+
+  const prepareContext = context();
+  await lifecycle.prepare({assetIds: ['Remote']}, prepareContext);
+  assert.equal(extractions.length, 1);
+  assert.deepEqual(Object.keys(extractions[0].payload).sort(), [
+    'archiveIntegrity',
+    'assetId',
+    'bytes',
+    'contentType',
+  ]);
+  assert.deepEqual(extractions[0].payload.bytes, archive);
+  assert.strictEqual(extractions[0].signal, prepareContext.signal);
+  assert.deepEqual(prepared[0].files, extractedFiles);
+  assert.deepEqual(prepared[0].archiveBinding, {
+    integrity: archiveIntegrity,
+    extractorFormat: 'tmpose-zip-v1',
+  });
+  assert.equal(
+    prepared[0].files.some((file) => file.path === 'untrusted.bin'),
+    false,
+  );
+  await lifecycle.release({reason: 'stop'});
+});
+
+test('rejects extractor results not bound to the verified archive', async () => {
+  const archive = new TextEncoder().encode('verified-pose-archive');
+  const archiveIntegrity = integrity(archive);
+  const lifecycle = createDsl4RemoteAssetLifecycle({
+    runtimeComponent: component(
+      {
+        url: 'https://cdn.example.com/pose.zip',
+        integrity: archiveIntegrity,
+        contentType: 'application/zip',
+        size: archive.byteLength,
+      },
+      'poseModel',
+    ),
+    loadRemoteAsset: async () => ({bytes: archive, contentType: 'application/zip'}),
+    extractRemotePoseArchive: async () => ({
+      archiveIntegrity: `sha256-${'0'.repeat(64)}`,
+      extractorFormat: 'tmpose-zip-v1',
+      files: [],
+    }),
+    adapter: {prepare() {}, release() {}},
+    setLoading() {},
+    subtleCrypto: webcrypto.subtle,
+  });
+  await assert.rejects(
+    lifecycle.prepare({assetIds: ['Remote']}, context()),
+    (error) => error.code === 'K4-ASSET-REMOTE-POSE-BINDING-001',
+  );
+  await lifecycle.release({reason: 'stop'});
+});
+
 test('waits for an aborted preparation to settle before retrying the same asset', async () => {
   const pending = [deferred(), deferred()];
   let loads = 0;

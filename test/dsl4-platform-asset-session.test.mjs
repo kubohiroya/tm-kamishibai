@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 import {createVerifiedRemoteBinaryCache} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {IDBFactory} from 'fake-indexeddb';
+import {strToU8, zipSync} from 'fflate';
 
 import {createDsl4PlatformAssetSession} from '../src/dsl4/platform/index.js';
 
@@ -80,6 +81,44 @@ function remoteRuntimeComponent(remoteBytes) {
     getAssetFile() {
       assert.fail('remote platform session must not read embedded bytes');
     },
+  };
+}
+
+function remotePoseRuntimeComponent(remoteBytes) {
+  return {
+    storyDocument: {kind: 'StoryDocument', version: '4.0'},
+    assetBundle: {
+      manifest: {
+        assets: [
+          {
+            id: 'RemotePose',
+            kind: 'poseModel',
+            loading: 'lazy',
+            source: {
+              type: 'remote',
+              url: 'https://cdn.example.com/pose.zip',
+              integrity: `sha256-${createHash('sha256').update(remoteBytes).digest('hex')}`,
+              contentType: 'application/zip',
+              size: remoteBytes.byteLength,
+            },
+          },
+        ],
+      },
+    },
+    getAssetFile() {
+      assert.fail('remote pose model must not read embedded bytes');
+    },
+  };
+}
+
+function poseArchiveLimits() {
+  return {
+    maxArchiveBytes: 64 * 1024,
+    maxEntries: 3,
+    maxCompressedEntryBytes: 32 * 1024,
+    maxExpandedEntryBytes: 32 * 1024,
+    maxTotalExpandedBytes: 64 * 1024,
+    maxCompressionRatio: 100,
   };
 }
 
@@ -408,6 +447,44 @@ test('uses the story-scoped IndexedDB cache before calling the host loader', asy
   await second.dispose('second-session-complete');
 });
 
+test('extracts a verified remote pose archive inside the platform boundary', async () => {
+  const remoteBytes = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"model":true}'),
+    'weights.bin': Uint8Array.from([1, 2, 3]),
+  });
+  const component = remotePoseRuntimeComponent(remoteBytes);
+  const log = [];
+  let registration;
+  const setup = options(component, log, {
+    tmpose: {
+      async registerPoseModel(input) {
+        registration = input;
+        log.push(['pose.register', input.name]);
+        return {name: input.name, labels: ['rescue']};
+      },
+    },
+  });
+  const session = createDsl4PlatformAssetSession({
+    ...setup.value,
+    cacheIdentity,
+    poseArchiveLimits: poseArchiveLimits(),
+    subtleCrypto: webcrypto.subtle,
+    async loadRemoteAsset() {
+      return {bytes: remoteBytes, contentType: 'application/zip'};
+    },
+  });
+
+  await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
+  assert.equal(registration.name, 'RemotePose');
+  assert.deepEqual(
+    registration.files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  await session.dispose('remote-pose-complete');
+  assert.ok(log.some(([event, name]) => event === 'pose.release' && name === 'RemotePose'));
+});
+
 test('attempts every final cleanup and aggregates lifecycle and composition failures', async () => {
   const log = [];
   const failure = new Error('release failed');
@@ -473,6 +550,16 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
   assert.throws(
     () => createDsl4PlatformAssetSession({...base, loadRemoteAsset() {}}),
     /cacheIdentity must be an object/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4PlatformAssetSession({
+        ...base,
+        runtimeComponent: remotePoseRuntimeComponent(new Uint8Array([1])),
+        cacheIdentity,
+        loadRemoteAsset() {},
+      }),
+    /pose archive limits/u,
   );
   assert.equal(factoryCalls, 0);
 

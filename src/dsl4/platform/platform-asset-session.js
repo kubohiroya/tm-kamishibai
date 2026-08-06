@@ -8,6 +8,7 @@ import {
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
+import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -143,6 +144,8 @@ function disposedError() {
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
  * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
+ * @param {Readonly<Record<string, unknown>>} [options.poseArchiveLimits]
+ * @param {{digest: Function}} [options.subtleCrypto]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
@@ -165,6 +168,14 @@ export function createDsl4PlatformAssetSession(options) {
   const remoteEnabled = typeof options.loadRemoteAsset === 'function';
   const remoteLoader = remoteEnabled ? /** @type {Function} */ (options.loadRemoteAsset) : null;
   const cacheIdentity = remoteEnabled ? validateCacheIdentity(options.cacheIdentity) : null;
+  const componentAssetBundle = /** @type {Record<string, any>} */ (runtimeComponent.assetBundle);
+  const remotePoseRequired = componentAssetBundle.manifest.assets.some(
+    /** @param {unknown} asset */ (asset) =>
+      isRecord(asset) &&
+      asset.kind === 'poseModel' &&
+      isRecord(asset.source) &&
+      asset.source.type === 'remote',
+  );
   if (
     options.verifiedRemoteCacheOptions !== undefined &&
     !isRecord(options.verifiedRemoteCacheOptions)
@@ -174,6 +185,13 @@ export function createDsl4PlatformAssetSession(options) {
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
   }
+  const poseArchiveExtractor =
+    remoteEnabled && remotePoseRequired
+      ? createDsl4PoseArchiveExtractor({
+          limits: options.poseArchiveLimits,
+          subtleCrypto: options.subtleCrypto,
+        })
+      : null;
   const createAssetManager =
     options.createAssetManagerComposition ?? createDefaultAssetManagerComposition;
   if (typeof createAssetManager !== 'function') {
@@ -366,6 +384,7 @@ export function createDsl4PlatformAssetSession(options) {
       adapter,
       setLoading: options.setLoading,
       ...(remoteEnabled ? {resolveVerifiedRemoteAsset} : {}),
+      ...(poseArchiveExtractor ? {extractRemotePoseArchive: poseArchiveExtractor} : {}),
     };
     const assetLifecycle = remoteEnabled
       ? createDsl4RemoteAssetLifecycle(lifecycleOptions)
