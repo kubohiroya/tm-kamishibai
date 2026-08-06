@@ -1462,7 +1462,7 @@ optional argument存在判定、typed argument、complete／fail／gotoの8 opco
 startupへ自動登録せず、作品固有custom actionを作る配布面だけが明示的に登録します。custom handlerのblock
 budgetは`test/fixtures/dsl4/custom-action-block-budget.json`で8 block以下を検証します。
 
-### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装待ち #327]`
+### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装中 #327]`
 
 アセットの「どこから読むか」「いつ準備するか」「いつメモリから解放するか」「検証済みbyte列を
 いつ永続cacheから削除するか」を一つのcache概念へまとめません。
@@ -1570,14 +1570,31 @@ self-contained SB3のbinary payloadは、長寿命JavaScript literal、data URL�
 せず、manifestへbindingされたZIP entryからone-shot providerで取り込みます。editor／builderは同一integrityの
 SB3を再保存できるよう、providerを破棄する前にIndexedDB backing bytesを再供給できることを確認します。
 
+binary-entry経路は互換用Base64経路を置換せず、明示APIでのみ選択する既定OFFのformatとします。descriptor
+format version 2は各fileを`assetId`、台本内path、展開後size、SHA-256 integrity、content-addressed ZIP entryへ
+bindingし、payload自体を`project.json`へ格納しません。ZIP layout version 1のentry名は
+`kamishibai/assets/v1/<sha256-hex>`とし、同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+
+runtimeはSB3全体を展開せず、中央directoryを走査してから要求されたassetのentryだけを展開します。providerは
+同じassetの2回目の取得と同時取得を拒否し、最後のembedded assetを渡した時点、または明示`release()`時点で
+SB3 byte snapshot、entry reader、release callbackへの参照を破棄します。`AbortSignal`による取得中断を
+machine-readable errorとして扱います。editorのpreview／再保存では破棄済みproviderを再利用せず、同じ
+snapshotまたは永続backing storeから新しいproviderを供給します。
+
+この経路では呼出側がarchive byte数、archive entry数、1 entryの展開後byte数、archive全体の展開後byte数、
+asset file数、1 asset fileのbyte数、asset file合計byte数、圧縮比の上限をすべて明示します。path traversal、
+duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの宣言size不一致、未対応圧縮方式は展開前に、
+展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
+
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
 同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
-この節はDSL 4.0の契約を定めますが、PR #290の現headにはschema、dependency diff、asset単位release、
-台本単位cache接続が未実装です。Issue #327のfixtureと上流Asset Manager／TMPoseのrelease契約を満たすまで、
-remote asset PRをmerge可能とは扱いません。
+Issue #327 step 3ではbinary descriptor、SB3 embed/read境界、one-shot provider、editor再供給境界を実装します。
+一方、Asset Manager／TMPose adapter接続、dependency pin、scene retention、同時materialize poseModel数、
+IndexedDB budget／台本単位cache接続は後続stepであり、このPRでは有効化しません。これらと上流のrelease契約を
+満たすまで、remote asset経路全体をmerge可能または既定ONとは扱いません。
 
 ### 10.6 development preview protocol `[決定済み／実装中 #266]`
 

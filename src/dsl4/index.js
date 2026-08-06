@@ -33,6 +33,14 @@ export {
   Dsl4AssetBundleError,
   validateDsl4EmbeddedAssetBundle,
 } from './asset-bundle-descriptor.js';
+export {
+  createDsl4BinaryEntryAssetBundle,
+  createDsl4OneShotBinaryEntryProvider,
+  dsl4BinaryEntryFormatVersion,
+  dsl4BinaryEntryPrefix,
+  Dsl4BinaryEntryError,
+  validateDsl4BinaryEntryAssetBundle,
+} from './binary-entry-provider.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
   createDsl4EmbeddedAssetLifecycle,
@@ -70,6 +78,7 @@ export {
 } from './runtime-artifact-descriptor.js';
 export {
   dsl4RuntimeArtifactStoragePaths,
+  loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeArtifact,
   loadDsl4RuntimeComponent,
 } from './runtime-artifact-loader.js';

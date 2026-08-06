@@ -3,6 +3,7 @@ import {
   Dsl4AssetBundleError,
   validateDsl4EmbeddedAssetBundle,
 } from './asset-bundle-descriptor.js';
+import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
 import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
@@ -123,7 +124,9 @@ function storedAssetBundles(project) {
  * @param {number} options.maxSourceBytes
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {boolean} [options.requireAssetBundle]
+ * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
  * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
@@ -134,7 +137,9 @@ export async function loadDsl4RuntimeArtifact(
     maxSourceBytes,
     historyNavigationAvailable = false,
     requireAssetBundle = false,
+    assetBundleFormat = 'embedded-base64',
     maxAssetFiles,
+    maxAssetFileBytes,
     maxAssetBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   },
@@ -232,16 +237,30 @@ export async function loadDsl4RuntimeArtifact(
       );
     }
     try {
-      const validatedBundle = await validateDsl4EmbeddedAssetBundle(
-        storyDocument,
-        storedBundle.assets,
-        {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
-      );
-      assetBundle = validatedBundle.descriptor;
+      if (assetBundleFormat === 'embedded-base64') {
+        const validatedBundle = await validateDsl4EmbeddedAssetBundle(
+          storyDocument,
+          storedBundle.assets,
+          {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
+        );
+        assetBundle = validatedBundle.descriptor;
+        getAssetFile = validatedBundle.getFile;
+      } else if (assetBundleFormat === 'binary-entry') {
+        if (maxAssetFileBytes === undefined) {
+          throw new TypeError('maxAssetFileBytes is required for binary-entry component loading');
+        }
+        assetBundle = await validateDsl4BinaryEntryAssetBundle(storyDocument, storedBundle.assets, {
+          maxFiles: maxAssetFiles,
+          maxFileBytes: maxAssetFileBytes,
+          maxTotalBytes: maxAssetBytes,
+          subtleCrypto,
+        });
+      } else {
+        throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
+      }
       assetBundlePath = storedBundle.path;
-      getAssetFile = validatedBundle.getFile;
     } catch (error) {
-      if (error instanceof Dsl4AssetBundleError) {
+      if (error instanceof Dsl4AssetBundleError || error instanceof Dsl4BinaryEntryError) {
         return failure(
           storyDocument,
           source.descriptor.sourceId,
@@ -263,8 +282,9 @@ export async function loadDsl4RuntimeArtifact(
     storyDocument,
     diagnostics: [],
   };
-  if (assetBundle && assetBundlePath && getAssetFile) {
-    Object.assign(result, {assetBundle, assetBundlePath, getAssetFile});
+  if (assetBundle && assetBundlePath) {
+    Object.assign(result, {assetBundle, assetBundlePath});
+    if (getAssetFile) Object.assign(result, {getAssetFile});
   }
   return deepFreeze(result);
 }
@@ -282,5 +302,27 @@ export async function loadDsl4RuntimeArtifact(
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export function loadDsl4RuntimeComponent(project, sourceFrontend, options) {
-  return loadDsl4RuntimeArtifact(project, sourceFrontend, {...options, requireAssetBundle: true});
+  return loadDsl4RuntimeArtifact(project, sourceFrontend, {
+    ...options,
+    requireAssetBundle: true,
+    assetBundleFormat: 'embedded-base64',
+  });
+}
+
+/**
+ * Load immutable source, control artifact, and ZIP-entry asset metadata.
+ *
+ * The returned component intentionally has no byte getter. The caller must create a bounded,
+ * releasable provider from an SB3 or editor backing store.
+ *
+ * @param {unknown} project
+ * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} sourceFrontend
+ * @param {Parameters<typeof loadDsl4RuntimeArtifact>[2]} options
+ */
+export function loadDsl4BinaryEntryRuntimeComponent(project, sourceFrontend, options) {
+  return loadDsl4RuntimeArtifact(project, sourceFrontend, {
+    ...options,
+    requireAssetBundle: true,
+    assetBundleFormat: 'binary-entry',
+  });
 }
