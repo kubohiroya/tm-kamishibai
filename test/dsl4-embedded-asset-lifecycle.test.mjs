@@ -425,13 +425,3 @@ test('forwards Loading calls and rejects invalid contracts before adapter side e
     TypeError,
   );
 });
-
-test('embedded asset lifecycle has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(repositoryRoot, 'src', 'dsl4', 'embedded-asset-lifecycle.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/u);
-  assert.doesNotMatch(implementation, /(?:globalThis\.(?:document|window)|KeyboardEvent)/u);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/u);
-});

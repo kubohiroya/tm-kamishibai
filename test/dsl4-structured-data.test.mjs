@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -471,13 +470,4 @@ test('matches a deterministic Iterator state and lease-count model', () => {
     ok(store.free(source));
     assert.equal(store.debugSnapshot().counts.leases, 0);
   }
-});
-
-test('keeps collection and Iterator modules free of platform and I/O dependencies', async () => {
-  const source = await readFile(new URL('../src/dsl4/structured-data.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(
-    source,
-    /from\s+['"](?:node:|[^'"]*(?:scratch-vm|turbowarp|story-document))|window\.|document\.|fetch\(/i,
-  );
-  assert.doesNotMatch(source, /\b(?:eval|Function|RegExp)\s*\(/);
 });

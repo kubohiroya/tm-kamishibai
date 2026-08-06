@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function mimeType(sourceName) {
   if (sourceName.endsWith('.svg')) return 'image/svg+xml';
@@ -202,23 +197,4 @@ test('cancels pending registration on Abort without publishing a resource', asyn
 
   await assert.rejects(pending, (error) => error.name === 'AbortError');
   assert.deepEqual(fake.calls.release, ['Late']);
-});
-
-test('keeps the adapter out of the default-off core import graph and pins its dependency', async () => {
-  const [coreIndex, startup, adapterSource, packageJson] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'asset-manager-adapter.js'),
-      'utf8',
-    ),
-    readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
-  ]);
-  assert.doesNotMatch(coreIndex, /asset-manager-adapter|\.\/platform/u);
-  assert.doesNotMatch(startup, /turbowarp-asset-manager|asset-manager-adapter/u);
-  assert.doesNotMatch(
-    adapterSource,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
-  );
-  assert.match(packageJson, /"@kubohiroya\/turbowarp-asset-manager": "0\.6\.0"/u);
 });

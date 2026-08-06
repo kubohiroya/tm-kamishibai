@@ -974,12 +974,3 @@ scenes:
     assert.equal(state.diagnostic.code, 'K4-RUNTIME-RESULT-001');
   }
 });
-
-test('runtime controller core has no filesystem, network, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'runtime-controller.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

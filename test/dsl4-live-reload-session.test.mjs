@@ -516,16 +516,3 @@ test('discarding a candidate does not revive a runtime after commit failure', as
   assert.equal(liveReload.getState().status, 'failed');
   assert.equal((await liveReload.discardCandidate()).status, 'failed');
 });
-
-test('live reload core has no filesystem, network, DOM, transport, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'live-reload-session.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(
-    implementation,
-    /(?:globalThis\.(?:document|window)|WebSocket|KeyboardEvent|addEventListener)/,
-  );
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

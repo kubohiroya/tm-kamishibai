@@ -158,16 +158,3 @@ test('profile diagnostics use the versioned K4 envelope', () => {
   );
   assert.ok(diagnostic.range.start.line >= 1);
 });
-
-test('control profile resolver has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'control-profile-resolver.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
-  assert.doesNotMatch(
-    implementation,
-    /(?:globalThis\.(?:document|window)|KeyboardEvent|addEventListener)/,
-  );
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

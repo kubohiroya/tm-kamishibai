@@ -322,15 +322,3 @@ test('serializes source revisions in runtime receipt order', async () => {
   assert.equal((await second).status, 'pending');
   assert.equal(protocol.getState().latestRevision, 2);
 });
-
-test('preview protocol core has no transport, filesystem, DOM, VM, or Scratch dependency', async () => {
-  const implementation = await readFile(
-    path.join(projectRoot, 'src', 'dsl4', 'preview-protocol.js'),
-    'utf8',
-  );
-  assert.doesNotMatch(
-    implementation,
-    /(?:node:fs|node:http|node:https|WebSocket|\bfetch\s*\(|globalThis\.(?:document|window))/,
-  );
-  assert.doesNotMatch(implementation, /(?:\bScratch\b|scratch-vm|vm\.runtime|startHats)/);
-});

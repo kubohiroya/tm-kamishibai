@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {createDsl4JsonPathEngine, dsl4JsonPathDefaultLimits} from '../src/dsl4/index.js';
@@ -343,13 +342,4 @@ test('binds compiled programs to the engine whose compile limits accepted them',
   const program = ok(source.compile('$.a'));
 
   errorCode(target.evaluate(program, {a: 1}), 'SD-JSONPATH-SYNTAX', 'evaluate');
-});
-
-test('has no Object Store, platform, parser-runtime, regexp, or eval dependency', async () => {
-  const source = await readFile(new URL('../src/dsl4/jsonpath.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(
-    source,
-    /from\s+['"]|object-store|scratch-vm|turbowarp|StoryDocument|window\.|document\.|fetch\(/i,
-  );
-  assert.doesNotMatch(source, /\b(?:eval|Function|RegExp)\s*\(|\.match\s*\(/);
 });

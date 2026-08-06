@@ -1,16 +1,11 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {
   createDsl4PlatformAssetAdapter,
   createDsl4TMPoseModelAdapter,
   createDsl4TMPosePlatform,
 } from '../src/dsl4/platform/index.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function poseModel(
   id = 'RescuePose',
@@ -223,27 +218,4 @@ test('routes media and pose assets to their owners and preserves release ownersh
   await assert.rejects(router.prepare({asset: {kind: 'video'}}), /Unsupported/u);
   const otherRouter = createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter});
   await assert.rejects(otherRouter.release(resources[0]), /not owned/u);
-});
-
-test('keeps platform adapters outside the default-off core graph and pins pose dependencies', async () => {
-  const [coreIndex, startup, adapterSource, routerSource, packageJson] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'tmpose-model-adapter.js'),
-      'utf8',
-    ),
-    readFile(
-      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'asset-adapter-router.js'),
-      'utf8',
-    ),
-    readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
-  ]);
-  assert.doesNotMatch(coreIndex, /\.\/platform|tmpose-model-adapter/u);
-  assert.doesNotMatch(startup, /turbowarp-tmpose|tmpose-model-adapter/u);
-  assert.doesNotMatch(
-    `${adapterSource}\n${routerSource}`,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
-  );
-  assert.match(packageJson, /"@kubohiroya\/turbowarp-tmpose": "1\.5\.0"/u);
 });

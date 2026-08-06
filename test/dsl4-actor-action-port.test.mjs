@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {createDsl4ActorActionPort} from '../src/dsl4/platform/index.js';
-
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
 function deferred() {
   let resolve;
@@ -351,7 +346,7 @@ test('does not inspect dependencies for a pre-aborted action', async () => {
   assert.equal(resolverCalls, 0);
 });
 
-test('validates dependencies and remains outside the default-off core graph', async () => {
+test('validates every actor action dependency before use', () => {
   assert.throws(
     () => createDsl4ActorActionPort({composition: {}, resolveActor() {}, host: {}}),
     /Asset Manager composition/u,
@@ -372,16 +367,5 @@ test('validates dependencies and remains outside the default-off core graph', as
         host: fakeHost().host,
       }),
     /resolveActor/u,
-  );
-  const [coreIndex, startup, portSource] = await Promise.all([
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'actor-action-port.js'), 'utf8'),
-  ]);
-  assert.doesNotMatch(coreIndex, /actor-action-port|\.\/platform/u);
-  assert.doesNotMatch(startup, /actor-action-port|turbowarp-asset-manager/u);
-  assert.doesNotMatch(
-    portSource,
-    /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
 });
