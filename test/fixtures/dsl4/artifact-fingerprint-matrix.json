@@ -1,0 +1,110 @@
+{
+  "formatVersion": 1,
+  "expectedFingerprint": "sha256-IDLKTR+BMLCJpGzXB48/AplF6bVxBYak6KDdxIW1N1w=",
+  "input": {
+    "formatVersion": 1,
+    "baseSb3Integrity": "sha256-7fS0A6BPhTzDnaWGhtroUdCdBilFgACUDkVvv21Um+c=",
+    "assetBundleIntegrity": "sha256-i/cp/+B0yu5iLAKSgXNGfmWOGeKCM8/4pEWBnjyuTVA=",
+    "appShell": {
+      "id": "standard",
+      "templateVersion": "4.0.0",
+      "integrity": "sha256-tO2WMkUv0S/WKX+7O3SAizXztOWoM99FnkmtFtCKQao="
+    },
+    "extensionBundle": {
+      "formatVersion": 1,
+      "id": "kubohiroyakamishibai4",
+      "integrity": "sha256-IO93OehCPxFImbdnkJoiDF3EFp1zo4GW16Lb+sUWbE4="
+    },
+    "builder": {
+      "package": "@kubohiroya/tmpose-kamishibai",
+      "version": "3.2.3",
+      "settings": {
+        "channel": "bundled",
+        "maxSourceBytes": 1048576,
+        "maxAssetFileBytes": 20971520,
+        "maxAssetFiles": 128,
+        "maxTotalAssetBytes": 67108864,
+        "historyNavigationAvailable": true,
+        "replaceExisting": false
+      }
+    },
+    "project": {
+      "sourcePath": "story.kamishibai.yaml",
+      "controlProfile": "development"
+    }
+  },
+  "activeSourceIntegrity": "sha256-D59c5Hgx4Jnnfile2Ltifwie+oZy7m+9xJ6sbw1/UnU=",
+  "candidateSourceIntegrity": "sha256-P+0TRX7iak9bJ8QlRKpXBFmBoHWmEDqrh+C4HAMunQE=",
+  "changes": [
+    {
+      "name": "no input change",
+      "path": null,
+      "value": null,
+      "sourceChanged": false,
+      "expected": "no-change"
+    },
+    {
+      "name": "YAML text only",
+      "path": null,
+      "value": null,
+      "sourceChanged": true,
+      "expected": "live-reload"
+    },
+    {
+      "name": "base SB3",
+      "path": "baseSb3Integrity",
+      "value": "sha256-K4cPSnlVojReOzna8ipgP7jUHlo8sVcA8k4WRLCRX5Q=",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "asset bytes or manifest",
+      "path": "assetBundleIntegrity",
+      "value": "sha256-aouTkqb5QR17NLmldmmzEy4NEk4tbxZ3VN9tNLyGOkA=",
+      "sourceChanged": true,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "app shell",
+      "path": "appShell.integrity",
+      "value": "sha256-mXiMtHgR4tgqY+Sro+UVKNd2O0V8R9dNnOzp8a3DseM=",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "extension bundle",
+      "path": "extensionBundle.integrity",
+      "value": "sha256-gvVUfN0jtSn9qSdGuUEKGCtf37AgD2H5yIc8IPrsaCc=",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "builder version",
+      "path": "builder.version",
+      "value": "3.2.4",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "builder setting",
+      "path": "builder.settings.maxAssetFiles",
+      "value": 129,
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "source path",
+      "path": "project.sourcePath",
+      "value": "scripts/story.kamishibai.yaml",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "selected control profile",
+      "path": "project.controlProfile",
+      "value": "production",
+      "sourceChanged": true,
+      "expected": "full-rebuild"
+    }
+  ]
+}

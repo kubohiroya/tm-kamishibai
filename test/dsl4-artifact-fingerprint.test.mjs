@@ -1,0 +1,143 @@
+import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import test from 'node:test';
+
+import {classifyDsl4PreviewChange, createDsl4ArtifactFingerprint} from '../src/builder/index.js';
+
+const fixture = JSON.parse(
+  await readFile(
+    new URL('fixtures/dsl4/artifact-fingerprint-matrix.json', import.meta.url),
+    'utf8',
+  ),
+);
+
+function setPath(target, path, value) {
+  const segments = path.split('.');
+  const final = segments.pop();
+  let parent = target;
+  for (const segment of segments) parent = parent[segment];
+  parent[final] = value;
+}
+
+async function fingerprint(input = fixture.input) {
+  return createDsl4ArtifactFingerprint(input, {subtleCrypto: webcrypto.subtle});
+}
+
+test('creates one deterministic deeply immutable structural fingerprint', async () => {
+  const created = await fingerprint();
+  const reordered = {
+    project: {
+      controlProfile: fixture.input.project.controlProfile,
+      sourcePath: fixture.input.project.sourcePath,
+    },
+    builder: {
+      settings: {
+        replaceExisting: false,
+        historyNavigationAvailable: true,
+        maxTotalAssetBytes: 67_108_864,
+        maxAssetFiles: 128,
+        maxAssetFileBytes: 20_971_520,
+        maxSourceBytes: 1_048_576,
+        channel: 'bundled',
+      },
+      version: '3.2.3',
+      package: '@kubohiroya/tmpose-kamishibai',
+    },
+    extensionBundle: {
+      integrity: fixture.input.extensionBundle.integrity,
+      id: 'kubohiroyakamishibai4',
+      formatVersion: 1,
+    },
+    appShell: {
+      integrity: fixture.input.appShell.integrity,
+      templateVersion: '4.0.0',
+      id: 'standard',
+    },
+    assetBundleIntegrity: fixture.input.assetBundleIntegrity,
+    baseSb3Integrity: fixture.input.baseSb3Integrity,
+    formatVersion: 1,
+  };
+  const reorderedResult = await fingerprint(reordered);
+
+  assert.equal(created.formatVersion, 1);
+  assert.equal(created.integrity, fixture.expectedFingerprint);
+  assert.equal(reorderedResult.integrity, created.integrity);
+  assert.deepEqual(reorderedResult.inputs, created.inputs);
+  assert.equal(Object.isFrozen(created), true);
+  assert.equal(Object.isFrozen(created.inputs), true);
+  assert.equal(Object.isFrozen(created.inputs.builder.settings), true);
+});
+
+test('classifies the reviewed YAML-only and structural change matrix', async () => {
+  const activeFingerprint = await fingerprint();
+  for (const change of fixture.changes) {
+    const candidateInput = structuredClone(fixture.input);
+    if (change.path) setPath(candidateInput, change.path, change.value);
+    const candidateFingerprint = await fingerprint(candidateInput);
+    const result = classifyDsl4PreviewChange({
+      activeArtifactFingerprint: activeFingerprint.integrity,
+      candidateArtifactFingerprint: candidateFingerprint.integrity,
+      activeSourceIntegrity: fixture.activeSourceIntegrity,
+      candidateSourceIntegrity: change.sourceChanged
+        ? fixture.candidateSourceIntegrity
+        : fixture.activeSourceIntegrity,
+    });
+    assert.equal(result.kind, change.expected, change.name);
+    assert.equal(result.requiresFullRebuild, change.expected === 'full-rebuild', change.name);
+    assert.equal(result.requiresNewPreviewSession, change.expected === 'full-rebuild', change.name);
+    assert.equal(
+      result.restartFrom,
+      change.expected === 'full-rebuild'
+        ? 'entrypoint'
+        : change.expected === 'live-reload'
+          ? 'author-choice'
+          : 'unchanged',
+      change.name,
+    );
+    assert.equal(Object.isFrozen(result), true);
+  }
+});
+
+test('rejects source text, preview preferences, and session-only state as fingerprint inputs', async () => {
+  for (const [path, value] of [
+    ['sourceText', 'kamishibai: 4.0'],
+    ['previewPreferences', {defaultChoice: 3}],
+    ['sessionToken', 'secret'],
+    ['candidateRevision', 2],
+    ['restartChoice', 1],
+  ]) {
+    const input = structuredClone(fixture.input);
+    input[path] = value;
+    await assert.rejects(fingerprint(input), /unknown/u);
+  }
+});
+
+test('fails closed for incomplete, malformed, or unsafe fingerprint boundaries', async () => {
+  for (const mutate of [
+    (input) => delete input.appShell,
+    (input) => (input.baseSb3Integrity = 'sha256-invalid'),
+    (input) => (input.extensionBundle.formatVersion = 2),
+    (input) => (input.builder.settings.channel = 'automatic'),
+    (input) => (input.builder.settings.maxSourceBytes = 0),
+    (input) => (input.builder.settings.historyNavigationAvailable = 1),
+    (input) => (input.project.sourcePath = '../story.kamishibai.yaml'),
+    (input) => (input.project.controlProfile = ''),
+  ]) {
+    const input = structuredClone(fixture.input);
+    mutate(input);
+    await assert.rejects(fingerprint(input), TypeError);
+  }
+
+  assert.throws(
+    () =>
+      classifyDsl4PreviewChange({
+        activeArtifactFingerprint: fixture.activeSourceIntegrity,
+        candidateArtifactFingerprint: fixture.activeSourceIntegrity,
+        activeSourceIntegrity: fixture.activeSourceIntegrity,
+        candidateSourceIntegrity: fixture.activeSourceIntegrity,
+        modalChoice: 2,
+      }),
+    /unknown/u,
+  );
+});
