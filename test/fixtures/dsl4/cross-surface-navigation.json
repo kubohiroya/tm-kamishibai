@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "controlProfile": "crossSurface",
+  "resolvedKeymap": {
+    "ArrowDown": "history.nextScene",
+    "ArrowLeft": "history.previousAction",
+    "ArrowUp": "history.previousScene",
+    "Space": "navigation.nextAction"
+  },
+  "surfaces": [
+    {
+      "id": "web",
+      "label": "Web版",
+      "channel": "bundled",
+      "delivery": "standard-composite-sb3"
+    },
+    {
+      "id": "turbowarpEditor",
+      "label": "TurboWarp editor",
+      "channel": "unbundled",
+      "delivery": "standalone-runtime-sb3"
+    },
+    {
+      "id": "packager",
+      "label": "Packager",
+      "channel": "bundled",
+      "delivery": "standard-composite-sb3"
+    }
+  ],
+  "expected": {
+    "visitedScenes": ["opening", "middle", "ending"],
+    "rewoundScenes": ["middle", "opening", "middle"],
+    "rebuiltFutureScenes": ["opening", "middle", "ending"],
+    "scoreBeforeRewind": 4,
+    "scoreAfterFutureRebuild": 6
+  }
+}
