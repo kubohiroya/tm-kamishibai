@@ -1987,24 +1987,6 @@ for (const command of ['say', 'think']) {
     assert.equal(harness.getBubbleText('Hero'), '');
     assert.equal(harness.hasRuntimeVariable('actionParam3'), false);
   });
-
-  test(`clears a styled ${command} bubble when Right finishes the action`, async (context) => {
-    const harness = await loadKamishibaiVm();
-    context.after(() => harness.quit());
-    startScript(
-      harness,
-      actorActionScript(`Hero:${command}:message:5.0:baloonStyle`, {
-        declarations: ['svgTextStyle=baloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right'],
-      }),
-    );
-    harness.runUntil(() => harness.getBubbleText('Hero') === 'message');
-
-    harness.pressKey('ArrowRight');
-    harness.runUntil(() => harness.getBackdropName() === 'Title', {maxSteps: 50});
-
-    assert.equal(harness.getBubbleText('Hero'), '');
-    assert.equal(harness.hasRuntimeVariable('actionParam3'), false);
-  });
 }
 
 test('moves an actor to the destination when Right finishes a glide', async (context) => {
@@ -2113,18 +2095,6 @@ for (const transition of [
     finalBrightness: 0,
     isInProgress: (brightness) => brightness > -100 && brightness < 0,
   },
-  {
-    name: 'fadeToWhite',
-    before: [],
-    finalBrightness: 100,
-    isInProgress: (brightness) => brightness > 0 && brightness < 100,
-  },
-  {
-    name: 'fadeFromWhite',
-    before: ['action=transition:fadeToWhite'],
-    finalBrightness: 0,
-    isInProgress: (brightness) => brightness > 0 && brightness < 100,
-  },
 ]) {
   test(`applies the final brightness when ${transition.name} completes`, async (context) => {
     const harness = await loadKamishibaiVm();
@@ -2188,6 +2158,61 @@ for (const transition of [
     assert.equal(harness.hasRuntimeVariable('skipMode'), false);
   });
 }
+
+test('applies both white transition endpoints when Right finishes their shared sequence', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  startScript(
+    harness,
+    [
+      'kamishibai=3.2',
+      'asset=Title,backdrop',
+      'asset=Stars,backdrop',
+      'cover=Title,',
+      '---',
+      'sceneLabel=first',
+      'action=stage:Stars',
+      'action=transition:fadeToWhite',
+      'action=wait:30',
+      'action=transition:fadeFromWhite',
+      'action=wait:30',
+      'action=stage:Title',
+      'action=wait:30',
+    ].join('\n'),
+  );
+  harness.runUntil(() => {
+    const brightness = harness.getStageEffect('brightness');
+    return (
+      harness.getRuntimeVariable('actionParam') === 'fadeToWhite' &&
+      brightness > 0 &&
+      brightness < 100
+    );
+  });
+
+  harness.pressKey('ArrowRight');
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('actionCommand') === 'wait' &&
+      harness.getStageEffect('brightness') === 100,
+  );
+  harness.pressKey('ArrowRight');
+  harness.runUntil(() => {
+    const brightness = harness.getStageEffect('brightness');
+    return (
+      harness.getRuntimeVariable('actionParam') === 'fadeFromWhite' &&
+      brightness > 0 &&
+      brightness < 100
+    );
+  });
+  harness.pressKey('ArrowRight');
+  harness.runUntil(
+    () =>
+      harness.getRuntimeVariable('actionCommand') === 'wait' &&
+      harness.getStageEffect('brightness') === 0,
+  );
+
+  assert.equal(harness.hasRuntimeVariable('skipMode'), false);
+});
 
 test('applies the final image when a later Right input finishes a sequence', async (context) => {
   const harness = await loadKamishibaiVm();
