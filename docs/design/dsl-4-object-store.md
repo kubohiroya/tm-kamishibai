@@ -30,13 +30,12 @@ JavaScript object identityの共有、構造cycleは受理しない。
 
 ### 2.2 公開Core handleと内部edge
 
-| 種類             | 公開値         | 作成方法                        | 状態                | countへの影響  |
-| ---------------- | -------------- | ------------------------------- | ------------------- | -------------- |
-| `ScopeRef`       | opaque string  | `createScope`                   | active → released   | なし           |
-| `OwnerRef`       | opaque string  | `newEntry`                      | active → freed      | なし           |
-| `ReferenceLease` | opaque string  | `createReference`／query結果    | active → released   | active中は+1   |
-| `ExceptionRef`   | adapter scalar | adapterが失敗を公開する場合     | active → expired    | なし           |
-| `RefValue`       | Core内部値     | `setReferenceValue`等のCore API | attached → detached | attached中は+1 |
+| 種類             | 公開値        | 作成方法                        | 状態                | countへの影響  |
+| ---------------- | ------------- | ------------------------------- | ------------------- | -------------- |
+| `ScopeRef`       | opaque string | `createScope`                   | active → released   | なし           |
+| `OwnerRef`       | opaque string | `newEntry`                      | active → freed      | なし           |
+| `ReferenceLease` | opaque string | `createReference`／query結果    | active → released   | active中は+1   |
+| `RefValue`       | Core内部値    | `setReferenceValue`等のCore API | attached → detached | attached中は+1 |
 
 `RefValue`はopaque stringではなく、Coreだけが生成できるbranded internal recordである。通常のstringを
 `RefValue`として解釈しない。構造的な親子edgeはcountへ加えず、別nodeを指す`RefValue`だけを管理対象edgeと
@@ -47,7 +46,7 @@ JavaScript object identityの共有、構造cycleは受理しない。
 
 `ExceptionRef`はCoreのobject handleではなく、TurboWarp Adapterが`StoreResult.error`をScratch scalarへ
 投影する場合だけ作る。符号化、predicate、diagnostic reporter、expiryはIssue #261で定義し、Coreの
-`@os1` handle tableへ登録しない。
+`@os1` handle tableへ登録しない。Adapter上ではactiveからreleaseまたはexpiryによりexpiredへ遷移する。
 
 ## 3. opaque handle
 
@@ -92,8 +91,10 @@ ScopeRef:    active ──releaseScope─> released
 OwnerRef:    active ──free─────────> freed
 Lease:       active ──release──────> released
 RefValue:    attached ──replace/remove/free─> detached
-ExceptionRef active ──release/expiry───────> expired
 ```
+
+TurboWarp Adapter固有の`ExceptionRef`は、Core状態遷移の外でactiveからreleaseまたはexpiryにより
+expiredへ遷移する。
 
 terminal状態から同じ解放操作を再実行しても成功扱いにはしない。leaseの二重releaseは
 `STORE-REFERENCE-RELEASED`、ownerの再freeは`STORE-REFERENCE-STALE`、scopeの再releaseは
