@@ -307,6 +307,15 @@ Kamishibai Runtimeは任意JSONPathをactionごとに評価せず、型付き`St
 優先し、JSONPathを必須にしない。上級custom actionがJSONPathを使う場合だけ、action scopeへ結果とleaseを
 所有させ、complete、fail、goto、timeout、stop、scene遷移で自動解放する。
 
+内部統合は一runtime sessionにつき一つのObject Store realmを持つ。開始時に`StoryDocument`を
+`kamishibai.storyDocument` entryへ格納し、scene選択時にscene child scope、action取得時に
+`kamishibai.actionView` entryを持つaction child scopeを作る。`ActionView`は`kind`、`version`、`name`、
+`target`、`arguments`、`storyPath`を持つ。controllerはaction dispatch中だけ`ActionContext.structuredData`へ
+`actionScopeRef`と`actionViewRef`を渡し、cleanup成功後にだけactionをcommitする。終了後のhistory
+repositionでは新しいstory／scene scopeを作り直し、位置以外のruntime変数は既存のnavigation契約どおり
+保持する。custom handlerのThread／ActionInvocationは#358でこのcontextを消費し、Core内部へ逆依存を
+追加しない。
+
 Standard fixtureの受け入れ条件は次とする。
 
 - `kubohiroyastructdata1`／`kubohiroyastructdata1debug`をextension storageへ登録しない。
@@ -333,7 +342,8 @@ Standard fixtureの受け入れ条件は次とする。
 
 pure libraryは既存runtimeから未参照で導入する。Standalone paletteは起動時固定の
 `structuredDataStandaloneEnabled`、developer surfaceは`structuredDataDebugEnabled`で個別に既定OFFとする。
-Kamishibai内部統合はさらに別の既定OFF flagにし、Standalone有効化と連動させない。
+Kamishibai内部統合は`structuredDataIntegrationEnabled`で個別に既定OFFとし、Standalone有効化と
+連動させない。`dsl4Runtime`がOFFなら内部統合flagがONでもproject、host、Storeを参照しない。
 
 実装は`./dsl4` package subpathから、既定OFFのflag snapshot、Adapter、TurboWarp surface factoryを公開する。
 factory生成だけでは登録せず、app shellが起動時に一度だけ`register()`を呼ぶ。両flagがOFFならScratch hostと

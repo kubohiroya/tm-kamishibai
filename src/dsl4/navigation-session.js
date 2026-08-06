@@ -1,5 +1,6 @@
 import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 import {createDsl4HistoryReducer} from './history-reducer.js';
+import {createDsl4KamishibaiStructuredDataSession} from './kamishibai-structured-data.js';
 import {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 import {createDsl4RuntimeController} from './runtime-controller.js';
 import {deepFreeze} from './story-document.js';
@@ -70,6 +71,7 @@ function historyFailure(result) {
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
+ * @param {boolean} [options.structuredDataIntegrationEnabled]
  */
 export function createDsl4NavigationSession({
   storyDocument,
@@ -82,7 +84,11 @@ export function createDsl4NavigationSession({
   evaluateCondition,
   onEvent,
   onInputError,
+  structuredDataIntegrationEnabled = false,
 }) {
+  if (typeof structuredDataIntegrationEnabled !== 'boolean') {
+    throw new TypeError('structuredDataIntegrationEnabled must be boolean');
+  }
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
   }
@@ -167,13 +173,22 @@ export function createDsl4NavigationSession({
     onEvent?.(event);
   }
 
-  controller = createDsl4RuntimeController({
-    storyDocument,
-    port,
-    assetLifecycle: resolvedAssetLifecycle,
-    evaluateCondition,
-    onEvent: handleRuntimeEvent,
-  });
+  const structuredDataIntegration = structuredDataIntegrationEnabled
+    ? createDsl4KamishibaiStructuredDataSession({storyDocument})
+    : null;
+  try {
+    controller = createDsl4RuntimeController({
+      storyDocument,
+      port,
+      assetLifecycle: resolvedAssetLifecycle,
+      evaluateCondition,
+      onEvent: handleRuntimeEvent,
+      structuredDataIntegration: structuredDataIntegration ?? undefined,
+    });
+  } catch (error) {
+    structuredDataIntegration?.dispose();
+    throw error;
+  }
 
   function snapshot() {
     return deepFreeze({
@@ -285,7 +300,7 @@ export function createDsl4NavigationSession({
     dispose() {
       if (disposed) return;
       inputAdapter.dispose();
-      controller.stop('dispose');
+      controller.dispose();
       resetHistory();
       disposed = true;
     },

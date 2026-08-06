@@ -4,14 +4,17 @@ import {deepFreeze} from './story-document.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
 
-const featureFlagKeys = new Set(['dsl4Runtime']);
+const featureFlagKeys = new Set(['dsl4Runtime', 'structuredDataIntegrationEnabled']);
 
-export const dsl4DefaultFeatureFlags = deepFreeze({dsl4Runtime: false});
+export const dsl4DefaultFeatureFlags = deepFreeze({
+  dsl4Runtime: false,
+  structuredDataIntegrationEnabled: false,
+});
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -84,9 +87,11 @@ export function resolveDsl4FeatureFlags(input = {}) {
   if (unknown.length > 0) {
     throw new TypeError(`Unknown DSL 4.0 feature flag: ${unknown.sort().join(', ')}`);
   }
-  const enabled = Object.hasOwn(input, 'dsl4Runtime') ? input.dsl4Runtime : false;
-  if (typeof enabled !== 'boolean') throw new TypeError('dsl4Runtime feature flag must be boolean');
-  return deepFreeze({dsl4Runtime: enabled});
+  const resolved = {...dsl4DefaultFeatureFlags, ...input};
+  for (const [name, value] of Object.entries(resolved)) {
+    if (typeof value !== 'boolean') throw new TypeError(`${name} feature flag must be boolean`);
+  }
+  return deepFreeze(resolved);
 }
 
 /**
@@ -244,6 +249,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       evaluateCondition: runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition,
       onEvent: options.onEvent,
       onInputError: options.onInputError,
+      structuredDataIntegrationEnabled: featureFlags.structuredDataIntegrationEnabled,
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;

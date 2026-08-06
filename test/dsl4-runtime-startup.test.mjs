@@ -103,7 +103,10 @@ const enabledOptions = (project, extra = {}) => ({
 });
 
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
-  assert.deepEqual(dsl4DefaultFeatureFlags, {dsl4Runtime: false});
+  assert.deepEqual(dsl4DefaultFeatureFlags, {
+    dsl4Runtime: false,
+    structuredDataIntegrationEnabled: false,
+  });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
   const implicit = await createDsl4RuntimeStartup();
   let factoryCalls = 0;
@@ -121,21 +124,35 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
       assert.fail('runtime environment factory must not be called');
     },
   });
+  const integrationWithoutRuntime = await createDsl4RuntimeStartup({
+    featureFlags: {dsl4Runtime: false, structuredDataIntegrationEnabled: true},
+    project: new Proxy({}, {get: () => assert.fail('project must not be read')}),
+  });
   assert.equal(factoryCalls, 0);
-  for (const result of [implicit, explicit]) {
+  for (const result of [implicit, explicit, integrationWithoutRuntime]) {
     assert.equal(result.ok, true);
     assert.equal(result.enabled, false);
     assert.equal(result.session, null);
-    assert.deepEqual(result.featureFlags, {dsl4Runtime: false});
+    assert.equal(result.featureFlags.dsl4Runtime, false);
     assert.equal(Object.isFrozen(result), true);
   }
+  assert.equal(integrationWithoutRuntime.featureFlags.structuredDataIntegrationEnabled, true);
 });
 
 test('strictly resolves one immutable startup flag snapshot', async () => {
-  assert.deepEqual(resolveDsl4FeatureFlags(), {dsl4Runtime: false});
-  assert.deepEqual(resolveDsl4FeatureFlags({}), {dsl4Runtime: false});
-  assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {dsl4Runtime: true});
+  const disabledFlags = {dsl4Runtime: false, structuredDataIntegrationEnabled: false};
+  assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
+  assert.deepEqual(resolveDsl4FeatureFlags({}), disabledFlags);
+  assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
+    dsl4Runtime: true,
+    structuredDataIntegrationEnabled: false,
+  });
+  assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
+    dsl4Runtime: false,
+    structuredDataIntegrationEnabled: true,
+  });
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
 
   const component = await packagedProject('production');
@@ -147,8 +164,42 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   const result = await pending;
   assert.equal(result.ok, true);
   assert.equal(result.enabled, true);
-  assert.deepEqual(result.featureFlags, {dsl4Runtime: true});
+  assert.deepEqual(result.featureFlags, {
+    dsl4Runtime: true,
+    structuredDataIntegrationEnabled: false,
+  });
   assert.equal(Object.isFrozen(result.featureFlags), true);
+  result.session.dispose();
+});
+
+test('enables internal Structured Data independently without exposing a generic palette', async () => {
+  const component = await packagedProject('production');
+  let actionResources;
+  const result = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {
+      featureFlags: {
+        dsl4Runtime: true,
+        structuredDataIntegrationEnabled: true,
+      },
+      port: {
+        wait(_payload, context) {
+          actionResources = context.structuredData;
+          assert.match(actionResources.actionScopeRef, /^@os1\./u);
+          assert.match(actionResources.actionViewRef, /^@os1\./u);
+          assert.equal(Object.isFrozen(actionResources), true);
+        },
+      },
+    }),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.featureFlags, {
+    dsl4Runtime: true,
+    structuredDataIntegrationEnabled: true,
+  });
+  assert.equal((await result.session.start()).status, 'finished');
+  assert.ok(actionResources);
+  assert.equal(JSON.stringify(component.project).includes('kubohiroyastructdata1'), false);
   result.session.dispose();
 });
 
@@ -204,7 +255,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
   assert.equal(typeof receivedComponent.getAssetFile, 'function');
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
-    featureFlags: {dsl4Runtime: true},
+    featureFlags: {dsl4Runtime: true, structuredDataIntegrationEnabled: false},
   });
   assert.equal(Object.isFrozen(receivedContext), true);
   assert.equal(Object.isFrozen(receivedContext.featureFlags), true);
@@ -323,7 +374,7 @@ test('creates an atomic runtime environment only after component validation', as
   assert.strictEqual(receivedComponent, result.runtimeComponent);
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
-    featureFlags: {dsl4Runtime: true},
+    featureFlags: {dsl4Runtime: true, structuredDataIntegrationEnabled: false},
   });
   assert.deepEqual(calls, ['create']);
   assert.equal(result.session.getState().runtime.status, 'idle');

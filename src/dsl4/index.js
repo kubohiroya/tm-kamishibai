@@ -24,6 +24,12 @@ export {
 export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4JsonPathEngine, dsl4JsonPathDefaultLimits} from './jsonpath.js';
+export {
+  createDsl4KamishibaiStructuredDataSession,
+  createDsl4SceneActionIterator,
+  createDsl4StoryIterator,
+  Dsl4KamishibaiStructuredDataError,
+} from './kamishibai-structured-data.js';
 export {createDsl4LiveReloadSession} from './live-reload-session.js';
 export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4MapBackend, createDsl4ObjectStore, isDsl4RefValue} from './object-store/index.js';
