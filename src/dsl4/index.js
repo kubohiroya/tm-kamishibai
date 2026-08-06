@@ -8,6 +8,10 @@ export {
   Dsl4ActionRegistryError,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+export {
+  detectDsl4ActionRegistrySnapshot,
+  dsl4ActionHatDetectorDefaultLimits,
+} from './action-hat-detector.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
