@@ -1543,6 +1543,47 @@ extractorで展開し、派生fileをarchive integrityとextractor format versio
 台本単位cache接続が未実装です。Issue #327のfixtureと上流Asset Manager／TMPoseのrelease契約を満たすまで、
 remote asset PRをmerge可能とは扱いません。
 
+### 10.6 development preview protocol `[決定済み／実装中 #266]`
+
+preview hostとDSL 4.0 runtimeの接続は、filesystem watcher、network transport、modal UIから独立した
+version 1のsession protocolとします。接続開始時にhostは次のhandshakeを送ります。
+
+```json
+{
+  "type": "preview.handshake",
+  "protocolVersion": {"major": 1, "minor": 0},
+  "sessionId": "preview-01",
+  "capabilities": [
+    "diagnostics.v1",
+    "restart.choice.v1",
+    "source.commit.v1",
+    "source.defer.v1",
+    "source.stage.v1"
+  ]
+}
+```
+
+`diagnostics.v1`、`restart.choice.v1`、`source.stage.v1`、`source.commit.v1`を必須とし、
+`source.defer.v1`をoptionalとします。major不一致または必須capability欠落は接続状態を変更せず拒否し、
+同じmajorではruntimeとhostがともに宣言したoptional capabilityだけをackへ含めます。minorは双方が扱える
+小さい方へ交渉します。
+
+handshake ackは`sessionId`、交渉済みversion／capabilityに加え、現在実行中の`sourceId`、source
+`integrity`、単調増加するexecution `generation`だけを返します。commit ackが失われた場合、hostは新しい
+sessionで再handshakeし、この二値でcommit済みかを照合します。台本本文、runtime変数、restart choiceは
+handshakeへ含めません。
+
+source更新はsession内で単調増加する`revision`を付けて`preview.source.stage`として送り、runtime受理順に
+直列化します。stage ackが返すcandidate IDは同じ`sessionId`と`revision`にだけ有効です。
+`preview.source.commit`はcandidate ID、revision、`storyStart`／`currentScene`／`currentAction`のchoiceが
+すべて一致した場合だけ受理し、ackへ実行中integrityと新しいgenerationを返します。重複・逆行revision、
+旧sessionのcandidate、切断中commitは拒否します。
+
+graceful stop、host crash、transport切断はいずれもprotocolのdisconnectへ収束させます。disconnectは
+pending／deferred candidateとcandidate診断だけを破棄し、現在のruntimeを停止・巻き戻ししません。再接続は
+revisionを1から再開し、必要なsourceを新sessionへ再stageします。session token、Origin、loopback bind、
+project root外file拒否はtransport層の責務であり、このpure session coreには含めません。
+
 ## 11. 独立capability projectとKamishibai Bundle
 
 ### 11.0 現行Bundle契約 `[現行事実]`
