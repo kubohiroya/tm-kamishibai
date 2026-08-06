@@ -29,6 +29,11 @@ export {
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
 export {
+  dsl4PreviewTransportLimits,
+  createDsl4PreviewTransportPolicy,
+  dsl4PreviewTransportTokenBytes,
+} from './dsl4-preview-transport-policy.js';
+export {
   Dsl4ValidationInternalError,
   formatDsl4Diagnostic,
   serializeDsl4ValidationResult,
