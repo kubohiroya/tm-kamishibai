@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "handlers": [
+    {
+      "name": "implicit-no-argument",
+      "expectedOverhead": 1,
+      "blocks": [{"opcode": "whenCustomAction"}, {"opcode": "looks_say", "role": "performance"}]
+    },
+    {
+      "name": "target-reporter",
+      "expectedOverhead": 2,
+      "blocks": [
+        {"opcode": "whenCustomAction"},
+        {"opcode": "currentActionTarget"},
+        {"opcode": "motion_goto", "role": "performance"}
+      ]
+    },
+    {
+      "name": "required-argument",
+      "expectedOverhead": 2,
+      "blocks": [
+        {"opcode": "whenCustomAction"},
+        {"opcode": "currentActionArgument"},
+        {"opcode": "motion_glidesecstoxy", "role": "performance"}
+      ]
+    },
+    {
+      "name": "optional-argument",
+      "expectedOverhead": 4,
+      "blocks": [
+        {"opcode": "whenCustomAction"},
+        {"opcode": "currentActionHasArgument"},
+        {"opcode": "currentActionArgument"},
+        {"opcode": "control_if"},
+        {"opcode": "looks_say", "role": "performance"}
+      ]
+    },
+    {
+      "name": "explicit-complete",
+      "expectedOverhead": 2,
+      "blocks": [
+        {"opcode": "whenCustomAction"},
+        {"opcode": "completeCurrentAction"},
+        {"opcode": "looks_hide", "role": "performance"}
+      ]
+    },
+    {
+      "name": "explicit-fail",
+      "expectedOverhead": 2,
+      "blocks": [{"opcode": "whenCustomAction"}, {"opcode": "failCurrentAction"}]
+    },
+    {
+      "name": "explicit-goto",
+      "expectedOverhead": 2,
+      "blocks": [{"opcode": "whenCustomAction"}, {"opcode": "gotoFromCurrentAction"}]
+    }
+  ]
+}
