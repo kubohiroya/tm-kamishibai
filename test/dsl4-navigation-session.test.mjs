@@ -107,6 +107,37 @@ scenes:
   await staleRun;
 });
 
+test('passes a planned action and variable snapshot through the public session start', async () => {
+  const calls = [];
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+variables:
+  score: 1
+scenes:
+  opening:
+    - wait: 1
+    - wait: 2
+`);
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    port: {
+      wait: async (payload, context) => calls.push([payload.seconds, context.getVariable('score')]),
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+
+  const state = await created.session.start({
+    sceneId: 'opening',
+    actionIndex: 1,
+    variables: {score: 9},
+  });
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(calls, [[2, 9]]);
+  assert.equal(created.session.getState().history, null);
+});
+
 test('history profile requires availability and explicit finite limits', () => {
   const story = parseStory(`
 kamishibai: '4.0'

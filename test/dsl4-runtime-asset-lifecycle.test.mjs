@@ -78,6 +78,35 @@ scenes:
     - sound: NextSound
 `;
 
+test('starts at a planned action after asset startup without replaying earlier actions', async () => {
+  const effects = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(lifecycleStory),
+    port: {
+      stage: async () => effects.push('stage'),
+      sound: async () => effects.push('sound'),
+    },
+    assetLifecycle: {
+      prepare: async () => {},
+      setLoading: async () => {},
+      releaseAssets: async () => {},
+      release: async () => {},
+    },
+  });
+
+  const state = await controller.start({sceneId: 'next', actionIndex: 1});
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(effects, ['sound']);
+  assert.equal(
+    controller
+      .getTrace()
+      .some(
+        ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/next/actions/0',
+      ),
+    false,
+  );
+});
+
 test('preloads the resolved target before transition and waits behind Loading', async () => {
   const pendingScene = deferred();
   const calls = [];

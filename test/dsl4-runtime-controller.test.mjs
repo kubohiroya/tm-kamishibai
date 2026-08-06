@@ -765,6 +765,93 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('starts a replacement runtime at one planned action with migrated variables', async () => {
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 1
+  hero: Alice
+scenes:
+  opening:
+    - wait: 1
+    - wait: 2
+    - wait: 3
+`),
+    port: {
+      wait: async (payload, context) => {
+        calls.push({seconds: payload.seconds, variables: context.variables});
+      },
+    },
+  });
+
+  const state = await controller.start({
+    sceneId: 'opening',
+    actionIndex: 1,
+    variables: {score: 42, hero: 'Bob'},
+  });
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(calls, [
+    {seconds: 2, variables: {score: 42, hero: 'Bob'}},
+    {seconds: 3, variables: {score: 42, hero: 'Bob'}},
+  ]);
+  assert.deepEqual(state.variables, {score: 42, hero: 'Bob'});
+  assert.equal(
+    controller
+      .getTrace()
+      .some(
+        ({type, actionPath}) =>
+          type === 'action.start' && actionPath === '/scenes/opening/actions/0',
+      ),
+    false,
+  );
+});
+
+test('rejects invalid replacement state before cancelling the active action', async () => {
+  const pending = deferred();
+  let activeSignal;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 1
+scenes:
+  opening:
+    - wait: 1
+    - wait: 2
+`),
+    port: {
+      wait: (_payload, context) => {
+        activeSignal = context.signal;
+        return pending.promise;
+      },
+    },
+  });
+  const run = controller.start();
+  await Promise.resolve();
+  assert.equal(activeSignal.aborted, false);
+
+  assert.throws(
+    () => controller.start({sceneId: 'opening', actionIndex: 9, variables: {score: 2}}),
+    /Invalid runtime start position/u,
+  );
+  assert.throws(
+    () => controller.start({sceneId: 'opening', actionIndex: 1, variables: {score: 'wrong'}}),
+    /wrong type/u,
+  );
+  assert.throws(
+    () => controller.start({sceneId: 'opening', actionIndex: 1, variables: {score: 2, extra: 1}}),
+    /match every declared story variable/u,
+  );
+  assert.equal(controller.getState().status, 'running');
+  assert.equal(activeSignal.aborted, false);
+
+  controller.stop('test-cleanup');
+  pending.resolve();
+  await run;
+});
+
 test('keeps variables outside StoryDocument and rejects stale or mistyped writes', async () => {
   const story = parseStory(`
 kamishibai: '4.0'
