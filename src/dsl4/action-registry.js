@@ -1,6 +1,7 @@
 const identifierPattern = /^[\p{L}_][\p{L}\p{N}_-]*$/u;
 const parameterTypes = new Set(['string', 'number', 'boolean']);
-const entryKeys = new Set(['name', 'target', 'parameters', 'source']);
+const quiesceModes = new Set(['finish-only', 'cancel-replay-safe']);
+const entryKeys = new Set(['name', 'target', 'parameters', 'quiesce', 'source']);
 const parameterKeys = new Set(['name', 'type', 'required']);
 const sourceKeys = new Set(['targetId', 'hatBlockId']);
 const snapshotKeys = new Set(['kind', 'version', 'actions']);
@@ -214,6 +215,14 @@ export function createDsl4ActionRegistrySnapshot(inputEntries) {
       };
     });
 
+    const quiesce = inputEntry.quiesce ?? 'finish-only';
+    if (typeof quiesce !== 'string' || !quiesceModes.has(quiesce)) {
+      throw new Dsl4ActionRegistryError(
+        'K4-REGISTRY-QUIESCE-001',
+        `Custom action ${name} quiesce must be finish-only or cancel-replay-safe`,
+      );
+    }
+
     if (!isRecord(inputEntry.source)) {
       throw new Dsl4ActionRegistryError(
         'K4-REGISTRY-SNAPSHOT-001',
@@ -228,6 +237,7 @@ export function createDsl4ActionRegistrySnapshot(inputEntries) {
       name,
       target: 'actor',
       parameters,
+      quiesce,
       source: {
         targetId: requireSourceId(inputEntry.source.targetId, `Custom action ${name} targetId`),
         hatBlockId: requireSourceId(
@@ -239,7 +249,7 @@ export function createDsl4ActionRegistrySnapshot(inputEntries) {
   });
 
   actions.sort(({name: left}, {name: right}) => (left < right ? -1 : left > right ? 1 : 0));
-  return deepFreeze({kind: 'ActionRegistrySnapshot', version: 1, actions});
+  return deepFreeze({kind: 'ActionRegistrySnapshot', version: 2, actions});
 }
 
 export const dsl4EmptyActionRegistrySnapshot = createDsl4ActionRegistrySnapshot([]);
@@ -261,7 +271,10 @@ export function validateDsl4ActionRegistrySnapshot(inputSnapshot) {
     'version',
     'actions',
   ]);
-  if (inputSnapshot.kind !== 'ActionRegistrySnapshot' || inputSnapshot.version !== 1) {
+  if (
+    inputSnapshot.kind !== 'ActionRegistrySnapshot' ||
+    (inputSnapshot.version !== 1 && inputSnapshot.version !== 2)
+  ) {
     throw new Dsl4ActionRegistryError(
       'K4-REGISTRY-SNAPSHOT-001',
       'Action Registry Snapshot kind or version is unsupported',
@@ -279,10 +292,15 @@ export function validateDsl4ActionRegistrySnapshot(inputSnapshot) {
         (parameter) => isRecord(parameter) && Object.hasOwn(parameter, 'required'),
       ),
   );
-  if (!hasCanonicalActionOrder || !hasNormalizedParameters) {
+  const hasNormalizedQuiesce = inputActions.every((action, index) =>
+    inputSnapshot.version === 1
+      ? !Object.hasOwn(action, 'quiesce')
+      : action.quiesce === canonical.actions[index]?.quiesce,
+  );
+  if (!hasCanonicalActionOrder || !hasNormalizedParameters || !hasNormalizedQuiesce) {
     throw new Dsl4ActionRegistryError(
       'K4-REGISTRY-SNAPSHOT-001',
-      'Action Registry Snapshot must use canonical action order and normalized parameter fields',
+      'Action Registry Snapshot must use canonical action order and normalized fields',
     );
   }
   return canonical;

@@ -250,6 +250,11 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | D-41 | 決定済み | Scratch facadeはscalarとreferenceのquery reporterを分離する              |
 | D-42 | 決定済み | Iterator終端後のnextはidempotentに`done`を返す                           |
 | D-43 | 決定済み | ExceptionRefはAdapter固有の`@sdx1` tokenとしCore handleから分離する      |
+| D-44 | 決定済み | custom handlerのprimary thread正常終了を暗黙completeとする               |
+| D-45 | 決定済み | ActionContextはprimary thread単位としbroadcast／cloneへ暗黙伝播しない    |
+| D-46 | 決定済み | custom actionのquiesce既定を`finish-only`とする                          |
+| D-47 | 決定済み | reload planはaction cleanup後のQuiesceTokenから作る                      |
+| D-48 | 決定済み | Esc再開でも位置以外のruntime stateと副作用を巻き戻さない                 |
 | P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする              |
 | P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する              |
 | P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う           |
@@ -1237,7 +1242,12 @@ releaseし、realm disposeは全状態を一括して無効にする。
 
 ## 9. Scratch Action Registry
 
-### 9.1 教育的な目的 `[決定済み]`
+handler検出、Snapshot v2、thread context、terminal outcome、action scope、clone／並行実行、block budget、
+live reload quiesceとraceの正本は
+[`DSL 4.0 Scratch Action Registry handler契約`](dsl-4-action-registry.md)とする。以下は要約であり、
+矛盾する場合は専用文書を優先する。
+
+### 9.1 教育的な目的 `[決定済み #264]`
 
 4.0ではJavaScriptパーサーへ一本化しますが、DSLの拡張方法までJavaScriptだけに閉じません。
 Scratch利用者が新しいアクションを定義し、台本から呼び出せる仕組みを提供します。
@@ -1262,10 +1272,12 @@ Scratch側の概念例:
   現在のactionのtargetを読む
   現在のactionの引数を読む
   Scratchブロックで演出する
-  現在のactionを完了する
+  [必要な場合だけ] 現在のactionを明示的に完了／失敗／gotoする
 ```
 
-### 9.2 登録方法 `[決定済み／詳細提案]`
+primary handler threadの正常終了は暗黙completeとし、単純handlerへterminal blockを要求しない。
+
+### 9.2 登録方法 `[決定済み #264]`
 
 カスタムaction用hat blockをproject内から検出し、台本のパース前にRegistry Snapshotを作ります。
 
@@ -1276,31 +1288,32 @@ when kamishibai action [wave]
 hatの存在自体を登録とみなすため、別の初期化scriptで登録blockを実行する必要がありません。
 green flag時に明示的な`register action` blockを実行する方式は、作者の初期化作業、実行順依存、
 登録漏れを増やすため標準方式に採用しません。hat検出adapterはaction名、actor target、parameter宣言、
-検出元のtarget／hat block IDを一つのRegistry Snapshotへ固定します。宣言UIの具体的なScratch block形状は
-adapter実装で確定しますが、coreへ渡すsnapshot形式と検証規則は9.4の通りです。
+quiesce mode、検出元のoriginal target／hat block IDを一つのRegistry Snapshotへ固定します。clone上のhatを
+登録またはdispatchせず、同名のoriginal handlerが複数あればsnapshot全体を拒否します。
 
-### 9.3 dispatchとthread context `[提案]`
+### 9.3 dispatchとthread context `[決定済み #264]`
 
-1. runtimeが`wave` handlerに対応するhatを`startHats`で開始する
-2. 開始した各Scratch threadへActionContext referenceを関連付ける
+1. runtimeがsnapshotに固定したoriginal target／hatだけを開始する
+2. exactly oneのprimary Scratch threadへActionInvocationを関連付ける
 3. handler内の`current action` reporterは`util.thread`から対応contextを解決する
 4. handlerは専用reporterを優先してtargetと引数を読み、上級用途だけActionViewをJSONPathで読む
-5. `complete`、`fail`、`goto`のいずれかで制御をruntimeへ返す
-6. thread終了とaction scope解放を確認する
+5. normal endまたは`complete`、`fail`、`goto`の最初のterminal outcomeを固定する
+6. thread停止、context unbind、action scope解放後にoutcomeをruntimeへ返す
 
-単一のグローバル`currentAction`変数だけに依存しないため、cloneや将来の並行処理でも
-contextが混ざりにくくなります。
+単一のグローバル`currentAction`変数を使わない。通常broadcastのreceiver、clone、別hatへcontextを暗黙に
+伝播せず、別runtime sessionはAdapter、WeakMap、scope、timeoutを共有しない。
 
-### 9.4 Registryが保持する情報 `[決定済み]`
+### 9.4 Registryが保持する情報 `[決定済み #264]`
 
 ```json
 {
   "name": "wave",
   "target": "actor",
   "parameters": [
-    {"name": "speed", "type": "string"},
-    {"name": "count", "type": "number"}
+    {"name": "speed", "type": "string", "required": true},
+    {"name": "count", "type": "number", "required": false}
   ],
+  "quiesce": "finish-only",
   "source": {
     "targetId": "...",
     "hatBlockId": "..."
@@ -1311,7 +1324,8 @@ contextが混ざりにくくなります。
 初版のparameter typeは`string`、`number`、`boolean`です。各parameterは`required`を持ち、省略時は
 `true`へ正規化します。台本ではparameterを`arguments` mappingへ名前付きで書き、位置listを許可しません。
 未宣言parameter、必須parameter欠落、型不一致を実行前に拒否します。snapshotはaction名順に固定し、
-一つのparse／runtime generation中は不変です。
+一つのparse／runtime generation中は不変です。Snapshot v1は`quiesce`なしのlegacy入力として読み、
+`finish-only`を追加したv2へ正規化します。
 
 ### 9.5 名前衝突 `[決定済み]`
 
@@ -1320,24 +1334,37 @@ contextが混ざりにくくなります。
 - 同名handlerと同一action内のparameter名重複をsnapshot生成errorにする
 - action名とparameter名はDSL ID規則およびUnicode NFCに従う
 
-### 9.6 custom actionの作者工数budget `[決定済み]`
+### 9.6 custom actionの作者工数budget `[決定済み #264]`
 
 custom action一件に必要な定型blockは、演出本体を除いて8個以下にします。単純なhandlerでは次の
-2〜4個を標準とします。
+1〜3個を標準とします。
 
 ```text
 when kamishibai action [wave]
   [必要な場合だけ] current action argument [speed]
   Scratchで作品固有の演出を行う
-  complete current action
+  [途中終了だけ] complete current action
 ```
 
 別の登録script、初期化用broadcast、action index、Temporary Variables、完了待ちloop、明示的なscope
-解放は要求しません。`complete`を省略してthread正常終了を暗黙完了とみなすかは未決ですが、どちらを
-採用しても定型block数を増やさないことを判断基準にします。
+解放は要求しません。primary threadの正常終了を暗黙completeとするため、演出を最後まで実行するhandlerへ
+`complete`を追加しません。
 
 同じcustom actionが複数作品で繰り返し利用され、DSL記述だけでは作品を作れない状況になった場合は、
 次のminor versionでcore actionまたは再利用可能capabilityへ昇格する候補として記録します。
+
+### 9.7 live reload safe boundary `[決定済み #264]`
+
+custom actionはhat mutationで`finish-only`または`cancel-replay-safe`を宣言し、省略時は安全側の
+`finish-only`とします。candidate検証後はdispatch gateを閉じ、新actionを開始しません。
+
+- `finish-only`: 現actionをterminalまで続け、次action開始前でpauseする
+- `cancel-replay-safe`: 現actionをcancel／cleanupし、同action先頭でpauseする
+
+thread停止とaction scope解放後にQuiesceTokenでanchorを固定し、その後でreload planと1／2／3 choiceを
+作ります。Escは旧snapshotをTokenのresume位置から再開します。execution position以外のruntime variable、
+presentation、外部副作用は巻き戻しません。stop、timeout、candidate replacement、commit、Escの競合は
+session operation queueで直列化し、cleanup不能時にcurrent scene／action choiceを黙って有効にしません。
 
 ## 10. 実行制御
 
@@ -2304,7 +2331,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [x] custom action登録はhat検出とし、明示的register blockを要求しない
 - [x] custom actionのparameter schemaをRegistry Snapshotで宣言し、初版をscalar型に限定する
 - [x] custom action名へnamespaceを要求せず、project内の短い一意名を許可する
-- [ ] handlerが`complete`を呼ばず終了した場合の扱い
+- [x] handlerが`complete`を呼ばず終了した場合の扱い
 - [x] 複数handlerが同じaction名を登録した場合はsnapshot生成errorにする
 
 ### 互換性と配布

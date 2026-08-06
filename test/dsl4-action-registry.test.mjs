@@ -50,8 +50,21 @@ test('creates a deterministic immutable Action Registry Snapshot', () => {
     {name: 'speed', type: 'string', required: true},
     {name: 'count', type: 'number', required: false},
   ]);
+  assert.equal(registry.version, 2);
+  assert.equal(registry.actions[0].quiesce, 'finish-only');
+  assert.equal(registry.actions[1].quiesce, 'finish-only');
   assertDeepFrozen(registry);
   assert.deepEqual(validateDsl4ActionRegistrySnapshot(registry), registry);
+
+  const legacy = JSON.parse(JSON.stringify(registry));
+  legacy.version = 1;
+  for (const action of legacy.actions) delete action.quiesce;
+  assert.deepEqual(validateDsl4ActionRegistrySnapshot(legacy), registry);
+
+  const replaySafe = createDsl4ActionRegistrySnapshot([
+    {...registryEntry('replaySafe'), quiesce: 'cancel-replay-safe'},
+  ]);
+  assert.equal(replaySafe.actions[0].quiesce, 'cancel-replay-safe');
 });
 
 test('rejects invalid, colliding, duplicate, and non-canonical registrations', () => {
@@ -69,6 +82,7 @@ test('rejects invalid, colliding, duplicate, and non-canonical registrations', (
     ],
     [registryEntry('wave', [{name: 'speed', type: 'object'}])],
     [registryEntry('wave', [{name: 'speed', type: 'string', required: 'yes'}])],
+    [{...registryEntry('wave'), quiesce: 'pause-anywhere'}],
   ];
   for (const entries of invalidEntries) {
     assert.throws(
@@ -88,6 +102,14 @@ test('rejects invalid, colliding, duplicate, and non-canonical registrations', (
   nonCanonical.actions.reverse();
   assert.throws(
     () => validateDsl4ActionRegistrySnapshot(nonCanonical),
+    (error) =>
+      error instanceof Dsl4ActionRegistryError && error.code === 'K4-REGISTRY-SNAPSHOT-001',
+  );
+
+  const nonCanonicalQuiesce = JSON.parse(JSON.stringify(registry));
+  delete nonCanonicalQuiesce.actions[0].quiesce;
+  assert.throws(
+    () => validateDsl4ActionRegistrySnapshot(nonCanonicalQuiesce),
     (error) =>
       error instanceof Dsl4ActionRegistryError && error.code === 'K4-REGISTRY-SNAPSHOT-001',
   );

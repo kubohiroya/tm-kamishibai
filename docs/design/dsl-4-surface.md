@@ -464,12 +464,17 @@ target actorとaction名を`Actor.action`で表し、異なる役割を持つ引
     {"name": "speed", "type": "string", "required": true},
     {"name": "count", "type": "number", "required": false}
   ],
+  "quiesce": "finish-only",
   "source": {"targetId": "...", "hatBlockId": "..."}
 }
 ```
 
 parameter typeは初版では`string`、`number`、`boolean`に限定します。`required`を省略してsnapshotを
 生成する場合は`true`へ正規化します。台本の未宣言引数、必須引数の欠落、型不一致は実行前のerrorです。
+
+`quiesce`はlive reload時のhandler停止契約であり、`finish-only`または`cancel-replay-safe`を取ります。
+省略時は副作用を重複させない安全側の`finish-only`へ正規化します。この値はhatのdeveloper向け設定で
+宣言し、台本製作者が作品ごとに指定する項目にはしません。
 
 action名とparameter名は通常のDSL ID規則とUnicode NFCに従います。短いaction名を許可し、namespaceは
 必須にしません。その代わりproject内でaction名を一意にし、同名handler、parameter重複、全core action名
