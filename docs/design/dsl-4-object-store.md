@@ -13,7 +13,8 @@
 - realm、slot generation、handle stateにより古い参照を拒否する
 
 Temporary Variables、Scratch runtime variable、IndexedDBは正本にしない。JSONPath、Iterator、Scratchの
-visible blockは本書の上に構築し、それぞれIssue #261で定義する。
+visible blockは本書の上に構築し、
+[`Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)で定義する。
 
 ## 2. 用語と型
 
@@ -45,8 +46,9 @@ JavaScript object identityの共有、構造cycleは受理しない。
 しても所有権は増えず、いずれかのaliasから`free`した時点で全aliasがstaleになる。
 
 `ExceptionRef`はCoreのobject handleではなく、TurboWarp Adapterが`StoreResult.error`をScratch scalarへ
-投影する場合だけ作る。符号化、predicate、diagnostic reporter、expiryはIssue #261で定義し、Coreの
-`@os1` handle tableへ登録しない。Adapter上ではactiveからreleaseまたはexpiryによりexpiredへ遷移する。
+投影する場合だけ作る。符号化、predicate、diagnostic reporter、expiryは
+[`Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)で定義し、Coreの`@os1` handle
+tableへ登録しない。Adapter上ではactiveからreleaseまたはexpiryによりexpiredへ遷移する。
 
 ## 3. opaque handle
 
@@ -264,7 +266,8 @@ rollbackを確認する。内部invariant failureだけはdata rootを変更せ�
 
 標準Kamishibai RuntimeはCore APIをJavaScriptから直接呼び、scopeとleaseを自動解放する。標準作者paletteと
 標準SB3にはnew、query、copy lease、release、free、scope、debug blockを登録しない。Standalone／developer
-surfaceはIssue #261で別extension IDとflagへ分離する。
+surfaceは[`Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)で別extension IDとflagへ
+分離する。
 
 ### 10.2 live reload transfer
 

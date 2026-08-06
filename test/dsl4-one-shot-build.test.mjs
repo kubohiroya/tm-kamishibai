@@ -83,6 +83,18 @@ function baseProject() {
   };
 }
 
+function structuredDataSurface(project) {
+  const prefix = 'kubohiroyastructdata1';
+  return {
+    extensionIds: Object.keys(project.extensionStorage ?? {}).filter((id) => id.startsWith(prefix)),
+    opcodes: project.targets.flatMap((target) =>
+      Object.values(target.blocks ?? {})
+        .map((block) => block?.opcode)
+        .filter((opcode) => typeof opcode === 'string' && opcode.startsWith(prefix)),
+    ),
+  };
+}
+
 function baseSb3(project = baseProject()) {
   return Buffer.from(
     zipSync({
@@ -142,6 +154,7 @@ test('builds and startup-validates one deterministic self-contained component pe
       assert.deepEqual(input, inputCopy);
       assert.deepEqual(first.bytes, second.bytes);
       assert.deepEqual(first.project.targets, baseProject().targets);
+      assert.deepEqual(structuredDataSurface(first.project), {extensionIds: [], opcodes: []});
       assert.equal(first.runtimeComponent.ok, true);
       assert.equal(first.runtimeComponent.channel, channel);
       assert.equal(Object.isFrozen(first), true);
