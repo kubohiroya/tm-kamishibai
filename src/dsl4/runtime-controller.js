@@ -69,12 +69,12 @@ function storyPathSegment(value) {
 
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
- * @param {string | null} actionPath
+ * @param {string | null} storyPath
  * @param {string} code
  * @param {string} message
  * @returns {Readonly<Record<string, unknown>>}
  */
-function runtimeDiagnostic(storyDocument, actionPath, code, message) {
+function runtimeDiagnostic(storyDocument, storyPath, code, message) {
   const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
   const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
   return deepFreeze({
@@ -83,8 +83,8 @@ function runtimeDiagnostic(storyDocument, actionPath, code, message) {
     severity: 'error',
     message,
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: actionPath ? (sourceMap[actionPath] ?? sourceMap['/']) : sourceMap['/'],
-    ...(actionPath ? {storyPath: actionPath} : {}),
+    range: storyPath ? (sourceMap[storyPath] ?? sourceMap['/']) : sourceMap['/'],
+    ...(storyPath ? {storyPath} : {}),
     related: [],
   });
 }
@@ -93,7 +93,7 @@ function runtimeDiagnostic(storyDocument, actionPath, code, message) {
  * @param {object} options
  * @param {Readonly<Record<string, unknown>>} options.storyDocument
  * @param {Record<string, Function>} options.port
- * @param {{prepare: Function, setLoading: Function, release: Function}} [options.assetLifecycle]
+ * @param {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.assetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: ActionContext) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  */
@@ -340,14 +340,34 @@ export function createDsl4RuntimeController({
   }
 
   /**
-   * Start target preparation before publishing the scene transition.
+   * Prepare the target while the current scene remains committed, then publish the transition.
    *
    * @param {string} sceneId
    * @param {string} reason
+   * @param {number} activeRunId
+   * @returns {Promise<boolean>}
    */
-  function enterScene(sceneId, reason) {
-    assetCoordinator?.beginScene(sceneId, generation);
+  async function enterScene(sceneId, reason, activeRunId) {
+    if (assetCoordinator) {
+      assetCoordinator.beginScene(sceneId, generation);
+      const readiness = await assetCoordinator.waitForScene(sceneId);
+      if (runId !== activeRunId || status !== 'running') return false;
+      if (!readiness.ok) {
+        if (!readiness.cancelled) fail(readiness.error);
+        return false;
+      }
+    }
     transitionTo(sceneId, reason);
+    if (assetCoordinator) {
+      try {
+        await assetCoordinator.commitScene(sceneId, 'scene-transition');
+      } catch (error) {
+        if (runId === activeRunId && status === 'running') fail(error);
+        return false;
+      }
+      if (runId !== activeRunId || status !== 'running') return false;
+    }
+    return true;
   }
 
   /**
@@ -473,7 +493,14 @@ export function createDsl4RuntimeController({
         ? /** @type {Record<string, unknown>} */ (error)
         : {};
     const code = typeof errorRecord.code === 'string' ? errorRecord.code : 'K4-RUNTIME-ACTION-001';
-    failureDiagnostic = runtimeDiagnostic(storyDocument, actionPath, code, safeErrorMessage(error));
+    const errorStoryPath =
+      typeof errorRecord.storyPath === 'string' ? errorRecord.storyPath : actionPath;
+    failureDiagnostic = runtimeDiagnostic(
+      storyDocument,
+      errorStoryPath,
+      code,
+      safeErrorMessage(error),
+    );
     emit('runtime.fail', {code});
   }
 
@@ -496,6 +523,15 @@ export function createDsl4RuntimeController({
             if (!readiness.cancelled) fail(readiness.error);
             break;
           }
+          if (readiness.prepared) {
+            try {
+              await assetCoordinator.commitScene(String(scene.id), 'scene-resume');
+            } catch (error) {
+              if (runId === activeRunId && status === 'running') fail(error);
+              break;
+            }
+            if (runId !== activeRunId || status !== 'running') break;
+          }
         }
         const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
           scene.actions
@@ -507,7 +543,11 @@ export function createDsl4RuntimeController({
             emit('runtime.finish');
             break;
           }
-          enterScene(String(scenes[currentSceneIndex + 1].id), 'sequential');
+          if (
+            !(await enterScene(String(scenes[currentSceneIndex + 1].id), 'sequential', activeRunId))
+          ) {
+            break;
+          }
           continue;
         }
 
@@ -528,7 +568,9 @@ export function createDsl4RuntimeController({
         if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
         emit('action.commit');
         actionAbortController = null;
-        if (transition) enterScene(transition.sceneId, transition.reason);
+        if (transition && !(await enterScene(transition.sceneId, transition.reason, activeRunId))) {
+          break;
+        }
       }
     } finally {
       if (runId === activeRunId) {
@@ -553,7 +595,7 @@ export function createDsl4RuntimeController({
         if (!readiness.cancelled) fail(readiness.error);
         return snapshot();
       }
-      enterScene(entrySceneId, 'start');
+      if (!(await enterScene(entrySceneId, 'start', activeRunId))) return snapshot();
       delegatedToRun = true;
       return await run(activeRunId);
     } finally {
@@ -658,8 +700,16 @@ export function createDsl4RuntimeController({
         toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
         reason,
       });
-      enterScene(nextSceneId, reason);
-      runPromise = run(runId);
+      const activeRunId = runId;
+      if (!assetCoordinator) {
+        transitionTo(nextSceneId, reason);
+        runPromise = run(activeRunId);
+        return runPromise;
+      }
+      runPromise = (async () => {
+        if (!(await enterScene(nextSceneId, reason, activeRunId))) return snapshot();
+        return run(activeRunId);
+      })();
       return runPromise;
     }
 
@@ -754,10 +804,19 @@ export function createDsl4RuntimeController({
     actionAbortController?.abort(reason);
     generation += 1;
     if (action) emit('action.cancel', {reason});
-    enterScene(sceneId, reason);
-    currentActionIndex = actionIndex - 1;
     runId += 1;
-    runPromise = run(runId);
+    const activeRunId = runId;
+    if (!assetCoordinator) {
+      transitionTo(sceneId, reason);
+      currentActionIndex = actionIndex - 1;
+      runPromise = run(activeRunId);
+      return runPromise;
+    }
+    runPromise = (async () => {
+      if (!(await enterScene(sceneId, reason, activeRunId))) return snapshot();
+      currentActionIndex = actionIndex - 1;
+      return run(activeRunId);
+    })();
     return runPromise;
   }
 

@@ -39,6 +39,14 @@ scenes:
     - wait: 0
 `;
 
+async function waitUntil(predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.fail('condition was not reached');
+}
+
 function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
@@ -179,6 +187,9 @@ test('creates a component-aware asset lifecycle after validation and releases it
           setLoading(payload, context) {
             calls.push(['setLoading', payload, context]);
           },
+          releaseAssets(payload) {
+            calls.push(['releaseAssets', payload]);
+          },
           release(payload) {
             calls.push(['release', payload]);
           },
@@ -209,8 +220,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
     ['create', 'prepare'],
   );
   result.session.dispose();
-  await Promise.resolve();
-  await Promise.resolve();
+  await waitUntil(() => calls.some(([name]) => name === 'release'));
   assert.deepEqual(
     calls.map(([name]) => name),
     ['create', 'prepare', 'release'],
@@ -222,7 +232,7 @@ test('rejects conflicting or invalid asset lifecycle factories before publishing
   await assert.rejects(
     createDsl4RuntimeStartup(
       enabledOptions(component.project, {
-        assetLifecycle: {prepare() {}, setLoading() {}, release() {}},
+        assetLifecycle: {prepare() {}, setLoading() {}, releaseAssets() {}, release() {}},
         createAssetLifecycle() {},
       }),
     ),
@@ -238,13 +248,13 @@ test('rejects conflicting or invalid asset lifecycle factories before publishing
     createDsl4RuntimeStartup(
       enabledOptions(component.project, {createAssetLifecycle: () => ({prepare() {}})}),
     ),
-    /must provide prepare, setLoading, and release/u,
+    /must provide prepare, setLoading, releaseAssets, and release/u,
   );
   await assert.rejects(
     createDsl4RuntimeStartup(
       enabledOptions(component.project, {createAssetLifecycle: () => undefined}),
     ),
-    /must provide prepare, setLoading, and release/u,
+    /must provide prepare, setLoading, releaseAssets, and release/u,
   );
 });
 
@@ -259,6 +269,7 @@ test('creates isolated lifecycle instances for separate startups', async () => {
     return {
       prepare() {},
       setLoading() {},
+      releaseAssets() {},
       release() {
         releases.push(current);
       },
@@ -278,8 +289,7 @@ test('creates isolated lifecycle instances for separate startups', async () => {
   await second.session.start();
   first.session.dispose();
   second.session.dispose();
-  await Promise.resolve();
-  await Promise.resolve();
+  await waitUntil(() => releases.length === 2);
   assert.deepEqual(releases.sort(), [1, 2]);
 });
 
@@ -302,7 +312,7 @@ test('creates an atomic runtime environment only after component validation', as
       calls.push('create');
       return {
         port: {wait() {}},
-        assetLifecycle: {prepare() {}, setLoading() {}, release() {}},
+        assetLifecycle: {prepare() {}, setLoading() {}, releaseAssets() {}, release() {}},
         dispose(reason) {
           calls.push(`dispose:${reason}`);
         },
@@ -471,6 +481,9 @@ test('creates but does not auto-start or attach a production navigation session'
     setLoading(payload, context) {
       calls.push(['setLoading', payload, context]);
     },
+    releaseAssets(payload) {
+      calls.push(['releaseAssets', payload]);
+    },
     release(payload) {
       calls.push(['release', payload]);
     },
@@ -508,8 +521,7 @@ test('creates but does not auto-start or attach a production navigation session'
     true,
   );
   result.session.dispose();
-  await Promise.resolve();
-  await Promise.resolve();
+  await waitUntil(() => calls.some(([name]) => name === 'release'));
   assert.equal(
     calls.some(([name]) => name === 'release'),
     true,
@@ -521,7 +533,7 @@ test('uses artifact history activation and requires availability plus finite lim
   let factoryCalls = 0;
   const createAssetLifecycle = () => {
     factoryCalls += 1;
-    return {prepare() {}, setLoading() {}, release() {}};
+    return {prepare() {}, setLoading() {}, releaseAssets() {}, release() {}};
   };
   const unavailable = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {createAssetLifecycle}),

@@ -1,10 +1,15 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 
-import {createDsl4EmbeddedAssetLifecycle} from '../embedded-asset-lifecycle.js';
+import {
+  createDsl4EmbeddedAssetLifecycle,
+  createDsl4RemoteAssetLifecycle,
+} from '../embedded-asset-lifecycle.js';
+import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
+import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -104,6 +109,11 @@ function disposedError() {
  * @param {unknown} options.runtimeComponent
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
+ * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
+ * @param {unknown} [options.cacheIdentity]
+ * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
+ * @param {Readonly<Record<string, unknown>>} [options.poseArchiveLimits]
+ * @param {{digest: Function}} [options.subtleCrypto]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
@@ -120,9 +130,42 @@ export function createDsl4PlatformAssetSession(options) {
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
   }
+  if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
+    throw new TypeError('loadRemoteAsset must be a function');
+  }
+  const remoteEnabled = typeof options.loadRemoteAsset === 'function';
+  const remoteLoader = remoteEnabled ? /** @type {Function} */ (options.loadRemoteAsset) : null;
+  let cacheIdentity = null;
+  if (remoteEnabled) {
+    if (options.cacheIdentity === undefined) {
+      throw new TypeError('cacheIdentity must be an object when remote loading is enabled');
+    }
+    cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
+  }
+  const componentAssetBundle = /** @type {Record<string, any>} */ (runtimeComponent.assetBundle);
+  const remotePoseRequired = componentAssetBundle.manifest.assets.some(
+    /** @param {unknown} asset */ (asset) =>
+      isRecord(asset) &&
+      asset.kind === 'poseModel' &&
+      isRecord(asset.source) &&
+      asset.source.type === 'remote',
+  );
+  if (
+    options.verifiedRemoteCacheOptions !== undefined &&
+    !isRecord(options.verifiedRemoteCacheOptions)
+  ) {
+    throw new TypeError('verifiedRemoteCacheOptions must be an object');
+  }
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
   }
+  const poseArchiveExtractor =
+    remoteEnabled && remotePoseRequired
+      ? createDsl4PoseArchiveExtractor({
+          limits: options.poseArchiveLimits,
+          subtleCrypto: options.subtleCrypto,
+        })
+      : null;
   const createAssetManager =
     options.createAssetManagerComposition ?? createDefaultAssetManagerComposition;
   if (typeof createAssetManager !== 'function') {
@@ -148,24 +191,45 @@ export function createDsl4PlatformAssetSession(options) {
 
   const created = [];
   try {
-    const assetManagerCandidate = createAssetManager();
+    const assetManagerCandidate = remoteEnabled
+      ? createAssetManager(undefined, {
+          verifiedRemoteCache: {
+            ...options.verifiedRemoteCacheOptions,
+            cacheIdentity,
+          },
+        })
+      : createAssetManager();
     created.push(assetManagerCandidate);
+    const assetManagerMethods = [
+      'registerProjectAsset',
+      'registerEmbeddedAsset',
+      'releaseAsset',
+      'releaseAll',
+      'isRegistered',
+      'getMimeType',
+      'applyToStage',
+      'applyToTarget',
+      'playSound',
+      'stopSound',
+      'stopAllSounds',
+      ...(remoteEnabled
+        ? [
+            'resolveVerifiedRemoteBinary',
+            'getVerifiedRemoteCacheStats',
+            'pruneVerifiedRemoteCache',
+            'clearVerifiedRemoteCache',
+            'listVerifiedRemoteStoryCaches',
+            'pruneVerifiedRemoteStoryCaches',
+            'deleteVerifiedRemoteStoryCache',
+            'renewVerifiedRemoteStoryCacheLease',
+            'releaseVerifiedRemoteStoryCacheLease',
+          ]
+        : []),
+    ];
     const assetManagerComposition = validateCompositionMethods(
       assetManagerCandidate,
       'Asset Manager composition',
-      [
-        'registerProjectAsset',
-        'registerEmbeddedAsset',
-        'releaseAsset',
-        'releaseAll',
-        'isRegistered',
-        'getMimeType',
-        'applyToStage',
-        'applyToTarget',
-        'playSound',
-        'stopSound',
-        'stopAllSounds',
-      ],
+      assetManagerMethods,
     );
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
@@ -234,29 +298,140 @@ export function createDsl4PlatformAssetSession(options) {
       mediaAdapter,
       poseAdapter: tmpose.adapter,
     });
-    const embeddedLifecycle = createDsl4EmbeddedAssetLifecycle({
+    /** @type {Readonly<Record<string, unknown>>[]} */
+    const cacheWarnings = [];
+
+    /**
+     * @param {Readonly<Record<string, any>>} payload
+     * @param {Readonly<Record<string, any>>} context
+     */
+    async function resolveVerifiedRemoteAsset(payload, context) {
+      /**
+       * @param {Readonly<Record<string, any>>} input
+       * @param {Readonly<Record<string, any>>} loadContext
+       */
+      async function loadVerifiedRemote(input, loadContext) {
+        if (!remoteLoader) throw new TypeError('Remote loader is unavailable');
+        const loaded = await remoteLoader(
+          Object.freeze({assetId: payload.assetId, ...input}),
+          Object.freeze({...context, signal: loadContext.signal}),
+        );
+        if (!isRecord(loaded)) return loaded;
+        return {
+          bytes: loaded.bytes,
+          contentType: loaded.contentType,
+          ...(loaded.transferOwnership === true ? {transferOwnership: true} : {}),
+        };
+      }
+      const result = await assetManagerComposition.resolveVerifiedRemoteBinary(
+        {
+          url: payload.url,
+          integrity: payload.integrity,
+          size: payload.size,
+          contentType: payload.contentType,
+        },
+        {
+          signal: context.signal,
+          load: loadVerifiedRemote,
+        },
+      );
+      if (Array.isArray(result.cacheWarnings)) {
+        for (const warning of result.cacheWarnings) {
+          if (!isRecord(warning)) continue;
+          cacheWarnings.push(
+            Object.freeze({
+              assetId: payload.assetId,
+              storyPath: `/assets/${String(payload.assetId)
+                .replaceAll('~', '~0')
+                .replaceAll('/', '~1')}`,
+              operation: warning.operation,
+              code: warning.code,
+            }),
+          );
+        }
+        if (cacheWarnings.length > 128) cacheWarnings.splice(0, cacheWarnings.length - 128);
+      }
+      return result;
+    }
+    const lifecycleOptions = {
       runtimeComponent,
       adapter,
       setLoading: options.setLoading,
-    });
+      ...(remoteEnabled ? {resolveVerifiedRemoteAsset} : {}),
+      ...(poseArchiveExtractor ? {extractRemotePoseArchive: poseArchiveExtractor} : {}),
+    };
+    const assetLifecycle = remoteEnabled
+      ? createDsl4RemoteAssetLifecycle(lifecycleOptions)
+      : createDsl4EmbeddedAssetLifecycle(lifecycleOptions);
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
+    const verifiedRemoteCache = remoteEnabled
+      ? Object.freeze({
+          identity: cacheIdentity,
+          getWarnings() {
+            return Object.freeze([...cacheWarnings]);
+          },
+          takeWarnings() {
+            const warnings = Object.freeze([...cacheWarnings]);
+            cacheWarnings.length = 0;
+            return warnings;
+          },
+          renewLease() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.renewVerifiedRemoteStoryCacheLease();
+          },
+          releaseLease() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.releaseVerifiedRemoteStoryCacheLease();
+          },
+          getStats() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.getVerifiedRemoteCacheStats();
+          },
+          prune() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.pruneVerifiedRemoteCache();
+          },
+          clear() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.clearVerifiedRemoteCache();
+          },
+          listStoryCaches() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.listVerifiedRemoteStoryCaches();
+          },
+          pruneStoryCaches() {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.pruneVerifiedRemoteStoryCaches();
+          },
+          /** @param {string} databaseName */
+          deleteStoryCache(databaseName) {
+            if (disposePromise) throw disposedError();
+            return assetManagerComposition.deleteVerifiedRemoteStoryCache(databaseName);
+          },
+        })
+      : null;
     const lifecycle = Object.freeze({
       /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
       prepare(payload, context) {
         if (disposePromise) throw disposedError();
-        return embeddedLifecycle.prepare(payload, context);
+        return assetLifecycle.prepare(payload, context);
       },
       /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
       setLoading(payload, context) {
         if (disposePromise) throw disposedError();
-        return embeddedLifecycle.setLoading(payload, context);
+        return assetLifecycle.setLoading(payload, context);
+      },
+      /** @param {Readonly<Record<string, unknown>>} payload */
+      releaseAssets(payload) {
+        if (disposePromise) return disposePromise;
+        return assetLifecycle.releaseAssets(payload);
       },
       /** @param {Readonly<Record<string, unknown>>} payload */
       release(payload) {
         if (disposePromise) return disposePromise;
-        return embeddedLifecycle.release(payload);
+        return assetLifecycle.release(payload);
       },
     });
 
@@ -270,9 +445,12 @@ export function createDsl4PlatformAssetSession(options) {
         const errors = [];
         for (const release of [
           () => poseActionPort.dispose(),
-          () => embeddedLifecycle.release({reason}),
+          () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
           () => tmposeComposition.releaseAll(),
+          ...(remoteEnabled
+            ? [() => assetManagerComposition.releaseVerifiedRemoteStoryCacheLease()]
+            : []),
           () => assetManagerComposition.releaseAll(),
         ]) {
           try {
@@ -294,6 +472,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       poseActionPort,
+      verifiedRemoteCache,
       dispose,
     });
   } catch (error) {

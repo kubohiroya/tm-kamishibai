@@ -1,7 +1,8 @@
 import {canonicalizeDsl4Source} from './source-frontend.js';
+import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {deepFreeze} from './story-document.js';
 
-const descriptorKeys = new Set([
+const requiredDescriptorKeys = new Set([
   'byteLength',
   'displayName',
   'encoding',
@@ -12,6 +13,7 @@ const descriptorKeys = new Set([
   'sourceId',
   'text',
 ]);
+const descriptorKeys = new Set([...requiredDescriptorKeys, 'cacheIdentity']);
 const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export const dsl4SourceStoragePaths = deepFreeze({
@@ -63,6 +65,18 @@ function requireDisplayName(value) {
     );
   }
   return displayName;
+}
+
+/** @param {unknown} value */
+function requireCacheIdentity(value) {
+  try {
+    return validateDsl4CacheIdentity(value);
+  } catch (error) {
+    fail(
+      'K4-SOURCE-DESCRIPTOR-001',
+      error instanceof Error ? error.message : 'cacheIdentity is invalid',
+    );
+  }
 }
 
 /** @param {unknown} value */
@@ -133,25 +147,36 @@ function encodeSource(text, maxSourceBytes) {
  * @param {string} options.sourceId
  * @param {string} options.displayName
  * @param {number} options.maxSourceBytes
+ * @param {unknown} [options.cacheIdentity]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function createDsl4EmbeddedSourceDescriptor(
   source,
-  {sourceId, displayName, maxSourceBytes, subtleCrypto = globalThis.crypto?.subtle},
+  {sourceId, displayName, maxSourceBytes, cacheIdentity, subtleCrypto = globalThis.crypto?.subtle},
 ) {
   const canonicalSource = canonicalizeDsl4Source(source);
   const limit = requireMaxSourceBytes(maxSourceBytes);
   const bytes = encodeSource(canonicalSource, limit);
+  const normalizedDisplayName = requireDisplayName(displayName);
+  const normalizedCacheIdentity =
+    cacheIdentity === undefined ? null : requireCacheIdentity(cacheIdentity);
+  if (normalizedCacheIdentity && normalizedCacheIdentity.label !== normalizedDisplayName) {
+    fail(
+      'K4-SOURCE-DESCRIPTOR-001',
+      'cacheIdentity.label must match the source descriptor displayName',
+    );
+  }
   const descriptor = {
     formatVersion: 1,
     mode: 'embedded',
     sourceId: requireNonEmptyString(sourceId, 'sourceId'),
-    displayName: requireDisplayName(displayName),
+    displayName: normalizedDisplayName,
     mediaType: 'application/yaml',
     encoding: 'utf-8',
     byteLength: bytes.length,
     integrity: await computeDsl4Sha256Integrity(bytes, subtleCrypto),
     text: canonicalSource,
+    ...(normalizedCacheIdentity ? {cacheIdentity: normalizedCacheIdentity} : {}),
   };
   return deepFreeze(descriptor);
 }
@@ -172,7 +197,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
   }
   const inputKeys = Object.keys(input);
   const unknownKeys = inputKeys.filter((key) => !descriptorKeys.has(key));
-  const missingKeys = [...descriptorKeys].filter((key) => !Object.hasOwn(input, key));
+  const missingKeys = [...requiredDescriptorKeys].filter((key) => !Object.hasOwn(input, key));
   if (unknownKeys.length > 0 || missingKeys.length > 0) {
     fail(
       'K4-SOURCE-DESCRIPTOR-001',
@@ -210,6 +235,14 @@ export async function validateDsl4EmbeddedSourceDescriptor(
   if (input.integrity !== expectedIntegrity) {
     fail('K4-SOURCE-INTEGRITY-001', 'Embedded source integrity does not match UTF-8 text');
   }
+  const cacheIdentity =
+    input.cacheIdentity === undefined ? null : requireCacheIdentity(input.cacheIdentity);
+  if (cacheIdentity && cacheIdentity.label !== displayName) {
+    fail(
+      'K4-SOURCE-DESCRIPTOR-001',
+      'cacheIdentity.label must match the source descriptor displayName',
+    );
+  }
   return deepFreeze({
     formatVersion: 1,
     mode: 'embedded',
@@ -220,6 +253,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
     byteLength: bytes.length,
     integrity: expectedIntegrity,
     text,
+    ...(cacheIdentity ? {cacheIdentity} : {}),
   });
 }
 

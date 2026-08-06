@@ -224,6 +224,67 @@ test('supports a canonical empty file payload', async () => {
   assert.deepEqual(validated.getFile('Image', 'image.svg'), new Uint8Array());
 });
 
+test('stores verified remote metadata without an embedded payload', async () => {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  Remote:
+    kind: sound
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/remote.ogg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: audio/ogg
+      size: 123456
+scenes:
+  opening:
+    - sound: Remote
+`,
+    {sourceId: 'remote-bundle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const snapshot = {
+    manifest: {
+      formatVersion: 1,
+      assets: [
+        {
+          id: 'Remote',
+          kind: 'sound',
+          loading: 'lazy',
+          source: {
+            type: 'remote',
+            url: 'https://cdn.example.com/remote.ogg',
+            integrity: 'sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            contentType: 'audio/ogg',
+            size: 123456,
+          },
+        },
+      ],
+    },
+    getFile() {
+      assert.fail('remote assets must not request local bytes');
+    },
+  };
+  const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
+  assert.deepEqual(descriptor.files, []);
+  assert.equal(descriptor.manifest.assets[0].source.type, 'remote');
+  const validated = await validateDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    descriptor,
+    options,
+  );
+  assert.deepEqual(validated.descriptor, descriptor);
+
+  const changed = structuredClone(descriptor);
+  changed.manifest.assets[0].source.url = 'https://cdn.example.com/changed.ogg';
+  await assert.rejects(
+    validateDsl4EmbeddedAssetBundle(parsed.storyDocument, changed, options),
+    (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
+  );
+});
+
 test('asset bundle runtime core has no filesystem, network, DOM, VM, or Scratch dependency', async () => {
   const implementation = await readFile(
     path.join(projectRoot, 'src', 'dsl4', 'asset-bundle-descriptor.js'),

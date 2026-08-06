@@ -39,20 +39,29 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
   ]);
   assert.deepEqual(index.cover, ['Beach', 'OpeningSound']);
   assert.deepEqual(index.actors, ['CaptionIdle', 'HeroIdle']);
+  assert.deepEqual(index.loading, ['Loading1', 'Loading2', 'LoadingBackground']);
   assert.deepEqual(index.poseRecognition, ['ClockTicking', 'Success']);
+  assert.deepEqual(index.sceneRetained, ['救助Pose']);
   assert.deepEqual(index.scenes, {
     opening: {
       all: ['Beach', 'HeroHappy', 'OpeningSound'],
       eager: ['Beach', 'HeroHappy'],
       lazy: ['OpeningSound'],
+      sceneRetained: [],
     },
     rescue: {
       all: ['ClockTicking', 'HeroHappy', 'HeroHelp', 'Ocean', 'Success', '救助Pose'],
       eager: ['ClockTicking', 'HeroHappy', 'HeroHelp', 'Success'],
       lazy: ['Ocean', '救助Pose'],
+      sceneRetained: ['救助Pose'],
     },
-    seaRoute: {all: ['救助Pose'], eager: [], lazy: ['救助Pose']},
-    ending: {all: ['Beach'], eager: ['Beach'], lazy: []},
+    seaRoute: {
+      all: ['救助Pose'],
+      eager: [],
+      lazy: ['救助Pose'],
+      sceneRetained: ['救助Pose'],
+    },
+    ending: {all: ['Beach'], eager: ['Beach'], lazy: [], sceneRetained: []},
   });
 });
 
@@ -102,10 +111,13 @@ scenes:
   assert.deepEqual(index.startup, ['LoadingBackdrop', 'LoadingCostume']);
   assert.deepEqual(index.cover, ['CoverBackdrop']);
   assert.deepEqual(index.actors, ['HeroInitial']);
+  assert.deepEqual(index.loading, ['LoadingBackdrop', 'LoadingCostume']);
+  assert.deepEqual(index.sceneRetained, []);
   assert.deepEqual(index.scenes.first, {
     all: ['SceneBackdrop'],
     eager: [],
     lazy: ['SceneBackdrop'],
+    sceneRetained: [],
   });
   assert.equal(index.startup.includes('Unused'), false);
 });
@@ -128,6 +140,7 @@ scenes:
     all: ['Alpha', 'Zed'],
     eager: ['Alpha', 'Zed'],
     lazy: [],
+    sceneRetained: [],
   });
 });
 
@@ -144,6 +157,8 @@ scenes:
   assert.equal(Object.isFrozen(index.scenes), true);
   assert.equal(Object.isFrozen(index.scenes.first), true);
   assert.equal(Object.isFrozen(index.scenes.first.lazy), true);
+  assert.equal(Object.isFrozen(index.loading), true);
+  assert.equal(Object.isFrozen(index.sceneRetained), true);
   assert.throws(
     () => createDsl4AssetDependencyIndex({kind: 'StoryDocument', version: '3.2'}),
     /StoryDocument version 4\.0/u,

@@ -3,7 +3,7 @@ import {loadDsl4RuntimeComponent} from './runtime-artifact-loader.js';
 import {deepFreeze} from './story-document.js';
 
 /**
- * @typedef {{prepare: Function, setLoading: Function, release: Function}} RuntimeAssetLifecycle
+ * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
  * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
@@ -209,11 +209,12 @@ export async function createDsl4RuntimeStartup(options = {}) {
       (!isRecord(candidate.assetLifecycle) ||
         typeof candidate.assetLifecycle.prepare !== 'function' ||
         typeof candidate.assetLifecycle.setLoading !== 'function' ||
+        typeof candidate.assetLifecycle.releaseAssets !== 'function' ||
         typeof candidate.assetLifecycle.release !== 'function')
     ) {
       await rejectInvalidRuntimeEnvironment(
         candidate,
-        'runtime environment asset lifecycle must provide prepare, setLoading, and release',
+        'runtime environment asset lifecycle must provide prepare, setLoading, releaseAssets, and release',
       );
     }
     if (

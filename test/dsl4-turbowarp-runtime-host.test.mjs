@@ -36,13 +36,14 @@ function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 
-async function packagedProject(sourceText = waitStory) {
+async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
   const parsed = frontend.parse(sourceText, {sourceId: 'main'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
     displayName: 'story.kamishibai.yaml',
     maxSourceBytes: limits.maxSourceBytes,
+    ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
     subtleCrypto,
   });
   const artifactResult = await createDsl4RuntimeArtifactDescriptor(
@@ -53,13 +54,19 @@ async function packagedProject(sourceText = waitStory) {
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
   const snapshotAssets = Object.values(parsed.storyDocument.assets)
-    .map((asset) => ({
-      id: asset.id,
-      kind: asset.kind,
-      loading: asset.loading,
-      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-      source: {type: 'project', name: asset.name},
-    }))
+    .map((asset) => {
+      const source =
+        asset.delivery === 'remote'
+          ? {type: 'remote', ...asset.source}
+          : {type: 'project', name: asset.name};
+      return {
+        id: asset.id,
+        kind: asset.kind,
+        loading: asset.loading,
+        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+        source,
+      };
+    })
     .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
@@ -139,6 +146,32 @@ function platformFixture(log) {
       log.push(['media.stop', name]);
     },
     stopAllSounds() {},
+    async resolveVerifiedRemoteBinary(input, options) {
+      const loaded = await options.load(input, {signal: options.signal});
+      return {
+        bytes: loaded.bytes,
+        contentType: loaded.contentType,
+        integrity: input.integrity,
+        source: 'network',
+        cacheRead: 'miss',
+        cacheWrite: 'stored',
+        cacheWarnings: [],
+      };
+    },
+    async getVerifiedRemoteCacheStats() {},
+    async pruneVerifiedRemoteCache() {},
+    async clearVerifiedRemoteCache() {},
+    async listVerifiedRemoteStoryCaches() {
+      return [];
+    },
+    async pruneVerifiedRemoteStoryCaches() {},
+    async deleteVerifiedRemoteStoryCache() {},
+    async renewVerifiedRemoteStoryCacheLease() {
+      log.push(['cache.renew-lease']);
+    },
+    async releaseVerifiedRemoteStoryCacheLease() {
+      log.push(['cache.release-lease']);
+    },
   };
   const tmposeComposition = {
     registerPoseModel() {
@@ -194,8 +227,8 @@ function platformFixture(log) {
     setLoading(payload) {
       log.push(['loading', payload.visible]);
     },
-    createAssetManagerComposition() {
-      log.push(['media.create']);
+    createAssetManagerComposition(...args) {
+      log.push(['media.create', args[1]]);
       return assetManagerComposition;
     },
     createTMPoseComposition() {
@@ -362,6 +395,231 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
   assert.throws(
     () => result.host.start(),
     (error) => error.code === 'K4-HOST-DISPOSED',
+  );
+});
+
+test('renews the active story cache lease and cancels its heartbeat after execution', async () => {
+  const cacheIdentity = {
+    id: 'heartbeat0000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--heartbeat0000001',
+  };
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteUnused:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/unused.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`,
+    {cacheIdentity},
+  );
+  const log = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+      cacheLeaseHeartbeatMs: 1234,
+      scheduleCacheLeaseHeartbeat(callback, milliseconds) {
+        log.push(['cache.heartbeat-start', milliseconds]);
+        callback();
+        return () => log.push(['cache.heartbeat-stop']);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal((await result.host.start()).status, 'finished');
+  assert.equal(log.filter(([event]) => event === 'cache.renew-lease').length, 2);
+  assert.deepEqual(
+    log.filter(([event]) => event.startsWith('cache.heartbeat')),
+    [['cache.heartbeat-start', 1234], ['cache.heartbeat-stop']],
+  );
+  assert.equal(result.host.verifiedRemoteCache.getHeartbeatError(), null);
+  await result.host.dispose();
+});
+
+test('contains a cache heartbeat cancellation failure and still releases the lease', async () => {
+  const cacheIdentity = {
+    id: 'cancelerror00001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--cancelerror00001',
+  };
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteUnused:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/unused.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`,
+    {cacheIdentity},
+  );
+  const log = [];
+  const cancellationFailure = new Error('heartbeat cancellation failed');
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+      scheduleCacheLeaseHeartbeat() {
+        return () => {
+          throw cancellationFailure;
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal((await result.host.start()).status, 'finished');
+  assert.strictEqual(result.host.verifiedRemoteCache.getHeartbeatError(), cancellationFailure);
+  assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 1);
+  await result.host.dispose();
+});
+
+test('a restarted run keeps the latest cache lease heartbeat active', async () => {
+  const cacheIdentity = {
+    id: 'restartheartbeat1',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--restartheartbeat1',
+  };
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteUnused:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/unused.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 30
+`,
+    {cacheIdentity},
+  );
+  const log = [];
+  const scheduledWaits = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+      waitSchedule(callback) {
+        const scheduled = {callback, cancelled: false};
+        scheduledWaits.push(scheduled);
+        return () => {
+          scheduled.cancelled = true;
+        };
+      },
+      scheduleCacheLeaseHeartbeat() {
+        log.push(['cache.heartbeat-start']);
+        return () => log.push(['cache.heartbeat-stop']);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const firstRun = result.host.start();
+  while (scheduledWaits.length < 1) await Promise.resolve();
+  const restartedRun = result.host.start();
+  while (scheduledWaits.length < 2) await Promise.resolve();
+  await firstRun;
+  assert.equal(scheduledWaits[0].cancelled, true);
+  assert.equal(log.filter(([event]) => event === 'cache.heartbeat-stop').length, 0);
+  assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 0);
+
+  scheduledWaits[1].callback();
+  assert.equal((await restartedRun).status, 'finished');
+  assert.equal(log.filter(([event]) => event === 'cache.heartbeat-start').length, 1);
+  assert.equal(log.filter(([event]) => event === 'cache.heartbeat-stop').length, 1);
+  assert.equal(log.filter(([event]) => event === 'cache.release-lease').length, 1);
+  await result.host.dispose();
+});
+
+test('uses the cache identity persisted in the packaged source for remote delivery', async () => {
+  const cacheIdentity = {
+    id: 'story000000000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
+  };
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteImage:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/image.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - stage: RemoteImage
+`,
+    {cacheIdentity},
+  );
+  const log = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      async loadRemoteAsset() {
+        return {bytes: new Uint8Array(12), contentType: 'image/svg+xml'};
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.host.verifiedRemoteCache.identity, cacheIdentity);
+  assert.deepEqual(log.find(([event]) => event === 'media.create')[1], {
+    verifiedRemoteCache: {cacheIdentity},
+  });
+  await result.host.dispose();
+
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, platformFixture([]), {
+        loadRemoteAsset() {},
+        cacheIdentity: {
+          ...cacheIdentity,
+          id: 'different0000001',
+          databaseName: 'tw-kamishibai-assets-v1--story--different0000001',
+        },
+      }),
+    ),
+    (error) => error.code === 'K4-HOST-CACHE-IDENTITY-001',
   );
 });
 

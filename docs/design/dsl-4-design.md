@@ -238,6 +238,10 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | D-29 | 決定済み | Scratch Action Registryは任意の作品固有拡張であり標準作品には要求しない |
 | D-30 | 決定済み | Object Store／Iterator等の汎用blockを標準作者経路へ露出させない         |
 | D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する     |
+| D-32 | 決定済み | delivery、loading、memory retention、永続cacheの寿命を独立させる        |
+| D-33 | 決定済み | poseModelの既定retentionをscene、mediaの既定をstoryとする               |
+| D-34 | 決定済み | binary DBを台本単位で分離し、可読名と共通metadata catalogで管理する     |
+| D-35 | 決定済み | selected next sceneだけを先読みし、遷移commit時に不要resourceを解放する |
 | P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする             |
 | P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する             |
 | P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う          |
@@ -435,6 +439,13 @@ assets:
     kind: costume
     target: Hero
     name: Hero-happy
+    loading: lazy
+    retention: story
+  救助Pose:
+    kind: poseModel
+    file: pose-models/rescue
+    loading: lazy
+    retention: scene
 ```
 
 パーサーは短縮アドレスを文字列のまま保持せず、次のような型付きアドレスへ変換します。
@@ -1409,6 +1420,123 @@ asset準備を個別command blockとして接続させないため、標準作�
 開発者向け操作は可能な限りJavaScript APIとtest harnessで行い、debug block自体を必須にはしません。
 debug版を用意する場合は標準版とAPI manifest／extension ID／配布物を区別し、debug projectを標準作品として
 公開しないようbuild時に検出します。
+
+### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装待ち #327]`
+
+アセットの「どこから読むか」「いつ準備するか」「いつメモリから解放するか」「検証済みbyte列を
+いつ永続cacheから削除するか」を一つのcache概念へまとめません。
+
+| lifecycle              | 代表object                                 | 正本となる方針                        | 解放／掃除の契機                                      |
+| ---------------------- | ------------------------------------------ | ------------------------------------- | ----------------------------------------------------- |
+| source delivery        | SB3 ZIP entry、remote response             | `delivery` (`embedded` / `remote`)    | ingest／検証完了後にapplication referenceを破棄       |
+| persistent byte cache  | 台本単位IndexedDBの検証済みbinary record   | TTL、LRU、byte budget、format version | cleanup trigger、明示prune／clear                     |
+| transient registration | `ArrayBuffer`、`Uint8Array`、仮想`File`    | adapterの所有権契約                   | register／`loadFromFiles`完了後にreferenceを破棄      |
+| materialized resource  | renderer image、audio、PoseNet、TensorFlow | `retention` (`scene` / `story`)       | scene transition commit、story stop／restart／dispose |
+
+関数scopeを抜けたことや参照を`null`へしたことは物理メモリの即時消去を意味しません。applicationから到達可能な
+参照を残さずGC対象にすることと、renderer／audio／TMPoseが提供する明示的release／disposeを一度だけ呼ぶことを
+runtimeの保証範囲とします。厳密なheap分離が必要なprofileではtransferable `ArrayBuffer`とingestion Workerを
+使用できますが、標準作者がblockで管理する機能にはしません。
+
+#### 10.5.1 `loading`と`retention`
+
+名前付きassetは次を指定できます。
+
+```yaml
+assets:
+  救助Pose:
+    kind: poseModel
+    file: pose-models/rescue
+    loading: lazy
+    retention: scene
+```
+
+- `loading: eager | lazy`はmaterializeを開始する時期だけを決める
+- `retention: scene | story`はmaterialize済みresourceのメモリ保持期間だけを決める
+- `poseModel`の既定値と推奨値は`scene`
+- `backdrop`、`costume`、`sound`の既定値は`story`
+- unknown valueはschema error
+- `retention`を変更してもIndexedDB recordのTTL／LRUは変えない
+
+media assetはscene間で表示や再生が継続することがあるため、初版では`story`を安全な既定とします。
+明示的に`scene`を指定する場合、dependency indexはnext sceneの直接参照だけでなく、遷移後も継続する表示／再生
+状態を含めなければなりません。
+
+#### 10.5.2 二段階scene transition
+
+遷移元をS、goto／branch／input／historyから実際に選択された遷移先をTとします。
+
+1. Tを一つに確定し、分岐候補全件ではなくTのdependencyだけを準備する
+2. 準備中はSとSのresourceを維持する
+3. Tの準備に失敗した場合は遷移せず、Sのresourceを解放しない
+4. 準備に成功した場合はSとTのdependency集合を比較する
+5. 両方が必要とする同一resourceは再登録も解放もしない
+6. commit時に、`retention: scene`でTが不要とするresourceだけをasset単位でreleaseする
+7. historyで再訪したsceneの解放済みresourceは、IndexedDBまたはembedded sourceから再materializeする
+
+poseModelはpreload中にcurrentとselected nextの最大二つが一時共存し得ます。通常状態で訪問済みmodel数に比例して
+完全初期化済みPoseNet／TensorFlow resourceを残しません。Abort、superseded navigation、live reload、disposeが
+競合してもstale resourceを公開せず、releaseをidempotentにします。
+
+#### 10.5.3 台本単位のIndexedDB identity
+
+DSL 4.0は台本を超えるcache共有とcontent deduplicationを行いません。stable story IDと台本ファイルのbasenameから
+可読database名を生成します。
+
+```text
+tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
+```
+
+- basename由来部分にはUnicode letter／numberを残し、空白や記号を`-`へ正規化する
+- filesystem path、URL credential、binary内容をdatabase名と診断へ含めない
+- stable IDにより同名台本を分離する
+- 初回生成したdatabase名をstory manifestへ保存し、台本名変更後も同じDBを利用する
+- DB内identity metadataに表示名、stable ID、database名、format、最終open時刻を保存する
+- 共通`tw-kamishibai-cache-catalog-v1`にはDB名、story ID、表示名、logical bytes／entries、last-usedだけを保存する
+- catalogにbinary data、asset key、URLを保存せず、台本間のasset lookup／deduplicationへ使用しない
+- runtime instanceごとの短期leaseをapp shellからrenewし、story stop／dispose時にreleaseする
+- 別tabを含め一件でも有効なleaseがあるDBは自動cleanup／明示deleteの対象にしない
+- lease取得とcatalog更新を同じtransactionで行い、database deleteは排他的deletion markerを先に取得する
+- 明示deleteはcurrent runtimeのleaseを自動解除せず、stop／disposeとlease releaseの完了を要求する
+- crash等でreleaseされないleaseはTTL後に削除する
+- app shellから全台本の名前、database名、使用量、entry数、最終cleanup、削除量を確認できる
+- app shellから台本単位のstats、prune、clear、database deleteを実行できるが、標準作者paletteへblockを追加しない
+- `clear`はdatabase／identityを残してentryを削除し、作品cacheの削除はdatabaseとcatalog recordを削除する
+
+永続cacheは既定30日の最終利用TTL、256 MiBまたはorigin quota 20%の小さい方をorigin全体のhigh-water、
+その80%をlow-waterとする初期policyでboundedにします。high-water超過時は全tabのactive leaseをpinし、catalogの
+last-used順に古いinactive DBを削除した後、必要ならcurrent DB内をasset LRUで掃除します。TTLを超えて開かれていない
+台本DBは、binaryを開かずdatabaseごと削除できます。具体値はhostから上書き可能とし、open、write前後、
+quota failure、session stop、upgrade、明示操作でcleanupを行います。他のactive DBが使用するbytesをcurrent DBの
+実効上限から差し引き、active leaseをpinしたまま新規entryをhigh-water内へ格納できない場合は永続化を省略して
+`ASSET_CACHE_ORIGIN_BUDGET_PINNED` warningを返し、検証済みbytesによるmemory実行を継続します。
+
+各DB内のstats、TTL、LRU、clearはkey cursorと軽量metadataだけを走査し、保存済み`ArrayBuffer`を容量計算のために
+JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは削除しますが、未知のbyte長を診断上の
+削除byte数には加えません。catalog failureは現在台本のcache write／verified memory fallbackを失敗させず、
+機械可読warningとして報告します。story DBのwrite／delete／clearは単調増加するstats revisionを更新し、catalogは
+別tabから遅れて到着した古いsnapshotでentries／bytesを上書きしません。memory releaseでcache recordを削除せず、
+cache clearでmaterialize済みresourceを直ちに無効化しません。
+
+remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
+size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は
+検証済みbytesによるmemory-only実行を許可して機械可読warningを返し、networkとvalid cacheの両方がない場合は
+fail closedとします。
+
+#### 10.5.4 packagingとresource上限
+
+self-contained SB3のbinary payloadは、長寿命JavaScript literal、data URL、Base64化したruntime snapshotを正本に
+せず、manifestへbindingされたZIP entryからone-shot providerで取り込みます。editor／builderは同一integrityの
+SB3を再保存できるよう、providerを破棄する前にIndexedDB backing bytesを再供給できることを確認します。
+
+実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
+同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
+extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
+別経路で渡された展開fileを同じmodelとして登録しません。
+
+この節はDSL 4.0の契約を定めますが、PR #290の現headにはschema、dependency diff、asset単位release、
+台本単位cache接続が未実装です。Issue #327のfixtureと上流Asset Manager／TMPoseのrelease契約を満たすまで、
+remote asset PRをmerge可能とは扱いません。
 
 ## 11. 独立capability projectとKamishibai Bundle
 

@@ -33,6 +33,35 @@
       "enum": ["eager", "lazy"],
       "default": "eager"
     },
+    "retentionPolicy": {
+      "type": "string",
+      "enum": ["scene", "story"]
+    },
+    "deliveryPolicy": {
+      "type": "string",
+      "enum": ["embedded", "remote"],
+      "default": "embedded"
+    },
+    "remoteAssetSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "integrity", "contentType", "size"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$"
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-[0-9a-f]{64}$"
+        },
+        "contentType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "size": {"type": "integer", "minimum": 1}
+      }
+    },
     "assetId": {"$ref": "#/$defs/id"},
     "sceneId": {"$ref": "#/$defs/id"},
     "actorId": {"$ref": "#/$defs/id"},
@@ -50,11 +79,42 @@
         "kind": {"const": "backdrop"},
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
-        {"properties": {"name": true}, "required": ["name"]},
-        {"properties": {"file": true}, "required": ["file"]}
+        {
+          "required": ["name"],
+          "properties": {"name": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"file": true}, "required": ["file"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"file": true}, "required": ["file"]}
+            ]
+          }
+        }
       ]
     },
     "namedSound": {
@@ -65,11 +125,42 @@
         "kind": {"const": "sound"},
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
-        {"properties": {"name": true}, "required": ["name"]},
-        {"properties": {"file": true}, "required": ["file"]}
+        {
+          "required": ["name"],
+          "properties": {"name": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"file": true}, "required": ["file"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"file": true}, "required": ["file"]}
+            ]
+          }
+        }
       ]
     },
     "namedCostume": {
@@ -81,22 +172,68 @@
         "target": {"$ref": "#/$defs/actorId"},
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
       },
       "oneOf": [
-        {"properties": {"name": true}, "required": ["name"]},
-        {"properties": {"file": true}, "required": ["file"]}
+        {
+          "required": ["name"],
+          "properties": {"name": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"file": true}, "required": ["file"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"source": true}, "required": ["source"]}
+            ]
+          }
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {
+            "anyOf": [
+              {"properties": {"name": true}, "required": ["name"]},
+              {"properties": {"file": true}, "required": ["file"]}
+            ]
+          }
+        }
       ]
     },
     "namedPoseModel": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "file"],
+      "required": ["kind"],
       "properties": {
         "kind": {"const": "poseModel"},
         "file": {"$ref": "#/$defs/filePath"},
-        "loading": {"$ref": "#/$defs/loadingPolicy"}
-      }
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
+      },
+      "oneOf": [
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {"properties": {"source": true}, "required": ["source"]}
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {"properties": {"file": true}, "required": ["file"]}
+        }
+      ]
     },
     "asset": {
       "oneOf": [

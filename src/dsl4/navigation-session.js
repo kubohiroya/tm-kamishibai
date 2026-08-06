@@ -65,8 +65,8 @@ function historyFailure(result) {
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {Record<string, Function>} options.port
- * @param {{prepare: Function, setLoading: Function, release: Function}} [options.assetLifecycle]
- * @param {() => {prepare: Function, setLoading: Function, release: Function}} [options.createAssetLifecycle]
+ * @param {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.assetLifecycle]
+ * @param {() => {prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.createAssetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -123,9 +123,12 @@ export function createDsl4NavigationSession({
     (!resolvedAssetLifecycle ||
       typeof resolvedAssetLifecycle.prepare !== 'function' ||
       typeof resolvedAssetLifecycle.setLoading !== 'function' ||
+      typeof resolvedAssetLifecycle.releaseAssets !== 'function' ||
       typeof resolvedAssetLifecycle.release !== 'function')
   ) {
-    throw new TypeError('asset lifecycle must provide prepare, setLoading, and release methods');
+    throw new TypeError(
+      'asset lifecycle must provide prepare, setLoading, releaseAssets, and release methods',
+    );
   }
 
   let disposed = false;

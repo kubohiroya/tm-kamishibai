@@ -55,6 +55,13 @@ function embeddedAsset(id, kind, filePath, bytes = new Uint8Array([1, 2, 3])) {
   };
 }
 
+function remoteAsset(id, kind, url, contentType, bytes = new Uint8Array([1, 2, 3])) {
+  return {
+    asset: {id, kind, source: {type: 'remote', url}},
+    files: [{path: url, contentType, bytes}],
+  };
+}
+
 function deferred() {
   let resolve;
   const promise = new Promise((resolvePromise) => {
@@ -107,6 +114,24 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   assert.equal(svg.mimeType, 'image/svg+xml');
   assert.equal(bitmap.mimeType, 'image/png');
   assert.equal(audio.mimeType, 'audio/wav');
+});
+
+test('registers verified remote bytes with their declared Content-Type', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const payload = remoteAsset(
+    'RemoteImage',
+    'backdrop',
+    'https://cdn.example.com/image.svg',
+    'image/svg+xml',
+  );
+  await adapter.prepare(payload);
+  assert.deepEqual(fake.calls.embedded[0], {
+    name: 'RemoteImage',
+    sourceName: 'https://cdn.example.com/image.svg',
+    mimeType: 'image/svg+xml',
+    bytes: payload.files[0].bytes,
+  });
 });
 
 test('rejects unsupported kinds and malformed materialization before registration', async () => {

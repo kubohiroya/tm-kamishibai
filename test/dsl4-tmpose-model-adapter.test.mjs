@@ -81,6 +81,20 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
   assert.equal(adapter.getPoseModelLabels('RescuePose'), null);
 });
 
+test('registers an extracted verified remote pose model through the same owner', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const payload = poseModel();
+  payload.asset.source = {type: 'remote', url: 'https://cdn.example.com/pose.zip'};
+  const resource = await adapter.prepare(payload);
+  assert.equal(resource.adapter, 'tmpose');
+  assert.deepEqual(
+    fake.calls.register[0].files.map(({path: filePath}) => filePath),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  await adapter.release(resource);
+});
+
 test('rejects malformed pose model bundles before TMPose registration', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});

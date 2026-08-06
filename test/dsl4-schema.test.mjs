@@ -57,6 +57,81 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
 });
 
+test('remote delivery requires verified metadata and stays independent from loading policy', async () => {
+  const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.assets.OpeningMusic, {
+    id: 'OpeningMusic',
+    delivery: 'remote',
+    loading: 'eager',
+    retention: 'story',
+    kind: 'sound',
+    source: {
+      url: 'https://cdn.example.com/opening.ogg',
+      integrity: 'sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      contentType: 'audio/ogg',
+      size: 123456,
+    },
+  });
+  assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
+  assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
+  assert.equal(result.storyDocument.assets.Ocean.retention, 'story');
+  assert.equal(result.storyDocument.assets.RemotePose.kind, 'poseModel');
+  assert.equal(result.storyDocument.assets.RemotePose.delivery, 'remote');
+  assert.equal(result.storyDocument.assets.RemotePose.retention, 'scene');
+  assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
+  assert.equal(result.storyDocument.assets.HeroIdle.loading, 'eager');
+  assert.equal(result.storyDocument.assets.HeroIdle.retention, 'story');
+});
+
+test('normalizes memory retention defaults while preserving explicit overrides', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  SceneImage:
+    kind: backdrop
+    name: SceneImage
+    retention: scene
+  StoryPose:
+    kind: poseModel
+    file: pose/story
+    retention: story
+  DefaultSound: sound
+  DefaultPose:
+    kind: poseModel
+    file: pose/default
+scenes:
+  opening: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.SceneImage.retention, 'scene');
+  assert.equal(result.storyDocument.assets.StoryPose.retention, 'story');
+  assert.equal(result.storyDocument.assets.DefaultSound.retention, 'story');
+  assert.equal(result.storyDocument.assets.DefaultPose.retention, 'scene');
+});
+
+test('remote delivery rejects malformed or credential-bearing HTTPS URLs semantically', async () => {
+  const fixture = await readFile(
+    path.join(fixtureRoot, 'valid', 'remote-assets.kamishibai.yaml'),
+    'utf8',
+  );
+  for (const url of [
+    'https://?',
+    'https://#fragment',
+    'https:///asset.webp',
+    'https://user:pass@example.com/asset.webp',
+    'https://cdn.example.com/asset.webp#fragment',
+  ]) {
+    const source = fixture.replace('url: https://cdn.example.com/opening.ogg', `url: '${url}'`);
+    const result = frontend.parse(source, {sourceId: 'invalid-remote-url'});
+    assert.equal(result.ok, false, url);
+    assert.ok(
+      result.diagnostics.some(({code}) => code === 'K4-ASSET-REMOTE-URL-001'),
+      url,
+    );
+  }
+});
+
 test('compact and named actions plus short and long scenes normalize identically', async () => {
   const compact = await validateFixture('valid', 'compact-normalization.kamishibai.yaml');
   const named = await validateFixture('valid', 'named-normalization.kamishibai.yaml');
@@ -83,8 +158,13 @@ for (const name of [
   'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',
   'invalid-loading-policy.kamishibai.yaml',
+  'invalid-retention-policy.kamishibai.yaml',
   'positional-multi-argument.kamishibai.yaml',
   'remote-asset.kamishibai.yaml',
+  'remote-http.kamishibai.yaml',
+  'remote-missing-integrity.kamishibai.yaml',
+  'remote-invalid-integrity.kamishibai.yaml',
+  'remote-invalid-metadata.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
 ]) {
   test(`schema rejects ${name}`, async () => {

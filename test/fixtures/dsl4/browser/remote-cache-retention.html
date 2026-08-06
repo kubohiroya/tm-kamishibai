@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSL 4.0 remote cache and retention fixture</title>
+    <style>
+      body {
+        max-width: 52rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-status='passed'] {
+        color: #087830;
+      }
+
+      [data-status='failed'] {
+        color: #b00020;
+      }
+
+      pre {
+        overflow: auto;
+        padding: 1rem;
+        background: #f3f4f6;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DSL 4.0 remote cache and retention fixture</h1>
+    <p id="status" data-status="running">Running…</p>
+    <pre id="result" aria-live="polite"></pre>
+    <script type="module">
+      import {createVerifiedRemoteBinaryCache} from '/node_modules/@kubohiroya/turbowarp-asset-manager/dist/composition.js';
+      import {createDsl4RemoteAssetLifecycle} from '/src/dsl4/embedded-asset-lifecycle.js';
+
+      const status = document.querySelector('#status');
+      const result = document.querySelector('#result');
+      const archiveBytes = new TextEncoder().encode('verified pose archive fixture');
+      const archiveDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', archiveBytes));
+      const archiveIntegrity = `sha256-${[...archiveDigest]
+        .map((value) => value.toString(16).padStart(2, '0'))
+        .join('')}`;
+      const cacheIdentity = Object.freeze({
+        id: 'browserfixture0001',
+        label: 'remote-cache-retention-fixture.kamishibai.yaml',
+        databaseName:
+          'tw-kamishibai-assets-v1--remote-cache-retention-fixture--browserfixture0001',
+      });
+      const remoteInput = Object.freeze({
+        url: 'https://cdn.example.com/browser-fixture-pose.zip',
+        integrity: archiveIntegrity,
+        contentType: 'application/zip',
+        size: archiveBytes.byteLength,
+      });
+      const cache = createVerifiedRemoteBinaryCache({
+        indexedDB,
+        subtleCrypto: crypto.subtle,
+        cacheIdentity,
+        estimateStorage: async () => ({quota: 64 * 1024 * 1024, usage: 0}),
+      });
+
+      try {
+        await cache.clear();
+        let networkLoads = 0;
+        let activeModels = 0;
+        let maximumActiveModels = 0;
+        let registrations = 0;
+        let releases = 0;
+        const runtimeComponent = Object.freeze({
+          storyDocument: Object.freeze({kind: 'StoryDocument', version: '4.0'}),
+          assetBundle: Object.freeze({
+            manifest: Object.freeze({
+              assets: Object.freeze([
+                Object.freeze({
+                  id: 'RemotePose',
+                  kind: 'poseModel',
+                  source: Object.freeze({type: 'remote', ...remoteInput}),
+                }),
+              ]),
+            }),
+          }),
+          getAssetFile() {
+            throw new Error('Remote fixture must not read an embedded asset');
+          },
+        });
+        const lifecycle = createDsl4RemoteAssetLifecycle({
+          runtimeComponent,
+          adapter: {
+            async prepare() {
+              registrations += 1;
+              activeModels += 1;
+              maximumActiveModels = Math.max(maximumActiveModels, activeModels);
+              return Object.freeze({id: registrations});
+            },
+            async release() {
+              releases += 1;
+              activeModels -= 1;
+            },
+          },
+          setLoading: async () => {},
+          async resolveVerifiedRemoteAsset(payload, context) {
+            return cache.resolve(
+              {
+                url: payload.url,
+                integrity: payload.integrity,
+                contentType: payload.contentType,
+                size: payload.size,
+              },
+              {
+                signal: context.signal,
+                async load() {
+                  networkLoads += 1;
+                  return {
+                    bytes: Uint8Array.from(archiveBytes),
+                    contentType: remoteInput.contentType,
+                  };
+                },
+              },
+            );
+          },
+          async extractRemotePoseArchive(payload) {
+            const files = await Promise.all(
+              [
+                ['metadata.json', '{"labels":["rescue"]}'],
+                ['model.json', '{"model":true}'],
+                ['weights.bin', 'weights'],
+              ].map(async ([path, contents]) => {
+                const bytes = new TextEncoder().encode(contents);
+                const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+                return Object.freeze({
+                  path,
+                  bytes,
+                  integrity: `sha256-${[...digest]
+                    .map((value) => value.toString(16).padStart(2, '0'))
+                    .join('')}`,
+                  archiveIntegrity: payload.archiveIntegrity,
+                  extractorFormat: 'browser-fixture-v1',
+                });
+              }),
+            );
+            return Object.freeze({
+              archiveIntegrity: payload.archiveIntegrity,
+              extractorFormat: 'browser-fixture-v1',
+              files: Object.freeze(files),
+            });
+          },
+        });
+
+        for (let visit = 0; visit < 12; visit += 1) {
+          const controller = new AbortController();
+          await lifecycle.prepare({assetIds: ['RemotePose']}, {signal: controller.signal});
+          const visitStats = await cache.getStats();
+          if (activeModels !== 1 || visitStats.entries !== 1) {
+            throw new Error(`Unbounded state at visit ${visit + 1}`);
+          }
+          await lifecycle.releaseAssets({
+            assetIds: ['RemotePose'],
+            reason: 'browser-fixture-scene-transition',
+          });
+          if (activeModels !== 0) throw new Error(`Pose model leaked at visit ${visit + 1}`);
+        }
+
+        const boundedStats = await cache.getStats();
+        const observed = {
+          visits: 12,
+          networkLoads,
+          maximumActiveModels,
+          activeModels,
+          registrations,
+          releases,
+          indexedDbEntries: boundedStats.entries,
+          indexedDbBytes: boundedStats.bytes,
+        };
+        const expected = {
+          networkLoads: 1,
+          maximumActiveModels: 1,
+          activeModels: 0,
+          registrations: 12,
+          releases: 12,
+          indexedDbEntries: 1,
+          indexedDbBytes: archiveBytes.byteLength,
+        };
+        for (const [key, value] of Object.entries(expected)) {
+          if (observed[key] !== value) {
+            throw new Error(`${key}: expected ${value}, received ${observed[key]}`);
+          }
+        }
+        const cleanup = await cache.clear();
+        const clearedStats = await cache.getStats();
+        if (cleanup.removedEntries !== 1 || clearedStats.entries !== 0 || clearedStats.bytes !== 0) {
+          throw new Error('Explicit IndexedDB cleanup did not remove the verified entry');
+        }
+        await lifecycle.release({reason: 'browser-fixture-complete'});
+        await cache.releaseStoryCacheLease();
+        status.dataset.status = 'passed';
+        status.textContent = 'Passed';
+        result.textContent = JSON.stringify({...observed, cleanup, clearedStats}, null, 2);
+      } catch (error) {
+        await cache.releaseStoryCacheLease().catch(() => {});
+        status.dataset.status = 'failed';
+        status.textContent = 'Failed';
+        result.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      }
+    </script>
+  </body>
+</html>

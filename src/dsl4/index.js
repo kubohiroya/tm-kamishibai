@@ -1,5 +1,6 @@
 export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-frontend.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
   createDsl4EmbeddedAssetBundle,
   dsl4AssetBundleStoragePaths,
@@ -7,7 +8,10 @@ export {
   validateDsl4EmbeddedAssetBundle,
 } from './asset-bundle-descriptor.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
-export {createDsl4EmbeddedAssetLifecycle} from './embedded-asset-lifecycle.js';
+export {
+  createDsl4EmbeddedAssetLifecycle,
+  createDsl4RemoteAssetLifecycle,
+} from './embedded-asset-lifecycle.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4NavigationSession} from './navigation-session.js';

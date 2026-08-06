@@ -7,7 +7,8 @@ Copyright © 2026 Hiroya Kubo.
 関連Issue: [#260](https://github.com/kubohiroya/tmpose-kamishibai/issues/260)、
 [#264](https://github.com/kubohiroya/tmpose-kamishibai/issues/264)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)
+[#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)、
+[#284](https://github.com/kubohiroya/tmpose-kamishibai/issues/284)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)
 
@@ -85,8 +86,9 @@ assets:
 
 ### 3.2 名前付き形式
 
-名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`またはbuilder入力内のローカル相対pathを
-示す`file`のどちらか一方を持ちます。`poseModel`は`file`を必須とします。
+名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`、builder入力内のローカル相対pathを示す
+`file`、または検証情報付きの`source`のいずれか一つを持ちます。`name`と`file`は
+`delivery: embedded`、`source`は明示的な`delivery: remote`で使用します。
 
 ```yaml
 assets:
@@ -94,6 +96,7 @@ assets:
     kind: backdrop
     file: assets/ocean.svg
     loading: lazy
+    retention: story
   HeroHappy:
     kind: costume
     target: Hero
@@ -102,27 +105,155 @@ assets:
     kind: sound
     name: OpeningSound
     loading: lazy
+    retention: story
   救助Pose:
     kind: poseModel
     file: pose-models/rescue
     loading: lazy
+    retention: scene
+  RemoteOcean:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    retention: story
+    source:
+      url: https://cdn.example.com/ocean.webp
+      integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      contentType: image/webp
+      size: 654321
 ```
 
 `kind`は`backdrop`、`costume`、`sound`、`poseModel`のいずれかです。`costume`は`target`を
 必須とします。`file`に絶対path、`.`または`..` path segment、HTTP(S)を含むURIなどの外部URIを
-指定できません。builderは参照されたbyte列を成果物へ埋め込み、実動作環境でネットワーク取得を
-必要としないself-containedなSB3を生成します。
+指定できません。`delivery`の省略時と短形式は`embedded`です。builderは`embedded`の参照byte列を
+成果物へ埋め込み、ネットワークなしで動作するself-containedなSB3を生成します。
 
-### 3.3 読み込み方針
+`delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
+`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。期待するbyte列を固定する`integrity`、MIME typeを固定する
+`contentType`、上限検査に使う`size`をすべて必須とします。`integrity`は
+`sha256-`に続けて64桁の小文字16進SHA-256を記述します。HTTP、検証情報の省略、`name`または`file`との
+併記はschema errorです。
 
-`backdrop`、`costume`、`sound`、`poseModel`の名前付き形式には`loading: eager | lazy`を
-指定できます。省略時と短形式は`eager`です。
+### 3.3 読み込みとメモリ保持方針
 
-`lazy`は成果物へのbyte列の埋め込みを省略する指定ではありません。decode、登録、モデル初期化など、
-実行可能にするための準備を遅延させる指定です。controllerが次の遷移先sceneを決定した時点で、
-そのsceneから直接必要になる未準備のlazy assetをbackgroundで先読みします。scene開始時に準備が
-終わっていなければLoading表示で待ち、失敗時はscene actionを実行せず診断を表示します。
-準備済みassetは紙芝居停止までcacheします。
+アセットには、互いに独立した三つの方針があります。
+
+| field       | 値                    | 管理するもの                                      |
+| ----------- | --------------------- | ------------------------------------------------- |
+| `delivery`  | `embedded` / `remote` | 正本となるbyte列をどこから供給するか              |
+| `loading`   | `eager` / `lazy`      | いつ実行可能なresourceへmaterializeするか         |
+| `retention` | `scene` / `story`     | materialize済みresourceをメモリ上でいつまで保つか |
+
+`backdrop`、`costume`、`sound`、`poseModel`の名前付き形式には`loading`と`retention`を指定できます。
+`loading`の省略時と短形式は`eager`です。`retention`の既定値は`poseModel`が`scene`、それ以外が
+`story`です。未知の値はschema errorとします。モデル数に比例してPoseNet／TensorFlow resourceが
+蓄積しないよう、`poseModel`には`retention: scene`を推奨します。
+
+`eager`なremote assetはentry sceneへ入る前に準備します。`lazy`はembedded byte列のdecode、登録、
+モデル初期化、またはremote byte列の取得と検証を遅延させます。controllerが次の遷移先sceneを
+決定した時点で、そのsceneから直接必要になる未準備のlazy assetを先読みします。scene開始時に準備が
+終わっていなければLoading表示で待ちます。`actors`の初期costume、`cover`、`loading`から参照される
+assetは起動時に必要となるため、`lazy`でもentry sceneより前に準備します。準備済みassetは紙芝居停止まで
+保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
+`retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
+
+scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
+assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
+準備に成功した場合はcurrent／nextのdependencyを比較し、nextでも必要なresourceは再登録せず、
+`retention: scene`でnextが必要としないresourceだけをcommit時に解放します。履歴移動で解放済みsceneへ
+戻る場合は永続cacheまたはembedded sourceから再materializeします。poseModelは先読み中にcurrentとselected
+nextの最大二つが一時共存し得ますが、訪問済みmodelをすべて保持しません。
+
+### 3.4 runtime境界と失敗
+
+builderはremote assetの検証情報だけをasset bundle manifestへ格納し、byte列をSB3へ格納しません。
+controller coreは`fetch`、filesystem、VMへ直接依存せず、既存のasset preload coordinatorを通して
+asset lifecycleを呼びます。通常のembedded lifecycleではremote取得を拒否し、hostが
+`createDsl4RemoteAssetLifecycle`へ`loadRemoteAsset`を明示的に注入した場合だけremote modeを有効に
+できます。
+
+loaderは宣言されたURLと期待値、`AbortSignal`を受け取り、byte列と実際のContent-Typeを返します。
+hostは接続先hostのallowlist、timeout、redirect数、stream受信中の最大byte数を制限します。lifecycleは
+loaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform adapterへ登録します。
+URL credentialはsource frontendで拒否するため、認証情報を作品へ埋め込む用途には使用できません。
+remote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive byte列に加え、
+実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
+extractorが`model.json`、`metadata.json`、weights fileを展開します。path traversal、duplicate entry、
+file数、圧縮前後と展開後の合計byte数へ上限を適用し、各fileをarchive integrityとextractor format versionへ
+bindingしてからTMPose adapterへ登録します。loaderが別経路で渡した未検証の展開fileは受理しません。
+
+materialize済みresourceは`retention`に従ってadapterからasset単位でreleaseし、停止・再起動・dispose時は
+retentionにかかわらず全件releaseします。
+navigationで同じassetの準備を中断した場合、古い処理がsettleしてstale resourceを解放するまで再準備を
+開始しないため、同一assetを同時に二重登録しません。準備中は`assets.startup.start`、
+`assets.preload.start`、`assets.loading.show`／`assets.loading.hide` eventを発行します。準備失敗時は
+対象assetのStoryPathと検証種別ごとの診断codeを表示し、遷移先sceneのactionを一つも実行しません。
+offlineへ切り戻す場合は`delivery: embedded`とローカル`file`へ戻します。
+
+### 3.5 IndexedDB永続cache
+
+IndexedDBへ保存した検証済みbyte列の寿命は`retention`とは別に管理します。memory resourceをreleaseしても
+永続cacheは削除せず、cacheをclearしても既にmaterialize済みのresourceは直ちに無効化しません。cacheは
+最終利用からのTTL、LRU、byte budget、format versionによりboundedに掃除し、保存失敗時は機械可読warningを
+返します。remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
+再検証を行います。
+
+DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にstable story IDと台本ファイルのbasenameから
+次のようなdatabase名を生成し、story manifestへ保存します。
+
+```text
+tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
+```
+
+`project.source.json`ではstable IDを`cacheId`、生成済みdatabase名を`cacheDatabaseName`として保持します。
+正常な初回buildが両fieldをatomicに追記し、生成SB3のsource descriptorにも`cacheIdentity`として埋め込みます。
+runtime hostは埋め込みidentityを正本として使用し、異なるidentityの外部注入を拒否します。
+
+可読部分にはUnicodeの文字と数字を残し、pathは保存しません。同名台本はstable IDで分離し、台本名を変更しても
+manifestに保存済みのdatabase名を継続利用します。database内のidentity metadataとapp shellの管理画面には、
+台本表示名、database名、使用量、entry数、最終cleanupを表示し、台本単位でstats、prune、clearを実行できます。
+これらを標準作者paletteのblockとしては公開しません。
+
+台本別databaseの一覧とorigin全体の容量管理には、小さな共通catalog database
+`tw-kamishibai-cache-catalog-v1`を使用します。catalogが保持するのはdatabase名、stable story ID、表示名、
+論理byte数、entry数、最終利用時刻だけで、binary dataやasset keyを保持せず、
+台本間のasset参照やdeduplicationには使用しません。各runtime instanceは短期leaseをrenewし、story stop／dispose時に
+releaseします。app shellはAsset Managerの`renewVerifiedRemoteStoryCacheLease`をheartbeatとして呼び、停止処理で
+`releaseVerifiedRemoteStoryCacheLease`を呼びます。origin全体がhigh-waterを超える場合は、実行中の全tabのleaseを
+pinしたまま、最終利用時刻が古い別台本のdatabaseから削除してlow-waterへ戻します。crash等でreleaseされなかった
+leaseは期限切れ後に掃除します。TTLを超えて開かれていない台本databaseは、binaryを読み込むことなくcatalogから
+列挙してdatabaseごと削除できます。lease取得とcatalog更新は一つのtransactionで行い、database deleteは先に
+排他的なdeletion markerを取得します。明示deleteはcurrent runtimeのleaseを自動解除せず、story stop／disposeと
+lease releaseの完了後だけ実行します。
+
+TurboWarp runtime hostは作品実行中だけ既定30秒間隔でleaseをrenewし、終了、停止、disposeでheartbeatを解除して
+leaseをreleaseします。hostの非palette APIはcurrent storyのstats／prune／clearとcatalogのlist／prune／deleteを
+公開し、app shell管理画面はこのAPIを使用します。
+
+他のactive台本が使用しているbytesはcurrent台本の実効cache上限から差し引きます。active leaseをpinした結果、
+新しいassetをorigin全体のhigh-water内へ格納できない場合は、検証済みbytesをmemory上で使用してIndexedDBへの
+書き込みを省略し、`ASSET_CACHE_ORIGIN_BUDGET_PINNED` warningを返します。
+
+app shellはcatalogを使って全台本cacheを一覧表示します。`clear`は現在のdatabaseとidentityを残してentryだけを
+削除し、「作品のcacheを削除」はdatabaseとcatalog recordを削除します。stats、TTL、LRU、clearの保守走査では
+keyと軽量metadataだけを読み、保存済み`ArrayBuffer`を容量計算のためにmaterializeしません。catalogが利用不能でも
+現在台本の検証済みcache／memory実行を中止せず、機械可読warningを返します。story DBのwrite／delete／clearは
+単調増加するstats revisionを更新し、catalogは別tabから遅れて到着した古いentry／byte数を採用しません。
+
+runtimeが扱う寿命は次の四段階です。
+
+1. SB3 ZIPまたはremote loaderが供給するsource bytes
+2. 台本単位のIndexedDBに保存する検証済みbytes
+3. 登録処理中だけ使用する一時`ArrayBuffer`／`File`
+4. renderer、audio、TMPose／PoseNetが所有するmaterialized resource
+
+source bytesと一時objectはtransactionまたは登録完了後にapplicationからの参照を破棄してGC対象にします。
+物理メモリから即時消去されることは保証しません。2はstorage policy、4は`retention`で解放します。この契約の
+実ブラウザ検証には`test/fixtures/dsl4/browser/remote-cache-retention.html`を使います。repository rootを
+HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同時保持数が1、解放後が0、IndexedDBが
+1 entry／archive byte数のまま増えないこと、および明示cleanup後に0 entry／0 bytesとなることを表示します。
+runtime／schema接続はIssue #284で実装し、TMPose classifier／PoseNet自体の完全dispose契約はIssue #327で
+引き続き追跡します。
 
 ## 4. 共通設定
 

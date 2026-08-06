@@ -185,6 +185,17 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     });
     assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
     assert.equal(loaded.channel, 'bundled');
+    const persistedManifest = JSON.parse(await readFile(fixture.sourceManifestPath, 'utf8'));
+    assert.match(persistedManifest.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
+    assert.equal(
+      persistedManifest.cacheDatabaseName,
+      `tw-kamishibai-assets-v1--story--${persistedManifest.cacheId}`,
+    );
+    assert.deepEqual(loaded.sourceDescriptor.cacheIdentity, {
+      id: persistedManifest.cacheId,
+      label: 'story.kamishibai.yaml',
+      databaseName: persistedManifest.cacheDatabaseName,
+    });
     assert.deepEqual(
       loaded.getAssetFile('OpeningImage', 'opening.svg'),
       new TextEncoder().encode('<svg/>'),
@@ -195,14 +206,9 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
       stdout: {write() {}},
     });
     assert.deepEqual(await readFile(second.outputPath), firstBytes);
-    assert.deepEqual(
-      await Promise.all([
-        readFile(fixture.baseSb3Path),
-        readFile(fixture.sourceManifestPath),
-        readFile(fixture.sourcePath),
-      ]),
-      inputBefore,
-    );
+    assert.deepEqual(await readFile(fixture.baseSb3Path), inputBefore[0]);
+    assert.deepEqual(await readFile(fixture.sourcePath), inputBefore[2]);
+    assert.notDeepEqual(await readFile(fixture.sourceManifestPath), inputBefore[1]);
   });
 });
 

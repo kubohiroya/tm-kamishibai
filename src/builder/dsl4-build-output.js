@@ -1,9 +1,11 @@
-import {readFile} from 'node:fs/promises';
+import {randomBytes} from 'node:crypto';
+import {readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
+import {ensureDsl4ExternalSourceCacheIdentity} from './dsl4-external-source.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3} from './sb3.js';
 
@@ -57,6 +59,22 @@ function parseSourceManifest(bytes) {
   return value;
 }
 
+/** @param {string} manifestPath @param {Readonly<Record<string, unknown>>} manifest */
+async function persistSourceManifest(manifestPath, manifest) {
+  const temporaryPath = `${manifestPath}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, {flag: 'wx'});
+    await rename(temporaryPath, manifestPath);
+  } catch (error) {
+    await rm(temporaryPath, {force: true}).catch(() => {});
+    throw new Sb3BuilderError('Cannot persist the stable story cache identity', {
+      stage: 'dsl4-build-input',
+      code: 'K4-SOURCE-MANIFEST-WRITE-001',
+      cause: error,
+    });
+  }
+}
+
 /**
  * Build and atomically install one self-contained DSL 4.0 SB3.
  *
@@ -75,6 +93,7 @@ function parseSourceManifest(bytes) {
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {boolean} [options.replaceExisting]
  * @param {{digest: Function}} [options.subtleCrypto]
+ * @param {() => string} [options.createStoryId]
  */
 export async function buildDsl4RuntimeComponentFile(options) {
   if (!isRecord(options)) {
@@ -104,7 +123,10 @@ export async function buildDsl4RuntimeComponentFile(options) {
     readInput(baseSb3, 'base SB3'),
     readInput(sourceManifestPath, 'source manifest'),
   ]);
-  const sourceManifest = parseSourceManifest(sourceManifestBytes);
+  const identity = ensureDsl4ExternalSourceCacheIdentity(parseSourceManifest(sourceManifestBytes), {
+    ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
+  });
+  const sourceManifest = identity.manifest;
   const buildOptions = {
     baseSb3Bytes,
     projectRoot,
@@ -121,6 +143,7 @@ export async function buildDsl4RuntimeComponentFile(options) {
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);
+  if (identity.created) await persistSourceManifest(sourceManifestPath, sourceManifest);
   const outputPaths = await installBundleTransactionally({
     outputDirectory: path.dirname(output),
     outputName,

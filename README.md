@@ -33,6 +33,15 @@ pnpm exec tmpose-kamishibai build-sb3 \
 
 開発中のDSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
 
+```json
+{
+  "formatVersion": 1,
+  "mode": "external",
+  "sourceId": "main",
+  "path": "story.kamishibai.yaml"
+}
+```
+
 ```bash
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
@@ -47,7 +56,7 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
-`project.source.json`はproject root内の1個の`.kamishibai.yaml`をPOSIX相対pathで参照します。YAMLが参照する画像・音声・pose modelもproject root内のlocal fileに限定され、生成SB3へ埋め込まれます。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。`preview --watch`とremote assetはこのcommandには含まれません。
+`project.source.json`はproject root内の1個の`.kamishibai.yaml`をPOSIX相対pathで参照します。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込み、`delivery: remote`を明示したassetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。`preview --watch`はこのcommandには含まれません。
 
 API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
