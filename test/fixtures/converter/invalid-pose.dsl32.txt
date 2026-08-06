@@ -1,0 +1,6 @@
+kamishibai=3.2
+asset=Hero,costume:Actor:hero
+asset=Success,sound
+actor=Hero,Hero
+sceneLabel=opening
+action=Hero:pose:Hero,Hero:help,:Success

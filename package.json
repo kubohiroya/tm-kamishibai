@@ -14,6 +14,7 @@
   },
   "exports": {
     "./builder": "./src/builder/index.js",
+    "./converter": "./src/converter/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -22,6 +23,7 @@
   "files": [
     "bin/",
     "src/builder/",
+    "src/converter/",
     "README.md",
     "LICENSE",
     "LICENSES.md"
@@ -48,7 +50,7 @@
     "deploy": "gh-pages -d dist",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "release:check": "npm publish --dry-run --access public",
-    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs && pnpm pack:check",
+    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:check",
     "tmpose-kamishibai": "node bin/tmpose-kamishibai.mjs"
   },
   "keywords": [
@@ -66,7 +68,8 @@
     "@kubohiroya/turbowarp-runtime-expression": "github:kubohiroya/turbowarp-runtime-expression#f0578e946ff61f1f33596df8619087b7a70d4cb6",
     "@kubohiroya/turbowarp-svg-text": "github:kubohiroya/turbowarp-svg-text#0a98e72b547c43b92bc76e71a54d66efb3fb4d39",
     "@kubohiroya/turbowarp-tmpose": "github:kubohiroya/turbowarp-tmpose#9fdc0982a76818c5627fa65a03c467a243fe8110",
-    "fflate": "0.8.3"
+    "fflate": "0.8.3",
+    "yaml": "2.8.1"
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#b3f4b9aa3ed3ede363700be815fe522f6a47df0b",
@@ -80,8 +83,7 @@
     "scratch-parser": "6.0.0",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
-    "typescript": "^7.0.2",
-    "yaml": "2.8.1"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.12.0"

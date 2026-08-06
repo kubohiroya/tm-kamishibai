@@ -1,0 +1,7 @@
+{
+  "https://example.com/models/rescue/": {
+    "id": "RescuePose",
+    "file": "pose-models/rescue",
+    "loading": "lazy"
+  }
+}
