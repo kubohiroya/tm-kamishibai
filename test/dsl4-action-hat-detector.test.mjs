@@ -199,6 +199,21 @@ test('rejects malformed graph and mutation inputs without a partial snapshot', (
       'K4-REGISTRY-MUTATION-001',
     );
   }
+  assert.throws(
+    () =>
+      detect([
+        originalTarget('target', {
+          invalid: hat('invalid', {
+            mutation: mutation({...declaration('wave'), privateSourceText: 'secret'}),
+          }),
+        }),
+      ]),
+    (error) => {
+      assert.equal(error.code, 'K4-REGISTRY-MUTATION-001');
+      assert.doesNotMatch(error.message, /privateSourceText|secret/u);
+      return true;
+    },
+  );
 });
 
 test('enforces every finite detection limit before publishing a snapshot', () => {

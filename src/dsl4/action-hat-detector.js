@@ -29,7 +29,7 @@ function fail(code, message) {
 function requireExactKeys(value, keys, label) {
   const unknown = Object.keys(value).filter((key) => !keys.has(key));
   if (unknown.length > 0) {
-    fail('K4-REGISTRY-MUTATION-001', `${label} has unknown keys: ${unknown.sort().join(', ')}`);
+    fail('K4-REGISTRY-MUTATION-001', `${label} has unknown keys`);
   }
 }
 
