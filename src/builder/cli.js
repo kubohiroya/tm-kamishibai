@@ -8,6 +8,11 @@ import {
 } from '../converter/index.js';
 import {createDsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {packageVersion} from './constants.js';
+import {
+  formatDsl4Diagnostic,
+  serializeDsl4ValidationResult,
+  validateDsl4SourceFile,
+} from './dsl4-validate.js';
 import {Sb3BuilderError} from './errors.js';
 import {buildDsl4RuntimeComponentFile, buildSb3Bundle} from './index.js';
 
@@ -27,6 +32,9 @@ export function usage() {
   tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
 
+  tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
+    --max-source-bytes N [--format pretty|json]
+
 DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
   --allow-http            Permit plain HTTP assets (HTTPS is the default)
@@ -42,14 +50,59 @@ DSL 4.0 build-dsl4 options:
 convert-dsl4 options:
   --pose-models FILE      Map exact TMPoseURL values to local poseModel assets
 
+validate-dsl4 options:
+  --format FORMAT         Diagnostic output: pretty (default) or json
+
 General options:
   --help                  Show this help
   --version               Show the package version
 
 build-sb3 takes an output basename and writes .sb3, .txt, and .manifest.json.
 build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
+validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics.
 convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
 explicitly selected YAML output.`;
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{input: string, format: 'pretty' | 'json', maxSourceBytes: number}}
+ */
+function parseValidateDsl4Arguments(arguments_) {
+  const values = new Map();
+  const allowed = new Set(['--input', '--format', '--max-source-bytes']);
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!allowed.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+  }
+  for (const required of ['--input', '--max-source-bytes']) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  const maxSourceBytes = Number(values.get('--max-source-bytes'));
+  if (!Number.isSafeInteger(maxSourceBytes) || maxSourceBytes < 1) {
+    throw new Sb3BuilderError('--max-source-bytes must be an integer >= 1.', {stage: 'cli'});
+  }
+  const format = values.get('--format') ?? 'pretty';
+  if (format !== 'pretty' && format !== 'json') {
+    throw new Sb3BuilderError('--format must be either pretty or json.', {stage: 'cli'});
+  }
+  return {
+    input: path.resolve(/** @type {string} */ (values.get('--input'))),
+    format,
+    maxSourceBytes,
+  };
 }
 
 /**
@@ -243,7 +296,7 @@ function parseBuildDsl4Arguments(rest) {
 
 /**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -258,8 +311,11 @@ export function parseCliArguments(arguments_) {
   if (command === 'convert-dsl4') {
     return {action: 'convert', options: parseConvertDsl4Arguments(rest)};
   }
+  if (command === 'validate-dsl4') {
+    return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
+  }
   throw new Sb3BuilderError(
-    `Expected the build-sb3, build-dsl4, or convert-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the build-sb3, build-dsl4, convert-dsl4, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -306,6 +362,22 @@ export async function runCli(arguments_, io = {}) {
     return result;
   }
   const schema = JSON.parse(await readFile(dsl4SchemaUrl, 'utf8'));
+  if (parsed.action === 'validate-dsl4') {
+    const result = await validateDsl4SourceFile({
+      ...parsed.options,
+      sourceFrontend: createDsl4SourceFrontend(schema),
+    });
+    if (parsed.options.format === 'json') {
+      stdout.write(serializeDsl4ValidationResult(result));
+    } else if (result.ok) {
+      stdout.write(`${path.basename(parsed.options.input)}: valid\n`);
+    } else {
+      for (const diagnostic of result.diagnostics) {
+        stderr.write(`${formatDsl4Diagnostic(diagnostic, path.basename(parsed.options.input))}\n`);
+      }
+    }
+    return {...result, exitCode: result.ok ? 0 : 1};
+  }
   const result = await buildDsl4RuntimeComponentFile({
     ...parsed.options,
     sourceFrontend: createDsl4SourceFrontend(schema),

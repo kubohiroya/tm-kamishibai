@@ -28,6 +28,12 @@ export {
 } from './dsl4-external-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {
+  Dsl4ValidationInternalError,
+  formatDsl4Diagnostic,
+  serializeDsl4ValidationResult,
+  validateDsl4SourceFile,
+} from './dsl4-validate.js';
+export {
   embedDsl4PackagedRuntimeComponentInSb3,
   embedDsl4RuntimeComponentInSb3,
   embedDsl4SourceInSb3,
