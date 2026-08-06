@@ -112,7 +112,11 @@ function payload(extraArguments = {}) {
 }
 
 function context(controller = new AbortController(), actionPath = '/scenes/opening/actions/0') {
-  return {signal: controller.signal, actionPath};
+  return {
+    signal: controller.signal,
+    actionPath,
+    structuredData: {actionScopeRef: '@test.scope', actionViewRef: '@test.action'},
+  };
 }
 
 function createAdapter(threadHost, extra = {}) {
@@ -137,9 +141,12 @@ async function rejectsCode(promise, code) {
 test('binds one immutable invocation to the primary thread and implicitly completes', async () => {
   const host = createThreadHost();
   const adapter = createAdapter(host);
-  const resultPromise = adapter.customAction(payload({enabled: false}), context());
+  const runtimeContext = context();
+  const resultPromise = adapter.customAction(payload({enabled: false}), runtimeContext);
   const thread = host.latestThread();
   const util = {thread};
+  runtimeContext.structuredData.actionScopeRef = '@private.replaced';
+  runtimeContext.structuredData.actionViewRef = '@private.replaced';
 
   assert.deepEqual(host.starts, [{targetId: 'private-target', hatBlockId: 'private-hat'}]);
   assert.equal(Object.isFrozen(host.starts[0]), true);
@@ -151,6 +158,11 @@ test('binds one immutable invocation to the primary thread and implicitly comple
   assert.equal(adapter.currentActionArgument('count', util), '');
   assert.equal(adapter.currentActionHasArgument('enabled', util), true);
   assert.equal(adapter.currentActionArgument('enabled', util), false);
+  assert.deepEqual(adapter.currentActionResources(util), {
+    actionScopeRef: '@test.scope',
+    actionViewRef: '@test.action',
+  });
+  assert.equal(Object.isFrozen(adapter.currentActionResources(util)), true);
 
   host.complete(thread);
   assert.deepEqual(await resultPromise, {outcome: 'completed'});
@@ -352,6 +364,35 @@ test('ignores an old thread settlement after cancellation and isolates the next 
   assert.deepEqual(await second, {outcome: 'completed'});
 });
 
+test('unbinds context immediately but dispose still waits for asynchronous thread cleanup', async () => {
+  const host = createThreadHost();
+  const cleanup = deferred();
+  const stop = host.stop.bind(host);
+  host.stop = (thread, reason) => {
+    stop(thread, reason);
+    return cleanup.promise;
+  };
+  const adapter = createAdapter(host);
+  const resultPromise = adapter.customAction(payload(), context());
+  const thread = host.latestThread();
+  adapter.completeCurrentAction({thread});
+  assert.throws(
+    () => adapter.currentActionName({thread}),
+    (error) => error.code === 'K4-CUSTOM-CONTEXT-MISSING',
+  );
+
+  let disposed = false;
+  const disposal = adapter.dispose().then(() => {
+    disposed = true;
+  });
+  await Promise.resolve();
+  assert.equal(disposed, false);
+  cleanup.resolve();
+  assert.deepEqual(await resultPromise, {outcome: 'completed'});
+  await disposal;
+  assert.equal(disposed, true);
+});
+
 test('disposes active invocations once and rejects malformed boundaries before starting', async () => {
   assert.deepEqual(dsl4CustomActionTimeoutDefaults, {
     customActionTimeoutMs: 30_000,
@@ -380,6 +421,16 @@ test('disposes active invocations once and rejects malformed boundaries before s
     await assert.rejects(createAdapter(invalidHost).customAction(invalidPayload, context()));
     assert.equal(invalidHost.starts.length, 0);
   }
+
+  const missingResourcesHost = createThreadHost();
+  await assert.rejects(
+    createAdapter(missingResourcesHost).customAction(payload(), {
+      signal: new AbortController().signal,
+      actionPath: '/scenes/opening/actions/0',
+    }),
+    /requires Structured Data resources/u,
+  );
+  assert.equal(missingResourcesHost.starts.length, 0);
 });
 
 test('routes a custom goto outcome through the controller scene transition', async () => {

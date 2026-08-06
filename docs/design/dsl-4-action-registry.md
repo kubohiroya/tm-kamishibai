@@ -136,12 +136,20 @@ script、別hat、別runtime sessionのthreadへcontextを暗黙伝播しない�
 Adapterへ注入するTurboWarp thread hostは、次の三操作だけを持つ。`start`はsource locatorの
 original target／hat blockだけを同期的に開始し、handler本体が次のblockを実行する前にthread配列を返す。
 `waitForCompletion(thread)`は正常終了でresolve、thread異常でrejectし、`stop(thread, reason)`は指定threadだけを
-停止する。Adapterはこの返値が0件または2件以上ならpartial contextを公開せず、複数件では全threadの
+呼び出し中に実行不能にする。追加cleanupがpromiseならoutcome settlementはその完了を待つが、WeakMap
+bindingは`stop`呼び出し直後に外す。Adapterはこの返値が0件または2件以上ならpartial contextを公開せず、複数件では全threadの
 stopを試行する。
 
 runtimeへ返すterminal outcomeは`{"outcome":"completed"}`または
 `{"outcome":"transitioned","sceneId":"..."}`のexact objectとする。互換用の`undefined`／`null`はcompleteとして扱うが、
 unknown field、unknown outcome、scene IDの型不一致は`K4-RUNTIME-RESULT-001`で拒否する。
+
+custom actionをdispatchする`ActionContext`は`structuredData.actionScopeRef`と
+`structuredData.actionViewRef`を必須とする。Adapterはこの2参照を起動時にcopy・freezeし、Invocationの
+`actionScope`／`actionView`とthread identity専用の内部resource APIに固定する。scopeの作成と解放の正本は
+runtime controllerが保持し、Adapterは別scopeや別leaseを作らない。thread cleanup後にcontrollerが
+action scopeを解放し、解放で失敗したcustom actionは元のStore errorを公開messageに出さず
+`K4-CUSTOM-CLEANUP-FAILED`へ正規化する。
 
 この制限により、handlerが`broadcast and wait`で別scriptへ処理を委譲しても、receiverからcurrent action
 reporterは読めない。値を渡す必要がある作品はprimary threadで専用reporterを読み、Scratchの通常の変数や

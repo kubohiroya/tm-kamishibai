@@ -99,9 +99,23 @@ function validateRuntimeContext(input) {
   ) {
     throw new TypeError('Custom action runtime context is invalid');
   }
+  if (
+    !isRecord(input.structuredData) ||
+    Object.keys(input.structuredData).length !== 2 ||
+    typeof input.structuredData.actionScopeRef !== 'string' ||
+    input.structuredData.actionScopeRef.length === 0 ||
+    typeof input.structuredData.actionViewRef !== 'string' ||
+    input.structuredData.actionViewRef.length === 0
+  ) {
+    throw new TypeError('Custom action runtime context requires Structured Data resources');
+  }
   return Object.freeze({
     actionPath: input.actionPath,
     signal: /** @type {AbortSignal} */ (/** @type {unknown} */ (input.signal)),
+    structuredData: Object.freeze({
+      actionScopeRef: input.structuredData.actionScopeRef,
+      actionViewRef: input.structuredData.actionViewRef,
+    }),
   });
 }
 
@@ -201,6 +215,8 @@ export function createDsl4ActionInvocationAdapter(options) {
   const registrations = new Map(registrySnapshot.actions.map((entry) => [entry.name, entry]));
   /** @type {WeakMap<object, Record<string, any>>} */
   const invocationByThread = new WeakMap();
+  /** @type {WeakMap<object, Record<string, any>>} */
+  const settledInvocationByThread = new WeakMap();
   /** @type {Set<Record<string, any>>} */
   const activeInvocations = new Set();
   let nextInvocationSequence = 1;
@@ -274,9 +290,11 @@ export function createDsl4ActionInvocationAdapter(options) {
 
     void (async () => {
       let finalTerminal = terminal;
+      /** @type {unknown} */
+      let stopCompletion;
       if (terminal.stop) {
         try {
-          await threadHost.stop(invocation.thread, terminal.reason);
+          stopCompletion = threadHost.stop(invocation.thread, terminal.reason);
         } catch (error) {
           reportInternalError(error, 'stop-thread', invocation);
           finalTerminal = {
@@ -290,7 +308,24 @@ export function createDsl4ActionInvocationAdapter(options) {
           };
         }
       }
+      settledInvocationByThread.set(invocation.thread, invocation);
       invocationByThread.delete(invocation.thread);
+      if (finalTerminal === terminal && terminal.stop) {
+        try {
+          await stopCompletion;
+        } catch (error) {
+          reportInternalError(error, 'stop-thread', invocation);
+          finalTerminal = {
+            state: 'failed',
+            error: customError(
+              'K4-CUSTOM-CLEANUP-FAILED',
+              'Custom action primary thread cleanup failed',
+            ),
+            stop: false,
+            reason: 'cleanup-failed',
+          };
+        }
+      }
       activeInvocations.delete(invocation);
       invocation.phase = finalTerminal.state;
       if (finalTerminal.state === 'completed' || finalTerminal.state === 'transitioned') {
@@ -316,6 +351,20 @@ export function createDsl4ActionInvocationAdapter(options) {
       );
     }
     return invocation;
+  }
+
+  /** @param {unknown} util */
+  function invocationForTerminalUtil(util) {
+    const thread = isRecord(util) ? util.thread : null;
+    if (!isThreadKey(thread)) return invocationForUtil(util);
+    const invocation = invocationByThread.get(/** @type {object} */ (thread));
+    if (invocation) return invocation;
+    const settled = settledInvocationByThread.get(/** @type {object} */ (thread));
+    if (settled) {
+      reportDiagnostic('K4-CUSTOM-ALREADY-SETTLED', settled);
+      return null;
+    }
+    return invocationForUtil(util);
   }
 
   /** @param {Record<string, any>} invocation */
@@ -440,6 +489,8 @@ export function createDsl4ActionInvocationAdapter(options) {
       name: payload.name,
       target: payload.target,
       arguments: payload.arguments,
+      actionScope: runtimeContext.structuredData.actionScopeRef,
+      actionView: runtimeContext.structuredData.actionViewRef,
       signal: abortController.signal,
       get state() {
         return invocation.phase;
@@ -561,6 +612,10 @@ export function createDsl4ActionInvocationAdapter(options) {
     currentActionTarget(util) {
       return invocationForUtil(util).publicView.target;
     },
+    /** @param {unknown} util */
+    currentActionResources(util) {
+      return invocationForUtil(util).runtimeContext.structuredData;
+    },
     /** @param {unknown} name @param {unknown} util */
     currentActionHasArgument(name, util) {
       const invocation = invocationForUtil(util);
@@ -575,7 +630,8 @@ export function createDsl4ActionInvocationAdapter(options) {
     },
     /** @param {unknown} util */
     completeCurrentAction(util) {
-      const invocation = invocationForUtil(util);
+      const invocation = invocationForTerminalUtil(util);
+      if (!invocation) return;
       settle(invocation, {
         state: 'completed',
         result: completedResult,
@@ -585,7 +641,8 @@ export function createDsl4ActionInvocationAdapter(options) {
     },
     /** @param {unknown} message @param {unknown} util */
     failCurrentAction(message, util) {
-      const invocation = invocationForUtil(util);
+      const invocation = invocationForTerminalUtil(util);
+      if (!invocation) return;
       const scalars = [...(typeof message === 'string' ? message : '')];
       const bounded = scalars
         .slice(0, dsl4CustomActionTimeoutDefaults.maximumFailureMessageScalars)
@@ -599,7 +656,8 @@ export function createDsl4ActionInvocationAdapter(options) {
     },
     /** @param {unknown} sceneId @param {unknown} util */
     gotoFromCurrentAction(sceneId, util) {
-      const invocation = invocationForUtil(util);
+      const invocation = invocationForTerminalUtil(util);
+      if (!invocation) return;
       if (invocation.phase !== 'running') {
         reportDiagnostic('K4-CUSTOM-ALREADY-SETTLED', invocation);
         return;
