@@ -445,6 +445,14 @@ export function createDsl4RuntimeController({
     const command = String(action.command);
     const target = action.target === null ? null : String(action.target);
     const args = /** @type {Record<string, unknown>} */ (action.args);
+    if (action.handler === 'custom') {
+      await invokePort(
+        'customAction',
+        {name: command, target, arguments: cloneValue(args)},
+        context,
+      );
+      return null;
+    }
     if (command === 'goto') return {sceneId: String(args.scene), reason: 'goto'};
     if (command === 'branch') {
       return {sceneId: await resolveBranch(String(args.branch), context), reason: 'branch'};

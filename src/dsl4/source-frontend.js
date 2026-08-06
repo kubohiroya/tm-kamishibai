@@ -1,6 +1,10 @@
 import Ajv2020 from 'ajv/dist/2020.js';
 import {isAlias, isPair, LineCounter, parseAllDocuments, visit} from 'yaml';
 
+import {
+  dsl4EmptyActionRegistrySnapshot,
+  validateDsl4ActionRegistrySnapshot,
+} from './action-registry.js';
 import {validateDsl4Semantics} from './semantic-validator.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 
@@ -61,8 +65,8 @@ function jsonPointerSegments(pointer) {
 function jsonPathSegments(path) {
   /** @type {(string | number)[]} */
   const segments = [];
-  for (const match of path.matchAll(/([^[.\]]+)|\[([0-9]+)\]/g)) {
-    const value = match[1] ?? match[2];
+  for (const match of path.matchAll(/([^[.\]]+)|\[([0-9]+)\]|\["((?:[^"\\]|\\.)*)"\]/g)) {
+    const value = match[1] ?? match[2] ?? JSON.parse(`"${match[3]}"`);
     if (value === '$') continue;
     segments.push(match[2] === undefined ? value : Number(value));
   }
@@ -83,7 +87,12 @@ function storyPathFromSourceSegments(segments) {
   const commandOffset = actionOffset + 1;
   const argumentSegments = segments.slice(commandOffset + 1);
   if (argumentSegments.length === 0) return actionPath;
-  return `${actionPath}/args/${argumentSegments.join('/')}`;
+  if (argumentSegments[0] === 'stableId') return `${actionPath}/stableId`;
+  const normalizedArguments =
+    argumentSegments[0] === 'arguments' ? argumentSegments.slice(1) : argumentSegments;
+  return normalizedArguments.length === 0
+    ? `${actionPath}/args`
+    : `${actionPath}/args/${normalizedArguments.join('/')}`;
 }
 
 /**
@@ -271,9 +280,14 @@ function parseRestrictedYaml(source, sourceId) {
  * Compile a schema once and return the shared pure source frontend.
  *
  * @param {import('ajv').AnySchema} schema
+ * @param {{actionRegistry?: unknown}} [options]
  * @returns {{parse(source: string, options?: {sourceId?: string}): ParseResult}}
  */
-export function createDsl4SourceFrontend(schema) {
+export function createDsl4SourceFrontend(
+  schema,
+  {actionRegistry = dsl4EmptyActionRegistrySnapshot} = {},
+) {
+  const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
   const AjvConstructor = /** @type {any} */ (Ajv2020);
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
   return Object.freeze({
@@ -306,18 +320,20 @@ export function createDsl4SourceFrontend(schema) {
       }
 
       const story = /** @type {Record<string, unknown>} */ (rawStory);
-      const semanticDiagnostics = validateDsl4Semantics(story).map((issue) => {
-        const segments = jsonPathSegments(issue.path);
-        return diagnostic({
-          code: issue.code,
-          message: issue.message,
-          sourceId,
-          path: issue.path,
-          node: nodeAtPath(parsed.document, segments),
-          lineCounter: parsed.lineCounter,
-          storyPath: storyPathFromSourceSegments(segments),
-        });
-      });
+      const semanticDiagnostics = validateDsl4Semantics(story, {actionRegistry: registry}).map(
+        (issue) => {
+          const segments = jsonPathSegments(issue.path);
+          return diagnostic({
+            code: issue.code,
+            message: issue.message,
+            sourceId,
+            path: issue.path,
+            node: nodeAtPath(parsed.document, segments),
+            lineCounter: parsed.lineCounter,
+            storyPath: storyPathFromSourceSegments(segments),
+          });
+        },
+      );
       if (semanticDiagnostics.length > 0) {
         return deepFreeze({
           ok: false,

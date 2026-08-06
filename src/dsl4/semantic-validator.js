@@ -1,4 +1,11 @@
+import {
+  dsl4ActorCoreActionNames,
+  dsl4EmptyActionRegistrySnapshot,
+  validateDsl4ActionRegistrySnapshot,
+} from './action-registry.js';
+
 const identifierSections = ['assets', 'actors', 'textStyles', 'variables', 'branches', 'scenes'];
+const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
 /**
  * @typedef {object} SemanticIssue
@@ -101,9 +108,15 @@ function addReferenceIssue(issues, collection, id, expectedKind, path) {
  * Validate relationships that JSON Schema cannot express.
  *
  * @param {Record<string, unknown>} story
+ * @param {{actionRegistry?: unknown}} [options]
  * @returns {SemanticIssue[]}
  */
-export function validateDsl4Semantics(story) {
+export function validateDsl4Semantics(
+  story,
+  {actionRegistry = dsl4EmptyActionRegistrySnapshot} = {},
+) {
+  const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
+  const customActions = new Map(registry.actions.map((action) => [action.name, action]));
   /** @type {SemanticIssue[]} */
   const issues = [];
   const assets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
@@ -235,7 +248,7 @@ export function validateDsl4Semantics(story) {
     sceneActions(scene).forEach((action, actionIndex) => {
       const [key] = Object.keys(action);
       const value = action[key];
-      const actionPath = `${actionBasePath}[${actionIndex}].${key}`;
+      const actionPath = `${actionBasePath}[${actionIndex}][${JSON.stringify(key)}]`;
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         const stableId = /** @type {Record<string, unknown>} */ (value).stableId;
         if (typeof stableId === 'string') {
@@ -331,6 +344,48 @@ export function validateDsl4Semantics(story) {
               `${actionPath}.steps[${stepIndex}].sound`,
             );
           });
+        } else if (!actorCoreActionNames.has(opcode)) {
+          const registration = customActions.get(opcode);
+          if (!registration) {
+            issues.push({
+              code: 'K4-COMMAND-UNSUPPORTED',
+              path: actionPath,
+              message: `Custom action ${opcode} is not registered`,
+            });
+            return;
+          }
+          const customAction = /** @type {Record<string, unknown>} */ (value);
+          const customArguments = /** @type {Record<string, unknown>} */ (
+            customAction.arguments ?? {}
+          );
+          const parameters = new Map(
+            registration.parameters.map((parameter) => [parameter.name, parameter]),
+          );
+          for (const [name, argument] of Object.entries(customArguments)) {
+            const parameter = parameters.get(name);
+            if (!parameter) {
+              issues.push({
+                code: 'K4-SCHEMA-UNKNOWN-KEY',
+                path: `${actionPath}.arguments.${name}`,
+                message: `Custom action ${opcode} has no parameter named ${name}`,
+              });
+            } else if (typeof argument !== parameter.type) {
+              issues.push({
+                code: 'K4-SCHEMA-001',
+                path: `${actionPath}.arguments.${name}`,
+                message: `Custom action ${opcode} parameter ${name} must be ${parameter.type}`,
+              });
+            }
+          }
+          for (const parameter of registration.parameters) {
+            if (parameter.required && !Object.hasOwn(customArguments, parameter.name)) {
+              issues.push({
+                code: 'K4-SCHEMA-001',
+                path: `${actionPath}.arguments`,
+                message: `Custom action ${opcode} requires parameter ${parameter.name}`,
+              });
+            }
+          }
         }
       }
     });

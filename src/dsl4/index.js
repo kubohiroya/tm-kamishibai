@@ -1,4 +1,13 @@
 export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-frontend.js';
+export {
+  createDsl4ActionRegistrySnapshot,
+  dsl4ActorCoreActionNames,
+  dsl4CoreActionNames,
+  dsl4EmptyActionRegistrySnapshot,
+  dsl4GlobalCoreActionNames,
+  Dsl4ActionRegistryError,
+  validateDsl4ActionRegistrySnapshot,
+} from './action-registry.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {

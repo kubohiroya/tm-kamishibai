@@ -99,7 +99,11 @@ function currentActionOf(currentStoryDocument, currentExecution) {
  * @param {Readonly<Record<string, unknown>>} right
  */
 function hasCompatibleSignature(left, right) {
-  return left.command === right.command && left.target === right.target;
+  return (
+    left.command === right.command &&
+    left.target === right.target &&
+    (left.handler ?? 'core') === (right.handler ?? 'core')
+  );
 }
 
 /**

@@ -424,7 +424,7 @@ scenes:
 `poseInputToChangeScene`は同時に待つ候補であり、最初に選ばれた1件だけのsceneへ移動します。
 
 一つのaction mappingに複数のaction keyを置けません。`stableId`は任意ですが、指定した場合は
-文書全体で一意にします。独自actionのschemaと登録契約はIssue #264で定義します。
+文書全体で一意にします。
 
 入力actionへ`stableId`を付ける場合は、遷移mappingを`routes`の下へ移します。
 
@@ -436,7 +436,47 @@ scenes:
       Digit2: ending
 ```
 
-## 8. 検証境界
+## 8. Custom action
+
+Custom actionは作品固有の工夫をScratch blockで加える任意機能です。標準作品はAction Registryが空でも
+全core actionを実行でき、台本製作者にcustom action blockを要求しません。
+
+```yaml
+- Hero.wave:
+    stableId: firstWave
+    arguments:
+      speed: fast
+      count: 3
+```
+
+target actorとaction名を`Actor.action`で表し、異なる役割を持つ引数は`arguments`内のnamed mappingで
+表します。位置listは許可しません。引数がないactionは`Hero.wave: {}`と書きます。外側で許可するkeyは
+`arguments`と`stableId`だけです。
+
+台本をparseする前にTurboWarp adapterがcustom action用hatを検出し、一つの不変な
+`ActionRegistrySnapshot`を生成します。各登録は次を持ちます。
+
+```json
+{
+  "name": "wave",
+  "target": "actor",
+  "parameters": [
+    {"name": "speed", "type": "string", "required": true},
+    {"name": "count", "type": "number", "required": false}
+  ],
+  "source": {"targetId": "...", "hatBlockId": "..."}
+}
+```
+
+parameter typeは初版では`string`、`number`、`boolean`に限定します。`required`を省略してsnapshotを
+生成する場合は`true`へ正規化します。台本の未宣言引数、必須引数の欠落、型不一致は実行前のerrorです。
+
+action名とparameter名は通常のDSL ID規則とUnicode NFCに従います。短いaction名を許可し、namespaceは
+必須にしません。その代わりproject内でaction名を一意にし、同名handler、parameter重複、全core action名
+との衝突をRegistry Snapshot生成時に拒否します。登録済みactionだけを受理し、runtimeは動的なport名を
+作らず、固定`customAction` portへname、target、argumentsを渡します。
+
+## 9. 検証境界
 
 JSON Schemaは型、必須項目、未知key、actionの引数形を検証します。意味検証は次を追加で検証します。
 
@@ -447,6 +487,7 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 - `file`が安全なローカル相対pathであること
 - 識別子がUnicode NFCであること
 - keymapと作品内入力に衝突がないこと
+- custom actionが登録済みで、引数がRegistry parameter宣言と一致すること
 
 構造または意味検証が失敗した場合、runtimeはscene actionやasset準備を開始しません。
 現在のschemaとfixtureは表層契約を固定するための実装基準であり、DSL 4.0 runtimeが利用可能になった
@@ -454,21 +495,22 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 
 初期実装で固定する診断codeは次です。Source Mapによる行・列・関連位置はparser実装時に加えます。
 
-| code                    | 意味                                        |
-| ----------------------- | ------------------------------------------- |
-| `K4-YAML-*`             | YAML構文または禁止機能                      |
-| `K4-VERSION-001`        | versionが文字列`4.0`ではない                |
-| `K4-SCHEMA-001`         | 引数型、必須field、構造がschemaと一致しない |
-| `K4-SCHEMA-UNKNOWN-KEY` | schemaにないkey                             |
-| `K4-ID-INVALID`         | 識別子の文字規則違反                        |
-| `K4-KEY-UNSUPPORTED`    | 未対応keyまたはmodifier combination         |
-| `K4-REF-001`            | 参照先が未定義                              |
-| `K4-REF-002`            | asset kindが利用箇所と一致しない            |
-| `K4-REF-003`            | costume targetがactorと一致しない           |
-| `K4-ASSET-001`          | `file`が安全なローカル相対pathではない      |
-| `K4-BRANCH-001`         | branchの末尾が`else`ではない                |
-| `K4-STABLE-ID-001`      | `stableId`が文書内で重複                    |
-| `K4-KEY-001`            | navigation keymapと作品内key inputが衝突    |
+| code                     | 意味                                        |
+| ------------------------ | ------------------------------------------- |
+| `K4-YAML-*`              | YAML構文または禁止機能                      |
+| `K4-VERSION-001`         | versionが文字列`4.0`ではない                |
+| `K4-SCHEMA-001`          | 引数型、必須field、構造がschemaと一致しない |
+| `K4-SCHEMA-UNKNOWN-KEY`  | schemaにないkey                             |
+| `K4-ID-INVALID`          | 識別子の文字規則違反                        |
+| `K4-KEY-UNSUPPORTED`     | 未対応keyまたはmodifier combination         |
+| `K4-REF-001`             | 参照先が未定義                              |
+| `K4-REF-002`             | asset kindが利用箇所と一致しない            |
+| `K4-REF-003`             | costume targetがactorと一致しない           |
+| `K4-ASSET-001`           | `file`が安全なローカル相対pathではない      |
+| `K4-BRANCH-001`          | branchの末尾が`else`ではない                |
+| `K4-STABLE-ID-001`       | `stableId`が文書内で重複                    |
+| `K4-KEY-001`             | navigation keymapと作品内key inputが衝突    |
+| `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action          |
 
 入力byte数、YAML node数、nesting深度、scalar長、scene数、sceneごとのaction数、asset数、診断数には
 資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。具体値は対象端末でのparser benchmarkを行う

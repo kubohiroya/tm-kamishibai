@@ -180,6 +180,7 @@ for (const name of [
   'non-nfc-id.kamishibai.yaml',
   'duplicate-id.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
+  'custom-action-unknown-key.kamishibai.yaml',
 ]) {
   test(`schema rejects ${name}`, async () => {
     const result = await validateFixture('invalid', name);
@@ -312,9 +313,13 @@ test('keeps StoryPath stable across comments and whitespace-only edits', () => {
 
 test('production source frontend has no filesystem, network, VM, or Scratch dependency', async () => {
   const sources = await Promise.all(
-    ['index.js', 'semantic-validator.js', 'source-frontend.js', 'story-document.js'].map((name) =>
-      readFile(path.join(projectRoot, 'src', 'dsl4', name), 'utf8'),
-    ),
+    [
+      'action-registry.js',
+      'index.js',
+      'semantic-validator.js',
+      'source-frontend.js',
+      'story-document.js',
+    ].map((name) => readFile(path.join(projectRoot, 'src', 'dsl4', name), 'utf8')),
   );
   const implementation = sources.join('\n');
   assert.doesNotMatch(implementation, /(?:node:fs|node:http|node:https|\bfetch\s*\()/);
