@@ -1,5 +1,7 @@
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {packageName, packageVersion} from './constants.js';
+import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 
 const inputKeys = new Set([
   'appShell',
@@ -22,7 +24,7 @@ const builderSettingKeys = new Set([
   'maxTotalAssetBytes',
   'replaceExisting',
 ]);
-const projectKeys = new Set(['controlProfile', 'sourcePath']);
+const projectKeys = new Set(['controlProfile', 'sourceManifest']);
 const classificationKeys = new Set([
   'activeArtifactFingerprint',
   'activeSourceIntegrity',
@@ -80,25 +82,6 @@ function integrity(value, name) {
   return value;
 }
 
-/** @param {unknown} value */
-function sourcePath(value) {
-  const source = nonEmptyString(value, 'project.sourcePath');
-  const segments = source.split('/');
-  if (
-    source.startsWith('/') ||
-    source.includes('\\') ||
-    /^[A-Za-z]:/u.test(source) ||
-    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-    !source.endsWith('.kamishibai.yaml')
-  ) {
-    throw new TypeError(
-      'project.sourcePath must be a normalized POSIX-relative .kamishibai.yaml path',
-    );
-  }
-  return source;
-}
-
 /**
  * Create the structural fingerprint used to choose live reload or a full rebuild.
  * Source text is deliberately not accepted. Its separate integrity selects live reload.
@@ -120,11 +103,17 @@ export async function createDsl4ArtifactFingerprint(
     throw new TypeError('extensionBundle.formatVersion must be 1');
   }
   const builder = exactRecord(root.builder, builderKeys, 'builder');
+  if (builder.package !== packageName || builder.version !== packageVersion) {
+    throw new TypeError(
+      `builder package and version must be exactly ${packageName}@${packageVersion}`,
+    );
+  }
   const settings = exactRecord(builder.settings, builderSettingKeys, 'builder.settings');
   if (settings.channel !== 'bundled' && settings.channel !== 'unbundled') {
     throw new TypeError('builder.settings.channel must be bundled or unbundled');
   }
   const project = exactRecord(root.project, projectKeys, 'project');
+  const sourceManifest = validateDsl4ExternalSourceManifest(project.sourceManifest);
 
   const normalized = deepFreeze({
     formatVersion: 1,
@@ -141,8 +130,8 @@ export async function createDsl4ArtifactFingerprint(
       integrity: integrity(extensionBundle.integrity, 'extensionBundle.integrity'),
     },
     builder: {
-      package: nonEmptyString(builder.package, 'builder.package'),
-      version: nonEmptyString(builder.version, 'builder.version'),
+      package: packageName,
+      version: packageVersion,
       settings: {
         channel: settings.channel,
         maxSourceBytes: positiveSafeInteger(
@@ -169,7 +158,7 @@ export async function createDsl4ArtifactFingerprint(
       },
     },
     project: {
-      sourcePath: sourcePath(project.sourcePath),
+      sourceManifest,
       controlProfile: nonEmptyString(project.controlProfile, 'project.controlProfile'),
     },
   });

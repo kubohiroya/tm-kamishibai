@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "expectedFingerprint": "sha256-IDLKTR+BMLCJpGzXB48/AplF6bVxBYak6KDdxIW1N1w=",
+  "expectedFingerprint": "sha256-ebiexf3/cgTLaXa//CKSr89k0+m6Rfu394lw9QRkVyA=",
   "input": {
     "formatVersion": 1,
     "baseSb3Integrity": "sha256-7fS0A6BPhTzDnaWGhtroUdCdBilFgACUDkVvv21Um+c=",
@@ -29,7 +29,12 @@
       }
     },
     "project": {
-      "sourcePath": "story.kamishibai.yaml",
+      "sourceManifest": {
+        "formatVersion": 1,
+        "mode": "external",
+        "sourceId": "main",
+        "path": "story.kamishibai.yaml"
+      },
       "controlProfile": "development"
     }
   },
@@ -79,13 +84,6 @@
       "expected": "full-rebuild"
     },
     {
-      "name": "builder version",
-      "path": "builder.version",
-      "value": "3.2.4",
-      "sourceChanged": false,
-      "expected": "full-rebuild"
-    },
-    {
       "name": "builder setting",
       "path": "builder.settings.maxAssetFiles",
       "value": 129,
@@ -94,8 +92,15 @@
     },
     {
       "name": "source path",
-      "path": "project.sourcePath",
+      "path": "project.sourceManifest.path",
       "value": "scripts/story.kamishibai.yaml",
+      "sourceChanged": false,
+      "expected": "full-rebuild"
+    },
+    {
+      "name": "source identity",
+      "path": "project.sourceManifest.sourceId",
+      "value": "alternate",
       "sourceChanged": false,
       "expected": "full-rebuild"
     },

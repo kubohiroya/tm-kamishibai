@@ -29,7 +29,12 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
   const reordered = {
     project: {
       controlProfile: fixture.input.project.controlProfile,
-      sourcePath: fixture.input.project.sourcePath,
+      sourceManifest: {
+        path: fixture.input.project.sourceManifest.path,
+        sourceId: fixture.input.project.sourceManifest.sourceId,
+        mode: 'external',
+        formatVersion: 1,
+      },
     },
     builder: {
       settings: {
@@ -99,6 +104,16 @@ test('classifies the reviewed YAML-only and structural change matrix', async () 
   }
 });
 
+test('includes the stable source cache identity without accepting source text', async () => {
+  const withoutCache = await fingerprint();
+  const input = structuredClone(fixture.input);
+  input.project.sourceManifest.cacheId = 'story-cache-01';
+  input.project.sourceManifest.cacheDatabaseName = 'tw-kamishibai-assets-v1--story--story-cache-01';
+  const withCache = await fingerprint(input);
+  assert.notEqual(withCache.integrity, withoutCache.integrity);
+  assert.deepEqual(withCache.inputs.project.sourceManifest, input.project.sourceManifest);
+});
+
 test('rejects source text, preview preferences, and session-only state as fingerprint inputs', async () => {
   for (const [path, value] of [
     ['sourceText', 'kamishibai: 4.0'],
@@ -119,15 +134,19 @@ test('fails closed for incomplete, malformed, or unsafe fingerprint boundaries',
     (input) => (input.baseSb3Integrity = 'sha256-invalid'),
     (input) => (input.extensionBundle.formatVersion = 2),
     (input) => (input.builder.settings.channel = 'automatic'),
+    (input) => (input.builder.version = '3.2.4'),
     (input) => (input.builder.settings.maxSourceBytes = 0),
     (input) => (input.builder.settings.historyNavigationAvailable = 1),
-    (input) => (input.project.sourcePath = '../story.kamishibai.yaml'),
     (input) => (input.project.controlProfile = ''),
   ]) {
     const input = structuredClone(fixture.input);
     mutate(input);
     await assert.rejects(fingerprint(input), TypeError);
   }
+
+  const unsafePath = structuredClone(fixture.input);
+  unsafePath.project.sourceManifest.path = '../story.kamishibai.yaml';
+  await assert.rejects(fingerprint(unsafePath), (error) => error?.code === 'K4-SOURCE-PATH-001');
 
   assert.throws(
     () =>
