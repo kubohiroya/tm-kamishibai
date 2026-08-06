@@ -335,6 +335,17 @@ controls:
 巻き戻しはscene遷移の実行履歴を使います。台本の実行位置を表すruntime stateは移動先に合わせて
 変更しますが、作品変数など、それ以外のruntime stateは巻き戻しません。
 
+Web版、TurboWarp editor、Packagerはkeymapを個別に解釈しません。builderが固定した同一の
+`controlProfile`、canonical resolved keymap、そのintegrity、history有効化結果をruntime startupで
+検証し、同じnavigation sessionへ渡します。surface shellが担当するのは検証対象projectと
+`KeyboardEvent`の接続だけです。Web版とPackagerのstandard Compositeは`bundled` channel、
+Standalone runtimeを直接読み込むTurboWarp editor fixtureは`unbundled` channelを使いますが、
+storage pathの違いによってcommand、時系列scene visit、future切捨て、非位置変数の扱いを変えません。
+
+`test/fixtures/dsl4/cross-surface-navigation.json`を3 surface共通の受け入れfixtureとし、同じSB3
+round-trip、keymap、巻き戻し操作列、期待結果を適用します。surface固有のfallback keymapや暗黙bindを
+追加してはいけません。
+
 ## 6. 分岐とscene
 
 分岐規則は記述順に評価し、最後の一件を必ず`else`にします。`if`と遷移先を同じmappingへ置きます。
