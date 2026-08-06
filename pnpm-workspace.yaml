@@ -3,13 +3,14 @@ packages:
 
 allowBuilds:
   '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b': true
-  '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8': true
-  '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/1f706d7d046ed491728d9011a0e610e63013d815': true
-  '@kubohiroya/turbowarp-tmpose@https://codeload.github.com/kubohiroya/turbowarp-tmpose/tar.gz/9fdc0982a76818c5627fa65a03c467a243fe8110': true
   fsevents: false
 
 minimumReleaseAgeExclude:
-  - '@kubohiroya/turbowarp-svg-text@0.1.0 || 0.2.0 || 0.2.1'
+  - '@kubohiroya/turbowarp-async-input@0.3.0'
+  - '@kubohiroya/turbowarp-asset-manager@0.6.0'
+  - '@kubohiroya/turbowarp-runtime-expression@0.3.0'
+  - '@kubohiroya/turbowarp-svg-text@0.3.0'
+  - '@kubohiroya/turbowarp-tmpose@1.5.0'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0

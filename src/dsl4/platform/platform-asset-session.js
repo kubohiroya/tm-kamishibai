@@ -147,6 +147,8 @@ function disposedError() {
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
  * @param {Function} [options.createAsyncInputComposition]
+ * @param {unknown} [options.keySource]
+ * @param {unknown} [options.actorTouchSource]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
  */
@@ -269,12 +271,18 @@ export function createDsl4PlatformAssetSession(options) {
       'resetAccumulatedPose',
       'subscribeAccumulatedPose',
     ]);
-    const asyncInputCandidate = createAsyncInput({poseSource: tmposeComposition});
+    const asyncInputCandidate = createAsyncInput({
+      poseSource: tmposeComposition,
+      ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
+      ...(options.actorTouchSource === undefined
+        ? {}
+        : {actorTouchSource: options.actorTouchSource}),
+    });
     created.push(asyncInputCandidate);
     const asyncInputComposition = validateCompositionMethods(
       asyncInputCandidate,
       'Async Input composition',
-      ['waitForPoseCandidate', 'releaseAll'],
+      ['waitForPoseCandidate', 'waitForKeyCandidate', 'waitForActorTouchCandidate', 'releaseAll'],
     );
     const poseActionPort = createDsl4PoseActionPort({
       tmposeComposition,
