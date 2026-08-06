@@ -239,6 +239,24 @@ for (const [code, severity] of [
   });
 }
 
+test('keeps retry finite even when an injected clock does not advance', async () => {
+  const stuckClock = createFakeClock();
+  stuckClock.sleep = async () => {};
+  let attempts = 0;
+  const setup = watcherOptions({
+    clock: stuckClock,
+    loadSource: async () => {
+      attempts += 1;
+      throw sourceError('K4-SOURCE-MISSING');
+    },
+  });
+  const watcher = createDsl4PreviewSourceWatcher(setup.options);
+  await watcher.start();
+  assert.equal(attempts, 4);
+  assert.equal(setup.results[0].diagnostics[0].code, 'K4-SOURCE-MISSING');
+  await watcher.dispose();
+});
+
 test('publishes stable source and frontend errors without retrying or replacing semantics', async () => {
   let loads = 0;
   const invalidSource = "kamishibai: '4.0'\nscenes: {}\n";

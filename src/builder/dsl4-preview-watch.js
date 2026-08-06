@@ -29,7 +29,7 @@ function sleep(milliseconds) {
 }
 
 const defaultClock = Object.freeze({
-  now: () => Date.now(),
+  now: () => globalThis.performance.now(),
   setTimeout: schedule,
   clearTimeout: cancelSchedule,
   sleep,
@@ -164,6 +164,7 @@ export function createDsl4PreviewSourceWatcher({
   const quiet = finiteMilliseconds(quietWindowMs, 'quietWindowMs', 0);
   const retry = finiteMilliseconds(retryIntervalMs, 'retryIntervalMs', 1);
   const timeout = finiteMilliseconds(stabilityTimeoutMs, 'stabilityTimeoutMs', retry);
+  const maximumAttempts = Math.ceil(timeout / retry) + 1;
   const clock = validateClock(inputClock);
   const sourcePath = path.resolve(projectRoot, ...manifest.path.split('/'));
   const sourceDirectory = path.dirname(sourcePath);
@@ -252,8 +253,10 @@ export function createDsl4PreviewSourceWatcher({
     status = 'stabilizing';
     const startedAt = Number(clock.now());
     let lastTransientCode = 'K4-PREVIEW-SOURCE-UNSTABLE';
+    let attempts = 0;
 
     while (!disposed && requestedRevision === revision) {
+      attempts += 1;
       try {
         const loaded = await loadSource(projectRoot, manifest, {
           maxSourceBytes,
@@ -296,7 +299,7 @@ export function createDsl4PreviewSourceWatcher({
       }
 
       const elapsed = Number(clock.now()) - startedAt;
-      if (elapsed >= timeout) {
+      if (elapsed >= timeout || attempts >= maximumAttempts) {
         const code =
           lastTransientCode === 'K4-SOURCE-MISSING'
             ? 'K4-SOURCE-MISSING'
