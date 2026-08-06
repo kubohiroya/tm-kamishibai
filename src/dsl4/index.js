@@ -14,6 +14,7 @@ export {
 } from './embedded-asset-lifecycle.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
+export {createDsl4LiveReloadSession} from './live-reload-session.js';
 export {createDsl4NavigationSession} from './navigation-session.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController} from './runtime-controller.js';
