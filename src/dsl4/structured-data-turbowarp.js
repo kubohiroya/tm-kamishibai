@@ -232,6 +232,8 @@ export const dsl4StructuredDataDefaultFeatureFlags = deepFreeze({
 });
 
 const featureFlagKeys = new Set(Object.keys(dsl4StructuredDataDefaultFeatureFlags));
+const registeredResult = deepFreeze({registered: true});
+const notRegisteredResult = deepFreeze({registered: false});
 const standaloneAdapterMethods = dsl4StructuredDataStandaloneManifest.blocks.map(
   (definition) => definition.opcode,
 );
@@ -307,7 +309,12 @@ export function createDsl4StructuredDataTurboWarpSurfaces(options = {}) {
   const candidate = /** @type {Record<string, any>} */ (options);
   const featureFlags = resolveDsl4StructuredDataFeatureFlags(candidate.featureFlags);
   if (!featureFlags.structuredDataStandaloneEnabled && !featureFlags.structuredDataDebugEnabled) {
-    return deepFreeze({featureFlags, standalone: null, developer: null, register() {}});
+    return deepFreeze({
+      featureFlags,
+      standalone: null,
+      developer: null,
+      register: () => notRegisteredResult,
+    });
   }
 
   const Scratch = candidate.Scratch;
@@ -419,18 +426,26 @@ export function createDsl4StructuredDataTurboWarpSurfaces(options = {}) {
   const developer = featureFlags.structuredDataDebugEnabled
     ? createExtension(Scratch, dsl4StructuredDataDeveloperManifest, developerHandlers)
     : null;
-  let registered = false;
+  let standaloneRegistered = false;
+  let developerRegistered = false;
 
   return Object.freeze({
     featureFlags,
     standalone,
     developer,
     register() {
-      if (registered) return Object.freeze({registered: false});
-      if (standalone) Scratch.extensions.register(standalone);
-      if (developer) Scratch.extensions.register(developer);
-      registered = true;
-      return Object.freeze({registered: true});
+      let changed = false;
+      if (standalone && !standaloneRegistered) {
+        Scratch.extensions.register(standalone);
+        standaloneRegistered = true;
+        changed = true;
+      }
+      if (developer && !developerRegistered) {
+        Scratch.extensions.register(developer);
+        developerRegistered = true;
+        changed = true;
+      }
+      return changed ? registeredResult : notRegisteredResult;
     },
   });
 }

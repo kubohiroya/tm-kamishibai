@@ -132,7 +132,7 @@ test('keeps both surfaces startup-fixed and disabled by default without touching
   assert.deepEqual(surfaces.featureFlags, dsl4StructuredDataDefaultFeatureFlags);
   assert.equal(surfaces.standalone, null);
   assert.equal(surfaces.developer, null);
-  assert.equal(surfaces.register(), undefined);
+  assert.deepEqual(surfaces.register(), {registered: false});
   assert.equal(Object.isFrozen(surfaces), true);
 });
 
@@ -186,6 +186,38 @@ test('keeps the developer palette separate and casts numeric debug indices', () 
   assert.deepEqual(calls.at(-1), ['debugNormalizedPath', 'string:r', 4.5]);
   surfaces.register();
   assert.deepEqual(registered, [surfaces.developer]);
+});
+
+test('retries a failed second registration without duplicating the first palette', () => {
+  const attempts = [];
+  let failDeveloper = true;
+  const {Scratch} = fakeScratch();
+  Scratch.extensions.register = (extension) => {
+    const id = extension.getInfo().id;
+    attempts.push(id);
+    if (id.endsWith('debug') && failDeveloper) {
+      failDeveloper = false;
+      throw new Error('injected registration failure');
+    }
+  };
+  const {adapter} = fakeAdapter();
+  const surfaces = createDsl4StructuredDataTurboWarpSurfaces({
+    Scratch,
+    adapter,
+    featureFlags: {
+      structuredDataStandaloneEnabled: true,
+      structuredDataDebugEnabled: true,
+    },
+  });
+
+  assert.throws(() => surfaces.register(), /injected registration failure/u);
+  assert.deepEqual(surfaces.register(), {registered: true});
+  assert.deepEqual(surfaces.register(), {registered: false});
+  assert.deepEqual(attempts, [
+    'kubohiroyastructdata1',
+    'kubohiroyastructdata1debug',
+    'kubohiroyastructdata1debug',
+  ]);
 });
 
 test('rejects sandboxed hosts and incomplete adapters before registration', () => {
