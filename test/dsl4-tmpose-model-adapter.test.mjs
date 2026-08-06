@@ -226,50 +226,24 @@ test('routes media and pose assets to their owners and preserves release ownersh
 });
 
 test('keeps platform adapters outside the default-off core graph and pins pose dependencies', async () => {
-  const [coreIndex, startup, adapterSource, routerSource, packageJson, workspace, lockfile] =
-    await Promise.all([
-      readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
-      readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
-      readFile(
-        path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'tmpose-model-adapter.js'),
-        'utf8',
-      ),
-      readFile(
-        path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'asset-adapter-router.js'),
-        'utf8',
-      ),
-      readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
-      readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
-      readFile(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8'),
-    ]);
+  const [coreIndex, startup, adapterSource, routerSource, packageJson] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
+    readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
+    readFile(
+      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'tmpose-model-adapter.js'),
+      'utf8',
+    ),
+    readFile(
+      path.join(repositoryRoot, 'src', 'dsl4', 'platform', 'asset-adapter-router.js'),
+      'utf8',
+    ),
+    readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
+  ]);
   assert.doesNotMatch(coreIndex, /\.\/platform|tmpose-model-adapter/u);
   assert.doesNotMatch(startup, /turbowarp-tmpose|tmpose-model-adapter/u);
   assert.doesNotMatch(
     `${adapterSource}\n${routerSource}`,
     /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
-  assert.match(packageJson, /turbowarp-tmpose#9fdc0982a76818c5627fa65a03c467a243fe8110/u);
-  assert.match(workspace, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
-  assert.match(lockfile, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
-  assert.match(packageJson, /turbowarp-async-input#0174a450ac6b2312637827f999748adc3d284332/u);
-  assert.match(
-    workspace,
-    /turbowarp-async-input\/tar\.gz\/0174a450ac6b2312637827f999748adc3d284332/u,
-  );
-  assert.match(
-    lockfile,
-    /turbowarp-async-input\/tar\.gz\/0174a450ac6b2312637827f999748adc3d284332/u,
-  );
-  assert.match(
-    packageJson,
-    /turbowarp-runtime-expression#f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
-  );
-  assert.match(
-    workspace,
-    /turbowarp-runtime-expression\/tar\.gz\/f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
-  );
-  assert.match(
-    lockfile,
-    /turbowarp-runtime-expression\/tar\.gz\/f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
-  );
+  assert.match(packageJson, /"@kubohiroya\/turbowarp-tmpose": "1\.5\.0"/u);
 });

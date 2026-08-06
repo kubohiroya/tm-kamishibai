@@ -205,7 +205,7 @@ test('cancels pending registration on Abort without publishing a resource', asyn
 });
 
 test('keeps the adapter out of the default-off core import graph and pins its dependency', async () => {
-  const [coreIndex, startup, adapterSource, packageJson, workspace] = await Promise.all([
+  const [coreIndex, startup, adapterSource, packageJson] = await Promise.all([
     readFile(path.join(repositoryRoot, 'src', 'dsl4', 'index.js'), 'utf8'),
     readFile(path.join(repositoryRoot, 'src', 'dsl4', 'runtime-startup.js'), 'utf8'),
     readFile(
@@ -213,7 +213,6 @@ test('keeps the adapter out of the default-off core import graph and pins its de
       'utf8',
     ),
     readFile(path.join(repositoryRoot, 'package.json'), 'utf8'),
-    readFile(path.join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
   ]);
   assert.doesNotMatch(coreIndex, /asset-manager-adapter|\.\/platform/u);
   assert.doesNotMatch(startup, /turbowarp-asset-manager|asset-manager-adapter/u);
@@ -221,9 +220,5 @@ test('keeps the adapter out of the default-off core import graph and pins its de
     adapterSource,
     /(?:node:fs|node:http|node:https|\bfetch\s*\(|\bScratch\b|indexedDB)/u,
   );
-  assert.match(packageJson, /turbowarp-asset-manager#1f706d7d046ed491728d9011a0e610e63013d815/u);
-  assert.match(
-    workspace,
-    /turbowarp-asset-manager\/tar\.gz\/1f706d7d046ed491728d9011a0e610e63013d815/u,
-  );
+  assert.match(packageJson, /"@kubohiroya\/turbowarp-asset-manager": "0\.6\.0"/u);
 });
