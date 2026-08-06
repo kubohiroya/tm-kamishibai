@@ -1,41 +1,49 @@
+import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 
+import {createDsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {packageVersion} from './constants.js';
 import {Sb3BuilderError} from './errors.js';
-import {buildSb3Bundle} from './index.js';
+import {buildDsl4RuntimeComponentFile, buildSb3Bundle} from './index.js';
+
+const dsl4SchemaUrl = new URL('../../schema/dsl-4.schema.json', import.meta.url);
 
 export function usage() {
   return `Usage:
   tmpose-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
     --assets assets.lock.json --output dist/sample --profile editor [options]
 
-Options:
+  tmpose-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
+    --source-manifest project.source.json --output dist/story.sb3 \\
+    --control-profile production --channel bundled \\
+    --max-source-bytes N --max-asset-file-bytes N \\
+    --max-asset-files N --max-total-asset-bytes N [options]
+
+DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
   --allow-http            Permit plain HTTP assets (HTTPS is the default)
   --timeout-ms N          Per-request timeout in milliseconds
   --max-asset-bytes N     Maximum bytes per asset
   --max-script-bytes N    Maximum embedded script bytes
   --max-redirects N       Maximum HTTP redirects
+
+DSL 4.0 build-dsl4 options:
+  --history-navigation-available  Permit a selected history.* keymap
+  --replace-existing              Replace a same-channel component in the base SB3
+
+General options:
   --help                  Show this help
   --version               Show the package version
 
-The output path is a basename. The example writes dist/sample.sb3,
-dist/sample.txt, and dist/sample.manifest.json as one validated transaction.`;
+build-sb3 takes an output basename and writes .sb3, .txt, and .manifest.json.
+build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.`;
 }
 
 /**
- * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]}}
+ * @param {string[]} rest
+ * @returns {Parameters<typeof buildSb3Bundle>[0]}
  */
-export function parseCliArguments(arguments_) {
-  if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
-  if (arguments_.includes('--version') || arguments_.includes('-v')) return {action: 'version'};
-  const [command, ...rest] = arguments_;
-  if (command !== 'build-sb3') {
-    throw new Sb3BuilderError(`Expected the build-sb3 command, received ${command ?? '(none)'}.`, {
-      stage: 'cli',
-    });
-  }
+function parseBuildSb3Arguments(rest) {
   const values = new Map();
   const allowedFileRoots = [];
   let allowHttp = false;
@@ -61,8 +69,9 @@ export function parseCliArguments(arguments_) {
       ['--base', '--script', '--assets', '--output', '--profile'].includes(option) ||
       numericOptions.has(option)
     ) {
-      if (values.has(option))
+      if (values.has(option)) {
         throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
       values.set(option, value);
     } else {
       throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
@@ -70,8 +79,9 @@ export function parseCliArguments(arguments_) {
     index += 1;
   }
   for (const required of ['--base', '--script', '--assets', '--output', '--profile']) {
-    if (!values.has(required))
+    if (!values.has(required)) {
       throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
   }
   /** @param {string} option */
   const numberValue = (option) => {
@@ -90,22 +100,118 @@ export function parseCliArguments(arguments_) {
     throw new Sb3BuilderError('--profile must be either editor or player.', {stage: 'cli'});
   }
   return {
-    action: 'build',
-    options: {
-      baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
-      sourceScript: path.resolve(/** @type {string} */ (values.get('--script'))),
-      assetManifest: path.resolve(/** @type {string} */ (values.get('--assets'))),
-      outputDirectory: path.dirname(outputBase),
-      outputName: path.basename(outputBase),
-      profile,
-      allowedFileRoots: allowedFileRoots.length > 0 ? allowedFileRoots : undefined,
-      allowHttp,
-      requestTimeoutMs: numberValue('--timeout-ms'),
-      maxAssetBytes: numberValue('--max-asset-bytes'),
-      maxEmbeddedScriptBytes: numberValue('--max-script-bytes'),
-      maxRedirects: numberValue('--max-redirects'),
-    },
+    baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
+    sourceScript: path.resolve(/** @type {string} */ (values.get('--script'))),
+    assetManifest: path.resolve(/** @type {string} */ (values.get('--assets'))),
+    outputDirectory: path.dirname(outputBase),
+    outputName: path.basename(outputBase),
+    profile,
+    allowedFileRoots: allowedFileRoots.length > 0 ? allowedFileRoots : undefined,
+    allowHttp,
+    requestTimeoutMs: numberValue('--timeout-ms'),
+    maxAssetBytes: numberValue('--max-asset-bytes'),
+    maxEmbeddedScriptBytes: numberValue('--max-script-bytes'),
+    maxRedirects: numberValue('--max-redirects'),
   };
+}
+
+/**
+ * @typedef {Omit<Parameters<typeof buildDsl4RuntimeComponentFile>[0], 'sourceFrontend'>} Dsl4CliOptions
+ */
+
+/**
+ * @param {string[]} rest
+ * @returns {Dsl4CliOptions}
+ */
+function parseBuildDsl4Arguments(rest) {
+  const values = new Map();
+  const flags = new Set();
+  const booleanOptions = new Set(['--history-navigation-available', '--replace-existing']);
+  const valueOptions = new Set([
+    '--base',
+    '--project-root',
+    '--source-manifest',
+    '--output',
+    '--control-profile',
+    '--channel',
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]);
+  for (let index = 0; index < rest.length; index += 1) {
+    const option = rest[index];
+    if (booleanOptions.has(option)) {
+      if (flags.has(option)) {
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
+      flags.add(option);
+      continue;
+    }
+    if (!valueOptions.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    const value = rest[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+    index += 1;
+  }
+  for (const required of valueOptions) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  /** @param {string} option */
+  const positiveInteger = (option) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const channel = values.get('--channel');
+  if (channel !== 'bundled' && channel !== 'unbundled') {
+    throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
+  }
+  return {
+    baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    output: path.resolve(/** @type {string} */ (values.get('--output'))),
+    controlProfile: /** @type {string} */ (values.get('--control-profile')),
+    channel,
+    maxSourceBytes: positiveInteger('--max-source-bytes'),
+    maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
+    maxAssetFiles: positiveInteger('--max-asset-files'),
+    maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
+    historyNavigationAvailable: flags.has('--history-navigation-available'),
+    replaceExisting: flags.has('--replace-existing'),
+  };
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions}}
+ */
+export function parseCliArguments(arguments_) {
+  if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
+  if (arguments_.includes('--version') || arguments_.includes('-v')) return {action: 'version'};
+  const [command, ...rest] = arguments_;
+  if (command === 'build-sb3') {
+    return {action: 'build', options: parseBuildSb3Arguments(rest)};
+  }
+  if (command === 'build-dsl4') {
+    return {action: 'build-dsl4', options: parseBuildDsl4Arguments(rest)};
+  }
+  throw new Sb3BuilderError(
+    `Expected the build-sb3 or build-dsl4 command, received ${command ?? '(none)'}.`,
+    {stage: 'cli'},
+  );
 }
 
 /**
@@ -123,9 +229,18 @@ export async function runCli(arguments_, io = {}) {
     stdout.write(`${packageVersion}\n`);
     return null;
   }
-  const result = await buildSb3Bundle(parsed.options);
-  stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.sb3`]}\n`);
-  stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.txt`]}\n`);
-  stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.manifest.json`]}\n`);
+  if (parsed.action === 'build') {
+    const result = await buildSb3Bundle(parsed.options);
+    stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.sb3`]}\n`);
+    stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.txt`]}\n`);
+    stdout.write(`Built ${result.outputPaths[`${parsed.options.outputName}.manifest.json`]}\n`);
+    return result;
+  }
+  const schema = JSON.parse(await readFile(dsl4SchemaUrl, 'utf8'));
+  const result = await buildDsl4RuntimeComponentFile({
+    ...parsed.options,
+    sourceFrontend: createDsl4SourceFrontend(schema),
+  });
+  stdout.write(`Built ${path.basename(result.outputPath)}\n`);
   return result;
 }

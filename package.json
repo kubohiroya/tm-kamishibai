@@ -22,6 +22,8 @@
   "files": [
     "bin/",
     "src/builder/",
+    "src/dsl4/*.js",
+    "schema/dsl-4.schema.json",
     "README.md",
     "LICENSE",
     "LICENSES.md"

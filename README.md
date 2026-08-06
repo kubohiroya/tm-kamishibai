@@ -31,6 +31,24 @@ pnpm exec tmpose-kamishibai build-sb3 \
   --profile editor
 ```
 
+開発中のDSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
+
+```bash
+pnpm exec tmpose-kamishibai build-dsl4 \
+  --base kamishibai-4-base.sb3 \
+  --project-root . \
+  --source-manifest project.source.json \
+  --output dist/story-4.sb3 \
+  --control-profile production \
+  --channel bundled \
+  --max-source-bytes 1048576 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 \
+  --max-total-asset-bytes 134217728
+```
+
+`project.source.json`はproject root内の1個の`.kamishibai.yaml`をPOSIX相対pathで参照します。YAMLが参照する画像・音声・pose modelもproject root内のlocal fileに限定され、生成SB3へ埋め込まれます。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。`preview --watch`とremote assetはこのcommandには含まれません。
+
 API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
 ## DSL 3.2の互換性
@@ -109,7 +127,7 @@ CIでも`pnpm sb3:check`を実行し、同じツールチェインで`app/`を�
 ## リポジトリ構成
 
 - `app/`: 紙芝居SB3のGit管理上の正本
-- `src/builder/`、`bin/`: npmで配布するビルダーAPIとCLI
+- `src/builder/`、`src/dsl4/`、`schema/`、`bin/`: npmで配布するDSL 3.2／4.0ビルダーAPIとCLI
 - `site/`: 公開サイトの静的ファイル
 - `scripts/`: 公開ページとSB3のビルド処理
 - `test/`: 自動テストと最小検証用台本
