@@ -263,7 +263,7 @@ export function createDsl4NavigationSession({
   });
 
   const session = Object.freeze({
-    /** @param {{sceneId?: string}} [options] */
+    /** @param {{sceneId?: string, actionIndex?: number, variables?: Readonly<Record<string, string | number | boolean>>}} [options] */
     start(options = {}) {
       if (disposed) return Promise.resolve(snapshot());
       sessionDiagnostic = null;

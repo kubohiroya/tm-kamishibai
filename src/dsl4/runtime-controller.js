@@ -50,6 +50,11 @@ function cloneValue(value) {
   );
 }
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * @param {unknown} error
  * @returns {string}
@@ -214,6 +219,39 @@ export function createDsl4RuntimeController({
       return null;
     }
     return {sceneIndex: nextSceneIndex};
+  }
+
+  /**
+   * Validate a planner-produced variable snapshot before interrupting the current run.
+   *
+   * @param {unknown} input
+   * @returns {Record<string, string | number | boolean>}
+   */
+  function resolveStartVariables(input) {
+    if (input === undefined) {
+      return /** @type {Record<string, string | number | boolean>} */ (
+        cloneValue(initialVariables)
+      );
+    }
+    if (!isRecord(input)) throw new TypeError('runtime start variables must be an object');
+    const expectedNames = Object.keys(initialVariables).sort();
+    const actualNames = Object.keys(input).sort();
+    if (
+      expectedNames.length !== actualNames.length ||
+      expectedNames.some((name, index) => name !== actualNames[index])
+    ) {
+      throw new TypeError('runtime start variables must match every declared story variable');
+    }
+    for (const name of expectedNames) {
+      const value = input[name];
+      if (
+        (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
+        typeof value !== typeof initialVariables[name]
+      ) {
+        throw new TypeError(`runtime start variable ${JSON.stringify(name)} has the wrong type`);
+      }
+    }
+    return /** @type {Record<string, string | number | boolean>} */ (cloneValue(input));
   }
 
   /**
@@ -583,9 +621,10 @@ export function createDsl4RuntimeController({
 
   /**
    * @param {string} entrySceneId
+   * @param {number} entryActionIndex
    * @param {number} activeRunId
    */
-  async function runWithAssetStartup(entrySceneId, activeRunId) {
+  async function runWithAssetStartup(entrySceneId, entryActionIndex, activeRunId) {
     if (!assetCoordinator) throw new Error('Asset startup requires an asset coordinator');
     let delegatedToRun = false;
     try {
@@ -596,6 +635,7 @@ export function createDsl4RuntimeController({
         return snapshot();
       }
       if (!(await enterScene(entrySceneId, 'start', activeRunId))) return snapshot();
+      currentActionIndex = entryActionIndex - 1;
       delegatedToRun = true;
       return await run(activeRunId);
     } finally {
@@ -604,16 +644,19 @@ export function createDsl4RuntimeController({
   }
 
   /**
-   * @param {{sceneId?: string}} [options]
+   * @param {{sceneId?: string, actionIndex?: number, variables?: Readonly<Record<string, string | number | boolean>>}} [options]
    * @returns {Promise<Readonly<Record<string, unknown>>>}
    */
-  function start({sceneId} = {}) {
+  function start({sceneId, actionIndex = 0, variables: startVariables} = {}) {
+    const entrySceneId = sceneId ?? String(scenes[0]?.id ?? '');
+    if (!entrySceneId || !resolvePosition(entrySceneId, actionIndex)) {
+      throw new TypeError(`Invalid runtime start position: ${entrySceneId} action ${actionIndex}`);
+    }
+    const nextVariables = resolveStartVariables(startVariables);
     const previousStatus = status;
     if (status === 'running' || status === 'paused') stop('restart');
     else if (previousStatus === 'failed' || previousStatus === 'finished') releaseAssets('restart');
-    variables = /** @type {Record<string, string | number | boolean>} */ (
-      cloneValue(initialVariables)
-    );
+    variables = nextVariables;
     failureDiagnostic = null;
     currentSceneIndex = -1;
     currentActionIndex = -1;
@@ -622,21 +665,13 @@ export function createDsl4RuntimeController({
     sequence = 0;
     trace.length = 0;
     emit('runtime.start');
-    const entrySceneId = sceneId ?? String(scenes[0]?.id ?? '');
-    if (!entrySceneId || !sceneIndex.has(entrySceneId)) {
-      fail(
-        Object.assign(new Error(`Unknown entry scene: ${entrySceneId}`), {
-          code: 'K4-RUNTIME-SCENE-001',
-        }),
-      );
-      return Promise.resolve(snapshot());
-    }
     if (assetCoordinator) assetsReleased = false;
     runId += 1;
     if (assetCoordinator) {
-      runPromise = runWithAssetStartup(entrySceneId, runId);
+      runPromise = runWithAssetStartup(entrySceneId, actionIndex, runId);
     } else {
       transitionTo(entrySceneId, 'start');
+      currentActionIndex = actionIndex - 1;
       runPromise = run(runId);
     }
     return runPromise;
