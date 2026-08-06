@@ -12,6 +12,31 @@ const defaultPoseSelectionRecognition = Object.freeze({
   scoreThreshold: 0,
 });
 
+export const dsl4RuntimeQuiesceDefaults = Object.freeze({
+  quiesceTimeoutMs: 5_000,
+  minimumQuiesceTimeoutMs: 100,
+  maximumQuiesceTimeoutMs: 30_000,
+});
+
+/** @param {() => void} callback @param {number} milliseconds */
+function defaultScheduleQuiesceTimeout(callback, milliseconds) {
+  const timer = setTimeout(callback, milliseconds);
+  if (typeof timer.unref === 'function') timer.unref();
+  return () => clearTimeout(timer);
+}
+
+function deferred() {
+  /** @type {(value: unknown) => void} */
+  let resolve = () => {};
+  /** @type {(reason: unknown) => void} */
+  let reject = () => {};
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, resolve, reject};
+}
+
 /**
  * @typedef {'idle' | 'running' | 'paused' | 'failed' | 'finished' | 'stopped'} RuntimeStatus
  *
@@ -102,6 +127,8 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: ActionContext) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  * @param {Record<string, Function>} [options.structuredDataIntegration]
+ * @param {number} [options.quiesceTimeoutMs]
+ * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
 export function createDsl4RuntimeController({
   storyDocument,
@@ -110,6 +137,8 @@ export function createDsl4RuntimeController({
   evaluateCondition,
   onEvent,
   structuredDataIntegration,
+  quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
+  scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime requires a StoryDocument version 4.0');
@@ -131,6 +160,16 @@ export function createDsl4RuntimeController({
         throw new TypeError(`structuredDataIntegration.${method} is required`);
       }
     }
+  }
+  if (
+    !Number.isSafeInteger(quiesceTimeoutMs) ||
+    quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
+    quiesceTimeoutMs > dsl4RuntimeQuiesceDefaults.maximumQuiesceTimeoutMs
+  ) {
+    throw new TypeError('quiesceTimeoutMs is outside the supported range');
+  }
+  if (typeof scheduleQuiesceTimeout !== 'function') {
+    throw new TypeError('scheduleQuiesceTimeout must be a function');
   }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
@@ -172,6 +211,8 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
+  /** @type {Record<string, any> | null} */
+  let quiesceRequest = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
   let failureDiagnostic = null;
   /** @type {RuntimeEvent[]} */
@@ -211,6 +252,137 @@ export function createDsl4RuntimeController({
       currentScene()?.actions ?? []
     );
     return actions[currentActionIndex];
+  }
+
+  /** @param {number} scenePosition @param {number} actionPosition */
+  function actionAt(scenePosition, actionPosition) {
+    const scene = scenes[scenePosition];
+    const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene?.actions ?? []
+    );
+    return actions[actionPosition] ?? null;
+  }
+
+  /** @param {string} code @param {string} message */
+  function quiesceError(code, message) {
+    const error = new Error(message);
+    Object.defineProperty(error, 'code', {value: code});
+    const action = currentAction();
+    if (typeof action?.id === 'string') {
+      Object.defineProperty(error, 'storyPath', {value: action.id});
+    }
+    return error;
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} token @param {number} candidateId */
+  function retagQuiesceToken(token, candidateId) {
+    return deepFreeze({...token, candidateId});
+  }
+
+  /**
+   * @param {number} scenePosition
+   * @param {number} actionPosition
+   * @param {'next-action' | 'replay-action' | 'finished'} resumeMode
+   * @param {boolean} pause
+   */
+  function completeQuiesce(scenePosition, actionPosition, resumeMode, pause) {
+    const request = quiesceRequest;
+    if (!request || request.phase !== 'quiescing') return null;
+    if (pause) {
+      status = 'paused';
+      currentSceneIndex = scenePosition;
+      currentActionIndex = actionPosition;
+      actionAbortController = null;
+    }
+    const scene = scenes[scenePosition] ?? null;
+    const action = actionAt(scenePosition, actionPosition);
+    const sceneId = typeof scene?.id === 'string' ? scene.id : null;
+    const storyPath =
+      typeof action?.id === 'string'
+        ? action.id
+        : sceneId
+          ? `/scenes/${storyPathSegment(sceneId)}`
+          : '/';
+    const token = deepFreeze({
+      kind: 'Dsl4QuiesceToken',
+      version: 1,
+      candidateId: request.candidateId,
+      runtimeGeneration: generation,
+      storyPath,
+      actionSignature: action
+        ? {
+            command: String(action.command),
+            target: action.target === null ? null : String(action.target),
+            handler: String(action.handler ?? 'core'),
+          }
+        : null,
+      sceneId,
+      actionIndex: actionPosition,
+      variables: cloneValue(variables),
+      resumeMode,
+    });
+    request.phase = 'token';
+    request.token = token;
+    try {
+      request.cancelTimeout();
+    } catch {
+      // A timeout observer cannot change an already safe boundary.
+    }
+    request.cancelTimeout = () => {};
+    if (pause) emit('runtime.quiesce', {candidateId: request.candidateId, resumeMode});
+    request.completion.resolve(token);
+    return token;
+  }
+
+  /** @param {unknown} error */
+  function rejectQuiesce(error) {
+    const request = quiesceRequest;
+    if (!request || request.phase !== 'quiescing') return;
+    request.phase = 'failed';
+    try {
+      request.cancelTimeout();
+    } catch {
+      // A timeout observer cannot replace the quiesce failure.
+    }
+    request.cancelTimeout = () => {};
+    quiesceRequest = null;
+    request.completion.reject(error);
+  }
+
+  /** @param {string} _reason */
+  function abandonQuiesce(_reason) {
+    const request = quiesceRequest;
+    if (!request) return;
+    if (request.phase === 'quiescing') {
+      rejectQuiesce(
+        quiesceError(
+          'K4-RELOAD-QUIESCE-FAILED',
+          'Runtime termination interrupted live reload quiesce',
+        ),
+      );
+      return;
+    }
+    try {
+      request.cancelTimeout();
+    } catch {
+      // Runtime termination remains authoritative.
+    }
+    quiesceRequest = null;
+  }
+
+  function pauseAtDispatchBoundary() {
+    const request = quiesceRequest;
+    if (!request || request.phase !== 'quiescing' || request.mode !== 'finish-only') {
+      return false;
+    }
+    const scene = currentScene();
+    const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene?.actions ?? []
+    );
+    const nextActionIndex = currentActionIndex + 1;
+    if (nextActionIndex >= actions.length) return false;
+    completeQuiesce(currentSceneIndex, nextActionIndex, 'next-action', true);
+    return true;
   }
 
   /** @param {unknown} error @param {Readonly<Record<string, unknown>> | null} action */
@@ -682,6 +854,11 @@ export function createDsl4RuntimeController({
       safeErrorMessage(terminalError),
     );
     emit('runtime.fail', {code});
+    rejectQuiesce(
+      terminalError instanceof Error
+        ? terminalError
+        : quiesceError('K4-RELOAD-QUIESCE-FAILED', 'Runtime failed while quiescing'),
+    );
   }
 
   /**
@@ -716,6 +893,7 @@ export function createDsl4RuntimeController({
         const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
           scene.actions
         );
+        if (pauseAtDispatchBoundary()) break;
         if (currentActionIndex + 1 >= actions.length) {
           if (currentSceneIndex + 1 >= scenes.length) {
             try {
@@ -727,6 +905,7 @@ export function createDsl4RuntimeController({
             status = 'finished';
             currentActionIndex = actions.length;
             emit('runtime.finish');
+            completeQuiesce(currentSceneIndex, currentActionIndex, 'finished', false);
             break;
           }
           if (
@@ -847,6 +1026,7 @@ export function createDsl4RuntimeController({
     }
     const nextVariables = resolveStartVariables(startVariables);
     const previousStatus = status;
+    abandonQuiesce('restart');
     if (status === 'running' || status === 'paused') stop('restart');
     else if (previousStatus === 'failed' || previousStatus === 'finished') releaseAssets('restart');
     variables = nextVariables;
@@ -887,6 +1067,7 @@ export function createDsl4RuntimeController({
    * @returns {Readonly<Record<string, unknown>>}
    */
   function stop(reason = 'stop') {
+    abandonQuiesce(reason);
     if (status !== 'running' && status !== 'paused') {
       try {
         endStructuredStory(reason);
@@ -1106,6 +1287,176 @@ export function createDsl4RuntimeController({
     return runPromise;
   }
 
+  /** @param {Record<string, any>} request @param {Promise<Readonly<Record<string, unknown>>>} activeRun */
+  function awaitCancelledActionCleanup(request, activeRun) {
+    const timeout = deferred();
+    try {
+      const cancelTimeout = scheduleQuiesceTimeout(
+        () => timeout.resolve('timeout'),
+        quiesceTimeoutMs,
+      );
+      if (typeof cancelTimeout !== 'function') {
+        throw new TypeError('scheduleQuiesceTimeout must return a cancel function');
+      }
+      request.cancelTimeout = cancelTimeout;
+    } catch {
+      fail(
+        quiesceError(
+          'K4-RELOAD-QUIESCE-FAILED',
+          'Live reload quiesce timeout could not be scheduled',
+        ),
+      );
+      return;
+    }
+
+    void Promise.race([Promise.resolve(activeRun).then(() => 'settled'), timeout.promise]).then(
+      (outcome) => {
+        if (quiesceRequest !== request || request.phase !== 'quiescing') return;
+        if (outcome === 'timeout') {
+          fail(
+            quiesceError(
+              'K4-RELOAD-QUIESCE-TIMEOUT',
+              'Live reload action cleanup exceeded the quiesce timeout',
+            ),
+          );
+          return;
+        }
+        if (request.resumeRequested) {
+          const error = new Error('Live reload quiesce was cancelled');
+          error.name = 'AbortError';
+          rejectQuiesce(error);
+          if (status === 'paused') void resume('live-reload-esc');
+          return;
+        }
+        if (status !== 'paused') {
+          rejectQuiesce(
+            quiesceError(
+              'K4-RELOAD-QUIESCE-FAILED',
+              'Runtime did not reach a safe replay boundary',
+            ),
+          );
+          return;
+        }
+        completeQuiesce(currentSceneIndex, currentActionIndex, 'replay-action', false);
+      },
+    );
+  }
+
+  /**
+   * Close the next-action dispatch gate and publish one immutable cleanup-complete boundary.
+   *
+   * @param {{candidateId: number, mode: 'finish-only' | 'cancel-replay-safe'}} options
+   */
+  function quiesce({candidateId, mode}) {
+    if (!Number.isSafeInteger(candidateId) || candidateId < 1) {
+      return Promise.reject(new TypeError('quiesce candidateId must be a positive safe integer'));
+    }
+    if (mode !== 'finish-only' && mode !== 'cancel-replay-safe') {
+      return Promise.reject(new TypeError('quiesce mode is invalid'));
+    }
+    if (controllerDisposed) {
+      return Promise.reject(new TypeError('DSL 4.0 runtime controller is disposed'));
+    }
+    if (quiesceRequest) {
+      quiesceRequest.candidateId = candidateId;
+      if (quiesceRequest.phase === 'token') {
+        quiesceRequest.token = retagQuiesceToken(quiesceRequest.token, candidateId);
+        return Promise.resolve(quiesceRequest.token);
+      }
+      return quiesceRequest.completion.promise;
+    }
+    if (status === 'failed' || status === 'stopped' || status === 'idle') {
+      return Promise.reject(
+        quiesceError('K4-RELOAD-QUIESCE-FAILED', 'Runtime is not resumable for live reload'),
+      );
+    }
+
+    const completion = deferred();
+    const request = {
+      candidateId,
+      mode,
+      phase: 'quiescing',
+      token: null,
+      completion,
+      resumeRequested: false,
+      cancelTimeout: () => {},
+    };
+    quiesceRequest = request;
+
+    if (status === 'finished') {
+      completeQuiesce(currentSceneIndex, currentActionIndex, 'finished', false);
+      return completion.promise;
+    }
+    if (status === 'paused') {
+      completeQuiesce(currentSceneIndex, currentActionIndex, 'next-action', false);
+      return completion.promise;
+    }
+
+    const activeRun = runPromise;
+    if (!activeRun) {
+      rejectQuiesce(
+        quiesceError('K4-RELOAD-QUIESCE-FAILED', 'Runtime has no active execution to quiesce'),
+      );
+      return completion.promise;
+    }
+    const hasActiveAction = actionAbortController !== null && currentAction() !== null;
+    if (hasActiveAction && mode === 'cancel-replay-safe') {
+      const sceneId = String(currentScene()?.id ?? '');
+      const actionIndex = currentActionIndex;
+      reposition(sceneId, {actionIndex, reason: 'live-reload-quiesce'});
+      if (quiesceRequest === request && request.phase === 'quiescing') {
+        awaitCancelledActionCleanup(request, activeRun);
+      }
+      return completion.promise;
+    }
+
+    void Promise.resolve(activeRun).then(() => {
+      if (quiesceRequest !== request || request.phase !== 'quiescing') return;
+      if (status === 'finished') {
+        completeQuiesce(currentSceneIndex, currentActionIndex, 'finished', false);
+        return;
+      }
+      if (status !== 'paused') {
+        rejectQuiesce(
+          quiesceError(
+            'K4-RELOAD-QUIESCE-FAILED',
+            'Runtime did not reach a safe dispatch boundary',
+          ),
+        );
+      }
+    });
+    return completion.promise;
+  }
+
+  /** @param {number} candidateId */
+  async function resumeQuiesce(candidateId) {
+    const request = quiesceRequest;
+    if (!request || request.candidateId !== candidateId) {
+      throw new TypeError('live reload quiesce candidate is stale or missing');
+    }
+    if (request.phase === 'quiescing') {
+      request.resumeRequested = true;
+      if (request.mode === 'finish-only') {
+        const error = new Error('Live reload quiesce was cancelled');
+        error.name = 'AbortError';
+        rejectQuiesce(error);
+        return snapshot();
+      }
+      try {
+        await request.completion.promise;
+      } catch {
+        return snapshot();
+      }
+      return snapshot();
+    }
+    if (request.phase !== 'token') {
+      throw new TypeError('live reload quiesce candidate is not resumable');
+    }
+    quiesceRequest = null;
+    if (status === 'paused') void resume('live-reload-esc');
+    return snapshot();
+  }
+
   return Object.freeze({
     start,
     stop,
@@ -1113,6 +1464,8 @@ export function createDsl4RuntimeController({
     navigate,
     reposition,
     resume,
+    quiesce,
+    resumeQuiesce,
     getState: snapshot,
     getTrace() {
       return deepFreeze(trace.map((event) => cloneValue(event)));

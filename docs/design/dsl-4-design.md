@@ -1605,10 +1605,15 @@ sessionで再handshakeし、この二値でcommit済みかを照合します。�
 handshakeへ含めません。
 
 source更新はsession内で単調増加する`revision`を付けて`preview.source.stage`として送り、runtime受理順に
-直列化します。stage ackが返すcandidate IDは同じ`sessionId`と`revision`にだけ有効です。
+直列化します。ただし受理順を固定した後のquiesce完了待ちは次revisionの受理を塞がず、より新しいsourceは
+quiesce中のcandidateを置き換えます。stage ackが返すcandidate IDは同じ`sessionId`と`revision`にだけ有効です。
 `preview.source.commit`はcandidate ID、revision、`storyStart`／`currentScene`／`currentAction`のchoiceが
 すべて一致した場合だけ受理し、ackへ実行中integrityと新しいgenerationを返します。重複・逆行revision、
 旧sessionのcandidate、切断中commitは拒否します。
+
+`preview.source.defer`はreload modalのEscに対応し、quiesce中またはToken発行済みの旧runtimeを安全位置から
+再開した上でcandidateとTokenを破棄します。defer ack後のcandidate IDはstaleであり、後からcommitすることは
+できません。同じsourceを再提示する場合も新revision／新candidateとしてquiesceとplan生成をやり直します。
 
 graceful stop、host crash、transport切断はいずれもprotocolのdisconnectへ収束させます。disconnectは
 pending／deferred candidateとcandidate診断だけを破棄し、現在のruntimeを停止・巻き戻ししません。再接続は

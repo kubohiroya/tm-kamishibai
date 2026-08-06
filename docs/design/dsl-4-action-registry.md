@@ -309,6 +309,17 @@ candidateを検出した直後の可変execution stateから先にreload planを
 のはQuiesceTokenのanchorである。Tokenはcandidate ID、旧runtime generation、StoryPath、action signature、
 scene ID、action index、runtime variable snapshot、resume modeを持つ。
 
+runtime session境界は`quiesce({candidateId})`と`resumeQuiesce(candidateId)`を持つ。前者は起動時固定の
+core/custom action modeを解決し、dispatch gateを閉じてcleanup完了後のTokenだけを返す。後者はToken発行前の
+`finish-only`ならgateを再び開き、`cancel-replay-safe`ならcleanup完了後、Token発行済みなら固定anchorから
+旧snapshotを再開する。live reload coordinatorは`session.getState()`の可変値ではなく、検証したTokenからのみ
+reload planを生成する。
+
+Token v1は`kind`、`version`、`candidateId`、`runtimeGeneration`、`storyPath`、`actionSignature`、
+`sceneId`、`actionIndex`、`variables`、`resumeMode`のexact objectとする。unknown field、非scalar runtime value、
+candidate ID不一致、旧StoryDocumentと矛盾するaction anchor／variable名・型はfail closedとし、旧runtimeを
+停止して選択肢を表示しない。
+
 - action実行中でない場合は次にdispatchするactionをanchorにする。
 - `finish-only`は現actionのcommit／goto／failを待つ。completeなら次action境界、gotoなら遷移先先頭をanchorにする。
 - `cancel-replay-safe`は現actionをcancelし、cleanup後に現action先頭をanchorにする。
@@ -318,6 +329,8 @@ scene ID、action index、runtime variable snapshot、resume modeを持つ。
 ### 8.3 Escと旧snapshot再開
 
 `Esc`はcandidateとQuiesceTokenを破棄し、旧StoryDocument／Registry Snapshotを次の位置から再開する。
+破棄後のcandidate IDはstaleであり、同じcandidateを後からcommitできない。再度選択するには新revisionとして
+stageし、現在のexecutionに対してquiesceとplan生成をやり直す。
 
 | quiesce時点                          | Esc後                                      |
 | ------------------------------------ | ------------------------------------------ |

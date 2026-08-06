@@ -38,6 +38,24 @@ function parsedSnapshot(source, integrity) {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, resolve, reject};
+}
+
+async function waitUntil(predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.fail('condition was not reached');
+}
+
 function fakeSession(storyDocument, events, name) {
   let runtime = {
     status: 'idle',
@@ -46,6 +64,7 @@ function fakeSession(storyDocument, events, name) {
     actionPath: '/scenes/opening/actions/0',
     variables: storyDocument.variables,
   };
+  let quiesceToken = null;
   return {
     start(options = {}) {
       events.push([name, 'start', options]);
@@ -65,12 +84,39 @@ function fakeSession(storyDocument, events, name) {
     stop(reason) {
       events.push([name, 'stop', reason]);
       runtime = {...runtime, status: 'stopped'};
+      quiesceToken = null;
     },
     dispose(reason) {
       events.push([name, 'dispose', reason]);
     },
     getState() {
       return {runtime};
+    },
+    quiesce({candidateId}) {
+      quiesceToken = Object.freeze({
+        kind: 'Dsl4QuiesceToken',
+        version: 1,
+        candidateId,
+        runtimeGeneration: 1,
+        storyPath: runtime.actionPath ?? `/scenes/${runtime.sceneId}`,
+        actionSignature: runtime.actionPath
+          ? {command: 'wait', target: null, handler: 'core'}
+          : null,
+        sceneId: runtime.sceneId,
+        actionIndex: runtime.actionIndex,
+        variables: {...runtime.variables},
+        resumeMode: runtime.actionPath ? 'replay-action' : 'finished',
+      });
+      runtime = {...runtime, status: 'paused'};
+      return quiesceToken;
+    },
+    resumeQuiesce(candidateId) {
+      if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
+        throw new TypeError('stale quiesce candidate');
+      }
+      quiesceToken = null;
+      runtime = {...runtime, status: 'running'};
+      return runtime;
     },
   };
 }
@@ -208,13 +254,31 @@ test('binds revisions and candidates to a session and acknowledges committed int
     revision: 2,
     candidateId: pending.candidate.id,
   });
-  assert.equal(deferred.status, 'deferred');
+  assert.equal(deferred.status, 'active');
+  assert.equal(protocol.getState().candidate, null);
+  await assert.rejects(
+    protocol.commit({
+      type: 'preview.source.commit',
+      sessionId: 'client-a',
+      revision: 2,
+      candidateId: pending.candidate.id,
+      choice: 'currentAction',
+    }),
+    (error) => error.code === 'K4-PREVIEW-PROTOCOL-CANDIDATE',
+  );
+
+  const restaged = await protocol.stage({
+    type: 'preview.source.stage',
+    sessionId: 'client-a',
+    revision: 3,
+    result: parsedSnapshot(changedSource, 'sha256-changed'),
+  });
 
   const committed = await protocol.commit({
     type: 'preview.source.commit',
     sessionId: 'client-a',
-    revision: 2,
-    candidateId: pending.candidate.id,
+    revision: 3,
+    candidateId: restaged.candidate.id,
     choice: 'currentAction',
   });
   assert.equal(committed.status, 'active');
@@ -321,4 +385,82 @@ test('serializes source revisions in runtime receipt order', async () => {
   assert.equal((await first).status, 'active');
   assert.equal((await second).status, 'pending');
   assert.equal(protocol.getState().latestRevision, 2);
+});
+test('accepts a newer source revision while the previous revision is still quiescing', async () => {
+  const initial = parsedSnapshot(initialSource, 'sha256-initial');
+  const gate = deferred();
+  const quiesceCalls = [];
+  let latestCandidateId = 0;
+  const session = {
+    start() {},
+    stop() {},
+    dispose() {},
+    getState() {
+      return {
+        runtime: {
+          status: 'running',
+          sceneId: 'opening',
+          actionIndex: 0,
+          actionPath: '/scenes/opening/actions/0',
+          variables: {score: 0},
+        },
+      };
+    },
+    quiesce({candidateId}) {
+      latestCandidateId = candidateId;
+      quiesceCalls.push(candidateId);
+      return gate.promise.then(() => ({
+        kind: 'Dsl4QuiesceToken',
+        version: 1,
+        candidateId: latestCandidateId,
+        runtimeGeneration: 1,
+        storyPath: '/scenes/opening/actions/0',
+        actionSignature: {command: 'wait', target: null, handler: 'core'},
+        sceneId: 'opening',
+        actionIndex: 0,
+        variables: {score: 0},
+        resumeMode: 'replay-action',
+      }));
+    },
+    resumeQuiesce() {},
+  };
+  const liveReload = createDsl4LiveReloadSession({
+    initialStoryDocument: initial.storyDocument,
+    initialSession: session,
+    createSession() {
+      assert.fail('candidate replacement must not create a runtime before commit');
+    },
+  });
+  const protocol = createDsl4PreviewProtocolSession({liveReloadSession: liveReload});
+  await protocol.handshake(hello('client-a'));
+
+  const first = protocol.stage({
+    type: 'preview.source.stage',
+    sessionId: 'client-a',
+    revision: 1,
+    result: parsedSnapshot(initialSource.replace('seconds: 1', 'seconds: 2'), 'sha256-one'),
+  });
+  const second = protocol.stage({
+    type: 'preview.source.stage',
+    sessionId: 'client-a',
+    revision: 2,
+    result: parsedSnapshot(initialSource.replace('seconds: 1', 'seconds: 3'), 'sha256-two'),
+  });
+  await waitUntil(() => quiesceCalls.length === 2);
+  assert.deepEqual(quiesceCalls, [1, 2]);
+  let idleSettled = false;
+  const idle = protocol.whenIdle().then(() => {
+    idleSettled = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(idleSettled, false);
+  gate.resolve();
+
+  await assert.rejects(first, /replaced/u);
+  const pending = await second;
+  await idle;
+  assert.equal(idleSettled, true);
+  assert.equal(pending.status, 'pending');
+  assert.equal(pending.candidate.id, 2);
+  assert.deepEqual(protocol.getState().candidate, {revision: 2, id: 2});
 });

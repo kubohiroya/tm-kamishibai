@@ -27,6 +27,7 @@ function deferred() {
 function fakeSession(runtime, events, name) {
   let state = {...runtime};
   let disposed = false;
+  let quiesceToken = null;
   return {
     start(options = {}) {
       events.push([name, 'start', options]);
@@ -46,6 +47,7 @@ function fakeSession(runtime, events, name) {
     stop(reason) {
       events.push([name, 'stop', reason]);
       state = {...state, status: 'stopped'};
+      quiesceToken = null;
       return state;
     },
     dispose(reason) {
@@ -54,6 +56,30 @@ function fakeSession(runtime, events, name) {
     },
     getState() {
       return {runtime: {...state}, disposed};
+    },
+    quiesce({candidateId}) {
+      quiesceToken = Object.freeze({
+        kind: 'Dsl4QuiesceToken',
+        version: 1,
+        candidateId,
+        runtimeGeneration: 1,
+        storyPath: state.actionPath ?? `/scenes/${state.sceneId}`,
+        actionSignature: state.actionPath ? {command: 'wait', target: null, handler: 'core'} : null,
+        sceneId: state.sceneId,
+        actionIndex: state.actionIndex,
+        variables: {...state.variables},
+        resumeMode: state.actionPath ? 'replay-action' : 'finished',
+      });
+      state = {...state, status: 'paused'};
+      return quiesceToken;
+    },
+    resumeQuiesce(candidateId) {
+      if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
+        throw new TypeError('stale quiesce candidate');
+      }
+      quiesceToken = null;
+      state = {...state, status: 'running'};
+      return state;
     },
   };
 }
@@ -294,11 +320,14 @@ scenes:
     assert.equal(pending.candidate.plan.options[choice].enabled, true);
     const candidateId = pending.candidate.id;
     const deferredState = await liveReload.defer(candidateId);
-    assert.equal(deferredState.status, 'deferred');
+    assert.equal(deferredState.status, 'active');
+    assert.equal(deferredState.candidate, null);
     assert.deepEqual(events, []);
 
-    const committed = await liveReload.commit(candidateId, choice);
-    const option = pending.candidate.plan.options[choice];
+    await assert.rejects(liveReload.commit(candidateId, choice), /stale or missing/u);
+    const restaged = await liveReload.stage(candidate);
+    const committed = await liveReload.commit(restaged.candidate.id, choice);
+    const option = restaged.candidate.plan.options[choice];
     assert.equal(committed.status, 'active');
     assert.equal(committed.generation, 2);
     assert.equal(committed.candidate, null);
