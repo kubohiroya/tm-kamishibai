@@ -133,6 +133,16 @@ Scratch procedure callは同じthreadなのでcontextを維持する。一方、
 script、別hat、別runtime sessionのthreadへcontextを暗黙伝播しない。それらから専用reporterを呼ぶと
 `K4-CUSTOM-CONTEXT-MISSING`になる。
 
+Adapterへ注入するTurboWarp thread hostは、次の三操作だけを持つ。`start`はsource locatorの
+original target／hat blockだけを同期的に開始し、handler本体が次のblockを実行する前にthread配列を返す。
+`waitForCompletion(thread)`は正常終了でresolve、thread異常でrejectし、`stop(thread, reason)`は指定threadだけを
+停止する。Adapterはこの返値が0件または2件以上ならpartial contextを公開せず、複数件では全threadの
+stopを試行する。
+
+runtimeへ返すterminal outcomeは`{"outcome":"completed"}`または
+`{"outcome":"transitioned","sceneId":"..."}`のexact objectとする。互換用の`undefined`／`null`はcompleteとして扱うが、
+unknown field、unknown outcome、scene IDの型不一致は`K4-RUNTIME-RESULT-001`で拒否する。
+
 この制限により、handlerが`broadcast and wait`で別scriptへ処理を委譲しても、receiverからcurrent action
 reporterは読めない。値を渡す必要がある作品はprimary threadで専用reporterを読み、Scratchの通常の変数や
 procedure引数へ明示的に渡す。
