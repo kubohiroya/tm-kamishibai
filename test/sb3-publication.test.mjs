@@ -30,11 +30,10 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
 });
 
 test('links and documents the generated downloadable SB3', async () => {
-  const [downloadPage, readme, packageJsonSource, ciWorkflow] = await Promise.all([
+  const [downloadPage, readme, packageJsonSource] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
-    readFile(path.join(projectRoot, '.github/workflows/ci.yml'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
 
@@ -46,7 +45,6 @@ test('links and documents the generated downloadable SB3', async () => {
     /^github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}$/u,
     'SB3 toolchain dependency must use a fixed commit.',
   );
-  assert.match(ciWorkflow, /run: pnpm sb3:check/u);
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
     readme,

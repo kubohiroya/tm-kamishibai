@@ -185,7 +185,10 @@ pnpm install
 | コマンド                                  | 内容                                            |
 | ----------------------------------------- | ----------------------------------------------- |
 | `pnpm run build`                          | 公開ページと配布用SB3を`dist/`へ生成            |
-| `pnpm test`                               | SB3、ビルダー、公開ページをテスト               |
+| `pnpm test:quick`                         | 事前生成SB3と重い実VM統合を除き短時間でテスト   |
+| `pnpm test` / `pnpm test:full`            | 生成SB3と実VMを含む全テストを実行               |
+| `pnpm verify:quick`                       | lint、型検査、Quickテストを実行                 |
+| `pnpm verify:full`                        | CI相当の全検証、ビルド、パッケージ検査を実行    |
 | `pnpm lint`                               | JavaScriptを検査                                |
 | `pnpm typecheck`                          | ビルダーAPIを型検査                             |
 | `pnpm sb3:build`                          | `app/`から編集用SB3を`tmp/kamishibai.sb3`へ生成 |
@@ -193,8 +196,12 @@ pnpm install
 | `pnpm sb3:import -- /path/to/project.sb3` | TurboWarpで編集したSB3を`app/`へ取り込み        |
 | `pnpm run deploy`                         | ビルド結果をGitHub Pagesへ公開                  |
 
+日常の実装中は`pnpm verify:quick`を使用し、PR前とCIでは`pnpm verify:full`を使用します。
+新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
+`scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
+
 `pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
-CIでも`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
+CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
 主な生成先は次のとおりです。
 
