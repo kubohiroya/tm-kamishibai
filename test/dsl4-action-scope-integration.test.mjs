@@ -124,7 +124,11 @@ async function waitUntil(predicate) {
   assert.fail('condition was not reached');
 }
 
-function createExecution({storyDocument = story(), failReleaseAction = false} = {}) {
+function createExecution({
+  storyDocument = story(),
+  failReleaseAction = false,
+  failEndStory = false,
+} = {}) {
   const store = createDsl4ObjectStore();
   const baseIntegration = createDsl4KamishibaiStructuredDataSession({storyDocument, store});
   const cleanupCalls = {releaseAction: 0, endStory: 0};
@@ -144,7 +148,13 @@ function createExecution({storyDocument = story(), failReleaseAction = false} = 
     },
     endStory(reason) {
       cleanupCalls.endStory += 1;
-      return baseIntegration.endStory(reason);
+      const result = baseIntegration.endStory(reason);
+      if (failEndStory) {
+        throw Object.assign(new Error('private Store end-story failure'), {
+          code: 'K4-STRUCTURED-DATA-CLEANUP-001',
+        });
+      }
+      return result;
     },
     dispose: baseIntegration.dispose,
   });
@@ -327,6 +337,37 @@ test('maps a custom ActionView scope release failure to one redacted fail-closed
     false,
   );
   assert.equal(execution.cleanupCalls.releaseAction, 1);
+  assert.equal(execution.cleanupCalls.endStory, 1);
+  assertReleased(execution, resources, thread);
+  assert.deepEqual(activeCounts(execution.store), {
+    scopes: 1,
+    entries: 0,
+    nodes: 0,
+    leases: 0,
+    referenceEdges: 0,
+  });
+  await disposeExecution(execution);
+});
+
+test('maps a custom end-story scope cleanup failure during stop to the same diagnostic', async () => {
+  const execution = createExecution({failEndStory: true});
+  const run = execution.controller.start();
+  await waitUntil(() => execution.threadHost.threads.length === 1);
+  const thread = execution.threadHost.threads[0];
+  const resources = assertActionView(execution, thread);
+  const stopped = execution.controller.stop('test-stop-cleanup-failure');
+  const state = await run;
+
+  assert.equal(stopped.status, 'failed');
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-CUSTOM-CLEANUP-FAILED');
+  assert.equal(state.diagnostic.message, 'Custom action scope cleanup failed');
+  assert.doesNotMatch(JSON.stringify(state.diagnostic), /private Store end-story failure/u);
+  assert.equal(
+    execution.controller.getTrace().some((event) => event.type === 'action.commit'),
+    false,
+  );
+  assert.equal(execution.cleanupCalls.releaseAction, 0);
   assert.equal(execution.cleanupCalls.endStory, 1);
   assertReleased(execution, resources, thread);
   assert.deepEqual(activeCounts(execution.store), {
