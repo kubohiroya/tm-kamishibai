@@ -1,6 +1,9 @@
+import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
+
 import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
+import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
@@ -9,6 +12,7 @@ import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 /**
  * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
  * @typedef {{wait?: Function, transition?: Function, keyInputToChangeScene?: Function, touchInputToChangeScene?: Function, dispose?: Function}} HostPort
+ * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  */
 
 const hostPortMethods = new Set([
@@ -148,6 +152,16 @@ function validateHostPort(value) {
   return /** @type {HostPort} */ (value);
 }
 
+/** @param {unknown} value @param {string} label @param {string[]} methods */
+function validateCompositionMethods(value, label, methods) {
+  if (!isRecord(value)) throw new TypeError(`${label} must be an object`);
+  const missing = methods.filter((method) => typeof value[method] !== 'function');
+  if (missing.length > 0) {
+    throw new TypeError(`${label} must provide ${missing.join(', ')}`);
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
 /**
  * @param {Record<string, Function>} destination
  * @param {Record<string, Function>} source
@@ -206,6 +220,8 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
+  /** @type {Record<string, Function> | null} */
+  let runtimeExpressionComposition = null;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
 
@@ -231,6 +247,10 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       ...(options.createAsyncInputComposition === undefined
         ? {}
         : {createAsyncInputComposition: options.createAsyncInputComposition}),
+      ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
+      ...(options.actorTouchSource === undefined
+        ? {}
+        : {actorTouchSource: options.actorTouchSource}),
       ...(options.poseSchedule === undefined ? {} : {poseSchedule: options.poseSchedule}),
       ...(options.poseNow === undefined ? {} : {poseNow: options.poseNow}),
     });
@@ -242,6 +262,9 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
+    });
+    const asyncInputPort = createDsl4AsyncInputActionPort({
+      composition: assetSession.asyncInputComposition,
     });
     svgTextPlatform = createDsl4SvgTextPlatform({
       enabled: true,
@@ -260,6 +283,24 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
         : undefined,
     );
 
+    /** @type {RuntimeConditionEvaluator | undefined} */
+    let evaluateCondition = options.evaluateCondition;
+    if (evaluateCondition === undefined) {
+      const createRuntimeExpression =
+        options.createRuntimeExpressionComposition ?? createDefaultRuntimeExpressionComposition;
+      const candidate = createRuntimeExpression();
+      if (isRecord(candidate)) {
+        runtimeExpressionComposition = /** @type {Record<string, Function>} */ (candidate);
+      }
+      const composition = validateCompositionMethods(candidate, 'Runtime Expression composition', [
+        'evaluateCondition',
+        'releaseAll',
+      ]);
+      runtimeExpressionComposition = composition;
+      evaluateCondition = (expression, variables) =>
+        composition.evaluateCondition(expression, variables);
+    }
+
     const port = /** @type {Record<string, Function>} */ ({});
     addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
     addPortMethods(port, actorPort, ['show', 'moveTo', 'say'], 'actor action port');
@@ -270,6 +311,12 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       ['waitForPose', 'poseInputToChangeScene'],
       'pose action port',
     );
+    if (options.keySource !== undefined) {
+      addPortMethods(port, asyncInputPort, ['keyInputToChangeScene'], 'async input action port');
+    }
+    if (options.actorTouchSource !== undefined) {
+      addPortMethods(port, asyncInputPort, ['touchInputToChangeScene'], 'async input action port');
+    }
 
     for (const method of Object.keys(hostPort)) {
       if (method === 'dispose') continue;
@@ -289,7 +336,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
       if (typeof schedule !== 'function') throw new TypeError('waitSchedule must be a function');
       addPortMethods(port, createWaitPort(schedule), ['wait'], 'wait action port');
     }
-    validateStoryCapabilities(component.storyDocument, port, options.evaluateCondition);
+    validateStoryCapabilities(component.storyDocument, port, evaluateCondition);
     Object.freeze(port);
 
     /** @type {Promise<void> | null} */
@@ -297,6 +344,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
     const environment = {
       port,
       assetLifecycle: assetSession.lifecycle,
+      evaluateCondition,
       /** @param {string} [reason] */
       dispose(reason = 'dispose') {
         if (disposePromise) return disposePromise;
@@ -304,6 +352,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
           const errors = [];
           for (const release of [
             () => hostPort.dispose?.(),
+            () => runtimeExpressionComposition?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
             () => assetSession?.dispose(reason),
           ]) {
@@ -325,6 +374,7 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
     const cleanupErrors = [];
     for (const release of [
       () => hostPort.dispose?.(),
+      () => runtimeExpressionComposition?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
       () => assetSession?.dispose('partial-creation-failed'),
     ]) {
@@ -367,6 +417,9 @@ async function createRuntimeEnvironment(options, runtimeComponent) {
  * @param {Function} [options.createAssetManagerComposition]
  * @param {Function} [options.createTMPoseComposition]
  * @param {Function} [options.createAsyncInputComposition]
+ * @param {unknown} [options.keySource]
+ * @param {unknown} [options.actorTouchSource]
+ * @param {Function} [options.createRuntimeExpressionComposition]
  * @param {Function} [options.createSvgTextComposition]
  * @param {unknown} [options.actorScheduler]
  * @param {number} [options.actorFrameMilliseconds]
@@ -386,6 +439,23 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   }
   if (options.createHostPort !== undefined && typeof options.createHostPort !== 'function') {
     throw new TypeError('createHostPort must be a function');
+  }
+  if (options.evaluateCondition !== undefined && typeof options.evaluateCondition !== 'function') {
+    throw new TypeError('evaluateCondition must be a function');
+  }
+  if (
+    options.createRuntimeExpressionComposition !== undefined &&
+    typeof options.createRuntimeExpressionComposition !== 'function'
+  ) {
+    throw new TypeError('createRuntimeExpressionComposition must be a function');
+  }
+  if (
+    options.evaluateCondition !== undefined &&
+    options.createRuntimeExpressionComposition !== undefined
+  ) {
+    throw new TypeError(
+      'Provide either evaluateCondition or createRuntimeExpressionComposition, not both',
+    );
   }
 
   const startup = await createDsl4RuntimeStartup({

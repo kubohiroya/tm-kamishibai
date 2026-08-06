@@ -5,7 +5,8 @@ import {deepFreeze} from './story-document.js';
 /**
  * @typedef {{prepare: Function, setLoading: Function, release: Function}} RuntimeAssetLifecycle
  * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean}>}>} RuntimeStartupContext
- * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
+ * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
+ * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
 
 const featureFlagKeys = new Set(['dsl4Runtime']);
@@ -215,6 +216,15 @@ export async function createDsl4RuntimeStartup(options = {}) {
         'runtime environment asset lifecycle must provide prepare, setLoading, and release',
       );
     }
+    if (
+      candidate.evaluateCondition !== undefined &&
+      typeof candidate.evaluateCondition !== 'function'
+    ) {
+      await rejectInvalidRuntimeEnvironment(
+        candidate,
+        'runtime environment evaluateCondition must be a function',
+      );
+    }
     runtimeEnvironment = /** @type {RuntimeEnvironment} */ (/** @type {unknown} */ (candidate));
   }
 
@@ -230,7 +240,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       createAssetLifecycle: createAssetLifecycle
         ? () => createAssetLifecycle(component, startupContext)
         : undefined,
-      evaluateCondition: options.evaluateCondition,
+      evaluateCondition: runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition,
       onEvent: options.onEvent,
       onInputError: options.onInputError,
     });

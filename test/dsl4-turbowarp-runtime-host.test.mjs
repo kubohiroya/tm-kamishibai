@@ -208,6 +208,12 @@ function platformFixture(log) {
         waitForPoseCandidate() {
           return Promise.resolve('pose');
         },
+        waitForKeyCandidate({candidates}) {
+          return Promise.resolve(candidates[0]);
+        },
+        waitForActorTouchCandidate({candidates}) {
+          return Promise.resolve(candidates[0]);
+        },
         releaseAll() {
           log.push(['input.release-all']);
         },
@@ -256,6 +262,7 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
     createAssetManagerComposition: failFactory,
     createTMPoseComposition: failFactory,
     createSvgTextComposition: failFactory,
+    createRuntimeExpressionComposition: failFactory,
     createHostPort: failFactory,
   });
   assert.equal(result.ok, true);
@@ -267,7 +274,12 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
 test('withholds every platform dependency until the packaged component validates', async () => {
   const log = [];
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(baseProject(), platformFixture(log)),
+    enabledOptions(baseProject(), platformFixture(log), {
+      createRuntimeExpressionComposition() {
+        log.push(['expression.create']);
+        return {evaluateCondition() {}, releaseAll() {}};
+      },
+    }),
   );
   assert.equal(result.ok, false);
   assert.equal(result.diagnostics[0].code, 'K4-SOURCE-CHANNEL-MISSING');
@@ -289,6 +301,17 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
   };
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
+      createRuntimeExpressionComposition() {
+        log.push(['expression.create']);
+        return {
+          evaluateCondition() {
+            return true;
+          },
+          releaseAll() {
+            log.push(['expression.release-all']);
+          },
+        };
+      },
       createHostPort(context) {
         log.push(['story-input.create']);
         assert.strictEqual(context.runtime, fixture.runtime);
@@ -324,6 +347,7 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
     ['listener.add', 'keydown'],
     ['listener.remove', 'keydown'],
     ['story-input.dispose'],
+    ['expression.release-all'],
     ['svg.release-all'],
     ['input.release-all'],
     ['pose.release-all'],
@@ -451,6 +475,106 @@ scenes:
   await result.host.dispose();
 });
 
+test('uses default Runtime Expression and one Async Input composition for key and touch routing', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+variables:
+  score: 1
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+branches:
+  chooseInput:
+    - if: 'score === 1'
+      goto: keyChoice
+    - else: failed
+scenes:
+  opening:
+    - branch: chooseInput
+  keyChoice:
+    - keyInputToChangeScene:
+        ArrowRight: touchChoice
+  touchChoice:
+    - touchInputToChangeScene:
+        Hero: ending
+  failed:
+    - wait: 0
+  ending:
+    - wait: 0
+`);
+  const log = [];
+  let keyListener = null;
+  let touchListener = null;
+  const events = [];
+  const keySource = {
+    subscribeKeyCandidate(listener) {
+      assert.equal(keyListener, null);
+      keyListener = listener;
+      return () => {
+        if (keyListener === listener) keyListener = null;
+      };
+    },
+  };
+  const actorTouchSource = {
+    subscribeActorTouchCandidate(listener) {
+      assert.equal(touchListener, null);
+      touchListener = listener;
+      return () => {
+        if (touchListener === listener) touchListener = null;
+      };
+    },
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      createAsyncInputComposition: undefined,
+      keySource,
+      actorTouchSource,
+      onEvent(event) {
+        events.push(event);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  while (!keyListener) await new Promise((resolve) => setImmediate(resolve));
+  keyListener({
+    version: 1,
+    code: 'ArrowRight',
+    repeat: false,
+    isComposing: false,
+    hasModifier: false,
+    interactiveTarget: false,
+    timestamp: 1,
+  });
+  while (!touchListener) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(keyListener, null);
+  touchListener({
+    version: 1,
+    actorId: 'Hero',
+    primaryButton: true,
+    topmost: true,
+    actorNameUnique: true,
+    timestamp: 2,
+  });
+
+  const finished = await run;
+  assert.deepEqual(
+    events.filter((event) => event.type === 'scene.transition').map((event) => event.details),
+    [
+      {from: null, to: 'opening', reason: 'start'},
+      {from: 'opening', to: 'keyChoice', reason: 'branch'},
+      {from: 'keyChoice', to: 'touchChoice', reason: 'keyInput'},
+      {from: 'touchChoice', to: 'ending', reason: 'touchInput'},
+    ],
+  );
+  assert.equal(finished.status, 'finished');
+  assert.equal(finished.sceneId, 'ending');
+  assert.equal(touchListener, null);
+  await result.host.dispose();
+});
+
 test('fails closed for missing story input and injected built-in collisions, then cleans up', async () => {
   const inputStory = `
 kamishibai: '4.0'
@@ -493,6 +617,30 @@ scenes:
   );
   assert.equal(collisionLog.filter(([name]) => name === 'story-input.dispose').length, 1);
   assert.equal(collisionLog.filter(([name]) => name === 'media.release-all').length, 1);
+});
+
+test('releases an invalid Runtime Expression composition during partial creation', async () => {
+  const project = await packagedProject();
+  const log = [];
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, platformFixture(log), {
+        createRuntimeExpressionComposition() {
+          log.push(['expression.create-invalid']);
+          return {
+            releaseAll() {
+              log.push(['expression.release-all-invalid']);
+            },
+          };
+        },
+      }),
+    ),
+    /must provide evaluateCondition/u,
+  );
+  assert.equal(log.filter(([name]) => name === 'expression.release-all-invalid').length, 1);
+  assert.equal(log.filter(([name]) => name === 'svg.release-all').length, 1);
+  assert.equal(log.filter(([name]) => name === 'input.release-all').length, 1);
+  assert.equal(log.filter(([name]) => name === 'media.release-all').length, 1);
 });
 
 test('stop cancels the default wait boundary and stale timer completion cannot resume execution', async () => {
@@ -625,6 +773,16 @@ test('attempts every partial cleanup and aggregates creation plus cleanup failur
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
       enabledOptions(project, fixture, {
+        createRuntimeExpressionComposition() {
+          return {
+            evaluateCondition() {
+              return true;
+            },
+            releaseAll() {
+              log.push(['expression.release-all']);
+            },
+          };
+        },
         createHostPort() {
           return {stage() {}};
         },
@@ -638,6 +796,7 @@ test('attempts every partial cleanup and aggregates creation plus cleanup failur
     },
   );
   assert.equal(log.filter(([name]) => name === 'svg.release-all-failed').length, 1);
+  assert.equal(log.filter(([name]) => name === 'expression.release-all').length, 1);
   assert.equal(log.filter(([name]) => name === 'media.release-all-failed').length, 1);
   assert.equal(log.filter(([name]) => name === 'pose.release-all').length, 1);
 });
