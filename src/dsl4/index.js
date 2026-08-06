@@ -62,3 +62,14 @@ export {
   createDsl4StructuredDataComposition,
   dsl4StructuredDataDefaultLimits,
 } from './structured-data.js';
+export {
+  createDsl4StructuredDataAdapter,
+  dsl4StructuredDataAdapterDefaultLimits,
+} from './structured-data-adapter.js';
+export {
+  createDsl4StructuredDataTurboWarpSurfaces,
+  dsl4StructuredDataDefaultFeatureFlags,
+  dsl4StructuredDataDeveloperManifest,
+  dsl4StructuredDataStandaloneManifest,
+  resolveDsl4StructuredDataFeatureFlags,
+} from './structured-data-turbowarp.js';

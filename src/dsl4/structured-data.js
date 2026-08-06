@@ -152,11 +152,19 @@ export function createDsl4StructuredDataComposition({
       const kind = evaluated.view.adapter.classify(result.node);
       if (kind === 'scalar') {
         const value = evaluated.view.adapter.scalarValue(result.node);
-        return Object.freeze({kind: scalarKind(value), value});
+        return Object.freeze({
+          kind: scalarKind(value),
+          value,
+          normalizedPath: result.normalizedPath,
+        });
       }
       const referenceIndex = references.length;
       references.push(Object.freeze({source, path: result.path}));
-      return Object.freeze({kind: 'reference', referenceIndex});
+      return Object.freeze({
+        kind: 'reference',
+        referenceIndex,
+        normalizedPath: result.normalizedPath,
+      });
     });
     return {pendingItems, references};
   }
@@ -166,7 +174,11 @@ export function createDsl4StructuredDataComposition({
     return Object.freeze(
       pendingItems.map((item) =>
         item.kind === 'reference'
-          ? Object.freeze({kind: 'reference', referenceLease: leases[item.referenceIndex]})
+          ? Object.freeze({
+              kind: 'reference',
+              referenceLease: leases[item.referenceIndex],
+              normalizedPath: item.normalizedPath,
+            })
           : item,
       ),
     );
@@ -378,6 +390,7 @@ export function createDsl4StructuredDataComposition({
           ? Object.freeze({
               kind: 'reference',
               referenceLease: created.value.referenceLeases[referenceIndex++],
+              normalizedPath: item.normalizedPath,
             })
           : item,
       ),
@@ -497,8 +510,26 @@ export function createDsl4StructuredDataComposition({
     return success({released: true});
   }
 
+  /** @param {unknown} resource @param {unknown} index */
+  function debugNormalizedPath(resource, index) {
+    const operation = 'debugNormalizedPath';
+    const records = collections.has(resource) ? collections : iterators;
+    const kind = records === collections ? 'collection' : 'iterator';
+    const validated = validateRecord(records, resource, kind, operation);
+    if (!validated.ok) return validated;
+    if (
+      !Number.isSafeInteger(index) ||
+      Number(index) < 0 ||
+      Number(index) >= validated.record.items.length
+    ) {
+      return failure('STORE-VALUE-INVALID', operation, 'The snapshot item index is invalid');
+    }
+    return success({normalizedPath: validated.record.items[Number(index)].normalizedPath});
+  }
+
   return Object.freeze({
     limits,
+    jsonPathLimits: compiler.limits,
     queryKind,
     queryScalar,
     queryReference,
@@ -511,5 +542,6 @@ export function createDsl4StructuredDataComposition({
     iteratorCurrentReference,
     releaseCollection,
     releaseIterator,
+    debugNormalizedPath,
   });
 }

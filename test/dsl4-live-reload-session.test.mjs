@@ -180,6 +180,64 @@ test('keeps the current immutable execution when a changed source is invalid', a
   assert.deepEqual(events, []);
 });
 
+test('passes the Adapter ExceptionRef predicate into live reload planning', async () => {
+  const currentStory = parse(`
+kamishibai: '4.0'
+variables:
+  exceptionToken: initial
+  forgedToken: initial
+scenes:
+  opening:
+    - wait: 1
+`).storyDocument;
+  const exceptionToken = '@sdx1.owned-realm.owned-token';
+  const forgedToken = '@sdx1.forged-realm.forged-token';
+  const liveReload = createDsl4LiveReloadSession({
+    initialStoryDocument: currentStory,
+    initialSession: fakeSession(
+      {
+        status: 'running',
+        sceneId: 'opening',
+        actionIndex: 0,
+        actionPath: '/scenes/opening/actions/0',
+        variables: {exceptionToken, forgedToken},
+      },
+      [],
+      'current',
+    ),
+    isException: (value) => value === exceptionToken,
+    createSession() {
+      assert.fail('staging must not create a replacement session');
+    },
+  });
+  const staged = await liveReload.stage(
+    parse(`
+kamishibai: '4.0'
+variables:
+  exceptionToken: reset
+  forgedToken: reset
+scenes:
+  opening:
+    - wait: 2
+`),
+  );
+
+  assert.equal(staged.status, 'pending');
+  assert.deepEqual(staged.candidate.plan.options.currentScene.variables, {
+    exceptionToken: 'reset',
+    forgedToken,
+  });
+  assert.equal(JSON.stringify(staged.candidate.plan).includes(exceptionToken), false);
+  assert.throws(
+    () =>
+      createDsl4LiveReloadSession({
+        createSession() {},
+        isException: true,
+      }),
+    /isException must be a function/u,
+  );
+});
+
 test('stages, defers, and commits each author-visible restart choice explicitly', async () => {
   for (const [choice, expectedPresentation] of [
     ['storyStart', false],

@@ -15,6 +15,14 @@ function isPlainRuntimeValue(value) {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 }
 
+/** @param {unknown} value @param {((value: unknown) => boolean) | undefined} isException */
+function runtimeReferenceKind(value, isException) {
+  if (typeof value !== 'string') return null;
+  if (value.startsWith('@os1.')) return 'object-store';
+  if (isException?.(value)) return 'exception';
+  return null;
+}
+
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
  * @param {string} storyPath
@@ -111,12 +119,14 @@ function hasCompatibleSignature(left, right) {
  * @param {Readonly<Record<string, unknown>>} candidateStoryDocument
  * @param {Readonly<Record<string, unknown>>} currentExecution
  * @param {Readonly<Record<string, unknown>>[]} diagnostics
+ * @param {((value: unknown) => boolean) | undefined} isException
  */
 function migrateVariables(
   currentStoryDocument,
   candidateStoryDocument,
   currentExecution,
   diagnostics,
+  isException,
 ) {
   const currentDeclarations = /** @type {Readonly<Record<string, string | number | boolean>>} */ (
     currentStoryDocument.variables ?? {}
@@ -130,10 +140,12 @@ function migrateVariables(
 
   for (const [name, initialValue] of Object.entries(initialVariables)) {
     const currentValue = currentVariables[name];
+    const referenceKind = runtimeReferenceKind(currentValue, isException);
     if (
       Object.hasOwn(currentDeclarations, name) &&
       Object.hasOwn(currentVariables, name) &&
       isPlainRuntimeValue(currentValue) &&
+      referenceKind === null &&
       typeof currentDeclarations[name] === typeof initialValue &&
       typeof currentValue === typeof initialValue
     ) {
@@ -144,11 +156,13 @@ function migrateVariables(
     if (Object.hasOwn(currentVariables, name)) {
       diagnostics.push(
         diagnostic(candidateStoryDocument, {
-          code: 'K4-RELOAD-VARIABLE-RESET',
+          code: referenceKind ? 'K4-RELOAD-VARIABLE-REFERENCE-RESET' : 'K4-RELOAD-VARIABLE-RESET',
           severity: 'warning',
-          message: `Runtime variable ${JSON.stringify(name)} is incompatible and will use its new initial value`,
+          message: referenceKind
+            ? `Runtime variable ${JSON.stringify(name)} contains a runtime-only reference and will use its new initial value`
+            : `Runtime variable ${JSON.stringify(name)} is incompatible and will use its new initial value`,
           path: `$.variables.${name}`,
-          details: {name},
+          details: {name, ...(referenceKind ? {referenceKind} : {})},
         }),
       );
     }
@@ -227,11 +241,13 @@ function resolveActionAnchor(candidateStoryDocument, currentAction) {
  * @param {Readonly<Record<string, unknown>>} options.currentStoryDocument
  * @param {Readonly<Record<string, unknown>>} options.candidateStoryDocument
  * @param {Readonly<Record<string, unknown>>} options.currentExecution
+ * @param {(value: unknown) => boolean} [options.isException]
  */
 export function createDsl4ReloadPlan({
   currentStoryDocument,
   candidateStoryDocument,
   currentExecution,
+  isException,
 }) {
   for (const [name, storyDocument] of Object.entries({
     currentStoryDocument,
@@ -242,6 +258,9 @@ export function createDsl4ReloadPlan({
     }
   }
   if (!isRecord(currentExecution)) throw new TypeError('currentExecution must be an object');
+  if (isException !== undefined && typeof isException !== 'function') {
+    throw new TypeError('isException must be a function');
+  }
 
   /** @type {Readonly<Record<string, unknown>>[]} */
   const diagnostics = [];
@@ -258,6 +277,7 @@ export function createDsl4ReloadPlan({
     candidateStoryDocument,
     currentExecution,
     diagnostics,
+    isException,
   );
   const currentSceneId = currentExecution.sceneId;
   const candidateScene =
