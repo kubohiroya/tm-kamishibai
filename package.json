@@ -24,6 +24,7 @@
     "bin/",
     "src/builder/",
     "src/dsl4/*.js",
+    "src/dsl4/object-store/",
     "schema/dsl-4.schema.json",
     "src/converter/",
     "README.md",
