@@ -57,6 +57,18 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
 });
 
+test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separate', async () => {
+  const result = await validateFixture('valid', 'unicode-identifiers.kamishibai.yaml');
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    result.storyDocument.scenes.map(({id}) => id),
+    ['開始', 'Scene', 'scene'],
+  );
+  assert.equal(result.storyDocument.actors.主人公, '主人公衣装');
+  assert.equal(result.storyDocument.variables.得点, 1);
+  assert.equal(result.storyDocument.scenes[0].actions[1].stableId, '開始表示');
+});
+
 test('remote delivery requires verified metadata and stays independent from loading policy', async () => {
   const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
@@ -165,6 +177,8 @@ for (const name of [
   'remote-missing-integrity.kamishibai.yaml',
   'remote-invalid-integrity.kamishibai.yaml',
   'remote-invalid-metadata.kamishibai.yaml',
+  'non-nfc-id.kamishibai.yaml',
+  'duplicate-id.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
 ]) {
   test(`schema rejects ${name}`, async () => {
@@ -180,6 +194,8 @@ for (const [name, code] of [
   ['invalid-id.kamishibai.yaml', 'K4-ID-INVALID'],
   ['unknown-top-level-key.kamishibai.yaml', 'K4-SCHEMA-UNKNOWN-KEY'],
   ['modifier-key.kamishibai.yaml', 'K4-KEY-UNSUPPORTED'],
+  ['non-nfc-id.kamishibai.yaml', 'K4-ID-001'],
+  ['duplicate-id.kamishibai.yaml', 'K4-YAML-001'],
 ]) {
   test(`${name} reports ${code}`, async () => {
     const result = await validateFixture('invalid', name);
