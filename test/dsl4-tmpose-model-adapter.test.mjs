@@ -237,13 +237,25 @@ test('keeps platform adapters outside the default-off core graph and pins pose d
   assert.match(packageJson, /turbowarp-tmpose#9fdc0982a76818c5627fa65a03c467a243fe8110/u);
   assert.match(workspace, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
   assert.match(lockfile, /turbowarp-tmpose\/tar\.gz\/9fdc0982a76818c5627fa65a03c467a243fe8110/u);
-  assert.match(packageJson, /turbowarp-async-input#a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u);
+  assert.match(packageJson, /turbowarp-async-input#0174a450ac6b2312637827f999748adc3d284332/u);
   assert.match(
     workspace,
-    /turbowarp-async-input\/tar\.gz\/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u,
+    /turbowarp-async-input\/tar\.gz\/0174a450ac6b2312637827f999748adc3d284332/u,
   );
   assert.match(
     lockfile,
-    /turbowarp-async-input\/tar\.gz\/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8/u,
+    /turbowarp-async-input\/tar\.gz\/0174a450ac6b2312637827f999748adc3d284332/u,
+  );
+  assert.match(
+    packageJson,
+    /turbowarp-runtime-expression#f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
+  );
+  assert.match(
+    workspace,
+    /turbowarp-runtime-expression\/tar\.gz\/f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
+  );
+  assert.match(
+    lockfile,
+    /turbowarp-runtime-expression\/tar\.gz\/f0578e946ff61f1f33596df8619087b7a70d4cb6/u,
   );
 });
