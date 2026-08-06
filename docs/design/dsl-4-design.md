@@ -246,6 +246,10 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | D-37 | 決定済み | cross-owner strong cycleを作成時拒否し、初版でweak／multi-freeを持たない |
 | D-38 | 決定済み | Store handleはruntime-onlyの128-bit nonceによるopaque tokenとする        |
 | D-39 | 決定済み | live reloadは参照を含まないplain valueだけを新realmへdeep copyする       |
+| D-40 | 決定済み | JSONPath初版はname／index／wildcard／sliceのchild segment subsetとする   |
+| D-41 | 決定済み | Scratch facadeはscalarとreferenceのquery reporterを分離する              |
+| D-42 | 決定済み | Iterator終端後のnextはidempotentに`done`を返す                           |
+| D-43 | 決定済み | ExceptionRefはAdapter固有の`@sdx1` tokenとしCore handleから分離する      |
 | P-01 | 提案     | DSL 4.0の表層構文はYAML 1.2の制限付きサブセットを基礎とする              |
 | P-02 | 提案     | パース成功後に不変な`StoryDocument`をObject Storeへ格納する              |
 | P-03 | 提案     | 実行には型付きIteratorを優先し、JSONPathは汎用参照・拡張に使う           |
@@ -968,11 +972,10 @@ Scratch reporterは構造化オブジェクトを公開値として扱うこと�
 Generic Coreのopaque handleを、少なくとも次の三種類に分けます。符号化された文字列を利用側が
 分解することは禁止し、種類の判定もCoreのAPIを介します。
 
-| 種類             | 作成契機                                  | 参照先のcount | 解放操作                          |
-| ---------------- | ----------------------------------------- | ------------- | --------------------------------- |
-| `OwnerRef`       | `newEntry`                                | 増やさない    | `free`で所有する構造を解放する    |
-| `ReferenceLease` | JSONPathのobject結果、明示的な参照作成    | 1増やす       | `releaseReference`で1減らす       |
-| `ExceptionRef`   | adapterがCoreの失敗をreporter値へ変換する | 対象外        | adapterの規則で診断寿命を管理する |
+| 種類             | 作成契機                               | 参照先のcount | 解放操作                       |
+| ---------------- | -------------------------------------- | ------------- | ------------------------------ |
+| `OwnerRef`       | `newEntry`                             | 増やさない    | `free`で所有する構造を解放する |
+| `ReferenceLease` | JSONPathのobject結果、明示的な参照作成 | 1増やす       | `releaseReference`で1減らす    |
 
 `OwnerRef`は解放権限を示すhandleであり、自分自身への外部参照としては数えません。`ReferenceLease`は
 参照先を生存させる管理単位です。同じlease文字列をScratchの複数の変数やlistへコピーしても、leaseが
@@ -983,12 +986,16 @@ Store内のobjectから別nodeを指す場合は、単なる文字列ではな�
 保持します。`RefValue`の作成で参照先のcountを1増やし、置換または削除で1減らします。一方、通常の
 object propertyやarray elementによる構造的な親子関係は所有関係であり、`RefValue`として数えません。
 
+`ExceptionRef`はCore handleではない。TurboWarp AdapterがCoreの失敗をScratch scalarへ投影する場合だけ
+作り、Coreのhandle tableと参照countへ登録しない。形式と寿命は8章の専用仕様で定義する。
+
 #### 7.3.3 JSONPath結果の扱い
 
-- scalarを選んだ場合はscalar値をcopyして返し、参照カウントを変更しない
-- objectまたはarrayを一件選んだ場合は`ReferenceLease`を作り、選択nodeのcountを1増やす
+- pure libraryでscalarを選んだ場合はscalar値をcopyして返し、参照カウントを変更しない
+- pure libraryでobjectまたはarrayを一件選んだ場合は`ReferenceLease`を作り、選択nodeのcountを1増やす
 - 複数nodeのquery結果は、選択した構造化nodeごとにleaseを所有するcollection entryとする
 - collectionを解放すると、collectionが所有する全leaseをreleaseする
+- Scratch facadeではscalar／referenceを混在させず、型別query reporterを使う
 - queryが0件、複数件、型不一致になった場合のreporter表現はTurboWarp Adapterで定義する
 
 JSONPath文字列そのものを参照として数えるのではありません。JSONPathの評価によって作られた
@@ -1019,7 +1026,8 @@ Generic Coreの公開操作は概念上`Result<Value, StoreException>`を返し�
 標準Kamishibai Runtimeでは失敗を`K4-*`診断へ変換してcontrollerへ返します。Standalone／上級利用向け
 block facadeを公開する場合だけ、Scratch reporterで運べる`ExceptionRef`または同等のscalar値へ変換し、
 Scratch側が`<例外か?>`に相当するpredicateで分岐できるようにします。JavaScript例外をScratchとの境界の
-外へ投げたままにしません。ExceptionRefのopcode、predicate、diagnostic reporterはIssue #261で定義します。
+外へ投げたままにしません。ExceptionRefのopcode、predicate、diagnostic reporterは
+[`Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)で定義します。
 
 最低限、次の汎用error codeを区別します。
 
@@ -1042,14 +1050,14 @@ weak referenceと任意OwnerRef集合のmulti-freeを提供しません。
 
 JSONPathで得た参照が`free`を止める例は次のとおりです。
 
-| 順序 | 操作                                   | 対象nodeのcount | 結果                                      |
-| ---- | -------------------------------------- | --------------- | ----------------------------------------- |
-| 1    | `newEntry`でrootと子node `actor`を作る | 0               | rootの`OwnerRef`を返す                    |
-| 2    | `query one(root, "$.actor")`を実行する | 1               | `actor`へのlease `L1`を返す               |
-| 3    | Scratch変数間で`L1`の文字列をcopyする  | 1               | 新しいleaseは作られない                   |
-| 4    | rootの`free`を試みる                   | 1               | `STORE-OBJECT-IN-USE`、Storeは変更しない  |
-| 5    | `L1`をreleaseする                      | 0               | `L1`を持つ全aliasが無効になる             |
-| 6    | rootの`free`を再実行する               | 削除            | rootと`actor`を解放し、generationを進める |
+| 順序 | 操作                                    | 対象nodeのcount | 結果                                      |
+| ---- | --------------------------------------- | --------------- | ----------------------------------------- |
+| 1    | `newEntry`でrootと子node `actor`を作る  | 0               | rootの`OwnerRef`を返す                    |
+| 2    | `queryReference(root, "$.actor")`を実行 | 1               | `actor`へのlease `L1`を返す               |
+| 3    | Scratch変数間で`L1`の文字列をcopyする   | 1               | 新しいleaseは作られない                   |
+| 4    | rootの`free`を試みる                    | 1               | `STORE-OBJECT-IN-USE`、Storeは変更しない  |
+| 5    | `L1`をreleaseする                       | 0               | `L1`を持つ全aliasが無効になる             |
+| 6    | rootの`free`を再実行する                | 削除            | rootと`actor`を解放し、generationを進める |
 
 別の所有closure Aの`RefValue`がclosure Bを指している場合、Bだけの`free`は失敗します。先にAを
 解放またはedgeを削除すればBのcountが減り、Bを解放できます。AとBを含む共通scopeを一括解放する
@@ -1087,10 +1095,11 @@ free(ownerRef)
 `label`は診断用の文字列であり、lifecycleを決定しません。`action`、`scene`、`story`という文字列を
 Generic Coreが特別扱いすることは禁止します。
 
-### 7.5 TurboWarp Adapterの責務 `[決定済み #259／block詳細は#261]`
+### 7.5 TurboWarp Adapterの責務 `[決定済み #259／#261]`
 
 Coreはimmutableな`StoreResult`を返し、TurboWarp Adapterだけが失敗をScratch scalarの
-`ExceptionRef`へ変換できます。具体的なopcode、predicate、diagnostic reporterはIssue #261で決定します。
+`ExceptionRef`へ変換できます。具体的なopcode、predicate、diagnostic reporterは
+[`Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)を正本とします。
 
 - Standalone／上級利用向けに、opaque referenceをScratch stringとして受け渡すblock facadeを提供可能にする
 - Scratchのnumber、string、BooleanとGeneric Coreのscalarを変換する
@@ -1163,7 +1172,11 @@ Variablesとは別実装にし、その状態や名前空間へ依存させま�
 
 ## 8. IteratorとJSONPath
 
-### 8.1 責務分離 `[提案]`
+参照モデル、RFC 9535 subset、limit、collection、Iterator状態、ExceptionRef、Standalone opcodeの正本は
+[`DSL 4.0 Iterator・JSONPath・TurboWarp Adapter API`](dsl-4-iterator-jsonpath.md)とする。以下は要約であり、
+矛盾する場合は専用文書を優先する。
+
+### 8.1 責務分離 `[決定済み #261]`
 
 - Object Store: オブジェクトの所有と参照
 - JSONPath: 構造からnode集合を選ぶ
@@ -1171,34 +1184,34 @@ Variablesとは別実装にし、その状態や名前空間へ依存させま�
 - Kamishibai Runtime: StoryDocumentの意味に沿ってscene/actionを実行する
 
 JSONPathは[IETF RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html)互換の読み取り専用
-subsetから始めます。初版でfilter式まで実装するかは未決です。
+subsetとする。初版はname、index、wildcard、slice、selector listからなるchild segmentだけを受理し、
+descendant、filter、function、`@`、script evaluation、mutationを含めない。query、AST、visit、result、
+normalized pathへ起動時固定の上限を適用し、部分結果を成功として返さない。
 
-### 8.2 Standalone／上級利用向け汎用blockの概念案 `[提案]`
+### 8.2 Standalone／上級利用向け汎用block `[決定済み #261]`
 
-次のblockはGeneric Coreを独立利用するproject、デバッグ、Structured Data教材向けの候補です。
-Kamishibaiの通常実行に必要なblock一覧ではありません。
+Scratch reporterでscalarとopaque handleを混在させる`query one`は採用しない。次の型別operationを
+Structured Data Standaloneだけへ公開する。
 
 ```text
-(new object store entry from JSON [text] owned by scope [scopeRef])
-(query one [ref] at [JSONPath])
-(query nodes [ref] at [JSONPath] owned by scope [scopeRef])
-(new iterator from [ref] at [JSONPath] owned by scope [scopeRef])
-<iterator [ref] has next?>
-(iterator [ref] next)
-release reference [referenceLease]
-free object owned by [ownerRef]
+(query scalar [ref] at [singular JSONPath])
+(query reference [ref] at [singular JSONPath] owned by [scopeRef])
+(query collection [ref] at [JSONPath] owned by [scopeRef])
+(new query iterator [ref] at [JSONPath] owned by [scopeRef])
+(iterator [ref] next) -> item | done | ExceptionRef
+(iterator [ref] current scalar)
+(iterator [ref] current reference owned by [scopeRef])
 ```
 
-`query one`がscalarを選んだ場合はScratch scalarを返し、objectまたはarrayを選んだ場合は
-読み取り専用`ReferenceLease`を返します。このleaseの作成時に対象nodeの参照カウントを増やし、
-`release reference`で減らします。`query nodes`のcollectionは選択した構造化nodeへのleaseを
-所有し、collectionの解放時にまとめてreleaseします。型の曖昧さを避けるため、常にreferenceを
-返す別blockを用意する案もレビュー対象です。
+collectionはscalar itemをcopyし、structured itemごとにleaseを所有する。Iteratorは作成時のnodelistを
+immutable snapshotとして保持し、sourceとstructured itemのleaseを所有する。collection／Iterator解放時に
+そのleaseをatomicにreleaseする。current referenceは呼び出し側scope所有の独立leaseとして作る。
 
-Kamishibai標準テンプレートはこれらを配置せず、StoryIteratorとscope管理をruntime内部で呼び出します。
-台本の内容が複雑になるほど作者が`query`や`free`のblockを増やす構造にはしません。
+Core errorまたはAdapter errorは`@sdx1.<adapterRealmNonce>.<exceptionNonce>`形式のAdapter固有
+`ExceptionRef`へ変換できる。Coreの`@os1` tableとcountには登録せず、predicate、code、operation、
+safe message、explicit releaseをStandalone facadeへ公開する。
 
-### 8.3 Kamishibaiでの利用 `[提案]`
+### 8.3 Kamishibaiでの利用 `[決定済み #261]`
 
 実行本体が毎actionを任意JSONPath文字列で検索する設計にはしません。型付きStoryIteratorを
 利用します。
@@ -1215,28 +1228,12 @@ JSONPathは、上級Scratchカスタムアクション、デバッグ、教材�
 StoryDocumentを調べるために使います。通常のcustom actionではtargetと引数の専用reporterを優先し、
 作者へJSONPath、reference lease、release blockの組合せを要求しません。
 
-### 8.4 Iteratorの状態 `[提案]`
+### 8.4 Iteratorの状態 `[決定済み #261]`
 
-Iterator entryは少なくとも次を持ちます。
-
-```json
-{
-  "kind": "Iterator",
-  "sourceLeaseRef": "...",
-  "selection": "...",
-  "index": 0,
-  "length": 4,
-  "ownerScopeRef": "...",
-  "state": "ready"
-}
-```
-
-Iteratorは作成時にsource nodeへの強い`ReferenceLease`を一つ取得し、sourceの参照カウントを
-増やします。Iteratorを解放するとこのleaseをreleaseします。したがって、Iteratorが生きている間に
-sourceの`OwnerRef`を`free`しようとすると、`STORE-OBJECT-IN-USE`で失敗します。正常なCore操作だけで
-「Iteratorは生きているがsourceだけ解放済み」という状態は作りません。realm全体の破棄では両方が
-一括して無効になります。`next`を終端後に呼んだ場合の返値を空文字にするか、明示的エラーにするかは
-未決です。
+Iteratorは`ready`、`positioned`、`exhausted`、`released`を持つ。`next`はitemへ進むと`item`、終端で
+`done`を返す。`exhausted`後の再呼び出しもidempotentに`done`を返し、countとbackend revisionを変えない。
+current itemは`positioned`でだけ取得できる。Iterator解放は所有するsource／item leaseを同一transactionで
+releaseし、realm disposeは全状態を一括して無効にする。
 
 ## 9. Scratch Action Registry
 
@@ -1676,7 +1673,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
 | Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
 | TMPose             | GitHub固定commit            | `tmpose`                      | `TMPoseURL`と`pose` action      |
-| Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`候補   | StoryDocumentと実行時viewの保持 |
+| Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`       | StoryDocumentと実行時viewの保持 |
 
 Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
 展開ソースはGitHub providerを使用しています。SVG Textも4.0の直接合成APIを含むGitHub commitへ固定します。
@@ -2292,15 +2289,15 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [x] Generic Core、TurboWarp Adapter、Kamishibai Adapterを分離する
 - [x] `MapBackend`をGeneric Coreの標準かつ唯一の正本とする
 - [x] 標準作者経路ではStore、scope、leaseの寿命をruntimeが自動管理する
-- [ ] 7.3の管理対象参照、参照カウント、解放closureの意味を承認する
-- [ ] 所有closureをまたぐ強い参照cycleの扱いを決める
-- [ ] reporterが返す例外scalarの符号化と操作blockを決める
-- [ ] 7.3の承認後にGeneric scopeの最終構成を決める
-- [ ] 7.3の承認後にTurboWarp Adapterの最終責務を決める
-- [ ] opaque referenceの具体的な符号化
-- [ ] JSONPath subsetの範囲
-- [ ] `query one`のscalar-or-reference返値を許すか
-- [ ] iterator終端後の`next`をerrorにするか
+- [x] 7.3の管理対象参照、参照カウント、解放closureの意味を承認する
+- [x] 所有closureをまたぐ強い参照cycleの扱いを決める
+- [x] reporterが返す例外scalarの符号化と操作blockを決める
+- [x] 7.3の承認後にGeneric scopeの最終構成を決める
+- [x] 7.3の承認後にTurboWarp Adapterの最終責務を決める
+- [x] opaque referenceの具体的な符号化
+- [x] JSONPath subsetの範囲
+- [x] `query one`のscalar-or-reference返値を許すか
+- [x] iterator終端後の`next`をerrorにするか
 
 ### Scratch拡張
 
