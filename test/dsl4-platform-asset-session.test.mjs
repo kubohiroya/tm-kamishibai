@@ -164,6 +164,8 @@ test('creates one shared composition pair and routes a complete lifecycle throug
   assert.strictEqual(session.assetManagerComposition, setup.created.assetManagerComposition);
   assert.strictEqual(session.tmposeComposition, setup.created.tmposeComposition);
   assert.equal(typeof session.asyncInputComposition.waitForPoseCandidate, 'function');
+  assert.equal(typeof session.asyncInputComposition.waitForKeyCandidate, 'function');
+  assert.equal(typeof session.asyncInputComposition.waitForActorTouchCandidate, 'function');
   assert.equal(typeof session.poseActionPort.waitForPose, 'function');
   assert.equal(typeof session.poseActionPort.poseInputToChangeScene, 'function');
   assert.equal(Object.isFrozen(session), true);
@@ -192,6 +194,37 @@ test('creates one shared composition pair and routes a complete lifecycle throug
     async () => session.lifecycle.prepare({assetIds: ['Beach']}, context()),
     (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
   );
+});
+
+test('passes pose, key, and actor touch sources into one Async Input composition', async () => {
+  const log = [];
+  const setup = options(runtimeComponent(), log);
+  const keySource = Object.freeze({kind: 'key-source'});
+  const actorTouchSource = Object.freeze({kind: 'actor-touch-source'});
+  let receivedOptions;
+  let releaseCalls = 0;
+  const session = createDsl4PlatformAssetSession({
+    ...setup.value,
+    keySource,
+    actorTouchSource,
+    createAsyncInputComposition(input) {
+      receivedOptions = input;
+      return {
+        waitForPoseCandidate() {},
+        waitForKeyCandidate() {},
+        waitForActorTouchCandidate() {},
+        releaseAll() {
+          releaseCalls += 1;
+        },
+      };
+    },
+  });
+
+  assert.strictEqual(receivedOptions.poseSource, setup.created.tmposeComposition);
+  assert.strictEqual(receivedOptions.keySource, keySource);
+  assert.strictEqual(receivedOptions.actorTouchSource, actorTouchSource);
+  await session.dispose('source-forwarding-complete');
+  assert.equal(releaseCalls, 1);
 });
 
 test('keeps compositions, resources, and final disposal isolated between sessions', async () => {

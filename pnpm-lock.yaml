@@ -17,8 +17,11 @@ importers:
         specifier: github:kubohiroya/turbowarp-asset-manager#34c7388f76d4983c928545d6bf440ebb6ce0abb4
         version: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4
       '@kubohiroya/turbowarp-async-input':
-        specifier: github:kubohiroya/turbowarp-async-input#a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
-        version: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8
+        specifier: github:kubohiroya/turbowarp-async-input#0174a450ac6b2312637827f999748adc3d284332
+        version: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/0174a450ac6b2312637827f999748adc3d284332
+      '@kubohiroya/turbowarp-runtime-expression':
+        specifier: github:kubohiroya/turbowarp-runtime-expression#f0578e946ff61f1f33596df8619087b7a70d4cb6
+        version: https://codeload.github.com/kubohiroya/turbowarp-runtime-expression/tar.gz/f0578e946ff61f1f33596df8619087b7a70d4cb6
       '@kubohiroya/turbowarp-svg-text':
         specifier: github:kubohiroya/turbowarp-svg-text#0a98e72b547c43b92bc76e71a54d66efb3fb4d39
         version: https://codeload.github.com/kubohiroya/turbowarp-svg-text/tar.gz/0a98e72b547c43b92bc76e71a54d66efb3fb4d39
@@ -131,8 +134,12 @@ packages:
     resolution: {gitHosted: true, integrity: sha512-VyFCJnMT92wx+uEuEnU0nezApQIX8++PvTnxppafyhPm00lmu3iwuu6pyl78GOAxbhkFOfdOuyQEW3MvHq2sdw==, tarball: https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4}
     version: 0.5.0
 
-  '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8':
-    resolution: {gitHosted: true, integrity: sha512-XBE56FZ2wzcdP9ZLdKMDefBu6ITjxdbX9A0YYVo8gNCOrNwWjgXlTO3bW+4PBczA5n5M02fq8713vDefmST6lg==, tarball: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8}
+  '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/0174a450ac6b2312637827f999748adc3d284332':
+    resolution: {gitHosted: true, integrity: sha512-TreYqTfcmcvx7/H+M+QOL++ymir/NDIN+SI8c5Vp1savpURJqS3HGUgXFQXMbV1TSvp/gGTplkQKrFOnJqvWnA==, tarball: https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/0174a450ac6b2312637827f999748adc3d284332}
+    version: 0.2.0
+
+  '@kubohiroya/turbowarp-runtime-expression@https://codeload.github.com/kubohiroya/turbowarp-runtime-expression/tar.gz/f0578e946ff61f1f33596df8619087b7a70d4cb6':
+    resolution: {gitHosted: true, integrity: sha512-YB1ZU6hJfyCkalkXBg+5oNR+KKu1haro4qBx6SX04FOzezwKqLpOgpRIG3L9MyT7D1GKeG5j3f9GEm848Zf2+g==, tarball: https://codeload.github.com/kubohiroya/turbowarp-runtime-expression/tar.gz/f0578e946ff61f1f33596df8619087b7a70d4cb6}
     version: 0.2.0
 
   '@kubohiroya/turbowarp-svg-text@https://codeload.github.com/kubohiroya/turbowarp-svg-text/tar.gz/0a98e72b547c43b92bc76e71a54d66efb3fb4d39':
@@ -963,7 +970,9 @@ snapshots:
 
   '@kubohiroya/turbowarp-asset-manager@https://codeload.github.com/kubohiroya/turbowarp-asset-manager/tar.gz/34c7388f76d4983c928545d6bf440ebb6ce0abb4': {}
 
-  '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/a4f65443d4f5ee59ced68a2cf5ece1e569ad5ea8': {}
+  '@kubohiroya/turbowarp-async-input@https://codeload.github.com/kubohiroya/turbowarp-async-input/tar.gz/0174a450ac6b2312637827f999748adc3d284332': {}
+
+  '@kubohiroya/turbowarp-runtime-expression@https://codeload.github.com/kubohiroya/turbowarp-runtime-expression/tar.gz/f0578e946ff61f1f33596df8619087b7a70d4cb6': {}
 
   '@kubohiroya/turbowarp-svg-text@https://codeload.github.com/kubohiroya/turbowarp-svg-text/tar.gz/0a98e72b547c43b92bc76e71a54d66efb3fb4d39': {}
 
