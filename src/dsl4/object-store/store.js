@@ -12,6 +12,8 @@ const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const handleKinds = new Set(['scope', 'owner', 'lease']);
 const terminalHandleStates = new Set(['released', 'freed']);
 const base64UrlAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const scopeBundleKeys = new Set(['label', 'ownerScopeRef', 'references', 'typeTag', 'value']);
+const scopeBundleReferenceKeys = new Set(['path', 'source']);
 
 const defaultLimits = Object.freeze({
   maxDepth: 64,
@@ -26,6 +28,8 @@ const defaultLimits = Object.freeze({
 
 /** @type {WeakMap<object, {storeKey: object, nodeSlot: number, generation: number}>} */
 const refValueMetadata = new WeakMap();
+/** @type {WeakMap<object, {viewKey: object, nodeSlot: number, generation: number}>} */
+const nodeViewMetadata = new WeakMap();
 
 class StoreFailure extends Error {
   /**
@@ -150,13 +154,11 @@ function freezeRoot(working) {
     ...(node.kind === 'scalar'
       ? {scalar: node.scalar}
       : {
-          members: [...node.members.entries()]
-            .sort(([left], [right]) => compareMemberKeys(left, right))
-            .map(([key, member]) => ({
-              key,
-              kind: member.kind,
-              targetNodeSlot: member.targetNodeSlot,
-            })),
+          members: [...node.members.entries()].map(([key, member]) => ({
+            key,
+            kind: member.kind,
+            targetNodeSlot: member.targetNodeSlot,
+          })),
         }),
   }));
   return deepFreeze({
@@ -359,6 +361,69 @@ function normalizeStoredValue(value, limits) {
 
   const descriptor = visit(value, 0);
   return {descriptor, nodeCount};
+}
+
+/**
+ * @param {unknown} value
+ * @param {ReadonlySet<string>} allowedKeys
+ * @param {ReadonlySet<string>} requiredKeys
+ * @param {string} message
+ */
+function normalizeOptionsRecord(value, allowedKeys, requiredKeys, message) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new StoreFailure('STORE-VALUE-INVALID', message);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Object.getOwnPropertySymbols(value).length > 0
+  ) {
+    throw new StoreFailure('STORE-VALUE-INVALID', message);
+  }
+  const normalized = /** @type {Record<string, unknown>} */ ({});
+  for (const key of Object.getOwnPropertyNames(value)) {
+    if (!allowedKeys.has(key)) throw new StoreFailure('STORE-VALUE-INVALID', message);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
+      throw new StoreFailure('STORE-VALUE-INVALID', message);
+    }
+    normalized[key] = descriptor.value;
+  }
+  if ([...requiredKeys].some((key) => !Object.hasOwn(normalized, key))) {
+    throw new StoreFailure('STORE-VALUE-INVALID', message);
+  }
+  return normalized;
+}
+
+/** @param {unknown} value @param {number} maximumLength */
+function normalizeOptionsArray(value, maximumLength) {
+  if (
+    !Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype ||
+    Object.getOwnPropertySymbols(value).length > 0
+  ) {
+    throw new StoreFailure('STORE-VALUE-INVALID', 'The scope bundle references are invalid');
+  }
+  if (value.length > maximumLength) {
+    throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The scope bundle handle limit was exceeded');
+  }
+  const ownKeys = Object.getOwnPropertyNames(value);
+  if (
+    ownKeys.some(
+      (key) => key !== 'length' && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length),
+    )
+  ) {
+    throw new StoreFailure('STORE-VALUE-INVALID', 'The scope bundle references are invalid');
+  }
+  const normalized = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
+      throw new StoreFailure('STORE-VALUE-INVALID', 'The scope bundle references are invalid');
+    }
+    normalized.push(descriptor.value);
+  }
+  return normalized;
 }
 
 /** @param {any} working @param {any} descriptor @param {number} entrySlot */
@@ -942,6 +1007,89 @@ function createDebugSnapshot(root, realmState, revision) {
   });
 }
 
+/** @param {any} working @param {any} rootNode */
+function createNodeView(working, rootNode) {
+  const viewKey = Object.freeze({});
+  const nodes = new Map();
+
+  /** @param {any} node */
+  function project(node) {
+    const existing = nodes.get(node.slot);
+    if (existing) return existing;
+    const projected = Object.freeze({kind: 'Dsl4ObjectStoreNode'});
+    nodeViewMetadata.set(projected, {
+      viewKey,
+      nodeSlot: node.slot,
+      generation: node.generation,
+    });
+    nodes.set(node.slot, projected);
+    return projected;
+  }
+
+  /** @param {unknown} projected */
+  function resolve(projected) {
+    if (typeof projected !== 'object' || projected === null) {
+      throw new TypeError('Object Store node view expected a projected node');
+    }
+    const metadata = nodeViewMetadata.get(projected);
+    if (!metadata || metadata.viewKey !== viewKey) {
+      throw new TypeError('Object Store node belongs to another view');
+    }
+    const node = working.nodes.get(metadata.nodeSlot);
+    if (!node || node.generation !== metadata.generation) {
+      throw new TypeError('Object Store node view is invalid');
+    }
+    return node;
+  }
+
+  /** @param {any} node @param {string | number} key */
+  function projectMember(node, key) {
+    const member = node.members.get(key);
+    const target = member && working.nodes.get(member.targetNodeSlot);
+    if (!member || !target) throw new TypeError('Object Store node member is invalid');
+    return project(target);
+  }
+
+  const adapter = Object.freeze({
+    /** @param {unknown} projected */
+    classify(projected) {
+      return resolve(projected).kind;
+    },
+    /** @param {unknown} projected */
+    objectEntries(projected) {
+      const node = resolve(projected);
+      if (node.kind !== 'object') throw new TypeError('Object Store node is not an object');
+      return Object.freeze(
+        [...node.members.keys()].map((key) =>
+          Object.freeze([String(key), projectMember(node, key)]),
+        ),
+      );
+    },
+    /** @param {unknown} projected */
+    arrayLength(projected) {
+      const node = resolve(projected);
+      if (node.kind !== 'array') throw new TypeError('Object Store node is not an array');
+      return node.members.size;
+    },
+    /** @param {unknown} projected @param {number} index */
+    arrayItem(projected, index) {
+      const node = resolve(projected);
+      if (node.kind !== 'array' || !Number.isSafeInteger(index) || index < 0) {
+        throw new TypeError('Object Store array index is invalid');
+      }
+      return projectMember(node, index);
+    },
+    /** @param {unknown} projected */
+    scalarValue(projected) {
+      const node = resolve(projected);
+      if (node.kind !== 'scalar') throw new TypeError('Object Store node is not a scalar');
+      return node.scalar;
+    },
+  });
+
+  return Object.freeze({kind: 'Dsl4ObjectStoreNodeView', root: project(rootNode), adapter});
+}
+
 /**
  * Create one isolated Generic Object Store realm.
  *
@@ -1123,6 +1271,121 @@ export function createDsl4ObjectStore({
         typeTag,
       });
       return {changed: true, value: token};
+    });
+  }
+
+  /** @param {unknown} input */
+  function createScopeBundle(input) {
+    return execute('createScopeBundle', (working) => {
+      const bundle = normalizeOptionsRecord(
+        input,
+        scopeBundleKeys,
+        new Set(['value']),
+        'The scope bundle is invalid',
+      );
+      const ownerScope = resolveScope(
+        working,
+        context,
+        bundle.ownerScopeRef === undefined ? rootScopeRef : bundle.ownerScopeRef,
+      );
+      const label = bundle.label === undefined ? '' : bundle.label;
+      if (typeof label !== 'string') {
+        throw new StoreFailure('STORE-VALUE-INVALID', 'Scope labels must be strings');
+      }
+      if (label.length > limits.maxStringLength) {
+        throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The scope label limit was exceeded');
+      }
+      const typeTag = bundle.typeTag === undefined ? 'generic' : bundle.typeTag;
+      if (
+        typeof typeTag !== 'string' ||
+        typeTag.length === 0 ||
+        typeTag.length > limits.maxStringLength
+      ) {
+        throw new StoreFailure('STORE-VALUE-INVALID', 'The entry type tag is invalid');
+      }
+      const references = normalizeOptionsArray(
+        bundle.references === undefined ? [] : bundle.references,
+        Math.min(limits.maxOperationSteps, limits.maxHandles - working.handles.size - 2),
+      );
+      const targets = references.map((reference) => {
+        const spec = normalizeOptionsRecord(
+          reference,
+          scopeBundleReferenceKeys,
+          new Set(['source']),
+          'A scope bundle reference is invalid',
+        );
+        const resolved = resolveSourceNode(working, context, spec.source);
+        return followPath(
+          working,
+          resolved.node,
+          normalizePath(spec.path === undefined ? '$' : spec.path, limits),
+        );
+      });
+      if (working.scopes.size >= limits.maxScopes || working.entries.size >= limits.maxEntries) {
+        throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The scope bundle limit was exceeded');
+      }
+      const normalized = normalizeStoredValue(bundle.value, limits);
+      if (working.nodes.size + normalized.nodeCount > limits.maxNodes) {
+        throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The node limit was exceeded');
+      }
+
+      const scopeSlot = allocateSlot(working);
+      const scopeRef = issueHandle(
+        working,
+        context,
+        'scope',
+        scopeSlot.slot,
+        scopeSlot.generation,
+        ownerScope.slot,
+      );
+      working.scopes.set(scopeSlot.slot, {
+        slot: scopeSlot.slot,
+        generation: scopeSlot.generation,
+        parentScopeSlot: ownerScope.slot,
+        label,
+      });
+
+      const entrySlot = allocateSlot(working);
+      const rootNode = createNodeTree(working, normalized.descriptor, entrySlot.slot);
+      const ownerRef = issueHandle(
+        working,
+        context,
+        'owner',
+        entrySlot.slot,
+        entrySlot.generation,
+        scopeSlot.slot,
+      );
+      working.entries.set(entrySlot.slot, {
+        slot: entrySlot.slot,
+        generation: entrySlot.generation,
+        ownerScopeSlot: scopeSlot.slot,
+        rootNodeSlot: rootNode.slot,
+        typeTag,
+      });
+
+      const referenceLeases = targets.map((target) => {
+        const leaseSlot = allocateSlot(working);
+        const token = issueHandle(
+          working,
+          context,
+          'lease',
+          leaseSlot.slot,
+          leaseSlot.generation,
+          scopeSlot.slot,
+        );
+        working.leases.set(leaseSlot.slot, {
+          slot: leaseSlot.slot,
+          generation: leaseSlot.generation,
+          ownerScopeSlot: scopeSlot.slot,
+          targetNodeSlot: target.slot,
+        });
+        adjustIncomingCount(target, 1);
+        return token;
+      });
+      return {
+        changed: true,
+        value: {scopeRef, ownerRef, referenceLeases},
+      };
     });
   }
 
@@ -1380,6 +1643,14 @@ export function createDsl4ObjectStore({
     });
   }
 
+  /** @param {unknown} source */
+  function readNodeView(source) {
+    return executeRead('readNodeView', (working) => {
+      const selected = resolveSourceNode(working, context, source).node;
+      return createNodeView(working, selected);
+    });
+  }
+
   function debugSnapshot() {
     const {root, revision} = readDsl4MapBackend(backend);
     return createDebugSnapshot(root, context.realmState, revision);
@@ -1427,6 +1698,7 @@ export function createDsl4ObjectStore({
     rootScopeRef,
     createScope,
     newEntry,
+    createScopeBundle,
     createReference,
     duplicateReference,
     releaseReference,
@@ -1435,6 +1707,7 @@ export function createDsl4ObjectStore({
     free,
     releaseScope,
     readValue,
+    readNodeView,
     debugSnapshot,
     backendStatus: () => backend.debugStatus(),
     disposeRealm,

@@ -58,3 +58,7 @@ export {
   resolveDsl4EmbeddedSource,
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
+export {
+  createDsl4StructuredDataComposition,
+  dsl4StructuredDataDefaultLimits,
+} from './structured-data.js';
