@@ -51,6 +51,65 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 
 API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
 
+### DSL 3.2から4.0への変換
+
+外部テキストのDSL 3.2台本を、DSL 4.0 YAMLへ明示的に変換できます。入力ファイルは変更せず、
+変換に成功した場合だけ出力をatomicに作成または置換します。
+
+```bash
+pnpm exec tmpose-kamishibai convert-dsl4 \
+  --input source.txt \
+  --output story.kamishibai.yaml \
+  --pose-models pose-models.json
+```
+
+3.2の`TMPoseURL`はremote URLのまま4.0へ移せません。ポーズを使う台本では、URLとlocal
+`poseModel` assetの対応をJSONで明示します。converterはURLを取得せず、指定したproject-relative
+pathだけを台本へ記録します。
+
+```json
+{
+  "https://example.com/models/rescue/": {
+    "id": "RescuePose",
+    "file": "pose-models/rescue",
+    "loading": "lazy"
+  }
+}
+```
+
+asset、actor、cover、runtime variable、loading、pose recognition sound、SVG Text style、branch、
+scene、およびDSL 4.0 coreに対応するactionを変換します。型推論、costumeのlogical actorへの付け替え、
+3.2に秒数指定がないtransitionには、元ファイルの行・列を含むwarningを標準エラー出力へ表示します。
+
+意味を保てない次の入力は、変換結果を部分出力せずerrorにします。
+
+- DSL 3.1、旧Text Asset、remote／cache asset、`TMPoseURL`
+- 秒数なしの永続`say`、style付き`say`、`think`、`hide`など4.0 coreにないaction
+- 4.0で必須のcharge soundがないpose recognition設定
+- local model置換がない`TMPoseURL`、空のpose名、要素数が異なるbranch／key／touch inputのparallel list
+- 最後の無条件遷移がないbranch
+
+3.2の`Actor:pose`は候補選択ではなく、pose名の順にすべて成立させる4.0
+`Actor.pose.steps`へ変換します。skin／soundの不足要素は3.2と同じく省略扱い、pose数を超える余分な
+要素はwarning付きで除外します。Async Inputによる候補1件選択は3.2テキストDSLのactionではなく
+SB3 block graph側の機能であるため、このconverterは`poseInputToChangeScene`を推測生成しません。
+
+headerの`poseRecog`は`sequence.confidenceThreshold`へ変換します。3.2が0.1秒ごとに100を目標として
+`confidence × poseCharge`を加えるため、`poseCharge`は
+`sequence.fullConfidenceHoldSeconds = 10 / poseCharge`へ変換します。`poseIdle=0`はそのまま変換
+できますが、非zero値は3.2だけがconfidenceを乗算するため、意味を変えず自動変換できません。
+scene内の`setRuntimeVariable`と、1以外の`startSceneIndex`も4.0 coreに同等の実行位置がないため
+errorにします。
+
+JavaScriptから副作用なしで変換する場合は、package exportを利用できます。
+
+```js
+import {convertDsl32ToDsl4} from '@kubohiroya/tmpose-kamishibai/converter';
+
+const result = convertDsl32ToDsl4(sourceText, {sourceId: 'source.txt'});
+if (result.ok) console.log(result.yaml);
+```
+
 ## DSL 3.2の互換性
 
 tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`の台本を読み込めます。既存の3.1台本は冒頭を書き換えずに実行でき、新規の台本には`kamishibai=3.2`を推奨します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
@@ -63,7 +122,7 @@ tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`�
 
 旧構文を含む台本では、プロジェクトごとに一度`LEGACY_TEXT_ASSET_DEPRECATED`警告を開発者コンソールへ出力しますが、実行は継続します。旧Text Assetは少なくとも3.2系列では維持し、削除する場合は将来のメジャーバージョンで事前に告知します。移行先は[`kubohiroya/turbowarp-svg-text`](https://github.com/kubohiroya/turbowarp-svg-text)です。この機能拡張を組み込んだ3.2プロジェクトでは、旧Text Assetと新しいSVG Textを同じ台本内で併用できます。新規の台本では、名前付きスタイルを共有するSVG Textを使用してください。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この警告の対象外です。
 
-SVG Textは`./composition` APIを含む`@kubohiroya/turbowarp-svg-text`のGit commit `0a98e72b547c43b92bc76e71a54d66efb3fb4d39`（package version 0.2.1）を完全固定で利用します。台本のシーン定義より前に、背景色、文字色、フォント、相対フォントサイズ、配置、吹き出し方向を名前付きスタイルとして定義します。サイズ`100`は480×360ステージにおける標準14px相当で、ステージ寸法に比例して拡大・縮小します。
+SVG Textは`./composition` APIを含むnpm package `@kubohiroya/turbowarp-svg-text@0.3.0`（gitHead `05580a6018ebcb078d22334619c533f548a1f7ed`）をexact versionで利用します。台本のシーン定義より前に、背景色、文字色、フォント、相対フォントサイズ、配置、吹き出し方向を名前付きスタイルとして定義します。サイズ`100`は480×360ステージにおける標準14px相当で、ステージ寸法に比例して拡大・縮小します。
 
 ```text
 svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up

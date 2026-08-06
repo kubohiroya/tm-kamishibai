@@ -1,6 +1,11 @@
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  convertDsl32File,
+  Dsl32ConversionError,
+  formatConversionDiagnostic,
+} from '../converter/index.js';
 import {createDsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {packageVersion} from './constants.js';
 import {Sb3BuilderError} from './errors.js';
@@ -19,6 +24,9 @@ export function usage() {
     --max-source-bytes N --max-asset-file-bytes N \\
     --max-asset-files N --max-total-asset-bytes N [options]
 
+  tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
+    --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
+
 DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
   --allow-http            Permit plain HTTP assets (HTTPS is the default)
@@ -31,12 +39,51 @@ DSL 4.0 build-dsl4 options:
   --history-navigation-available  Permit a selected history.* keymap
   --replace-existing              Replace a same-channel component in the base SB3
 
+convert-dsl4 options:
+  --pose-models FILE      Map exact TMPoseURL values to local poseModel assets
+
 General options:
   --help                  Show this help
   --version               Show the package version
 
 build-sb3 takes an output basename and writes .sb3, .txt, and .manifest.json.
-build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.`;
+build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
+convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
+explicitly selected YAML output.`;
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {Parameters<typeof convertDsl32File>[0]}
+ */
+function parseConvertDsl4Arguments(arguments_) {
+  const values = new Map();
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!['--input', '--output', '--pose-models'].includes(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+  }
+  for (const required of ['--input', '--output']) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  return {
+    inputPath: path.resolve(/** @type {string} */ (values.get('--input'))),
+    outputPath: path.resolve(/** @type {string} */ (values.get('--output'))),
+    ...(values.has('--pose-models')
+      ? {poseModelMapPath: path.resolve(/** @type {string} */ (values.get('--pose-models')))}
+      : {}),
+  };
 }
 
 /**
@@ -196,7 +243,7 @@ function parseBuildDsl4Arguments(rest) {
 
 /**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -208,18 +255,22 @@ export function parseCliArguments(arguments_) {
   if (command === 'build-dsl4') {
     return {action: 'build-dsl4', options: parseBuildDsl4Arguments(rest)};
   }
+  if (command === 'convert-dsl4') {
+    return {action: 'convert', options: parseConvertDsl4Arguments(rest)};
+  }
   throw new Sb3BuilderError(
-    `Expected the build-sb3 or build-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the build-sb3, build-dsl4, or convert-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
 
 /**
  * @param {string[]} arguments_
- * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>}} [io]
+ * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>, stderr?: Pick<NodeJS.WriteStream, 'write'>}} [io]
  */
 export async function runCli(arguments_, io = {}) {
   const stdout = io.stdout ?? process.stdout;
+  const stderr = io.stderr ?? process.stderr;
   const parsed = parseCliArguments(arguments_);
   if (parsed.action === 'help') {
     stdout.write(`${usage()}\n`);
@@ -228,6 +279,24 @@ export async function runCli(arguments_, io = {}) {
   if (parsed.action === 'version') {
     stdout.write(`${packageVersion}\n`);
     return null;
+  }
+  if (parsed.action === 'convert') {
+    const result = await convertDsl32File(parsed.options);
+    for (const diagnostic of result.diagnostics) {
+      stderr.write(`${formatConversionDiagnostic(diagnostic)}\n`);
+    }
+    if (!result.ok || !result.outputPath) {
+      const errorCount = result.diagnostics.filter(
+        (diagnostic) => diagnostic.severity === 'error',
+      ).length;
+      throw new Dsl32ConversionError(
+        `DSL 3.2 to 4.0 conversion failed with ${errorCount} error(s).`,
+        result.diagnostics,
+        {reported: true},
+      );
+    }
+    stdout.write(`Converted ${result.outputPath}\n`);
+    return result;
   }
   if (parsed.action === 'build') {
     const result = await buildSb3Bundle(parsed.options);
