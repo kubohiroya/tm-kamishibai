@@ -1,0 +1,11 @@
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.wave:
+        arguments:
+          speed: fast
+          repetitions: 3

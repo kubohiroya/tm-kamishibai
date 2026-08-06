@@ -612,6 +612,19 @@
         }
       }
     },
+    "customArguments": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/variableValue"}
+    },
+    "customActorActionArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stableId": {"$ref": "#/$defs/stableId"},
+        "arguments": {"$ref": "#/$defs/customArguments"}
+      }
+    },
     "stageAction": {
       "type": "object",
       "additionalProperties": false,
@@ -732,6 +745,17 @@
         "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.pose$": {"$ref": "#/$defs/poseArgs"}
       }
     },
+    "customActorAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+          "$ref": "#/$defs/customActorActionArgs"
+        }
+      }
+    },
     "action": {
       "oneOf": [
         {"$ref": "#/$defs/stageAction"},
@@ -749,7 +773,8 @@
         {"$ref": "#/$defs/sayAction"},
         {"$ref": "#/$defs/setSkinAction"},
         {"$ref": "#/$defs/setTextAction"},
-        {"$ref": "#/$defs/poseAction"}
+        {"$ref": "#/$defs/poseAction"},
+        {"$ref": "#/$defs/customActorAction"}
       ]
     },
     "actions": {

@@ -103,7 +103,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 | SVG Text                  | 4.0の標準テキスト表示候補として維持する                           |
 | 個別の機能拡張source      | provider、version／commit、integrityを正本として維持する          |
 | `extensionBundles`        | 4.0 Compositeの第一候補として維持する                             |
-| 新しい`./composition` API | block登録なしの直接合成契約が必要なcapabilityに限定して公開する  |
+| 新しい`./composition` API | block登録なしの直接合成契約が必要なcapabilityに限定して公開する   |
 | block cleanup             | DSL設計外。必要なbuildでだけ既定OFFオプションを明示的に有効化する |
 | 台本製作者の作業          | 標準テンプレートのblock graphを変更せず、台本の記述だけで完結する |
 
@@ -1245,7 +1245,10 @@ Action Registryは、Scratchで作品固有の工夫を加えたいカスタマ�
 台本例:
 
 ```yaml
-- Hero.wave: [fast, 3]
+- Hero.wave:
+    arguments:
+      speed: fast
+      count: 3
 ```
 
 Scratch側の概念例:
@@ -1268,7 +1271,9 @@ when kamishibai action [wave]
 
 hatの存在自体を登録とみなすため、別の初期化scriptで登録blockを実行する必要がありません。
 green flag時に明示的な`register action` blockを実行する方式は、作者の初期化作業、実行順依存、
-登録漏れを増やすため標準方式に採用しません。parameter schemaの宣言方法は詳細提案として残します。
+登録漏れを増やすため標準方式に採用しません。hat検出adapterはaction名、actor target、parameter宣言、
+検出元のtarget／hat block IDを一つのRegistry Snapshotへ固定します。宣言UIの具体的なScratch block形状は
+adapter実装で確定しますが、coreへ渡すsnapshot形式と検証規則は9.4の通りです。
 
 ### 9.3 dispatchとthread context `[提案]`
 
@@ -1282,7 +1287,7 @@ green flag時に明示的な`register action` blockを実行する方式は、�
 単一のグローバル`currentAction`変数だけに依存しないため、cloneや将来の並行処理でも
 contextが混ざりにくくなります。
 
-### 9.4 Registryが保持する情報 `[提案]`
+### 9.4 Registryが保持する情報 `[決定済み]`
 
 ```json
 {
@@ -1299,17 +1304,17 @@ contextが混ざりにくくなります。
 }
 ```
 
-parameter schemaをScratch上でどの程度宣言できるようにするかは未決です。初版ではhandlerの
-存在だけを検証し、引数はlistまたはmappingとして渡す小さな仕様から始める案があります。
+初版のparameter typeは`string`、`number`、`boolean`です。各parameterは`required`を持ち、省略時は
+`true`へ正規化します。台本ではparameterを`arguments` mappingへ名前付きで書き、位置listを許可しません。
+未宣言parameter、必須parameter欠落、型不一致を実行前に拒否します。snapshotはaction名順に固定し、
+一つのparse／runtime generation中は不変です。
 
-### 9.5 名前衝突 `[未決]`
+### 9.5 名前衝突 `[決定済み]`
 
 - core actionと同名のcustom action登録を禁止する
-- custom actionへnamespaceを必須にする
-- project内だけで一意なら短い名前を許可する
-
-小学生向けの分かりやすさと、再利用可能なScratchモジュール間の衝突回避を比較する必要が
-あります。
+- project内だけで一意なら短い名前を許可し、namespaceを必須にしない
+- 同名handlerと同一action内のparameter名重複をsnapshot生成errorにする
+- action名とparameter名はDSL ID規則およびUnicode NFCに従う
 
 ### 9.6 custom actionの作者工数budget `[決定済み]`
 
@@ -2250,10 +2255,10 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 ### Scratch拡張
 
 - [x] custom action登録はhat検出とし、明示的register blockを要求しない
-- [ ] custom actionのparameter schemaをScratchで宣言可能にするか
-- [ ] custom action名へnamespaceを要求するか
+- [x] custom actionのparameter schemaをRegistry Snapshotで宣言し、初版をscalar型に限定する
+- [x] custom action名へnamespaceを要求せず、project内の短い一意名を許可する
 - [ ] handlerが`complete`を呼ばず終了した場合の扱い
-- [ ] 複数handlerが同じaction名を登録した場合の扱い
+- [x] 複数handlerが同じaction名を登録した場合はsnapshot生成errorにする
 
 ### 互換性と配布
 

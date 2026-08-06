@@ -1,3 +1,7 @@
+import {dsl4ActorCoreActionNames} from './action-registry.js';
+
+const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
+
 /**
  * @typedef {object} SourcePosition
  * @property {number} line
@@ -102,19 +106,27 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   const target = separator === -1 ? null : sourceCommand.slice(0, separator);
   const command = separator === -1 ? sourceCommand : sourceCommand.slice(separator + 1);
   const sourceArguments = sourceAction[sourceCommand];
+  const customAction = separator !== -1 && !actorCoreActionNames.has(command);
   const actionPath = `/scenes/${storyPathSegment(sceneId)}/actions/${actionIndex}`;
   const actionRange = sourceRangeForNode(actionNode, lineCounter);
   const argumentNode = actionNode?.get?.(sourceCommand, true);
+  const argumentRecord =
+    typeof sourceArguments === 'object' && sourceArguments !== null
+      ? /** @type {Record<string, unknown>} */ (sourceArguments)
+      : null;
   /** @type {Record<string, unknown>} */
   let args;
 
-  if (typeof sourceArguments === 'object' && sourceArguments !== null) {
+  if (customAction) {
+    args = /** @type {Record<string, unknown>} */ (
+      cloneValue(/** @type {Record<string, unknown>} */ (argumentRecord?.arguments ?? {}))
+    );
+  } else if (argumentRecord) {
     const routeCommand = [
       'keyInputToChangeScene',
       'touchInputToChangeScene',
       'poseInputToChangeScene',
     ].includes(command);
-    const argumentRecord = /** @type {Record<string, unknown>} */ (sourceArguments);
     args = /** @type {Record<string, unknown>} */ (
       cloneValue(routeCommand && !argumentRecord.routes ? {routes: argumentRecord} : argumentRecord)
     );
@@ -132,16 +144,22 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
     args = {[argumentName]: sourceArguments};
   }
 
-  const stableId = typeof args.stableId === 'string' ? args.stableId : undefined;
+  const stableId =
+    typeof argumentRecord?.stableId === 'string' ? argumentRecord.stableId : undefined;
   delete args.stableId;
+  const argsNode = customAction
+    ? (argumentNode?.get?.('arguments', true) ?? argumentNode)
+    : argumentNode;
   sourceMap[actionPath] = actionRange;
-  sourceMap[`${actionPath}/args`] = sourceRangeForNode(argumentNode, lineCounter);
+  sourceMap[`${actionPath}/args`] = sourceRangeForNode(argsNode, lineCounter);
 
   for (const field of Object.keys(args)) {
-    let fieldNode = argumentNode;
-    if (argumentNode?.get && typeof sourceArguments === 'object' && sourceArguments !== null) {
+    let fieldNode = argsNode;
+    if (customAction) {
+      fieldNode = argsNode?.get?.(field, true) ?? argsNode;
+    } else if (argumentNode?.get && argumentRecord) {
       const sourceField =
-        field === 'routes' && !Object.hasOwn(sourceArguments, 'routes') ? undefined : field;
+        field === 'routes' && !Object.hasOwn(argumentRecord, 'routes') ? undefined : field;
       if (sourceField) fieldNode = argumentNode.get(sourceField, true);
     }
     sourceMap[`${actionPath}/args/${storyPathSegment(field)}`] = sourceRangeForNode(
@@ -162,6 +180,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
     target,
     command,
     args,
+    ...(customAction ? {handler: 'custom'} : {}),
     ...(stableId ? {stableId} : {}),
     sourceRange: actionRange,
   };
