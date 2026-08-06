@@ -213,11 +213,25 @@ export function createDsl4RuntimeController({
     return actions[currentActionIndex];
   }
 
+  /** @param {unknown} error @param {Readonly<Record<string, unknown>> | null} action */
+  function normalizeStructuredCleanupError(error, action) {
+    if (action?.handler !== 'custom') return error;
+    const cleanupError = new Error('Custom action scope cleanup failed', {cause: error});
+    Object.defineProperty(cleanupError, 'code', {value: 'K4-CUSTOM-CLEANUP-FAILED'});
+    if (typeof action.id === 'string') {
+      Object.defineProperty(cleanupError, 'storyPath', {value: action.id});
+    }
+    return cleanupError;
+  }
+
   /** @param {string} reason */
   function releaseStructuredAction(reason) {
     if (!structuredDataIntegration || !structuredActionActive) return;
+    const action = currentAction();
     try {
       structuredDataIntegration.releaseAction(reason);
+    } catch (error) {
+      throw normalizeStructuredCleanupError(error, action);
     } finally {
       structuredActionActive = false;
       structuredAction = null;
@@ -228,8 +242,11 @@ export function createDsl4RuntimeController({
   /** @param {string} reason */
   function endStructuredStory(reason) {
     if (!structuredDataIntegration || !structuredStoryActive) return;
+    const action = structuredActionActive ? currentAction() : null;
     try {
       structuredDataIntegration.endStory(reason);
+    } catch (error) {
+      throw normalizeStructuredCleanupError(error, action);
     } finally {
       structuredStoryActive = false;
       structuredActionActive = false;
