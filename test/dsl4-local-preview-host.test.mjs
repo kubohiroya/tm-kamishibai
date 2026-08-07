@@ -486,6 +486,105 @@ test('serves copied browser and project artifacts through separate authenticated
   }
 });
 
+test('streams generations to a browser-owned runtime without creating a Node protocol session', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-browser-runtime-host-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceFilename = 'runtime-preview.k4.yml';
+  const sourcePath = path.join(projectRoot, sourceFilename);
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+  await Promise.all([
+    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(sourcePath, validSource),
+  ]);
+  const sourceWatch = fakeWatchFactory();
+  const structureWatch = fakeWatchFactory();
+  const observedEvents = [];
+  const projectBytes = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x01]);
+  const browserBundleBytes = new TextEncoder().encode('globalThis.browserRuntime = true;\n');
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    runtimeOwner: 'browser',
+    projectBytes,
+    browserBundleBytes,
+    watcherOptions: {
+      watchFactory: sourceWatch.factory,
+      quietWindowMs: 0,
+      retryIntervalMs: 1,
+      stabilityTimeoutMs: 3,
+    },
+    structureWatchFactory: structureWatch.factory,
+    onEvent: (event) => observedEvents.push(event),
+  });
+
+  try {
+    assert.equal(host.getSnapshot().runtimeOwner, 'browser');
+    await host.start();
+    const launchUrl = new URL(host.getLaunchUrl());
+    const token = launchUrl.hash.slice(1);
+    const page = await fetch(launchUrl.origin);
+    const pageBody = await page.text();
+    assert.match(pageBody, /src="\/runtime\/browser\.js"/u);
+    assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
+
+    const connected = await request(launchUrl.origin, '/api/connect', {body: {token}});
+    assert.equal(connected.snapshot.status, 'connected');
+    assert.equal(connected.snapshot.runtimeOwner, 'browser');
+    const generationRecord = connected.events.find(
+      (event) => event.type === 'local-preview.generation',
+    );
+    const generation = decodeDsl4PreviewSourceGenerationWire(
+      new TextEncoder().encode(JSON.stringify(generationRecord.generation)),
+    );
+    assert.equal(generation.revision, 1);
+    assert.equal(generation.result.storyDocument.scenes[0].id, 'opening');
+    const sourceRecord = connected.events.find((event) => event.type === 'local-preview.source');
+    assert.equal(sourceRecord.generationRevision, 1);
+    assert.equal(sourceRecord.source.ok, true);
+    assert.equal(Object.hasOwn(sourceRecord, 'acknowledgement'), false);
+    assert.equal(
+      observedEvents.some((event) => JSON.stringify(event).includes('StoryDocument')),
+      false,
+    );
+
+    const projectResponse = await fetch(`${launchUrl.origin}/api/runtime-project`, {
+      method: 'POST',
+      headers: {
+        origin: launchUrl.origin,
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    assert.equal(projectResponse.status, 200);
+    assert.deepEqual([...new Uint8Array(await projectResponse.arrayBuffer())], [...projectBytes]);
+
+    const deniedCommit = await request(launchUrl.origin, '/api/commit', {
+      token,
+      body: {choice: 'storyStart'},
+      expectedStatus: 400,
+    });
+    assert.equal(deniedCommit.error.code, 'K4-PREVIEW-HOST-RUNTIME-OWNER');
+
+    await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
+    sourceWatch.emit(sourceFilename);
+    await waitFor(() => host.getSnapshot().source?.ok === false, 'invalid source was not observed');
+    const invalidRecord = observedEvents.findLast((event) => event.type === 'local-preview.source');
+    assert.equal(invalidRecord.generationRevision, 2);
+    assert.equal(invalidRecord.source.ok, false);
+    assert.equal(JSON.stringify(invalidRecord).includes(validSource.trim()), false);
+    assert.equal(JSON.stringify(invalidRecord).includes(projectRoot), false);
+  } finally {
+    await host.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+  assert.equal(sourceWatch.closed, 1);
+  assert.equal(structureWatch.closed, 1);
+});
+
 test('fails before opening sockets for unsafe local host configuration', () => {
   const runtime = createRuntimeProtocol();
   const base = {
@@ -542,6 +641,26 @@ test('fails before opening sockets for unsafe local host configuration', () => {
         maxBrowserBundleBytes: dsl4TurboWarpBrowserBundleMaximumBytes + 1,
       }),
     /maxBrowserBundleBytes must be <=/u,
+  );
+  const withoutProtocol = {...base};
+  delete withoutProtocol.protocolSession;
+  assert.throws(
+    () => createDsl4LocalPreviewHost({...withoutProtocol, runtimeOwner: 'browser'}),
+    /requires projectBytes and browserBundleBytes/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        runtimeOwner: 'browser',
+        projectBytes: Uint8Array.of(1),
+        browserBundleBytes: Uint8Array.of(1),
+      }),
+    /protocolSession must be omitted/u,
+  );
+  assert.throws(
+    () => createDsl4LocalPreviewHost({...base, runtimeOwner: 'worker'}),
+    /runtimeOwner must be protocol or browser/u,
   );
   void runtime.liveReload.dispose();
 });

@@ -150,7 +150,18 @@ targetとしてsession lifetimeへattachします。generation bridgeはwireで�
 
 startup failure、startup中のpage close、通常disposeではgeneration bridge／runtime environmentを先に、TurboWarp VM／stageを
 後に解放します。base componentがinvalidな場合はplatformをinspectせず、stage／camera／rendererを確保しません。このownerは
-次段で認証済みhost transportと共通reload overlayへ接続するまでpublic CLIから起動しません。
+browser bundle entryが認証済みhost transportと共通reload overlayを合成するまでpublic CLIから起動しません。
+
+### 5.5 browser-owned host transport
+
+hostのruntime ownerは`protocol`または`browser`を起動時に固定します。`protocol`は既存test／移行用のcaller-owned sessionを
+使用し、`browser`はbase SB3とself-contained browser bundleのpairを必須とし、Node側`protocolSession`を拒否します。
+browser modeのpageは`/runtime/browser.js`だけを起動し、unbundled legacy clientとNodeのcommit／restart／defer APIを使用しません。
+
+browser modeでもsourceはNodeの共有frontendで一度だけparseします。hostはrevision付きbounded generation recordと、integrity／
+件数／canonical diagnosticだけのredacted summaryを同じstreamへ順序付きで書きます。raw YAML、source filename、絶対pathは
+generationへ含めません。browserはgenerationを自身のbridgeへacceptし、commit／restart／deferをpage内で完結させます。
+runtime project取得とevent streamは引き続きactive exact Origin＋bearer sessionを必須とします。
 
 ## 6. securityとrollback
 
