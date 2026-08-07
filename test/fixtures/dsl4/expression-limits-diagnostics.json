@@ -93,6 +93,31 @@
         "retryIntervalMs": 50,
         "stabilityTimeoutMs": 2000
       }
+    },
+    "sourceFrontend": {
+      "source": "src/dsl4/source-frontend.js",
+      "values": {
+        "maxCanonicalSourceBytes": 262144,
+        "maxYamlNodes": 20000,
+        "maxYamlDepth": 64,
+        "maxScalarScalars": 16384,
+        "maxScenes": 512,
+        "maxActionsPerScene": 1024,
+        "maxTotalActions": 4096,
+        "maxAssets": 1024,
+        "maxDiagnostics": 100,
+        "maxRelatedLocations": 8
+      }
+    },
+    "diagnosticProjection": {
+      "source": "src/dsl4/diagnostic-projection.js",
+      "values": {
+        "maxDiagnostics": 100,
+        "maxUiDiagnostics": 20,
+        "maxExcerptScalars": 240,
+        "maxMessageScalars": 500,
+        "maxRelatedLocations": 8
+      }
     }
   },
   "requiredExplicitLimits": [
@@ -104,8 +129,8 @@
     "maxSceneVisits",
     "poseArchiveLimits"
   ],
-  "proposedSourcePolicy": {
-    "status": "proposed-not-implemented",
+  "sourceFrontendPolicy": {
+    "status": "implemented-default",
     "values": {
       "maxCanonicalSourceBytes": 262144,
       "maxYamlNodes": 20000,
@@ -117,8 +142,8 @@
       "maxAssets": 1024
     }
   },
-  "proposedDiagnosticPolicy": {
-    "status": "proposed-not-implemented",
+  "diagnosticProjectionPolicy": {
+    "status": "implemented-default",
     "values": {
       "maxDiagnostics": 100,
       "maxUiDiagnostics": 20,

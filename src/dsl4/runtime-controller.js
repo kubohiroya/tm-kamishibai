@@ -1,6 +1,7 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {deepFreeze} from './story-document.js';
+import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -110,11 +111,12 @@ function storyPathSegment(value) {
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
  * @param {string | null} storyPath
+ * @param {string} sourcePath
  * @param {string} code
  * @param {string} message
  * @returns {Readonly<Record<string, unknown>>}
  */
-function runtimeDiagnostic(storyDocument, storyPath, code, message) {
+function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) {
   const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
   const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
   return deepFreeze({
@@ -125,6 +127,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
     sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
     range: storyPath ? (sourceMap[storyPath] ?? sourceMap['/']) : sourceMap['/'],
     ...(storyPath ? {storyPath} : {}),
+    path: sourcePath,
     related: [],
   });
 }
@@ -885,14 +888,22 @@ export function createDsl4RuntimeController({
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-BRANCH-001'});
       throw error;
     }
-    for (const rule of rules) {
+    for (const [ruleIndex, rule] of rules.entries()) {
       if (rule.else) return rule.else;
       if (typeof evaluateCondition !== 'function') {
         const error = new Error('Runtime condition evaluator is not available');
         Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});
         throw error;
       }
-      const matches = await evaluateCondition(rule.if, context.variables, context);
+      let matches;
+      try {
+        matches = await evaluateCondition(rule.if, context.variables, context);
+      } catch (error) {
+        throw mapDsl4RuntimeExpressionError(error, {
+          storyPath: `/branches/${storyPathSegment(branchId)}/${ruleIndex}/if`,
+          sourcePath: `$.branches[${JSON.stringify(branchId)}][${ruleIndex}].if`,
+        });
+      }
       ensureActive(context);
       if (matches) return rule.goto;
     }
@@ -1068,12 +1079,16 @@ export function createDsl4RuntimeController({
     const code = typeof errorRecord.code === 'string' ? errorRecord.code : 'K4-RUNTIME-ACTION-001';
     const errorStoryPath =
       typeof errorRecord.storyPath === 'string' ? errorRecord.storyPath : actionPath;
+    const errorSourcePath =
+      typeof errorRecord.sourcePath === 'string' ? errorRecord.sourcePath : (errorStoryPath ?? '$');
     failureDiagnostic = runtimeDiagnostic(
       storyDocument,
       errorStoryPath,
+      errorSourcePath,
       code,
       safeErrorMessage(terminalError),
     );
+    releaseAssets('runtime-failed');
     emit('runtime.fail', {code});
     rejectQuiesce(
       terminalError instanceof Error

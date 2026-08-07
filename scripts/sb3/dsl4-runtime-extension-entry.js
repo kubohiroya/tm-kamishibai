@@ -1,6 +1,6 @@
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
-import {createDsl4SourceFrontend} from '../../src/dsl4/source-frontend.js';
+import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
@@ -23,7 +23,7 @@ function fallbackTMPoseRuntime() {
 class KamishibaiDsl4RuntimeExtension {
   constructor(Scratch) {
     this.Scratch = Scratch;
-    this.frontend = createDsl4SourceFrontend(schema);
+    this.frontend = createDsl4ProductionSourceFrontend(schema);
     this.shell = null;
     this.operation = Promise.resolve();
     this.status = 'ready';

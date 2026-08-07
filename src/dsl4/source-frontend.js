@@ -1,5 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
-import {isAlias, isPair, LineCounter, parseAllDocuments, visit} from 'yaml';
+import {isAlias, isMap, isPair, isScalar, isSeq, LineCounter, parseAllDocuments, visit} from 'yaml';
 
 import {
   dsl4EmptyActionRegistrySnapshot,
@@ -7,11 +7,26 @@ import {
 } from './action-registry.js';
 import {validateDsl4Semantics} from './semantic-validator.js';
 import {canonicalizeDsl4Source} from './source-canonicalizer.js';
+import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
 
 const forbiddenMappingKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const textEncoder = new TextEncoder();
+
+export const dsl4SourceFrontendDefaultLimits = Object.freeze({
+  maxCanonicalSourceBytes: 256 * 1024,
+  maxYamlNodes: 20_000,
+  maxYamlDepth: 64,
+  maxScalarScalars: 16_384,
+  maxScenes: 512,
+  maxActionsPerScene: 1_024,
+  maxTotalActions: 4_096,
+  maxAssets: 1_024,
+  maxDiagnostics: 100,
+  maxRelatedLocations: 8,
+});
 
 /**
  * @typedef {object} Dsl4Diagnostic
@@ -127,19 +142,289 @@ function diagnostic({code, message, sourceId, path, node, lineCounter, storyPath
   };
 }
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** @param {string} value */
+function storyPathSegment(value) {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+/** @param {unknown} input */
+function resolveFrontendLimits(input) {
+  if (!isRecord(input)) throw new TypeError('source frontend limits must be an object');
+  const unknown = Object.keys(input).filter(
+    (name) => !Object.hasOwn(dsl4SourceFrontendDefaultLimits, name),
+  );
+  if (unknown.length > 0) {
+    throw new TypeError(`Unknown source frontend limits: ${unknown.sort().join(', ')}`);
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(dsl4SourceFrontendDefaultLimits).map(([name, maximum]) => {
+        const value = Object.hasOwn(input, name) ? input[name] : maximum;
+        const minimum = name === 'maxRelatedLocations' ? 0 : 1;
+        if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum) {
+          throw new TypeError(`${name} must be a safe integer between ${minimum} and ${maximum}`);
+        }
+        return [name, Number(value)];
+      }),
+    ),
+  );
+}
+
+/**
+ * @param {readonly Dsl4Diagnostic[]} diagnostics
+ * @param {Readonly<Record<string, number>>} limits
+ */
+function finalizeDiagnostics(diagnostics, limits) {
+  return normalizeDsl4DiagnosticSequence(diagnostics, {
+    maxDiagnostics: limits.maxDiagnostics,
+    maxRelatedLocations: limits.maxRelatedLocations,
+  }).diagnostics;
+}
+
 /**
  * @param {readonly Dsl4Diagnostic[]} diagnostics
  * @returns {readonly Dsl4Diagnostic[]}
  */
 function sortDiagnostics(diagnostics) {
+  /** @param {string} left @param {string} right */
+  const compareCodeUnits = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
   return deepFreeze(
     [...diagnostics].sort(
       (left, right) =>
         left.range.start.offset - right.range.start.offset ||
-        left.code.localeCompare(right.code) ||
-        left.message.localeCompare(right.message),
+        compareCodeUnits(left.code, right.code) ||
+        compareCodeUnits(left.message, right.message),
     ),
   );
+}
+
+/**
+ * Count YAML collections and scalars without recursively traversing an attacker-controlled tree.
+ *
+ * @param {any} root
+ * @param {Readonly<Record<string, number>>} limits
+ */
+function inspectYamlResources(root, limits) {
+  const stack = [{node: root, collectionDepth: 0}];
+  let nodeCount = 0;
+  let firstNodeOverflow = null;
+  let firstDepthOverflow = null;
+  let firstScalarOverflow = null;
+
+  while (stack.length > 0) {
+    const next = stack.pop();
+    if (!next) break;
+    const {node, collectionDepth} = next;
+    if (!node) continue;
+    if (isPair(node)) {
+      stack.push({node: node.value, collectionDepth});
+      stack.push({node: node.key, collectionDepth});
+      continue;
+    }
+
+    if (isMap(node) || isSeq(node)) {
+      nodeCount += 1;
+      if (nodeCount > limits.maxYamlNodes && !firstNodeOverflow) firstNodeOverflow = node;
+      const nextDepth = collectionDepth + 1;
+      if (nextDepth > limits.maxYamlDepth && !firstDepthOverflow) firstDepthOverflow = node;
+      for (let index = node.items.length - 1; index >= 0; index -= 1) {
+        stack.push({node: node.items[index], collectionDepth: nextDepth});
+      }
+      continue;
+    }
+
+    if (isScalar(node)) {
+      nodeCount += 1;
+      if (nodeCount > limits.maxYamlNodes && !firstNodeOverflow) firstNodeOverflow = node;
+      if (
+        typeof node.value === 'string' &&
+        [...node.value].length > limits.maxScalarScalars &&
+        !firstScalarOverflow
+      ) {
+        firstScalarOverflow = node;
+      }
+    }
+  }
+
+  return {nodeCount, firstNodeOverflow, firstDepthOverflow, firstScalarOverflow};
+}
+
+/**
+ * @param {Record<string, unknown>} story
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {string} sourceId
+ * @param {Readonly<Record<string, number>>} limits
+ */
+function validateStoryResourceLimits(story, document, lineCounter, sourceId, limits) {
+  /** @type {Dsl4Diagnostic[]} */
+  const diagnostics = [];
+  const assets = isRecord(story.assets) ? story.assets : {};
+  if (Object.keys(assets).length > limits.maxAssets) {
+    diagnostics.push(
+      diagnostic({
+        code: 'K4-ASSET-LIMIT-001',
+        message: `Story exceeds the ${limits.maxAssets} asset limit`,
+        sourceId,
+        path: '$.assets',
+        node: document.getIn(['assets'], true),
+        lineCounter,
+      }),
+    );
+  }
+
+  const scenes = isRecord(story.scenes) ? story.scenes : {};
+  if (Object.keys(scenes).length > limits.maxScenes) {
+    diagnostics.push(
+      diagnostic({
+        code: 'K4-SCENE-LIMIT-001',
+        message: `Story exceeds the ${limits.maxScenes} scene limit`,
+        sourceId,
+        path: '$.scenes',
+        node: document.getIn(['scenes'], true),
+        lineCounter,
+      }),
+    );
+  }
+
+  let totalActions = 0;
+  let totalOverflowNode = null;
+  for (const [sceneId, scene] of Object.entries(scenes)) {
+    const actions = Array.isArray(scene)
+      ? scene
+      : isRecord(scene) && Array.isArray(scene.actions)
+        ? scene.actions
+        : [];
+    const actionsPath = Array.isArray(scene) ? ['scenes', sceneId] : ['scenes', sceneId, 'actions'];
+    if (actions.length > limits.maxActionsPerScene) {
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-ACTION-LIMIT-SCENE-001',
+          message: `Scene exceeds the ${limits.maxActionsPerScene} action limit`,
+          sourceId,
+          path: Array.isArray(scene)
+            ? `$.scenes[${JSON.stringify(sceneId)}]`
+            : `$.scenes[${JSON.stringify(sceneId)}].actions`,
+          node: document.getIn(actionsPath, true),
+          lineCounter,
+          storyPath: `/scenes/${storyPathSegment(sceneId)}`,
+        }),
+      );
+    }
+    if (!totalOverflowNode && totalActions + actions.length > limits.maxTotalActions) {
+      const overflowIndex = Math.max(0, limits.maxTotalActions - totalActions);
+      totalOverflowNode = document.getIn([...actionsPath, overflowIndex], true);
+    }
+    totalActions += actions.length;
+  }
+  if (totalActions > limits.maxTotalActions) {
+    diagnostics.push(
+      diagnostic({
+        code: 'K4-ACTION-LIMIT-TOTAL-001',
+        message: `Story exceeds the ${limits.maxTotalActions} total action limit`,
+        sourceId,
+        path: '$.scenes',
+        node: totalOverflowNode ?? document.getIn(['scenes'], true),
+        lineCounter,
+      }),
+    );
+  }
+  return diagnostics;
+}
+
+/**
+ * @param {Record<string, unknown>} story
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {string} sourceId
+ * @param {(() => unknown) | null} createRuntimeExpressionComposition
+ */
+function validateBranchExpressions(
+  story,
+  document,
+  lineCounter,
+  sourceId,
+  createRuntimeExpressionComposition,
+) {
+  const branches = isRecord(story.branches) ? story.branches : {};
+  const conditions = Object.entries(branches).flatMap(([branchId, value]) =>
+    Array.isArray(value)
+      ? value.flatMap((rule, index) =>
+          isRecord(rule) && typeof rule.if === 'string'
+            ? [{branchId, index, expression: rule.if}]
+            : [],
+        )
+      : [],
+  );
+  if (conditions.length === 0) return [];
+  if (typeof createRuntimeExpressionComposition !== 'function') return [];
+
+  /** @type {Dsl4Diagnostic[]} */
+  const diagnostics = [];
+  let composition;
+  try {
+    composition = createRuntimeExpressionComposition();
+    if (
+      !isRecord(composition) ||
+      typeof composition.validateConditionSyntax !== 'function' ||
+      typeof composition.releaseAll !== 'function'
+    ) {
+      throw new TypeError(
+        'Runtime Expression composition must provide validateConditionSyntax and releaseAll',
+      );
+    }
+    for (const {branchId, index, expression} of conditions) {
+      const result = composition.validateConditionSyntax(expression);
+      if (isRecord(result) && result.ok === true) continue;
+      const position =
+        isRecord(result) && Number.isSafeInteger(result.position) ? result.position : 0;
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-EXPRESSION-SYNTAX-001',
+          message: `Condition syntax is invalid at expression offset ${position}`,
+          sourceId,
+          path: `$.branches[${JSON.stringify(branchId)}][${index}].if`,
+          node: document.getIn(['branches', branchId, index, 'if'], true),
+          lineCounter,
+          storyPath: `/branches/${storyPathSegment(branchId)}/${index}/if`,
+        }),
+      );
+    }
+  } catch {
+    diagnostics.push(
+      diagnostic({
+        code: 'K4-EXPRESSION-INTERNAL-001',
+        message: 'Expression validation failed internally',
+        sourceId,
+        path: '$.branches',
+        node: document.getIn(['branches'], true),
+        lineCounter,
+      }),
+    );
+  } finally {
+    try {
+      if (isRecord(composition) && typeof composition.releaseAll === 'function') {
+        composition.releaseAll();
+      }
+    } catch {
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-EXPRESSION-INTERNAL-001',
+          message: 'Expression validation resources could not be released',
+          sourceId,
+          path: '$.branches',
+          node: document.getIn(['branches'], true),
+          lineCounter,
+        }),
+      );
+    }
+  }
+  return diagnostics;
 }
 
 /**
@@ -169,9 +454,10 @@ function schemaErrorSegments(error) {
 /**
  * @param {string} source
  * @param {string} sourceId
+ * @param {Readonly<Record<string, number>>} limits
  * @returns {{document: any, lineCounter: import('yaml').LineCounter, diagnostics: readonly Dsl4Diagnostic[]}}
  */
-function parseRestrictedYaml(source, sourceId) {
+function parseRestrictedYaml(source, sourceId, limits) {
   const lineCounter = new LineCounter();
   const documents = parseAllDocuments(source, {
     lineCounter,
@@ -265,6 +551,43 @@ function parseRestrictedYaml(source, sourceId) {
         );
       }
     });
+    const resources = inspectYamlResources(document.contents, limits);
+    if (resources.firstNodeOverflow) {
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-YAML-LIMIT-NODES-001',
+          message: `YAML exceeds the ${limits.maxYamlNodes} node limit`,
+          sourceId,
+          path: '$',
+          node: resources.firstNodeOverflow,
+          lineCounter,
+        }),
+      );
+    }
+    if (resources.firstDepthOverflow) {
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-YAML-LIMIT-DEPTH-001',
+          message: `YAML exceeds the ${limits.maxYamlDepth} collection depth limit`,
+          sourceId,
+          path: '$',
+          node: resources.firstDepthOverflow,
+          lineCounter,
+        }),
+      );
+    }
+    if (resources.firstScalarOverflow) {
+      diagnostics.push(
+        diagnostic({
+          code: 'K4-YAML-LIMIT-SCALAR-001',
+          message: `YAML scalar exceeds the ${limits.maxScalarScalars} Unicode scalar limit`,
+          sourceId,
+          path: '$',
+          node: resources.firstScalarOverflow,
+          lineCounter,
+        }),
+      );
+    }
   }
 
   return {document: documents[0], lineCounter, diagnostics: sortDiagnostics(diagnostics)};
@@ -274,22 +597,55 @@ function parseRestrictedYaml(source, sourceId) {
  * Compile a schema once and return the shared pure source frontend.
  *
  * @param {import('ajv').AnySchema} schema
- * @param {{actionRegistry?: unknown}} [options]
+ * @param {{actionRegistry?: unknown, limits?: Partial<typeof dsl4SourceFrontendDefaultLimits>, createRuntimeExpressionComposition?: (() => unknown) | null}} [options]
  * @returns {{parse(source: string, options?: {sourceId?: string}): ParseResult}}
  */
 export function createDsl4SourceFrontend(
   schema,
-  {actionRegistry = dsl4EmptyActionRegistrySnapshot} = {},
+  {
+    actionRegistry = dsl4EmptyActionRegistrySnapshot,
+    limits: limitOverrides = {},
+    createRuntimeExpressionComposition = null,
+  } = {},
 ) {
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
+  const limits = resolveFrontendLimits(limitOverrides);
+  if (
+    createRuntimeExpressionComposition !== null &&
+    typeof createRuntimeExpressionComposition !== 'function'
+  ) {
+    throw new TypeError('createRuntimeExpressionComposition must be a function or null');
+  }
   const AjvConstructor = /** @type {any} */ (Ajv2020);
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
   return Object.freeze({
     parse(source, {sourceId = 'main'} = {}) {
       const canonicalSource = canonicalizeDsl4Source(source);
-      const parsed = parseRestrictedYaml(canonicalSource, sourceId);
+      if (textEncoder.encode(canonicalSource).byteLength > limits.maxCanonicalSourceBytes) {
+        const lineCounter = new LineCounter();
+        lineCounter.addNewLine(0);
+        const diagnostics = finalizeDiagnostics(
+          [
+            diagnostic({
+              code: 'K4-SOURCE-LIMIT-BYTES-001',
+              message: `Canonical source exceeds the ${limits.maxCanonicalSourceBytes} byte limit`,
+              sourceId,
+              path: '$',
+              node: {range: [0, 0]},
+              lineCounter,
+            }),
+          ],
+          limits,
+        );
+        return deepFreeze({ok: false, canonicalSource, diagnostics});
+      }
+      const parsed = parseRestrictedYaml(canonicalSource, sourceId, limits);
       if (parsed.diagnostics.length > 0 || !parsed.document) {
-        return deepFreeze({ok: false, canonicalSource, diagnostics: parsed.diagnostics});
+        return deepFreeze({
+          ok: false,
+          canonicalSource,
+          diagnostics: finalizeDiagnostics(parsed.diagnostics, limits),
+        });
       }
 
       const rawStory = parsed.document.toJS({maxAliasCount: 0});
@@ -309,7 +665,7 @@ export function createDsl4SourceFrontend(
         return deepFreeze({
           ok: false,
           canonicalSource,
-          diagnostics: sortDiagnostics(diagnostics),
+          diagnostics: finalizeDiagnostics(diagnostics, limits),
         });
       }
 
@@ -328,11 +684,29 @@ export function createDsl4SourceFrontend(
           });
         },
       );
-      if (semanticDiagnostics.length > 0) {
+      const resourceDiagnostics = validateStoryResourceLimits(
+        story,
+        parsed.document,
+        parsed.lineCounter,
+        sourceId,
+        limits,
+      );
+      const expressionDiagnostics = validateBranchExpressions(
+        story,
+        parsed.document,
+        parsed.lineCounter,
+        sourceId,
+        createRuntimeExpressionComposition,
+      );
+      const finalDiagnostics = finalizeDiagnostics(
+        [...semanticDiagnostics, ...resourceDiagnostics, ...expressionDiagnostics],
+        limits,
+      );
+      if (finalDiagnostics.length > 0) {
         return deepFreeze({
           ok: false,
           canonicalSource,
-          diagnostics: sortDiagnostics(semanticDiagnostics),
+          diagnostics: finalDiagnostics,
         });
       }
 

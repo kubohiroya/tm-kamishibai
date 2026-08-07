@@ -1,8 +1,8 @@
 # DSL 4.0 式評価・資源上限・診断境界
 
-この文書はIssue #262の式言語、resource policy、診断projectionの正本候補です。機械可読な対応物は
-`test/fixtures/dsl4/expression-limits-diagnostics.json`です。表で「実装済み」とした値だけが現行コードへ
-適用されています。「提案・未実装」はレビュー対象であり、runtimeが既に強制しているとはみなしません。
+この文書はIssue #262の式言語、resource policy、診断projectionの正本です。機械可読な対応物は
+`test/fixtures/dsl4/expression-limits-diagnostics.json`です。表の既定値は現行コードとtestで同期し、hostは
+既定値以下へだけ絞れます。artifact固有のbyte／件数上限は従来どおりcallerによる明示を必須とします。
 
 ## 1. Runtime Expression互換
 
@@ -45,11 +45,10 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 
 ## 2. Resource limit registry
 
-上限は次の三状態を区別します。
+上限は次の二状態を区別します。
 
 - 実装済みdefault: moduleが既定値を持ち、callerは同値以下だけへ絞れる。
 - 必須explicit: build/startupごとにhostが値を渡し、省略はerror。台本から変更できない。
-- 提案・未実装: benchmarkとレビュー後にfrontend policyへ実装する候補。
 
 ### 2.1 現在の実装済みdefault
 
@@ -63,6 +62,8 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 | custom action      | 30秒、許容範囲100 ms〜300秒、failure message 256 scalar                  |
 | reload quiesce     | 5秒、許容範囲100 ms〜30秒                                                |
 | preview watch      | quiet 100 ms、retry 50 ms、stability timeout 2秒                         |
+| source frontend    | canonical source 256 KiB、YAML node 20,000、depth 64、scalar 16,384等    |
+| diagnostic表示     | 保持100件、UI 20件、excerpt 240 scalar、message 500 scalar、related 8件  |
 
 完全なfield名と値は機械可読contractを正本とし、testで公開定数または実装sourceと照合します。
 
@@ -72,9 +73,9 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 明示します。省略時defaultへ推測せずbuild/startupを拒否します。preview、validate、build、runtimeは
 同じartifactについて同じ値を使います。台本やruntime variableから値を引き上げられません。
 
-### 2.3 frontend既定policy案
+### 2.3 source frontend既定policy
 
-| 上限             |        提案値 | 理由                                                               |
+| 上限             |        既定値 | 理由                                                               |
 | ---------------- | ------------: | ------------------------------------------------------------------ |
 | canonical source |       256 KiB | 1 MiBを根拠なく規範化せず、parse前のhard boundを置く               |
 | YAML node        |        20,000 | mapping/sequence/scalarの総数を制限する                            |
@@ -95,8 +96,8 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 | 16,000 |    224,037 | 293.9 ms |   66.7 MiB |
 | 32,000 |    448,037 | 526.4 ms |  127.9 MiB |
 
-byte上限だけではaction数を十分に制限できないため、複合上限が必要です。正式採用前に対象となる低性能端末と
-実作品fixtureで再測定します。hostは採用上限以下へ下げられますが、台本から上げられません。
+byte上限だけではaction数を十分に制限できないため、この複合上限をsource frontendの既定値として採用します。
+hostは採用上限以下へ下げられますが、台本から上げられません。境界は独立fixtureで検証します。
 
 ## 3. Versioned diagnostic
 
@@ -141,7 +142,7 @@ diagnosticは`range.start.offset`、code、messageの順に並べます。string
 `localeCompare`ではなくUnicode code unit順とします。同じsourceとpolicyはWeb、editor、Packager、CLIで
 byte-equivalentなcode/severity/range順を返します。
 
-提案する保持上限は100件、通常UI表示は先頭20件です。上限を超えた場合、最後の一枠を
+保持上限は100件、通常UI表示は先頭20件です。上限を超えた場合、最後の一枠を
 `K4-DIAGNOSTICS-TRUNCATED`に置き換え、最初に省略した位置と省略件数を示します。省略対象にerrorが
 一件でもあればtruncation自体もerror、warningだけならwarningです。黙って切り捨てません。
 
@@ -151,14 +152,13 @@ byte-equivalentなcode/severity/range順を返します。
 
 ## 5. 表示、SVG、clipboard、telemetry
 
-UI excerptは240 Unicode scalar、messageは500 scalar、related locationは8件、画面同時表示は20件を提案
-します。scalar境界で切り、切詰めたことを`…`で明示してから、`& < > \" '`をSVG/XML escapeします。
+UI excerptは240 Unicode scalar、messageは500 scalar、related locationは8件、画面同時表示は20件を上限
+とします。scalar境界で切り、切詰めたことを`…`で明示してから、`& < > \" '`をSVG/XML escapeします。
 source textをHTML/SVGとして解釈せず、複数errorは一つの巨大SVGへ詰め込まず、scroll可能なhost UIで
 20件まで表示します。Scratch stage用SVGは最初のerrorと総件数だけを示すfallback rendererとします。
 
-SVG rendererは現時点で独立capabilityにしません。Kamishibai以外のconsumerと安定APIが確認できるまで、
-app shell所有のpure rendererとして実装します。rendererはdiagnostic projectionだけを受け、source file、
-Object Store、runtimeへアクセスしません。
+SVG rendererは独立capabilityにしません。`diagnostic-projection.js`のapp shell所有pure rendererとし、
+bounded diagnostic projectionだけを受けます。source file、Object Store、runtimeへアクセスしません。
 
 clipboard/exportは暗黙実行しません。作者の明示操作として次を分けます。
 
@@ -187,17 +187,22 @@ runtime expression failure
   -> failedで停止（自動retryなし）
 ```
 
+Runtime Expressionのgeneric errorは`expression-diagnostics.js`で一度だけK4へ変換します。変換後errorは
+expression本文、variable名・値、dependencyのmessageを保持しません。controllerはaction generationを
+無効化し、Object Store scopeとasset lifecycleを`runtime-failed`で解放してからfailed stateを公開します。
+
 初回source errorはwatchを継続し、実行中reload candidateのerrorは旧immutable snapshotを継続します。
 runtime failureのretryは明示的なrestart/reloadだけです。同じ失敗を自動loopさせません。cleanup failureは
 元errorを隠さずAggregateErrorとして内部観測し、作者向けには安定したcleanup用K4 code一件へ投影します。
 
-## 7. 推奨実装順
+## 7. 実装境界
 
-1. このcontractと式security/limit fixtureを確定する。
-2. source frontendへ複合上限、code-unit順sort、truncation sentinel、stage gateをpureに追加する。
-3. Runtime Expression compositionのsyntax validationをbuilder/startup前段へ注入し、K4 mappingを追加する。
-4. bounded diagnostic projectionとapp-shell-owned SVG fallbackを追加する。
-5. Web/editor/Packager/CLIへ同じfailure fixtureを通し、低性能端末benchmark後に提案値を採用へ変更する。
+- `source-frontend.js`: source/YAML/scene/action/asset上限、注入された式syntax validator、canonical diagnostic sequence
+- `builder/dsl4-source-frontend.js`: pinned Runtime Expressionをproduction frontendへ注入するcomposition root
+- `expression-diagnostics.js`: runtime generic errorからredacted K4 errorへの一度だけのmapping
+- `diagnostic-projection.js`: bounded UI、SVG fallback、clipboard、JSON export、telemetry allowlist
+- `runtime-controller.js`: branch位置の同義projection、fail-closed停止、scope／asset解放
+- `dsl4-expression-diagnostic-boundaries.test.mjs`: editor UI／CLI／Packagerのfailure identityとsecurity境界
 
-各段階はDSL 4.0の既定OFF flag内で導入し、問題時はflag OFFまたは当該adapter/policy差分のrevertで戻します。
-3.1/3.2のK32診断、renderer、SB3を変更しません。
+すべてDSL 4.0の既定OFF flag内で導入します。問題時はflag OFFまたは上記module差分をrevertし、3.1/3.2の
+K32診断、renderer、SB3へ切り戻せます。
