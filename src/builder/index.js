@@ -43,6 +43,11 @@ export {
   validateDsl4PreviewShellView,
 } from './dsl4-preview-shell.js';
 export {
+  createDsl4PreviewTransportPolicy,
+  dsl4PreviewTransportLimits,
+  dsl4PreviewTransportTokenBytes,
+} from './dsl4-preview-transport-policy.js';
+export {
   Dsl4ValidationInternalError,
   formatDsl4Diagnostic,
   serializeDsl4ValidationResult,

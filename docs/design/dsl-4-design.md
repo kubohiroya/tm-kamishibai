@@ -1640,6 +1640,20 @@ pending／deferred candidateとcandidate診断だけを破棄し、現在のrunt
 revisionを1から再開し、必要なsourceを新sessionへ再stageします。session token、Origin、loopback bind、
 project root外file拒否はtransport層の責務であり、このpure session coreには含めません。
 
+transport adapterは、protocolへ接続またはsource readを渡す前に、builderのpure security policyを必ず通します。
+bind先はIP literalの`127.0.0.1`または`::1`、接続元はloopback addressだけを許可し、設定済みのcanonicalな
+HTTP(S) Originをscheme／host／portまで完全一致で照合します。tokenは暗号学的乱数32 bytesから生成する
+base64url文字列とし、raw tokenを発行結果以外へ保持せず、policy内部ではSHA-256 digestだけをmemory上に
+保持します。tokenは単回消費かつ期限付きとし、TTLは最大5分、同時に保持するpending／consumed recordは
+合計64件までです。TTLとrecord上限はhostが有限値を明示し、永続設定、source manifest、SB3、YAMLへ
+tokenを保存しません。
+
+source readは検証済みexternal source manifestの相対pathとの完全一致だけを許可し、project rootと実fileの
+realpath／symlink検証は既存external source loaderで重ねて行います。graceful stop、host crash、
+transport closeは同じcallbackを一度だけ実行し、その完了前の再接続を拒否します。callback失敗後は同じpolicyで
+接続を再開せず、hostがpolicyを破棄して新sessionを作り直します。このpolicy自体はsocketを開かず、
+HTTP／WebSocketの選択、CLI、remote preview、production artifactには接続しません。
+
 ## 11. 独立capability projectとKamishibai Bundle
 
 ### 11.0 現行Bundle契約 `[現行事実]`
