@@ -51,6 +51,10 @@ export {
   Dsl4LocalPreviewBrowserRuntimeError,
 } from './dsl4-local-preview-browser-runtime.js';
 export {
+  createDsl4LocalPreviewBrowserClient,
+  dsl4LocalPreviewBrowserClientDefaults,
+} from './dsl4-local-preview-browser-client.js';
+export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,
