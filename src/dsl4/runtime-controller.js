@@ -13,6 +13,13 @@ const defaultPoseSelectionRecognition = Object.freeze({
   scoreThreshold: 0,
 });
 const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
+const speechPresentationArgumentNames = Object.freeze([
+  'characterIntervalSeconds',
+  'characterSound',
+  'noSoundCharacters',
+  'restCharacters',
+  'restCharacterIntervalSeconds',
+]);
 
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
@@ -206,6 +213,13 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  const speechStylesValue = storyDocument.speechStyles ?? {};
+  if (!isRecord(speechStylesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument speechStyles must be an object');
+  }
+  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    speechStylesValue
+  );
   if (!speechAdvanceTypewriterEnabled) {
     const extendedSpeechAction = scenes
       .flatMap(
@@ -216,7 +230,7 @@ export function createDsl4RuntimeController({
         if (action.command === 'think') return true;
         if (action.command !== 'say') return false;
         const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
-        return ['waitFor', 'characterIntervalSeconds', 'startSound', 'characterSound'].some((key) =>
+        return ['waitFor', 'startSound', 'style', ...speechPresentationArgumentNames].some((key) =>
           Object.hasOwn(args, key),
         );
       });
@@ -877,6 +891,31 @@ export function createDsl4RuntimeController({
   }
 
   /**
+   * @param {'say' | 'think'} command
+   * @param {Record<string, unknown>} args
+   */
+  function resolveSpeechStyle(command, args) {
+    if (!Object.hasOwn(args, 'style')) return args;
+    if (speechPresentationArgumentNames.some((key) => Object.hasOwn(args, key))) {
+      const error = new Error(
+        `${command}.style cannot be combined with inline speech presentation`,
+      );
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
+      throw error;
+    }
+    const styleId = args.style;
+    const style = typeof styleId === 'string' ? speechStyles[styleId] : undefined;
+    if (!isRecord(style)) {
+      const error = new Error(`Speech style is unavailable: ${String(styleId)}`);
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
+      throw error;
+    }
+    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'style'));
+    const resolvedStyle = /** @type {Record<string, unknown>} */ (cloneValue(style));
+    return {...resolvedStyle, ...actionArgs};
+  }
+
+  /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
    * @returns {Promise<{sceneId: string, reason: string} | null>}
@@ -982,7 +1021,9 @@ export function createDsl4RuntimeController({
       }
       return null;
     }
-    await invokePort(command, target === null ? {...args} : {target, ...args}, context);
+    const portArgs =
+      command === 'say' || command === 'think' ? resolveSpeechStyle(command, args) : args;
+    await invokePort(command, target === null ? {...portArgs} : {target, ...portArgs}, context);
     return null;
   }
 

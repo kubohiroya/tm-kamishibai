@@ -40,19 +40,20 @@ Copyright © 2026 Hiroya Kubo.
 台本はUTF-8で記述した単一のYAML 1.2文書です。トップレベルで使用できるキーは次だけです。
 未知のキーは警告ではなくエラーにします。
 
-| キー              | 必須 | 役割                             |
-| ----------------- | ---- | -------------------------------- |
-| `kamishibai`      | 必須 | 文字列`'4.0'`                    |
-| `assets`          | 任意 | 型付きアセットの宣言             |
-| `actors`          | 任意 | actorと初期costumeの対応         |
-| `cover`           | 任意 | 表紙の背景とBGM                  |
-| `textStyles`      | 任意 | SVG Textの名前付きstyle          |
-| `variables`       | 任意 | string、number、booleanの初期値  |
-| `loading`         | 任意 | 読み込み中の背景とcostume列      |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音           |
-| `controls`        | 任意 | 環境別の開発・チート機能用keymap |
-| `branches`        | 任意 | 順序付き条件分岐                 |
-| `scenes`          | 必須 | 一つ以上のscene                  |
+| キー              | 必須 | 役割                                 |
+| ----------------- | ---- | ------------------------------------ |
+| `kamishibai`      | 必須 | 文字列`'4.0'`                        |
+| `assets`          | 任意 | 型付きアセットの宣言                 |
+| `actors`          | 任意 | actorと初期costumeの対応             |
+| `cover`           | 任意 | 表紙の背景とBGM                      |
+| `textStyles`      | 任意 | SVG Textの名前付きstyle              |
+| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle    |
+| `variables`       | 任意 | string、number、booleanの初期値      |
+| `loading`         | 任意 | 読み込み中の背景とcostume列          |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音               |
+| `controls`        | 任意 | 環境別の開発・チート機能用keymap     |
+| `branches`        | 任意 | 順序付き条件分岐                     |
+| `scenes`          | 必須 | 一つ以上のscene                      |
 
 識別子にはUnicodeの文字、数字、`_`、`-`を使用できます。先頭は文字または`_`とし、
 `.`はactor actionの区切りとして予約します。すべての識別子はUnicode NFCでなければなりません。
@@ -290,9 +291,22 @@ textStyles:
     size: 150
     align: center
     direction: up
+
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.05
+    characterSound: Typewriter
+    noSoundCharacters: '「」'
+    restCharacters: '、。…'
+    restCharacterIntervalSeconds: 0.5
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
+
+`speechStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
+各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
+`restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
+セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -507,20 +521,27 @@ iconへ反映します。
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                 |
-| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                            |
-| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, characterIntervalSeconds?, startSound?, characterSound?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                               |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                       |
-| `Actor.pose`               | `{steps, stableId?}`                                                                             |
+| action                     | 引数                                                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                           |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                   |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                         |
 
 `Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
 `seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
 修飾キーを伴わないany key入力後に完了します。両方を指定した場合は入力とタイムアウトのうち先に成立した方で
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
+
+`style`にはトップレベルの`speechStyles`で宣言したIDを指定します。styleを指定したactionでは、
+`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
+`restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
+引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、
+platform adapterはstyle registryを参照しません。style内の`characterSound`は、そのstyleを参照したsceneの
+asset依存として扱います。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -529,6 +550,13 @@ iconへ反映します。
 `characterSound`は`characterIntervalSeconds`と組み合わせるsound asset IDで、実際に1文字ずつ表示した
 各文字に対して再生します。`startSound`と`characterSound`は併用できます。文字送りの途中で入力または
 タイムアウトが成立した場合、残り全文を効果音なしで一括表示してから次のactionへ進みます。
+`noSoundCharacters`は`characterSound`を鳴らさない文字を連結した文字列です。
+`restCharacters`は対象文字を無音にし、その文字を表示してから次の文字を表示するまでの間隔を
+`restCharacterIntervalSeconds`へ置き換えます。両方の文字列は本文と同じUnicode grapheme cluster単位で
+判定します。`noSoundCharacters`は`characterSound`と、`restCharacters`は
+`restCharacterIntervalSeconds`と組み合わせ、いずれも`characterIntervalSeconds`による文字送りが必要です。
+休止中に入力、タイムアウト、cancelが発生した場合は休止を即座に解除し、残り全文を一括表示する場合は
+文字別の休止も効果音も適用しません。
 sound停止はAsset Managerのasset ID単位です。speechに指定したsound asset IDはそのspeechが排他的に
 使用し、BGMや別presentationとの同時再生には別のasset IDを割り当てます。terminal cleanupは、その
 speechが実際に再生を開始したasset IDだけを停止します。
@@ -550,9 +578,8 @@ speechが実際に再生を開始したasset IDだけを停止します。
     text: 助けに行こう
     seconds: 8
     waitFor: advance
-    characterIntervalSeconds: 0.05
+    style: novel
     startSound: HeroGreetingVoice
-    characterSound: Typewriter
 - Hero.think:
     text: どうしよう……
     waitFor: advance

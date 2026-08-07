@@ -85,13 +85,14 @@ function speechRuntime() {
   };
 }
 
-function parseSpeech(command, args) {
+function parseSpeech(command, args, speechStyles = '') {
   const parsed = frontend.parse(`
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   Tick: sound
   Voice: sound
+${speechStyles}
 actors:
   Hero: HeroIdle
 scenes:
@@ -106,7 +107,7 @@ ${Object.entries(args)
   return parsed.storyDocument;
 }
 
-function createSpeechExecution(command, args) {
+function createSpeechExecution(command, args, speechStyles = '') {
   const fake = speechRuntime();
   const clock = manualScheduler();
   const sounds = [];
@@ -133,7 +134,7 @@ function createSpeechExecution(command, args) {
   });
   let followingActions = 0;
   const controller = createDsl4RuntimeController({
-    storyDocument: parseSpeech(command, args),
+    storyDocument: parseSpeech(command, args, speechStyles),
     port: {
       say: actorPort.say.bind(actorPort),
       think: actorPort.think.bind(actorPort),
@@ -298,6 +299,140 @@ test('waitFor-only speech stays active after typewriter completion until one adv
   assert.equal(execution.followingActions(), 1);
 });
 
+test('applies grapheme-based silent characters and post-character rest intervals', async () => {
+  const execution = createSpeechExecution(
+    'say',
+    {
+      text: '「A、B👨‍👩‍👧‍👦C',
+      waitFor: 'advance',
+      style: 'novel',
+    },
+    `speechStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    characterSound: Tick
+    noSoundCharacters: "「👨‍👩‍👧‍👦"
+    restCharacters: "、。…"
+    restCharacterIntervalSeconds: 0.5`,
+  );
+  const run = execution.controller.start();
+  await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
+
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「'],
+  );
+  assert.deepEqual(execution.sounds, []);
+  execution.clock.advance(100);
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「', '「A'],
+  );
+  assert.deepEqual(execution.sounds, [['play', 'Tick']]);
+  execution.clock.advance(100);
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「', '「A', '「A、'],
+  );
+
+  execution.clock.advance(499);
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「', '「A', '「A、'],
+  );
+  execution.clock.advance(1);
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「', '「A', '「A、', '「A、B'],
+  );
+  assert.deepEqual(execution.sounds, [
+    ['play', 'Tick'],
+    ['play', 'Tick'],
+  ]);
+
+  execution.clock.advance(200);
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['「', '「A', '「A、', '「A、B', '「A、B👨‍👩‍👧‍👦', '「A、B👨‍👩‍👧‍👦C'],
+  );
+  assert.deepEqual(execution.sounds, [
+    ['play', 'Tick'],
+    ['play', 'Tick'],
+    ['play', 'Tick'],
+  ]);
+  assert.equal(execution.clock.pendingCount(), 0);
+
+  assert.equal(execution.controller.acceptAdvanceInput({kind: 'pointer'}), true);
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(execution.sounds.at(-1), ['stop', 'Tick']);
+  assert.equal(execution.followingActions(), 1);
+});
+
+test('advance during a rest interval reveals all text without sound or a stale timer', async () => {
+  const execution = createSpeechExecution('think', {
+    text: 'A、B',
+    waitFor: 'advance',
+    characterIntervalSeconds: 0.1,
+    characterSound: 'Tick',
+    restCharacters: '、。…',
+    restCharacterIntervalSeconds: 0.5,
+  });
+  const run = execution.controller.start();
+  await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
+  execution.clock.advance(100);
+  assert.equal(execution.clock.pendingCount(), 1);
+
+  assert.equal(execution.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['A', 'A、', 'A、B', ''],
+  );
+  assert.deepEqual(execution.sounds, [
+    ['play', 'Tick'],
+    ['stop', 'Tick'],
+  ]);
+  assert.equal(execution.clock.pendingCount(), 0);
+  assert.equal(execution.followingActions(), 1);
+
+  const snapshot = JSON.stringify({bubbles: execution.fake.bubbles, sounds: execution.sounds});
+  execution.clock.advance(10_000);
+  await Promise.resolve();
+  assert.equal(
+    JSON.stringify({bubbles: execution.fake.bubbles, sounds: execution.sounds}),
+    snapshot,
+  );
+});
+
+test('timeout during a rest interval reveals all text and cancels the rest timer', async () => {
+  const execution = createSpeechExecution('say', {
+    text: 'A、B',
+    seconds: 0.25,
+    waitFor: 'advance',
+    characterIntervalSeconds: 0.1,
+    characterSound: 'Tick',
+    restCharacters: '、。…',
+    restCharacterIntervalSeconds: 0.5,
+  });
+  const run = execution.controller.start();
+  await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
+  execution.clock.advance(100);
+  assert.equal(execution.clock.pendingCount(), 2);
+  execution.clock.advance(150);
+
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(
+    execution.fake.bubbles.map(({message}) => message),
+    ['A', 'A、', 'A、B', ''],
+  );
+  assert.deepEqual(execution.sounds, [
+    ['play', 'Tick'],
+    ['stop', 'Tick'],
+  ]);
+  assert.equal(execution.clock.pendingCount(), 0);
+  assert.equal(execution.followingActions(), 1);
+});
+
 test('stop during typewriter clears timers, bubble, sound, and stale completion', async () => {
   const execution = createSpeechExecution('think', {
     text: 'abcdef',
@@ -454,6 +589,26 @@ test('typewriter reveals one grapheme cluster per tick and validates character s
         characterSound: '',
       }),
     /non-empty string/u,
+  );
+  assert.throws(
+    () =>
+      platform.host.createSay(fake.actor, {
+        text: 'x',
+        seconds: 1,
+        characterIntervalSeconds: 0.1,
+        noSoundCharacters: '、',
+      }),
+    /requires characterIntervalSeconds and characterSound/u,
+  );
+  assert.throws(
+    () =>
+      platform.host.createSay(fake.actor, {
+        text: 'x',
+        seconds: 1,
+        characterIntervalSeconds: 0.1,
+        restCharacters: '、',
+      }),
+    /must be specified together/u,
   );
 });
 

@@ -83,6 +83,14 @@ test('keeps legacy timed say available and rejects extended speech while the fla
         startSound: Voice
 `,
     `
+    - Hero.say:
+        text: hello
+        seconds: 1
+        characterIntervalSeconds: 0.1
+        characterSound: Voice
+        noSoundCharacters: "、。"
+`,
+    `
     - Hero.think:
         text: hmm
         seconds: 1
@@ -97,6 +105,26 @@ test('keeps legacy timed say available and rejects extended speech while the fla
       /dsl4SpeechAdvanceTypewriter/u,
     );
   }
+
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument: parseSpeech(
+          `
+    - Hero.say:
+        text: hello
+        seconds: 1
+        style: novel
+`,
+          `speechStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+`,
+        ),
+        port: {},
+      }),
+    /dsl4SpeechAdvanceTypewriter/u,
+  );
 });
 
 test('completes active speech from one eligible key without dispatching navigation twice', async () => {
