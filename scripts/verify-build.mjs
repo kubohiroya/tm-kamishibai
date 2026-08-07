@@ -5,7 +5,6 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {
   downloadCardsPlaceholder,
   downloadCatalog,
-  dsl4DocsUrl,
   recommendedDownload,
 } from './download-catalog.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
@@ -258,9 +257,11 @@ async function verifyDownloads(releaseBuilds = []) {
       `The ${entry.series} card does not use its catalog description.`,
     );
   }
+  assert(!html.includes('4.0ドキュメントを参照できます。'), 'The 4.0 card has a docs note.');
+  assert(!html.includes('4.0ドキュメントを開く'), 'The 4.0 card has a docs action.');
   assert(
-    html.includes(`href="${dsl4DocsUrl}"`),
-    'The 4.0 card does not link to the published author guide.',
+    !html.includes('/dsl-author-guides/dsl-4.0-author-guide/'),
+    'The 4.0 card links to the author guide.',
   );
   for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
     assert(

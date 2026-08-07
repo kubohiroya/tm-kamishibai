@@ -66,10 +66,9 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(downloadPage, new RegExp(`href="${release.filename}" download`, 'u'));
     assert(downloadPage.includes(`<code>${release.filename}</code>（${release.version}）`));
   }
-  assert.match(
-    downloadPage,
-    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/dsl-author-guides\/dsl-4\.0-author-guide\/"/u,
-  );
+  assert.doesNotMatch(downloadPage, /4\.0ドキュメントを参照できます。/u);
+  assert.doesNotMatch(downloadPage, /4\.0ドキュメントを開く/u);
+  assert.doesNotMatch(downloadPage, /\/dsl-author-guides\/dsl-4\.0-author-guide\//u);
   for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
     assert(downloadPage.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`));
     assert(downloadPage.includes(entry.unavailableNote));
