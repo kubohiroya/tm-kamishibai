@@ -132,6 +132,12 @@ export function createFakeDocument() {
       for (const listener of listeners.get('keydown') ?? []) listener(event);
       return event;
     },
+    dispatchPointer(pointerId, options = {}) {
+      const event = createFakeEvent({code: '', target: document.activeElement, ...options});
+      event.pointerId = pointerId;
+      for (const listener of listeners.get('pointerdown') ?? []) listener(event);
+      return event;
+    },
     listenerCount(type) {
       return (listeners.get(type) ?? []).length;
     },

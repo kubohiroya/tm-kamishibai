@@ -42,6 +42,14 @@ export {
   inspectDsl4ProductionPreviewExclusion,
   validateDsl4PreviewShellView,
 } from './dsl4-preview-shell.js';
+export {
+  createDsl4PreviewReloadOverlay,
+  dsl4PreviewReloadOverlayManifest,
+} from './dsl4-preview-reload-overlay.js';
+export {
+  createDsl4PreviewReloadSurface,
+  dsl4PreviewReloadSurfaceManifest,
+} from './dsl4-preview-reload-surface.js';
 export {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from './dsl4-web-preview-shell.js';
 export {
   createDsl4PreviewTransportPolicy,
