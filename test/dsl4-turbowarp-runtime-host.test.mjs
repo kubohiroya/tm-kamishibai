@@ -31,6 +31,27 @@ scenes:
   opening:
     - wait: 0
 `;
+const posePreviewStory = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: unmirrored
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    posePreview:
+      mirroring: mirrored
+    actions: []
+  reset: []
+`;
 
 function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
@@ -212,6 +233,9 @@ function platformFixture(log) {
     subscribeAccumulatedPose() {
       return () => {};
     },
+    setPreviewMirroring(mode) {
+      log.push(['pose.preview-mirroring', mode]);
+    },
   };
   const runtime = {
     targets: [actor],
@@ -351,6 +375,65 @@ test('forwards the pose observer only when its startup-fixed feature flag is ena
   );
   assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
   await enabled.host.dispose('feedback-enabled');
+});
+
+test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {
+  const project = await packagedProject(posePreviewStory);
+
+  const disabledLog = [];
+  const disabledFixture = platformFixture(disabledLog);
+  const disabledCreateTMPose = disabledFixture.createTMPoseComposition;
+  disabledFixture.createTMPoseComposition = (...args) => {
+    const composition = disabledCreateTMPose(...args);
+    delete composition.setPreviewMirroring;
+    Object.defineProperty(composition, 'setPreviewMirroring', {
+      get() {
+        assert.fail('disabled host must not inspect the TMPose mirroring method');
+      },
+    });
+    return composition;
+  };
+  const disabled = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, disabledFixture));
+  assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
+  assert.equal((await disabled.host.start()).status, 'finished');
+  assert.equal(
+    disabledLog.some(([event]) => event === 'pose.preview-mirroring'),
+    false,
+  );
+  await disabled.host.dispose('pose-preview-disabled');
+
+  const missingFixture = platformFixture([]);
+  const missingCreateTMPose = missingFixture.createTMPoseComposition;
+  missingFixture.createTMPoseComposition = (...args) => {
+    const composition = missingCreateTMPose(...args);
+    delete composition.setPreviewMirroring;
+    return composition;
+  };
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, missingFixture, {
+        featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
+      }),
+    ),
+    /setPreviewMirroring/u,
+  );
+
+  const enabledLog = [];
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(enabledLog), {
+      featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  assert.equal((await enabled.host.start()).status, 'finished');
+  assert.deepEqual(
+    enabledLog.filter(([event]) => event === 'pose.preview-mirroring'),
+    [
+      ['pose.preview-mirroring', 'mirrored'],
+      ['pose.preview-mirroring', 'unmirrored'],
+    ],
+  );
+  await enabled.host.dispose('pose-preview-enabled');
 });
 
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {

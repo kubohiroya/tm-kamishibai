@@ -537,6 +537,8 @@ poseRecognition:
     mode: scratchMirror
   navigation:
     allowSkip: false
+  preview:
+    mirroring: mirrored
 ```
 
 3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
@@ -548,6 +550,16 @@ mappingへまとめます。sequenceとselectionは排他でActor sequenceを優
 state eventはrenderer非依存とし、`phase`、`target`、`pose`、`stepIndex`、0〜1の`confidence`／`progress`
 だけを通知します。Scratch／presenter adapterとnavigation bypassはこのpure event契約のconsumerとして
 分離し、起動時固定・既定OFFの`dsl4PoseFeedbackModes`がOFFなら登録しません。
+
+`preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
+省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
+effective値を再適用します。上書きのないsceneではstory既定へ戻し、前sceneの値を引き継ぎません。
+`dsl4PosePreviewMirroring`は起動時固定・既定OFFとし、OFFではTMPoseの新methodを検査・呼出しません。
+ONでは`@kubohiroya/turbowarp-tmpose/composition`の
+`setPreviewMirroring('mirrored' | 'unmirrored')`を直接使い、method欠落時はstartupでfail closedにします。
+preview transformはrecognition入力の`flipHorizontal`、confidence、sequence／selection判定から分離します。
+Web player、通常editor、Packager、development previewは同じconsumerを使い、surface固有の暗黙値を
+追加しません。DSL 3.1／3.2とStandalone block／paletteは変更対象外です。
 
 ### 3.11 分岐 `[提案]`
 

@@ -17,6 +17,8 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
+
 /** @param {unknown} value */
 function validateRuntimeComponent(value) {
   const component = isRecord(value) ? value : {};
@@ -124,6 +126,7 @@ function disposedError() {
  * @param {Function} [options.poseNow]
  * @param {boolean} [options.poseFeedbackEnabled]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
+ * @param {boolean} [options.posePreviewMirroringEnabled]
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
@@ -196,6 +199,10 @@ export function createDsl4PlatformAssetSession(options) {
   }
   if (poseFeedbackEnabled && typeof options.onPoseState !== 'function') {
     throw new TypeError('onPoseState must be a function when pose feedback is enabled');
+  }
+  const posePreviewMirroringEnabled = options.posePreviewMirroringEnabled ?? false;
+  if (typeof posePreviewMirroringEnabled !== 'boolean') {
+    throw new TypeError('posePreviewMirroringEnabled must be boolean');
   }
 
   const created = [];
@@ -271,6 +278,7 @@ export function createDsl4PlatformAssetSession(options) {
       'configureAccumulatedPose',
       'resetAccumulatedPose',
       'subscribeAccumulatedPose',
+      ...(posePreviewMirroringEnabled ? ['setPreviewMirroring'] : []),
     ]);
     const asyncInputCandidate = createAsyncInput({
       poseSource: tmposeComposition,
@@ -376,6 +384,18 @@ export function createDsl4PlatformAssetSession(options) {
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
+    const posePreviewPort = posePreviewMirroringEnabled
+      ? Object.freeze({
+          /** @param {unknown} mode */
+          setPosePreviewMirroring(mode) {
+            if (disposePromise) throw disposedError();
+            if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
+              throw new TypeError('pose preview mirroring mode is invalid');
+            }
+            tmposeComposition.setPreviewMirroring(mode);
+          },
+        })
+      : null;
     const verifiedRemoteCache = remoteEnabled
       ? Object.freeze({
           identity: cacheIdentity,
@@ -482,6 +502,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       poseActionPort,
+      posePreviewPort,
       verifiedRemoteCache,
       dispose,
     });

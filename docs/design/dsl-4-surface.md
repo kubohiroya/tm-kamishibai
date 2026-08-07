@@ -279,6 +279,8 @@ poseRecognition:
     mode: scratchMirror
   navigation:
     allowSkip: false
+  preview:
+    mirroring: mirrored
 
 textStyles:
   title:
@@ -328,6 +330,18 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 `navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
 起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
+
+`preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`の二値です。
+省略時は`mirrored`として従来の表示を維持します。scene固有の上書きは長形式sceneの
+`posePreview.mirroring`に記述します。runtimeはsceneへ入場するたびにeffective値を
+`scene.posePreview.mirroring ?? poseRecognition.preview.mirroring`として適用するため、上書きのない
+sceneへ移ると必ずstory既定へ戻り、前sceneの値をstickyにしません。
+
+この値が変更するのはpreview canvasの表示transformだけです。recognitionへ渡すframeの
+`flipHorizontal`、pose confidence、sequence／selectionの計算と成立時刻は変更しません。実行時接続は
+`@kubohiroya/turbowarp-tmpose/composition`の`setPreviewMirroring`だけを使い、Standalone block opcodeや
+paletteを呼びません。起動時固定・既定OFFの`dsl4PosePreviewMirroring`がOFFなら新methodを検査・呼出し
+せず、現行のmirrored表示を維持します。ONでmethodが不足する場合はstartupでfail closedにします。
 
 ## 5. 環境別keymap
 
@@ -390,10 +404,25 @@ scenes:
 
   rescue:
     poseModel: 救助Pose
+    posePreview:
+      mirroring: unmirrored
     actions:
       - stage: Ocean
       - branch: rescueResult
 ```
+
+pose preview mirroringのsurface境界は次のとおりです。いずれも台本値を個別解釈せず、同じschema、
+StoryDocument、scene-entry consumerを使います。
+
+| surface              | source channel | 適用条件                                          |
+| -------------------- | -------------- | ------------------------------------------------- |
+| Web player           | bundled        | build/startupで`dsl4PosePreviewMirroring=true`    |
+| 通常TurboWarp editor | unbundled      | DSL 4.0 hostがflag ONで明示接続された場合だけ     |
+| Packager             | bundled        | package済みruntimeの起動時flagがONの場合だけ      |
+| development preview  | unbundled      | preview hostが同じ起動時flagをONにしたsessionだけ |
+
+development preview専用の暗黙上書きは設けません。flag OFF時とDSL 3.1／3.2 SB3は対象外で、TMPoseの
+既存mirrored表示、recognition入力、Standalone paletteを変更しません。
 
 ## 7. Core action
 

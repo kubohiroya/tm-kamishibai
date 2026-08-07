@@ -4,7 +4,7 @@ import {deepFreeze} from './story-document.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
@@ -12,12 +12,14 @@ import {deepFreeze} from './story-document.js';
 const featureFlagKeys = new Set([
   'dsl4Runtime',
   'dsl4PoseFeedbackModes',
+  'dsl4PosePreviewMirroring',
   'structuredDataIntegrationEnabled',
 ]);
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
   dsl4PoseFeedbackModes: false,
+  dsl4PosePreviewMirroring: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -255,6 +257,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       onEvent: options.onEvent,
       onInputError: options.onInputError,
       structuredDataIntegrationEnabled: featureFlags.structuredDataIntegrationEnabled,
+      posePreviewMirroringEnabled: featureFlags.dsl4PosePreviewMirroring,
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;

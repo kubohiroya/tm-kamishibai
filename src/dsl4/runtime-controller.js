@@ -11,6 +11,7 @@ const defaultPoseSelectionRecognition = Object.freeze({
   decayPerSecond: 0.9,
   scoreThreshold: 0,
 });
+const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
 
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
@@ -127,6 +128,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: ActionContext) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  * @param {Record<string, Function>} [options.structuredDataIntegration]
+ * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -137,11 +139,23 @@ export function createDsl4RuntimeController({
   evaluateCondition,
   onEvent,
   structuredDataIntegration,
+  posePreviewMirroringEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime requires a StoryDocument version 4.0');
+  }
+  if (typeof posePreviewMirroringEnabled !== 'boolean') {
+    throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (
+    posePreviewMirroringEnabled &&
+    typeof (/** @type {Record<string, unknown>} */ (port).setPosePreviewMirroring) !== 'function'
+  ) {
+    throw new TypeError(
+      'setPosePreviewMirroring runtime port method is required when pose preview mirroring is enabled',
+    );
   }
   if (structuredDataIntegration !== undefined) {
     if (!isRecord(structuredDataIntegration)) {
@@ -645,6 +659,21 @@ export function createDsl4RuntimeController({
     return operation(payload, context);
   }
 
+  /** @param {Readonly<Record<string, unknown>>} scene */
+  function applyPosePreviewMirroring(scene) {
+    if (!posePreviewMirroringEnabled) return;
+    const operation = port.setPosePreviewMirroring;
+    const storyPreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const scenePreview = isRecord(scene.posePreview) ? scene.posePreview : {};
+    const mode = scenePreview.mirroring ?? storyPreview.mirroring ?? 'mirrored';
+    if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
+      const error = new Error('Pose preview mirroring mode is invalid');
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-POSE-PREVIEW-001'});
+      throw error;
+    }
+    operation(mode);
+  }
+
   /**
    * @param {string} sceneId
    * @param {string} reason
@@ -657,7 +686,9 @@ export function createDsl4RuntimeController({
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SCENE-001'});
       throw error;
     }
+    const nextScene = scenes[nextIndex];
     const from = currentScene()?.id ?? null;
+    applyPosePreviewMirroring(nextScene);
     bindStructuredScene(sceneId, actionIndex);
     currentSceneIndex = nextIndex;
     currentActionIndex = actionIndex - 1;
@@ -1215,6 +1246,7 @@ export function createDsl4RuntimeController({
     try {
       beginStructuredStory();
       releaseStructuredAction(reason);
+      applyPosePreviewMirroring(scenes[target.sceneIndex]);
       bindStructuredScene(sceneId, actionIndex);
     } catch (error) {
       fail(error);

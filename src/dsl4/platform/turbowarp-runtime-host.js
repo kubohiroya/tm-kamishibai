@@ -222,12 +222,14 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
  * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
  * @param {boolean} poseFeedbackEnabled
+ * @param {boolean} posePreviewMirroringEnabled
  */
 async function createRuntimeEnvironment(
   options,
   runtimeComponent,
   publishVerifiedRemoteCache,
   poseFeedbackEnabled,
+  posePreviewMirroringEnabled,
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -301,6 +303,7 @@ async function createRuntimeEnvironment(
       ...(options.poseSchedule === undefined ? {} : {poseSchedule: options.poseSchedule}),
       ...(options.poseNow === undefined ? {} : {poseNow: options.poseNow}),
       ...(poseFeedbackEnabled ? {poseFeedbackEnabled: true, onPoseState: options.onPoseState} : {}),
+      ...(posePreviewMirroringEnabled ? {posePreviewMirroringEnabled: true} : {}),
     });
     const mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
@@ -359,6 +362,14 @@ async function createRuntimeEnvironment(
       ['waitForPose', 'poseInputToChangeScene'],
       'pose action port',
     );
+    if (assetSession.posePreviewPort) {
+      addPortMethods(
+        port,
+        assetSession.posePreviewPort,
+        ['setPosePreviewMirroring'],
+        'pose preview port',
+      );
+    }
     if (options.keySource !== undefined) {
       addPortMethods(port, asyncInputPort, ['keyInputToChangeScene'], 'async input action port');
     }
@@ -550,13 +561,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           verifiedRemoteCache = cache;
         },
         startupContext.featureFlags.dsl4PoseFeedbackModes,
+        startupContext.featureFlags.dsl4PosePreviewMirroring,
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;

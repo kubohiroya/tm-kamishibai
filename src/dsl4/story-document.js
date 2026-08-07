@@ -97,10 +97,12 @@ function normalizePoseRecognition(value) {
   const source = /** @type {Record<string, unknown>} */ (cloneValue(value));
   const feedback = /** @type {Record<string, unknown>} */ (source.feedback ?? {});
   const navigation = /** @type {Record<string, unknown>} */ (source.navigation ?? {});
+  const preview = /** @type {Record<string, unknown>} */ (source.preview ?? {});
   return {
     ...source,
     feedback: {mode: 'scratchMirror', ...feedback},
     navigation: {allowSkip: false, ...navigation},
+    preview: {mirroring: 'mirrored', ...preview},
   };
 }
 
@@ -120,6 +122,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
     'selection',
     'feedback',
     'navigation',
+    'preview',
   ]) {
     const fieldNode = document.getIn(['poseRecognition', field], true);
     if (!fieldNode) continue;
@@ -129,6 +132,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
       selection: ['accumulationPerSecond', 'decayPerSecond', 'scoreThreshold'],
       feedback: ['mode'],
       navigation: ['allowSkip'],
+      preview: ['mirroring'],
     }[field];
     for (const nestedField of nestedFields ?? []) {
       const nestedNode = document.getIn(['poseRecognition', field, nestedField], true);
@@ -284,13 +288,22 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     });
     const longScene = /** @type {Record<string, unknown>} */ (sourceScene);
     const poseModel = isShortScene ? null : (longScene.poseModel ?? null);
+    const posePreview = isShortScene ? null : cloneValue(longScene.posePreview ?? null);
     if (poseModel) {
       sourceMap[`${scenePath}/poseModel`] = sourceRangeForNode(
         document.getIn([...sourceScenePath, 'poseModel'], true),
         lineCounter,
       );
     }
-    return {kind: 'Scene', id: sceneId, poseModel, actions};
+    if (posePreview) {
+      const posePreviewNode = document.getIn([...sourceScenePath, 'posePreview'], true);
+      sourceMap[`${scenePath}/posePreview`] = sourceRangeForNode(posePreviewNode, lineCounter);
+      sourceMap[`${scenePath}/posePreview/mirroring`] = sourceRangeForNode(
+        document.getIn([...sourceScenePath, 'posePreview', 'mirroring'], true),
+        lineCounter,
+      );
+    }
+    return {kind: 'Scene', id: sceneId, poseModel, posePreview, actions};
   });
 
   const result = {
