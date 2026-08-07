@@ -43,7 +43,22 @@ acknowledgementだけを受け取ります。作品IRはOrigin／bearer検証を
 disconnect、full rebuild要求、host disposeではlatest generation参照を解放し、新規接続はsourceを安定読込して
 新しいgenerationを作成します。
 
-## 4. securityとrollback
+## 4. browser runtime ownership
+
+browser側のruntime bridgeは`local-preview.generation` recordをbounded decoderで再検証し、wire revisionの連続性と
+stream sequenceの単調増加を確認してから、browser所有のlive reload sessionへstageします。bridgeがsourceをparse
+し直すことはなく、runtime session factoryへ渡す正本はNodeのproduction frontendが生成したimmutable
+`StoryDocument`です。
+
+初回invalid generationではruntimeを作らず、最初のvalid generationで先頭から開始します。以後のvalid generationは
+browser内の共有preview protocolでcandidate化し、commit／defer／manual restartを処理します。invalid generationは
+現在のruntimeを維持し、manual restart用の最新valid generationを置換しません。bridgeの公開snapshotとobserverには
+StoryDocumentを含めません。disposeはprotocol接続を切断した後、current runtime sessionを一度だけ停止・解放します。
+
+このbridgeはtransportとUIを所有せず、具体的なTurboWarp VM／renderer session factoryを次段から注入します。実VMが
+接続されるまでlocal preview clientおよび公開CLIから有効化しません。
+
+## 5. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
 project-root confinementを通過したclientだけがgenerationを受け取れます。hostはbounded wireを作成できたgeneration

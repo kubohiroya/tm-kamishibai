@@ -73,6 +73,7 @@ export {
   Dsl4BrowserPreviewAssetError,
 } from './browser-preview-asset-adapter.js';
 export {createDsl4BrowserAssetReloadPipeline} from './browser-asset-reload-pipeline.js';
+export {createDsl4BrowserPreviewRuntimeBridge} from './browser-preview-runtime-bridge.js';
 export {
   createDsl4PreviewReloadPolicy,
   dsl4PreviewReloadPolicyDefaults,
