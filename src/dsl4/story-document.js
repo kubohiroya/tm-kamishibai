@@ -55,6 +55,48 @@ export function sourceRangeForNode(node, lineCounter) {
   };
 }
 
+const zeroSourceRange = deepFreeze({
+  start: {line: 1, column: 1, offset: 0},
+  end: {line: 1, column: 1, offset: 0},
+});
+
+/**
+ * Resolve the closest available source origin for a StoryDocument path.
+ *
+ * Included-source documents carry sourceOrigins. Legacy single-source documents fall back to
+ * metadata.sourceId and sourceMap, preserving the existing diagnostic contract.
+ *
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {string} [storyPath]
+ */
+export function sourceOriginForStoryPath(storyDocument, storyPath = '/') {
+  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  const sourceOrigins = /** @type {Record<string, unknown>} */ (storyDocument.sourceOrigins ?? {});
+  let candidatePath = storyPath.startsWith('/') ? storyPath : '/';
+  while (true) {
+    const origin = sourceOrigins[candidatePath];
+    if (typeof origin === 'object' && origin !== null && !Array.isArray(origin)) {
+      const record = /** @type {Record<string, unknown>} */ (origin);
+      if (typeof record.sourceId === 'string' && record.range !== undefined) {
+        return deepFreeze({sourceId: record.sourceId, range: record.range});
+      }
+    }
+    if (candidatePath === '/') break;
+    const separator = candidatePath.lastIndexOf('/');
+    candidatePath = separator > 0 ? candidatePath.slice(0, separator) : '/';
+  }
+  candidatePath = storyPath.startsWith('/') ? storyPath : '/';
+  while (sourceMap[candidatePath] === undefined && candidatePath !== '/') {
+    const separator = candidatePath.lastIndexOf('/');
+    candidatePath = separator > 0 ? candidatePath.slice(0, separator) : '/';
+  }
+  return deepFreeze({
+    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
+    range: sourceMap[candidatePath] ?? sourceMap['/'] ?? zeroSourceRange,
+  });
+}
+
 /**
  * @param {string} value
  * @returns {string}

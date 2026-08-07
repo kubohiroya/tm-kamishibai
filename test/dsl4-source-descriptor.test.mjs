@@ -78,6 +78,35 @@ test('validates a JSON-round-tripped descriptor into a frozen copy', async () =>
   assert.equal(Object.isFrozen(validated), true);
 });
 
+test('round-trips optional included-source origins through the source descriptor', async () => {
+  const range = {
+    start: {line: 1, column: 1, offset: 0},
+    end: {line: 2, column: 1, offset: 20},
+  };
+  const descriptor = await createDsl4EmbeddedSourceDescriptor("kamishibai: '4.0'\nscenes: {}\n", {
+    sourceId: 'main',
+    displayName: 'story.k4.yml',
+    sourceOrigins: {'/': {sourceId: 'story.k4.yml', range}},
+    ...options,
+  });
+  assert.deepEqual(descriptor.sourceOrigins, {
+    formatVersion: 1,
+    entries: [{storyPath: '/', sourceId: 'story.k4.yml', range}],
+  });
+  assert.equal(Object.isFrozen(descriptor.sourceOrigins.entries[0]), true);
+  assert.deepEqual(
+    await validateDsl4EmbeddedSourceDescriptor(structuredClone(descriptor), options),
+    descriptor,
+  );
+
+  const tampered = structuredClone(descriptor);
+  tampered.sourceOrigins.entries[0].sourceId = '/private/story.k4.yml';
+  await rejectsCode(
+    validateDsl4EmbeddedSourceDescriptor(tampered, options),
+    'K4-SOURCE-ORIGIN-SOURCE-ID-001',
+  );
+});
+
 test('embeds and validates the persisted story cache identity without a filesystem path', async () => {
   const cacheIdentity = {
     id: 'story000000000001',

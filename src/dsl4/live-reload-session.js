@@ -1,5 +1,5 @@
 import {createDsl4ReloadPlan} from './reload-planner.js';
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -175,8 +175,7 @@ function quiesceDiagnostic(storyDocument, error) {
       ? record.code
       : 'K4-RELOAD-QUIESCE-FAILED';
   const storyPath = typeof record.storyPath === 'string' ? record.storyPath : '/';
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument, storyPath);
   return deepFreeze({
     version: 1,
     code,
@@ -185,8 +184,8 @@ function quiesceDiagnostic(storyDocument, error) {
       code === 'K4-RELOAD-QUIESCE-TIMEOUT'
         ? 'Live reload could not stop the current action before the quiesce timeout'
         : 'Live reload could not establish a safe action boundary',
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: sourceMap[storyPath] ?? sourceMap['/'],
+    sourceId: origin.sourceId,
+    range: origin.range,
     ...(storyPath !== '/' ? {storyPath} : {}),
     related: [],
   });

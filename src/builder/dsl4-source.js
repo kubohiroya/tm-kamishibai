@@ -11,6 +11,7 @@ import {
   Dsl4SourceDescriptorError,
   validateDsl4EmbeddedSourceDescriptor,
 } from '../dsl4/source-descriptor.js';
+import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from '../dsl4/source-origin-descriptor.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 
@@ -218,8 +219,17 @@ export async function installDsl4RuntimeComponent(
     if (error instanceof Dsl4SourceDescriptorError) fail(error.message, error.code, error);
     throw error;
   }
+  let validatedStoryDocument = storyDocument;
+  if (source.sourceOrigins !== undefined) {
+    try {
+      validatedStoryDocument = applyDsl4SourceOrigins(storyDocument, source.sourceOrigins);
+    } catch (error) {
+      if (error instanceof Dsl4SourceOriginError) fail(error.message, error.code, error);
+      throw error;
+    }
+  }
   const validatedArtifact = await validateDsl4RuntimeArtifactDescriptor(
-    storyDocument,
+    validatedStoryDocument,
     source,
     runtimeArtifact,
     {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
@@ -238,22 +248,30 @@ export async function installDsl4RuntimeComponent(
     }
     try {
       if (assetBundleFormat === 'embedded-base64') {
-        validatedAssets = await validateDsl4EmbeddedAssetBundle(storyDocument, assetBundle, {
-          maxFiles: maxAssetFiles,
-          maxTotalBytes: maxAssetBytes,
-          subtleCrypto,
-        });
+        validatedAssets = await validateDsl4EmbeddedAssetBundle(
+          validatedStoryDocument,
+          assetBundle,
+          {
+            maxFiles: maxAssetFiles,
+            maxTotalBytes: maxAssetBytes,
+            subtleCrypto,
+          },
+        );
       } else if (assetBundleFormat === 'binary-entry') {
         if (maxAssetFileBytes === undefined) {
           throw new TypeError('maxAssetFileBytes is required with a binary-entry asset bundle');
         }
         validatedAssets = {
-          descriptor: await validateDsl4BinaryEntryAssetBundle(storyDocument, assetBundle, {
-            maxFiles: maxAssetFiles,
-            maxFileBytes: maxAssetFileBytes,
-            maxTotalBytes: maxAssetBytes,
-            subtleCrypto,
-          }),
+          descriptor: await validateDsl4BinaryEntryAssetBundle(
+            validatedStoryDocument,
+            assetBundle,
+            {
+              maxFiles: maxAssetFiles,
+              maxFileBytes: maxAssetFileBytes,
+              maxTotalBytes: maxAssetBytes,
+              subtleCrypto,
+            },
+          ),
         };
       } else {
         throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
