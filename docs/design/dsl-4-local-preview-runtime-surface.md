@@ -67,7 +67,13 @@ runtimeを使用し、StoryDocumentの初回valid generationを先頭から開�
 
 canvasはkeyboard focusを持つ実stageで、primary pointerとkeyboard inputをVM I/Oへ渡します。外部extension URLの
 自動loadは拒否し、標準templateが必要とする固定extension登録は注入された`prepareVm`境界だけで行います。base SB3
-byte copyはload完了後に破棄し、公開snapshotにはproject、VM、runtime、asset dataを含めません。
+byte copyはstory／scene reload時のpresentation resetに同じprojectを再loadするためstage lifetimeだけ保持し、disposeで
+空byte列へ置換します。公開snapshotにはproject、VM、runtime、asset dataを含めません。
+
+`resetManagedPresentation`は旧runtime sessionの停止／解放後、next environment生成前にだけ呼び、同じVMへ保持済みbase SB3を
+再loadします。SB3の再buildやVM／rendererの再生成は行いません。reset中はstage inputをdetachし、完了後に同じcanvasへ
+再attachします。重複resetは同じpromiseへ合流し、dispose競合ではinputを再attachせず、reset失敗時はstage全体を
+fail-closedで解放します。現在actionからの再開ではfactoryがresetを呼ばないため、managed presentation stateを保持します。
 
 disposeまたはstartup failureではinput listener、VM target、frame loop、bitmap adapter、audio、renderer、storage、canvas
 を一度だけ解放します。project load中のdisposeはload完了を待ち、VM frame loopを開始せずcleanupします。このownerへ

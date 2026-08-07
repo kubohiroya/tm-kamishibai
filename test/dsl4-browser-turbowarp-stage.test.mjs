@@ -72,10 +72,11 @@ function fakeDocument() {
   return {document, mount};
 }
 
-function platformFixture({loadGate, failAudio = false} = {}) {
+function platformFixture({loadGate, resetGate, failAudio = false, failReset = false} = {}) {
   const log = [];
   const runtime = {targets: []};
   const io = [];
+  let loadCount = 0;
   const vm = {
     runtime,
     securityManager: {},
@@ -101,9 +102,11 @@ function platformFixture({loadGate, failAudio = false} = {}) {
       log.push(['compiler', value.enabled]);
     },
     async loadProject(bytes) {
+      loadCount += 1;
       log.push(['load', bytes.byteLength]);
-      await loadGate?.promise;
-      runtime.targets = [{isStage: true, name: 'Stage'}];
+      await (loadCount === 1 ? loadGate : resetGate)?.promise;
+      if (loadCount > 1 && failReset) throw new Error('reset load failed');
+      runtime.targets = [{isStage: true, name: 'Stage', loadCount}];
     },
     postIOData(device, data) {
       io.push([device, data]);
@@ -245,6 +248,83 @@ test('cleans partial platform resources when startup fails', async () => {
   assert.equal(stage.getState().status, 'disposed');
 });
 
+test('reloads the retained base project to reset presentation without replacing the VM', async () => {
+  const gate = deferred();
+  const dom = fakeDocument();
+  const fixture = platformFixture({resetGate: gate});
+  const input = new Uint8Array([1, 2, 3]);
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...dom,
+    projectBytes: input,
+    platform: fixture.platform,
+  });
+  input.fill(0);
+  await stage.start();
+  const runtime = stage.getRuntime();
+  runtime.targets[0].name = 'Changed';
+  const canvas = stage.getCanvas();
+  const firstReset = stage.resetManagedPresentation();
+  const secondReset = stage.resetManagedPresentation();
+
+  assert.strictEqual(secondReset, firstReset);
+  assert.equal(stage.getState().status, 'resetting');
+  assert.equal(canvas.listenerCount(), 0);
+  assert.throws(() => stage.getRuntime(), /not ready/u);
+  gate.resolve();
+  const resetState = await firstReset;
+  assert.equal(resetState.status, 'ready');
+  assert.strictEqual(stage.getRuntime(), runtime);
+  assert.deepEqual(runtime.targets, [{isStage: true, name: 'Stage', loadCount: 2}]);
+  assert.equal(canvas.listenerCount(), 6);
+  assert.equal(fixture.log.filter(([operation]) => operation === 'load').length, 2);
+  await stage.dispose();
+});
+
+test('does not reattach input when disposal races a presentation reset', async () => {
+  const gate = deferred();
+  const dom = fakeDocument();
+  const fixture = platformFixture({resetGate: gate});
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...dom,
+    projectBytes: new Uint8Array([1, 2]),
+    platform: fixture.platform,
+  });
+  await stage.start();
+  const canvas = stage.getCanvas();
+  const resetting = stage.resetManagedPresentation();
+  const disposing = stage.dispose();
+  assert.equal(stage.getState().status, 'disposing');
+  assert.equal(canvas.listenerCount(), 0);
+  gate.resolve();
+
+  await Promise.all([resetting, disposing]);
+  assert.equal(stage.getState().status, 'disposed');
+  assert.equal(canvas.listenerCount(), 0);
+  assert.equal(fixture.log.filter(([operation]) => operation === 'vm.clear').length, 1);
+  assert.equal(fixture.log.filter(([operation]) => operation === 'vm.quit').length, 1);
+});
+
+test('cleans the whole stage after a base presentation reset fails', async () => {
+  const dom = fakeDocument();
+  const fixture = platformFixture({failReset: true});
+  const stage = createDsl4BrowserTurboWarpStage({
+    ...dom,
+    projectBytes: new Uint8Array([1]),
+    platform: fixture.platform,
+  });
+  await stage.start();
+  const canvas = stage.getCanvas();
+
+  await assert.rejects(() => stage.resetManagedPresentation(), /reset load failed/u);
+  assert.equal(stage.getState().status, 'failed');
+  assert.equal(canvas.listenerCount(), 0);
+  assert.equal(dom.mount.children.length, 0);
+  assert.equal(fixture.log.filter(([operation]) => operation === 'vm.clear').length, 1);
+  await stage.dispose();
+  assert.equal(stage.getState().status, 'disposed');
+  assert.equal(fixture.log.filter(([operation]) => operation === 'vm.clear').length, 1);
+});
+
 test('does not start the VM when disposal races project loading', async () => {
   const gate = deferred();
   const dom = fakeDocument();
@@ -287,5 +367,7 @@ test('rejects unsafe project and stage limits before platform side effects', () 
     () => createDsl4BrowserTurboWarpStage({...base, projectBytes: new Uint8Array()}),
     /projectBytes/u,
   );
+  const stage = createDsl4BrowserTurboWarpStage(base);
+  assert.throws(() => stage.resetManagedPresentation(), /not ready/u);
   assert.deepEqual(fixture.log, []);
 });
