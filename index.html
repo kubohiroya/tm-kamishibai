@@ -44,7 +44,7 @@
         display: block;
         width: 100%;
         height: auto;
-        margin: 32px 0;
+        margin: 32px 0 18px;
         border-radius: 18px;
         box-shadow: 0 16px 36px rgb(63 48 43 / 18%);
       }
@@ -74,6 +74,11 @@
       .content-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 9px 24px rgb(89 61 43 / 14%);
+      }
+      .featured-web-card {
+        min-height: auto;
+        border: 2px solid var(--accent);
+        background: linear-gradient(135deg, #fff0e4, var(--paper) 70%);
       }
       .content-card:focus-visible {
         outline: 3px solid var(--accent);
@@ -127,6 +132,11 @@
           <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
             >ドキュメント</a
           >
+          <a
+            class="site-nav__link"
+            href="https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/"
+            >ワークショップ</a
+          >
           <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/"
             >サンプル</a
           >
@@ -165,29 +175,41 @@
         alt="カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めているアプリ画面"
       />
 
+      <a
+        class="content-card featured-web-card"
+        href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/"
+      >
+        <h2 class="card-heading">
+          <span class="card-icon" aria-hidden="true">▶️</span>Web版を開く
+        </h2>
+        <p>
+          DSL
+          3.2系の紙芝居アプリを、組み込み台本「浦島太郎」で起動します。PC・スマートフォンのカメラの前でポーズを取り、物語を進めてプレイできます。
+        </p>
+        <span class="card-destination">DSL 3.2版「浦島太郎」へ</span>
+      </a>
+
       <section aria-labelledby="site-contents">
         <h2 id="site-contents">このサイトで提供するもの</h2>
         <div class="cards">
-          <a
-            class="content-card"
-            href="https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/"
-          >
-            <h3 class="card-heading">
-              <span class="card-icon" aria-hidden="true">▶️</span>Web版を開く
-            </h3>
-            <p>
-              DSL 3.2系の紙芝居アプリを、組み込み台本「浦島太郎」で起動します。PC・スマートフォンのカメラの前でポーズを取り、物語を進めてプレイできます。
-            </p>
-            <span class="card-destination">DSL 3.2版「浦島太郎」へ</span>
-          </a>
           <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/">
             <h3 class="card-heading">
               <span class="card-icon" aria-hidden="true">📕</span>ドキュメント
             </h3>
-            <p>
-              操作説明、DSL作成マニュアル、コマンドリファレンス、体験会資料をHTML・PDFで読めます。
-            </p>
+            <p>操作説明、DSL作成マニュアル、コマンドリファレンスをHTML・PDFで読めます。</p>
             <span class="card-destination">ドキュメント一覧へ</span>
+          </a>
+          <a
+            class="content-card"
+            href="https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/"
+          >
+            <h3 class="card-heading">
+              <span class="card-icon" aria-hidden="true">🧑‍🏫</span>ワークショップ
+            </h3>
+            <p>
+              開催日と対応するDSL系列（3.2系／4.0系）から、体験会の参加者向け資料とスタッフ向け資料を探せます。
+            </p>
+            <span class="card-destination">ワークショップ一覧へ</span>
           </a>
           <a class="content-card" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">
             <h3 class="card-heading">
