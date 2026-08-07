@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,
   dsl4DevelopmentPreviewShellManifest,
   inspectDsl4ProductionPreviewExclusion,
@@ -131,6 +132,58 @@ test('keeps missing and invalid initial source visible, then auto-starts first v
   assert.equal(calls[0][1], ready);
   shell.update(ready);
   assert.equal(calls.length, 1);
+});
+
+test('constructs the shared non-blocking overlay through the actual CLI browser host', async () => {
+  const legacyDocument = createFakeDocument();
+  const legacy = createDsl4CliPreviewShell({
+    environment: 'development',
+    document: legacyDocument,
+    mount: legacyDocument.body,
+    featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+  });
+  legacy.update(candidateView());
+  assert.equal(findById(legacy.element, 'dsl4-preview-reload-dialog').hidden, false);
+  assert.equal(legacy.getSnapshot().reloadOverlay, null);
+  await legacy.dispose();
+
+  const document = createFakeDocument();
+  const operations = [];
+  const shell = createDsl4CliPreviewShell({
+    environment: 'development',
+    document,
+    mount: document.body,
+    featureFlags: {
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4PreviewReloadOverlay: true,
+    },
+    previewViewport: {width: 640, height: 480},
+  });
+  shell.update(candidateView());
+  assert.equal(findById(shell.element, 'dsl4-preview-reload-dialog').hidden, true);
+  assert.equal(
+    findById(shell.element, 'dsl4-preview-reload-overlay').getAttribute('data-preview-surface'),
+    'cli',
+  );
+  await shell.submitReloadCandidate({
+    channel: 'source',
+    channelRevision: 1,
+    availability: {
+      story: {available: true, reason: null},
+      scene: {available: true, reason: null},
+      action: {available: true, replaySafe: true, reason: null},
+    },
+    changedIds: ['source-generation'],
+    initiatingInputId: null,
+    apply: (request) => operations.push(['apply', request.actualAnchor]),
+    restart: (request) => operations.push(['restart', request.actualAnchor]),
+  });
+  await shell.whenIdle();
+  assert.deepEqual(operations, [['apply', 'action']]);
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.surface, 'cli');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.status, 'reloaded');
+  await shell.dispose();
 });
 
 test('renders the fixed semantic summary without source text, runtime values, or an editor', () => {

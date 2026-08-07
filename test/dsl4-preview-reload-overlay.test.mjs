@@ -73,6 +73,8 @@ test('uses one non-blocking 44px status component for Web and CLI browser surfac
   for (const surface of ['web', 'cli']) {
     const setup = createSetup({surface});
     const button = setup.overlay.statusButton;
+    assert.equal(button.style.width, '44px');
+    assert.equal(button.style.height, '44px');
     assert.equal(button.style.minWidth, '44px');
     assert.equal(button.style.minHeight, '44px');
     assert.match(button.style.background, /rgba/u);
@@ -257,9 +259,22 @@ test('falls back to session memory when browser storage is unavailable and clean
   assert.equal(setup.errors.length, 2);
   assert.equal(setup.document.listenerCount('keydown'), 1);
   assert.equal(setup.document.listenerCount('pointerdown'), 1);
+  assert.equal(setup.document.listenerCount('pointerup'), 1);
+  const button = setup.overlay.statusButton;
+  button.dispatch('pointerdown', {pointerId: 17});
+  assert.equal(button.hasPointerCapture(17), true);
+  assert.deepEqual(setup.layout.getState().interaction, {
+    pressed: true,
+    pointerCaptured: true,
+    focused: false,
+  });
+  setup.document.dispatchPointerEvent('pointerup', 17);
+  assert.equal(button.hasPointerCapture(17), false);
+  assert.equal(setup.layout.getState().interaction.pointerCaptured, false);
   setup.overlay.dispose();
   setup.overlay.dispose();
   assert.equal(setup.document.listenerCount('keydown'), 0);
   assert.equal(setup.document.listenerCount('pointerdown'), 0);
+  assert.equal(setup.document.listenerCount('pointerup'), 0);
   assert.equal(setup.overlay.element.parentNode, null);
 });

@@ -305,6 +305,53 @@ test('requires and owns the browser asset pipeline only behind its startup flag'
   );
 });
 
+test('connects the owned asset pipeline and camera layout bridge to the shared Web surface', async () => {
+  const document = createFakeDocument();
+  const source = createCoordinatorFixture();
+  const assets = createAssetPipelineFixture();
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: {
+      ...assetEnabledFlags,
+      dsl4PreviewReloadOverlay: true,
+    },
+    environment: 'development',
+    document,
+    mount: document.body,
+    protocolSession: {},
+    sessionId: 'composite-shell-test',
+    sourceFrontend: {parse() {}},
+    maxSourceBytes: 8192,
+    createCoordinator: source.createCoordinator,
+    createAssetPipeline: assets.createAssetPipeline,
+    assetPipelineOptions: {
+      structuralFingerprint: sri('composite-structure'),
+      adapterOptions: {},
+      prepareGeneration() {},
+      restartGeneration() {},
+    },
+    previewViewport: {width: 800, height: 600},
+  });
+
+  assert.equal(typeof assets.options.reloadSurface.submitCandidate, 'function');
+  await assets.options.onDiagnostic({
+    code: 'K4-ASSET-MISSING',
+    severity: 'error',
+    message: 'Asset missing.',
+  });
+  await shell.whenIdle();
+  assert.deepEqual(shell.getSnapshot().reloadOverlay.diagnosticChannels, ['asset']);
+
+  const occupied = shell.getSnapshot().reloadOverlay.overlay.layout.layout.rect;
+  shell.registerReservedRect('camera-controls', occupied);
+  assert.equal(
+    shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor,
+    'top-center',
+  );
+  shell.unregisterReservedRect('camera-controls');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor, 'top-right');
+  await shell.dispose();
+});
+
 test('opens the picker directly from a button activation and renders watch status', async () => {
   const {document, fixture, shell} = createShell();
   const button = findById(shell.element, 'dsl4-web-preview-open-project');

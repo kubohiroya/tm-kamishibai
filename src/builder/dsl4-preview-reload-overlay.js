@@ -190,8 +190,14 @@ export function createDsl4PreviewReloadOverlay(options) {
   statusButton.id = 'dsl4-preview-reload-status-button';
   statusButton.type = 'button';
   statusButton.style.position = 'fixed';
+  statusButton.style.boxSizing = 'border-box';
+  statusButton.style.width = '44px';
+  statusButton.style.height = '44px';
   statusButton.style.minWidth = '44px';
   statusButton.style.minHeight = '44px';
+  statusButton.style.margin = '0';
+  statusButton.style.padding = '0';
+  statusButton.style.overflow = 'hidden';
   statusButton.style.zIndex = '20';
   statusButton.style.color = '#ffffff';
   statusButton.style.background = 'rgba(31, 41, 55, 0.82)';
@@ -326,6 +332,8 @@ export function createDsl4PreviewReloadOverlay(options) {
   /** @type {Promise<unknown>[]} */
   let pending = [];
   let lastPolicyState = policy.getState();
+  /** @type {number | null} */
+  let activePointerId = null;
 
   /** @param {unknown} operation */
   function observe(operation) {
@@ -433,21 +441,62 @@ export function createDsl4PreviewReloadOverlay(options) {
   render(lastPolicyState);
 
   statusButton.addEventListener('focus', () => {
-    layout.setInteraction({pressed: false, pointerCaptured: false, focused: true});
+    const interaction = layout.getState().interaction;
+    layout.setInteraction({...interaction, focused: true});
   });
   statusButton.addEventListener('blur', () => {
-    layout.setInteraction({pressed: false, pointerCaptured: false, focused: false});
+    const interaction = layout.getState().interaction;
+    layout.setInteraction({...interaction, focused: false});
     resolveLayout();
   });
-  statusButton.addEventListener('pointerdown', () => {
-    layout.setInteraction({pressed: true, pointerCaptured: true, focused: false});
-  });
-  const finishPointerInteraction = () => {
-    layout.setInteraction({pressed: false, pointerCaptured: false, focused: false});
+  /** @param {any} event */
+  function onStatusPointerDown(event) {
+    const pointerId = Number.isSafeInteger(event.pointerId) ? Number(event.pointerId) : null;
+    activePointerId = pointerId;
+    let pointerCaptured = false;
+    if (pointerId !== null && typeof statusButton.setPointerCapture === 'function') {
+      try {
+        statusButton.setPointerCapture(pointerId);
+        pointerCaptured = true;
+      } catch (error) {
+        reportError(error);
+      }
+    }
+    layout.setInteraction({
+      pressed: true,
+      pointerCaptured,
+      focused: document.activeElement === statusButton,
+    });
+  }
+  /** @param {any} event */
+  function finishPointerInteraction(event) {
+    const pointerId = Number.isSafeInteger(event?.pointerId) ? Number(event.pointerId) : null;
+    if (activePointerId !== null && pointerId !== null && pointerId !== activePointerId) return;
+    if (
+      activePointerId !== null &&
+      typeof statusButton.hasPointerCapture === 'function' &&
+      statusButton.hasPointerCapture(activePointerId) &&
+      typeof statusButton.releasePointerCapture === 'function'
+    ) {
+      try {
+        statusButton.releasePointerCapture(activePointerId);
+      } catch (error) {
+        reportError(error);
+      }
+    }
+    activePointerId = null;
+    layout.setInteraction({
+      pressed: false,
+      pointerCaptured: false,
+      focused: document.activeElement === statusButton,
+    });
     resolveLayout();
-  };
+  }
+  statusButton.addEventListener('pointerdown', onStatusPointerDown);
   statusButton.addEventListener('pointerup', finishPointerInteraction);
   statusButton.addEventListener('pointercancel', finishPointerInteraction);
+  document.addEventListener('pointerup', finishPointerInteraction, true);
+  document.addEventListener('pointercancel', finishPointerInteraction, true);
   statusButton.addEventListener('click', () => {
     observe(policy.openDialog({inputId: 'status-button'}));
   });
@@ -570,6 +619,8 @@ export function createDsl4PreviewReloadOverlay(options) {
       unsubscribe();
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('pointerdown', onPreviewPointer, true);
+      document.removeEventListener('pointerup', finishPointerInteraction, true);
+      document.removeEventListener('pointercancel', finishPointerInteraction, true);
       if (typeof host.remove === 'function') host.remove();
     },
   });

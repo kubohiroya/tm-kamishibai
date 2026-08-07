@@ -208,8 +208,8 @@ function validateReloadSurface(value) {
   return /** @type {Record<string, Function>} */ (value);
 }
 
-/** @param {unknown} value */
-function validateAssetPipelineOptions(value) {
+/** @param {unknown} value @param {boolean} requireRestart */
+function validateAssetPipelineOptions(value, requireRestart) {
   if (!isRecord(value)) throw new TypeError('assetPipelineOptions must be an object');
   if (
     typeof value.structuralFingerprint !== 'string' ||
@@ -219,6 +219,11 @@ function validateAssetPipelineOptions(value) {
   }
   if (!isRecord(value.adapterOptions) || typeof value.prepareGeneration !== 'function') {
     throw new TypeError('assetPipelineOptions must provide adapterOptions and prepareGeneration');
+  }
+  if (requireRestart && typeof value.restartGeneration !== 'function') {
+    throw new TypeError(
+      'assetPipelineOptions.restartGeneration is required with the shared reload overlay',
+    );
   }
   return /** @type {Record<string, any>} */ (value);
 }
@@ -300,7 +305,10 @@ export function createDsl4WebPreviewShell(input = {}) {
     throw new TypeError('createCoordinator must be a function');
   }
   const assetPipelineOptions = featureFlags.dsl4WebPreviewAssetLiveReload
-    ? validateAssetPipelineOptions(input.assetPipelineOptions)
+    ? validateAssetPipelineOptions(
+        input.assetPipelineOptions,
+        featureFlags.dsl4PreviewReloadOverlay,
+      )
     : null;
   const createAssetPipeline = featureFlags.dsl4WebPreviewAssetLiveReload
     ? (input.createAssetPipeline ?? createDsl4BrowserAssetReloadPipeline)
@@ -440,8 +448,8 @@ export function createDsl4WebPreviewShell(input = {}) {
     }
   }
 
-  /** @param {Record<string, any>} diagnostic */
-  function renderDiagnostic(diagnostic) {
+  /** @param {Record<string, any>} diagnostic @param {'source' | 'asset'} [channel] */
+  function renderDiagnostic(diagnostic, channel = 'source') {
     diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code : null;
     const message = safeMessage(
       diagnosticCode
@@ -449,7 +457,7 @@ export function createDsl4WebPreviewShell(input = {}) {
         : diagnostic.message,
     );
     diagnosticStatus.textContent = message;
-    if (reloadSurface) observe(reloadSurface.setDiagnostic('source', diagnostic));
+    if (reloadSurface) observe(reloadSurface.setDiagnostic(channel, diagnostic));
     fallback.hidden = !diagnosticCode || !fallbackDiagnosticCodes.has(diagnosticCode);
     if (diagnostic.severity !== 'error') return;
     const currentIntegrity = coordinator?.getState()?.protocol?.current?.integrity ?? null;
@@ -645,43 +653,6 @@ export function createDsl4WebPreviewShell(input = {}) {
     onError: reportError,
   });
 
-  if (createAssetPipeline && assetPipelineOptions) {
-    try {
-      assetPipeline = validateAssetPipeline(
-        createAssetPipeline({
-          ...assetPipelineOptions,
-          sessionId: input.sessionId,
-          onEvent: (/** @type {Readonly<Record<string, unknown>>} */ event) =>
-            notifyAssetObserver('onEvent', event),
-          onDiagnostic: async (
-            /** @type {Readonly<Record<string, unknown>> | null} */ diagnostic,
-          ) => {
-            await notifyAssetObserver('onDiagnostic', diagnostic);
-            if (disposed) return;
-            if (diagnostic === null) {
-              if (diagnosticCode?.startsWith('K4-ASSET-')) {
-                diagnosticCode = null;
-                diagnosticStatus.textContent = '';
-              }
-              return;
-            }
-            renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic));
-          },
-          onWatchStatus: (/** @type {Readonly<Record<string, unknown>>} */ state) =>
-            notifyAssetObserver('onWatchStatus', state),
-          onError: (/** @type {unknown} */ error) => {
-            void notifyAssetObserver('onError', error);
-            reportError(error);
-          },
-        }),
-      );
-    } catch (error) {
-      previewShell.dispose();
-      if (typeof host.remove === 'function') host.remove();
-      throw error;
-    }
-  }
-
   /** @type {Record<string, Function>} */
   let coordinator;
   try {
@@ -752,6 +723,47 @@ export function createDsl4WebPreviewShell(input = {}) {
     }
   }
 
+  if (createAssetPipeline && assetPipelineOptions) {
+    try {
+      assetPipeline = validateAssetPipeline(
+        createAssetPipeline({
+          ...assetPipelineOptions,
+          sessionId: input.sessionId,
+          ...(reloadSurface ? {reloadSurface} : {}),
+          onEvent: (/** @type {Readonly<Record<string, unknown>>} */ event) =>
+            notifyAssetObserver('onEvent', event),
+          onDiagnostic: async (
+            /** @type {Readonly<Record<string, unknown>> | null} */ diagnostic,
+          ) => {
+            await notifyAssetObserver('onDiagnostic', diagnostic);
+            if (disposed) return;
+            if (diagnostic === null) {
+              if (diagnosticCode?.startsWith('K4-ASSET-')) {
+                diagnosticCode = null;
+                diagnosticStatus.textContent = '';
+              }
+              if (reloadSurface) observe(reloadSurface.setDiagnostic('asset', null));
+              return;
+            }
+            renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic), 'asset');
+          },
+          onWatchStatus: (/** @type {Readonly<Record<string, unknown>>} */ state) =>
+            notifyAssetObserver('onWatchStatus', state),
+          onError: (/** @type {unknown} */ error) => {
+            void notifyAssetObserver('onError', error);
+            reportError(error);
+          },
+        }),
+      );
+    } catch (error) {
+      previewShell.dispose();
+      observe(coordinator.dispose());
+      observe(reloadSurface?.dispose());
+      if (typeof host.remove === 'function') host.remove();
+      throw error;
+    }
+  }
+
   function openProject() {
     if (disposed) throw new TypeError('Web Preview shell is disposed');
     openButton.disabled = true;
@@ -806,7 +818,6 @@ export function createDsl4WebPreviewShell(input = {}) {
     selectedProjectRoot = null;
     latestValidSourceResult = null;
     const assetDisposal = assetPipeline?.dispose();
-    assetPipeline = null;
     reloadSurface = null;
     disposePromise = Promise.all([coordinator.dispose(), assetDisposal, reloadDisposal]).then(
       snapshot,
@@ -870,6 +881,21 @@ export function createDsl4WebPreviewShell(input = {}) {
     },
     /** @param {string} owner */
     unregisterPreviewControlRect(owner) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.unregisterReservedRect(owner);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    registerReservedRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.registerReservedRect(owner, rect);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    updateReservedRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.updateReservedRect(owner, rect);
+    },
+    /** @param {string} owner */
+    unregisterReservedRect(owner) {
       if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
       return reloadSurface.unregisterReservedRect(owner);
     },

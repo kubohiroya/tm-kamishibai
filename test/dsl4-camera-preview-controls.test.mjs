@@ -177,6 +177,43 @@ test('anchors deterministic accessible controls and follows preview/camera/story
   assert.equal(group.parentNode, null);
 });
 
+test('publishes and releases real camera-control geometry through the shared layout bridge', () => {
+  const layoutCalls = [];
+  const setup = fixture({
+    previewLayout: {
+      registerReservedRect(owner, rect) {
+        layoutCalls.push(['register', owner, rect]);
+      },
+      updateReservedRect(owner, rect) {
+        layoutCalls.push(['update', owner, rect]);
+      },
+      unregisterReservedRect(owner) {
+        layoutCalls.push(['unregister', owner]);
+      },
+    },
+  });
+  const group = findByDataset(setup.document.body, 'dsl4PreviewControlAnchor', 'top-center');
+  group.setBoundingClientRect({x: 588, y: 8, width: 96, height: 44});
+  setup.setCameraRunning(true);
+  setup.renderer.start();
+  assert.deepEqual(layoutCalls[0], [
+    'register',
+    'camera-controls-top-center',
+    {x: 588, y: 8, width: 96, height: 44},
+  ]);
+
+  group.setBoundingClientRect({x: 500, y: 12, width: 120, height: 44});
+  setup.renderer.refresh();
+  assert.deepEqual(layoutCalls[1], [
+    'update',
+    'camera-controls-top-center',
+    {x: 500, y: 12, width: 120, height: 44},
+  ]);
+  setup.renderer.stop();
+  assert.deepEqual(layoutCalls.at(-1), ['unregister', 'camera-controls-top-center']);
+  setup.renderer.dispose();
+});
+
 test('stops fail-safe without consulting unavailable preview providers', () => {
   let previewReads = 0;
   const setup = fixture({

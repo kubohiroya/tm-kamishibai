@@ -37,6 +37,7 @@ export {
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
 export {
+  createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,
   dsl4DevelopmentPreviewShellManifest,
   inspectDsl4ProductionPreviewExclusion,

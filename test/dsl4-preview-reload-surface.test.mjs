@@ -122,6 +122,54 @@ test('routes manual restart to the active channel and keeps channel diagnostics 
   await setup.instance.dispose();
 });
 
+test('recomputes shared layout on browser resize, orientation, and fullscreen geometry', async () => {
+  const document = createFakeDocument();
+  const listeners = new Map();
+  const browserWindow = {
+    innerWidth: 640,
+    innerHeight: 480,
+    addEventListener(type, listener) {
+      const entries = listeners.get(type) ?? [];
+      entries.push(listener);
+      listeners.set(type, entries);
+    },
+    removeEventListener(type, listener) {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((entry) => entry !== listener),
+      );
+    },
+    dispatch(type) {
+      for (const listener of listeners.get(type) ?? []) listener({type});
+    },
+  };
+  document.defaultView = browserWindow;
+  const instance = createDsl4PreviewReloadSurface({
+    surface: 'web',
+    environment: 'development',
+    document,
+    mount: document.body,
+    viewport: {width: 640, height: 480},
+  });
+
+  browserWindow.innerWidth = 900;
+  browserWindow.innerHeight = 700;
+  browserWindow.dispatch('resize');
+  assert.deepEqual(instance.layoutCoordinator.getState().viewport, {width: 900, height: 700});
+
+  browserWindow.innerWidth = 700;
+  browserWindow.innerHeight = 900;
+  browserWindow.dispatch('orientationchange');
+  assert.deepEqual(instance.layoutCoordinator.getState().viewport, {width: 700, height: 900});
+
+  document.fullscreenElement = {clientWidth: 1024, clientHeight: 768};
+  document.dispatchPointerEvent('fullscreenchange', 1);
+  assert.deepEqual(instance.layoutCoordinator.getState().viewport, {width: 1024, height: 768});
+  await instance.dispose();
+  assert.equal((listeners.get('resize') ?? []).length, 0);
+  assert.equal((listeners.get('orientationchange') ?? []).length, 0);
+});
+
 test('rejects production construction and releases DOM and listeners on dispose', async () => {
   const document = createFakeDocument();
   assert.throws(

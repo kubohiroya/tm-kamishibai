@@ -63,7 +63,7 @@
       "id": "camera-control-collision",
       "state": "watching",
       "preferredAnchor": "top-right",
-      "resolvedAnchor": "right-center",
+      "resolvedAnchor": "top-center",
       "reservedRectangles": [
         {"owner": "camera-controls", "x": 1228, "y": 8, "width": 44, "height": 44}
       ],

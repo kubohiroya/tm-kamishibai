@@ -141,6 +141,65 @@ export function createDsl4PreviewReloadSurface(options) {
     reducedMotion: options.reducedMotion,
     onError: reportError,
   });
+  const document = /** @type {Record<string, any>} */ (options.document);
+  const browserWindow = isRecord(document.defaultView) ? document.defaultView : null;
+  /** @type {Array<() => void>} */
+  const geometryListenerCleanup = [];
+  /** @type {{disconnect: Function, observe?: Function} | null} */
+  let resizeObserver = null;
+
+  function measuredViewport() {
+    const fullscreen = isRecord(document.fullscreenElement) ? document.fullscreenElement : null;
+    const documentElement = isRecord(document.documentElement) ? document.documentElement : null;
+    const mount = isRecord(options.mount) ? options.mount : null;
+    const previous = layoutCoordinator.getState().viewport;
+    const width = [
+      fullscreen?.clientWidth,
+      documentElement?.clientWidth,
+      browserWindow?.innerWidth,
+      mount?.clientWidth,
+      previous.width,
+    ].find((value) => Number.isFinite(value) && Number(value) >= 44);
+    const height = [
+      fullscreen?.clientHeight,
+      documentElement?.clientHeight,
+      browserWindow?.innerHeight,
+      mount?.clientHeight,
+      previous.height,
+    ].find((value) => Number.isFinite(value) && Number(value) >= 44);
+    return {width: Number(width), height: Number(height)};
+  }
+
+  function refreshBrowserGeometry() {
+    if (disposed) return;
+    try {
+      layoutCoordinator.updateViewport(measuredViewport());
+      overlay.refreshLayout();
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  /** @param {Record<string, any>} target @param {string} type */
+  function listenGeometry(target, type) {
+    if (typeof target.addEventListener !== 'function') return;
+    target.addEventListener(type, refreshBrowserGeometry);
+    geometryListenerCleanup.push(() => target.removeEventListener(type, refreshBrowserGeometry));
+  }
+  if (browserWindow) {
+    listenGeometry(browserWindow, 'resize');
+    listenGeometry(browserWindow, 'orientationchange');
+    if (typeof browserWindow.ResizeObserver === 'function') {
+      const ResizeObserverConstructor =
+        /** @type {new (callback: Function) => {disconnect: Function, observe?: Function}} */ (
+          browserWindow.ResizeObserver
+        );
+      const observer = new ResizeObserverConstructor(refreshBrowserGeometry);
+      observer.observe?.(options.mount);
+      resizeObserver = observer;
+    }
+  }
+  listenGeometry(document, 'fullscreenchange');
 
   async function publishDiagnostic() {
     const ordered = [...diagnostics.entries()].sort(
@@ -231,9 +290,22 @@ export function createDsl4PreviewReloadSurface(options) {
       return snapshot();
     },
     acknowledgePreviewInput: overlay.acknowledgePreviewInput,
-    registerReservedRect: layoutCoordinator.register,
-    updateReservedRect: layoutCoordinator.update,
-    unregisterReservedRect: layoutCoordinator.unregister,
+    /** @param {string} owner @param {unknown} rect */
+    registerReservedRect(owner, rect) {
+      const registered = layoutCoordinator.register(owner, rect);
+      overlay.refreshLayout();
+      return registered;
+    },
+    /** @param {string} owner @param {unknown} rect */
+    updateReservedRect(owner, rect) {
+      layoutCoordinator.update(owner, rect);
+      overlay.refreshLayout();
+    },
+    /** @param {string} owner */
+    unregisterReservedRect(owner) {
+      layoutCoordinator.unregister(owner);
+      overlay.refreshLayout();
+    },
     /** @param {unknown} value @param {unknown} [safeArea] */
     updateViewport(value, safeArea) {
       layoutCoordinator.updateViewport(value, safeArea);
@@ -249,6 +321,9 @@ export function createDsl4PreviewReloadSurface(options) {
     async dispose() {
       if (disposed) return snapshot();
       disposed = true;
+      for (const remove of geometryListenerCleanup.splice(0).reverse()) remove();
+      resizeObserver?.disconnect();
+      resizeObserver = null;
       overlay.dispose();
       await policy.dispose();
       drivers.clear();

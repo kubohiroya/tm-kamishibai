@@ -90,6 +90,10 @@ test('provides a deterministic reduced-motion screenshot contract to docs #31', 
   assert.equal(screenshotContract.capture.reducedMotion, true);
   assert.equal(screenshotContract.capture.sourcePathsVisible, false);
   assert.deepEqual(screenshotContract.requiredAnchorsInDialog, contract.anchors);
+  assert.equal(
+    screenshotContract.frames.find(({id}) => id === 'camera-control-collision').resolvedAnchor,
+    'top-center',
+  );
   assert.deepEqual(
     screenshotContract.frames.map(({id}) => id),
     [
