@@ -22,6 +22,10 @@ export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
 export {
+  classifyDsl4PreviewChange,
+  createDsl4ArtifactFingerprint,
+} from './dsl4-artifact-fingerprint.js';
+export {
   createDsl4BinaryEntryProviderFromSb3,
   embedDsl4BinaryEntryRuntimeComponentInSb3,
 } from './dsl4-binary-entry-sb3.js';
