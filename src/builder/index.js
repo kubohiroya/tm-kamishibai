@@ -55,6 +55,10 @@ export {
   dsl4LocalPreviewBrowserClientDefaults,
 } from './dsl4-local-preview-browser-client.js';
 export {
+  createDsl4LocalPreviewBrowserBootstrap,
+  dsl4LocalPreviewBrowserBootstrapDefaults,
+} from './dsl4-local-preview-browser-bootstrap.js';
+export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,

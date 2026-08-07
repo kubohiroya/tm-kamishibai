@@ -184,6 +184,18 @@ script自体は引き続き`'self'`だけから取得し、connect、frame、bas
 `'unsafe-eval'`を許可しません。実Chromium E2Eは初回stage表示、valid YAML auto reload、invalid時のcurrent保持、recovery、page離脱時の
 transport／runtime cleanupをloopback hostと実TurboWarp bundleの組み合わせで確認します。
 
+camera／poseのbrowser libraryはbootstrapへ`tmPoseRuntime`として明示注入します。production entryは同一pageへ事前提供された
+`globalThis.tmPose`だけを採用し、CDN scriptを自動取得しません。未提供時はpose assetを使用した時点で有限診断として失敗し、
+actor／soundだけの作品へnetwork依存を追加しません。公式Teachable Machine Pose packageを直接bundleすると、内部でPoseNet base
+modelを外部取得するため、self-contained runtimeとremote code／asset policyを満たすまではproduction entryの暗黙依存にしません。
+
+代表fixtureはcamera／model推論境界だけを決定的な実装へ差し替え、同一のproduction source frontend、base SB3 loader、実TurboWarp
+VM／renderer／audio、Standard Runtime composition、embedded pose model fileを使ってactor表示、sound再生、pose action完了を検証します。
+startupは20秒以下、強制GC後のJavaScript heapは192 MiB以下を有限上限とし、camera／modelの作成回数、prediction、classifier／PoseNet
+の一回だけの解放、canvas／`Scratch` global／transportのcleanupもassertします。2026-08-07にarm64 macOS 27.0、Google Chrome
+151.0.7922.76で確認し、実測値はtest diagnosticへ毎回記録します。source 64 KiB、asset 64件／64 MiB、base SB3 64 MiB、browser
+bundle 24 MiBという既存の入力上限は同じfixtureでも維持します。
+
 ## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、

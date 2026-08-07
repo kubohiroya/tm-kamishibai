@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
-import {webcrypto} from 'node:crypto';
+import {createHash, webcrypto} from 'node:crypto';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
@@ -1070,6 +1070,385 @@ test(
       }
       assert.equal(host.getSnapshot().status, 'listening');
       assert.deepEqual(hostErrors, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await host.dispose();
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(projectDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
+
+test(
+  'runs actor, sound, pose, and camera capabilities within bounded browser-preview resources',
+  {timeout: 60_000},
+  async (testContext) => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-capability-chromium-'));
+    const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-capability-project-'));
+    const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
+    const sourceFilename = 'capabilities.k4.yml';
+    const sourcePath = path.join(projectDirectory, sourceFilename);
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+    const source = `kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+  Cue: sound
+  Idle: sound
+  Charge: sound
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroSkin
+poseRecognition:
+  idleSound: Idle
+  chargeSound: Charge
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 0.01
+    idleChargePerSecond: 0
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    poseModel: RescuePose
+    actions:
+      - Hero.show:
+          skin: HeroSkin
+          x: 15
+          y: -20
+          scale: 45
+      - sound: Cue
+      - Hero.pose:
+          steps:
+            - pose: help
+`;
+    await Promise.all([
+      writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+      writeFile(sourcePath, source),
+    ]);
+    const schema = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+    );
+    const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
+    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const parsed = sourceFrontend.parse(source, {sourceId: 'main'});
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
+      sourceId: 'main',
+      displayName: sourceFilename,
+      maxSourceBytes: limits.maxSourceBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    const artifact = await createDsl4RuntimeArtifactDescriptor(
+      parsed.storyDocument,
+      sourceDescriptor,
+      'production',
+      {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
+    );
+    assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
+    const poseFiles = new Map([
+      [
+        'model.json',
+        strToU8(
+          JSON.stringify({
+            modelTopology: {},
+            weightsManifest: [{paths: ['weights.bin'], weights: []}],
+          }),
+        ),
+      ],
+      ['metadata.json', strToU8(JSON.stringify({labels: ['help']}))],
+      ['weights.bin', new Uint8Array([1])],
+    ]);
+    const poseSourceFiles = [...poseFiles]
+      .map(([filePath, bytes]) => ({
+        path: filePath,
+        size: bytes.byteLength,
+        integrity: `sha256-${createHash('sha256').update(bytes).digest('base64')}`,
+      }))
+      .sort((left, right) => left.path.localeCompare(right.path));
+    const snapshotAssets = Object.values(parsed.storyDocument.assets)
+      .map((asset) => ({
+        id: asset.id,
+        kind: asset.kind,
+        loading: asset.loading,
+        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+        source:
+          asset.kind === 'poseModel'
+            ? {
+                type: 'file',
+                inputPath: asset.file,
+                mode: 'directory',
+                files: poseSourceFiles,
+              }
+            : {type: 'project', name: asset.name},
+      }))
+      .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+    const assets = await createDsl4EmbeddedAssetBundle(
+      parsed.storyDocument,
+      {
+        manifest: {formatVersion: 1, assets: snapshotAssets},
+        getFile(assetId, filePath) {
+          assert.equal(assetId, 'RescuePose');
+          return new Uint8Array(poseFiles.get(filePath));
+        },
+      },
+      {
+        maxFiles: limits.maxAssetFiles,
+        maxTotalBytes: limits.maxAssetBytes,
+        subtleCrypto: webcrypto.subtle,
+      },
+    );
+    const backdropAssetId = '00000000000000000000000000000000';
+    const heroAssetId = '11111111111111111111111111111111';
+    const soundAssetId = '22222222222222222222222222222222';
+    const backdropFilename = `${backdropAssetId}.svg`;
+    const heroFilename = `${heroAssetId}.svg`;
+    const soundFilename = `${soundAssetId}.wav`;
+    const soundBytes = await readFile(
+      path.join(repositoryRoot, 'test', 'fixtures', 'assets', 'actor-pop.wav'),
+    );
+    const sounds = ['Cue', 'Idle', 'Charge'].map((name) => ({
+      name,
+      assetId: soundAssetId,
+      dataFormat: 'wav',
+      format: '',
+      rate: 44_100,
+      sampleCount: 1,
+      md5ext: soundFilename,
+    }));
+    const project = await installDsl4PackagedRuntimeComponent(
+      {
+        extensionStorage: {},
+        targets: [
+          {
+            isStage: true,
+            name: 'Stage',
+            variables: {},
+            lists: {},
+            broadcasts: {},
+            blocks: {},
+            comments: {},
+            currentCostume: 0,
+            costumes: [
+              {
+                name: 'backdrop1',
+                assetId: backdropAssetId,
+                dataFormat: 'svg',
+                md5ext: backdropFilename,
+                rotationCenterX: 240,
+                rotationCenterY: 180,
+              },
+            ],
+            sounds,
+            volume: 100,
+            layerOrder: 0,
+            tempo: 60,
+            videoTransparency: 50,
+            videoState: 'on',
+            textToSpeechLanguage: null,
+          },
+          {
+            isStage: false,
+            name: 'Hero',
+            variables: {'actor-name': ['actorName', 'Hero']},
+            lists: {},
+            broadcasts: {},
+            blocks: {},
+            comments: {},
+            currentCostume: 0,
+            costumes: [
+              {
+                name: 'HeroSkin',
+                assetId: heroAssetId,
+                dataFormat: 'svg',
+                md5ext: heroFilename,
+                rotationCenterX: 40,
+                rotationCenterY: 40,
+              },
+            ],
+            sounds: [],
+            volume: 100,
+            layerOrder: 1,
+            visible: false,
+            x: 0,
+            y: 0,
+            size: 100,
+            direction: 90,
+            draggable: false,
+            rotationStyle: 'all around',
+          },
+        ],
+        monitors: [],
+        extensions: [],
+        meta: {semver: '3.0.0'},
+      },
+      parsed.storyDocument,
+      sourceDescriptor,
+      artifact.artifact,
+      assets,
+      {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
+    );
+    const projectBytes = new Uint8Array(
+      zipSync({
+        'project.json': strToU8(`${JSON.stringify(project)}\n`),
+        [backdropFilename]: strToU8(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+        ),
+        [heroFilename]: strToU8(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#7c3aed"/></svg>',
+        ),
+        [soundFilename]: soundBytes,
+      }),
+    );
+    const browserBundleBytes = await buildDsl4TurboWarpBrowserBundle({
+      entryPoint: path.join(
+        repositoryRoot,
+        'test',
+        'fixtures',
+        'dsl4',
+        'local-preview-capability-entry.mjs',
+      ),
+    });
+    const hostErrors = [];
+    const host = createDsl4LocalPreviewHost({
+      projectRoot: projectDirectory,
+      sourceManifestPath,
+      sourceManifest: manifest,
+      sourceFrontend,
+      maxSourceBytes: limits.maxSourceBytes,
+      runtimeOwner: 'browser',
+      projectBytes,
+      browserBundleBytes,
+      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+    });
+    await host.start();
+    const url = host.getLaunchUrl();
+    const startedAt = Date.now();
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--autoplay-policy=no-user-gesture-required',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--enable-precise-memory-info',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      try {
+        await waitForEvaluation(
+          client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
+          'browser-owned representative capability fixture',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          body: document.body.textContent,
+          fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
+          scratch: globalThis.Scratch?.vm?.runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible}))
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+        );
+      }
+      const startupMilliseconds = Date.now() - startedAt;
+      testContext.diagnostic(`representative capability startup: ${startupMilliseconds}ms`);
+      assert.ok(startupMilliseconds <= 20_000, `startup took ${startupMilliseconds}ms`);
+      const observed = await client.evaluate(`(() => {
+        const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
+        const actor = globalThis.Scratch.vm.runtime.targets.find((target) =>
+          target.lookupVariableByNameAndType?.('actorName', '')?.value === 'Hero'
+        );
+        return {
+          actor: {
+            costume: actor.getCostumes()[actor.currentCostume].name,
+            size: actor.size,
+            visible: actor.visible,
+            x: actor.x,
+            y: actor.y
+          },
+          actionCommits: fixture.events
+            .filter(({type}) => type === 'action.commit')
+            .map(({actionPath}) => actionPath),
+          canvasCount: document.querySelectorAll('canvas').length,
+          errors: fixture.errors,
+          metrics: fixture.metrics,
+          started: fixture.started
+        };
+      })()`);
+      assert.deepEqual(observed.actor, {
+        costume: 'HeroSkin',
+        size: 45,
+        visible: true,
+        x: 15,
+        y: -20,
+      });
+      assert.deepEqual(observed.actionCommits, [
+        '/scenes/opening/actions/0',
+        '/scenes/opening/actions/1',
+        '/scenes/opening/actions/2',
+      ]);
+      assert.equal(observed.started, true);
+      assert.equal(observed.metrics.cameraStarts, 1);
+      assert.equal(observed.metrics.modelLoads, 1);
+      assert.ok(observed.metrics.predictions >= 1);
+      assert.ok(observed.metrics.webcamUpdates >= 1);
+      assert.ok(observed.canvasCount >= 2);
+      assert.deepEqual(observed.errors, []);
+
+      await client.send('HeapProfiler.enable');
+      await client.send('HeapProfiler.collectGarbage');
+      const usedHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
+      testContext.diagnostic(`representative capability heap after GC: ${usedHeapBytes} bytes`);
+      assert.ok(usedHeapBytes <= 192 * 1024 * 1024, `heap used ${usedHeapBytes} bytes`);
+
+      const disposed = await client.evaluate(`(async () => {
+        const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
+        await fixture.client.dispose();
+        return {
+          canvasCount: document.querySelectorAll('canvas').length,
+          hasScratch: Object.hasOwn(globalThis, 'Scratch'),
+          metrics: fixture.metrics,
+          status: fixture.client.getState().status
+        };
+      })()`);
+      assert.equal(disposed.status, 'disposed');
+      assert.equal(disposed.canvasCount, 0);
+      assert.equal(disposed.hasScratch, false);
+      assert.equal(disposed.metrics.cameraTrackStops, 1);
+      assert.equal(disposed.metrics.classifierDisposals, 1);
+      assert.equal(disposed.metrics.poseNetDisposals, 1);
+      await waitForEvaluation(
+        client,
+        'document.querySelectorAll("canvas").length === 0',
+        'capability fixture canvas cleanup',
+      );
+      const disconnectDeadline = Date.now() + 10_000;
+      while (Date.now() < disconnectDeadline && host.getSnapshot().status !== 'listening') {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      assert.equal(host.getSnapshot().status, 'listening');
+      assert.deepEqual(hostErrors, []);
+      assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();
       await stopChrome(chrome);
