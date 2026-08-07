@@ -95,3 +95,25 @@ activation, rollback/release failures, background throttling, and full rebuild r
 Rollback sets `dsl4WebPreviewAssetLiveReload=false`. Source-only Web Preview, Node source watching,
 production playback, existing asset schema, and built SB3 files remain valid. All candidate state is
 session-owned, so rollback requires no persistent-data migration.
+
+## Browser support, latency, and known limits
+
+Support is capability-based rather than user-agent-based.
+
+| Browser context                                                         | Asset live reload behavior                                                                  |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Secure top-level context with `showDirectoryPicker` and read permission | Enabled when every required startup flag and optional asset protocol capability is present  |
+| Insecure or embedded context, missing picker API, or revoked permission | Last-known-good preview continues; the diagnostic points to the CLI validate/build fallback |
+| Peer missing any `asset.*.v1` capability                                | Candidate is released and classified as full-rebuild-required                               |
+
+The nominal visible-page detection budget is the 500 ms poll interval plus a 100 ms quiet window and
+two reads. Hidden pages use a 5 s interval. An unstable save retries every 50 ms for at most 2 s; the
+current generation remains active throughout. The implementation serializes reads and validation, so
+the effective decode concurrency is one and stays below the contract ceiling of two.
+
+The initial finite ceilings are 128 files, 20 MiB per file, 64 MiB total, 16,777,216 image pixels,
+1,800 audio seconds, 8 channels, and 192 kHz. A pose bundle is currently an unpacked directory with
+exactly `model.json`, `metadata.json`, and one weights `.bin`. The adapter does not persist directory
+handles, scan for undeclared files, watch VM-owned project assets, or live-reload removals, renames,
+kind/path changes, and bundle-shape changes. Those changes retain the active generation and require a
+new CLI preview build.
