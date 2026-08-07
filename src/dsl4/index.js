@@ -128,6 +128,13 @@ export {
   dsl4PreviewRequiredCapabilities,
   Dsl4PreviewProtocolError,
 } from './preview-protocol.js';
+export {
+  createDsl4PreviewSourceGenerationWire,
+  decodeDsl4PreviewSourceGenerationWire,
+  dsl4PreviewSourceGenerationWireDefaults,
+  Dsl4PreviewSourceGenerationWireError,
+  encodeDsl4PreviewSourceGenerationWire,
+} from './preview-source-generation-wire.js';
 export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
