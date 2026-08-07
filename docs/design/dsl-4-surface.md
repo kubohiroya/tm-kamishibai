@@ -341,6 +341,9 @@ completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し
 
 `navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
 `navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+`false`で拒否されたkeymap入力はDOM eventを消費せず、`setSkin`やstep soundなどpose待機外の処理は
+従来どおりnavigation可能です。policy有効時の受理commandは同じ同期dispatch境界で処理し、historyと
+`navigation.nextAction`の混在連打でも到着順を変更しません。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
 起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
 

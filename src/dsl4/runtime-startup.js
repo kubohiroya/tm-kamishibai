@@ -265,6 +265,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       evaluateCondition: runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition,
       onEvent: options.onEvent,
       onInputError: options.onInputError,
+      poseNavigationPolicyEnabled: featureFlags.dsl4PoseFeedbackModes,
       structuredDataIntegrationEnabled: featureFlags.structuredDataIntegrationEnabled,
       posePreviewMirroringEnabled:
         featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,

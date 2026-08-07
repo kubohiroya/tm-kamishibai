@@ -20,10 +20,12 @@ function parseStory(source) {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((resolvePromise) => {
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return {promise, resolve};
+  return {promise, resolve, reject};
 }
 
 function keyEvent(code) {
@@ -105,6 +107,140 @@ scenes:
   assert.equal(session.getState().history, null);
   pending.resolve();
   await staleRun;
+});
+
+test('reports an unchanged command when pose policy refuses nextAction', async () => {
+  const cleanup = deferred();
+  let aborted = false;
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: false
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+`);
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: (_payload, context) =>
+        new Promise((resolve) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              void cleanup.promise.then(resolve);
+            },
+            {once: true},
+          );
+        }),
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  const run = created.session.start();
+
+  const initialKey = keyEvent('Space');
+  assert.equal(created.session.handleKeyDown(initialKey), false);
+  assert.deepEqual(initialKey.counters, {preventDefault: 0, stopPropagation: 0});
+  const repeatKey = keyEvent('Space');
+  repeatKey.repeat = true;
+  assert.equal(created.session.handleKeyDown(repeatKey), false);
+  assert.deepEqual(repeatKey.counters, {preventDefault: 0, stopPropagation: 0});
+  await created.session.whenInputIdle();
+
+  const result = created.session.dispatchCommand('navigation.nextAction');
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, false);
+  assert.equal(aborted, false);
+  assert.equal(created.session.getState().runtime.status, 'running');
+
+  created.session.stop('test-cleanup');
+  cleanup.resolve();
+  await run;
+});
+
+test('preserves mixed history and nextAction arrival order while pose policy is enabled', async () => {
+  async function runOrder(codes) {
+    const waits = [];
+    const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+scenes:
+  opening:
+    - wait: 1
+    - wait: 1
+    - wait: 1
+`);
+    const created = createDsl4NavigationSession({
+      storyDocument: story,
+      controlProfile: 'development',
+      historyNavigationAvailable: true,
+      historyLimits: {maxActionEntries: 10, maxSceneVisits: 10},
+      poseNavigationPolicyEnabled: true,
+      port: {
+        wait(_payload, context) {
+          const pending = deferred();
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('wait cancelled');
+              error.name = 'AbortError';
+              pending.reject(error);
+            },
+            {once: true},
+          );
+          waits.push(pending);
+          return pending.promise;
+        },
+      },
+    });
+    assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+    const {session} = created;
+    const initialRun = session.start();
+    await waitFor(() => waits.length === 1, 'first wait did not start');
+    for (const expectedWaits of [2, 3]) {
+      waits[expectedWaits - 2].resolve();
+      await waitFor(() => waits.length === expectedWaits, 'next wait did not start');
+    }
+
+    for (const code of codes) assert.equal(session.handleKeyDown(keyEvent(code)), true);
+    await session.whenInputIdle();
+    await Promise.resolve();
+    const state = session.getState().runtime;
+
+    const activeRun = session.getRunPromise();
+    session.stop('test-cleanup');
+    await Promise.allSettled([initialRun, activeRun]);
+    session.dispose();
+    return state;
+  }
+
+  const historyThenNext = await runOrder(['ArrowLeft', 'Space']);
+  assert.equal(historyThenNext.status, 'running', JSON.stringify(historyThenNext));
+  assert.equal(historyThenNext.actionPath, '/scenes/opening/actions/1');
+
+  const nextThenHistory = await runOrder(['Space', 'ArrowLeft']);
+  assert.equal(nextThenHistory.status, 'paused');
+  assert.equal(nextThenHistory.actionPath, '/scenes/opening/actions/1');
 });
 
 test('passes a planned action and variable snapshot through the public session start', async () => {

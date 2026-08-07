@@ -47,6 +47,23 @@ async function waitUntil(predicate) {
   assert.fail('condition was not reached');
 }
 
+function keyEvent(code) {
+  const counters = {preventDefault: 0, stopPropagation: 0};
+  return {
+    code,
+    defaultPrevented: false,
+    repeat: false,
+    preventDefault() {
+      counters.preventDefault += 1;
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      counters.stopPropagation += 1;
+    },
+    counters,
+  };
+}
+
 function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
@@ -67,9 +84,21 @@ async function packagedProject(profile, historyNavigationAvailable = false, sour
     {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const snapshotAssets = Object.values(parsed.storyDocument.assets)
+    .map((asset) => ({
+      id: asset.id,
+      kind: asset.kind,
+      loading: asset.loading,
+      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      source:
+        asset.delivery === 'remote'
+          ? {type: 'remote', ...asset.source}
+          : {type: 'project', name: asset.name},
+    }))
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+    {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
     {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
   );
   const project = await installDsl4PackagedRuntimeComponent(
@@ -260,6 +289,78 @@ scenes:
   assert.equal((await enabled.session.start()).status, 'finished');
   assert.deepEqual(modes, ['unmirrored']);
   enabled.session.dispose();
+});
+
+test('connects the startup pose flag to refusal without consuming the mapped key', async () => {
+  const component = await packagedProject(
+    'production',
+    false,
+    `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/rescue-pose.zip
+      integrity: sha256-fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      contentType: application/zip
+      size: 1024
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: false
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+`,
+  );
+  let aborted = false;
+  const result = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      port: {
+        waitForPose: (_payload, context) =>
+          new Promise((resolve) => {
+            context.signal.addEventListener(
+              'abort',
+              () => {
+                aborted = true;
+                resolve();
+              },
+              {once: true},
+            );
+          }),
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.session.start();
+
+  const space = keyEvent('Space');
+  assert.equal(result.session.handleKeyDown(space), false);
+  assert.deepEqual(space.counters, {preventDefault: 0, stopPropagation: 0});
+  assert.equal(aborted, false);
+
+  result.session.stop('test-cleanup');
+  await run;
+  assert.equal(aborted, true);
+  result.session.dispose();
 });
 
 test('enables internal Structured Data independently without exposing a generic palette', async () => {
