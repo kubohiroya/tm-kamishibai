@@ -812,10 +812,18 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
       await setStatus('diagnostic');
       return snapshot();
     }
-    await setStatus('selecting');
+    status = 'selecting';
+    const selection = (() => {
+      try {
+        return Promise.resolve(picker.call(globalObject, {mode: 'read'}));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    })();
+    await notifyStatus();
     let projectRoot;
     try {
-      projectRoot = await picker.call(globalObject, {mode: 'read'});
+      projectRoot = await selection;
     } catch (error) {
       const name = errorName(error);
       const code =

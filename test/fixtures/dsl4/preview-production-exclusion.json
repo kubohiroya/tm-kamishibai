@@ -8,6 +8,12 @@
     "previewBridge",
     "previewToken",
     "reloadCandidate",
-    "reloadModalState"
+    "reloadModalState",
+    "browserPreviewHandle",
+    "browserPreviewTimer",
+    "browserPreviewObserver",
+    "browserPreviewPendingRead",
+    "browserPreviewCandidate",
+    "browserPreviewModalState"
   ]
 }

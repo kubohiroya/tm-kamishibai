@@ -36,7 +36,7 @@ test('specifies the app shell as a startup-fixed default-off implementation flag
     defaultEnabled: false,
     startupFixed: true,
     requires: ['dsl4Runtime'],
-    implemented: false,
+    implemented: true,
   });
 });
 

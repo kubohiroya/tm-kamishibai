@@ -1,27 +1,16 @@
 import {createDsl4NavigationSession} from './navigation-session.js';
 import {loadDsl4RuntimeComponent} from './runtime-artifact-loader.js';
+import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import {deepFreeze} from './story-document.js';
+
+export {dsl4DefaultFeatureFlags, resolveDsl4FeatureFlags} from './feature-flags.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
-
-const featureFlagKeys = new Set([
-  'dsl4Runtime',
-  'dsl4PoseFeedbackModes',
-  'dsl4PosePreviewMirroring',
-  'structuredDataIntegrationEnabled',
-]);
-
-export const dsl4DefaultFeatureFlags = deepFreeze({
-  dsl4Runtime: false,
-  dsl4PoseFeedbackModes: false,
-  dsl4PosePreviewMirroring: false,
-  structuredDataIntegrationEnabled: false,
-});
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -81,24 +70,6 @@ function ownRuntimeEnvironment(session, environment) {
       return disposePromise;
     },
   });
-}
-
-/**
- * Resolve one immutable startup feature snapshot.
- *
- * @param {unknown} [input]
- */
-export function resolveDsl4FeatureFlags(input = {}) {
-  if (!isRecord(input)) throw new TypeError('DSL 4.0 feature flags must be an object');
-  const unknown = Object.keys(input).filter((key) => !featureFlagKeys.has(key));
-  if (unknown.length > 0) {
-    throw new TypeError(`Unknown DSL 4.0 feature flag: ${unknown.sort().join(', ')}`);
-  }
-  const resolved = {...dsl4DefaultFeatureFlags, ...input};
-  for (const [name, value] of Object.entries(resolved)) {
-    if (typeof value !== 'boolean') throw new TypeError(`${name} feature flag must be boolean`);
-  }
-  return deepFreeze(resolved);
 }
 
 /**
