@@ -197,6 +197,57 @@ test('transparency finish synchronously commits the final state and cancels its 
   assert.equal(hero.calls.filter(([method]) => method === 'setEffect').length, effectCallCount);
 });
 
+test('keeps foreground transparency pending until finalization retry succeeds', async () => {
+  const hero = fakeActor();
+  const originalSetEffect = hero.target.setEffect.bind(hero.target);
+  let finalizationFailures = 1;
+  hero.target.setEffect = (effect, value) => {
+    originalSetEffect(effect, value);
+    if (value === 50 && finalizationFailures > 0) {
+      finalizationFailures -= 1;
+      throw new Error('finalization failed');
+    }
+  };
+  const fake = fakeRuntime([hero.target]);
+  const clock = manualScheduler();
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: fake.runtime,
+    scheduler: clock.scheduler,
+  });
+  const operation = platform.host.createTransparencyTransition(hero.target, {
+    from: 0,
+    to: 50,
+    seconds: 1,
+  });
+  const pending = operation.start();
+  let settlement = 'pending';
+  void pending.then(
+    () => {
+      settlement = 'resolved';
+    },
+    () => {
+      settlement = 'rejected';
+    },
+  );
+
+  assert.throws(() => operation.finish(), /finalization failed/u);
+  await Promise.resolve();
+  assert.equal(settlement, 'pending');
+  assert.equal(clock.pendingCount(), 0);
+
+  operation.finish();
+  await pending;
+  assert.equal(settlement, 'resolved');
+  assert.deepEqual(
+    hero.calls.filter(([method]) => method === 'setEffect'),
+    [
+      ['setEffect', 'ghost', 0],
+      ['setEffect', 'ghost', 50],
+      ['setEffect', 'ghost', 50],
+    ],
+  );
+});
+
 test('retains failed background finalization and retries it at each lifecycle boundary', async () => {
   const hero = fakeActor();
   const originalSetEffect = hero.target.setEffect.bind(hero.target);

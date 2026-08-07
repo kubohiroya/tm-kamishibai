@@ -560,6 +560,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
       /** @type {unknown} */
       let backgroundFailure;
       let operationSettled = false;
+      let backgroundOwned = false;
 
       const cancelTimer = () => {
         if (timer === undefined) return;
@@ -606,7 +607,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
                   'TurboWarp actor transparency finalization retry failed',
                 );
           backgroundFailure = terminalError;
-          rejectPresentation(terminalError);
+          if (backgroundOwned) rejectPresentation(terminalError);
           throw terminalError;
         }
         resolvePresentation();
@@ -627,11 +628,13 @@ export function createDsl4TurboWarpActorPlatform(options) {
         rejectPresentation(backgroundFailure);
       };
 
-      const startOperation = () => {
+      /** @param {boolean} background */
+      const startOperation = (background) => {
         if (state !== 'idle') {
           throw adapterError('K4-TW-ACTOR-003', 'setTransparency operation can only start once');
         }
         ensureActive();
+        backgroundOwned = background;
         const startTime = finiteNumber(scheduler.now(), 'scheduler.now()');
         activeTransparencyTransitions.get(actor)?.finish();
         actor.setEffect('ghost', from);
@@ -676,9 +679,11 @@ export function createDsl4TurboWarpActorPlatform(options) {
       };
 
       const operation = Object.freeze({
-        start: startOperation,
+        start() {
+          return startOperation(false);
+        },
         startBackground() {
-          const presentation = startOperation();
+          const presentation = startOperation(true);
           void presentation.catch((error) => {
             backgroundFailure = error;
           });

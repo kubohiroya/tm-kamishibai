@@ -1841,6 +1841,68 @@ scenes:
   await result.host.dispose();
 });
 
+test('foreground transparency remains running after failed skip finalization and retries', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+`);
+  const log = [];
+  const fixture = platformFixture(log);
+  const actor = fixture.runtime.targets.find((target) => target.isStage === false);
+  const originalSetEffect = actor.setEffect.bind(actor);
+  let finalizationFailures = 1;
+  actor.setEffect = (effect, value) => {
+    originalSetEffect(effect, value);
+    if (value === 50 && finalizationFailures > 0) {
+      finalizationFailures -= 1;
+      throw new Error('finalization failed');
+    }
+  };
+  const clock = manualScheduler();
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      actorScheduler: clock.scheduler,
+      actorFrameMilliseconds: 500,
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.host.start();
+  while (clock.pendingCount() === 0) await Promise.resolve();
+
+  assert.throws(
+    () => result.host.dispatchCommand('navigation.nextAction'),
+    /transparency transition cleanup failed/u,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(result.host.getState().runtime.status, 'running');
+  assert.equal(clock.pendingCount(), 0);
+
+  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(skipped.ok, true);
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.equal(
+    log.filter(
+      ([event, effect, value]) => event === 'actor.effect' && effect === 'ghost' && value === 50,
+    ).length,
+    2,
+  );
+  await run;
+  await result.host.dispose();
+});
+
 test('background transparency runs with the next action and stop finalizes it before cancellation', async () => {
   const project = await packagedProject(`
 kamishibai: '4.0'
