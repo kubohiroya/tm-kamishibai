@@ -80,6 +80,10 @@ export {
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from './browser-turbowarp-stage.js';
 export {
+  createDsl4BrowserTurboWarpPlatform,
+  loadDsl4BrowserTurboWarpPlatform,
+} from './browser-turbowarp-platform.js';
+export {
   createDsl4PreviewReloadPolicy,
   dsl4PreviewReloadPolicyDefaults,
   Dsl4PreviewReloadPolicyError,

@@ -78,15 +78,20 @@
     "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
     "@kubohiroya/turbowarp-svg-text": "0.3.0",
     "@kubohiroya/turbowarp-tmpose": "1.6.1",
+    "@turbowarp/scratch-storage": "2.0.0",
+    "@turbowarp/scratch-svg-renderer": "1.1.0",
+    "brfs": "1.6.1",
+    "esbuild": "0.28.1",
     "fflate": "0.8.3",
+    "scratch-audio": "github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30",
+    "scratch-render": "github:TurboWarp/scratch-render#a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce",
+    "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
     "yaml": "2.8.1"
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#b3f4b9aa3ed3ede363700be815fe522f6a47df0b",
-    "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
     "ajv": "8.18.0",
-    "esbuild": "0.28.1",
     "eslint": "^10.8.0",
     "fake-indexeddb": "6.2.5",
     "gh-pages": "^6.3.0",
@@ -94,7 +99,6 @@
     "prettier": "^3.0.0",
     "scratch-parser": "6.0.0",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
-    "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
     "typescript": "^7.0.2"
   },
   "engines": {

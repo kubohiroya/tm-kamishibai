@@ -40,6 +40,11 @@ export {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';
+export {
+  buildDsl4TurboWarpBrowserBundle,
+  dsl4TurboWarpBrowserBundleDefaults,
+  dsl4TurboWarpBrowserBundleMaximumBytes,
+} from './dsl4-turbowarp-browser-bundle.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
 export {
   createDsl4CliPreviewShell,
