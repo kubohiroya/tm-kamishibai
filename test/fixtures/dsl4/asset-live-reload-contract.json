@@ -1,0 +1,80 @@
+{
+  "formatVersion": 1,
+  "issue": 391,
+  "featureFlag": {
+    "name": "dsl4WebPreviewAssetLiveReload",
+    "default": false,
+    "startupFixed": true,
+    "requires": ["dsl4Runtime", "dsl4AppShell", "dsl4WebPreviewAdapter"]
+  },
+  "classifications": [
+    "no-change",
+    "source-live-reload",
+    "asset-live-reload",
+    "composite-live-reload",
+    "additive-composite-live-reload",
+    "full-rebuild"
+  ],
+  "assetKinds": ["backdrop", "costume", "image", "poseModel", "sound"],
+  "safeAddition": {
+    "requiresSourceChange": true,
+    "requiresFileSource": true,
+    "preservesEveryActiveGraphEntry": true
+  },
+  "polling": {
+    "foregroundIntervalMs": 500,
+    "backgroundIntervalMs": 5000,
+    "quietWindowMs": 100,
+    "retryIntervalMs": 50,
+    "stabilityTimeoutMs": 2000,
+    "overlap": false,
+    "adoptionKey": "sha256-integrity"
+  },
+  "limits": {
+    "maxFiles": 128,
+    "maxFileBytes": 20971520,
+    "maxTotalBytes": 67108864,
+    "maxImagePixels": 16777216,
+    "maxAudioDurationSeconds": 1800,
+    "maxAudioChannels": 8,
+    "maxAudioSampleRate": 192000,
+    "maxConcurrentDecodes": 2
+  },
+  "protocolCapabilities": [
+    "asset.commit.v1",
+    "asset.defer.v1",
+    "asset.diagnostics.v1",
+    "asset.stage.v1"
+  ],
+  "diagnosticCodes": [
+    "K4-ASSET-DECODE-001",
+    "K4-ASSET-FULL-REBUILD-REQUIRED",
+    "K4-ASSET-LIMIT-001",
+    "K4-ASSET-MISSING",
+    "K4-ASSET-PERMISSION-001",
+    "K4-ASSET-POSE-BUNDLE-001",
+    "K4-ASSET-POSE-LABEL-001",
+    "K4-ASSET-PREPARE-001",
+    "K4-ASSET-RELEASE-001",
+    "K4-ASSET-ROLLBACK-001",
+    "K4-ASSET-SIGNATURE-001",
+    "K4-ASSET-STALE-001",
+    "K4-ASSET-UNSTABLE-001"
+  ],
+  "productionExclusions": [
+    "ArrayBuffer",
+    "AudioBuffer",
+    "Blob",
+    "File",
+    "FileSystemHandle",
+    "candidate",
+    "decodedResource",
+    "dialogState",
+    "objectUrl",
+    "previewToken",
+    "reloadPreference",
+    "reloadTimestamp",
+    "revision"
+  ],
+  "rollbackFlag": "dsl4WebPreviewAssetLiveReload"
+}
