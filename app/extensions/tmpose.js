@@ -18,7 +18,7 @@
     accumulatedPoseEvents: false
   };
   const EXTENSION_ID = "tmpose";
-  const VERSION = "1.4.0-typescript";
+  const VERSION = "1.5.1-typescript";
   const DOCS_URI = "https://kubohiroya.github.io/turbowarp-tmpose/";
   const ACCUMULATED_POSE_CHANGED_EVENT = "TMPOSE_ACCUMULATED_POSE_CHANGED";
   const TFJS_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js";
@@ -103,8 +103,11 @@
     return typeof document !== "undefined" && document.visibilityState === "hidden";
   }
   class TMPoseExtension {
-    constructor(featureFlags = {}) {
+    constructor(featureFlags = {}, dependencies = {}) {
       this.featureFlags = { ...FEATURE_FLAGS, ...featureFlags };
+      this.tmPoseRuntime = dependencies.runtime ?? null;
+      this.allowRemoteLibraries = dependencies.allowRemoteLibraries ?? true;
+      this.onAccumulatedPoseChanged = dependencies.onAccumulatedPoseChanged ?? null;
       this.modelURL = "";
       this.model = null;
       this.webcam = null;
@@ -112,6 +115,7 @@
       this.predicting = false;
       this.loopStarted = false;
       this.loopGeneration = 0;
+      this.activeModelOperations = /* @__PURE__ */ new Map();
       this.currentPoseName = "";
       this.score = 0;
       this.predictions = {};
@@ -181,11 +185,16 @@
       this.firstPredictMs = 0;
     }
     async ensureLibrariesLoaded() {
+      if (this.tmPoseRuntime) return;
+      if (!this.allowRemoteLibraries) {
+        throw new Error("TMPose: A preloaded Teachable Machine Pose runtime is required.");
+      }
       if (typeof globalThis.tf === "undefined") await loadScript(TFJS_URL);
       if (typeof globalThis.tmPose === "undefined") await loadScript(TMPOSE_URL);
       if (typeof globalThis.tmPose === "undefined") {
         throw new Error("TMPose: Teachable Machine Pose could not be loaded.");
       }
+      this.tmPoseRuntime = globalThis.tmPose;
     }
     cleanupCameraResources() {
       const video = this.webcam?.webcam;
@@ -210,7 +219,7 @@
         this.lastError = "";
         const startedAt = performance.now();
         await this.ensureLibrariesLoaded();
-        this.webcam = new globalThis.tmPose.Webcam(320, 240, true);
+        this.webcam = new this.tmPoseRuntime.Webcam(320, 240, true);
         await this.webcam.setup();
         await this.webcam.play();
         this.attachPreviewToStage();
@@ -271,13 +280,19 @@
       }
     }
     async loadModel() {
-      if (!this.modelURL) throw new Error("TMPose: Set the model URL first.");
       if (this.model) return;
+      if (!this.modelURL) throw new Error("TMPose: Set the model URL first.");
       try {
         this.lastError = "";
         const startedAt = performance.now();
         await this.ensureLibrariesLoaded();
-        this.model = await globalThis.tmPose.load(this.modelURL + "model.json", this.modelURL + "metadata.json");
+        if (typeof this.tmPoseRuntime.load !== "function") {
+          throw new Error("TMPose: The Teachable Machine Pose URL loader is not available.");
+        }
+        this.model = await this.tmPoseRuntime.load(
+          this.modelURL + "model.json",
+          this.modelURL + "metadata.json"
+        );
         this.modelLoadMs = Math.round(performance.now() - startedAt);
       } catch (error) {
         this.setLastError(error);
@@ -286,6 +301,26 @@
     }
     isModelLoaded() {
       return Boolean(this.model);
+    }
+    usePreparedModel(model) {
+      if (!model || typeof model !== "object") {
+        throw new TypeError("TMPose: Prepared model must be an object.");
+      }
+      if (this.predicting && this.model !== model) {
+        throw new Error("TMPose: Stop recognition before changing the active model.");
+      }
+      this.model = model;
+      this.modelURL = "";
+      this.modelLoadMs = 0;
+      this.firstPredictMs = 0;
+    }
+    clearPreparedModel(model) {
+      if (model !== void 0 && this.model !== model) return;
+      this.stopPredict();
+      this.model = null;
+      this.modelURL = "";
+      this.modelLoadMs = 0;
+      this.firstPredictMs = 0;
     }
     async startPredict() {
       try {
@@ -433,6 +468,28 @@
       const generation = ++this.loopGeneration;
       void this.loop(generation);
     }
+    trackPreparedModelOperation(model, operation) {
+      let active = this.activeModelOperations.get(model);
+      if (!active) {
+        active = /* @__PURE__ */ new Set();
+        this.activeModelOperations.set(model, active);
+      }
+      active.add(operation);
+      void operation.then(
+        () => {
+          active.delete(operation);
+          if (active.size === 0) this.activeModelOperations.delete(model);
+        },
+        () => {
+          active.delete(operation);
+          if (active.size === 0) this.activeModelOperations.delete(model);
+        }
+      );
+      return operation;
+    }
+    async waitForPreparedModelIdle(model) {
+      await Promise.allSettled([...this.activeModelOperations.get(model) ?? []]);
+    }
     async loop(generation = this.loopGeneration) {
       if (generation !== this.loopGeneration || !this.cameraRunning || !this.webcam) {
         if (generation === this.loopGeneration) this.loopStarted = false;
@@ -441,22 +498,30 @@
       try {
         this.webcam.update();
         if (this.predicting && this.model) {
+          const model = this.model;
           const first = this.firstPredictMs === 0;
           const startedAt = first ? performance.now() : 0;
-          const estimate = await this.model.estimatePose(this.webcam.canvas);
-          const prediction = await this.model.predict(estimate.posenetOutput);
-          if (generation !== this.loopGeneration || !this.cameraRunning) return;
-          if (first) this.firstPredictMs = Math.round(performance.now() - startedAt);
-          let best = { className: "", probability: 0 };
-          this.predictions = {};
-          for (const result of prediction) {
-            this.predictions[result.className] = result.probability;
-            if (result.probability > best.probability) best = result;
-          }
-          this.currentPoseName = best.className;
-          this.score = best.probability;
-          if (this.featureFlags.temporalPoseScoring) {
-            this.updateAccumulatedPose(prediction);
+          const prediction = await this.trackPreparedModelOperation(
+            model,
+            (async () => {
+              const estimate = await model.estimatePose(this.webcam.canvas);
+              return model.predict(estimate.posenetOutput);
+            })()
+          );
+          if (generation !== this.loopGeneration || !this.cameraRunning || !this.predicting || this.model !== model) {
+          } else {
+            if (first) this.firstPredictMs = Math.round(performance.now() - startedAt);
+            let best = { className: "", probability: 0 };
+            this.predictions = {};
+            for (const result of prediction) {
+              this.predictions[result.className] = result.probability;
+              if (result.probability > best.probability) best = result;
+            }
+            this.currentPoseName = best.className;
+            this.score = best.probability;
+            if (this.featureFlags.temporalPoseScoring) {
+              this.updateAccumulatedPose(prediction);
+            }
           }
         }
       } catch (error) {
@@ -506,7 +571,21 @@
         reason,
         timestamp: performance.now()
       };
-      Scratch.vm?.runtime?.emit(ACCUMULATED_POSE_CHANGED_EVENT, payload);
+      if (this.onAccumulatedPoseChanged) {
+        try {
+          this.onAccumulatedPoseChanged(payload);
+        } catch {
+        }
+      } else if (typeof Scratch !== "undefined") {
+        Scratch.vm?.runtime?.emit(ACCUMULATED_POSE_CHANGED_EVENT, payload);
+      }
+    }
+    dispose() {
+      this.stopCamera();
+      if (this.featureFlags.temporalPoseScoring && typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", this.visibilityChangeListener);
+      }
+      this.onAccumulatedPoseChanged = null;
     }
     resetAccumulatedPose(reason = "reset") {
       const previousPoseName = this.accumulatedPoseName;
