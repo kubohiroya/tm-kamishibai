@@ -40,6 +40,13 @@
     "pickerOptions": {"mode": "read"},
     "manifestFilename": "project.source.json",
     "defaultSourceFilename": "story.kamishibai.yaml",
+    "recommendedSourceFilenameSuffix": ".k4.yml",
+    "acceptedSourceFilenameSuffixes": [
+      ".k4.yml",
+      ".k4.yaml",
+      ".kamishibai.yml",
+      ".kamishibai.yaml"
+    ],
     "sourcePathOptional": true,
     "sourcePathScope": "normalized-project-root-relative",
     "sourceDiscovery": "manifest-or-default-only",

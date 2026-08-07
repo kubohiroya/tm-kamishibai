@@ -40,8 +40,9 @@ project-root/
 }
 ```
 
-`path`を省略すると`story.kamishibai.yaml`を使用します。別名を指定する場合もproject root直下の
-`.kamishibai.yaml` basenameだけを許可し、`/`または`\\`を含むサブディレクトリは受理しません。Web Previewは
+`path`を省略すると後方互換のため`story.kamishibai.yaml`を使用します。新規sourceでは`.k4.yml`を推奨します。
+別名を指定する場合はproject root直下で、`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`の
+いずれかで終わるbasenameだけを許可し、`/`または`\\`を含むサブディレクトリは受理しません。Web Previewは
 manifestとそのYAMLだけを読み、asset、base SB3、builder設定は変更しません。
 
 ## 3. 開始と保存

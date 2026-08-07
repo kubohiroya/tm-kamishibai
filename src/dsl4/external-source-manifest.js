@@ -1,4 +1,5 @@
 import {validateDsl4CacheIdentity} from './cache-identity.js';
+import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {deepFreeze} from './story-document.js';
 
 export const dsl4DefaultExternalSourcePath = 'story.kamishibai.yaml';
@@ -47,9 +48,9 @@ function sourcePath(value) {
     /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
     segments.length !== 1 ||
     segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-    !source.endsWith('.kamishibai.yaml')
+    !hasDsl4SourceFilenameSuffix(source)
   ) {
-    fail('K4-SOURCE-PATH-001', 'path must be a root-level .kamishibai.yaml basename');
+    fail('K4-SOURCE-PATH-001', 'path must be a root-level DSL 4 source basename');
   }
   return source;
 }

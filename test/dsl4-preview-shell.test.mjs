@@ -80,6 +80,13 @@ function createShell(callbacks = {}) {
   return {document, before, calls, shell};
 }
 
+test('accepts the recommended short DSL 4 source filename', () => {
+  assert.equal(
+    validateDsl4PreviewShellView(baseView({sourceDisplayName: 'story.k4.yml'})).sourceDisplayName,
+    'story.k4.yml',
+  );
+});
+
 test('keeps missing and invalid initial source visible, then auto-starts first valid without a modal', () => {
   const {document, calls, shell} = createShell();
   const dialog = findById(shell.element, 'dsl4-preview-reload-dialog');
