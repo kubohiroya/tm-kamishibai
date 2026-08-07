@@ -11,6 +11,7 @@ const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
 const destinations = {
   top: siteRoot,
   docs: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/',
+  workshops: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/',
   samples: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/',
   downloads: `${siteRoot}downloads/`,
 };

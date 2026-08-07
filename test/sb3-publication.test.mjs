@@ -155,8 +155,22 @@ test('opens the Urashima web sample from the top-page Web card', async () => {
   const webCardStart = siteIndex.lastIndexOf('<a', webCardHrefPosition);
   const webCardEnd = siteIndex.indexOf('</a>', webCardHrefPosition);
   const webCard = siteIndex.slice(webCardStart, webCardEnd + '</a>'.length);
+  const heroImagePosition = siteIndex.indexOf('class="hero-image"');
+  const siteContentsPosition = siteIndex.indexOf('id="site-contents"');
+  const siteContentsCardsStart = siteIndex.indexOf('<div class="cards">', siteContentsPosition);
+  const siteContentsCardsEnd = siteIndex.indexOf('</div>', siteContentsCardsStart);
+  const siteContentsCards = siteIndex.slice(siteContentsCardsStart, siteContentsCardsEnd);
 
   assert.ok(webCardHrefPosition >= 0);
+  assert.ok(heroImagePosition < webCardHrefPosition);
+  assert.ok(webCardHrefPosition < siteContentsPosition);
+  assert.doesNotMatch(siteContentsCards, /Web版を開く|stories\/urashima\/web/u);
+  assert.match(
+    siteContentsCards,
+    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/workshops\/"/u,
+  );
+  assert.match(siteContentsCards, /ワークショップ一覧へ/u);
+  assert.match(webCard, /class="content-card featured-web-card"/u);
   assert.match(webCard, /Web版を開く/u);
   assert.match(webCard, /DSL\s+3\.2系/u);
   assert.match(webCard, /組み込み台本「浦島太郎」/u);
