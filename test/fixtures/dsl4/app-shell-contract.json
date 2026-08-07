@@ -1,0 +1,155 @@
+{
+  "formatVersion": 1,
+  "issue": 265,
+  "standardComposite": {
+    "extensionId": "kubohiroyakamishibai4",
+    "visibleOpcodes": [],
+    "hiddenOpcodes": [
+      "startConfiguredSource",
+      "stopKamishibai",
+      "retryKamishibai",
+      "whenKamishibaiFinished",
+      "whenKamishibaiFailed"
+    ]
+  },
+  "featureFlags": {
+    "appShell": {
+      "name": "dsl4AppShell",
+      "defaultEnabled": false,
+      "startupFixed": true,
+      "requires": ["dsl4Runtime"],
+      "implemented": false
+    }
+  },
+  "optionalSurfaces": {
+    "actionContext": {
+      "extensionId": "kubohiroyakamishibai4actioncontext",
+      "featureFlag": "dsl4CustomActionsEnabled",
+      "defaultEnabled": false,
+      "registeredInStandard": false,
+      "opcodes": [
+        "whenCustomAction",
+        "currentActionName",
+        "currentActionTarget",
+        "currentActionHasArgument",
+        "currentActionArgument",
+        "completeCurrentAction",
+        "failCurrentAction",
+        "gotoFromCurrentAction"
+      ]
+    },
+    "structuredDataStandalone": {
+      "extensionId": "kubohiroyastructdata1",
+      "featureFlag": "structuredDataStandaloneEnabled",
+      "defaultEnabled": false,
+      "registeredInStandard": false,
+      "opcodes": [
+        "defaultScope",
+        "createScope",
+        "newEntryFromJson",
+        "duplicateReference",
+        "queryKind",
+        "queryScalar",
+        "queryReference",
+        "queryCollection",
+        "newQueryIterator",
+        "newCollectionIterator",
+        "iteratorNext",
+        "iteratorCurrentKind",
+        "iteratorCurrentScalar",
+        "iteratorCurrentReference",
+        "releaseReference",
+        "releaseCollection",
+        "releaseIterator",
+        "freeEntry",
+        "releaseScope",
+        "isReference",
+        "isException",
+        "exceptionCode",
+        "exceptionOperation",
+        "exceptionMessage",
+        "releaseException"
+      ]
+    },
+    "structuredDataDebug": {
+      "extensionId": "kubohiroyastructdata1debug",
+      "featureFlag": "structuredDataDebugEnabled",
+      "defaultEnabled": false,
+      "registeredInStandard": false,
+      "opcodes": [
+        "debugSnapshot",
+        "debugAssertInvariants",
+        "debugHandleKind",
+        "debugNormalizedPath",
+        "debugLimits"
+      ]
+    },
+    "appShellDebug": {
+      "extensionId": "kubohiroyakamishibai4debug",
+      "featureFlag": "dsl4AppShellDebugEnabled",
+      "defaultEnabled": false,
+      "registeredInStandard": false,
+      "opcodes": []
+    },
+    "developmentPreviewHost": {
+      "extensionId": null,
+      "production": false,
+      "registeredInStandard": false,
+      "opcodes": []
+    }
+  },
+  "budgets": {
+    "requiredAuthorBlocks": 0,
+    "fixedDslConnectionBlocks": 30,
+    "stageBlocks": 150,
+    "nonStageBlocksPerTarget": 20,
+    "targetProjectBlocks": 350,
+    "maximumProjectBlocks": 500,
+    "customHandlerOverheadBlocks": 8,
+    "stageGlobalVariables": 16,
+    "localVariablesPerTarget": 4,
+    "projectVariables": 32,
+    "scratchLists": 0,
+    "broadcasts": 16
+  },
+  "runtimeStates": [
+    "bootTitle",
+    "validating",
+    "loading",
+    "running",
+    "waitingAction",
+    "finished",
+    "error"
+  ],
+  "surfaces": {
+    "localPreview": {
+      "previewUi": true,
+      "productionArtifact": false
+    },
+    "previewHostedEditor": {
+      "previewUi": true,
+      "productionArtifact": false
+    },
+    "regularEditor": {
+      "previewUi": false,
+      "productionArtifact": true
+    },
+    "webPlayer": {
+      "previewUi": false,
+      "productionArtifact": true
+    },
+    "packager": {
+      "previewUi": false,
+      "productionArtifact": true
+    }
+  },
+  "standardProductionForbidden": {
+    "extensionIds": [
+      "kubohiroyakamishibai4actioncontext",
+      "kubohiroyastructdata1",
+      "kubohiroyastructdata1debug",
+      "kubohiroyakamishibai4debug"
+    ],
+    "persistedFields": ["previewBridge", "previewToken", "reloadCandidate", "reloadModalState"]
+  }
+}
