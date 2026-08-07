@@ -272,6 +272,69 @@ test('contains synchronous and asynchronous observer failures without changing p
   ]);
 });
 
+test('applies one normalized Scratch binding snapshot before the deterministic pose tick', async () => {
+  const states = [];
+  let reads = 0;
+  const {clock, sounds, port} = setup({
+    onPoseState: (event) => states.push(event),
+    readPoseStateBinding() {
+      reads += 1;
+      return {confidence: 1, progress: 0.5};
+    },
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  await flush();
+  clock.advance(500);
+  await pending;
+
+  assert.equal(reads, 1);
+  assert.deepEqual(
+    states.map(({phase, confidence, progress}) => [phase, confidence, progress]),
+    [
+      ['waiting', 0, 0],
+      ['charging', 1, 1],
+      ['completed', 1, 1],
+    ],
+  );
+  assert.deepEqual(sounds, [
+    ['play', 'Tick'],
+    ['play', 'Charge'],
+    ['stop', 'Tick'],
+  ]);
+});
+
+test('ignores asynchronous or malformed binding samples and waits for the next valid tick', async () => {
+  let reads = 0;
+  const {clock, port} = setup({
+    readPoseStateBinding() {
+      reads += 1;
+      if (reads === 1) return Promise.resolve({progress: 1});
+      return {progress: 1};
+    },
+  });
+  const pending = port.waitForPose(
+    sequencePayload({
+      recognition: {
+        confidenceThreshold: 0.5,
+        fullConfidenceHoldSeconds: 1,
+        idleChargePerSecond: 0,
+        idleSound: null,
+        chargeSound: null,
+        feedback: {mode: 'scratchBinding'},
+        navigation: {allowSkip: false},
+      },
+    }),
+    actionContext(),
+  );
+  await flush();
+  clock.advance(100);
+  await flush();
+  assert.equal(reads, 1);
+  clock.advance(100);
+  await pending;
+  assert.equal(reads, 2);
+});
+
 test('uses idleChargePerSecond only while confidence is below threshold', async () => {
   const {pose, clock, sounds, port} = setup();
   pose.confidence.set('help', 0.49);

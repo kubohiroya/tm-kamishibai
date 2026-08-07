@@ -127,6 +127,7 @@ function disposedError() {
  * @param {boolean} [options.poseFeedbackEnabled]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
  * @param {boolean} [options.posePreviewMirroringEnabled]
+ * @param {() => Readonly<{confidence?: number, progress?: number}> | null} [options.readPoseStateBinding]
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
@@ -203,6 +204,13 @@ export function createDsl4PlatformAssetSession(options) {
   const posePreviewMirroringEnabled = options.posePreviewMirroringEnabled ?? false;
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (
+    poseFeedbackEnabled &&
+    options.readPoseStateBinding !== undefined &&
+    typeof options.readPoseStateBinding !== 'function'
+  ) {
+    throw new TypeError('readPoseStateBinding must be a function');
   }
 
   const created = [];
@@ -311,6 +319,9 @@ export function createDsl4PlatformAssetSession(options) {
         ? {}
         : {now: /** @type {() => number} */ (options.poseNow)}),
       ...(poseFeedbackEnabled ? {onPoseState: options.onPoseState} : {}),
+      ...(poseFeedbackEnabled && options.readPoseStateBinding !== undefined
+        ? {readPoseStateBinding: options.readPoseStateBinding}
+        : {}),
     });
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,

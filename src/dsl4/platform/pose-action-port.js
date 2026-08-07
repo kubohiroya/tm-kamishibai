@@ -6,6 +6,7 @@ function isRecord(value) {
 }
 
 const feedbackModes = new Set(['scratchMirror', 'scratchBinding', 'presenter']);
+const poseBindingKeys = new Set(['confidence', 'progress']);
 
 /** @param {string} code @param {string} message */
 function portError(code, message) {
@@ -52,6 +53,24 @@ function requireBoolean(value, label) {
     throw portError('K4-POSE-PORT-001', `${label} must be boolean`);
   }
   return value;
+}
+
+/** @param {unknown} value */
+function validatePoseStateBinding(value) {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) throw new TypeError('pose state binding must be an object');
+  const keys = Object.keys(value);
+  if (
+    keys.length === 0 ||
+    keys.some((key) => !poseBindingKeys.has(key)) ||
+    keys.some((key) => {
+      const number = value[key];
+      return typeof number !== 'number' || !Number.isFinite(number) || number < 0 || number > 1;
+    })
+  ) {
+    throw new TypeError('pose state binding must contain normalized confidence or progress');
+  }
+  return /** @type {Readonly<{confidence?: number, progress?: number}>} */ (value);
 }
 
 /** @param {unknown} value */
@@ -205,6 +224,7 @@ function defaultSchedule(callback, delayMilliseconds) {
  * @param {(sound: string) => unknown | Promise<unknown>} [options.playSound]
  * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSound]
  * @param {(event: Readonly<{phase: 'waiting' | 'charging' | 'completed' | 'cancelled', target: string, pose: string, stepIndex: number, confidence: number, progress: number}>) => unknown} [options.onPoseState]
+ * @param {() => Readonly<{confidence?: number, progress?: number}> | null} [options.readPoseStateBinding]
  * @param {(callback: () => void, delayMilliseconds: number) => () => void} [options.schedule]
  * @param {() => number} [options.now]
  */
@@ -219,6 +239,7 @@ export function createDsl4PoseActionPort(options) {
   const playSound = options.playSound ?? (() => undefined);
   const stopSound = options.stopSound ?? (() => undefined);
   const onPoseState = options.onPoseState;
+  const readPoseStateBinding = options.readPoseStateBinding;
   const schedule = options.schedule ?? defaultSchedule;
   const now = options.now ?? (() => performance.now());
   for (const [name, value] of Object.entries({playSound, stopSound, schedule, now})) {
@@ -226,6 +247,9 @@ export function createDsl4PoseActionPort(options) {
   }
   if (onPoseState !== undefined && typeof onPoseState !== 'function') {
     throw new TypeError('onPoseState must be a function');
+  }
+  if (readPoseStateBinding !== undefined && typeof readPoseStateBinding !== 'function') {
+    throw new TypeError('readPoseStateBinding must be a function');
   }
 
   let released = false;
@@ -260,6 +284,16 @@ export function createDsl4PoseActionPort(options) {
       Promise.resolve(onPoseState(event)).catch(() => {});
     } catch {
       // A non-authoritative observer cannot change pose execution semantics.
+    }
+  }
+
+  function readPoseBinding() {
+    if (!readPoseStateBinding) return null;
+    try {
+      return validatePoseStateBinding(readPoseStateBinding());
+    } catch {
+      // Invalid or failed bindings are ignored at the authoritative tick boundary.
+      return null;
     }
   }
 
@@ -400,10 +434,17 @@ export function createDsl4PoseActionPort(options) {
           const timestamp = /** @type {number} */ (await waitForTick(operation.controller.signal));
           const elapsedSeconds = Math.max(0, (timestamp - previousTime) / 1000);
           previousTime = timestamp;
-          confidence = Number(tmpose.confidenceOf(input.pose));
-          if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+          const binding = readPoseBinding();
+          const measuredConfidence = Number(tmpose.confidenceOf(input.pose));
+          if (
+            !Number.isFinite(measuredConfidence) ||
+            measuredConfidence < 0 ||
+            measuredConfidence > 1
+          ) {
             throw portError('K4-POSE-PORT-007', 'TMPose returned an invalid confidence');
           }
+          confidence = binding?.confidence ?? measuredConfidence;
+          progress = binding?.progress ?? progress;
           if (confidence >= input.confidenceThreshold) {
             progress += (confidence / input.fullConfidenceHoldSeconds) * elapsedSeconds;
             if (input.chargeSound) await playSound(input.chargeSound);

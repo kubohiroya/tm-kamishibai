@@ -561,6 +561,11 @@ preview transformはrecognition入力の`flipHorizontal`、confidence、sequence
 Web player、通常editor、Packager、development previewは同じconsumerを使い、surface固有の暗黙値を
 追加しません。DSL 3.1／3.2とStandalone block／paletteは変更対象外です。
 
+Scratch consumerはplatform composition境界に置き、coreにScratch variable IDやVM targetを持ち込みません。
+`scratchBinding`の入力はrenderer非依存な0〜1の`confidence`／`progress`sampleとして、各計算tickの
+開始時に最大1回取り込みます。invalidなScratch snapshotは両fieldともfail-closedで無視し、
+センサー値、sequence積分、soundを変更しません。
+
 ### 3.11 分岐 `[提案]`
 
 3.2の条件リストと遷移先リストを別々に並べる形式を廃止し、条件と遷移先を一組として

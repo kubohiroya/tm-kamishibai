@@ -109,6 +109,18 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
 }
 
 function platformFixture(log) {
+  const poseConfidence = {value: 0};
+  const poseProgress = {value: 0};
+  const stage = {
+    id: 'stage-target',
+    isStage: true,
+    lookupVariableByNameAndType(name, type) {
+      assert.equal(type, '');
+      if (name === 'ポーズ認識') return poseConfidence;
+      if (name === 'チャージ') return poseProgress;
+      return null;
+    },
+  };
   const actor = {
     id: 'actor-target',
     isStage: false,
@@ -238,7 +250,10 @@ function platformFixture(log) {
     },
   };
   const runtime = {
-    targets: [actor],
+    targets: [stage, actor],
+    getTargetForStage() {
+      return stage;
+    },
     ext_scratch3_looks: {
       _say(message) {
         log.push(['actor.say', message]);
@@ -247,6 +262,8 @@ function platformFixture(log) {
   };
   return {
     runtime,
+    poseConfidence,
+    poseProgress,
     tmPoseRuntime: {Webcam: class {}, loadFromFiles() {}},
     setLoading(payload) {
       log.push(['loading', payload.visible]);
@@ -344,7 +361,7 @@ test('withholds every platform dependency until the packaged component validates
   assert.deepEqual(log, []);
 });
 
-test('forwards the pose observer only when its startup-fixed feature flag is enabled', async () => {
+test('selects the startup-fixed Scratch consumer and reserves host observers for presenter mode', async () => {
   const project = await packagedProject();
   const disabledLog = [];
   const disabledOptions = enabledOptions(project, platformFixture(disabledLog));
@@ -357,24 +374,73 @@ test('forwards the pose observer only when its startup-fixed feature flag is ena
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
   await disabled.host.dispose('feedback-disabled');
 
-  const enabledLog = [];
+  const scratchBindingSource = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: scratchBinding
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`;
+  const scratchProject = await packagedProject(scratchBindingSource);
+  const scratchFixture = platformFixture([]);
+  scratchFixture.poseConfidence.value = 75;
+  scratchFixture.poseProgress.value = 50;
+  const scratch = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(scratchProject, scratchFixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+    }),
+  );
+  assert.equal(scratch.ok, true, JSON.stringify(scratch.diagnostics));
+  await scratch.host.dispose('scratch-feedback-enabled');
+  assert.equal(scratchFixture.poseConfidence.value, 0);
+  assert.equal(scratchFixture.poseProgress.value, 0);
+
+  const presenterSource = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`;
+  const presenterProject = await packagedProject(presenterSource);
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
-      enabledOptions(project, platformFixture(enabledLog), {
+      enabledOptions(presenterProject, platformFixture([]), {
         featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       }),
     ),
     /onPoseState/u,
   );
-
-  const enabled = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, platformFixture([]), {
+  const presenter = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(presenterProject, platformFixture([]), {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       onPoseState() {},
     }),
   );
-  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  await enabled.host.dispose('feedback-enabled');
+  assert.equal(presenter.ok, true, JSON.stringify(presenter.diagnostics));
+  await presenter.host.dispose('presenter-feedback-enabled');
 });
 
 test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {
