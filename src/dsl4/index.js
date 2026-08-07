@@ -180,6 +180,7 @@ export {
   resolveDsl4IncludePath,
   resolveDsl4SourceRelativeAssetPath,
 } from './source-graph.js';
+export {createDsl4SourceGraphFrontend} from './source-graph-frontend.js';
 export {
   createDsl4StructuredDataComposition,
   dsl4StructuredDataDefaultLimits,
