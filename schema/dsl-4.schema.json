@@ -667,7 +667,8 @@
         "stableId": {"$ref": "#/$defs/stableId"},
         "x": {"type": "number"},
         "y": {"type": "number"},
-        "seconds": {"type": "number", "minimum": 0}
+        "seconds": {"type": "number", "minimum": 0},
+        "easing": {"enum": ["linear", "easeIn", "easeOut", "easeInOut"]}
       }
     },
     "speechArgs": {

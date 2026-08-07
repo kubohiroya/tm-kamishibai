@@ -95,6 +95,7 @@ scenes:
           x: 10
           y: 20
           seconds: 0
+          easing: easeOut
       - Hero.say:
           text: hello
           seconds: 0
@@ -219,6 +220,13 @@ test('dispatches every core action and keeps transition separate from scene move
       decayPerSecond: 0.8,
       scoreThreshold: 1,
     },
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'moveTo').payload, {
+    target: 'Hero',
+    x: 10,
+    y: 20,
+    seconds: 0,
+    easing: 'easeOut',
   });
   const trace = controller.getTrace();
   assert.deepEqual(

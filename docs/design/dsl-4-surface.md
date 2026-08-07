@@ -510,7 +510,7 @@ iconへ反映します。
 | action                     | 引数                                                                                             |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                 |
-| `Actor.moveTo`             | `{x, y, seconds, stableId?}`                                                                     |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                            |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, characterIntervalSeconds?, startSound?, characterSound?, stableId?}` |
 | `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                               |
 | `Actor.setText`            | `{text, style, stableId?}`                                                                       |
@@ -541,6 +541,11 @@ speechが実際に再生を開始したasset IDだけを停止します。
     x: 0
     y: -60
     scale: 30
+- Hero.moveTo:
+    x: 100
+    y: -60
+    seconds: 1.5
+    easing: easeInOut
 - Hero.say:
     text: 助けに行こう
     seconds: 8
@@ -567,6 +572,9 @@ speechが実際に再生を開始したasset IDだけを停止します。
     help: ending
     jump: retry
 ```
+
+`Actor.moveTo.easing`は`linear | easeIn | easeOut | easeInOut`から選びます。省略時は従来どおり
+`linear`です。easingはX/Yへ同じ比率で適用し、0秒またはactionのskip時は即座に終点へ確定します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

@@ -1,3 +1,5 @@
+import {applyDsl4MoveEasing, dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
+
 const defaultFrameMilliseconds = 1000 / 60;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -128,16 +130,17 @@ function validateActor(value) {
   );
 }
 
-/** @param {unknown} value @param {string[]} keys @param {string} operation */
-function validateSpec(value, keys, operation) {
+/** @param {unknown} value @param {string[]} keys @param {string} operation @param {string[]} [optionalKeys] */
+function validateSpec(value, keys, operation, optionalKeys = []) {
+  const allowedKeys = new Set([...keys, ...optionalKeys]);
   if (
     !isRecord(value) ||
-    Object.keys(value).length !== keys.length ||
+    Object.keys(value).some((key) => !allowedKeys.has(key)) ||
     keys.some((key) => !Object.hasOwn(value, key))
   ) {
     throw adapterError(
       'K4-TW-ACTOR-002',
-      `${operation} specification must provide exactly ${keys.join(', ')}`,
+      `${operation} specification must provide ${keys.join(', ')}${optionalKeys.length > 0 ? ` and only optional ${optionalKeys.join(', ')}` : ''}`,
     );
   }
   return value;
@@ -413,10 +416,17 @@ export function createDsl4TurboWarpActorPlatform(options) {
     /** @param {unknown} target @param {unknown} destination */
     createMove(target, destination) {
       const actor = validateActor(target);
-      const value = validateSpec(destination, ['x', 'y', 'seconds'], 'moveTo');
+      const value = validateSpec(destination, ['x', 'y', 'seconds'], 'moveTo', ['easing']);
       const destinationX = finiteNumber(value.x, 'moveTo.x');
       const destinationY = finiteNumber(value.y, 'moveTo.y');
       const duration = durationMilliseconds(/** @type {number} */ (value.seconds), 'moveTo');
+      const easing = value.easing ?? 'linear';
+      if (!isDsl4MoveEasing(easing)) {
+        throw adapterError(
+          'K4-TW-ACTOR-002',
+          `moveTo.easing must be one of ${dsl4MoveEasingNames.join(', ')}`,
+        );
+      }
       let state = 'idle';
       /** @type {unknown} */
       let timer;
@@ -473,14 +483,15 @@ export function createDsl4TurboWarpActorPlatform(options) {
                   finiteNumber(scheduler.now(), 'scheduler.now()') - startTime,
                 );
                 const progress = Math.min(elapsed / duration, 1);
-                actor.setXY(
-                  startX + (destinationX - startX) * progress,
-                  startY + (destinationY - startY) * progress,
-                );
                 if (progress >= 1) {
                   complete();
                   return;
                 }
+                const easedProgress = applyDsl4MoveEasing(easing, progress);
+                actor.setXY(
+                  startX + (destinationX - startX) * easedProgress,
+                  startY + (destinationY - startY) * easedProgress,
+                );
                 timer = scheduler.setTimeout(tick, Math.min(frameMilliseconds, duration - elapsed));
               } catch (error) {
                 fail(error);

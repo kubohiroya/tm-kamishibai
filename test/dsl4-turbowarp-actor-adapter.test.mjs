@@ -136,6 +136,39 @@ test('interpolates moveTo and completes exactly at the destination', async () =>
   assert.equal(hero.target.x, 100);
   assert.equal(hero.target.y, 50);
   assert.equal(clock.pendingCount(), 0);
+  assert.equal(hero.calls.filter(([method]) => method === 'setXY').length, 2);
+});
+
+test('applies named moveTo easing curves to normalized elapsed time', async () => {
+  const expectedQuarterProgress = {
+    linear: 0.25,
+    easeIn: 0.0625,
+    easeOut: 0.4375,
+    easeInOut: 0.125,
+  };
+
+  for (const [easing, expectedProgress] of Object.entries(expectedQuarterProgress)) {
+    const hero = fakeActor({x: 0, y: 100});
+    const fake = fakeRuntime([hero.target]);
+    const clock = manualScheduler();
+    const platform = createDsl4TurboWarpActorPlatform({
+      runtime: fake.runtime,
+      scheduler: clock.scheduler,
+      frameMilliseconds: 250,
+    });
+    const pending = platform.host
+      .createMove(hero.target, {x: 100, y: -100, seconds: 1, easing})
+      .start();
+
+    clock.advance(250);
+    assert.equal(hero.target.x, 100 * expectedProgress, easing);
+    assert.equal(hero.target.y, 100 - 200 * expectedProgress, easing);
+    clock.advance(750);
+    await pending;
+    assert.equal(hero.target.x, 100, easing);
+    assert.equal(hero.target.y, -100, easing);
+    assert.equal(clock.pendingCount(), 0, easing);
+  }
 });
 
 test('moveTo finish synchronously cancels its timer and commits the destination once', async () => {
@@ -280,6 +313,21 @@ test('rejects invalid runtime, scheduler, target, specs, duration, and repeated 
   assert.throws(
     () => platform.host.createMove(hero.target, {x: 0, y: 0, seconds: Number.MAX_VALUE}),
     /finite non-negative duration/u,
+  );
+  assert.throws(
+    () => platform.host.createMove(hero.target, {x: 0, y: 0, seconds: 1, easing: 'spring'}),
+    /easing must be one of/u,
+  );
+  assert.throws(
+    () =>
+      platform.host.createMove(hero.target, {
+        x: 0,
+        y: 0,
+        seconds: 1,
+        easing: 'linear',
+        extra: true,
+      }),
+    /specification/u,
   );
   assert.throws(
     () => platform.host.createSay(hero.target, {text: 1, seconds: 0}),
