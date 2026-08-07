@@ -2134,16 +2134,19 @@ metadataをtransactionで更新します。外部projectのsourceを由来情報
 
 ## 12. 3.1／3.2から4.0への移行
 
-### 12.1 ランタイムの分離 `[提案]`
+converterの規範的な対応表、判定分類、旧Text Asset移行例、追加block 0契約は
+[`dsl-4-migration.md`](./dsl-4-migration.md)を正本とします。
+
+### 12.1 ランタイムの分離 `[決定済み #263]`
 
 - 3.1／3.2作品は3.2.3以降の3.2アプリで引き続き実行する
 - 4.0アプリは4.0台本だけを実行する
 - 4.0パーサー内へ3.1／3.2構文解析や旧Text Asset互換を残さない
 - 3.1／3.2から4.0への変換はruntime外のconverterで行う
 
-converterを本リポジトリへ置くか、builder CLIへ含めるかは未決です。
+converterは本repositoryの`./converter` package exportと`convert-dsl4` CLIで公開し、runtimeからは呼びません。
 
-### 12.2 変換可能性
+### 12.2 変換可能性 `[決定済み #263]`
 
 機械変換しやすい項目:
 
@@ -2346,9 +2349,9 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 
 ### 互換性と配布
 
-- [ ] 3.1／3.2 converterの配置と公開単位
-- [ ] 旧Text AssetからSVG Textへ自動変換できない項目のwarning仕様
-- [ ] 4.0のminor version互換規則
+- [x] 3.1／3.2 converterの配置と公開単位
+- [x] 旧Text AssetからSVG Textへ自動変換できない項目のwarning仕様
+- [x] 4.0のminor version互換規則
 - [ ] `kubohiroyastructdata1`を同時に公開するか
 - [ ] extension API manifestをScratchから参照するblockを公開するか
 
