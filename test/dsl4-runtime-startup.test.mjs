@@ -137,6 +137,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -181,6 +182,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -194,6 +196,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -205,6 +208,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: true,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -216,6 +220,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: true,
     dsl4CameraPreviewControls: false,
@@ -227,6 +232,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -268,12 +274,14 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4AppShell: true,
       dsl4WebPreviewAdapter: true,
       dsl4WebPreviewAssetLiveReload: false,
+      dsl4PreviewReloadOverlay: false,
     }),
     {
       dsl4Runtime: true,
       dsl4AppShell: true,
       dsl4WebPreviewAdapter: true,
       dsl4WebPreviewAssetLiveReload: false,
+      dsl4PreviewReloadOverlay: false,
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
@@ -294,6 +302,18 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     }).dsl4WebPreviewAssetLiveReload,
     true,
   );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4PreviewReloadOverlay: true}),
+    /requires dsl4Runtime and dsl4AppShell/u,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4PreviewReloadOverlay: true,
+    }).dsl4PreviewReloadOverlay,
+    true,
+  );
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
 
   const component = await packagedProject('production');
@@ -310,6 +330,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -473,6 +494,7 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
     dsl4WebPreviewAssetLiveReload: false,
+    dsl4PreviewReloadOverlay: false,
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
@@ -542,6 +564,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
       dsl4WebPreviewAssetLiveReload: false,
+      dsl4PreviewReloadOverlay: false,
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
@@ -671,6 +694,7 @@ test('creates an atomic runtime environment only after component validation', as
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
       dsl4WebPreviewAssetLiveReload: false,
+      dsl4PreviewReloadOverlay: false,
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
