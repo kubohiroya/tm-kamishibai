@@ -361,20 +361,21 @@ platformは0〜100の既存Stage variable slider monitorをvariable IDで一意�
 adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
 completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
 
-presenterの現行実装範囲はplatform rendererとTurboWarp runtime hostの明示的な
-`poseFeedbackPresenter` optionまでです。`dsl4PoseFeedbackModes=true`かつ台本が
-`feedback.mode: presenter`の場合に、custom hostがcontainerを渡せば利用できます。Standard app shellへの
-自動登録と`dsl4AppShell` flagはまだ実装していません。
+presenterはplatform renderer、TurboWarp runtime hostの明示的な`poseFeedbackPresenter` option、および
+4つのdelivery surfaceで共有する`createDsl4StandardAppShell`から接続します。Standard shellは
+`dsl4AppShell`が有効なときだけruntime hostを所有し、`dsl4PoseFeedbackModes=true`かつ台本が
+`feedback.mode: presenter`の場合だけcontainerを遅延生成して同じrendererへ渡します。
 
-| surface              | source channel | 現在のStandard接続 | 対応方針                                                     |
-| -------------------- | -------------- | ------------------ | ------------------------------------------------------------ |
-| Web player           | bundled        | 未接続             | production app shellが同じhost optionへ固定DOM領域を渡す     |
-| 通常TurboWarp editor | unbundled      | 未接続             | editor shellが明示的にhost optionへDOM領域を渡す             |
-| Packager             | bundled        | 未接続             | package済みproduction app shellが同じconsumerを使用する      |
-| development preview  | unbundled      | 未接続             | preview shellが新sessionごとのcontainerを所有し、旧DOMを破棄 |
+| surface              | source channel | Standard接続         | ownership                                                  |
+| -------------------- | -------------- | -------------------- | ---------------------------------------------------------- |
+| Web player           | bundled        | `webPlayer`          | production shellがsessionごとの固定DOM領域を所有する       |
+| 通常TurboWarp editor | unbundled      | `regularEditor`      | editor shellがsessionごとの固定DOM領域を所有する           |
+| Packager             | bundled        | `packager`           | package済みproduction shellが同じconsumerを使用する        |
+| development preview  | unbundled      | `developmentPreview` | preview shellが新sessionのDOMを所有し、dispose時に破棄する |
 
-各surfaceの接続は`dsl4AppShell`実装の後続作業です。surface固有の暗黙modeは設けません。flag OFF、別の
-feedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、DOMを生成しません。
+surface固有の暗黙modeは設けません。flag OFF、別のfeedback mode、DSL 3.1／3.2ではpresenter optionの
+container／localeを検査せず、DOMを生成しません。shell disposeはruntime hostを先に停止・解放し、その後に
+所有DOMを除去します。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

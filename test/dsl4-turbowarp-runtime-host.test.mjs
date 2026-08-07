@@ -12,8 +12,12 @@ import {
   createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
-import {createDsl4TurboWarpRuntimeHost} from '../src/dsl4/platform/index.js';
+import {
+  createDsl4StandardAppShell,
+  createDsl4TurboWarpRuntimeHost,
+} from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
+import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -823,6 +827,207 @@ scenes:
 
   await result.host.dispose('presenter-lifecycle');
   assert.equal(document.body.children.length, 0);
+});
+
+test('keeps the Standard app shell inert when its startup flag is disabled', async () => {
+  let runtimeHostCalls = 0;
+  const options = {
+    featureFlags: {dsl4Runtime: true, dsl4AppShell: false},
+    createRuntimeHost() {
+      runtimeHostCalls += 1;
+      assert.fail('the disabled Standard app shell must not create a runtime host');
+    },
+  };
+  for (const key of ['surface', 'document', 'mount', 'runtimeHostOptions']) {
+    Object.defineProperty(options, key, {
+      get() {
+        assert.fail(`the disabled Standard app shell must not inspect ${key}`);
+      },
+    });
+  }
+
+  const shell = await createDsl4StandardAppShell(options);
+  assert.equal(shell.ok, true);
+  assert.equal(shell.enabled, false);
+  assert.equal(shell.element, null);
+  assert.equal(shell.runtimeHost, null);
+  assert.equal(runtimeHostCalls, 0);
+  assert.equal((await shell.dispose()).enabled, false);
+});
+
+test('shares one lazy pose feedback shell across every Standard delivery surface', async () => {
+  const presenterProject = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`);
+  for (const surface of ['webPlayer', 'regularEditor', 'packager', 'developmentPreview']) {
+    const document = createFakeDocument();
+    const shell = await createDsl4StandardAppShell({
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4AppShell: true,
+        dsl4PoseFeedbackModes: true,
+      },
+      surface,
+      document,
+      mount: document.body,
+      runtimeHostOptions: {
+        project: presenterProject,
+        sourceFrontend: frontend,
+        ...limits,
+        subtleCrypto,
+        ...platformFixture([]),
+      },
+    });
+    assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
+    assert.equal(shell.enabled, true);
+    assert.equal(shell.surface, surface);
+    assert.equal(shell.element.getAttribute('data-dsl4-app-shell'), 'standard');
+    assert.equal(shell.element.getAttribute('data-dsl4-surface'), surface);
+    assert.ok(findByDataset(shell.element, 'dsl4PoseFeedback', 'true'));
+    assert.equal(shell.getSnapshot().poseFeedbackMounted, true);
+
+    await shell.dispose(`surface-${surface}`);
+    assert.equal(document.body.children.length, 0);
+    assert.equal(shell.element, null);
+    assert.equal(shell.getSnapshot().disposed, true);
+  }
+});
+
+test('does not inspect or create Standard shell DOM for Scratch feedback mode', async () => {
+  const project = await packagedProject();
+  const options = {
+    featureFlags: {
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4PoseFeedbackModes: true,
+    },
+    surface: 'webPlayer',
+    runtimeHostOptions: {
+      project,
+      sourceFrontend: frontend,
+      ...limits,
+      subtleCrypto,
+      ...platformFixture([]),
+    },
+  };
+  for (const key of ['document', 'mount', 'poseFeedbackLabels']) {
+    Object.defineProperty(options, key, {
+      get() {
+        assert.fail(`Scratch feedback must not inspect Standard shell ${key}`);
+      },
+    });
+  }
+
+  const shell = await createDsl4StandardAppShell(options);
+  assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
+  assert.equal(shell.element, null);
+  assert.equal(shell.getSnapshot().poseFeedbackMounted, false);
+  await shell.dispose('scratch-mode');
+});
+
+test('rejects malformed Standard runtime results and cleans partial host and DOM ownership', async () => {
+  const document = createFakeDocument();
+  const cleanupReasons = [];
+  await assert.rejects(
+    createDsl4StandardAppShell({
+      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+      surface: 'webPlayer',
+      document,
+      mount: document.body,
+      runtimeHostOptions: {},
+      createRuntimeHost(options) {
+        void options.poseFeedbackPresenter.container;
+        return {
+          ok: 'yes',
+          enabled: true,
+          host: {
+            dispose(reason) {
+              cleanupReasons.push(reason);
+            },
+          },
+          diagnostics: [],
+        };
+      },
+    }),
+    /valid enabled runtime host result/u,
+  );
+  assert.deepEqual(cleanupReasons, ['invalid-standard-app-shell-result']);
+  assert.equal(document.body.children.length, 0);
+
+  await assert.rejects(
+    createDsl4StandardAppShell({
+      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+      surface: 'webPlayer',
+      runtimeHostOptions: {featureFlags: {}},
+    }),
+    /cannot override Standard app-shell option: featureFlags/u,
+  );
+});
+
+test('mounts and disposes the Standard presenter against the pinned TurboWarp VM runtime', async () => {
+  assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
+  const harness = await loadKamishibaiVm();
+  try {
+    const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`);
+    const document = createFakeDocument();
+    const shell = await createDsl4StandardAppShell({
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4AppShell: true,
+        dsl4PoseFeedbackModes: true,
+      },
+      surface: 'regularEditor',
+      document,
+      mount: document.body,
+      runtimeHostOptions: {
+        project,
+        sourceFrontend: frontend,
+        ...limits,
+        subtleCrypto,
+        ...platformFixture([]),
+        runtime: harness.vm.runtime,
+      },
+    });
+    assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
+    assert.ok(findByDataset(shell.element, 'dsl4PoseFeedback', 'true'));
+    assert.equal((await shell.runtimeHost.start()).status, 'finished');
+    await shell.dispose('turbowarp-vm-fixture');
+    assert.equal(document.body.children.length, 0);
+  } finally {
+    harness.quit();
+  }
 });
 
 test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
