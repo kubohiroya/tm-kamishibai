@@ -41,12 +41,22 @@ export {
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';
+export {
+  createDsl4BrowserPreviewSourceAdapter,
+  dsl4BrowserPreviewSourceDefaults,
+  Dsl4BrowserPreviewSourceError,
+  inspectDsl4BrowserPreviewSupport,
+} from './browser-preview-source-adapter.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
   dsl4DiagnosticTruncationCode,
   Dsl4DiagnosticPolicyError,
   normalizeDsl4DiagnosticSequence,
 } from './diagnostic-sequence-policy.js';
+export {
+  Dsl4ExternalSourceManifestError,
+  validateDsl4ExternalSourceManifestContract,
+} from './external-source-manifest.js';
 export {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
