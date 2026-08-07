@@ -28,6 +28,7 @@ import {
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = new Set(['builder', 'dsl4']);
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
+const runtimeOwners = new Set(['protocol', 'browser']);
 const maximumRequestBytes = 4 * 1024;
 const maximumEventRecords = 64;
 
@@ -226,9 +227,17 @@ function modulePath(requestPath) {
   return candidate;
 }
 
-/** @param {string} sourceDisplayName */
-function previewHtml(sourceDisplayName) {
+/** @param {string} sourceDisplayName @param {'protocol' | 'browser'} runtimeOwner */
+function previewHtml(sourceDisplayName, runtimeOwner) {
   const safeName = sourceDisplayName.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
+  const runtimeDescription =
+    runtimeOwner === 'browser'
+      ? 'The project runtime is owned by this authenticated browser page.'
+      : 'The project runtime is connected through the shared preview protocol.';
+  const clientPath =
+    runtimeOwner === 'browser'
+      ? '/runtime/browser.js'
+      : '/modules/builder/dsl4-local-preview-client.js';
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -248,10 +257,10 @@ function previewHtml(sourceDisplayName) {
   <body>
     <main id="dsl4-local-preview-mount">
       <h1>DSL 4.0 local preview</h1>
-      <p>Watching <strong id="dsl4-local-preview-source-name">${safeName}</strong>. The project runtime is connected through the shared preview protocol.</p>
+      <p>Watching <strong id="dsl4-local-preview-source-name">${safeName}</strong>. ${runtimeDescription}</p>
       <section id="dsl4-local-preview-runtime" aria-label="Project preview runtime"></section>
     </main>
-    <script type="module" src="/modules/builder/dsl4-local-preview-client.js"></script>
+    <script type="module" src="${clientPath}"></script>
   </body>
 </html>\n`;
 }
@@ -266,7 +275,8 @@ function previewHtml(sourceDisplayName) {
  * @param {unknown} options.sourceManifest
  * @param {{parse: Function}} options.sourceFrontend
  * @param {number} options.maxSourceBytes
- * @param {Record<string, Function>} options.protocolSession
+ * @param {Record<string, Function>} [options.protocolSession]
+ * @param {'protocol' | 'browser'} [options.runtimeOwner]
  * @param {'127.0.0.1' | '::1'} [options.bindHost]
  * @param {number} [options.port]
  * @param {number} [options.tokenTtlMs]
@@ -299,7 +309,15 @@ export function createDsl4LocalPreviewHost(options) {
   const sourceManifest = validateDsl4ExternalSourceManifest(options.sourceManifest);
   const sourceFrontend = validateFrontend(options.sourceFrontend);
   const maxSourceBytes = safeInteger(options.maxSourceBytes, 'maxSourceBytes', 1);
-  const protocolSession = validateProtocolSession(options.protocolSession);
+  const runtimeOwner = options.runtimeOwner ?? 'protocol';
+  if (typeof runtimeOwner !== 'string' || !runtimeOwners.has(runtimeOwner)) {
+    throw new TypeError('runtimeOwner must be protocol or browser');
+  }
+  const protocolSession =
+    runtimeOwner === 'protocol' ? validateProtocolSession(options.protocolSession) : null;
+  if (runtimeOwner === 'browser' && options.protocolSession !== undefined) {
+    throw new TypeError('protocolSession must be omitted when runtimeOwner is browser');
+  }
   const bindHost = validateBindHost(options.bindHost ?? dsl4LocalPreviewHostDefaults.bindHost);
   const requestedPort = safeInteger(options.port ?? dsl4LocalPreviewHostDefaults.port, 'port', 0);
   if (requestedPort > 65_535) throw new TypeError('port must be <= 65535');
@@ -356,6 +374,9 @@ export function createDsl4LocalPreviewHost(options) {
     options.browserBundleBytes === undefined
       ? null
       : boundedBytes(options.browserBundleBytes, 'browserBundleBytes', maxBrowserBundleBytes);
+  if (runtimeOwner === 'browser' && (!projectArtifactBytes || !browserRuntimeBundleBytes)) {
+    throw new TypeError('browser runtime owner requires projectBytes and browserBundleBytes');
+  }
   const structureWatchFactory =
     /** @type {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} */ (
       options.structureWatchFactory ??
@@ -422,6 +443,7 @@ export function createDsl4LocalPreviewHost(options) {
   function snapshot() {
     return deepFreeze({
       version: 1,
+      runtimeOwner,
       status,
       disposed,
       origin,
@@ -634,12 +656,15 @@ export function createDsl4LocalPreviewHost(options) {
     /** @type {ReturnType<typeof createDsl4PreviewSourceWatcher> | null} */
     let watcher = null;
     try {
-      const activePort = createDsl4PreviewSourceProtocolPort({
-        protocolSession,
-        sessionId,
-        onEvent: observeProtocolEvent,
-        onError: reportError,
-      });
+      const activePort =
+        runtimeOwner === 'protocol'
+          ? createDsl4PreviewSourceProtocolPort({
+              protocolSession: /** @type {Record<string, Function>} */ (protocolSession),
+              sessionId,
+              onEvent: observeProtocolEvent,
+              onError: reportError,
+            })
+          : null;
       port = activePort;
       sourcePort = activePort;
       const activeWatcher = createDsl4PreviewSourceWatcher({
@@ -649,20 +674,43 @@ export function createDsl4LocalPreviewHost(options) {
         sourceFrontend,
         maxSourceBytes,
         async onResult(result) {
-          if (sourcePort !== activePort) return;
-          publishGeneration(result);
+          if (
+            transportConnection !== connection ||
+            sourceWatcher !== activeWatcher ||
+            (runtimeOwner === 'protocol' && sourcePort !== activePort)
+          ) {
+            return;
+          }
+          const generationRecord = publishGeneration(result);
           const summary = safeSourceSummary(result);
           currentSourceSummary = summary;
+          const generationRevision = generationRecord.generation.revision;
+          if (runtimeOwner === 'browser') {
+            publish({type: 'local-preview.source', generationRevision, source: summary});
+            return;
+          }
+          if (!activePort) {
+            fail('Preview protocol is unavailable', 'K4-PREVIEW-HOST-RUNTIME-OWNER');
+          }
           if (result.ok === true) latestValidSourceResult = result;
           const acknowledgement = await activePort.stage(result);
-          publish({type: 'local-preview.source', source: summary, acknowledgement});
+          publish({
+            type: 'local-preview.source',
+            generationRevision,
+            source: summary,
+            acknowledgement,
+          });
         },
         onError: reportError,
       });
       watcher = activeWatcher;
       sourceWatcher = activeWatcher;
-      await activePort.connect();
-      if (disposed || transportConnection !== connection || sourcePort !== activePort) {
+      await activePort?.connect();
+      if (
+        disposed ||
+        transportConnection !== connection ||
+        (runtimeOwner === 'protocol' && sourcePort !== activePort)
+      ) {
         throw new TypeError('local preview host was disposed while connecting');
       }
       await activeWatcher.start();
@@ -700,9 +748,23 @@ export function createDsl4LocalPreviewHost(options) {
     if (!matchesBearer(activeTokenDigest, request.headers.authorization)) {
       fail('Preview bearer session is invalid', 'K4-PREVIEW-TRANSPORT-TOKEN');
     }
-    if (!transportConnection || !sourcePort || status === 'rebuild-required') {
+    if (
+      !transportConnection ||
+      (runtimeOwner === 'protocol' && !sourcePort) ||
+      status === 'rebuild-required'
+    ) {
       fail('Preview session is disconnected', 'K4-PREVIEW-TRANSPORT-DISCONNECTED');
     }
+  }
+
+  function requireProtocolPort() {
+    if (runtimeOwner !== 'protocol') {
+      fail('Preview runtime operations are browser-owned', 'K4-PREVIEW-HOST-RUNTIME-OWNER');
+    }
+    if (!sourcePort) {
+      fail('Preview session is disconnected', 'K4-PREVIEW-TRANSPORT-DISCONNECTED');
+    }
+    return sourcePort;
   }
 
   /** @param {import('node:http').IncomingMessage} request @param {import('node:http').ServerResponse} response */
@@ -718,10 +780,6 @@ export function createDsl4LocalPreviewHost(options) {
       return;
     }
     requireActiveRequest(request);
-    const activePort = sourcePort;
-    if (!activePort) {
-      fail('Preview session is disconnected', 'K4-PREVIEW-TRANSPORT-DISCONNECTED');
-    }
     if (requestUrl.pathname === '/api/events') {
       if (activeResponse) {
         fail('Preview event stream is already open', 'K4-PREVIEW-HOST-STREAM-ACTIVE');
@@ -767,6 +825,7 @@ export function createDsl4LocalPreviewHost(options) {
       return;
     }
     if (requestUrl.pathname === '/api/commit') {
+      const activePort = requireProtocolPort();
       const body = await readJsonBody(request);
       if (typeof body.choice !== 'string' || !restartChoices.has(body.choice)) {
         fail('Preview restart choice is invalid', 'K4-PREVIEW-HOST-REQUEST');
@@ -778,6 +837,7 @@ export function createDsl4LocalPreviewHost(options) {
       return;
     }
     if (requestUrl.pathname === '/api/restart') {
+      const activePort = requireProtocolPort();
       const body = await readJsonBody(request);
       if (typeof body.choice !== 'string' || !restartChoices.has(body.choice)) {
         fail('Preview restart choice is invalid', 'K4-PREVIEW-HOST-REQUEST');
@@ -794,6 +854,7 @@ export function createDsl4LocalPreviewHost(options) {
       return;
     }
     if (requestUrl.pathname === '/api/defer') {
+      const activePort = requireProtocolPort();
       const acknowledgement = await activePort.defer();
       writeJson(response, 200, {acknowledgement});
       return;
@@ -833,7 +894,10 @@ export function createDsl4LocalPreviewHost(options) {
         return;
       }
       if (requestUrl.pathname === '/') {
-        const body = previewHtml(sourceManifest.path);
+        const body = previewHtml(
+          sourceManifest.path,
+          /** @type {'protocol' | 'browser'} */ (runtimeOwner),
+        );
         response.writeHead(200, {
           'cache-control': 'no-store',
           'content-length': Buffer.byteLength(body),
