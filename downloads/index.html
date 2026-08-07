@@ -34,7 +34,6 @@
     .status--development { background: #f8e8c9; color: #71491a; }
     .actions { display: grid; gap: 8px; margin-top: auto; padding-top: .5rem; }
     .button { display: block; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: white; text-align: center; text-decoration: none; font-weight: 700; }
-    .button--secondary { border: 1px solid var(--accent); background: transparent; color: var(--accent); }
     .button--disabled { border: 1px solid var(--line); background: #eee8e2; color: var(--muted); cursor: not-allowed; }
     .file-info { margin-bottom: 0; color: var(--muted); font-size: .88rem; }
     .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -73,6 +72,15 @@
   </header>
 
   <section class="download-list" aria-label="バージョン別ダウンロード">
+    <article data-version="4.0">
+      <h2>kamishibai 4.0 <span class="status status--development">開発版</span></h2>
+      <p>YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。</p>
+      <div class="actions">
+        <a class="button" href="kamishibai-4.0.sb3" download>📁 4.0のSB3をダウンロード</a>
+      </div>
+      <p class="file-info">ファイル: <code>kamishibai-4.0.sb3</code>（4.0.0-dev）</p>
+    </article>
+
     <article data-version="3.2">
       <h2>kamishibai 3.2 <span class="status status--stable">安定版</span></h2>
       <p>現在おすすめしている安定版です。3.1と3.2の台本を読み込み、TurboWarpで編集・実行できます。</p>
@@ -80,16 +88,6 @@
         <a class="button" href="kamishibai-3.2.sb3" download>📁 3.2のSB3をダウンロード</a>
       </div>
       <p class="file-info">ファイル: <code>kamishibai-3.2.sb3</code>（3.2.3）</p>
-    </article>
-
-    <article data-version="4.0">
-      <h2>kamishibai 4.0 <span class="status status--development">開発版</span></h2>
-      <p>YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試し、4.0ドキュメントを参照できます。</p>
-      <div class="actions">
-        <a class="button" href="kamishibai-4.0.sb3" download>📁 4.0のSB3をダウンロード</a>
-        <a class="button button--secondary" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/">📕 4.0ドキュメントを開く</a>
-      </div>
-      <p class="file-info">ファイル: <code>kamishibai-4.0.sb3</code>（4.0.0-dev）</p>
     </article>
 
     <article data-version="3.1">
