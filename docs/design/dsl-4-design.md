@@ -569,6 +569,18 @@ tick境界の最終pairを決定的にsampleします。adapter startupでは専
 monitorを隠し、active stateでだけ表示します。terminal eventは非同期sound cleanupより先にbindingを
 無効化してmonitorを隠し、Scratchの一時表示値を直ちに0へresetします。
 
+`preview.controls`はapp shell所有の任意camera UIです。`mirroring`と`cameraMenu`は8 anchor、個別opacity、
+eagerな`kind: image` assetを指定します。同一anchorはこの順序でgroup化し、preview矩形へ追従します。
+反転iconは操作後のtarget stateを示し、composition成功時だけ更新します。camera menuはopenごとに端末を
+再列挙し、opaque device IDをsession外へ保存しません。asset byte、Object URL、DOM listener/nodeは同じ
+story owner scopeで解放します。自然終了またはfail時はrendererとlistenerを停止する一方、履歴からの
+巻き戻しに備えてDOMとasset・Object URL leaseをsession内に保持します。`navigation.reposition`または
+`runtime.resume`で同じrendererを再開し、明示的なstory stopまたはhost disposeで初めて所有resourceを解放します。
+起動時固定・既定OFFの`dsl4CameraPreviewControls`がOFFならcontrol専用assetを
+startup準備から除外し、TMPose camera APIもDOM rendererも検査しません。これはStandard productionの固定UI
+であり、台本製作者の必須block 0、palette block 0を維持します。`mirroring` controlがあるsessionは#387の
+story／scene effective mirroringを同じcompositionへ適用し、外部の反転変更もtarget-state iconへ同期します。
+
 ### 3.11 分岐 `[提案]`
 
 3.2の条件リストと遷移先リストを別々に並べる形式を廃止し、条件と遷移先を一組として

@@ -143,6 +143,125 @@ test('normalizes a scene pose preview override and maps its source position', ()
   }
 });
 
+test('normalizes camera preview controls, image assets, defaults, and source ranges', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  ShowMirrored:
+    kind: image
+    file: ui/show-mirrored.svg
+    loading: eager
+  ShowUnmirrored:
+    kind: image
+    file: ui/show-unmirrored.svg
+  CameraMenu:
+    kind: image
+    file: ui/camera.svg
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-center
+        opacity: 0.8
+        assets:
+          showMirrored: ShowMirrored
+          showUnmirrored: ShowUnmirrored
+      cameraMenu:
+        position: bottom-right
+        buttonAsset: CameraMenu
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source, {sourceId: 'camera-preview-controls.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.ShowMirrored.kind, 'image');
+  assert.equal(result.storyDocument.assets.ShowMirrored.retention, 'story');
+  assert.deepEqual(result.storyDocument.poseRecognition.preview.controls, {
+    mirroring: {
+      opacity: 0.8,
+      position: 'top-center',
+      assets: {showMirrored: 'ShowMirrored', showUnmirrored: 'ShowUnmirrored'},
+    },
+    cameraMenu: {opacity: 1, position: 'bottom-right', buttonAsset: 'CameraMenu'},
+  });
+  for (const path of [
+    '/poseRecognition/preview/controls',
+    '/poseRecognition/preview/controls/mirroring/position',
+    '/poseRecognition/preview/controls/mirroring/opacity',
+    '/poseRecognition/preview/controls/mirroring/assets/showMirrored',
+    '/poseRecognition/preview/controls/mirroring/assets/showUnmirrored',
+    '/poseRecognition/preview/controls/cameraMenu/position',
+    '/poseRecognition/preview/controls/cameraMenu/buttonAsset',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+  for (const position of [
+    'top-center',
+    'bottom-center',
+    'left-center',
+    'right-center',
+    'top-right',
+    'bottom-right',
+    'top-left',
+    'bottom-left',
+  ]) {
+    const positioned = frontend.parse(
+      source.replace('position: top-center', `position: ${position}`),
+    );
+    assert.equal(positioned.ok, true, position);
+  }
+
+  for (const [needle, replacement] of [
+    ['position: top-center', 'position: middle'],
+    ['opacity: 0.8', 'opacity: 1.1'],
+    [
+      'showUnmirrored: ShowUnmirrored',
+      'showUnmirrored: ShowUnmirrored\n          extra: ShowUnmirrored',
+    ],
+  ]) {
+    const candidate = source.replace(needle, replacement);
+    const invalid = frontend.parse(candidate);
+    assert.equal(invalid.ok, false, replacement);
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
+test('requires eager image references for every configured camera preview control', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  Icon:
+    kind: image
+    file: ui/icon.svg
+    loading: lazy
+  Wrong: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-left
+        assets:
+          showMirrored: Icon
+          showUnmirrored: Wrong
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source);
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({code}) => code === 'K4-PREVIEW-CONTROL-ASSET-001'));
+  assert.ok(result.diagnostics.some(({code}) => code === 'K4-REF-002'));
+});
+
 test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separate', async () => {
   const result = await validateFixture('valid', 'unicode-identifiers.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));

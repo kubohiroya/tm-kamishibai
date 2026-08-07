@@ -305,6 +305,37 @@ test('selectively releases one resource and serializes its next preparation', as
   ]);
 });
 
+test('joins concurrent full releases so every adapter resource finishes releasing once', async () => {
+  const component = await runtimeComponent();
+  const released = [];
+  let finishFirstRelease;
+  const lifecycle = createDsl4EmbeddedAssetLifecycle({
+    runtimeComponent: component,
+    adapter: {
+      prepare({asset}) {
+        return {id: asset.id};
+      },
+      release(resource) {
+        released.push(resource.id);
+        if (released.length === 1) {
+          return new Promise((resolve) => {
+            finishFirstRelease = resolve;
+          });
+        }
+      },
+    },
+    setLoading() {},
+  });
+  await lifecycle.prepare({assetIds: ['OpeningImage', 'OpeningSound']}, context());
+  const first = lifecycle.release({reason: 'stop'});
+  while (finishFirstRelease === undefined) await new Promise((resolve) => setImmediate(resolve));
+  const second = lifecycle.release({reason: 'dispose'});
+  assert.strictEqual(second, first);
+  finishFirstRelease();
+  await Promise.all([first, second]);
+  assert.deepEqual(released, ['OpeningSound', 'OpeningImage']);
+});
+
 test('releases a late stale resource after Abort and permits a clean retry', async () => {
   const component = await runtimeComponent();
   const pending = [];

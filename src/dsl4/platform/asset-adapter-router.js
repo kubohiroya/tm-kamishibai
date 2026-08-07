@@ -1,4 +1,4 @@
-const mediaKinds = new Set(['backdrop', 'costume', 'sound']);
+const mediaKinds = new Set(['backdrop', 'costume', 'image', 'sound']);
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {

@@ -66,15 +66,34 @@ function validateLifecycle(lifecycle) {
  * @param {Readonly<Record<string, unknown>>} options.storyDocument
  * @param {unknown} options.lifecycle
  * @param {(type: string, details: Record<string, unknown>) => void} options.onEvent
+ * @param {ReadonlyArray<string>} [options.excludedStartupAssetIds]
  */
-export function createDsl4AssetPreloadCoordinator({storyDocument, lifecycle, onEvent}) {
+export function createDsl4AssetPreloadCoordinator({
+  storyDocument,
+  lifecycle,
+  onEvent,
+  excludedStartupAssetIds = [],
+}) {
   const port = validateLifecycle(lifecycle);
   if (typeof onEvent !== 'function')
     throw new TypeError('asset preload onEvent must be a function');
   const index = createDsl4AssetDependencyIndex(storyDocument);
-  const startupAssetIds = sortedUnique([...index.startup, ...index.cover, ...index.actors]);
+  if (
+    !Array.isArray(excludedStartupAssetIds) ||
+    excludedStartupAssetIds.some((id) => typeof id !== 'string')
+  ) {
+    throw new TypeError('excludedStartupAssetIds must contain strings');
+  }
+  const excludedStartup = new Set(excludedStartupAssetIds);
+  const startupAssetIds = sortedUnique([...index.startup, ...index.cover, ...index.actors]).filter(
+    (assetId) => !excludedStartup.has(assetId),
+  );
   const sceneRetainedAssetIds = new Set(index.sceneRetained);
-  const persistentSceneAssetIds = new Set([...index.loading, ...index.actors]);
+  const persistentSceneAssetIds = new Set([
+    ...index.loading,
+    ...index.actors,
+    ...index.posePreviewControls,
+  ]);
   const loading = storyDocument.loading ?? null;
   /** @type {Preparation | null} */
   let current = null;

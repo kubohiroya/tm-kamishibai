@@ -1,4 +1,5 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
+import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {deepFreeze} from './story-document.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
@@ -129,6 +130,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  * @param {Record<string, Function>} [options.structuredDataIntegration]
  * @param {boolean} [options.posePreviewMirroringEnabled]
+ * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -140,6 +142,7 @@ export function createDsl4RuntimeController({
   onEvent,
   structuredDataIntegration,
   posePreviewMirroringEnabled = false,
+  cameraPreviewControlsEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -148,6 +151,9 @@ export function createDsl4RuntimeController({
   }
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (typeof cameraPreviewControlsEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewControlsEnabled must be boolean');
   }
   if (
     posePreviewMirroringEnabled &&
@@ -252,6 +258,12 @@ export function createDsl4RuntimeController({
         storyDocument,
         lifecycle: assetLifecycle,
         onEvent: (type, details) => emit(type, details),
+        ...(cameraPreviewControlsEnabled
+          ? {}
+          : {
+              excludedStartupAssetIds:
+                createDsl4AssetDependencyIndex(storyDocument).posePreviewControls,
+            }),
       })
     : null;
   let assetsReleased = true;

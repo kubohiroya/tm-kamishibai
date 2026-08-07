@@ -4,7 +4,7 @@ import {deepFreeze} from './story-document.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
@@ -13,6 +13,7 @@ const featureFlagKeys = new Set([
   'dsl4Runtime',
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
+  'dsl4CameraPreviewControls',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -20,6 +21,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
+  dsl4CameraPreviewControls: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -243,6 +245,13 @@ export async function createDsl4RuntimeStartup(options = {}) {
 
   let created;
   try {
+    const poseRecognition = isRecord(component.storyDocument.poseRecognition)
+      ? component.storyDocument.poseRecognition
+      : {};
+    const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const posePreviewControls = isRecord(posePreview.controls) ? posePreview.controls : {};
+    const cameraMirroringControlEnabled =
+      featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);
     created = createDsl4NavigationSession({
       storyDocument: component.storyDocument,
       controlProfile: String(component.runtimeArtifact.controlProfile),
@@ -257,7 +266,9 @@ export async function createDsl4RuntimeStartup(options = {}) {
       onEvent: options.onEvent,
       onInputError: options.onInputError,
       structuredDataIntegrationEnabled: featureFlags.structuredDataIntegrationEnabled,
-      posePreviewMirroringEnabled: featureFlags.dsl4PosePreviewMirroring,
+      posePreviewMirroringEnabled:
+        featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,
+      cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;

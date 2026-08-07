@@ -9,7 +9,7 @@ const fileSourceKeys = new Set(['files', 'inputPath', 'mode', 'type']);
 const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
-const assetKinds = new Set(['backdrop', 'costume', 'poseModel', 'sound']);
+const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
 const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export const dsl4AssetBundleStoragePaths = deepFreeze({

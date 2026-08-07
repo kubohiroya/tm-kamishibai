@@ -112,6 +112,8 @@ export function createDsl4EmbeddedAssetLifecycle({
   const cache = new Map();
   /** @type {Map<string, Promise<void>>} */
   const releaseLocks = new Map();
+  /** @type {Promise<void> | null} */
+  let releaseAllLock = null;
 
   /** @param {Record<string, any>} asset @param {Readonly<Record<string, any>>} context */
   function materialize(asset, context) {
@@ -420,7 +422,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   }
 
   /** @param {Readonly<Record<string, unknown>>} payload */
-  async function release(payload) {
+  async function performRelease(payload) {
     const reason =
       isRecord(payload) && typeof payload.reason === 'string' ? payload.reason : 'release';
     epoch += 1;
@@ -451,8 +453,29 @@ export function createDsl4EmbeddedAssetLifecycle({
     }
   }
 
+  /** @param {Readonly<Record<string, unknown>>} payload */
+  function release(payload) {
+    if (releaseAllLock) return releaseAllLock;
+    const operation = performRelease(payload);
+    releaseAllLock = operation;
+    void operation
+      .finally(() => {
+        if (releaseAllLock === operation) releaseAllLock = null;
+      })
+      .catch(() => {});
+    return operation;
+  }
+
+  /** @param {unknown} assetId */
+  function getResource(assetId) {
+    if (typeof assetId !== 'string') throw new TypeError('assetId must be a string');
+    const entry = cache.get(assetId);
+    return entry?.status === 'ready' && !entry.released ? entry.resource : null;
+  }
+
   return Object.freeze({
     prepare,
+    getResource,
     /**
      * @param {Readonly<Record<string, unknown>>} payload
      * @param {Readonly<Record<string, unknown>>} context
