@@ -793,6 +793,7 @@ export function createDsl4LocalPreviewHost(options) {
         'x-accel-buffering': 'no',
         'x-content-type-options': 'nosniff',
       });
+      response.flushHeaders();
       for (const event of retainedRecords(after)) {
         response.write(`${JSON.stringify(event)}\n`);
       }
@@ -901,8 +902,7 @@ export function createDsl4LocalPreviewHost(options) {
         response.writeHead(200, {
           'cache-control': 'no-store',
           'content-length': Buffer.byteLength(body),
-          'content-security-policy':
-            "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          'content-security-policy': `default-src 'none'; script-src 'self'${runtimeOwner === 'browser' ? " 'unsafe-eval'" : ''}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
           'content-type': 'text/html; charset=utf-8',
           'referrer-policy': 'no-referrer',
           'x-content-type-options': 'nosniff',

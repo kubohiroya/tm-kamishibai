@@ -81,6 +81,7 @@
     "@turbowarp/scratch-storage": "2.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "brfs": "1.6.1",
+    "buffer": "4.9.2",
     "esbuild": "0.28.1",
     "fflate": "0.8.3",
     "scratch-audio": "github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30",

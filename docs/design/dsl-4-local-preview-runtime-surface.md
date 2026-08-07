@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #423の段階実装（browser TurboWarp runtime session factory）
+文書状態: Issue #423の段階実装（browser-owned runtime bootstrap）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#423](https://github.com/kubohiroya/tmpose-kamishibai/issues/423)
@@ -163,11 +163,33 @@ browser modeでもsourceはNodeの共有frontendで一度だけparseします。
 generationへ含めません。browserはgenerationを自身のbridgeへacceptし、commit／restart／deferをpage内で完結させます。
 runtime project取得とevent streamは引き続きactive exact Origin＋bearer sessionを必須とします。
 
+### 5.6 browser clientとself-contained bootstrap
+
+browser clientはURL fragmentのone-use tokenをmemoryへ取り込み、`history.replaceState`でfragmentを消してからconnectします。
+connect responseの保持済みrecordを有限queueへ入れ、直ちに認証済みNDJSON streamを開いた後でbase SB3を取得します。これにより
+TurboWarp packageとprojectの起動中に保存されたgenerationも失いません。queueは既定64 record／32 MiB、1 generationは既定
+4 MiB、projectは既定64 MiBで有限化し、streamのContent-Type、projectのContent-Length、各revisionをfail-closedで検証します。
+
+base component検証後にだけ固定TurboWarp packageを遅延loadし、同じpageのcanvas、VM、renderer、audio、storage、bitmap adapter、
+generation bridgeを起動します。`.k4.yml`を含むmanifest指定sourceのvalid summaryはwire acknowledgementと対応付けて共有CLI overlayへ
+表示し、既定restart preferenceでbrowser内commitします。invalid／missing summaryはcurrent integrityと実行中sessionを維持し、次の
+valid generationで復旧できます。raw YAML、絶対path、token、StoryDocumentは公開snapshotへ出しません。
+
+固定TurboWarp compositionが参照するlegacy `Scratch.vm.runtime` globalはbrowser runtime ownerのlifetimeだけ同じVMへbindし、既存値を
+上書き保存してdispose時に正確に復元します。TurboWarp storageが要求する`Buffer`はbrowser bundleへ明示的にpolyfillします。
+pagehide／startup failure／明示disposeではevent streamをabortし、generation bridge／runtime session、stage、共有overlayの順に解放します。
+
+browser-owned pageに限り、固定Ajv validatorとTurboWarp runtimeが生成コードを使うためCSP `script-src`へ`'unsafe-eval'`を追加します。
+script自体は引き続き`'self'`だけから取得し、connect、frame、base、form、外部default sourceの制限は維持します。protocol-owned pageは
+`'unsafe-eval'`を許可しません。実Chromium E2Eは初回stage表示、valid YAML auto reload、invalid時のcurrent保持、recovery、page離脱時の
+transport／runtime cleanupをloopback hostと実TurboWarp bundleの組み合わせで確認します。
+
 ## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
 project-root confinementを通過したclientだけがgenerationを受け取れます。hostはbounded wireを作成できたgeneration
 だけをresponseへ書き、接続切断時は未確定generationを破棄します。
 
-この段階を戻す場合はbrowser platform／bundle builder、直接依存、export、test、本文を同じPR単位でrevertします。既存
+この段階を戻す場合はbrowser client／entry、browser platform／bundle builder、直接依存、export、test、本文を後続PRから逆順に
+revertします。既存
 host、Web Preview、production SB3、Standard palette、source／artifact formatにmigrationはありません。

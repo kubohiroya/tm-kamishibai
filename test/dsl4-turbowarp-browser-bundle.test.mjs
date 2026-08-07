@@ -29,6 +29,18 @@ test('TurboWarp browser bundle translates pinned webpack loader imports into one
   assert.match(bundle, /External extension workers are disabled in DSL 4\.0 local preview/u);
 });
 
+test('production browser preview entry bundles the authenticated client and pinned stage runtime', async () => {
+  const bytes = await buildDsl4TurboWarpBrowserBundle({
+    entryPoint: path.join(repositoryRoot, 'src/builder/dsl4-local-preview-browser-entry.js'),
+  });
+  assert.ok(bytes.byteLength > 1_000_000);
+  assert.ok(bytes.byteLength < 24 * 1024 * 1024);
+  const bundle = new TextDecoder().decode(bytes);
+  assert.match(bundle, /story\.k4\.yml/u);
+  assert.match(bundle, /The local preview launch token is missing or invalid/u);
+  assert.match(bundle, /TurboWarp project stage/u);
+});
+
 test('TurboWarp browser bundle rejects unbounded and relative inputs before build', async () => {
   await assert.rejects(
     buildDsl4TurboWarpBrowserBundle({entryPoint: 'relative.js'}),
