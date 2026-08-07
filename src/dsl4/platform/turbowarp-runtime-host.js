@@ -448,11 +448,11 @@ async function createRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => scratchPoseFeedbackAdapter?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
             () => assetSession?.dispose(reason),
-            () => scratchPoseFeedbackAdapter?.dispose(),
           ]) {
             try {
               await release();
@@ -472,11 +472,11 @@ async function createRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => scratchPoseFeedbackAdapter?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
       () => assetSession?.dispose('partial-creation-failed'),
-      () => scratchPoseFeedbackAdapter?.dispose(),
     ]) {
       try {
         await release();

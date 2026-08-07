@@ -443,6 +443,110 @@ scenes:
   await presenter.host.dispose('presenter-feedback-enabled');
 });
 
+test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  let finishHostPortCleanup = null;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      createHostPort() {
+        return {
+          dispose() {
+            return new Promise((resolve) => {
+              finishHostPortCleanup = resolve;
+            });
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+
+  const disposal = result.host.dispose('pending-environment-cleanup');
+  while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+
+  finishHostPortCleanup();
+  await disposal;
+});
+
+test('resets Scratch pose feedback before awaiting partial-creation cleanup', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  let finishHostPortCleanup = null;
+  const rejection = assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+        createHostPort() {
+          return {
+            stage() {},
+            dispose() {
+              return new Promise((resolve) => {
+                finishHostPortCleanup = resolve;
+              });
+            },
+          };
+        },
+      }),
+    ),
+    (error) => error.code === 'K4-HOST-PORT-COLLISION',
+  );
+
+  while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+
+  finishHostPortCleanup();
+  await rejection;
+});
+
+test('continues environment cleanup and aggregates a Scratch reset failure', async () => {
+  const project = await packagedProject();
+  const log = [];
+  const fixture = platformFixture(log);
+  let progress = 50;
+  fixture.poseConfidence.value = 75;
+  Object.defineProperty(fixture.poseProgress, 'value', {
+    configurable: true,
+    get() {
+      return progress;
+    },
+    set(value) {
+      if (value === 0) throw new Error('Scratch reset failed');
+      progress = value;
+    },
+  });
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      createHostPort() {
+        return {
+          dispose() {
+            log.push(['host-port.dispose']);
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  await assert.rejects(result.host.dispose('reset-failure'), (error) => {
+    assert.equal(error instanceof AggregateError, true);
+    return true;
+  });
+  assert.equal(log.filter(([event]) => event === 'host-port.dispose').length, 1);
+  assert.equal(log.filter(([event]) => event === 'svg.release-all').length, 1);
+  assert.equal(log.filter(([event]) => event === 'pose.release-all').length, 1);
+  assert.equal(log.filter(([event]) => event === 'media.release-all').length, 1);
+});
+
 test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {
   const project = await packagedProject(posePreviewStory);
 

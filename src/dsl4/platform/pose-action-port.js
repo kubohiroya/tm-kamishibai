@@ -434,7 +434,7 @@ export function createDsl4PoseActionPort(options) {
           const timestamp = /** @type {number} */ (await waitForTick(operation.controller.signal));
           const elapsedSeconds = Math.max(0, (timestamp - previousTime) / 1000);
           previousTime = timestamp;
-          const binding = readPoseBinding();
+          const binding = input.feedbackMode === 'scratchBinding' ? readPoseBinding() : null;
           const measuredConfidence = Number(tmpose.confidenceOf(input.pose));
           if (
             !Number.isFinite(measuredConfidence) ||

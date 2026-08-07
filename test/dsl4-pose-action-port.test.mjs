@@ -28,6 +28,15 @@ function sequencePayload(overrides = {}) {
   };
 }
 
+/** @param {'scratchMirror' | 'scratchBinding' | 'presenter'} mode */
+function sequencePayloadWithFeedback(mode) {
+  const payload = sequencePayload();
+  return {
+    ...payload,
+    recognition: {...payload.recognition, feedback: {mode}},
+  };
+}
+
 function selectionPayload(overrides = {}) {
   return {
     poses: ['help', 'stand'],
@@ -282,7 +291,7 @@ test('applies one normalized Scratch binding snapshot before the deterministic p
       return {confidence: 1, progress: 0.5};
     },
   });
-  const pending = port.waitForPose(sequencePayload(), actionContext());
+  const pending = port.waitForPose(sequencePayloadWithFeedback('scratchBinding'), actionContext());
   await flush();
   clock.advance(500);
   await pending;
@@ -301,6 +310,26 @@ test('applies one normalized Scratch binding snapshot before the deterministic p
     ['play', 'Charge'],
     ['stop', 'Tick'],
   ]);
+});
+
+test('never samples a Scratch binding for mirror or presenter feedback', async () => {
+  for (const mode of ['scratchMirror', 'presenter']) {
+    let reads = 0;
+    const {pose, clock, port} = setup({
+      readPoseStateBinding() {
+        reads += 1;
+        return {progress: 1};
+      },
+    });
+    pose.confidence.set('help', 1);
+
+    const pending = port.waitForPose(sequencePayloadWithFeedback(mode), actionContext());
+    await flush();
+    clock.advance(1000);
+    await pending;
+
+    assert.equal(reads, 0, mode);
+  }
 });
 
 test('ignores asynchronous or malformed binding samples and waits for the next valid tick', async () => {
