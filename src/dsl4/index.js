@@ -33,6 +33,15 @@ export {
 } from './asset-candidate-validator.js';
 export {classifyDsl4AssetReload, createDsl4AssetReloadSnapshot} from './asset-reload-policy.js';
 export {
+  createDsl4AssetReloadTransaction,
+  Dsl4AssetReloadTransactionError,
+} from './asset-reload-transaction.js';
+export {
+  createDsl4AssetReloadProtocolSession,
+  dsl4AssetReloadProtocolCapabilities,
+  Dsl4AssetReloadProtocolError,
+} from './asset-reload-protocol.js';
+export {
   createDsl4AssetSnapshotWatch,
   dsl4AssetSnapshotWatchDefaults,
   Dsl4AssetSnapshotWatchError,
@@ -63,6 +72,7 @@ export {
   dsl4BrowserPreviewAssetDefaults,
   Dsl4BrowserPreviewAssetError,
 } from './browser-preview-asset-adapter.js';
+export {createDsl4BrowserAssetReloadPipeline} from './browser-asset-reload-pipeline.js';
 export {createDsl4BrowserPreviewCoordinator} from './browser-preview-coordinator.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {

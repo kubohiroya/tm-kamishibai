@@ -297,6 +297,7 @@ export function inspectDsl4BrowserPreviewSupport({globalObject = globalThis} = {
  * @param {(diagnostic: Readonly<Record<string, unknown>> | null) => unknown | Promise<unknown>} [options.onDiagnostic]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onStatus]
  * @param {(error: unknown) => unknown} [options.onError]
+ * @param {(projectRoot: Record<string, any>) => unknown | Promise<unknown>} [options.onProjectRoot]
  * @param {Record<string, any>} [options.globalObject]
  * @param {Record<string, any>} [options.document]
  * @param {Function} [options.showDirectoryPicker]
@@ -320,6 +321,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
   const onDiagnostic = optionalCallback(options.onDiagnostic, 'onDiagnostic');
   const onStatus = optionalCallback(options.onStatus, 'onStatus');
   const onError = optionalCallback(options.onError, 'onError');
+  const onProjectRoot = optionalCallback(options.onProjectRoot, 'onProjectRoot');
   const globalObject = /** @type {Record<string, any>} */ (
     isRecord(options.globalObject) ? options.globalObject : globalThis
   );
@@ -780,7 +782,9 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     if (started || disposed) {
       throw new TypeError('browser preview source adapter can only start once');
     }
-    rootHandle = requireDirectoryHandle(projectRoot);
+    const selectedRoot = requireDirectoryHandle(projectRoot);
+    await onProjectRoot?.(selectedRoot);
+    rootHandle = selectedRoot;
     started = true;
     generation += 1;
     attachListeners();
