@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
-export const dsl4DocsUrl =
-  'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -39,9 +37,7 @@ export const downloadCatalog = deepFreeze([
       sourceCommit: 'd115ffdb5e93c23605dffeabbe9ea7e302e23cde',
       sourceDirectory: 'release-sources/4.0.0-dev/app',
     },
-    description:
-      'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試し、4.0ドキュメントを参照できます。',
-    docsUrl: dsl4DocsUrl,
+    description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
     series: '4.0',
     status: '開発版',
     statusKind: 'development',
@@ -123,13 +119,6 @@ function renderActions(entry) {
     actions.push(
       `<a class="button" href="${escapeHtml(entry.artifact.filename)}" download>` +
         `📁 ${escapeHtml(entry.series)}のSB3をダウンロード</a>`,
-    );
-  }
-  if (entry.docsUrl) {
-    const secondary = entry.artifact ? ' button--secondary' : '';
-    actions.push(
-      `<a class="button${secondary}" href="${escapeHtml(entry.docsUrl)}">` +
-        `📕 ${escapeHtml(entry.series)}ドキュメントを開く</a>`,
     );
   }
   if (!entry.artifact) {
