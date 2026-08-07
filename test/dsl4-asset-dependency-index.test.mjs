@@ -185,7 +185,7 @@ scenes:
   });
 });
 
-test('indexes lazy character sounds for say and think in their owning scene', () => {
+test('indexes lazy start and character sounds for say and think in their owning scene', () => {
   const storyDocument = parse(`
 kamishibai: '4.0'
 assets:
@@ -193,6 +193,10 @@ assets:
   TalkTick:
     kind: sound
     name: TalkTick
+    loading: lazy
+  HeroVoice:
+    kind: sound
+    name: HeroVoice
     loading: lazy
 actors:
   Hero: HeroIdle
@@ -202,19 +206,21 @@ scenes:
         text: hello
         waitFor: advance
         characterIntervalSeconds: 0.1
+        startSound: HeroVoice
         characterSound: TalkTick
     - Hero.think:
         text: hmm
         seconds: 1
+        startSound: HeroVoice
         characterIntervalSeconds: 0.2
         characterSound: TalkTick
 `);
   const index = createDsl4AssetDependencyIndex(storyDocument);
 
   assert.deepEqual(index.scenes.first, {
-    all: ['TalkTick'],
+    all: ['HeroVoice', 'TalkTick'],
     eager: [],
-    lazy: ['TalkTick'],
+    lazy: ['HeroVoice', 'TalkTick'],
     sceneRetained: [],
   });
 });

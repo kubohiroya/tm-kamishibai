@@ -67,11 +67,12 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
-test('normalizes say and think speech completion, typewriter, sound, and source positions', () => {
+test('normalizes say and think completion, typewriter, start sound, and source positions', () => {
   const source = `
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
+  HeroVoice: sound
   TalkTick: sound
 actors:
   Hero: HeroIdle
@@ -89,6 +90,7 @@ scenes:
         seconds: 5
         waitFor: advance
         characterIntervalSeconds: 0.08
+        startSound: HeroVoice
         characterSound: TalkTick
 `;
   const result = frontend.parse(source, {sourceId: 'speech.kamishibai.yaml'});
@@ -111,6 +113,7 @@ scenes:
           seconds: 5,
           waitFor: 'advance',
           characterIntervalSeconds: 0.08,
+          startSound: 'HeroVoice',
           characterSound: 'TalkTick',
         },
         stableId: 'thinking',
@@ -122,6 +125,7 @@ scenes:
     'seconds',
     'waitFor',
     'characterIntervalSeconds',
+    'startSound',
     'characterSound',
   ]) {
     assert.ok(result.storyDocument.sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
@@ -129,7 +133,7 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
-test('rejects incomplete or malformed speech and non-sound character assets', () => {
+test('rejects incomplete or malformed speech and non-sound speech assets', () => {
   const source = `
 kamishibai: '4.0'
 assets:
@@ -174,6 +178,21 @@ scenes:
         ({code, storyPath}) =>
           code === (characterSound === 'MissingTick' ? 'K4-REF-001' : 'K4-REF-002') &&
           storyPath === '/scenes/opening/actions/0/args/characterSound',
+      ),
+      JSON.stringify(result.diagnostics),
+    );
+  }
+
+  for (const startSound of ['MissingVoice', 'WrongTick']) {
+    const result = frontend.parse(
+      source.replace('        seconds: 1', `        seconds: 1\n        startSound: ${startSound}`),
+    );
+    assert.equal(result.ok, false, startSound);
+    assert.ok(
+      result.diagnostics.some(
+        ({code, storyPath}) =>
+          code === (startSound === 'MissingVoice' ? 'K4-REF-001' : 'K4-REF-002') &&
+          storyPath === '/scenes/opening/actions/0/args/startSound',
       ),
       JSON.stringify(result.diagnostics),
     );

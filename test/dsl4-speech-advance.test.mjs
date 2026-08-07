@@ -22,6 +22,7 @@ kamishibai: '4.0'
 ${controls}
 assets:
   HeroIdle: costume:Hero
+  Voice: sound
 actors:
   Hero: HeroIdle
 scenes:
@@ -74,6 +75,12 @@ test('keeps legacy timed say available and rejects extended speech while the fla
     - Hero.say:
         text: hello
         waitFor: advance
+`,
+    `
+    - Hero.say:
+        text: hello
+        seconds: 1
+        startSound: Voice
 `,
     `
     - Hero.think:

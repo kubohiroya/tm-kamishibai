@@ -241,6 +241,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} poseFeedbackEnabled
  * @param {boolean} posePreviewMirroringEnabled
  * @param {boolean} cameraPreviewControlsEnabled
+ * @param {boolean} speechAdvanceTypewriterEnabled
  */
 async function createRuntimeEnvironment(
   options,
@@ -250,6 +251,7 @@ async function createRuntimeEnvironment(
   poseFeedbackEnabled,
   posePreviewMirroringEnabled,
   cameraPreviewControlsEnabled,
+  speechAdvanceTypewriterEnabled,
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -304,6 +306,18 @@ async function createRuntimeEnvironment(
   try {
     const actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
+      ...(speechAdvanceTypewriterEnabled
+        ? {
+            speechAdvanceTypewriterEnabled: true,
+            playSpeechSound(sound) {
+              if (!assetSession) throw new Error('Asset session is unavailable');
+              return assetSession.assetManagerComposition.playSound(sound);
+            },
+            stopSpeechSound(sound) {
+              return assetSession?.assetManagerComposition.stopSound(sound);
+            },
+          }
+        : {}),
       ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
       ...(options.actorFrameMilliseconds === undefined
         ? {}
@@ -415,6 +429,7 @@ async function createRuntimeEnvironment(
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
+      ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
     });
     const asyncInputPort = createDsl4AsyncInputActionPort({
       composition: assetSession.asyncInputComposition,
@@ -456,7 +471,12 @@ async function createRuntimeEnvironment(
 
     const port = /** @type {Record<string, Function>} */ ({});
     addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
-    addPortMethods(port, actorPort, ['show', 'moveTo', 'say'], 'actor action port');
+    addPortMethods(
+      port,
+      actorPort,
+      ['show', 'moveTo', 'say', ...(speechAdvanceTypewriterEnabled ? ['think'] : [])],
+      'actor action port',
+    );
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
       port,
@@ -795,13 +815,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         startupContext.featureFlags.dsl4PoseFeedbackModes,
         startupContext.featureFlags.dsl4PosePreviewMirroring,
         startupContext.featureFlags.dsl4CameraPreviewControls,
+        startupContext.featureFlags.dsl4SpeechAdvanceTypewriter,
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
@@ -895,9 +916,18 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       ensureActive();
       return session.attach(target);
     },
+    /** @param {unknown} target */
+    attachStagePointer(target) {
+      ensureActive();
+      return session.attachStagePointer(target);
+    },
     detach() {
       ensureActive();
       return session.detach();
+    },
+    detachStagePointer() {
+      ensureActive();
+      return session.detachStagePointer();
     },
     /** @param {string} command */
     dispatchCommand(command) {
@@ -908,6 +938,11 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     handleKeyDown(event) {
       ensureActive();
       return session.handleKeyDown(event);
+    },
+    /** @param {Record<string, unknown>} event */
+    handlePointerUp(event) {
+      ensureActive();
+      return session.handlePointerUp(event);
     },
     whenInputIdle() {
       return session.whenInputIdle();

@@ -32,6 +32,25 @@ scenes:
   opening:
     - wait: 0
 `;
+const speechStory = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Voice: sound
+actors:
+  Hero: HeroIdle
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.think:
+        text: どうしよう
+        waitFor: advance
+        startSound: Voice
+    - wait: 0
+`;
 const posePreviewStory = `
 kamishibai: '4.0'
 assets:
@@ -358,7 +377,7 @@ function platformFixture(log) {
       return true;
     },
     getMimeType(name) {
-      return name === 'Bell' ? 'audio/wav' : 'image/svg+xml';
+      return name === 'Bell' || name === 'Tick' || name === 'Voice' ? 'audio/wav' : 'image/svg+xml';
     },
     applyToStage(name) {
       log.push(['media.stage', name]);
@@ -453,6 +472,9 @@ function platformFixture(log) {
     ext_scratch3_looks: {
       _say(message) {
         log.push(['actor.say', message]);
+      },
+      _think(message) {
+        log.push(['actor.think', message]);
       },
     },
   };
@@ -1291,6 +1313,69 @@ test('suspends camera controls at natural finish and resumes the same leases for
   await result.host.dispose('history-camera-controls');
   assert.equal(document.body.children.length, 0);
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+});
+
+test('wires flagged think advance through the standard TurboWarp runtime host', async () => {
+  const project = await packagedProject(speechStory);
+  const log = [];
+  const fixture = platformFixture(log);
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true},
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const stageListeners = new Map();
+  const stageTarget = {
+    addEventListener(type, listener) {
+      stageListeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (stageListeners.get(type) === listener) stageListeners.delete(type);
+    },
+  };
+  result.host.attachStagePointer(stageTarget);
+  assert.equal(stageListeners.has('pointerup'), true);
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (log.some(([name, message]) => name === 'actor.think' && message === 'どうしよう')) break;
+    await Promise.resolve();
+  }
+  assert.equal(
+    log.some(([name, message]) => name === 'actor.think' && message === 'どうしよう'),
+    true,
+    JSON.stringify(log),
+  );
+  assert.equal(log.filter(([name, sound]) => name === 'media.play' && sound === 'Voice').length, 1);
+  assert.ok(
+    log.findIndex(([name, message]) => name === 'actor.think' && message === 'どうしよう') <
+      log.findIndex(([name, sound]) => name === 'media.play' && sound === 'Voice'),
+    JSON.stringify(log),
+  );
+  await Promise.resolve();
+  const counters = {preventDefault: 0, stopPropagation: 0};
+  const event = {
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    preventDefault() {
+      counters.preventDefault += 1;
+    },
+    stopPropagation() {
+      counters.stopPropagation += 1;
+    },
+  };
+  assert.equal(stageListeners.get('pointerup')(event), true);
+  assert.deepEqual(counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal((await run).status, 'finished');
+  assert.equal(
+    log.filter(([name, message]) => name === 'actor.think' && message === '').length,
+    1,
+    JSON.stringify(log),
+  );
+  assert.equal(log.filter(([name, sound]) => name === 'media.stop' && sound === 'Voice').length, 1);
+  await result.host.dispose('test-complete');
+  assert.equal(stageListeners.has('pointerup'), false);
 });
 
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {
