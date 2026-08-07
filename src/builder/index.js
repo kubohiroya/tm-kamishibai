@@ -41,6 +41,12 @@ export {
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';
 export {
+  dsl4BrowserRuntimeComponentDefaults,
+  dsl4BrowserRuntimeComponentMaximums,
+  Dsl4BrowserRuntimeComponentError,
+  loadDsl4BrowserRuntimeComponent,
+} from './dsl4-browser-runtime-component.js';
+export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,
