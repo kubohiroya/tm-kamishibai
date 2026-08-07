@@ -1,0 +1,48 @@
+{
+  "extensionStorage": {},
+  "targets": [
+    {
+      "isStage": true,
+      "name": "Stage",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "stage-start": {
+          "opcode": "event_whenflagclicked",
+          "next": null,
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "isStage": false,
+      "name": "Hero",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "actor-custom-performance": {
+          "opcode": "looks_say",
+          "next": null,
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 60
+        }
+      }
+    }
+  ],
+  "monitors": [],
+  "extensions": [],
+  "meta": {"semver": "3.0.0"}
+}

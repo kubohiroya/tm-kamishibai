@@ -26,6 +26,10 @@ export {
   createDsl4ArtifactFingerprint,
 } from './dsl4-artifact-fingerprint.js';
 export {
+  createDsl4BinaryEntryProviderFromSb3,
+  embedDsl4BinaryEntryRuntimeComponentInSb3,
+} from './dsl4-binary-entry-sb3.js';
+export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
@@ -42,6 +46,7 @@ export {
   embedDsl4PackagedRuntimeComponentInSb3,
   embedDsl4RuntimeComponentInSb3,
   embedDsl4SourceInSb3,
+  installDsl4BinaryEntryRuntimeComponent,
   installDsl4EmbeddedSource,
   installDsl4PackagedRuntimeComponent,
   installDsl4RuntimeComponent,

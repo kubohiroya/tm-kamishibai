@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
+import {embedDsl4SourceInSb3} from '../src/builder/index.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
 import {
   convertDsl32File,
   convertDsl32ToDsl4,
   Dsl32ConversionError,
 } from '../src/converter/index.js';
-import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {createDsl4EmbeddedSourceDescriptor, createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = path.join(projectRoot, 'test', 'fixtures', 'converter');
@@ -20,6 +24,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 const poseModels = JSON.parse(await readFile(path.join(fixtureRoot, 'pose-models.json'), 'utf8'));
+const subtleCrypto = webcrypto.subtle;
 
 test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 4.0 YAML', async () => {
   const [source, expected] = await Promise.all([
@@ -56,6 +61,90 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
     {pose: 'jump', skin: 'HeroHappy', sound: 'Success'},
   ]);
   assert.equal(first.yaml.includes('poseInputToChangeScene'), false);
+});
+
+test('converts DSL 3.1 through the maintained compatibility grammar with an explicit warning', async () => {
+  const [source, expected] = await Promise.all([
+    readFile(path.join(fixtureRoot, 'full.dsl32.txt'), 'utf8'),
+    readFile(path.join(fixtureRoot, 'full.kamishibai.yaml'), 'utf8'),
+  ]);
+  const result = convertDsl32ToDsl4(source.replace('kamishibai=3.2', 'kamishibai=3.1'), {
+    sourceId: 'full.dsl31.txt',
+    poseModels,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.yaml, expected);
+  assert.deepEqual(
+    result.diagnostics.filter(({code}) => code === 'K4-CONVERT-VERSION-31-COMPAT'),
+    [
+      {
+        code: 'K4-CONVERT-VERSION-31-COMPAT',
+        severity: 'warning',
+        message:
+          'DSL 3.1 is interpreted through the maintained DSL 3.2 compatibility grammar; review every conversion warning before replacing the original work.',
+        sourceId: 'full.dsl31.txt',
+        range: {
+          start: {line: 1, column: 1},
+          end: {line: 1, column: 15},
+        },
+        command: 'kamishibai',
+      },
+    ],
+  );
+});
+
+test('rejects versions outside the maintained DSL 3.1 and 3.2 migration inputs', () => {
+  for (const version of ['3.0', '4.0']) {
+    const result = convertDsl32ToDsl4(
+      `kamishibai=${version}\nsceneLabel=opening\naction=wait:1\n`,
+      {sourceId: `unsupported-${version}.txt`},
+    );
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.diagnostics.some(
+        ({code, severity, range}) =>
+          code === 'K4-CONVERT-VERSION-001' && severity === 'error' && range.start.line === 1,
+      ),
+    );
+  }
+});
+
+test('embeds converted source without adding a Scratch block to the project fixture', async () => {
+  const [source, baseProject] = await Promise.all([
+    readFile(path.join(fixtureRoot, 'full.dsl32.txt')),
+    readFile(path.join(fixtureRoot, 'block-zero-project.json'), 'utf8').then((text) =>
+      JSON.parse(text),
+    ),
+  ]);
+  const converted = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt', poseModels});
+  assert.equal(converted.ok, true);
+  const maxSourceBytes = 64 * 1024;
+  const descriptor = await createDsl4EmbeddedSourceDescriptor(converted.yaml, {
+    sourceId: 'converted',
+    displayName: 'converted.kamishibai.yaml',
+    maxSourceBytes,
+    subtleCrypto,
+  });
+  const beforeBlocks = baseProject.targets.map(({blocks}) => structuredClone(blocks));
+  const baseSb3 = Buffer.from(
+    zipSync({'project.json': strToU8(`${JSON.stringify(baseProject)}\n`)}),
+  );
+
+  const embedded = await embedDsl4SourceInSb3(baseSb3, descriptor, {
+    channel: 'bundled',
+    maxSourceBytes,
+    subtleCrypto,
+  });
+
+  assert.deepEqual(
+    embedded.project.targets.map(({blocks}) => blocks),
+    beforeBlocks,
+  );
+  assert.equal(
+    embedded.project.targets.reduce((count, {blocks}) => count + Object.keys(blocks).length, 0),
+    beforeBlocks.reduce((count, blocks) => count + Object.keys(blocks).length, 0),
+  );
 });
 
 test('canonicalizes BOM and legacy newlines before recording source positions', () => {
@@ -250,12 +339,12 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
   );
 
   assert.equal(result.ok, false);
-  assert.ok(
-    result.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === 'K4-CONVERT-LEGACY-TEXT' && diagnostic.range.start.line === 3,
-    ),
+  const legacyText = result.diagnostics.find(
+    (diagnostic) =>
+      diagnostic.code === 'K4-CONVERT-LEGACY-TEXT' && diagnostic.range.start.line === 3,
   );
+  assert.equal(legacyText?.severity, 'error');
+  assert.match(legacyText?.message ?? '', /textStyles and Actor\.setText/u);
   assert.ok(
     result.diagnostics.some(
       (diagnostic) =>
