@@ -1731,19 +1731,29 @@ for (const [name, port, expectedCode] of [
   ],
 ]) {
   test(`converts ${name} into a runtime diagnostic`, async () => {
-    const controller = createDsl4RuntimeController({
-      storyDocument: parseStory(`
+    const parsedStory = parseStory(`
 kamishibai: '4.0'
 scenes:
   opening:
     - wait: 0
-`),
+`);
+    const actionPath = '/scenes/opening/actions/0';
+    const includedRange = parsedStory.sourceMap[actionPath];
+    const controller = createDsl4RuntimeController({
+      storyDocument: {
+        ...parsedStory,
+        sourceOrigins: {
+          [actionPath]: {sourceId: 'chapters/opening.k4.yml', range: includedRange},
+        },
+      },
       port,
     });
     const state = await controller.start();
     assert.equal(state.status, 'failed');
     assert.equal(state.diagnostic.code, expectedCode);
-    assert.equal(state.diagnostic.storyPath, '/scenes/opening/actions/0');
+    assert.equal(state.diagnostic.storyPath, actionPath);
+    assert.equal(state.diagnostic.sourceId, 'chapters/opening.k4.yml');
+    assert.deepEqual(state.diagnostic.range, includedRange);
     assert.equal(controller.getTrace().at(-1).type, 'runtime.fail');
   });
 }

@@ -6,7 +6,8 @@ import {
 import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
 import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
-import {deepFreeze} from './story-document.js';
+import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 export const dsl4RuntimeArtifactStoragePaths = deepFreeze({
   bundled:
@@ -27,19 +28,22 @@ function isRecord(value) {
  * @param {string} [path]
  */
 function diagnostic(storyDocument, sourceId, code, message, path = '$.artifact') {
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument?.sourceMap ?? {});
+  const origin = storyDocument
+    ? sourceOriginForStoryPath(storyDocument)
+    : {
+        sourceId,
+        range: deepFreeze({
+          start: {line: 1, column: 1, offset: 0},
+          end: {line: 1, column: 1, offset: 0},
+        }),
+      };
   return deepFreeze({
     version: 1,
     code,
     severity: 'error',
     message,
-    sourceId,
-    range:
-      sourceMap['/'] ??
-      deepFreeze({
-        start: {line: 1, column: 1, offset: 0},
-        end: {line: 1, column: 1, offset: 0},
-      }),
+    sourceId: origin.sourceId,
+    range: origin.range,
     path,
     related: [],
   });
@@ -161,7 +165,23 @@ export async function loadDsl4RuntimeArtifact(
     sourceId: source.descriptor.sourceId,
   });
   if (!parsed.ok) return deepFreeze({ok: false, diagnostics: parsed.diagnostics});
-  const storyDocument = /** @type {Readonly<Record<string, unknown>>} */ (parsed.storyDocument);
+  let storyDocument = /** @type {Readonly<Record<string, unknown>>} */ (parsed.storyDocument);
+  if (source.descriptor.sourceOrigins !== undefined) {
+    try {
+      storyDocument = applyDsl4SourceOrigins(storyDocument, source.descriptor.sourceOrigins);
+    } catch (error) {
+      if (error instanceof Dsl4SourceOriginError) {
+        return failure(
+          storyDocument,
+          source.descriptor.sourceId,
+          error.code,
+          error.message,
+          '$.source.sourceOrigins',
+        );
+      }
+      throw error;
+    }
+  }
   const artifacts = storedArtifacts(project);
   if (artifacts.length === 0) {
     return failure(

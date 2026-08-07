@@ -147,6 +147,9 @@ export async function buildDsl4RuntimeComponent(options) {
           ...(source.descriptor.cacheIdentity
             ? {cacheIdentity: source.descriptor.cacheIdentity}
             : {}),
+          ...(parsed.storyDocument.sourceOrigins
+            ? {sourceOrigins: parsed.storyDocument.sourceOrigins}
+            : {}),
           subtleCrypto,
         });
       } catch (error) {

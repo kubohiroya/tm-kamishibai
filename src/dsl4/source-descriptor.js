@@ -1,6 +1,11 @@
 import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
+import {
+  createDsl4SourceOriginDescriptor,
+  Dsl4SourceOriginError,
+  validateDsl4SourceOriginDescriptor,
+} from './source-origin-descriptor.js';
 import {deepFreeze} from './story-document.js';
 
 const requiredDescriptorKeys = new Set([
@@ -14,7 +19,7 @@ const requiredDescriptorKeys = new Set([
   'sourceId',
   'text',
 ]);
-const descriptorKeys = new Set([...requiredDescriptorKeys, 'cacheIdentity']);
+const descriptorKeys = new Set([...requiredDescriptorKeys, 'cacheIdentity', 'sourceOrigins']);
 const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export const dsl4SourceStoragePaths = deepFreeze({
@@ -149,11 +154,21 @@ function encodeSource(text, maxSourceBytes) {
  * @param {string} options.displayName
  * @param {number} options.maxSourceBytes
  * @param {unknown} [options.cacheIdentity]
+ * @param {unknown} [options.sourceOrigins]
+ * @param {Record<string, number>} [options.sourceOriginLimits]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function createDsl4EmbeddedSourceDescriptor(
   source,
-  {sourceId, displayName, maxSourceBytes, cacheIdentity, subtleCrypto = globalThis.crypto?.subtle},
+  {
+    sourceId,
+    displayName,
+    maxSourceBytes,
+    cacheIdentity,
+    sourceOrigins,
+    sourceOriginLimits,
+    subtleCrypto = globalThis.crypto?.subtle,
+  },
 ) {
   const canonicalSource = canonicalizeDsl4Source(source);
   const limit = requireMaxSourceBytes(maxSourceBytes);
@@ -161,6 +176,15 @@ export async function createDsl4EmbeddedSourceDescriptor(
   const normalizedDisplayName = requireDisplayName(displayName);
   const normalizedCacheIdentity =
     cacheIdentity === undefined ? null : requireCacheIdentity(cacheIdentity);
+  let normalizedSourceOrigins = null;
+  if (sourceOrigins !== undefined) {
+    try {
+      normalizedSourceOrigins = createDsl4SourceOriginDescriptor(sourceOrigins, sourceOriginLimits);
+    } catch (error) {
+      if (error instanceof Dsl4SourceOriginError) fail(error.code, error.message);
+      throw error;
+    }
+  }
   if (normalizedCacheIdentity && normalizedCacheIdentity.label !== normalizedDisplayName) {
     fail(
       'K4-SOURCE-DESCRIPTOR-001',
@@ -178,6 +202,7 @@ export async function createDsl4EmbeddedSourceDescriptor(
     integrity: await computeDsl4Sha256Integrity(bytes, subtleCrypto),
     text: canonicalSource,
     ...(normalizedCacheIdentity ? {cacheIdentity: normalizedCacheIdentity} : {}),
+    ...(normalizedSourceOrigins ? {sourceOrigins: normalizedSourceOrigins} : {}),
   };
   return deepFreeze(descriptor);
 }
@@ -186,11 +211,12 @@ export async function createDsl4EmbeddedSourceDescriptor(
  * @param {unknown} input
  * @param {object} options
  * @param {number} options.maxSourceBytes
+ * @param {Record<string, number>} [options.sourceOriginLimits]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function validateDsl4EmbeddedSourceDescriptor(
   input,
-  {maxSourceBytes, subtleCrypto = globalThis.crypto?.subtle},
+  {maxSourceBytes, sourceOriginLimits, subtleCrypto = globalThis.crypto?.subtle},
 ) {
   const limit = requireMaxSourceBytes(maxSourceBytes);
   if (!isRecord(input)) {
@@ -238,6 +264,15 @@ export async function validateDsl4EmbeddedSourceDescriptor(
   }
   const cacheIdentity =
     input.cacheIdentity === undefined ? null : requireCacheIdentity(input.cacheIdentity);
+  let sourceOrigins = null;
+  if (input.sourceOrigins !== undefined) {
+    try {
+      sourceOrigins = validateDsl4SourceOriginDescriptor(input.sourceOrigins, sourceOriginLimits);
+    } catch (error) {
+      if (error instanceof Dsl4SourceOriginError) fail(error.code, error.message);
+      throw error;
+    }
+  }
   if (cacheIdentity && cacheIdentity.label !== displayName) {
     fail(
       'K4-SOURCE-DESCRIPTOR-001',
@@ -255,6 +290,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
     integrity: expectedIntegrity,
     text,
     ...(cacheIdentity ? {cacheIdentity} : {}),
+    ...(sourceOrigins ? {sourceOrigins} : {}),
   });
 }
 
@@ -264,11 +300,12 @@ export async function validateDsl4EmbeddedSourceDescriptor(
  * @param {unknown} project
  * @param {object} options
  * @param {number} options.maxSourceBytes
+ * @param {Record<string, number>} [options.sourceOriginLimits]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function resolveDsl4EmbeddedSource(
   project,
-  {maxSourceBytes, subtleCrypto = globalThis.crypto?.subtle},
+  {maxSourceBytes, sourceOriginLimits, subtleCrypto = globalThis.crypto?.subtle},
 ) {
   if (!isRecord(project)) {
     fail('K4-SOURCE-DESCRIPTOR-001', 'Project must be an object');
@@ -309,6 +346,7 @@ export async function resolveDsl4EmbeddedSource(
   const location = locations[0];
   const descriptor = await validateDsl4EmbeddedSourceDescriptor(location.descriptor, {
     maxSourceBytes,
+    sourceOriginLimits,
     subtleCrypto,
   });
   return deepFreeze({channel: location.channel, path: location.path, descriptor});

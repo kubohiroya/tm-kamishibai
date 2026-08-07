@@ -10,6 +10,9 @@ import {strToU8, zipSync} from 'fflate';
 
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from '../src/builder/dsl4-build.js';
 import {Sb3BuilderError} from '../src/builder/errors.js';
+import {readSb3} from '../src/builder/sb3.js';
+import {loadDsl4RuntimeComponent} from '../src/dsl4/runtime-artifact-loader.js';
+import {createDsl4RuntimeStartup} from '../src/dsl4/runtime-startup.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/source-frontend.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -116,6 +119,57 @@ test('builds a self-contained component with declaring-source-relative assets', 
       built.runtimeComponent.getAssetFile('ChapterBackground', 'background.svg'),
       new TextEncoder().encode('<svg/>'),
     );
+    const actionPath = '/scenes/chapter1/actions/0';
+    const memoryOrigin = built.runtimeComponent.storyDocument.sourceOrigins[actionPath];
+    assert.equal(memoryOrigin.sourceId, 'chapters/chapter1/scenario.k4.yml');
+    assert.deepEqual(
+      built.runtimeComponent.storyDocument.scenes[1].actions[0].sourceRange,
+      memoryOrigin.range,
+    );
+
+    const persisted = readSb3(built.bytes).project;
+    const reloaded = await loadDsl4RuntimeComponent(persisted, frontend, {
+      maxSourceBytes: 16 * 1024,
+      maxAssetFiles: 10,
+      maxAssetBytes: 16 * 1024,
+      subtleCrypto,
+    });
+    assert.equal(reloaded.ok, true);
+    assert.deepEqual(reloaded.storyDocument.sourceOrigins[actionPath], memoryOrigin);
+    assert.deepEqual(reloaded.storyDocument.scenes[1].actions[0].sourceRange, memoryOrigin.range);
+
+    let startupOrigin = null;
+    const startup = await createDsl4RuntimeStartup({
+      featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+      project: persisted,
+      sourceFrontend: frontend,
+      maxSourceBytes: 16 * 1024,
+      maxAssetFiles: 10,
+      maxAssetBytes: 16 * 1024,
+      subtleCrypto,
+      createRuntimeEnvironment(component) {
+        startupOrigin = component.storyDocument.sourceOrigins[actionPath];
+        return {port: {}, dispose() {}};
+      },
+    });
+    assert.equal(startup.ok, true);
+    assert.deepEqual(startupOrigin, memoryOrigin);
+    await startup.session.dispose();
+
+    const missingOrigin = structuredClone(persisted);
+    const storedSource = missingOrigin.extensionStorage.kubohiroyakamishibairuntime4.source;
+    storedSource.sourceOrigins.entries = storedSource.sourceOrigins.entries.filter(
+      ({storyPath}) => storyPath !== actionPath,
+    );
+    const rejected = await loadDsl4RuntimeComponent(missingOrigin, frontend, {
+      maxSourceBytes: 16 * 1024,
+      maxAssetFiles: 10,
+      maxAssetBytes: 16 * 1024,
+      subtleCrypto,
+    });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.diagnostics[0].code, 'K4-SOURCE-ORIGIN-COVERAGE-001');
+    assert.equal(rejected.diagnostics[0].path, '$.source.sourceOrigins');
     assert.equal(JSON.stringify(built).includes(directory), false);
   } finally {
     await rm(directory, {recursive: true, force: true});

@@ -4,7 +4,7 @@ import {createDsl4HistoryReducer} from './history-reducer.js';
 import {createDsl4KamishibaiStructuredDataSession} from './kamishibai-structured-data.js';
 import {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 import {createDsl4RuntimeController} from './runtime-controller.js';
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 /**
  * @typedef {Readonly<{ok: true, profile: string, keymap: Readonly<Record<string, string>>, canonicalKeymap: string, historyEnabled: boolean, diagnostics: ReadonlyArray<never>}>} ResolvedControlProfile
@@ -21,20 +21,14 @@ import {deepFreeze} from './story-document.js';
  * @param {Record<string, unknown>} [details]
  */
 function diagnostic(storyDocument, code, message, details = {}) {
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument);
   return deepFreeze({
     version: 1,
     code,
     severity: 'error',
     message,
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range:
-      sourceMap['/'] ??
-      deepFreeze({
-        start: {line: 1, column: 1, offset: 0},
-        end: {line: 1, column: 1, offset: 0},
-      }),
+    sourceId: origin.sourceId,
+    range: origin.range,
     related: [],
     details,
   });

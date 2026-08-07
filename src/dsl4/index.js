@@ -174,6 +174,13 @@ export {
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
 export {
+  applyDsl4SourceOrigins,
+  createDsl4SourceOriginDescriptor,
+  dsl4SourceOriginDefaultLimits,
+  Dsl4SourceOriginError,
+  validateDsl4SourceOriginDescriptor,
+} from './source-origin-descriptor.js';
+export {
   createDsl4SourceGraph,
   dsl4SourceGraphDefaultLimits,
   Dsl4SourceGraphError,

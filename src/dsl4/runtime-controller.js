@@ -1,6 +1,6 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
@@ -117,15 +117,14 @@ function storyPathSegment(value) {
  * @returns {Readonly<Record<string, unknown>>}
  */
 function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) {
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument, storyPath ?? '/');
   return deepFreeze({
     version: 1,
     code,
     severity: 'error',
     message,
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: storyPath ? (sourceMap[storyPath] ?? sourceMap['/']) : sourceMap['/'],
+    sourceId: origin.sourceId,
+    range: origin.range,
     ...(storyPath ? {storyPath} : {}),
     path: sourcePath,
     related: [],

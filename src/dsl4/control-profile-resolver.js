@@ -1,4 +1,4 @@
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 const zeroRange = deepFreeze({
   start: {line: 1, column: 1, offset: 0},
@@ -11,15 +11,14 @@ const zeroRange = deepFreeze({
  * @param {string} message
  */
 function diagnostic(storyDocument, code, message) {
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument, '/controls');
   return deepFreeze({
     version: 1,
     code,
     severity: 'error',
     message,
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: sourceMap['/'] ?? zeroRange,
+    sourceId: origin.sourceId,
+    range: origin.range ?? zeroRange,
     path: '$.controls.keymaps',
     related: [],
   });

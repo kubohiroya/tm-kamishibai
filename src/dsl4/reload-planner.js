@@ -1,4 +1,4 @@
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 const zeroRange = deepFreeze({
   start: {line: 1, column: 1, offset: 0},
@@ -25,16 +25,6 @@ function runtimeReferenceKind(value, isException) {
 
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
- * @param {string} storyPath
- * @returns {unknown}
- */
-function sourceRange(storyDocument, storyPath) {
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
-  return sourceMap[storyPath] ?? sourceMap['/'] ?? zeroRange;
-}
-
-/**
- * @param {Readonly<Record<string, unknown>>} storyDocument
  * @param {object} input
  * @param {string} input.code
  * @param {'error' | 'warning'} input.severity
@@ -44,14 +34,14 @@ function sourceRange(storyDocument, storyPath) {
  * @param {Record<string, unknown>} [input.details]
  */
 function diagnostic(storyDocument, {code, severity, message, path, storyPath = '/', details = {}}) {
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument, storyPath);
   return deepFreeze({
     version: 1,
     code,
     severity,
     message,
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range: sourceRange(storyDocument, storyPath),
+    sourceId: origin.sourceId,
+    range: origin.range ?? zeroRange,
     ...(storyPath !== '/' ? {storyPath} : {}),
     path,
     related: [],

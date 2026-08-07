@@ -4,7 +4,7 @@ import {
   Dsl4SourceDescriptorError,
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 
 const artifactKeys = new Set([
   'controlProfile',
@@ -33,20 +33,14 @@ function isRecord(value) {
  * @param {string} [path]
  */
 function diagnostic(storyDocument, code, message, path = '$.artifact') {
-  const metadata = /** @type {Record<string, unknown>} */ (storyDocument.metadata ?? {});
-  const sourceMap = /** @type {Record<string, unknown>} */ (storyDocument.sourceMap ?? {});
+  const origin = sourceOriginForStoryPath(storyDocument);
   return deepFreeze({
     version: 1,
     code,
     severity: 'error',
     message,
-    sourceId: typeof metadata.sourceId === 'string' ? metadata.sourceId : 'main',
-    range:
-      sourceMap['/'] ??
-      deepFreeze({
-        start: {line: 1, column: 1, offset: 0},
-        end: {line: 1, column: 1, offset: 0},
-      }),
+    sourceId: origin.sourceId,
+    range: origin.range,
     path,
     related: [],
   });
