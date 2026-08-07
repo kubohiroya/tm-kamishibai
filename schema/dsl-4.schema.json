@@ -311,7 +311,16 @@
         "sequence": {"$ref": "#/$defs/poseSequenceRecognition"},
         "selection": {"$ref": "#/$defs/poseSelectionRecognition"},
         "feedback": {"$ref": "#/$defs/poseFeedback"},
-        "navigation": {"$ref": "#/$defs/poseNavigation"}
+        "navigation": {"$ref": "#/$defs/poseNavigation"},
+        "preview": {"$ref": "#/$defs/posePreview"}
+      }
+    },
+    "posePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mirroring"],
+      "properties": {
+        "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]}
       }
     },
     "poseFeedback": {
@@ -808,6 +817,7 @@
       "required": ["actions"],
       "properties": {
         "poseModel": {"$ref": "#/$defs/assetId"},
+        "posePreview": {"$ref": "#/$defs/posePreview"},
         "actions": {"$ref": "#/$defs/actions"}
       }
     },

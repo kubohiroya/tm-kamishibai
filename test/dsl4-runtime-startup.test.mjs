@@ -106,6 +106,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
   assert.deepEqual(dsl4DefaultFeatureFlags, {
     dsl4Runtime: false,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
@@ -144,6 +145,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   const disabledFlags = {
     dsl4Runtime: false,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: false,
   };
   assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
@@ -151,20 +153,30 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
     dsl4Runtime: true,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
     dsl4Runtime: false,
     dsl4PoseFeedbackModes: true,
+    dsl4PosePreviewMirroring: false,
+    structuredDataIntegrationEnabled: false,
+  });
+  assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
+    dsl4Runtime: false,
+    dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: true,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
     dsl4Runtime: false,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
 
@@ -180,10 +192,66 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
   result.session.dispose();
+});
+
+test('connects pose preview mirroring to a direct runtime port only when enabled', async () => {
+  const component = await packagedProject(
+    'production',
+    false,
+    `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    posePreview:
+      mirroring: unmirrored
+    actions: []
+`,
+  );
+  const disabledPort = {};
+  Object.defineProperty(disabledPort, 'setPosePreviewMirroring', {
+    get() {
+      assert.fail('disabled startup must not inspect the pose preview port');
+    },
+  });
+  const disabled = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {port: disabledPort}),
+  );
+  assert.equal((await disabled.session.start()).status, 'finished');
+  disabled.session.dispose();
+
+  await assert.rejects(
+    createDsl4RuntimeStartup(
+      enabledOptions(component.project, {
+        featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
+        port: {},
+      }),
+    ),
+    /setPosePreviewMirroring/u,
+  );
+
+  const modes = [];
+  const enabled = await createDsl4RuntimeStartup(
+    enabledOptions(component.project, {
+      featureFlags: {dsl4Runtime: true, dsl4PosePreviewMirroring: true},
+      port: {
+        setPosePreviewMirroring(mode) {
+          modes.push(mode);
+        },
+      },
+    }),
+  );
+  assert.equal((await enabled.session.start()).status, 'finished');
+  assert.deepEqual(modes, ['unmirrored']);
+  enabled.session.dispose();
 });
 
 test('enables internal Structured Data independently without exposing a generic palette', async () => {
@@ -210,6 +278,7 @@ test('enables internal Structured Data independently without exposing a generic 
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
     dsl4PoseFeedbackModes: false,
+    dsl4PosePreviewMirroring: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.equal((await result.session.start()).status, 'finished');
@@ -273,6 +342,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
     featureFlags: {
       dsl4Runtime: true,
       dsl4PoseFeedbackModes: false,
+      dsl4PosePreviewMirroring: false,
       structuredDataIntegrationEnabled: false,
     },
   });
@@ -396,6 +466,7 @@ test('creates an atomic runtime environment only after component validation', as
     featureFlags: {
       dsl4Runtime: true,
       dsl4PoseFeedbackModes: false,
+      dsl4PosePreviewMirroring: false,
       structuredDataIntegrationEnabled: false,
     },
   });

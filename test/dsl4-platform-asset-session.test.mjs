@@ -269,6 +269,7 @@ test('creates one shared composition pair and routes a complete lifecycle throug
   assert.equal(typeof session.asyncInputComposition.waitForActorTouchCandidate, 'function');
   assert.equal(typeof session.poseActionPort.waitForPose, 'function');
   assert.equal(typeof session.poseActionPort.poseInputToChangeScene, 'function');
+  assert.equal(session.posePreviewPort, null);
   assert.equal(Object.isFrozen(session), true);
   assert.equal(Object.isFrozen(session.lifecycle), true);
   await session.lifecycle.prepare({assetIds: ['RescuePose', 'Beach']}, context());
@@ -359,6 +360,65 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
     onPoseState() {},
   });
   await enabled.dispose('feedback-enabled');
+});
+
+test('gates pose preview mirroring and uses one composition method before or during camera use', async () => {
+  const disabledLog = [];
+  const disabledSetup = options(runtimeComponent(), disabledLog);
+  Object.defineProperty(disabledSetup.created.tmposeComposition, 'setPreviewMirroring', {
+    get() {
+      assert.fail('disabled pose preview mirroring must not inspect the TMPose method');
+    },
+  });
+  const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
+  assert.equal(disabled.posePreviewPort, null);
+  await disabled.dispose('pose-preview-disabled');
+
+  const missingSetup = options(runtimeComponent(), []);
+  assert.throws(
+    () =>
+      createDsl4PlatformAssetSession({
+        ...missingSetup.value,
+        posePreviewMirroringEnabled: true,
+      }),
+    /setPreviewMirroring/u,
+  );
+
+  let cameraRunning = false;
+  const enabledLog = [];
+  const enabledSetup = options(runtimeComponent(), enabledLog, {
+    tmpose: {
+      startCamera() {
+        cameraRunning = true;
+      },
+      isCameraRunning() {
+        return cameraRunning;
+      },
+      setPreviewMirroring(mode) {
+        enabledLog.push(['pose.preview-mirroring', mode, cameraRunning]);
+      },
+    },
+  });
+  const enabled = createDsl4PlatformAssetSession({
+    ...enabledSetup.value,
+    posePreviewMirroringEnabled: true,
+  });
+  enabled.posePreviewPort.setPosePreviewMirroring('mirrored');
+  await enabled.tmposeComposition.startCamera();
+  enabled.posePreviewPort.setPosePreviewMirroring('unmirrored');
+  assert.deepEqual(
+    enabledLog.filter(([event]) => event === 'pose.preview-mirroring'),
+    [
+      ['pose.preview-mirroring', 'mirrored', false],
+      ['pose.preview-mirroring', 'unmirrored', true],
+    ],
+  );
+  assert.throws(() => enabled.posePreviewPort.setPosePreviewMirroring('reversed'), /invalid/u);
+  await enabled.dispose('pose-preview-enabled');
+  assert.throws(
+    () => enabled.posePreviewPort.setPosePreviewMirroring('mirrored'),
+    (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
+  );
 });
 
 test('keeps compositions, resources, and final disposal isolated between sessions', async () => {

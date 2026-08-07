@@ -246,6 +246,129 @@ test('dispatches every core action and keeps transition separate from scene move
   );
 });
 
+test('applies effective pose preview mirroring on every scene entry without changing recognition', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: unmirrored
+scenes:
+  opening:
+    poseModel: RescuePose
+    posePreview:
+      mirroring: mirrored
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: wave
+  reset:
+    poseModel: RescuePose
+    actions: []
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    posePreviewMirroringEnabled: true,
+    port: {
+      setPosePreviewMirroring(mode) {
+        calls.push({method: 'setPosePreviewMirroring', mode});
+      },
+      waitForPose(payload) {
+        calls.push({method: 'waitForPose', payload});
+      },
+    },
+  });
+
+  const finished = await controller.start();
+  assert.equal(finished.status, 'finished');
+  assert.deepEqual(
+    calls.map(({method, mode}) => [method, mode]),
+    [
+      ['setPosePreviewMirroring', 'mirrored'],
+      ['waitForPose', undefined],
+      ['setPosePreviewMirroring', 'unmirrored'],
+    ],
+  );
+  const recognition = calls.find(({method}) => method === 'waitForPose').payload.recognition;
+  assert.equal(Object.hasOwn(recognition, 'preview'), false);
+  assert.deepEqual(recognition, {
+    confidenceThreshold: 0.5,
+    fullConfidenceHoldSeconds: 1,
+    idleChargePerSecond: 0,
+    idleSound: 'Tick',
+    chargeSound: 'Charge',
+    feedback: {mode: 'scratchMirror'},
+    navigation: {allowSkip: false},
+  });
+
+  controller.reposition('opening');
+  controller.reposition('reset');
+  assert.deepEqual(
+    calls.slice(-2).map(({mode}) => mode),
+    ['mirrored', 'unmirrored'],
+  );
+});
+
+test('keeps pose preview mirroring disabled without inspecting its runtime port', async () => {
+  const port = {};
+  Object.defineProperty(port, 'setPosePreviewMirroring', {
+    get() {
+      assert.fail('disabled pose preview mirroring must not inspect its runtime port');
+    },
+  });
+  const storyDocument = parseStory("kamishibai: '4.0'\nscenes:\n  opening: []\n");
+  const controller = createDsl4RuntimeController({storyDocument, port});
+  assert.equal((await controller.start()).status, 'finished');
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {},
+        posePreviewMirroringEnabled: true,
+      }),
+    /setPosePreviewMirroring/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {},
+        posePreviewMirroringEnabled: 'yes',
+      }),
+    /posePreviewMirroringEnabled/u,
+  );
+});
+
+test('fails closed before scene publication when pose preview mirroring cannot be applied', async () => {
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory("kamishibai: '4.0'\nscenes:\n  opening: []\n"),
+    posePreviewMirroringEnabled: true,
+    port: {
+      setPosePreviewMirroring() {
+        throw new Error('preview unavailable');
+      },
+    },
+  });
+
+  const result = await controller.start();
+  assert.equal(result.status, 'failed');
+  assert.equal(
+    controller.getTrace().some(({type}) => type === 'scene.enter'),
+    false,
+  );
+});
+
 test('preserves non-default pose policy and increments stepIndex across ordered steps', async () => {
   const calls = [];
   const controller = createDsl4RuntimeController({

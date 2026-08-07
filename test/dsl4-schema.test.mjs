@@ -57,11 +57,17 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
   assert.deepEqual(result.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
   assert.deepEqual(result.storyDocument.poseRecognition.navigation, {allowSkip: false});
+  assert.deepEqual(result.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
+  assert.equal(result.storyDocument.scenes[0].posePreview, null);
+  assert.deepEqual(result.storyDocument.scenes[1].posePreview, {mirroring: 'unmirrored'});
+  assert.equal(result.storyDocument.scenes[2].posePreview, null);
   assert.ok(result.storyDocument.sourceMap['/poseRecognition/feedback/mode']);
   assert.ok(result.storyDocument.sourceMap['/poseRecognition/navigation/allowSkip']);
+  assert.ok(result.storyDocument.sourceMap['/poseRecognition/preview/mirroring']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
-test('normalizes pose feedback defaults and rejects unknown policy keys or values', () => {
+test('normalizes pose policy defaults and rejects unknown keys, values, or types', () => {
   const base = [
     "kamishibai: '4.0'",
     'assets:',
@@ -77,17 +83,63 @@ test('normalizes pose feedback defaults and rejects unknown policy keys or value
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
   assert.deepEqual(valid.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
   assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
+  assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
 
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
     ['feedback', '    mode: presenter\n    extra: true\n'],
     ['navigation', '    allowSkip: yes\n'],
     ['navigation', '    allowSkip: false\n    extra: true\n'],
+    ['preview', '    mirroring: reversed\n'],
+    ['preview', '    mirroring: mirrored\n    extra: true\n'],
+    ['preview', '    mirroring: true\n'],
   ]) {
     const source = base.replace('scenes:', `  ${policy[0]}:\n${policy[1]}scenes:`);
     const result = frontend.parse(source);
     assert.equal(result.ok, false, source);
     assert.ok(result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
+test('normalizes a scene pose preview override and maps its source position', () => {
+  const source = [
+    "kamishibai: '4.0'",
+    'assets:',
+    '  Tick: sound',
+    '  Charge: sound',
+    'poseRecognition:',
+    '  idleSound: Tick',
+    '  chargeSound: Charge',
+    '  preview:',
+    '    mirroring: unmirrored',
+    'scenes:',
+    '  opening:',
+    '    posePreview:',
+    '      mirroring: mirrored',
+    '    actions: []',
+    '  reset: []',
+  ].join('\n');
+  const valid = frontend.parse(source, {sourceId: 'pose-preview.kamishibai.yaml'});
+  assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
+  assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'unmirrored'});
+  assert.deepEqual(valid.storyDocument.scenes[0].posePreview, {mirroring: 'mirrored'});
+  assert.equal(valid.storyDocument.scenes[1].posePreview, null);
+  assert.equal(
+    valid.storyDocument.sourceMap['/scenes/opening/posePreview/mirroring'].start.line,
+    13,
+  );
+
+  for (const replacement of [
+    '      mirroring: reversed',
+    '      mirroring: [mirrored]',
+    '      mirroring: mirrored\n      extra: true',
+  ]) {
+    const invalid = frontend.parse(source.replace('      mirroring: mirrored', replacement), {
+      sourceId: 'invalid-pose-preview.kamishibai.yaml',
+    });
+    assert.equal(invalid.ok, false, replacement);
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+    assert.ok(invalid.diagnostics.every(({range}) => range.start.line > 0));
   }
 });
 
