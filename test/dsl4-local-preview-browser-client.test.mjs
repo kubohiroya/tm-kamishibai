@@ -23,6 +23,7 @@ test('browser preview client owns the authenticated generation stream and preser
   const diagnostics = [];
   const accepted = [];
   const commits = [];
+  const runtimeReadyBodies = [];
   const projectBytes = new Uint8Array([80, 75, 3, 4]);
   const currentOne = integrity('A');
   const currentTwo = integrity('B');
@@ -106,7 +107,7 @@ test('browser preview client owns the authenticated generation stream and preser
     },
     async dispose() {},
   };
-  const fetchRequest = async (endpoint) => {
+  const fetchRequest = async (endpoint, init) => {
     if (endpoint === '/api/connect') {
       return Response.json({events: initialRecords});
     }
@@ -125,6 +126,10 @@ test('browser preview client owns the authenticated generation stream and preser
         status: 200,
         headers: {'content-length': String(projectBytes.byteLength)},
       });
+    }
+    if (endpoint === '/api/runtime-ready') {
+      runtimeReadyBodies.push(JSON.parse(init.body));
+      return Response.json({snapshot: {browserRuntimeReady: true}});
     }
     throw new Error(`Unexpected endpoint: ${endpoint}`);
   };
@@ -160,6 +165,7 @@ test('browser preview client owns the authenticated generation stream and preser
   assert.deepEqual(accepted, [1]);
   assert.equal(updates.at(-1).currentIntegrity, currentOne);
   assert.deepEqual(watchStates, ['stabilizing', 'watching']);
+  assert.deepEqual(runtimeReadyBodies, [{version: 1}]);
 
   const encoder = new TextEncoder();
   for (const record of [
