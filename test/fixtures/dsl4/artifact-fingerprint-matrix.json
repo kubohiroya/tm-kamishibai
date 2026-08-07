@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "expectedFingerprint": "sha256-ebiexf3/cgTLaXa//CKSr89k0+m6Rfu394lw9QRkVyA=",
+  "expectedFingerprint": "sha256-15b79kUCGSa5kYMVa/+0T37JE828hRCeSAy6ztHLCWY=",
   "input": {
     "formatVersion": 1,
     "baseSb3Integrity": "sha256-7fS0A6BPhTzDnaWGhtroUdCdBilFgACUDkVvv21Um+c=",
@@ -17,7 +17,7 @@
     },
     "builder": {
       "package": "@kubohiroya/tmpose-kamishibai",
-      "version": "3.2.3",
+      "version": "4.0.0",
       "settings": {
         "channel": "bundled",
         "maxSourceBytes": 1048576,

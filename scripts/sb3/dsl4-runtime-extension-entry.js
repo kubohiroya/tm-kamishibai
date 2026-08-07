@@ -4,7 +4,7 @@ import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-dev';
+const extensionVersion = '4.0.0';
 const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,

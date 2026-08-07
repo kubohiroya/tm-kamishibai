@@ -13,7 +13,7 @@ Copyright © 2026 Hiroya Kubo.
 
 ## 1. 結論
 
-4.0.0-devのStandard成果物は、`kubohiroyakamishibairuntime4`を一度だけ登録する
+4.0.0のStandard成果物は、`kubohiroyakamishibairuntime4`を一度だけ登録する
 **source-composed Standard Runtime**です。旧案の生成Composite ID `kubohiroyakamishibai4`は4.0の
 Standard成果物へ使用しません。5つの外部capabilityは完全固定npm packageの`./composition`から組み込み、
 Structured Dataはこのrepositoryのfirst-party sourceとして組み込みます。
@@ -115,15 +115,22 @@ releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
-3. `pnpm verify:full`を実行する
-4. version付き`release-sources/<version>/app`を書き出す
-5. `pnpm sb3:dsl4-release:check`でSB3の決定性と実行を検証する
-6. download catalogのSHA-256、source commit、build dateを更新する
-7. siteをbuildして公開する
+3. package、runtime reporter、release catalogを同じrelease versionへ更新する
+4. `pnpm verify:full`を実行する
+5. version付き`release-sources/<version>/app`を書き出す
+6. `pnpm sb3:dsl4-release:check`でSB3の決定性と実行を検証する
+7. download catalogのSHA-256、source commit、build dateを更新する
+8. source commitを保持するmerge strategyでrelease PRをmainへ統合する
+9. mainで`pnpm verify:full && pnpm release:check`を再実行する
+10. version tagを作成する
+11. npm packageを公開する
+12. GitHub Releaseを公開する
+13. siteをbuildして公開する
 
-更新中に失敗した場合は新しい成果物を公開しません。公開後のrollbackは、既定OFFの対象surfaceを無効化し、
-直前のpackage／lock pin、release source、download catalogへ順に戻し、`pnpm verify:full`後にsiteを再公開します。
-3.2 `extensionBundles` memberの更新は一件ずつ行い、recovery capsuleを保ったままmember単位で戻します。
+更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release、
+version付きrelease sourceを差し替えません。必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記し、
+直前の推奨downloadへsiteを戻してから修正版を次のpatch versionで公開します。3.2 `extensionBundles`
+memberの更新は一件ずつ行い、recovery capsuleを保ったままmember単位で戻します。
 
 ## 8. 受け入れ基準
 

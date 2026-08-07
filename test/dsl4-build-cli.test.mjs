@@ -389,6 +389,6 @@ scenes:
 test('ships the DSL 4.0 implementation and schema required by the installed CLI', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.files.includes('src/builder/'), true);
-  assert.equal(packageJson.files.includes('src/dsl4/*.js'), true);
+  assert.equal(packageJson.files.includes('src/dsl4/'), true);
   assert.equal(packageJson.files.includes('schema/dsl-4.schema.json'), true);
 });

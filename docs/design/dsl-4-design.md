@@ -1736,7 +1736,7 @@ unsupported browser fallbackの正本は
 
 ## 11. 独立capability projectとKamishibai Bundle
 
-> **4.0.0-dev closeout（2026-08-07）:** この章には3.2 `extensionBundles`を4.0へ適用する比較検討の
+> **4.0.0 closeout（2026-08-08）:** この章には3.2 `extensionBundles`を4.0へ適用する比較検討の
 > 履歴が含まれます。実装済み4.0 Standardの正本は
 > [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。競合する記述では、
 > source-composed Standard Runtime ID `kubohiroyakamishibairuntime4`、完全固定npm provider、

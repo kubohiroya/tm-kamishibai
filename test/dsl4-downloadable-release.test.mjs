@@ -142,7 +142,7 @@ test('starts and finishes the downloaded DSL 4.0 story in the pinned TurboWarp V
       updateDrawableSkinId() {},
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     vm.greenFlag();
     const startupDeadline = Date.now() + 5_000;

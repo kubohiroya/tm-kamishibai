@@ -60,7 +60,7 @@ Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個で�
 
 ### 3.1 template内部control
 
-4.0.0-devの内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
+4.0.0の内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
 `hideFromPalette: true`にします。
 
 - `versionReporter`

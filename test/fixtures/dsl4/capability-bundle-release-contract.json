@@ -3,13 +3,13 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-dev",
+    "version": "4.0.0",
     "extensionId": "kubohiroyakamishibairuntime4",
     "integration": "source-composition",
     "registrationCount": 1,
     "visibleOpcodes": [],
     "hiddenOpcodes": ["versionReporter", "statusReporter", "lastErrorReporter", "setTextValue"],
-    "projectSource": "release-sources/4.0.0-dev/app/project.source.json",
+    "projectSource": "release-sources/4.0.0/app/project.source.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": false
@@ -138,18 +138,26 @@
   "releaseOrder": [
     "release-capability-packages",
     "update-exact-package-and-lock-pins",
+    "set-release-version",
     "run-full-verification",
     "write-versioned-release-source",
     "verify-deterministic-sb3",
     "update-download-catalog-integrity-and-source-commit",
+    "merge-with-provenance-preserving-strategy",
+    "rerun-release-verification",
+    "create-version-tag",
+    "publish-npm-package",
+    "publish-github-release",
     "publish-site"
   ],
   "rollbackOrder": [
     "disable-default-off-feature-surface",
-    "restore-previous-exact-package-and-lock-pins",
-    "restore-previous-release-source-and-download-catalog",
+    "deprecate-released-npm-version-if-required",
+    "annotate-github-release",
+    "restore-previous-recommended-download",
     "rerun-full-verification",
-    "republish-site"
+    "republish-site",
+    "release-fix-as-next-patch"
   ],
   "evidence": [
     "test/dsl4-extension-pins.test.mjs",

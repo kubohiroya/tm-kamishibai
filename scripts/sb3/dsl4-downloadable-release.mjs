@@ -14,7 +14,7 @@ import {createDsl4RuntimeArtifactDescriptor} from '../../src/dsl4/runtime-artifa
 import {createDsl4EmbeddedSourceDescriptor} from '../../src/dsl4/source-descriptor.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0', 'app');
 const extensionId = 'kubohiroyakamishibairuntime4';
 const extensionPath = `extensions/${extensionId}.js`;
 const sourceText = `kamishibai: '4.0'

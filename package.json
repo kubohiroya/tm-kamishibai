@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "3.2.3",
+  "version": "4.0.0",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
@@ -24,8 +24,7 @@
   "files": [
     "bin/",
     "src/builder/",
-    "src/dsl4/*.js",
-    "src/dsl4/object-store/",
+    "src/dsl4/",
     "schema/dsl-4.schema.json",
     "src/converter/",
     "README.md",
@@ -55,12 +54,13 @@
     "test:quick": "node scripts/test/run-suite.mjs quick",
     "test:full": "node scripts/test/run-suite.mjs full",
     "verify:quick": "pnpm lint && pnpm typecheck && pnpm test:quick",
-    "verify:full": "pnpm sb3:check && pnpm lint && pnpm format && pnpm typecheck && pnpm test:full && pnpm e2e && pnpm build && pnpm pack:check",
+    "verify:full": "pnpm sb3:check && pnpm lint && pnpm format && pnpm typecheck && pnpm test:full && pnpm e2e && pnpm build && pnpm pack:smoke",
     "predeploy": "pnpm run build",
     "deploy": "gh-pages -d dist",
     "pack:check": "npm pack --dry-run --ignore-scripts",
+    "pack:smoke": "node scripts/verify-package.mjs",
     "release:check": "npm publish --dry-run --access public",
-    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:check",
+    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
     "tmpose-kamishibai": "node bin/tmpose-kamishibai.mjs"
   },
   "keywords": [
