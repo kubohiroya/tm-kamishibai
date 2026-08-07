@@ -9,6 +9,7 @@ import {
   dsl4StructuredDataDeveloperManifest,
   dsl4StructuredDataStandaloneManifest,
 } from '../src/dsl4/index.js';
+import {createDsl4StandardAppShell} from '../src/dsl4/platform/index.js';
 
 const contract = JSON.parse(
   await readFile(new URL('fixtures/dsl4/app-shell-contract.json', import.meta.url), 'utf8'),
@@ -38,6 +39,7 @@ test('specifies the app shell as a startup-fixed default-off implementation flag
     requires: ['dsl4Runtime'],
     implemented: true,
   });
+  assert.equal(typeof createDsl4StandardAppShell, 'function');
 });
 
 test('keeps actual developer manifests aligned with the optional-surface contract', () => {

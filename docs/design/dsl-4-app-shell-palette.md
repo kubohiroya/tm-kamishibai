@@ -116,9 +116,10 @@ pose feedbackの`presenter` modeはScratch costume、variable、monitorを使い
 投影します。active pose待機だけを表示し、完了・中止・scene移動・stop・live reloadで値をresetして隠し、
 host disposeでDOMを解放します。作者palette／developer paletteのどちらにもblockを追加しません。
 `dsl4PoseFeedbackModes=false`または別の`feedback.mode`ではcontainer設定を読まず、rendererを作りません。
-現段階の実装はrenderer moduleとTurboWarp runtime hostの明示optionまでであり、Standard Web／editor／
-Packager／development previewからの接続と`dsl4AppShell` flagは未実装です。各surfaceは後続のapp shell
-実装で同じconsumerへcontainerを渡します。
+`createDsl4StandardAppShell`はStandard Web／editor／Packager／development previewを同じcompositionで
+TurboWarp runtime hostへ接続します。`dsl4AppShell`がOFFならruntime host、surface、DOMを検査せず、ONでも
+presenter modeになるまでcontainerとlocaleを検査しません。shell disposeはhost-owned presenterを含むruntime
+resourceを先に解放し、最後にshell所有DOMを除去します。
 
 camera previewの反転buttonとcamera menuもDSL actionやScratch spriteではありません。Standard production
 app shellの固定rendererが台本の`poseRecognition.preview.controls`を投影し、locale対応accessible name、
@@ -222,8 +223,8 @@ development previewのreload選択は、次のaccessibility契約を満たすmod
 
 ## 8. feature flagとrollback
 
-実装時に起動時固定・既定OFFの`dsl4AppShell`を追加し、`dsl4Runtime=true`を前提にします。この設計PRでは
-flagをruntimeへ実装しません。実装PRは次をfixtureで検証します。
+起動時固定・既定OFFの`dsl4AppShell`は`dsl4Runtime=true`を前提にします。共有Standard shell実装は次を
+fixtureで検証します。
 
 - `dsl4AppShell=false`: 現行3.2 shellを変更せず使用できる
 - `dsl4Runtime=true, dsl4AppShell=false`: headless／custom hostだけが4.0 runtimeを所有する
@@ -231,7 +232,7 @@ flagをruntimeへ実装しません。実装PRは次をfixtureで検証します
 - 未知のflag: 起動前に拒否する
 - rollback: `dsl4AppShell=false`へ戻すだけで新shellを登録、表示、保存しない
 
-大きな実装差分は、hidden control、presentation state、preview shell、reload modalを別PRへ分けます。
+hidden control、pose feedback以外のpresentation state、preview reload shell／modalは別の責務として分けます。
 
 ## 9. builder契約
 
