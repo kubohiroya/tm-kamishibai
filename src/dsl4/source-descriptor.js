@@ -1,5 +1,6 @@
 import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {validateDsl4CacheIdentity} from './cache-identity.js';
+import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {deepFreeze} from './story-document.js';
 
 const requiredDescriptorKeys = new Set([
@@ -57,11 +58,11 @@ function requireDisplayName(value) {
   if (
     displayName.includes('/') ||
     displayName.includes('\\') ||
-    !displayName.endsWith('.kamishibai.yaml')
+    !hasDsl4SourceFilenameSuffix(displayName)
   ) {
     fail(
       'K4-SOURCE-DESCRIPTOR-001',
-      'displayName must be a .kamishibai.yaml basename without path separators',
+      'displayName must be a DSL 4 source basename without path separators',
     );
   }
   return displayName;

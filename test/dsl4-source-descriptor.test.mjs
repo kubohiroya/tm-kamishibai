@@ -49,6 +49,22 @@ test('creates a canonical immutable UTF-8 descriptor with SHA-256 SRI', async ()
   assert.equal(Object.isFrozen(descriptor), true);
 });
 
+test('accepts every canonical DSL 4 source filename suffix', async () => {
+  for (const displayName of [
+    'story.k4.yml',
+    'story.k4.yaml',
+    'story.kamishibai.yml',
+    'story.kamishibai.yaml',
+  ]) {
+    const descriptor = await createDsl4EmbeddedSourceDescriptor("kamishibai: '4.0'\nscenes: {}\n", {
+      sourceId: 'main',
+      displayName,
+      ...options,
+    });
+    assert.equal(descriptor.displayName, displayName);
+  }
+});
+
 test('validates a JSON-round-tripped descriptor into a frozen copy', async () => {
   const created = await createDsl4EmbeddedSourceDescriptor("kamishibai: '4.0'\nscenes: {}\n", {
     sourceId: 'main',

@@ -1,5 +1,6 @@
 import {deepFreeze} from '../dsl4/story-document.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {hasDsl4SourceFilenameSuffix} from '../dsl4/source-filename.js';
 import {createDsl4PreviewReloadSurface} from './dsl4-preview-reload-surface.js';
 
 const optionKeys = new Set([
@@ -135,8 +136,8 @@ function nullableIntegrity(value, name) {
 /** @param {unknown} value */
 function displayName(value) {
   const name = safeText(value, 'sourceDisplayName', 200);
-  if (name.includes('/') || name.includes('\\') || !name.endsWith('.kamishibai.yaml')) {
-    throw new TypeError('sourceDisplayName must be one .kamishibai.yaml basename');
+  if (name.includes('/') || name.includes('\\') || !hasDsl4SourceFilenameSuffix(name)) {
+    throw new TypeError('sourceDisplayName must be one DSL 4 source basename');
   }
   return name;
 }

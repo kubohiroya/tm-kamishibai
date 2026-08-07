@@ -11,6 +11,11 @@ import {
   Sb3BuilderError,
   validateDsl4ExternalSourceManifest,
 } from '../src/builder/index.js';
+import {
+  dsl4RecommendedSourceFilenameSuffix,
+  dsl4SourceFilenameSuffixes,
+  hasDsl4SourceFilenameSuffix,
+} from '../src/dsl4/source-filename.js';
 
 const subtleCrypto = webcrypto.subtle;
 const maxSourceBytes = 4096;
@@ -19,6 +24,19 @@ const validManifest = Object.freeze({
   mode: 'external',
   sourceId: 'main',
   path: 'story.kamishibai.yaml',
+});
+
+test('defines the recommended and backward-compatible DSL 4 source suffixes', () => {
+  assert.equal(dsl4RecommendedSourceFilenameSuffix, '.k4.yml');
+  assert.deepEqual(dsl4SourceFilenameSuffixes, [
+    '.k4.yml',
+    '.k4.yaml',
+    '.kamishibai.yml',
+    '.kamishibai.yaml',
+  ]);
+  assert.equal(Object.isFrozen(dsl4SourceFilenameSuffixes), true);
+  assert.equal(hasDsl4SourceFilenameSuffix('chapter.k4.yml'), true);
+  assert.equal(hasDsl4SourceFilenameSuffix('chapter.yml'), false);
 });
 
 test('creates one stable cache identity and preserves its database name across renames', async () => {
@@ -101,6 +119,17 @@ test('strictly validates the external manifest and returns an immutable copy', (
 
 test('accepts only a root-level source basename', () => {
   for (const sourcePath of [
+    'story.k4.yml',
+    'story.k4.yaml',
+    'story.kamishibai.yml',
+    'story.kamishibai.yaml',
+  ]) {
+    assert.equal(
+      validateDsl4ExternalSourceManifest({...validManifest, path: sourcePath}).path,
+      sourcePath,
+    );
+  }
+  for (const sourcePath of [
     '',
     '/story.kamishibai.yaml',
     'C:/story.kamishibai.yaml',
@@ -111,6 +140,7 @@ test('accepts only a root-level source basename', () => {
     'scripts/../story.kamishibai.yaml',
     'scripts//story.kamishibai.yaml',
     'story.yaml',
+    'story.K4.YML',
   ]) {
     assert.throws(
       () => validateDsl4ExternalSourceManifest({...validManifest, path: sourcePath}),

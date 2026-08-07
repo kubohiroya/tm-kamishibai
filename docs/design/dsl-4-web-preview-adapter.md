@@ -92,7 +92,7 @@ adapterは選択されたroot直下の`project.source.json`だけを最初に読
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
 - 省略時は`story.kamishibai.yaml`へ正規化する
-- project root直下の`.kamishibai.yaml` basenameである
+- project root直下で、`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるbasenameである
 - `/`、backslash、absolute path、drive prefix、URL scheme、NULを含まない
 - directoryを走査または推測して別のYAMLへfallbackしない
 
