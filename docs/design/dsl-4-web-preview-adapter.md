@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #390の実装基準
+文書状態: Issue #390実装済み（起動時flagは既定OFF）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#262](https://github.com/kubohiroya/tmpose-kamishibai/issues/262)、
@@ -12,6 +12,9 @@ Copyright © 2026 Hiroya Kubo.
 
 機械可読な契約:
 [`web-preview-adapter-contract.json`](../../test/fixtures/dsl4/web-preview-adapter-contract.json)
+
+作者向け手順:
+[`dsl-4-web-preview-author-flow.md`](./dsl-4-web-preview-author-flow.md)
 
 ## 1. 結論
 
@@ -30,11 +33,16 @@ browser adapter、Node watcher、runtimeは別々のlive reloadを実装しま�
 - `createDsl4PreviewSourceWatcher`: Node.jsの`fs.watch`と安定読込
 - `createDsl4PreviewProtocolSession`: handshake、stage、commit、defer、disconnect
 - `createDsl4DevelopmentPreviewShell`: 初回自動開始、診断、reload選択1／2／3
+- `createDsl4BrowserPreviewSourceAdapter`: read-only picker、安定読込、polling、回復診断
+- `createDsl4PreviewSourceProtocolPort`: browser／Node共通のrevision、stage、commit、defer
+- `createDsl4BrowserPreviewCoordinator`: source adapterとprotocolのsession接続
+- `createDsl4WebPreviewShell`: project open、watch status、診断、reload UI、CLI fallback
+- `dsl4AppShell`と`dsl4WebPreviewAdapter`: 起動時固定、既定OFFの依存flag
 - `validate-dsl4`と`build-dsl4`: local検証とfull rebuild
 
-一方、`preview --watch`相当のCLI commandと`dsl4AppShell` flagはまだ公開されていません。したがって、Web
-Preview UIで「CLI live previewを起動するcommand」が利用可能だと表示してはいけません。後続実装は次を満たして
-から一般作者向けfallback文言を確定します。
+一方、`preview --watch`相当のCLI commandはまだ公開されていません。したがって、Web Preview UIで「CLI live
+previewを起動するcommand」が利用可能だと表示してはいけません。後続実装は次を満たしてから一般作者向け
+fallback文言を拡張します。
 
 1. local preview hostがNode watcher、共有protocol、共有reload shellを接続する
 2. `--help`に実在するcommandと必須limitを表示する
@@ -83,13 +91,31 @@ await globalThis.showDirectoryPicker({mode: 'read'});
 adapterは選択されたroot直下の`project.source.json`だけを最初に読みます。manifestは既存
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
-- normalized POSIX relative path
-- segmentが空、`.`、`..`のいずれでもない
-- absolute path、drive prefix、URL scheme、backslash、NULを含まない
-- `.kamishibai.yaml`で終わる
+- 省略時は`story.kamishibai.yaml`へ正規化する
+- normalized POSIX-relative `.kamishibai.yaml` pathである
+- 空、`.`、`..` segment、backslash、absolute path、drive prefix、URL scheme、NULを含まない
+- directoryを走査または推測して別のYAMLへfallbackしない
 
-pathは`/`でsegmentへ分割し、選択済みroot handleから`getDirectoryHandle()`と`getFileHandle()`だけで辿ります。
-文字列pathをOS pathへ変換せず、root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
+選択済みroot handleからpath segmentごとに`getDirectoryHandle()`で辿り、最後に`getFileHandle()`でYAMLだけを取得
+します。文字列pathをOS pathへ変換せず、root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
+
+一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。pose modelはbundle自体を
+directoryにしますが、`assets/`、`images/`、`sounds/`、`pose-models/`等の分類directoryは任意です。
+
+```text
+project-root/
+├── project.source.json
+├── story.kamishibai.yaml
+├── hero.svg
+├── opening.mp3
+└── rescue-pose/
+    ├── model.json
+    ├── metadata.json
+    └── weights.bin
+```
+
+YAML内のlocal asset pathはproject root基準です。YAMLをroot直下へ置く最小構成でも、分類directoryへ置く構成でも、
+adapter／builderはproject rootから同じ正規化済みpathを解決します。
 
 manifestのraw上限は32 KiBです。UTF-8をfatal decodeし、JSON objectと既存manifest schemaを検証します。
 初版session中にmanifestが変更された場合はadapter設定を暗黙更新せず、project再選択またはlocal full rebuildを
@@ -266,8 +292,10 @@ download、polyfill、`webkitdirectory`へ自動fallbackせず、上の明示経
 
 ## 11. test matrixと測定
 
-後続実装はfake handle／deterministic clockで全caseをunit testし、Tier 1の最新stable ChromeとEdgeで同じfixtureを
-E2E実行します。
+fake handle／deterministic clockのunit／protocol testに加え、
+[`web-preview-browser.html`](../../test/fixtures/dsl4/web-preview-browser.html)を実Chromiumで操作します。2026-08-07に
+初回valid、valid reload、invalid candidate、missing／restore、unsupported fallbackをChromiumで確認済みです。
+Edge実測とsave latency測定は、flagを一般作者向け既定ONへ切り替える前のrelease gateとして残します。
 
 | case                     | unit | protocol integration | Chromium E2E | 合否条件                                            |
 | ------------------------ | ---: | -------------------: | -----------: | --------------------------------------------------- |
@@ -296,13 +324,16 @@ Chrome／Edge、OS、version、sample数とともにIssueへ記録しますが�
 
 ## 12. rolloutとrollback
 
-実装は次の小粒PRに分けます。
+実装は次の小粒PR境界で構成します。
 
 1. pure manifest／adapter portとdeterministic polling fixture
 2. File System Access handle adapter
 3. shared preview protocol接続
 4. `dsl4AppShell`と`dsl4WebPreviewAdapter`を既定OFFでUIへ接続
-5. Chromium E2E、測定、作者向け手順、local live preview fallback
+5. Chromium fixture、作者向け手順、既存local validate／build fallback
+
+1〜5はIssue #390で実装済みです。local live preview commandはIssue #258、Edgeと実editorのlatency測定は一般作者向け
+既定ONのrelease gateとして追跡します。
 
 rollbackは`dsl4WebPreviewAdapter=false`だけでWeb固有UIとadapterを初期化しない状態へ戻します。共有source
 frontend、preview protocol、Node watcher、CLI validate/buildはrevertしません。handleを永続化しないため、
