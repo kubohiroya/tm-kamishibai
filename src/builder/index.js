@@ -47,6 +47,10 @@ export {
   loadDsl4BrowserRuntimeComponent,
 } from './dsl4-browser-runtime-component.js';
 export {
+  createDsl4LocalPreviewBrowserRuntime,
+  Dsl4LocalPreviewBrowserRuntimeError,
+} from './dsl4-local-preview-browser-runtime.js';
+export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,

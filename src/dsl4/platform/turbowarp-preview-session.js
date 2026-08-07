@@ -194,6 +194,33 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
     const navigationSession = /** @type {{session: Readonly<Record<string, Function>>}} */ (
       /** @type {unknown} */ (created)
     ).session;
+    try {
+      if (options.inputTarget !== undefined) {
+        navigationSession.attach(options.inputTarget);
+      }
+      if (featureFlags.dsl4SpeechAdvanceTypewriter && options.stagePointerTarget !== undefined) {
+        navigationSession.attachStagePointer(options.stagePointerTarget);
+      }
+    } catch (error) {
+      const cleanupErrors = [];
+      try {
+        navigationSession.dispose();
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+      try {
+        await environment.dispose('preview-input-attachment-failed');
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+      if (cleanupErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...cleanupErrors],
+          'DSL 4.0 preview input attachment and cleanup failed',
+        );
+      }
+      throw error;
+    }
     const owned = ownRuntimeEnvironment(navigationSession, environment);
     return owned;
   }

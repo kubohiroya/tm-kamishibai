@@ -670,6 +670,72 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
 });
 
+test('attaches browser preview key and stage pointer input for the owned session lifetime', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const listeners = new Map();
+  const target = {
+    addEventListener(type, listener) {
+      const values = listeners.get(type) ?? new Set();
+      values.add(listener);
+      listeners.set(type, values);
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener);
+    },
+  };
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true},
+    runtimeComponent,
+    ...platformFixture([]),
+    inputTarget: target,
+    stagePointerTarget: target,
+    resetManagedPresentation() {},
+  });
+  const session = await createSession({
+    storyDocument: runtimeComponent.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+
+  await session.start();
+  assert.equal(listeners.get('keydown')?.size, 1);
+  assert.equal(listeners.get('pointerup')?.size, 1);
+  await session.dispose('input-owner-test');
+  assert.equal(listeners.get('keydown')?.size, 0);
+  assert.equal(listeners.get('pointerup')?.size, 0);
+});
+
+test('releases a preview environment when browser input attachment fails', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const log = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    inputTarget: {},
+    resetManagedPresentation() {},
+  });
+  const session = await createSession({
+    storyDocument: runtimeComponent.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+
+  await assert.rejects(() => session.start(), /input target/u);
+  assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 1);
+  assert.equal(log.filter((entry) => entry[0] === 'pose.release-all').length, 1);
+});
+
 test('fails closed before inspecting preview artifacts while the runtime flag is disabled', () => {
   assert.throws(
     () =>

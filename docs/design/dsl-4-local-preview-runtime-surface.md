@@ -141,6 +141,17 @@ production frontendでbrowser起動時に一度だけparseします。これはN
 artifact検証です。generation wireの`StoryDocument`、raw YAML、source pathをbase loaderへ渡さず、reloadごとの再parseは
 行いません。base component診断時はpartial componentを返さず、stage／sessionを開始しません。
 
+### 5.4 browser runtime owner
+
+browser runtime ownerはbase component検証の成功後にだけ、visible stage、世代別session factory、generation bridgeをこの順で
+一度ずつ起動します。stage canvasを作品keymapの入力targetとし、speech advanceが有効な場合は同じcanvasをstage pointer
+targetとしてsession lifetimeへattachします。generation bridgeはwireで検証済みの`StoryDocument`だけをsession factoryへ渡し、
+外部`.k4.yml`のraw source、file name、pathを受け取りません。
+
+startup failure、startup中のpage close、通常disposeではgeneration bridge／runtime environmentを先に、TurboWarp VM／stageを
+後に解放します。base componentがinvalidな場合はplatformをinspectせず、stage／camera／rendererを確保しません。このownerは
+次段で認証済みhost transportと共通reload overlayへ接続するまでpublic CLIから起動しません。
+
 ## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
