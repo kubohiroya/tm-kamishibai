@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -18,7 +18,6 @@ const manifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
-  path: 'scripts/story.kamishibai.yaml',
 });
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
 
@@ -145,12 +144,36 @@ test('defines finite development defaults and has no side effects before start',
   const state = await watcher.start();
   assert.equal(state.status, 'watching');
   assert.equal(state.published, 1);
-  assert.equal(setup.watched.directory, path.join('/project', 'scripts'));
+  assert.equal(setup.watched.directory, '/project');
   assert.equal(setup.results[0].ok, true);
   assert.equal(setup.results[0].sourceSnapshot.integrity, 'sha256-initial');
   assert.equal(Object.isFrozen(setup.results[0]), true);
   await watcher.dispose();
   assert.equal(setup.watched.closed, 1);
+});
+
+test('watches an explicit root-level source basename without accepting other files', async () => {
+  let loads = 0;
+  const setup = watcherOptions({
+    manifest: {...manifest, path: 'alternate.kamishibai.yaml'},
+    loadSource: async () => {
+      loads += 1;
+      return {descriptor: descriptor(validSource, 'sha256-explicit')};
+    },
+  });
+  const watcher = createDsl4PreviewSourceWatcher(setup.options);
+  await watcher.start();
+  assert.equal(setup.watched.directory, '/project');
+  assert.equal(loads, 1);
+
+  setup.watched.emit('story.kamishibai.yaml');
+  assert.equal(setup.clock.pendingTimers(), 0);
+  setup.watched.emit('alternate.kamishibai.yaml');
+  assert.equal(setup.clock.pendingTimers(), 1);
+  setup.clock.advance(100);
+  await watcher.whenIdle();
+  assert.equal(loads, 2);
+  await watcher.dispose();
 });
 
 test('coalesces source events and publishes only changed stable integrity', async () => {
@@ -341,9 +364,7 @@ test('contains watcher observer failures and validates the lifecycle boundary', 
 test('uses the authorized stable loader and shared frontend for real disk updates', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-preview-watch-'));
   try {
-    const scripts = path.join(directory, 'scripts');
-    const sourcePath = path.join(scripts, 'story.kamishibai.yaml');
-    await mkdir(scripts);
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, validSource);
     const clock = createFakeClock();
     const watched = createFakeWatchFactory();

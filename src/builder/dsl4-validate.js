@@ -1,6 +1,6 @@
 import {readFile, stat} from 'node:fs/promises';
 
-import {canonicalizeDsl4Source} from '../dsl4/source-frontend.js';
+import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
 const textDecoder = new TextDecoder('utf-8', {fatal: true});

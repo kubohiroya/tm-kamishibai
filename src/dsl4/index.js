@@ -1,4 +1,5 @@
-export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-frontend.js';
+export {canonicalizeDsl4Source} from './source-canonicalizer.js';
+export {createDsl4SourceFrontend} from './source-frontend.js';
 export {
   createDsl4ActionRegistrySnapshot,
   dsl4ActorCoreActionNames,
@@ -41,12 +42,24 @@ export {
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';
+export {
+  createDsl4BrowserPreviewSourceAdapter,
+  dsl4BrowserPreviewSourceDefaults,
+  Dsl4BrowserPreviewSourceError,
+  inspectDsl4BrowserPreviewSupport,
+} from './browser-preview-source-adapter.js';
+export {createDsl4BrowserPreviewCoordinator} from './browser-preview-coordinator.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
   dsl4DiagnosticTruncationCode,
   Dsl4DiagnosticPolicyError,
   normalizeDsl4DiagnosticSequence,
 } from './diagnostic-sequence-policy.js';
+export {
+  dsl4DefaultExternalSourcePath,
+  Dsl4ExternalSourceManifestError,
+  validateDsl4ExternalSourceManifestContract,
+} from './external-source-manifest.js';
 export {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
@@ -70,6 +83,7 @@ export {
   dsl4PreviewRequiredCapabilities,
   Dsl4PreviewProtocolError,
 } from './preview-protocol.js';
+export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';

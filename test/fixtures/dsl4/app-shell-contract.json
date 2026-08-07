@@ -18,7 +18,7 @@
       "defaultEnabled": false,
       "startupFixed": true,
       "requires": ["dsl4Runtime"],
-      "implemented": false
+      "implemented": true
     }
   },
   "optionalSurfaces": {
@@ -150,6 +150,17 @@
       "kubohiroyastructdata1debug",
       "kubohiroyakamishibai4debug"
     ],
-    "persistedFields": ["previewBridge", "previewToken", "reloadCandidate", "reloadModalState"]
+    "persistedFields": [
+      "previewBridge",
+      "previewToken",
+      "reloadCandidate",
+      "reloadModalState",
+      "browserPreviewHandle",
+      "browserPreviewTimer",
+      "browserPreviewObserver",
+      "browserPreviewPendingRead",
+      "browserPreviewCandidate",
+      "browserPreviewModalState"
+    ]
   }
 }
