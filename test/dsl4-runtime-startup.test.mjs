@@ -243,6 +243,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4Runtime: true,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
+      dsl4WebPreviewAssetLiveReload: false,
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
