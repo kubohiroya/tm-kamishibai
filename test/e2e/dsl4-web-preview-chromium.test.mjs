@@ -219,14 +219,26 @@ async function pressKey(client, {key, code, windowsVirtualKeyCode}) {
   await client.send('Input.dispatchKeyEvent', {type: 'keyUp', ...params});
 }
 
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onExit = () => finish(true);
+    const finish = (exited) => {
+      clearTimeout(timeout);
+      child.off('exit', onExit);
+      resolve(exited);
+    };
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once('exit', onExit);
+  });
+}
+
 async function stopChrome(child) {
-  if (child.exitCode !== null) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    new Promise((resolve) => setTimeout(resolve, 2_000)),
-  ]);
-  if (child.exitCode === null) child.kill('SIGKILL');
+  if (await waitForExit(child, 2_000)) return;
+  child.kill('SIGKILL');
+  await waitForExit(child, 5_000);
 }
 
 test(
@@ -387,7 +399,12 @@ test(
       client?.close();
       await stopChrome(chrome);
       await new Promise((resolve) => server.close(resolve));
-      await rm(profileDirectory, {recursive: true, force: true});
+      await rm(profileDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      });
     }
   },
 );
