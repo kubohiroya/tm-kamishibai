@@ -60,6 +60,7 @@ function deferred() {
  * @property {Readonly<{actionScopeRef: string, actionViewRef: string}>} [structuredData]
  * @property {(name: string) => string | number | boolean | undefined} getVariable
  * @property {(name: string, value: string | number | boolean) => boolean} setVariable
+ * @property {() => Readonly<{promise: Promise<Readonly<Record<string, unknown>>>, cancel: () => void}>} createAdvanceWait
  */
 
 /**
@@ -132,6 +133,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
+ * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -145,6 +147,7 @@ export function createDsl4RuntimeController({
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
+  speechAdvanceTypewriterEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -186,6 +189,9 @@ export function createDsl4RuntimeController({
   if (typeof poseNavigationPolicyEnabled !== 'boolean') {
     throw new TypeError('poseNavigationPolicyEnabled must be boolean');
   }
+  if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
+    throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -200,6 +206,26 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  if (!speechAdvanceTypewriterEnabled) {
+    const extendedSpeechAction = scenes
+      .flatMap(
+        (scene) =>
+          /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions ?? []),
+      )
+      .find((action) => {
+        if (action.command === 'think') return true;
+        if (action.command !== 'say') return false;
+        const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
+        return ['waitFor', 'characterIntervalSeconds', 'startSound', 'characterSound'].some((key) =>
+          Object.hasOwn(args, key),
+        );
+      });
+    if (extendedSpeechAction) {
+      throw new TypeError(
+        'dsl4SpeechAdvanceTypewriter must be enabled for think, waitFor, or extended speech',
+      );
+    }
+  }
   const sceneIndex = new Map(scenes.map((scene, index) => [scene.id, index]));
   const branches = /** @type {Record<string, ReadonlyArray<Readonly<Record<string, string>>>>} */ (
     storyDocument.branches ?? {}
@@ -256,6 +282,8 @@ export function createDsl4RuntimeController({
   let poseAdvanceLock = null;
   /** @type {{generation: number} | null} */
   let activePoseWait = null;
+  /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void} | null} */
+  let activeAdvanceWait = null;
   /** @type {Record<string, any> | null} */
   let quiesceRequest = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -651,7 +679,73 @@ export function createDsl4RuntimeController({
         variables[name] = value;
         return true;
       },
+      createAdvanceWait() {
+        if (!speechAdvanceTypewriterEnabled) {
+          throw new TypeError('Speech advance input is disabled');
+        }
+        if (!isCurrent(actionGeneration) || signal.aborted) {
+          throw Object.assign(new Error('DSL 4.0 runtime action was cancelled'), {
+            name: 'AbortError',
+          });
+        }
+        if (activeAdvanceWait) {
+          throw new Error('Only one speech advance wait may be active');
+        }
+        const completion = deferred();
+        /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void}} */
+        const wait = {
+          generation: actionGeneration,
+          armed: false,
+          completion,
+          cleanup: () => {},
+        };
+        const close = (outcome = 'cancelled', input = null) => {
+          if (activeAdvanceWait !== wait) return;
+          activeAdvanceWait = null;
+          wait.cleanup();
+          completion.resolve(deepFreeze({outcome, ...(input ? {input: cloneValue(input)} : {})}));
+        };
+        const handleAbort = () => close();
+        wait.cleanup = () => signal.removeEventListener('abort', handleAbort);
+        signal.addEventListener('abort', handleAbort, {once: true});
+        activeAdvanceWait = wait;
+        queueMicrotask(() => {
+          if (activeAdvanceWait === wait && isCurrent(actionGeneration) && !signal.aborted) {
+            wait.armed = true;
+          }
+        });
+        return Object.freeze({
+          promise: completion.promise,
+          cancel: () => close(),
+        });
+      },
     };
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} input */
+  function acceptAdvanceInput(input) {
+    if (!speechAdvanceTypewriterEnabled || !isRecord(input)) return false;
+    const wait = activeAdvanceWait;
+    if (!wait || !wait.armed || !isCurrent(wait.generation)) return false;
+    activeAdvanceWait = null;
+    wait.cleanup();
+    wait.completion.resolve(deepFreeze({outcome: 'advance', input: cloneValue(input)}));
+    emit('speech.advance', {input: cloneValue(input)});
+    return true;
+  }
+
+  /**
+   * Consume an eligible input while an advance wait is active, including the
+   * unarmed interval that protects the speech-starting event from reuse.
+   *
+   * @param {Readonly<Record<string, unknown>>} input
+   */
+  function consumeAdvanceInput(input) {
+    if (!speechAdvanceTypewriterEnabled || !isRecord(input)) return false;
+    const wait = activeAdvanceWait;
+    if (!wait || !isCurrent(wait.generation)) return false;
+    if (!wait.armed) return true;
+    return acceptAdvanceInput(input);
   }
 
   /**
@@ -1609,6 +1703,8 @@ export function createDsl4RuntimeController({
     start,
     stop,
     canAdvance,
+    acceptAdvanceInput,
+    consumeAdvanceInput,
     advance,
     navigate,
     reposition,
