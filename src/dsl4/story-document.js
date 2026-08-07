@@ -307,6 +307,26 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     }),
   );
 
+  const sourceSpeechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.speechStyles ?? {}
+  );
+  const speechStyles = cloneValue(sourceSpeechStyles);
+  const speechStylesNode = document.getIn(['speechStyles'], true);
+  if (speechStylesNode) {
+    sourceMap['/speechStyles'] = sourceRangeForNode(speechStylesNode, lineCounter);
+    for (const [styleId, style] of Object.entries(sourceSpeechStyles)) {
+      const stylePath = `/speechStyles/${storyPathSegment(styleId)}`;
+      const styleNode = document.getIn(['speechStyles', styleId], true);
+      sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
+      for (const field of Object.keys(style)) {
+        sourceMap[`${stylePath}/${storyPathSegment(field)}`] = sourceRangeForNode(
+          document.getIn(['speechStyles', styleId, field], true),
+          lineCounter,
+        );
+      }
+    }
+  }
+
   const sourceScenes = /** @type {Record<string, unknown>} */ (story.scenes);
   const scenes = Object.entries(sourceScenes).map(([sceneId, sourceScene]) => {
     const sourceScenePath = ['scenes', sceneId];
@@ -358,6 +378,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     actors: cloneValue(story.actors ?? {}),
     cover: cloneValue(story.cover ?? null),
     textStyles: cloneValue(story.textStyles ?? {}),
+    speechStyles,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),

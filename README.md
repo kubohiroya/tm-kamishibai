@@ -74,15 +74,35 @@ DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記する�
 入力またはタイムアウトが成立した場合は、残り全文を効果音なしで一括表示して次のactionへ進み、再生中の
 `startSound`も停止します。speech soundの停止単位はAsset Managerのasset IDです。同じsound assetを
 speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り当ててください。
+`noSoundCharacters`には文字音を鳴らさない文字、`restCharacters`には文字音を鳴らさず長めに休止する
+文字を連結して指定します。休止時間は`restCharacterIntervalSeconds`で指定します。文字集合の判定は
+本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`speechStyles`へ
+名前付きでまとめ、`say`／`think`の`style`から再利用できます。`text`、`seconds`、`waitFor`、
+`startSound`はactionごとに指定します。styleを使うactionに文字送り設定を重ねて指定することはできません。
+既存のインライン指定も引き続き使用できます。
 
 ```yaml
-- Hero.say:
-    text: こんにちは！
-    seconds: 10
-    waitFor: advance
+assets:
+  HeroIdle: costume:Hero
+  HeroGreetingVoice: sound
+  Typewriter: sound
+actors:
+  Hero: HeroIdle
+speechStyles:
+  novel:
     characterIntervalSeconds: 0.05
-    startSound: HeroGreetingVoice
     characterSound: Typewriter
+    noSoundCharacters: '「」'
+    restCharacters: '、。…'
+    restCharacterIntervalSeconds: 0.5
+scenes:
+  opening:
+    - Hero.say:
+        text: こんにちは！
+        seconds: 10
+        waitFor: advance
+        style: novel
+        startSound: HeroGreetingVoice
 ```
 
 この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter` feature flagが既定OFFです。入力対象や

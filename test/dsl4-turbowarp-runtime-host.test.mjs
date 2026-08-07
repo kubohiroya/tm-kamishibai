@@ -39,6 +39,9 @@ assets:
   Voice: sound
 actors:
   Hero: HeroIdle
+speechStyles:
+  novel:
+    characterIntervalSeconds: 60
 controls:
   keymaps:
     production:
@@ -48,6 +51,7 @@ scenes:
     - Hero.think:
         text: どうしよう
         waitFor: advance
+        style: novel
         startSound: Voice
     - wait: 0
 `;
@@ -1338,17 +1342,17 @@ test('wires flagged think advance through the standard TurboWarp runtime host', 
   assert.equal(stageListeners.has('pointerup'), true);
   const run = result.host.start();
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (log.some(([name, message]) => name === 'actor.think' && message === 'どうしよう')) break;
+    if (log.some(([name, message]) => name === 'actor.think' && message === 'ど')) break;
     await Promise.resolve();
   }
   assert.equal(
-    log.some(([name, message]) => name === 'actor.think' && message === 'どうしよう'),
+    log.some(([name, message]) => name === 'actor.think' && message === 'ど'),
     true,
     JSON.stringify(log),
   );
   assert.equal(log.filter(([name, sound]) => name === 'media.play' && sound === 'Voice').length, 1);
   assert.ok(
-    log.findIndex(([name, message]) => name === 'actor.think' && message === 'どうしよう') <
+    log.findIndex(([name, message]) => name === 'actor.think' && message === 'ど') <
       log.findIndex(([name, sound]) => name === 'media.play' && sound === 'Voice'),
     JSON.stringify(log),
   );
@@ -1368,6 +1372,11 @@ test('wires flagged think advance through the standard TurboWarp runtime host', 
   assert.equal(stageListeners.get('pointerup')(event), true);
   assert.deepEqual(counters, {preventDefault: 1, stopPropagation: 1});
   assert.equal((await run).status, 'finished');
+  assert.equal(
+    log.filter(([name, message]) => name === 'actor.think' && message === 'どうしよう').length,
+    1,
+    JSON.stringify(log),
+  );
   assert.equal(
     log.filter(([name, message]) => name === 'actor.think' && message === '').length,
     1,

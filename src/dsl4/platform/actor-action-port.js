@@ -57,6 +57,9 @@ function validateSpeechPayload(value, command, extended) {
     'characterIntervalSeconds',
     'startSound',
     'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
@@ -74,6 +77,33 @@ function validateSpeechPayload(value, command, extended) {
     throw portError(
       'K4-ACTOR-PORT-001',
       `${command}.characterSound requires characterIntervalSeconds`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'noSoundCharacters') &&
+    (!Object.hasOwn(value, 'characterIntervalSeconds') || !Object.hasOwn(value, 'characterSound'))
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.noSoundCharacters requires characterIntervalSeconds and characterSound`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'restCharacters') !== Object.hasOwn(value, 'restCharacterIntervalSeconds')
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.restCharacters and restCharacterIntervalSeconds must be specified together`,
+    );
+  }
+  if (
+    (Object.hasOwn(value, 'restCharacters') ||
+      Object.hasOwn(value, 'restCharacterIntervalSeconds')) &&
+    !Object.hasOwn(value, 'characterIntervalSeconds')
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.restCharacters requires characterIntervalSeconds`,
     );
   }
   return value;
@@ -407,6 +437,32 @@ export function createDsl4ActorActionPort(options) {
     if (Object.hasOwn(value, 'characterSound')) {
       characterSound = requireNonEmptyString(value.characterSound, 'characterSound', command);
     }
+    let noSoundCharacters;
+    if (Object.hasOwn(value, 'noSoundCharacters')) {
+      noSoundCharacters = requireNonEmptyString(
+        value.noSoundCharacters,
+        'noSoundCharacters',
+        command,
+      );
+    }
+    let restCharacters;
+    if (Object.hasOwn(value, 'restCharacters')) {
+      restCharacters = requireNonEmptyString(value.restCharacters, 'restCharacters', command);
+    }
+    let restCharacterIntervalSeconds;
+    if (Object.hasOwn(value, 'restCharacterIntervalSeconds')) {
+      restCharacterIntervalSeconds = requireFiniteNumber(
+        value.restCharacterIntervalSeconds,
+        'restCharacterIntervalSeconds',
+        command,
+      );
+      if (restCharacterIntervalSeconds <= 0) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.restCharacterIntervalSeconds must be greater than zero`,
+        );
+      }
+    }
     const signal = validateContext(context);
     if (signal.aborted) throw abortError();
     for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
@@ -425,6 +481,9 @@ export function createDsl4ActorActionPort(options) {
           ...(characterIntervalSeconds === undefined ? {} : {characterIntervalSeconds}),
           ...(startSound === undefined ? {} : {startSound}),
           ...(characterSound === undefined ? {} : {characterSound}),
+          ...(noSoundCharacters === undefined ? {} : {noSoundCharacters}),
+          ...(restCharacters === undefined ? {} : {restCharacters}),
+          ...(restCharacterIntervalSeconds === undefined ? {} : {restCharacterIntervalSeconds}),
         }),
         actionContext,
       ),

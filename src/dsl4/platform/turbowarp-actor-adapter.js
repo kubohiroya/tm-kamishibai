@@ -74,6 +74,9 @@ function validateSpeechSpec(value, operation, extended) {
     'characterIntervalSeconds',
     'startSound',
     'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (!Object.hasOwn(value, 'text') || unknown.length > 0) {
@@ -86,6 +89,33 @@ function validateSpeechSpec(value, operation, extended) {
     throw adapterError(
       'K4-TW-ACTOR-002',
       `${operation}.characterSound requires characterIntervalSeconds`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'noSoundCharacters') &&
+    (!Object.hasOwn(value, 'characterIntervalSeconds') || !Object.hasOwn(value, 'characterSound'))
+  ) {
+    throw adapterError(
+      'K4-TW-ACTOR-002',
+      `${operation}.noSoundCharacters requires characterIntervalSeconds and characterSound`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'restCharacters') !== Object.hasOwn(value, 'restCharacterIntervalSeconds')
+  ) {
+    throw adapterError(
+      'K4-TW-ACTOR-002',
+      `${operation}.restCharacters and restCharacterIntervalSeconds must be specified together`,
+    );
+  }
+  if (
+    (Object.hasOwn(value, 'restCharacters') ||
+      Object.hasOwn(value, 'restCharacterIntervalSeconds')) &&
+    !Object.hasOwn(value, 'characterIntervalSeconds')
+  ) {
+    throw adapterError(
+      'K4-TW-ACTOR-002',
+      `${operation}.restCharacters requires characterIntervalSeconds`,
     );
   }
   return value;
@@ -241,6 +271,18 @@ export function createDsl4TurboWarpActorPlatform(options) {
         `${kind}.characterIntervalSeconds must be greater than zero`,
       );
     }
+    const restCharacterInterval = Object.hasOwn(value, 'restCharacterIntervalSeconds')
+      ? durationMilliseconds(
+          /** @type {number} */ (value.restCharacterIntervalSeconds),
+          `${kind}.restCharacterInterval`,
+        )
+      : null;
+    if (restCharacterInterval !== null && restCharacterInterval <= 0) {
+      throw adapterError(
+        'K4-TW-ACTOR-002',
+        `${kind}.restCharacterIntervalSeconds must be greater than zero`,
+      );
+    }
     let characterSound = null;
     let startSound = null;
     if (Object.hasOwn(value, 'startSound')) {
@@ -264,10 +306,28 @@ export function createDsl4TurboWarpActorPlatform(options) {
     if (startSound !== null && (!playSpeechSound || !stopSpeechSound)) {
       throw adapterError('K4-TW-ACTOR-002', `${kind}.startSound requires sound playback callbacks`);
     }
-    const segments = segmentText(text);
-    if (!Array.isArray(segments) || segments.some((segment) => typeof segment !== 'string')) {
-      throw adapterError('K4-TW-ACTOR-002', 'segmentText must return a string array');
-    }
+    /** @param {unknown} source @param {string} field */
+    const segmentGraphemes = (source, field) => {
+      if (typeof source !== 'string' || source.length === 0) {
+        throw adapterError('K4-TW-ACTOR-002', `${kind}.${field} must be a non-empty string`);
+      }
+      const result = segmentText(source);
+      if (!Array.isArray(result) || result.some((segment) => typeof segment !== 'string')) {
+        throw adapterError('K4-TW-ACTOR-002', 'segmentText must return a string array');
+      }
+      return result;
+    };
+    const segments = text.length === 0 ? [] : segmentGraphemes(text, 'text');
+    const noSoundSegments = new Set(
+      Object.hasOwn(value, 'noSoundCharacters')
+        ? segmentGraphemes(value.noSoundCharacters, 'noSoundCharacters')
+        : [],
+    );
+    const restSegments = new Set(
+      Object.hasOwn(value, 'restCharacters')
+        ? segmentGraphemes(value.restCharacters, 'restCharacters')
+        : [],
+    );
     const showBubble = kind === 'say' ? say : /** @type {Function} */ (think);
     let state = 'idle';
     /** @type {unknown} */
@@ -312,12 +372,21 @@ export function createDsl4TurboWarpActorPlatform(options) {
       }
       void playback.catch((error) => fail(error));
     };
+    /** @param {string} segment */
+    const playCharacterSound = (segment) => {
+      if (noSoundSegments.has(segment) || restSegments.has(segment)) return;
+      playSound(characterSound);
+    };
     /** @param {number} count @param {boolean} withSound */
     const reveal = (count, withSound) => {
       visibleCount = Math.min(count, segments.length);
       showBubble(segments.slice(0, visibleCount).join(''), actor);
-      if (withSound) playSound(characterSound);
+      if (withSound && visibleCount > 0) playCharacterSound(segments[visibleCount - 1]);
     };
+    const nextCharacterInterval = () =>
+      visibleCount > 0 && restSegments.has(segments[visibleCount - 1])
+        ? /** @type {number} */ (restCharacterInterval)
+        : /** @type {number} */ (characterInterval);
     /** @param {'advance' | 'timeout' | 'cancel'} reason */
     const complete = (reason) => {
       if (state === 'completed' || state === 'failed') return;
@@ -362,17 +431,17 @@ export function createDsl4TurboWarpActorPlatform(options) {
               reveal(1, false);
               playSound(startSound);
               if (state !== 'running') return;
-              playSound(characterSound);
+              playCharacterSound(segments[0]);
               const tick = () => {
                 characterTimer = undefined;
                 if (state !== 'running' || visibleCount >= segments.length) return;
                 reveal(visibleCount + 1, true);
                 if (state === 'running' && visibleCount < segments.length) {
-                  characterTimer = scheduler.setTimeout(tick, characterInterval);
+                  characterTimer = scheduler.setTimeout(tick, nextCharacterInterval());
                 }
               };
               if (state === 'running' && visibleCount < segments.length) {
-                characterTimer = scheduler.setTimeout(tick, characterInterval);
+                characterTimer = scheduler.setTimeout(tick, nextCharacterInterval());
               }
             } else {
               reveal(segments.length, false);

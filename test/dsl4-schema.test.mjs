@@ -92,6 +92,9 @@ scenes:
         characterIntervalSeconds: 0.08
         startSound: HeroVoice
         characterSound: TalkTick
+        noSoundCharacters: "「」"
+        restCharacters: "、。…"
+        restCharacterIntervalSeconds: 0.5
 `;
   const result = frontend.parse(source, {sourceId: 'speech.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
@@ -115,6 +118,9 @@ scenes:
           characterIntervalSeconds: 0.08,
           startSound: 'HeroVoice',
           characterSound: 'TalkTick',
+          noSoundCharacters: '「」',
+          restCharacters: '、。…',
+          restCharacterIntervalSeconds: 0.5,
         },
         stableId: 'thinking',
       },
@@ -127,10 +133,86 @@ scenes:
     'characterIntervalSeconds',
     'startSound',
     'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
   ]) {
     assert.ok(result.storyDocument.sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
   }
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
+});
+
+test('normalizes reusable speech styles and validates style references and dependencies', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick: sound
+  WrongTick: backdrop
+actors:
+  Hero: HeroIdle
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.08
+    characterSound: TalkTick
+    noSoundCharacters: "「」"
+    restCharacters: "、。…"
+    restCharacterIntervalSeconds: 0.5
+scenes:
+  opening:
+    - Hero.say:
+        text: スタイルで進む。
+        waitFor: advance
+        style: novel
+`;
+  const result = frontend.parse(source, {sourceId: 'speech-style.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.speechStyles, {
+    novel: {
+      characterIntervalSeconds: 0.08,
+      characterSound: 'TalkTick',
+      noSoundCharacters: '「」',
+      restCharacters: '、。…',
+      restCharacterIntervalSeconds: 0.5,
+    },
+  });
+  assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {
+    text: 'スタイルで進む。',
+    waitFor: 'advance',
+    style: 'novel',
+  });
+  for (const field of [
+    'characterIntervalSeconds',
+    'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[`/speechStyles/novel/${field}`], field);
+  }
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/style']);
+
+  for (const [needle, replacement] of [
+    ['        style: novel', '        style: missing'],
+    ['        style: novel', '        style: novel\n        characterIntervalSeconds: 0.1'],
+    ['    characterSound: TalkTick\n', ''],
+    ['    characterSound: TalkTick', '    characterSound: WrongTick'],
+    ['    restCharacterIntervalSeconds: 0.5\n', ''],
+  ]) {
+    const invalid = frontend.parse(source.replace(needle, replacement));
+    assert.equal(invalid.ok, false, replacement);
+  }
+
+  const missingSound = frontend.parse(
+    source.replace('    characterSound: TalkTick', '    characterSound: MissingTick'),
+  );
+  assert.equal(missingSound.ok, false);
+  assert.ok(
+    missingSound.diagnostics.some(
+      ({code, path}) => code === 'K4-REF-001' && path === '$.speechStyles.novel.characterSound',
+    ),
+    JSON.stringify(missingSound.diagnostics),
+  );
 });
 
 test('rejects incomplete or malformed speech and non-sound speech assets', () => {
@@ -154,6 +236,26 @@ scenes:
     ['        seconds: 1', '        seconds: -1'],
     ['        seconds: 1', '        seconds: 1\n        characterIntervalSeconds: 0'],
     ['        seconds: 1', '        seconds: 1\n        characterSound: TalkTick'],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        noSoundCharacters: "「」"',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacters: "、。…"',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacterIntervalSeconds: 0.5',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacters: "、。…"\n        restCharacterIntervalSeconds: 0',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        characterSound: TalkTick\n        noSoundCharacters: ""',
+    ],
     ['        seconds: 1', '        seconds: 1\n        unexpected: true'],
   ];
   for (const [needle, replacement] of replacements) {

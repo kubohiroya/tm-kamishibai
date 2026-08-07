@@ -225,6 +225,42 @@ scenes:
   });
 });
 
+test('indexes a lazy character sound from each referenced speech style', () => {
+  const storyDocument = parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick:
+    kind: sound
+    name: TalkTick
+    loading: lazy
+actors:
+  Hero: HeroIdle
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    characterSound: TalkTick
+    noSoundCharacters: "「」"
+scenes:
+  first:
+    - Hero.say:
+        text: hello
+        waitFor: advance
+        style: novel
+  second:
+    - wait: 0
+`);
+  const index = createDsl4AssetDependencyIndex(storyDocument);
+
+  assert.deepEqual(index.scenes.first, {
+    all: ['TalkTick'],
+    eager: [],
+    lazy: ['TalkTick'],
+    sceneRetained: [],
+  });
+  assert.deepEqual(index.scenes.second.all, []);
+});
+
 test('returns a deeply immutable index and rejects non-StoryDocument input', () => {
   const index = createDsl4AssetDependencyIndex(
     parse(`

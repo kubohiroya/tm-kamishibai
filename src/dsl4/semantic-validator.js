@@ -4,7 +4,15 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 
-const identifierSections = ['assets', 'actors', 'textStyles', 'variables', 'branches', 'scenes'];
+const identifierSections = [
+  'assets',
+  'actors',
+  'textStyles',
+  'speechStyles',
+  'variables',
+  'branches',
+  'scenes',
+];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
 /**
@@ -123,7 +131,10 @@ export function validateDsl4Semantics(
   const actors = /** @type {Record<string, string>} */ (story.actors ?? {});
   const scenes = /** @type {Record<string, unknown>} */ (story.scenes ?? {});
   const branches = /** @type {Record<string, Record<string, string>[]>} */ (story.branches ?? {});
-  const styles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
+  const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
+  const speechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.speechStyles ?? {}
+  );
   const stableIds = new Map();
   const storyInputCodes = new Map();
 
@@ -190,6 +201,16 @@ export function validateDsl4Semantics(
         message: `Initial costume ${initialCostume} must target actor ${actor}`,
       });
     }
+  }
+
+  for (const [styleId, style] of Object.entries(speechStyles)) {
+    addReferenceIssue(
+      issues,
+      assets,
+      style.characterSound,
+      'sound',
+      `$.speechStyles.${styleId}.characterSound`,
+    );
   }
 
   const cover = /** @type {Record<string, unknown> | undefined} */ (story.cover);
@@ -354,9 +375,10 @@ export function validateDsl4Semantics(
           }
         } else if (opcode === 'setText') {
           const style = /** @type {Record<string, unknown>} */ (value).style;
-          addReferenceIssue(issues, styles, style, undefined, `${actionPath}.style`);
+          addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
+          addReferenceIssue(issues, speechStyles, speech.style, undefined, `${actionPath}.style`);
           for (const field of ['startSound', 'characterSound']) {
             addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
           }

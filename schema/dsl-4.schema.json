@@ -11,6 +11,7 @@
     "actors": {"$ref": "#/$defs/actors"},
     "cover": {"$ref": "#/$defs/cover"},
     "textStyles": {"$ref": "#/$defs/textStyles"},
+    "speechStyles": {"$ref": "#/$defs/speechStyles"},
     "variables": {"$ref": "#/$defs/variables"},
     "loading": {"$ref": "#/$defs/loadingScreen"},
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
@@ -305,6 +306,28 @@
       "type": "object",
       "propertyNames": {"$ref": "#/$defs/id"},
       "additionalProperties": {"$ref": "#/$defs/textStyle"}
+    },
+    "speechStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characterIntervalSeconds"],
+      "dependentRequired": {
+        "noSoundCharacters": ["characterSound"],
+        "restCharacters": ["restCharacterIntervalSeconds"],
+        "restCharacterIntervalSeconds": ["restCharacters"]
+      },
+      "properties": {
+        "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "characterSound": {"$ref": "#/$defs/assetId"},
+        "noSoundCharacters": {"type": "string", "minLength": 1},
+        "restCharacters": {"type": "string", "minLength": 1},
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "speechStyles": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/speechStyle"}
     },
     "variableValue": {
       "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}]
@@ -679,15 +702,58 @@
         {"required": ["seconds"], "properties": {"seconds": true}},
         {"required": ["waitFor"], "properties": {"waitFor": true}}
       ],
-      "dependentRequired": {"characterSound": ["characterIntervalSeconds"]},
+      "dependentRequired": {
+        "characterSound": ["characterIntervalSeconds"],
+        "noSoundCharacters": ["characterIntervalSeconds", "characterSound"],
+        "restCharacters": ["characterIntervalSeconds", "restCharacterIntervalSeconds"],
+        "restCharacterIntervalSeconds": ["characterIntervalSeconds", "restCharacters"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"style": true},
+            "required": ["style"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {"characterIntervalSeconds": true},
+                  "required": ["characterIntervalSeconds"]
+                },
+                {
+                  "properties": {"characterSound": true},
+                  "required": ["characterSound"]
+                },
+                {
+                  "properties": {"noSoundCharacters": true},
+                  "required": ["noSoundCharacters"]
+                },
+                {
+                  "properties": {"restCharacters": true},
+                  "required": ["restCharacters"]
+                },
+                {
+                  "properties": {"restCharacterIntervalSeconds": true},
+                  "required": ["restCharacterIntervalSeconds"]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
         "seconds": {"type": "number", "minimum": 0},
         "waitFor": {"const": "advance"},
+        "style": {"$ref": "#/$defs/styleId"},
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "startSound": {"$ref": "#/$defs/assetId"},
-        "characterSound": {"$ref": "#/$defs/assetId"}
+        "characterSound": {"$ref": "#/$defs/assetId"},
+        "noSoundCharacters": {"type": "string", "minLength": 1},
+        "restCharacters": {"type": "string", "minLength": 1},
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "setSkinArgs": {
