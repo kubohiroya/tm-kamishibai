@@ -21,6 +21,9 @@ function isRecord(value) {
  * @param {(diagnostic: Readonly<Record<string, unknown>> | null) => unknown | Promise<unknown>} [options.onDiagnostic]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onWatchStatus]
  * @param {(error: unknown) => unknown} [options.onError]
+ * @param {Record<string, Function>} [options.reloadSurface]
+ * @param {(request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.restartGeneration]
+ * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.resolveReloadAvailability]
  */
 export function createDsl4BrowserAssetReloadPipeline(options) {
   if (!isRecord(options)) throw new TypeError('browser asset pipeline options are required');
@@ -50,6 +53,40 @@ export function createDsl4BrowserAssetReloadPipeline(options) {
   if (options.onError !== undefined && typeof options.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
+  if (options.restartGeneration !== undefined && typeof options.restartGeneration !== 'function') {
+    throw new TypeError('restartGeneration must be a function');
+  }
+  if (
+    options.resolveReloadAvailability !== undefined &&
+    typeof options.resolveReloadAvailability !== 'function'
+  ) {
+    throw new TypeError('resolveReloadAvailability must be a function');
+  }
+
+  /** @type {{submitCandidate: Function, setDiagnostic: Function, setWatchState: Function} | null} */
+  let reloadSurface = null;
+  if (options.reloadSurface !== undefined) {
+    if (!isRecord(options.reloadSurface)) {
+      throw new TypeError('reloadSurface must be an object');
+    }
+    const submitCandidate =
+      options.reloadSurface.submitCandidate ?? options.reloadSurface.submitReloadCandidate;
+    const setDiagnostic =
+      options.reloadSurface.setDiagnostic ?? options.reloadSurface.setReloadDiagnostic;
+    const setWatchState =
+      options.reloadSurface.setWatchState ?? options.reloadSurface.setReloadWatchState;
+    if (
+      typeof submitCandidate !== 'function' ||
+      typeof setDiagnostic !== 'function' ||
+      typeof setWatchState !== 'function'
+    ) {
+      throw new TypeError('reloadSurface does not implement the shared reload bridge');
+    }
+    if (typeof options.restartGeneration !== 'function') {
+      throw new TypeError('reloadSurface requires restartGeneration');
+    }
+    reloadSurface = {submitCandidate, setDiagnostic, setWatchState};
+  }
 
   /** @param {unknown} error */
   function reportError(error) {
@@ -58,6 +95,51 @@ export function createDsl4BrowserAssetReloadPipeline(options) {
     } catch {
       // Error observers cannot change pipeline state.
     }
+  }
+
+  /** @param {Readonly<Record<string, any>>} event */
+  function assetAvailability(event) {
+    if (options.resolveReloadAvailability) return options.resolveReloadAvailability(event);
+    return deepFreeze({
+      story: {available: true, reason: null},
+      scene: {available: true, reason: null},
+      action: {
+        available: false,
+        replaySafe: false,
+        reason: 'The asset driver did not prove the current action replay-safe.',
+      },
+    });
+  }
+
+  /** @param {Readonly<Record<string, any>>} event */
+  function submitReloadCandidate(event) {
+    if (!reloadSurface || event.type !== 'preview.asset.staged') return;
+    const changedIds = Array.isArray(event.classification?.changedAssets)
+      ? event.classification.changedAssets
+          .map((/** @type {unknown} */ asset) => (isRecord(asset) ? asset.id : null))
+          .filter((/** @type {unknown} */ id) => typeof id === 'string')
+      : [];
+    Promise.resolve(
+      reloadSurface.submitCandidate({
+        channel: 'asset',
+        channelRevision: event.revision,
+        availability: assetAvailability(event),
+        changedIds,
+        initiatingInputId: null,
+        async apply(/** @type {Readonly<Record<string, any>>} */ request) {
+          await /** @type {Record<string, Function>} */ (protocol).whenIdle();
+          const committed = await commit({
+            requestedPreference: request.requestedPreference,
+            actualAnchor: request.actualAnchor,
+            fallbackReason: request.fallbackReason,
+          });
+          if (committed.result.type !== 'preview.asset.committed') {
+            throw new TypeError('asset generation commit was not acknowledged');
+          }
+        },
+        restart: options.restartGeneration,
+      }),
+    ).catch(reportError);
   }
 
   /** @type {Record<string, Function> | null} */
@@ -72,8 +154,23 @@ export function createDsl4BrowserAssetReloadPipeline(options) {
       /** @type {(bytes: Uint8Array, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} */ (
         options.adapterOptions.inspectAudio
       ),
-    onDiagnostic: options.onDiagnostic,
-    onStatus: options.onWatchStatus,
+    async onDiagnostic(diagnostic) {
+      await options.onDiagnostic?.(diagnostic);
+      await reloadSurface?.setDiagnostic('asset', diagnostic);
+    },
+    async onStatus(state) {
+      await options.onWatchStatus?.(state);
+      if (!reloadSurface) return;
+      const reloadStatus =
+        state.status === 'stabilizing'
+          ? 'stabilizing'
+          : state.status === 'disposed'
+            ? 'disconnected'
+            : state.hidden === true
+              ? 'paused'
+              : 'watching';
+      await reloadSurface.setWatchState('asset', reloadStatus);
+    },
     onError: reportError,
     onCandidate(candidate) {
       if (!protocol) throw new TypeError('browser asset protocol is not initialized');
@@ -87,8 +184,14 @@ export function createDsl4BrowserAssetReloadPipeline(options) {
   const transaction = createDsl4AssetReloadTransaction({
     assetAdapter: adapter,
     prepareGeneration: options.prepareGeneration,
-    onEvent: options.onEvent,
-    onDiagnostic: options.onDiagnostic,
+    async onEvent(event) {
+      submitReloadCandidate(event);
+      await options.onEvent?.(event);
+    },
+    async onDiagnostic(diagnostic) {
+      await options.onDiagnostic?.(diagnostic);
+      await reloadSurface?.setDiagnostic('asset', diagnostic);
+    },
     onError: reportError,
   });
   protocol = createDsl4AssetReloadProtocolSession({
