@@ -640,6 +640,7 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
     previousSession: null,
     preserveManagedPresentation: false,
   });
+  assert.equal(log.length, 0);
   await first.start();
   assert.deepEqual(resets, ['reset']);
   assert.equal(first.getState().runtime.status, 'finished');
@@ -649,6 +650,7 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
     previousSession: first,
     preserveManagedPresentation: true,
   });
+  assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 1);
   first.stop('preview-reload');
   await first.dispose('preview-replaced');
   await second.start();
@@ -701,18 +703,80 @@ test('releases a preview environment when the wire StoryDocument rejects navigat
     resetManagedPresentation() {},
   });
 
-  await assert.rejects(
-    () =>
-      createSession({
-        storyDocument: incompatible.storyDocument,
-        previousSession: null,
-        preserveManagedPresentation: false,
-      }),
-    /incompatible with the base runtime/u,
-  );
+  const rejected = await createSession({
+    storyDocument: incompatible.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  assert.equal(log.length, 0);
+  await assert.rejects(() => rejected.start(), /incompatible with the base runtime/u);
   assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 1);
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 1);
   assert.equal(log.filter((entry) => entry[0] === 'pose.release-all').length, 1);
+});
+
+test('disposes an unstarted preview candidate without allocating platform resources', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const log = [];
+  let resetCount = 0;
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {
+      resetCount += 1;
+    },
+  });
+  const candidate = await createSession({
+    storyDocument: runtimeComponent.storyDocument,
+    previousSession: {},
+    preserveManagedPresentation: false,
+  });
+
+  await candidate.dispose('deferred-candidate');
+  assert.equal(resetCount, 0);
+  assert.deepEqual(log, []);
+  assert.equal(candidate.getState().disposed, true);
+});
+
+test('cancels preview initialization after reset without creating a late environment', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const log = [];
+  let finishReset;
+  const reset = new Promise((resolve) => {
+    finishReset = resolve;
+  });
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {
+      return reset;
+    },
+  });
+  const candidate = await createSession({
+    storyDocument: runtimeComponent.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  const run = candidate.start();
+  const disposal = candidate.dispose('page-close');
+  finishReset();
+
+  await assert.rejects(() => run, /disposed/u);
+  await disposal;
+  assert.deepEqual(log, []);
+  assert.equal(candidate.getState().disposed, true);
 });
 
 test('withholds every platform dependency until the packaged component validates', async () => {
