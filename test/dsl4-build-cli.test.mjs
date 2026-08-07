@@ -162,6 +162,21 @@ test('parses a complete build-dsl4 contract and rejects incomplete or unbounded 
     () => parseCliArguments([...cliArguments(fixture), '--enable-source-includes']),
     /Missing required option: --max-source-files/u,
   );
+  assert.throws(
+    () =>
+      parseCliArguments(
+        cliArguments(fixture, 'story.sb3', [
+          '--enable-source-includes',
+          '--max-source-files',
+          '8',
+          '--max-total-source-bytes',
+          String(limits.maxSourceBytes - 1),
+          '--max-include-depth',
+          '4',
+        ]),
+      ),
+    /greater than or equal/u,
+  );
 
   assert.throws(
     () => parseCliArguments(cliArguments(fixture).filter((value) => value !== '--channel')),

@@ -21,6 +21,7 @@ import {validateBundle} from './validate.js';
 export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
+export {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 export {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 export {
   classifyDsl4PreviewChange,

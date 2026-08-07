@@ -7,6 +7,7 @@ import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 import {ensureDsl4ExternalSourceCacheIdentity} from './dsl4-external-source.js';
 import {Sb3BuilderError} from './errors.js';
+import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {readSb3} from './sb3.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -122,6 +123,13 @@ export async function buildDsl4RuntimeComponentFile(options) {
   if (!options.sourceFrontend || typeof options.sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
+  const sourceIncludesEnabled =
+    isRecord(options.featureFlags) && options.featureFlags.dsl4SourceIncludes === true;
+  const sourceLimits = resolveDsl4BuildSourceLimits({
+    sourceIncludesEnabled,
+    maxSourceBytes: options.maxSourceBytes,
+    maxTotalSourceBytes: options.maxTotalSourceBytes,
+  });
 
   const [baseSb3Bytes, sourceManifestBytes] = await Promise.all([
     readInput(baseSb3, 'base SB3'),
@@ -168,7 +176,7 @@ export async function buildDsl4RuntimeComponentFile(options) {
       }
       const {project} = readSb3(candidateBytes);
       const loaded = await loadDsl4RuntimeComponent(project, options.sourceFrontend, {
-        maxSourceBytes: options.maxSourceBytes,
+        maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
         maxAssetFiles: options.maxAssetFiles,
         maxAssetBytes: options.maxTotalAssetBytes,
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,

@@ -275,6 +275,41 @@ test('enforces finite file, byte, and include-depth limits', async () => {
   );
 });
 
+test('accepts exact individual and graph-total byte limits and rejects one byte less', async () => {
+  const sources = {
+    'story.k4.yml': 'include: chapter.k4.yml\nscenes: {}\n',
+    'chapter.k4.yml': 'assets: {}\n',
+  };
+  const encoder = new TextEncoder();
+  const individualLimit = Math.max(
+    ...Object.values(sources).map((source) => encoder.encode(source).byteLength),
+  );
+  const totalLimit = Object.values(sources).reduce(
+    (total, source) => total + encoder.encode(source).byteLength,
+    0,
+  );
+  const boundary = await createDsl4SourceGraph('story.k4.yml', {
+    readSource: sourceLoader(sources),
+    limits: {maxSourceBytes: individualLimit, maxTotalSourceBytes: totalLimit},
+  });
+  assert.equal(boundary.totalSourceBytes, totalLimit);
+
+  await rejectsCode(
+    createDsl4SourceGraph('story.k4.yml', {
+      readSource: sourceLoader(sources),
+      limits: {maxSourceBytes: individualLimit - 1, maxTotalSourceBytes: totalLimit},
+    }),
+    'K4-SOURCE-SIZE-001',
+  );
+  await rejectsCode(
+    createDsl4SourceGraph('story.k4.yml', {
+      readSource: sourceLoader(sources),
+      limits: {maxSourceBytes: individualLimit, maxTotalSourceBytes: totalLimit - 1},
+    }),
+    'K4-INCLUDE-LIMIT-001',
+  );
+});
+
 test('keeps source includes behind an immutable default-off runtime flag', () => {
   assert.equal(dsl4DefaultFeatureFlags.dsl4SourceIncludes, false);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4SourceIncludes: true}), /requires dsl4Runtime/u);
