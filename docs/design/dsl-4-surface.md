@@ -321,6 +321,17 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 - `scratchBinding`: Scratch側の有限な0〜100の変更を定義済みtick境界で取り込む
 - `presenter`: Scratch変数を使わず、app shellの専用presenterへsemantic stateを通知する
 
+`presenter`はapp shellが所有するDOM rendererです。対象actor／pose／stepを文字で示し、認識度と
+チャージを別々のnative `progress`と数値で表示します。領域にはaccessible nameを付け、状態変化を
+`role="status"`のpolite live regionでも通知するため、色だけには依存しません。文言のlocaleは
+台本ではなくapp shellの起動時optionで与えます。Scratch variable、monitor、palette blockは作成・参照しません。
+
+`waiting`／`charging`の間だけ表示し、`completed`／`cancelled`では値を0へ戻して領域を隠します。terminal
+状態自体はlive regionへ通知してから保持し、次のactive eventで更新します。scene移動、skip、abort、stop、
+live reload、runtime disposeはpose actionの最終`cancelled`を同じrendererへ通し、host disposeではDOMと
+live regionを解放します。追加の開発者observerはpresenterと独立して通知し、一方の例外やrejectで他方または
+pose実行を停止しません。
+
 Scratch方式はStageの非cloud scalar変数「ポーズ認識」「チャージ」を使い、0〜1のsemantic
 stateを0〜100へ投影します。`scratchMirror`はScratch側の書換えを読みません。
 `scratchBinding`は各pose計算tickの開始時に1回だけ両変数をatomicにsampleし、そのtickの
@@ -333,6 +344,19 @@ terminal eventではbindingを無効にして両変数を直ちに0へ戻し、p
 platformは0〜100の既存Stage variable slider monitorをvariable IDで一意に解決します。両monitorは
 adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
 completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
+
+presenterのsurface境界は次のとおりです。いずれも同じsemantic event consumerを使用し、
+`dsl4PoseFeedbackModes=true`かつ台本が`feedback.mode: presenter`の場合だけapp shellがcontainerを接続します。
+
+| surface              | source channel | presenter接続                                                |
+| -------------------- | -------------- | ------------------------------------------------------------ |
+| Web player           | bundled        | production app shellの固定DOM領域                            |
+| 通常TurboWarp editor | unbundled      | DSL 4.0 hostを明示接続したeditor shellのDOM領域              |
+| Packager             | bundled        | package済みproduction app shellの固定DOM領域                 |
+| development preview  | unbundled      | preview shellのDOM領域。reload後も新sessionのeventだけを表示 |
+
+surface固有の暗黙modeは設けません。flag OFF、別のfeedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、
+DOMを生成しません。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

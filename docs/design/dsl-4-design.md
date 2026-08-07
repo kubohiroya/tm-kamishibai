@@ -550,6 +550,13 @@ mappingへまとめます。sequenceとselectionは排他でActor sequenceを優
 state eventはrenderer非依存とし、`phase`、`target`、`pose`、`stepIndex`、0〜1の`confidence`／`progress`
 だけを通知します。Scratch／presenter adapterとnavigation bypassはこのpure event契約のconsumerとして
 分離し、起動時固定・既定OFFの`dsl4PoseFeedbackModes`がOFFなら登録しません。
+Standardの`presenter` consumerはScratch variableやmonitorを使わず、actor／pose／step、認識度、チャージを
+app shell所有のDOMへ表示します。認識度とチャージは別々のnative `progress`と数値で示し、accessible nameと
+polite live regionを持たせ、色だけに依存しません。`waiting`／`charging`で表示し、`completed`／`cancelled`で
+値を0へ戻して隠します。scene移動、skip、abort、stop、live reload、disposeの最終`cancelled`も同じ経路で
+処理し、disposeではDOMを解放します。追加の開発者observerはpresenterと独立して例外隔離します。
+Web player、通常editor、Packager、development previewは同じconsumerをそれぞれのapp shell containerへ
+接続し、surface固有の暗黙modeを追加しません。flag OFFまたは別modeではpresenter optionを検査しません。
 `allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
 消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
 `navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。

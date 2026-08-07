@@ -104,11 +104,18 @@ app shellは紙芝居のpresentationと最小のlifecycle入力だけを担当�
 | close                   | button入力とtitle presentationへの復帰 | 実行中sessionをstopし、所有resourceを解放する            |
 | official site           | 固定button target                      | 既存のWeb Link capabilityで固定HTTPS URLを開く           |
 | finished                | costume／次の操作button                | 最終actionのcommit後に終了状態を返す                     |
+| pose feedback           | なし                                   | 認識度／チャージの専用DOM表示とlive status               |
 | camera preview controls | 固定DOM button／menuとaccessibility    | preview geometry、反転、camera列挙／選択へ接続する       |
 
 language menu、close、official siteはDSL actionではなくapp shellの固定UIです。作品ごとの台本からopcodeや
 URLを追加できる経路にしません。Web Link capabilityは標準作品に必要なproduction依存ですが、その
 汎用paletteを作者へ表示する必要はありません。
+
+pose feedbackの`presenter` modeはScratch costume、variable、monitorを使いません。Standard app shellの
+固定DOM rendererがactor／pose／step、認識度、チャージを、二つのnative `progress`、数値、polite live regionへ
+投影します。active pose待機だけを表示し、完了・中止・scene移動・stop・live reloadで値をresetして隠し、
+host disposeでDOMを解放します。作者palette／developer paletteのどちらにもblockを追加しません。
+`dsl4PoseFeedbackModes=false`または別の`feedback.mode`ではcontainer設定を読まず、rendererを作りません。
 
 camera previewの反転buttonとcamera menuもDSL actionやScratch spriteではありません。Standard production
 app shellの固定rendererが台本の`poseRecognition.preview.controls`を投影し、locale対応accessible name、
