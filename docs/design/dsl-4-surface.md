@@ -321,6 +321,19 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 - `scratchBinding`: Scratch側の有限な0〜100の変更を定義済みtick境界で取り込む
 - `presenter`: Scratch変数を使わず、app shellの専用presenterへsemantic stateを通知する
 
+`presenter`はapp shellが所有するDOM rendererです。対象actor／pose／stepを文字で示し、認識度と
+チャージを別々のnative `progress`と数値で表示します。領域にはaccessible nameを付け、状態変化を
+`role="status"`のpolite live regionでも通知するため、色だけには依存しません。文言のlocaleは
+台本ではなくapp shellの起動時optionで与えます。Scratch variable、monitor、palette blockは作成・参照しません。
+visualなprogressと数値は各tickで更新しますが、live regionはphase、actor、pose、stepのいずれかが変化した
+場合だけ更新します。同じphaseの連続tickを読み上げqueueへ追加しません。
+
+`waiting`／`charging`の間だけ表示し、`completed`／`cancelled`では値を0へ戻して領域を隠します。terminal
+状態自体はlive regionへ通知してから保持し、次のactive eventで更新します。scene移動、skip、abort、stop、
+live reload、runtime disposeはpose actionの最終`cancelled`を同じrendererへ通し、host disposeではDOMと
+live regionを解放します。追加の開発者observerはpresenterと独立して通知し、一方の例外やrejectで他方または
+pose実行を停止しません。
+
 Scratch方式はStageの非cloud scalar変数「ポーズ認識」「チャージ」を使い、0〜1のsemantic
 stateを0〜100へ投影します。`scratchMirror`はScratch側の書換えを読みません。
 `scratchBinding`は各pose計算tickの開始時に1回だけ両変数をatomicにsampleし、そのtickの
@@ -333,6 +346,21 @@ terminal eventではbindingを無効にして両変数を直ちに0へ戻し、p
 platformは0〜100の既存Stage variable slider monitorをvariable IDで一意に解決します。両monitorは
 adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
 completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
+
+presenterの現行実装範囲はplatform rendererとTurboWarp runtime hostの明示的な
+`poseFeedbackPresenter` optionまでです。`dsl4PoseFeedbackModes=true`かつ台本が
+`feedback.mode: presenter`の場合に、custom hostがcontainerを渡せば利用できます。Standard app shellへの
+自動登録と`dsl4AppShell` flagはまだ実装していません。
+
+| surface              | source channel | 現在のStandard接続 | 対応方針                                                     |
+| -------------------- | -------------- | ------------------ | ------------------------------------------------------------ |
+| Web player           | bundled        | 未接続             | production app shellが同じhost optionへ固定DOM領域を渡す     |
+| 通常TurboWarp editor | unbundled      | 未接続             | editor shellが明示的にhost optionへDOM領域を渡す             |
+| Packager             | bundled        | 未接続             | package済みproduction app shellが同じconsumerを使用する      |
+| development preview  | unbundled      | 未接続             | preview shellが新sessionごとのcontainerを所有し、旧DOMを破棄 |
+
+各surfaceの接続は`dsl4AppShell`実装の後続作業です。surface固有の暗黙modeは設けません。flag OFF、別の
+feedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、DOMを生成しません。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

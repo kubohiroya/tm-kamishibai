@@ -8,6 +8,7 @@ import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
+import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
@@ -260,6 +261,8 @@ async function createRuntimeEnvironment(
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
   let scratchPoseFeedbackAdapter = null;
+  /** @type {ReturnType<typeof createDsl4PoseFeedbackPresenter> | null} */
+  let poseFeedbackPresenter = null;
   /** @type {Record<string, Function> | null} */
   let runtimeExpressionComposition = null;
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
@@ -315,9 +318,32 @@ async function createRuntimeEnvironment(
         mode: feedbackMode,
       });
     }
-    const poseStateObserver = poseFeedbackEnabled
-      ? (scratchPoseFeedbackAdapter?.onPoseState ?? options.onPoseState)
-      : undefined;
+    /** @type {((event: Readonly<Record<string, unknown>>) => unknown) | undefined} */
+    let poseStateObserver = scratchPoseFeedbackAdapter?.onPoseState;
+    if (feedbackMode === 'presenter') {
+      if (options.poseFeedbackPresenter !== undefined) {
+        poseFeedbackPresenter = createDsl4PoseFeedbackPresenter(options.poseFeedbackPresenter);
+      }
+      const externalObserver = options.onPoseState;
+      if (externalObserver !== undefined && typeof externalObserver !== 'function') {
+        throw new TypeError('onPoseState must be a function');
+      }
+      /** @type {Array<(event: Readonly<Record<string, unknown>>) => unknown>} */
+      const observers = [];
+      if (poseFeedbackPresenter !== null) observers.push(poseFeedbackPresenter.onPoseState);
+      if (typeof externalObserver === 'function') observers.push(externalObserver);
+      if (observers.length > 0) {
+        poseStateObserver = (event) => {
+          for (const observer of observers) {
+            try {
+              Promise.resolve(observer(event)).catch(() => {});
+            } catch {
+              // Presenter observers are non-authoritative and isolated from pose execution.
+            }
+          }
+        };
+      }
+    }
     const poseStateBinding =
       feedbackMode === 'scratchBinding'
         ? scratchPoseFeedbackAdapter?.readPoseStateBinding
@@ -595,6 +621,7 @@ async function createRuntimeEnvironment(
           const errors = [];
           for (const release of [
             () => scratchPoseFeedbackAdapter?.dispose(),
+            () => poseFeedbackPresenter?.dispose(),
             () => cameraPreviewControls?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
@@ -620,6 +647,7 @@ async function createRuntimeEnvironment(
     const cleanupErrors = [];
     for (const release of [
       () => scratchPoseFeedbackAdapter?.dispose(),
+      () => poseFeedbackPresenter?.dispose(),
       () => cameraPreviewControls?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
@@ -679,7 +707,8 @@ async function createRuntimeEnvironment(
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
- * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState] presenter observer
+ * @param {Readonly<Record<string, unknown>>} [options.poseFeedbackPresenter] Standard app-shell presenter options
+ * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState] additional presenter observer
  * @param {Readonly<Record<string, unknown>>} [options.cameraPreviewControls]
  * @param {(blob: Blob) => string} [options.createObjectURL]
  * @param {(url: string) => void} [options.revokeObjectURL]

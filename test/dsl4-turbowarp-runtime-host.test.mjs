@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {webcrypto} from 'node:crypto';
+import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -177,6 +177,70 @@ async function packagedProject(
       historyNavigationAvailable,
       subtleCrypto,
     },
+  );
+}
+
+async function packagedPoseProject(sourceText) {
+  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
+    sourceId: 'main',
+    displayName: 'story.kamishibai.yaml',
+    maxSourceBytes: limits.maxSourceBytes,
+    subtleCrypto,
+  });
+  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    sourceDescriptor,
+    'production',
+    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
+  );
+  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const poseFiles = new Map([
+    ['metadata.json', new TextEncoder().encode('{"labels":["help"]}')],
+    ['model.json', new TextEncoder().encode('{"modelTopology":{}}')],
+    ['weights.bin', new Uint8Array([1])],
+  ]);
+  const poseSourceFiles = [...poseFiles].map(([filePath, bytes]) => ({
+    path: filePath,
+    size: bytes.byteLength,
+    integrity: `sha256-${createHash('sha256').update(bytes).digest('base64')}`,
+  }));
+  const snapshotAssets = Object.values(parsed.storyDocument.assets)
+    .map((asset) => ({
+      id: asset.id,
+      kind: asset.kind,
+      loading: asset.loading,
+      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      source:
+        asset.kind === 'poseModel'
+          ? {
+              type: 'file',
+              inputPath: asset.file,
+              mode: 'directory',
+              files: poseSourceFiles,
+            }
+          : {type: 'project', name: asset.name},
+    }))
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  const assetBundle = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    {
+      manifest: {formatVersion: 1, assets: snapshotAssets},
+      getFile(assetId, filePath) {
+        assert.equal(assetId, 'RescuePose');
+        return new Uint8Array(poseFiles.get(filePath));
+      },
+    },
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+  );
+  return installDsl4PackagedRuntimeComponent(
+    baseProject(),
+    parsed.storyDocument,
+    sourceDescriptor,
+    artifactResult.artifact,
+    assetBundle,
+    {channel: 'unbundled', ...limits, subtleCrypto},
   );
 }
 
@@ -394,6 +458,7 @@ function platformFixture(log) {
   };
   return {
     runtime,
+    tmposeComposition,
     poseConfidence,
     poseProgress,
     monitorRecords,
@@ -503,6 +568,11 @@ test('selects the startup-fixed Scratch consumer and reserves host observers for
       assert.fail('disabled pose feedback must not inspect its observer');
     },
   });
+  Object.defineProperty(disabledOptions, 'poseFeedbackPresenter', {
+    get() {
+      assert.fail('disabled pose feedback must not inspect its presenter');
+    },
+  });
   const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
   await disabled.host.dispose('feedback-disabled');
@@ -529,11 +599,20 @@ scenes:
   const scratchFixture = platformFixture([]);
   scratchFixture.poseConfidence.value = 75;
   scratchFixture.poseProgress.value = 50;
-  const scratch = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(scratchProject, scratchFixture, {
-      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
-    }),
-  );
+  const scratchOptions = enabledOptions(scratchProject, scratchFixture, {
+    featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+  });
+  Object.defineProperty(scratchOptions, 'onPoseState', {
+    get() {
+      assert.fail('Scratch feedback must not inspect a presenter observer');
+    },
+  });
+  Object.defineProperty(scratchOptions, 'poseFeedbackPresenter', {
+    get() {
+      assert.fail('Scratch feedback must not inspect DOM presenter options');
+    },
+  });
+  const scratch = await createDsl4TurboWarpRuntimeHost(scratchOptions);
   assert.equal(scratch.ok, true, JSON.stringify(scratch.diagnostics));
   await scratch.host.dispose('scratch-feedback-enabled');
   assert.equal(scratchFixture.poseConfidence.value, 0);
@@ -566,14 +645,120 @@ scenes:
     ),
     /onPoseState/u,
   );
+  const presenterDocument = createFakeDocument();
   const presenter = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(presenterProject, platformFixture([]), {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
-      onPoseState() {},
+      poseFeedbackPresenter: {container: presenterDocument.body},
     }),
   );
   assert.equal(presenter.ok, true, JSON.stringify(presenter.diagnostics));
+  assert.equal(findByDataset(presenterDocument.body, 'dsl4PoseFeedback', 'true').hidden, true);
+  assert.ok(findByDataset(presenterDocument.body, 'dsl4PoseFeedbackStatus', 'true'));
   await presenter.host.dispose('presenter-feedback-enabled');
+  assert.equal(presenterDocument.body.children.length, 0);
+});
+
+test('renders presenter pose lifecycle and isolates its additional developer observer', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+`);
+  const fixture = platformFixture([]);
+  const document = createFakeDocument();
+  const phases = [];
+  let confidence = 0;
+  let now = 0;
+  let scheduled = null;
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmposeComposition.confidenceOf = () => confidence;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      poseFeedbackPresenter: {container: document.body},
+      onPoseState(event) {
+        phases.push(event.phase);
+        if (event.phase === 'charging') throw new Error('developer observer failed');
+      },
+      poseNow: () => now,
+      poseSchedule(callback) {
+        scheduled = callback;
+        return () => {
+          if (scheduled === callback) scheduled = null;
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const root = findByDataset(document.body, 'dsl4PoseFeedback', 'true');
+  const status = findByDataset(document.body, 'dsl4PoseFeedbackStatus', 'true');
+
+  const run = result.host.start();
+  for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof scheduled, 'function');
+  assert.equal(root.hidden, false);
+  assert.equal(root.dataset.phase, 'waiting');
+  assert.match(status.textContent, /Waiting for pose: Hero \/ help \/ Step 1/u);
+
+  confidence = 1;
+  now = 1000;
+  scheduled();
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(phases, ['waiting', 'charging', 'completed']);
+  assert.equal(root.hidden, true);
+  assert.match(status.textContent, /Pose completed/u);
+
+  confidence = 0;
+  now = 2000;
+  scheduled = null;
+  const stoppedRun = result.host.start();
+  for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof scheduled, 'function');
+  assert.equal(root.hidden, false);
+  assert.equal(root.dataset.phase, 'waiting');
+  assert.equal(result.host.stop('presenter-stop').status, 'stopped');
+  await stoppedRun;
+  assert.deepEqual(phases.slice(-2), ['waiting', 'cancelled']);
+  assert.equal(root.hidden, true);
+  assert.match(status.textContent, /Pose cancelled/u);
+  for (const row of root.children.filter((child) => child.tagName === 'DIV')) {
+    assert.equal(row.children[1].value, 0);
+  }
+
+  await result.host.dispose('presenter-lifecycle');
+  assert.equal(document.body.children.length, 0);
 });
 
 test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
