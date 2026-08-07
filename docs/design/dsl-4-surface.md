@@ -507,14 +507,14 @@ iconへ反映します。
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                    |
-| `Actor.moveTo`             | `{x, y, seconds, stableId?}`                                                        |
+| action                     | 引数                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                 |
+| `Actor.moveTo`             | `{x, y, seconds, stableId?}`                                                                     |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, characterIntervalSeconds?, startSound?, characterSound?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                  |
-| `Actor.setText`            | `{text, style, stableId?}`                                                          |
-| `Actor.pose`               | `{steps, stableId?}`                                                                |
+| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                               |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                       |
+| `Actor.pose`               | `{steps, stableId?}`                                                                             |
 
 `Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
 `seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または

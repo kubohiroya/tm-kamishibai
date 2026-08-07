@@ -114,10 +114,10 @@ function createSpeechExecution(command, args) {
     runtime: fake.runtime,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playCharacterSound(sound) {
+    playSpeechSound(sound) {
       sounds.push(['play', sound]);
     },
-    stopCharacterSound(sound) {
+    stopSpeechSound(sound) {
       sounds.push(['stop', sound]);
     },
   });
@@ -338,8 +338,8 @@ test('contains character sound cleanup failure and still settles and clears the 
     runtime: fake.runtime,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playCharacterSound() {},
-    stopCharacterSound() {
+    playSpeechSound() {},
+    stopSpeechSound() {
       throw new Error('sound cleanup failed');
     },
   });
@@ -420,8 +420,8 @@ test('typewriter reveals one grapheme cluster per tick and validates character s
     runtime: fake.runtime,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playCharacterSound() {},
-    stopCharacterSound() {},
+    playSpeechSound() {},
+    stopSpeechSound() {},
   });
   const operation = platform.host.createSay(fake.actor, {
     text: '👨‍👩‍👧‍👦A',

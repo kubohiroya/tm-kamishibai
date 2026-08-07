@@ -164,8 +164,8 @@ function durationMilliseconds(seconds, operation) {
  * @param {unknown} [options.scheduler]
  * @param {number} [options.frameMilliseconds]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
- * @param {(sound: string) => unknown | Promise<unknown>} [options.playCharacterSound]
- * @param {(sound: string) => unknown | Promise<unknown>} [options.stopCharacterSound]
+ * @param {(sound: string) => unknown | Promise<unknown>} [options.playSpeechSound]
+ * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSpeechSound]
  * @param {(text: string) => string[]} [options.segmentText]
  */
 export function createDsl4TurboWarpActorPlatform(options) {
@@ -175,20 +175,14 @@ export function createDsl4TurboWarpActorPlatform(options) {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
   const {runtime, say, think} = validateRuntime(options.runtime, speechAdvanceTypewriterEnabled);
-  if (
-    options.playCharacterSound !== undefined &&
-    typeof options.playCharacterSound !== 'function'
-  ) {
-    throw new TypeError('playCharacterSound must be a function');
+  if (options.playSpeechSound !== undefined && typeof options.playSpeechSound !== 'function') {
+    throw new TypeError('playSpeechSound must be a function');
   }
-  if (
-    options.stopCharacterSound !== undefined &&
-    typeof options.stopCharacterSound !== 'function'
-  ) {
-    throw new TypeError('stopCharacterSound must be a function');
+  if (options.stopSpeechSound !== undefined && typeof options.stopSpeechSound !== 'function') {
+    throw new TypeError('stopSpeechSound must be a function');
   }
-  const playCharacterSound = options.playCharacterSound;
-  const stopCharacterSound = options.stopCharacterSound;
+  const playSpeechSound = options.playSpeechSound;
+  const stopSpeechSound = options.stopSpeechSound;
   const segmentText = options.segmentText ?? defaultSegmentText;
   if (typeof segmentText !== 'function') throw new TypeError('segmentText must be a function');
   const scheduler = validateScheduler(options.scheduler ?? createDefaultScheduler());
@@ -258,13 +252,13 @@ export function createDsl4TurboWarpActorPlatform(options) {
       }
       characterSound = value.characterSound;
     }
-    if (characterSound !== null && (!playCharacterSound || !stopCharacterSound)) {
+    if (characterSound !== null && (!playSpeechSound || !stopSpeechSound)) {
       throw adapterError(
         'K4-TW-ACTOR-002',
         `${kind}.characterSound requires sound playback callbacks`,
       );
     }
-    if (startSound !== null && (!playCharacterSound || !stopCharacterSound)) {
+    if (startSound !== null && (!playSpeechSound || !stopSpeechSound)) {
       throw adapterError('K4-TW-ACTOR-002', `${kind}.startSound requires sound playback callbacks`);
     }
     const segments = segmentText(text);
@@ -291,10 +285,10 @@ export function createDsl4TurboWarpActorPlatform(options) {
       characterTimer = undefined;
     };
     const stopSounds = () => {
-      if (!stopCharacterSound) return;
+      if (!stopSpeechSound) return;
       for (const sound of playedSounds) {
         try {
-          const operation = Promise.resolve(stopCharacterSound(sound));
+          const operation = Promise.resolve(stopSpeechSound(sound));
           void operation.catch(() => {});
         } catch {
           // Sound cleanup cannot prevent the speech operation from settling.
@@ -304,10 +298,10 @@ export function createDsl4TurboWarpActorPlatform(options) {
     };
     /** @param {string | null} sound */
     const playSound = (sound) => {
-      if (sound === null || !playCharacterSound) return;
+      if (sound === null || !playSpeechSound) return;
       let playback;
       try {
-        playback = Promise.resolve(playCharacterSound(sound));
+        playback = Promise.resolve(playSpeechSound(sound));
         playedSounds.add(sound);
       } catch (error) {
         fail(error);

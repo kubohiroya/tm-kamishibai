@@ -377,9 +377,7 @@ function platformFixture(log) {
       return true;
     },
     getMimeType(name) {
-      return name === 'Bell' || name === 'Tick' || name === 'Voice'
-        ? 'audio/wav'
-        : 'image/svg+xml';
+      return name === 'Bell' || name === 'Tick' || name === 'Voice' ? 'audio/wav' : 'image/svg+xml';
     },
     applyToStage(name) {
       log.push(['media.stage', name]);

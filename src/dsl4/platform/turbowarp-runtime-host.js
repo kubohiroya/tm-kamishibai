@@ -309,11 +309,11 @@ async function createRuntimeEnvironment(
       ...(speechAdvanceTypewriterEnabled
         ? {
             speechAdvanceTypewriterEnabled: true,
-            playCharacterSound(sound) {
+            playSpeechSound(sound) {
               if (!assetSession) throw new Error('Asset session is unavailable');
               return assetSession.assetManagerComposition.playSound(sound);
             },
-            stopCharacterSound(sound) {
+            stopSpeechSound(sound) {
               return assetSession?.assetManagerComposition.stopSound(sound);
             },
           }
