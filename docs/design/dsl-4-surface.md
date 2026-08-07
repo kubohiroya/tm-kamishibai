@@ -529,5 +529,6 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 | `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action          |
 
 入力byte数、YAML node数、nesting深度、scalar長、scene数、sceneごとのaction数、asset数、診断数には
-資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。具体値は対象端末でのparser benchmarkを行う
-実装Issueで決定し、schema互換性を変えずに安全側へ設定可能なruntime policyとします。
+資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。実装済み上限、必須explicit上限、benchmarkに
+基づくfrontend提案値、診断の切詰めとredactionは
+[`DSL 4.0 式評価・資源上限・診断境界`](dsl-4-expression-limits-diagnostics.md)を正本とします。
