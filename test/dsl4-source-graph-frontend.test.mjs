@@ -16,6 +16,7 @@ const singleSourceFrontend = createDsl4SourceFrontend(schema);
 const graphFrontend = createDsl4SourceGraphFrontend(singleSourceFrontend);
 const enabledOptions = {
   featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+  maxComposedSourceBytes: 1024 * 1024,
 };
 
 function sourceLoader(sources) {
@@ -179,6 +180,38 @@ scenes:
     () => graphFrontend.parse(graph, {featureFlags: {dsl4Runtime: true}}),
     /requires dsl4SourceIncludes/u,
   );
+  assert.throws(
+    () =>
+      graphFrontend.parse(graph, {
+        featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+      }),
+    /maxComposedSourceBytes/u,
+  );
+});
+
+test('accepts the exact composed-source byte limit and rejects one byte less', async () => {
+  const graph = await sourceGraph({
+    'story.kamishibai.yaml': "include: chapter.k4.yml\nkamishibai: '4.0'\nscenes: {opening: []}\n",
+    'chapter.k4.yml': 'scenes: {chapter: []}\n',
+  });
+  const prepared = graphFrontend.parse(graph, enabledOptions);
+  assert.equal(prepared.ok, true, JSON.stringify(prepared.diagnostics));
+  const byteLength = new TextEncoder().encode(prepared.canonicalSource).byteLength;
+
+  const boundary = graphFrontend.parse(graph, {
+    ...enabledOptions,
+    maxComposedSourceBytes: byteLength,
+  });
+  assert.equal(boundary.ok, true, JSON.stringify(boundary.diagnostics));
+
+  const overflow = graphFrontend.parse(graph, {
+    ...enabledOptions,
+    maxComposedSourceBytes: byteLength - 1,
+  });
+  assert.equal(overflow.ok, false);
+  assert.equal(overflow.diagnostics[0].code, 'K4-SOURCE-LIMIT-BYTES-001');
+  assert.equal(overflow.diagnostics[0].sourceId, 'story.kamishibai.yaml');
+  assert.equal(overflow.diagnostics[0].range.start.line, 1);
 });
 
 test('fails closed for malformed graph topology and non-string fragment keys', async () => {

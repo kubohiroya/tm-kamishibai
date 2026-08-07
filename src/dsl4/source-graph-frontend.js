@@ -29,6 +29,7 @@ const allowedTopLevelKeys = new Set([
   ...singletonDeclarationNames,
 ]);
 const forbiddenMappingKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const textEncoder = new TextEncoder();
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -475,12 +476,18 @@ export function createDsl4SourceGraphFrontend(sourceFrontend) {
   return Object.freeze({
     /**
      * @param {unknown} inputGraph
-     * @param {{featureFlags?: unknown, sourceId?: string}} [options]
+     * @param {{featureFlags?: unknown, sourceId?: string, maxComposedSourceBytes?: number}} [options]
      */
-    parse(inputGraph, {featureFlags: inputFeatureFlags = {}, sourceId} = {}) {
+    parse(
+      inputGraph,
+      {featureFlags: inputFeatureFlags = {}, sourceId, maxComposedSourceBytes} = {},
+    ) {
       const featureFlags = resolveDsl4FeatureFlags(inputFeatureFlags);
       if (!featureFlags.dsl4SourceIncludes) {
         throw new TypeError('Source Graph frontend requires dsl4SourceIncludes');
+      }
+      if (!Number.isSafeInteger(maxComposedSourceBytes) || Number(maxComposedSourceBytes) < 1) {
+        throw new TypeError('maxComposedSourceBytes must be a positive safe integer');
       }
       const {graph, nodes, discoveryOrder} = validateSourceGraph(inputGraph);
       const artifactSourceId = sourceId ?? graph.entryPath;
@@ -517,6 +524,24 @@ export function createDsl4SourceGraphFrontend(sourceFrontend) {
         });
       }
       const effectiveSource = stringify(composed.composed, {lineWidth: 0});
+      const composedSourceBytes = textEncoder.encode(effectiveSource).byteLength;
+      if (composedSourceBytes > Number(maxComposedSourceBytes)) {
+        const entry = /** @type {Record<string, any>} */ (parsedNodes.get(graph.entryPath));
+        return deepFreeze({
+          ok: false,
+          canonicalSource: effectiveSource,
+          diagnostics: [
+            diagnostic(
+              'K4-SOURCE-LIMIT-BYTES-001',
+              `Composed canonical source is ${composedSourceBytes} bytes and exceeds the ${maxComposedSourceBytes} byte limit`,
+              graph.entryPath,
+              '$',
+              entry.document.contents,
+              entry.lineCounter,
+            ),
+          ],
+        });
+      }
       const parsed = sourceFrontend.parse(effectiveSource, {sourceId: artifactSourceId});
       if (!parsed.ok) {
         return deepFreeze({

@@ -95,6 +95,16 @@ async function createIncludedProject() {
   return directory;
 }
 
+async function createCompactIncludedProject() {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-composed-source-limit-'));
+  const entry =
+    "include: chapter.k4.yml\nkamishibai: '4.0'\ncontrols: {keymaps: {production: {Space: navigation.nextAction}}}\nscenes: {opening: []}\n";
+  const chapter = `scenes: {chapter: [${Array(10).fill('{wait: 0}').join(',')}]}\n`;
+  await writeFile(path.join(directory, 'story.k4.yml'), entry);
+  await writeFile(path.join(directory, 'chapter.k4.yml'), chapter);
+  return {directory, entry, chapter};
+}
+
 test('builds a self-contained component with declaring-source-relative assets', async () => {
   const directory = await createIncludedProject();
   try {
@@ -185,6 +195,61 @@ test('keeps include disabled unless the startup-fixed feature flag is enabled', 
         error instanceof Dsl4BuildError &&
         error.stage === 'dsl4-parse' &&
         error.code === 'K4-SCHEMA-UNKNOWN-KEY',
+    );
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
+test('uses the graph-total budget for composed packaging and rejects one byte over', async () => {
+  const {directory, entry, chapter} = await createCompactIncludedProject();
+  try {
+    const encoder = new TextEncoder();
+    const maxSourceBytes = Math.max(
+      encoder.encode(entry).byteLength,
+      encoder.encode(chapter).byteLength,
+    );
+    const featureFlags = {dsl4Runtime: true, dsl4SourceIncludes: true};
+    const prepared = await buildDsl4RuntimeComponent(
+      buildOptions(directory, {
+        featureFlags,
+        maxSourceBytes,
+        maxTotalSourceBytes: 16 * 1024,
+      }),
+    );
+    const composedBytes = prepared.runtimeComponent.sourceDescriptor.byteLength;
+    assert.equal(composedBytes > maxSourceBytes, true);
+
+    const boundary = await buildDsl4RuntimeComponent(
+      buildOptions(directory, {
+        featureFlags,
+        maxSourceBytes,
+        maxTotalSourceBytes: composedBytes,
+      }),
+    );
+    assert.equal(boundary.runtimeComponent.sourceDescriptor.byteLength, composedBytes);
+
+    const runtimeOverflow = await loadDsl4RuntimeComponent(prepared.project, frontend, {
+      maxSourceBytes: composedBytes - 1,
+      maxAssetFiles: 10,
+      maxAssetBytes: 16 * 1024,
+      subtleCrypto,
+    });
+    assert.equal(runtimeOverflow.ok, false);
+    assert.equal(runtimeOverflow.diagnostics[0].code, 'K4-SOURCE-SIZE-001');
+
+    await assert.rejects(
+      buildDsl4RuntimeComponent(
+        buildOptions(directory, {
+          featureFlags,
+          maxSourceBytes,
+          maxTotalSourceBytes: composedBytes - 1,
+        }),
+      ),
+      (error) =>
+        error instanceof Dsl4BuildError &&
+        error.stage === 'dsl4-parse' &&
+        error.code === 'K4-SOURCE-LIMIT-BYTES-001',
     );
   } finally {
     await rm(directory, {recursive: true, force: true});

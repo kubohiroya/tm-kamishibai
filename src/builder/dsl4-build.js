@@ -14,6 +14,7 @@ import {deepFreeze} from '../dsl4/story-document.js';
 import {loadDsl4ExternalSource} from './dsl4-external-source.js';
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
+import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {embedDsl4PackagedRuntimeComponentInSb3} from './dsl4-source.js';
 import {Sb3BuilderError} from './errors.js';
 
@@ -110,9 +111,14 @@ export async function buildDsl4RuntimeComponent(options) {
   nonEmptyString(controlProfile, 'controlProfile');
   nonEmptyString(channel, 'channel');
   const featureFlags = resolveDsl4FeatureFlags(inputFeatureFlags);
+  const sourceLimits = resolveDsl4BuildSourceLimits({
+    sourceIncludesEnabled: featureFlags.dsl4SourceIncludes,
+    maxSourceBytes,
+    maxTotalSourceBytes,
+  });
 
   const source = await loadDsl4ExternalSource(projectRoot, sourceManifest, {
-    maxSourceBytes,
+    maxSourceBytes: sourceLimits.maxSourceFileBytes,
     subtleCrypto,
     fileSystem,
     readSource,
@@ -123,8 +129,8 @@ export async function buildDsl4RuntimeComponent(options) {
   if (featureFlags.dsl4SourceIncludes) {
     const sourceGraph = await loadDsl4BuildSourceGraph(projectRoot, source, {
       limits: {
-        maxSourceBytes,
-        maxTotalSourceBytes: maxTotalSourceBytes ?? maxSourceBytes,
+        maxSourceBytes: sourceLimits.maxSourceFileBytes,
+        maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
         ...(maxSourceFiles === undefined ? {} : {maxSourceFiles}),
         ...(maxIncludeDepth === undefined ? {} : {maxIncludeDepth}),
       },
@@ -136,6 +142,7 @@ export async function buildDsl4RuntimeComponent(options) {
       graphFrontend.parse(sourceGraph, {
         featureFlags,
         sourceId: source.descriptor.sourceId,
+        maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
       })
     );
     if (parsed.ok) {
@@ -143,7 +150,7 @@ export async function buildDsl4RuntimeComponent(options) {
         sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(parsed.canonicalSource, {
           sourceId: source.descriptor.sourceId,
           displayName: source.descriptor.displayName,
-          maxSourceBytes,
+          maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
           ...(source.descriptor.cacheIdentity
             ? {cacheIdentity: source.descriptor.cacheIdentity}
             : {}),
@@ -201,7 +208,11 @@ export async function buildDsl4RuntimeComponent(options) {
     storyDocument,
     sourceDescriptor,
     controlProfile,
-    {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
+    {
+      maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
+      historyNavigationAvailable,
+      subtleCrypto,
+    },
   );
   if (!artifactResult.ok) failDiagnostics(artifactResult.diagnostics, 'dsl4-artifact');
   const artifactSuccess = /** @type {{artifact: Readonly<Record<string, unknown>>}} */ (
@@ -216,7 +227,7 @@ export async function buildDsl4RuntimeComponent(options) {
     assetBundle,
     {
       channel,
-      maxSourceBytes,
+      maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
       maxAssetFiles,
       maxAssetBytes: maxTotalAssetBytes,
       historyNavigationAvailable,
@@ -226,7 +237,7 @@ export async function buildDsl4RuntimeComponent(options) {
   );
 
   const verified = await loadDsl4RuntimeComponent(embedded.project, sourceFrontend, {
-    maxSourceBytes,
+    maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
     maxAssetFiles,
     maxAssetBytes: maxTotalAssetBytes,
     historyNavigationAvailable,

@@ -53,7 +53,7 @@ DSL 3.1/3.2 build-sb3 options:
 DSL 4.0 build-dsl4 options:
   --enable-source-includes       Enable multi-file include processing
   --max-source-files N          Maximum files in the include graph
-  --max-total-source-bytes N    Maximum total bytes in the include graph
+  --max-total-source-bytes N    Maximum graph total and composed source bytes
   --max-include-depth N         Maximum include graph depth
   --history-navigation-available  Permit a selected history.* keymap
   --replace-existing              Replace a same-channel component in the base SB3
@@ -317,6 +317,17 @@ function parseBuildDsl4Arguments(rest) {
   if (channel !== 'bundled' && channel !== 'unbundled') {
     throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
   }
+  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const sourceIncludesEnabled = flags.has('--enable-source-includes');
+  const maxTotalSourceBytes = sourceIncludesEnabled
+    ? positiveInteger('--max-total-source-bytes')
+    : null;
+  if (maxTotalSourceBytes !== null && maxTotalSourceBytes < maxSourceBytes) {
+    throw new Sb3BuilderError(
+      '--max-total-source-bytes must be greater than or equal to --max-source-bytes.',
+      {stage: 'cli'},
+    );
+  }
   return {
     baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
@@ -324,15 +335,15 @@ function parseBuildDsl4Arguments(rest) {
     output: path.resolve(/** @type {string} */ (values.get('--output'))),
     controlProfile: /** @type {string} */ (values.get('--control-profile')),
     channel,
-    maxSourceBytes: positiveInteger('--max-source-bytes'),
+    maxSourceBytes,
     maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
     maxAssetFiles: positiveInteger('--max-asset-files'),
     maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
-    ...(flags.has('--enable-source-includes')
+    ...(sourceIncludesEnabled
       ? {
           featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
           maxSourceFiles: positiveInteger('--max-source-files'),
-          maxTotalSourceBytes: positiveInteger('--max-total-source-bytes'),
+          maxTotalSourceBytes: /** @type {number} */ (maxTotalSourceBytes),
           maxIncludeDepth: positiveInteger('--max-include-depth'),
         }
       : {}),
@@ -529,7 +540,9 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
   if (parsed.action === 'validate-dsl4') {
     const result = await validateDsl4SourceFile({
       ...parsed.options,
-      sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
+      }),
     });
     if (parsed.options.format === 'json') {
       stdout.write(serializeDsl4ValidationResult(result));
@@ -555,7 +568,12 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
   }
   const result = await buildDsl4RuntimeComponentFile({
     ...parsed.options,
-    sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+    sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+      limits: {
+        maxCanonicalSourceBytes:
+          parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
+      },
+    }),
   });
   stdout.write(`Built ${path.basename(result.outputPath)}\n`);
   return result;
