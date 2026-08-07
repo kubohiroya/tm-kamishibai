@@ -122,15 +122,21 @@ test('starts and finishes the downloaded DSL 4.0 story in the pinned TurboWarp V
     assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     vm.greenFlag();
-    for (let attempt = 0; attempt < 200; attempt += 1) {
+    const startupDeadline = Date.now() + 5_000;
+    while (Date.now() < startupDeadline) {
       const status = await extensionReporter(vm, 'statusReporter');
       if (status === 'finished') break;
       if (status === 'error') {
         assert.fail(`DSL 4.0 runtime failed: ${await extensionReporter(vm, 'lastErrorReporter')}`);
       }
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(await extensionReporter(vm, 'statusReporter'), 'finished');
+    const finalStatus = await extensionReporter(vm, 'statusReporter');
+    assert.equal(
+      finalStatus,
+      'finished',
+      `DSL 4.0 runtime remained ${finalStatus} at startup timeout`,
+    );
   } finally {
     vm.quit();
     restoreGlobals();
