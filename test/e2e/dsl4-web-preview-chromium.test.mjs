@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
-import {access, mkdtemp, readFile, rm, stat} from 'node:fs/promises';
+import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
+
+import {
+  createDsl4LocalPreviewHost,
+  createDsl4ProductionSourceFrontend,
+} from '../../src/builder/index.js';
+import {
+  createDsl4LiveReloadSession,
+  createDsl4PreviewProtocolSession,
+} from '../../src/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -103,11 +112,20 @@ function waitForDevTools(child) {
 async function waitForPageTarget(browserWebSocketUrl, fixtureUrl) {
   const endpoint = new URL(browserWebSocketUrl);
   const listUrl = `http://${endpoint.host}/json/list`;
+  const expected = new URL(fixtureUrl);
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
       const targets = await fetch(listUrl).then((response) => response.json());
-      const page = targets.find((target) => target.type === 'page' && target.url === fixtureUrl);
+      const page = targets.find((target) => {
+        if (target.type !== 'page') return false;
+        const actual = new URL(target.url);
+        return (
+          actual.origin === expected.origin &&
+          actual.pathname === expected.pathname &&
+          actual.search === expected.search
+        );
+      });
       if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
     } catch {
       // Chrome may publish the browser endpoint before the initial page target.
@@ -242,6 +260,70 @@ async function stopChrome(child) {
   if (await waitForExit(child, 2_000)) return;
   child.kill('SIGKILL');
   await waitForExit(child, 5_000);
+}
+
+function createLocalPreviewRuntimeProtocol() {
+  const liveReload = createDsl4LiveReloadSession({
+    createSession({storyDocument}) {
+      const firstAction = storyDocument.scenes[0].actions[0] ?? null;
+      let state = {
+        status: 'idle',
+        sceneId: storyDocument.scenes[0].id,
+        actionIndex: 0,
+        actionPath: firstAction?.id ?? null,
+        variables: storyDocument.variables,
+      };
+      let quiesceToken = null;
+      return {
+        start() {
+          state = {...state, status: 'running'};
+          return Promise.resolve(state);
+        },
+        stop() {
+          state = {...state, status: 'stopped'};
+          quiesceToken = null;
+        },
+        dispose() {},
+        getState() {
+          return {runtime: state};
+        },
+        quiesce({candidateId}) {
+          quiesceToken = Object.freeze({
+            kind: 'Dsl4QuiesceToken',
+            version: 1,
+            candidateId,
+            runtimeGeneration: 1,
+            storyPath: firstAction?.id ?? `/scenes/${state.sceneId}`,
+            actionSignature: firstAction
+              ? {
+                  command: firstAction.command,
+                  target: firstAction.target,
+                  handler: firstAction.handler ?? 'core',
+                }
+              : null,
+            sceneId: state.sceneId,
+            actionIndex: 0,
+            variables: {...state.variables},
+            resumeMode: firstAction ? 'replay-action' : 'finished',
+          });
+          state = {...state, status: 'paused'};
+          return quiesceToken;
+        },
+        resumeQuiesce(candidateId) {
+          if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
+            throw new TypeError('stale quiesce candidate');
+          }
+          quiesceToken = null;
+          state = {...state, status: 'running'};
+          return state;
+        },
+      };
+    },
+  });
+  return {
+    liveReload,
+    protocol: createDsl4PreviewProtocolSession({liveReloadSession: liveReload}),
+  };
 }
 
 test(
@@ -504,6 +586,166 @@ test(
         maxRetries: 10,
         retryDelay: 100,
       });
+    }
+  },
+);
+
+test(
+  'runs the loopback CLI preview page through the shared overlay in real Chromium',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-chromium-'));
+    const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-project-'));
+    const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
+    const sourcePath = path.join(projectDirectory, 'story.kamishibai.yaml');
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main'};
+    await Promise.all([
+      writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+      writeFile(sourcePath, "kamishibai: '4.0'\nscenes:\n  opening: []\n"),
+    ]);
+    const schema = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+    );
+    const runtime = createLocalPreviewRuntimeProtocol();
+    const hostEvents = [];
+    const host = createDsl4LocalPreviewHost({
+      projectRoot: projectDirectory,
+      sourceManifestPath,
+      sourceManifest: manifest,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+      maxSourceBytes: 4096,
+      protocolSession: runtime.protocol,
+      onEvent: (event) => hostEvents.push(event),
+    });
+    await host.start();
+    const url = host.getLaunchUrl();
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid'",
+        'local preview initial source activation',
+      );
+      assert.equal(
+        await client.evaluate(
+          "document.querySelector('#dsl4-preview-reload-overlay')?.dataset.previewSurface",
+        ),
+        'cli',
+      );
+      assert.equal(host.getSnapshot().status, 'connected');
+      const initialIntegrity = await client.evaluate(
+        "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+      );
+
+      await writeFile(sourcePath, "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 60\n");
+      try {
+        await waitForEvaluation(
+          client,
+          "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState === 'reloaded'",
+          'local preview automatic reload',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          status: document.querySelector('#dsl4-preview-status')?.textContent,
+          current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
+          candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
+          reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
+          body: document.body.textContent
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+        );
+      }
+      const reloadedIntegrity = await client.evaluate(
+        "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+      );
+      assert.notEqual(reloadedIntegrity, initialIntegrity);
+
+      await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
+      await waitForEvaluation(
+        client,
+        "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'invalid'",
+        'local preview invalid diagnostic',
+      );
+      assert.equal(
+        await client.evaluate(
+          "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+        ),
+        reloadedIntegrity,
+      );
+      assert.equal(
+        await client.evaluate(
+          "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState",
+        ),
+        'diagnostic',
+      );
+
+      await writeFile(sourcePath, "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 30\n");
+      try {
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-summary-value=currentIntegrity]')?.textContent !== ${JSON.stringify(reloadedIntegrity)}`,
+          'local preview recovery reload',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          status: document.querySelector('#dsl4-preview-status')?.textContent,
+          current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
+          candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
+          reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
+          body: document.body.textContent
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+        );
+      }
+
+      await writeFile(
+        sourceManifestPath,
+        `${JSON.stringify({...manifest, path: 'alternate.kamishibai.yaml'})}\n`,
+      );
+      await waitForEvaluation(
+        client,
+        "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState === 'diagnostic'",
+        'local preview structural rebuild diagnostic',
+      );
+      await waitForEvaluation(
+        client,
+        'document.body.textContent.includes("full rebuild")',
+        'local preview full rebuild message',
+      );
+      assert.equal(host.getSnapshot().rebuildRequired, true);
+      assert.equal(await client.evaluate('location.hash'), '');
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await host.dispose();
+      await runtime.liveReload.dispose();
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(projectDirectory, {recursive: true, force: true}),
+      ]);
     }
   },
 );
