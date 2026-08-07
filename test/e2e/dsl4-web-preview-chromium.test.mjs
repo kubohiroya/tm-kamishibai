@@ -360,6 +360,8 @@ test(
         deviceScaleFactor: 1,
         mobile: false,
       });
+      await waitForEvaluation(client, 'innerWidth === 520', 'Chromium viewport override');
+      await client.evaluate("window.dispatchEvent(new Event('resize'))");
       await waitForEvaluation(
         client,
         'globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport.width === 520',
