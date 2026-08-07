@@ -275,6 +275,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       posePreviewMirroringEnabled:
         featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,
       cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
+      speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;

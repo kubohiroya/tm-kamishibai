@@ -326,10 +326,10 @@ export function createDsl4NavigationSession({
     ...(speechAdvanceTypewriterEnabled
       ? {
           consumeAnyKey({code}) {
-            return controller.acceptAdvanceInput({kind: 'key', code});
+            return controller.consumeAdvanceInput({kind: 'key', code});
           },
           consumePointer({pointerType}) {
-            return controller.acceptAdvanceInput({kind: 'pointer', pointerType});
+            return controller.consumeAdvanceInput({kind: 'pointer', pointerType});
           },
         }
       : {}),

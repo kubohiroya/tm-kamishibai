@@ -151,6 +151,63 @@ controls:
   created.session.dispose();
 });
 
+test('reserves the speech-starting key before the advance wait is armed', async () => {
+  const storyDocument = parseSpeech(
+    `
+    - Hero.say:
+        text: hello
+        waitFor: advance
+    - wait: 0
+`,
+    `
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+`,
+  );
+  const calls = [];
+  let startingEvent;
+  let startingEventHandled;
+  let created;
+  created = createDsl4NavigationSession({
+    storyDocument,
+    controlProfile: 'production',
+    speechAdvanceTypewriterEnabled: true,
+    port: {
+      async say(_payload, context) {
+        calls.push('say');
+        const advance = context.createAdvanceWait();
+        startingEvent = keyEvent('Space');
+        startingEventHandled = created.session.handleKeyDown(startingEvent);
+        const outcome = await advance.promise;
+        calls.push(outcome.outcome);
+      },
+      async wait() {
+        calls.push('wait');
+      },
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+
+  const run = created.session.start();
+  await waitFor(
+    () => startingEventHandled !== undefined,
+    'the speech-starting key was not presented during the unarmed interval',
+  );
+  assert.equal(startingEventHandled, true);
+  assert.deepEqual(startingEvent.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(calls, ['say']);
+  assert.equal(created.session.getState().runtime.actionIndex, 0);
+
+  const advanceEvent = keyEvent('Space');
+  assert.equal(created.session.handleKeyDown(advanceEvent), true);
+  assert.deepEqual(advanceEvent.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(calls, ['say', 'advance', 'wait']);
+  created.session.dispose();
+});
+
 test('accepts primary stage pointer only through the separately attached stage boundary', async () => {
   const storyDocument = parseSpeech(
     `

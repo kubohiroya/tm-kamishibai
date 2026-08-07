@@ -735,6 +735,20 @@ export function createDsl4RuntimeController({
   }
 
   /**
+   * Consume an eligible input while an advance wait is active, including the
+   * unarmed interval that protects the speech-starting event from reuse.
+   *
+   * @param {Readonly<Record<string, unknown>>} input
+   */
+  function consumeAdvanceInput(input) {
+    if (!speechAdvanceTypewriterEnabled || !isRecord(input)) return false;
+    const wait = activeAdvanceWait;
+    if (!wait || !isCurrent(wait.generation)) return false;
+    if (!wait.armed) return true;
+    return acceptAdvanceInput(input);
+  }
+
+  /**
    * @param {ActionContext} context
    */
   function ensureActive(context) {
@@ -1690,6 +1704,7 @@ export function createDsl4RuntimeController({
     stop,
     canAdvance,
     acceptAdvanceInput,
+    consumeAdvanceInput,
     advance,
     navigate,
     reposition,
