@@ -45,7 +45,7 @@
     "sb3:extensions:status": "sb3-toolchain extensions status app",
     "sb3:extensions:sync": "sb3-toolchain extensions sync app",
     "sb3:extensions:update": "sb3-toolchain extensions update app",
-    "e2e": "node --test test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs",
+    "e2e": "node --test test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/e2e/dsl4-web-preview-chromium.test.mjs",
     "lint": "eslint .",
     "format": "prettier --check \"**/*.{js,mjs,cjs}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\"",
     "typecheck": "tsc --project tsconfig.builder.json",

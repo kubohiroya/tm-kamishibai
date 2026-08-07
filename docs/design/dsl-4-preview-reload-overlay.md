@@ -8,8 +8,10 @@ companion is `test/fixtures/dsl4/preview-reload-overlay-contract.json`.
 
 The startup-fixed `dsl4PreviewReloadOverlay` flag defaults to `false` and requires `dsl4Runtime` and
 `dsl4AppShell`. It is independent of `dsl4WebPreviewAdapter`, so Web and CLI browser hosts construct
-the same component. When disabled, the existing candidate dialog remains available. Rollback sets
-`dsl4PreviewReloadOverlay=false`; source and asset adapters remain unchanged.
+the same component. `createDsl4WebPreviewShell` and `createDsl4CliPreviewShell` are the two actual
+host entry points; neither host constructs a surface-specific overlay. When disabled, the existing
+candidate dialog remains available. Rollback sets `dsl4PreviewReloadOverlay=false`; source and asset
+adapters remain unchanged.
 
 The overlay, policy, preference, successful reload time, layout rectangles, dialog state, candidate
 revision, and browser storage key are development-session data. They cannot enter YAML, project
@@ -75,6 +77,12 @@ preferred anchor without animation when the conflict disappears. Movement is def
 button is pressed, pointer-captured, or keyboard-focused unless the current position leaves the
 viewport.
 
+The shared surface listens to browser `resize`, `orientationchange`, `fullscreenchange`, and mount
+`ResizeObserver` notifications. Camera preview controls receive the host as `previewLayout`, publish
+each visible control group's `getBoundingClientRect()` under an explicit owner, update it as camera
+geometry changes, and unregister it when hidden, stopped, or disposed. Registration never searches
+for controls through DOM selectors.
+
 The status button is at least 44 x 44 CSS px, stays inside the safe area, has a visible focus ring and
 3:1 component contrast, and expresses state with icon shape, badge text, accessible name, and status
 text rather than color alone. Any pulse is bounded to five seconds and disabled by
@@ -85,7 +93,10 @@ text rather than color alone. Any pulse is bounded to five seconds and disabled 
 Unit and DOM integration fixtures cover safe fallback, rapid generations, manual transaction scopes,
 stale dialogs, success timing, diagnostic priority, keyboard/touch/focus behavior, reduced motion,
 eight-anchor collision resolution, browser-local storage fallback, Web/CLI component identity, and
-production exclusion.
+production exclusion. The `pnpm e2e` suite also launches real headless Chromium through the DevTools
+Protocol and exercises directory selection, valid/invalid/recovered source generations, automatic
+commit acknowledgement, native pointer capture, keyboard dialog handling, touch acknowledgement,
+and viewport resize without a synthetic DOM.
 
 Rollback is one startup change: `dsl4PreviewReloadOverlay=false`. No stored project data requires
 migration; the browser-local anchor value is ignored while the flag is off.

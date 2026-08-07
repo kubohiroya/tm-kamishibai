@@ -17,6 +17,11 @@ adapter passes the selected root handle only through an in-process callback, and
 result starts or updates the asset pipeline with the startup-fixed structural fingerprint. Shell
 polling, idle settlement, diagnostics, and disposal include both source and asset paths.
 
+When `dsl4PreviewReloadOverlay` is also enabled, the shell constructs the shared reload surface first
+and passes that same instance to the asset pipeline. Asset candidates, diagnostics, and watch state
+therefore share one revision order and overlay with source candidates; `restartGeneration` is
+required for manual asset reload from the shared dialog.
+
 The feature is part of the development preview shell. A production SB3, ordinary TurboWarp editor,
 Web player, or Packager output must not contain a directory handle, file/blob/array-buffer, candidate,
 revision, preview token, decoded resource, reload UI state, preference, or reload timestamp.
