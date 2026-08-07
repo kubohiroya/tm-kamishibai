@@ -25,6 +25,7 @@ const downloadIndexPath = path.join(downloadDirectory, 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const docsSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-docs/';
+const workshopSiteUrl = `${docsSiteUrl}workshops/`;
 const sampleSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
@@ -120,6 +121,7 @@ async function verifySiteAppBars() {
     for (const destination of [
       'https://kubohiroya.github.io/tmpose-kamishibai/',
       docsSiteUrl,
+      workshopSiteUrl,
       sampleSiteUrl,
       'https://kubohiroya.github.io/tmpose-kamishibai/downloads/',
     ]) {
@@ -173,7 +175,8 @@ async function verifySiteIndex() {
   const localLinks = await verifyLocalReferences(siteIndexPath, 'a', 'href');
   const allLinks = attributeValues(html, 'a', 'href');
   const altTexts = attributeValues(html, 'img', 'alt');
-  const cardCount = (html.match(/<a\b(?=[^>]*class="content-card")[^>]*>/gu) ?? []).length;
+  const cardCount = (html.match(/<a\b(?=[^>]*class="[^"]*\bcontent-card\b[^"]*")[^>]*>/gu) ?? [])
+    .length;
   const [sourceImage, publishedImage] = await Promise.all([
     readFile(heroImageSourcePath),
     readFile(heroImagePath),
@@ -190,9 +193,10 @@ async function verifySiteIndex() {
     sourceImage.equals(publishedImage),
     'The published top-page hero image differs from site/images/image01.png.',
   );
-  assert(cardCount === 4, `Expected four top-page content cards, found ${cardCount}.`);
+  assert(cardCount === 5, `Expected five top-page content cards, found ${cardCount}.`);
   assert(allLinks.includes(urashimaWebUrl), 'The top page does not link to the Urashima sample.');
   assert(allLinks.includes(docsSiteUrl), 'The top page does not link to the documentation site.');
+  assert(allLinks.includes(workshopSiteUrl), 'The top page does not link to the workshop site.');
   assert(!localLinks.includes('docs/'), 'The top page still links to a local documentation build.');
   assert(localLinks.includes('downloads/'), 'The top-page download card is missing.');
   assert(allLinks.includes(sampleSiteUrl), 'The top page does not link to the sample site.');
@@ -200,7 +204,7 @@ async function verifySiteIndex() {
     !allLinks.includes('https://sqs.prof.cuc.ac.jp/kamishibai/'),
     'The top page still links to the retired SQS web app.',
   );
-  for (const icon of ['▶️', '📕', '🎭', '📁']) {
+  for (const icon of ['▶️', '📕', '🧑‍🏫', '🎭', '📁']) {
     assert(
       html.includes(`<span class="card-icon" aria-hidden="true">${icon}</span>`),
       `The top-page card icon ${icon} is missing.`,
