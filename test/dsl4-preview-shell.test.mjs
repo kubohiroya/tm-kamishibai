@@ -343,6 +343,12 @@ test('is development-only and scans production projects for preview persistence'
   firstTarget.blocks.preview = {opcode: 'kubohiroyakamishibai4preview_openModal'};
   firstTarget.reloadCandidate = {revision: 1};
   invalid.reloadModalState = {choice: null};
+  invalid.browserPreviewHandle = {name: 'must-not-persist'};
+  invalid.browserPreviewTimer = 1;
+  invalid.browserPreviewObserver = {connected: true};
+  invalid.browserPreviewPendingRead = {revision: 2};
+  invalid.browserPreviewCandidate = {revision: 2};
+  invalid.browserPreviewModalState = {choice: null};
   const result = inspectDsl4ProductionPreviewExclusion(invalid);
   assert.equal(result.ok, false);
   assert.ok(result.violations.some((violation) => violation.includes('extensions')));
@@ -351,6 +357,19 @@ test('is development-only and scans production projects for preview persistence'
   assert.ok(result.violations.some((violation) => violation.includes('previewToken')));
   assert.ok(result.violations.some((violation) => violation.includes('reloadCandidate')));
   assert.ok(result.violations.some((violation) => violation.includes('reloadModalState')));
+  for (const field of [
+    'browserPreviewHandle',
+    'browserPreviewTimer',
+    'browserPreviewObserver',
+    'browserPreviewPendingRead',
+    'browserPreviewCandidate',
+    'browserPreviewModalState',
+  ]) {
+    assert.ok(
+      result.violations.some((violation) => violation.includes(field)),
+      field,
+    );
+  }
   assert.ok(result.violations.some((violation) => violation.includes('openModal')));
 });
 

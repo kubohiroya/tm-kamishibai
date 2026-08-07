@@ -17,6 +17,7 @@ function isRecord(value) {
  * @param {number} options.maxSourceBytes
  * @param {ReadonlyArray<string>} [options.capabilities]
  * @param {Record<string, unknown>} [options.sourceOptions]
+ * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceResult]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onProtocolEvent]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceStatus]
  * @param {(diagnostic: Readonly<Record<string, unknown>> | null) => unknown | Promise<unknown>} [options.onSourceDiagnostic]
@@ -43,6 +44,9 @@ export function createDsl4BrowserPreviewCoordinator(options) {
   if (options.onError !== undefined && typeof options.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
+  if (options.onSourceResult !== undefined && typeof options.onSourceResult !== 'function') {
+    throw new TypeError('onSourceResult must be a function');
+  }
   /** @param {unknown} error */
   const reportError = (error) => {
     try {
@@ -58,13 +62,20 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     onEvent: options.onProtocolEvent,
     onError: reportError,
   });
+  /** @type {Promise<unknown>} */
+  let protocolReady = Promise.resolve(protocol.getState());
   const source = createDsl4BrowserPreviewSourceAdapter({
     ...sourceOptions,
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
     onResult(result) {
       try {
-        Promise.resolve(protocol.stage(result)).catch(reportError);
+        Promise.resolve(options.onSourceResult?.(result)).catch(reportError);
+      } catch (error) {
+        reportError(error);
+      }
+      try {
+        protocolReady.then(() => protocol.stage(result)).catch(reportError);
       } catch (error) {
         reportError(error);
       }
@@ -90,7 +101,8 @@ export function createDsl4BrowserPreviewCoordinator(options) {
   /** @param {() => unknown | Promise<unknown>} operation */
   async function startSource(operation) {
     if (disposed) throw new TypeError('browser preview coordinator is disposed');
-    await protocol.connect();
+    protocolReady = protocol.connect();
+    await protocolReady;
     await operation();
     await protocol.whenIdle();
     return snapshot();
@@ -107,7 +119,12 @@ export function createDsl4BrowserPreviewCoordinator(options) {
 
   return Object.freeze({
     openProject() {
-      return startSource(() => source.openProject());
+      if (disposed) throw new TypeError('browser preview coordinator is disposed');
+      protocolReady = protocol.connect();
+      const opening = source.openProject();
+      return Promise.all([protocolReady, opening])
+        .then(() => protocol.whenIdle())
+        .then(snapshot);
     },
     /** @param {unknown} projectRoot */
     start(projectRoot) {

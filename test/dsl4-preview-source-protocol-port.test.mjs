@@ -376,6 +376,58 @@ function createBrowserProject() {
   return {root, setSource: (value) => (source = value)};
 }
 
+test('opens the directory picker before an asynchronous protocol handshake settles', async () => {
+  const fixture = createProtocol();
+  const handshakeGate = deferred();
+  const handshake = fixture.protocol.handshake;
+  fixture.protocol.handshake = async (message) => {
+    await handshakeGate.promise;
+    return handshake(message);
+  };
+  const project = createBrowserProject();
+  let pickerCalls = 0;
+  const globalObject = {isSecureContext: true, crypto: {subtle: webcrypto.subtle}};
+  globalObject.self = globalObject;
+  globalObject.top = globalObject;
+  globalObject.showDirectoryPicker = () => {
+    pickerCalls += 1;
+    return Promise.resolve(project.root);
+  };
+  const coordinator = createDsl4BrowserPreviewCoordinator({
+    protocolSession: fixture.protocol,
+    sessionId: 'browser-user-activation',
+    sourceFrontend: {
+      parse(source) {
+        return {
+          ok: true,
+          canonicalSource: source,
+          diagnostics: [],
+          storyDocument: {kind: 'StoryDocument', version: '4.0'},
+        };
+      },
+    },
+    maxSourceBytes: 4096,
+    sourceOptions: {
+      clock: createClock(),
+      document: createDocument(),
+      globalObject,
+      subtleCrypto: webcrypto.subtle,
+    },
+  });
+
+  const opening = coordinator.openProject();
+  assert.equal(pickerCalls, 1);
+  assert.equal(fixture.calls.length, 0);
+  handshakeGate.resolve();
+  const state = await opening;
+  assert.equal(state.protocol.latestRevision, 1);
+  assert.deepEqual(
+    fixture.calls.map(({type}) => type),
+    ['preview.handshake', 'preview.source.stage'],
+  );
+  await coordinator.dispose();
+});
+
 test('composes browser polling with handshake, stage, commit, and disconnect', async () => {
   const fixture = createProtocol();
   const project = createBrowserProject();
