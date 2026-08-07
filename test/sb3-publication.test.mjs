@@ -151,9 +151,16 @@ test('renders the top-page version from the recommended download catalog entry',
 
 test('opens the Urashima web sample from the top-page Web card', async () => {
   const siteIndex = await readFile(path.join(projectRoot, 'site/index.html'), 'utf8');
+  const webCardHrefPosition = siteIndex.indexOf(`href="${urashimaWebUrl}"`);
+  const webCardStart = siteIndex.lastIndexOf('<a', webCardHrefPosition);
+  const webCardEnd = siteIndex.indexOf('</a>', webCardHrefPosition);
+  const webCard = siteIndex.slice(webCardStart, webCardEnd + '</a>'.length);
 
-  assert(siteIndex.includes(`href="${urashimaWebUrl}"`));
-  assert.match(siteIndex, /Web版を開く/u);
+  assert.ok(webCardHrefPosition >= 0);
+  assert.match(webCard, /Web版を開く/u);
+  assert.match(webCard, /DSL\s+3\.2系/u);
+  assert.match(webCard, /組み込み台本「浦島太郎」/u);
+  assert.match(webCard, /DSL 3\.2版「浦島太郎」へ/u);
   assert.doesNotMatch(siteIndex, /https:\/\/sqs\.prof\.cuc\.ac\.jp\/kamishibai\//u);
 });
 
