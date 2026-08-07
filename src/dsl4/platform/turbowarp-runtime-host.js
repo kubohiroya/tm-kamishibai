@@ -381,6 +381,12 @@ async function createRuntimeEnvironment(
       ...(options.createAssetManagerComposition === undefined
         ? {}
         : {createAssetManagerComposition: options.createAssetManagerComposition}),
+      ...(options.binaryEntryProvider === undefined
+        ? {}
+        : {binaryEntryProvider: options.binaryEntryProvider}),
+      ...(options.binaryBundleStoreOptions === undefined
+        ? {}
+        : {binaryBundleStoreOptions: options.binaryBundleStoreOptions}),
       ...(options.createTMPoseComposition === undefined
         ? {}
         : {createTMPoseComposition: options.createTMPoseComposition}),
@@ -712,7 +718,11 @@ async function createRuntimeEnvironment(
  * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} [options.sourceFrontend]
  * @param {number} [options.maxSourceBytes]
  * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
+ * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
+ * @param {unknown} [options.binaryEntryProvider]
+ * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {unknown} [options.runtime]
@@ -755,6 +765,16 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     const disabled = await createDsl4RuntimeStartup({featureFlags});
     return deepFreeze({...disabled, host: null});
   }
+  const assetBundleFormat = options.assetBundleFormat ?? 'embedded-base64';
+  if (assetBundleFormat !== 'embedded-base64' && assetBundleFormat !== 'binary-entry') {
+    throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
+  }
+  if (assetBundleFormat === 'binary-entry' && options.binaryEntryProvider === undefined) {
+    throw new TypeError('binaryEntryProvider is required for binary-entry runtime startup');
+  }
+  if (assetBundleFormat === 'embedded-base64' && options.binaryEntryProvider !== undefined) {
+    throw new TypeError('binaryEntryProvider requires assetBundleFormat binary-entry');
+  }
   if (options.createHostPort !== undefined && typeof options.createHostPort !== 'function') {
     throw new TypeError('createHostPort must be a function');
   }
@@ -796,7 +816,9 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
     maxAssetFiles: options.maxAssetFiles,
+    maxAssetFileBytes: options.maxAssetFileBytes,
     maxAssetBytes: options.maxAssetBytes,
+    assetBundleFormat,
     historyNavigationAvailable: options.historyNavigationAvailable,
     historyLimits: options.historyLimits,
     evaluateCondition: options.evaluateCondition,

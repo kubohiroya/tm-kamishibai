@@ -253,8 +253,20 @@ source bytesと一時objectはtransactionまたは登録完了後にapplication�
 実ブラウザ検証には`test/fixtures/dsl4/browser/remote-cache-retention.html`を使います。repository rootを
 HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同時保持数が1、解放後が0、IndexedDBが
 1 entry／archive byte数のまま増えないこと、および明示cleanup後に0 entry／0 bytesとなることを表示します。
-runtime／schema接続はIssue #284で実装し、TMPose classifier／PoseNet自体の完全dispose契約はIssue #327で
-引き続き追跡します。
+runtime／schema接続はIssue #284で実装済みです。TMPose 1.6.1の`releasePoseModel()`／`releaseAll()`は
+classifierとPoseNet双方のdispose完了を待ちます。
+
+self-contained 4.0 SB3の`binary-entry`形式は明示opt-inです。runtime startupへ渡すproviderは
+`releaseAfterLastAsset: false`で作成し、全assetのtransaction commit後にproduct backingが一度だけreleaseします。
+永続keyはstable story ID／asset ID／bundle integrityを組み合わせ、provider解放後のscene再訪はIndexedDBだけから
+再materializeします。editorは`createExportBundle()`で同一descriptor／integrityの一時entry集合を再構築でき、保存後は
+`releaseEntries()`でその参照を破棄します。cache miss、quota、unavailable、abort時にnetwork fallbackは行いません。
+互換用Base64形式とDSL 3.2は変更せず、`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+
+real Chromiumのpose memory fixtureは24回のscene再訪で最大20 logical tensors／196,608 bytes、解放後0、
+classifier／PoseNet dispose各24回を確認します。JavaScript heapのfixture上限はpeak増加32 MiB、CDP強制GC後は
+baseline + 8 MiBです。WebGL／WASM allocatorが解放済み領域をpoolへ残すことは許容し、process memoryの即時縮小は
+合格条件にしません。
 
 ## 4. 共通設定
 

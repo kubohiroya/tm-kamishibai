@@ -1644,10 +1644,27 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
-Issue #327 step 3ではbinary descriptor、SB3 embed/read境界、one-shot provider、editor再供給境界を実装します。
-一方、Asset Manager／TMPose adapter接続、dependency pin、scene retention、同時materialize poseModel数、
-IndexedDB budget／台本単位cache接続は後続stepであり、このPRでは有効化しません。これらと上流のrelease契約を
-満たすまで、remote asset経路全体をmerge可能または既定ONとは扱いません。
+Issue #327の製品接続では、`assetBundleFormat: binary-entry`を明示したruntime startupだけが
+deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.7.0のtransactional binary storeへ
+順番にingestし、最後の`IDBTransaction.oncomplete`まで検証済みsource byte参照を保持します。全commit後にproviderと
+SB3 readerへの到達可能参照を破棄し、scene materializationとhistory再訪はstoreの`getBinaryBundle()`から供給します。
+keyはstable story ID、asset ID、descriptor全体のintegrityへbindingし、story別database名には
+`<cacheIdentity.databaseName>--binary-v1`を使用します。cache miss、IndexedDB unavailable、quota、abort、corrupt recordは
+外部URLへfallbackせず、Asset Managerの機械可読codeを維持してfail closedにします。
+
+player runtime componentはmanifestだけを保持し、ingest後のproviderやdecoded byte copyを公開snapshotへ含めません。
+editorが再保存するときだけbacking storeから全entryを一時materializeし、元descriptorと同じcontent-addressed entryを
+再構成します。保存処理の`releaseEntries()`後は一時copyを破棄します。互換用Base64 loader／writerは既定のままで、
+binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.6.1のrelease完了待ちと既存の
+two-phase scene retentionにより、通常時のmodel保持はcurrent、preload中はcurrent＋selected nextへ制限します。
+
+実ブラウザ回帰は`test/fixtures/dsl4/browser/pose-memory-retention.html`をreal Chromiumで実行します。
+24回のscene離脱／再訪でinstrumented disposable backendの最大値は20 tensors／196,608 bytes、最終値は
+0 tensors／0 bytes、classifier／PoseNet disposeは各24回です。観測runのJavaScript heapはbaseline／peak／
+release後が1,370,530 bytesで、fixture内peak上限を32 MiB、CDP強制GC後の許容差をbaseline + 8 MiBに固定します。
+このlogical counterは`tf.memory()`相当の所有resourceを数えますが、物理VRAM／WASM heapの即時縮小を保証しません。
+WebGL／WASM backendは解放済みbufferをallocator poolへ保持し得るため、合格条件は訪問回数に比例したlogical tensor増加が
+ないこと、classifierとPoseNetを一度ずつdisposeすること、JS heapが上限内であることです。
 
 ### 10.6 development preview protocol `[決定済み／実装中 #266]`
 

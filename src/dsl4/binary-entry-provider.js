@@ -366,6 +366,7 @@ function linkAbortSignals(external, internal) {
  * @param {number} options.maxFileBytes
  * @param {number} options.maxTotalBytes
  * @param {number} options.maxCompressionRatio
+ * @param {boolean} [options.releaseAfterLastAsset]
  * @param {(entryName: string, options: {signal?: AbortSignal}) => Promise<{bytes: Uint8Array, compressedSize: number}> | {bytes: Uint8Array, compressedSize: number}} options.readEntry
  * @param {() => Promise<void> | void} [options.releaseEntries]
  * @param {{digest: Function}} [options.subtleCrypto]
@@ -378,6 +379,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
     maxFileBytes,
     maxTotalBytes,
     maxCompressionRatio,
+    releaseAfterLastAsset = true,
     readEntry,
     releaseEntries,
     subtleCrypto = globalThis.crypto?.subtle,
@@ -386,6 +388,9 @@ export async function createDsl4OneShotBinaryEntryProvider(
   if (typeof readEntry !== 'function') throw new TypeError('readEntry must be a function');
   if (releaseEntries !== undefined && typeof releaseEntries !== 'function') {
     throw new TypeError('releaseEntries must be a function');
+  }
+  if (typeof releaseAfterLastAsset !== 'boolean') {
+    throw new TypeError('releaseAfterLastAsset must be boolean');
   }
   const ratioLimit = positiveRatio(maxCompressionRatio, 'maxCompressionRatio');
   const validated = await validateDsl4BinaryEntryAssetBundle(storyDocument, descriptor, {
@@ -431,6 +436,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
   const provider = {
     descriptor: validated,
     assetIds,
+    releaseAfterLastAsset,
     get released() {
       return released;
     },
@@ -515,7 +521,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
             );
           }
           consumed.add(assetId);
-          if (consumed.size === assetIds.length) await finalize();
+          if (releaseAfterLastAsset && consumed.size === assetIds.length) await finalize();
           return Object.freeze({assetId, files: Object.freeze(output)});
         } finally {
           linkedAbort.cleanup();
@@ -542,6 +548,6 @@ export async function createDsl4OneShotBinaryEntryProvider(
       await finalize();
     },
   };
-  if (assetIds.length === 0) await finalize();
+  if (releaseAfterLastAsset && assetIds.length === 0) await finalize();
   return Object.freeze(provider);
 }

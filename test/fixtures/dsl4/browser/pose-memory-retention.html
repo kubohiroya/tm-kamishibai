@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSL 4.0 pose memory retention fixture</title>
+  </head>
+  <body>
+    <h1>DSL 4.0 pose memory retention fixture</h1>
+    <p id="status" data-status="running">Running…</p>
+    <pre id="result" aria-live="polite"></pre>
+    <script type="importmap">
+      {
+        "imports": {
+          "@kubohiroya/turbowarp-tmpose/composition": "/node_modules/@kubohiroya/turbowarp-tmpose/dist/composition.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import {createTMPoseComposition} from '/node_modules/@kubohiroya/turbowarp-tmpose/dist/composition.js';
+      import {createDsl4TMPoseModelAdapter} from '/src/dsl4/platform/tmpose-model-adapter.js';
+
+      const status = document.querySelector('#status');
+      const resultElement = document.querySelector('#result');
+      const allocator = {
+        backend: 'instrumented-disposable-browser-backend',
+        numTensors: 0,
+        numBytes: 0,
+        maximumTensors: 0,
+        maximumBytes: 0,
+        classifierDisposals: 0,
+        poseNetDisposals: 0,
+      };
+      const memory = () => ({
+        numTensors: allocator.numTensors,
+        numBytes: allocator.numBytes,
+        unreliable: false,
+      });
+      const heap = () => performance.memory?.usedJSHeapSize ?? null;
+
+      function disposable(kind, tensors, bytes) {
+        allocator.numTensors += tensors;
+        allocator.numBytes += bytes;
+        allocator.maximumTensors = Math.max(allocator.maximumTensors, allocator.numTensors);
+        allocator.maximumBytes = Math.max(allocator.maximumBytes, allocator.numBytes);
+        let allocation = new Uint8Array(bytes);
+        let disposed = false;
+        return {
+          dispose() {
+            if (disposed) throw new Error(`${kind} was disposed twice`);
+            disposed = true;
+            allocation = new Uint8Array(0);
+            allocator.numTensors -= tensors;
+            allocator.numBytes -= bytes;
+            allocator[`${kind}Disposals`] += 1;
+          },
+          get byteLength() {
+            return allocation.byteLength;
+          },
+        };
+      }
+
+      const runtime = {
+        Webcam: class {},
+        async loadFromFiles(_model, _weights, metadata) {
+          const label = JSON.parse(await metadata.text()).labels[0];
+          return {
+            model: disposable('classifier', 6, 64 * 1024),
+            posenetModel: disposable('poseNet', 14, 128 * 1024),
+            getClassLabels() {
+              return [label];
+            },
+          };
+        },
+      };
+      const composition = createTMPoseComposition({runtime});
+      const adapter = createDsl4TMPoseModelAdapter({composition});
+      const files = (label) => [
+        {path: 'metadata.json', bytes: new TextEncoder().encode(`{"labels":["${label}"]}`)},
+        {path: 'model.json', bytes: new TextEncoder().encode(`{"model":"${label}"}`)},
+        {path: 'weights.bin', bytes: new Uint8Array([1, 2, 3, 4])},
+      ];
+      const baselineHeapBytes = heap();
+      let maximumHeapBytes = baselineHeapBytes;
+
+      try {
+        for (let visit = 0; visit < 24; visit += 1) {
+          const name = visit % 2 === 0 ? 'FirstPose' : 'NextPose';
+          const resource = await adapter.prepare({
+            asset: {id: name, kind: 'poseModel', source: {type: 'file'}},
+            files: files(name),
+          });
+          composition.activatePoseModel(name);
+          if (memory().numTensors !== 20 || memory().numBytes !== 192 * 1024) {
+            throw new Error(`Unexpected live allocation at visit ${visit + 1}`);
+          }
+          if (Object.hasOwn(resource, 'files') || Object.hasOwn(resource, 'bytes')) {
+            throw new Error('Published pose resource retained temporary input bytes');
+          }
+          const currentHeap = heap();
+          if (currentHeap !== null) {
+            maximumHeapBytes = Math.max(maximumHeapBytes ?? currentHeap, currentHeap);
+          }
+          await adapter.release(resource, {reason: 'scene-transition'});
+          if (memory().numTensors !== 0 || memory().numBytes !== 0) {
+            throw new Error(`Pose allocation leaked at visit ${visit + 1}`);
+          }
+        }
+        await composition.releaseAll();
+        const finalHeapBytesBeforeGc = heap();
+        const observed = {
+          backend: allocator.backend,
+          visits: 24,
+          logicalMemory: memory(),
+          maximumTensors: allocator.maximumTensors,
+          maximumBytes: allocator.maximumBytes,
+          classifierDisposals: allocator.classifierDisposals,
+          poseNetDisposals: allocator.poseNetDisposals,
+          baselineHeapBytes,
+          maximumHeapBytes,
+          finalHeapBytesBeforeGc,
+          heapLimitBytes: 32 * 1024 * 1024,
+        };
+        if (
+          observed.maximumTensors !== 20 ||
+          observed.maximumBytes !== 192 * 1024 ||
+          observed.classifierDisposals !== 24 ||
+          observed.poseNetDisposals !== 24
+        ) {
+          throw new Error(`Unexpected allocator bounds: ${JSON.stringify(observed)}`);
+        }
+        if (
+          baselineHeapBytes !== null &&
+          maximumHeapBytes - baselineHeapBytes > observed.heapLimitBytes
+        ) {
+          throw new Error(
+            `JavaScript heap exceeded the fixture limit: ${JSON.stringify(observed)}`,
+          );
+        }
+        globalThis.poseMemoryFixture = Object.freeze({passed: true, observed});
+        status.dataset.status = 'passed';
+        status.textContent = 'Passed';
+        resultElement.textContent = JSON.stringify(observed, null, 2);
+      } catch (error) {
+        await composition.releaseAll().catch(() => {});
+        globalThis.poseMemoryFixture = Object.freeze({
+          passed: false,
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        });
+        status.dataset.status = 'failed';
+        status.textContent = 'Failed';
+        resultElement.textContent = globalThis.poseMemoryFixture.error;
+      }
+    </script>
+  </body>
+</html>

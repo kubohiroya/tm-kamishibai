@@ -1,5 +1,8 @@
 import {createDsl4NavigationSession} from './navigation-session.js';
-import {loadDsl4RuntimeComponent} from './runtime-artifact-loader.js';
+import {
+  loadDsl4BinaryEntryRuntimeComponent,
+  loadDsl4RuntimeComponent,
+} from './runtime-artifact-loader.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import {deepFreeze} from './story-document.js';
 
@@ -81,7 +84,9 @@ function ownRuntimeEnvironment(session, environment) {
  * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} [options.sourceFrontend]
  * @param {number} [options.maxSourceBytes]
  * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
+ * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {Record<string, Function>} [options.port]
@@ -145,10 +150,22 @@ export async function createDsl4RuntimeStartup(options = {}) {
   if (maxSourceBytes === undefined || maxAssetFiles === undefined || maxAssetBytes === undefined) {
     throw new TypeError('DSL 4.0 startup requires explicit source and asset limits');
   }
+  const assetBundleFormat = options.assetBundleFormat ?? 'embedded-base64';
+  if (assetBundleFormat !== 'embedded-base64' && assetBundleFormat !== 'binary-entry') {
+    throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
+  }
+  if (assetBundleFormat === 'binary-entry' && options.maxAssetFileBytes === undefined) {
+    throw new TypeError('maxAssetFileBytes is required for binary-entry startup');
+  }
 
-  const loaded = await loadDsl4RuntimeComponent(options.project, options.sourceFrontend, {
+  const loadRuntimeComponent =
+    assetBundleFormat === 'binary-entry'
+      ? loadDsl4BinaryEntryRuntimeComponent
+      : loadDsl4RuntimeComponent;
+  const loaded = await loadRuntimeComponent(options.project, options.sourceFrontend, {
     maxSourceBytes,
     maxAssetFiles,
+    ...(assetBundleFormat === 'binary-entry' ? {maxAssetFileBytes: options.maxAssetFileBytes} : {}),
     maxAssetBytes,
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     subtleCrypto: options.subtleCrypto,

@@ -217,6 +217,7 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
  * @param {number} options.maxAssetFileBytes
  * @param {number} options.maxAssetBytes
  * @param {number} options.maxCompressionRatio
+ * @param {boolean} [options.releaseAfterLastAsset]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function createDsl4BinaryEntryProviderFromSb3(
@@ -339,6 +340,7 @@ export async function createDsl4BinaryEntryProviderFromSb3(
     maxFileBytes: options.maxAssetFileBytes,
     maxTotalBytes: options.maxAssetBytes,
     maxCompressionRatio: ratioLimit,
+    releaseAfterLastAsset: options.releaseAfterLastAsset,
     readEntry(entryName, {signal}) {
       if (signal?.aborted) {
         entryFail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry consumption was aborted');
