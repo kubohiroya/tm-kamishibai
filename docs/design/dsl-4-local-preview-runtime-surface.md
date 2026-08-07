@@ -58,7 +58,22 @@ StoryDocumentを含めません。disposeはprotocol接続を切断した後、c
 このbridgeはtransportとUIを所有せず、具体的なTurboWarp VM／renderer session factoryを次段から注入します。実VMが
 接続されるまでlocal preview clientおよび公開CLIから有効化しません。
 
-## 5. securityとrollback
+## 5. TurboWarp stage ownership
+
+browser stage ownerは最大64 MiB（hard maximum 128 MiB）のbase SB3 byte copy、480×360のcanvas、TurboWarp VM、
+renderer、audio engine、storage、bitmap adapterを1 preview pageにつき一度だけ所有します。VMはcompatibility mode、
+turbo mode、compilerを無効にしてbase projectをloadし、green flagは開始しません。DSL runtime sessionが同じVM
+runtimeを使用し、StoryDocumentの初回valid generationを先頭から開始します。
+
+canvasはkeyboard focusを持つ実stageで、primary pointerとkeyboard inputをVM I/Oへ渡します。外部extension URLの
+自動loadは拒否し、標準templateが必要とする固定extension登録は注入された`prepareVm`境界だけで行います。base SB3
+byte copyはload完了後に破棄し、公開snapshotにはproject、VM、runtime、asset dataを含めません。
+
+disposeまたはstartup failureではinput listener、VM target、frame loop、bitmap adapter、audio、renderer、storage、canvas
+を一度だけ解放します。project load中のdisposeはload完了を待ち、VM frame loopを開始せずcleanupします。このownerへ
+渡す実TurboWarp platform adapterとbrowser bundleは次段で固定し、それまではlocal preview clientから有効化しません。
+
+## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
 project-root confinementを通過したclientだけがgenerationを受け取れます。hostはbounded wireを作成できたgeneration
