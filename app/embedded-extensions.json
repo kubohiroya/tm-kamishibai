@@ -41,9 +41,9 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-tmpose",
         "ref": "main",
-        "resolvedCommit": "776d0680a724ae8f1007dfcb08f4301dc5df65c1",
+        "resolvedCommit": "9274b0f4ad5a1bf2dfe174381ad088240e1b9d1e",
         "artifact": "dist/tmpose.js",
-        "integrity": "sha256-5s7VUaC2Y2MRYCyUqQrTm6RWhFf+ID4+NGbwSqeeOxo="
+        "integrity": "sha256-LI8tEA1iy8ktjUT3AooT4rM2fjhahUHisNWoQzotae0="
       }
     },
     {

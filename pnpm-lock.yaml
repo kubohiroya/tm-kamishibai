@@ -26,8 +26,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0
       '@kubohiroya/turbowarp-tmpose':
-        specifier: 1.5.1
-        version: 1.5.1
+        specifier: 1.6.1
+        version: 1.6.1
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -145,8 +145,8 @@ packages:
   '@kubohiroya/turbowarp-svg-text@0.3.0':
     resolution: {integrity: sha512-J04auCUiuLAZDYgfNMDGqUfoT3qfevhpxTXi8/MUU6FqCq/jloZPWE7JuFZjQxen9MGVF40gT+PhPu2mJHYCvg==}
 
-  '@kubohiroya/turbowarp-tmpose@1.5.1':
-    resolution: {integrity: sha512-XZI/jtP1mg/wfqckXkG5GPnJwUJSpmQOu1hW2BDhqTK3YSF50NY/lQ4ZRy379AVpDUsF7iD4IwPNgzr+K7dF1g==}
+  '@kubohiroya/turbowarp-tmpose@1.6.1':
+    resolution: {integrity: sha512-amY1kjFzJFGZAbIHa7+NlB3j5FDGG+SQJ6l5aQP90eDJV9fshlTrmLRqqNbZApDfR6sQBYZUsewww09g4UCe9Q==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -978,7 +978,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-svg-text@0.3.0': {}
 
-  '@kubohiroya/turbowarp-tmpose@1.5.1': {}
+  '@kubohiroya/turbowarp-tmpose@1.6.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

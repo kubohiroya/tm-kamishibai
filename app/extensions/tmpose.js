@@ -8,7 +8,7 @@
   'use strict';
 
   const extensionName = "TMPose";
-  const blocks = [{ "opcode": "versionReporter", "blockType": "REPORTER", "text": "TMPose version", "description": "Returns the extension version." }, { "opcode": "setModelURL", "blockType": "COMMAND", "text": "set model URL to [URL]", "description": "Sets the Teachable Machine Pose model URL.", "arguments": { "URL": { "type": "STRING", "defaultValue": "https://teachablemachine.withgoogle.com/models/XXXX/" } } }, { "opcode": "startCamera", "blockType": "COMMAND", "text": "start camera", "description": "Starts the camera and attaches the preview." }, { "opcode": "stopCamera", "blockType": "COMMAND", "text": "stop camera", "description": "Stops the camera and prediction loop." }, { "opcode": "isCameraRunning", "blockType": "BOOLEAN", "text": "camera is running?", "description": "Reports whether the camera is running." }, { "opcode": "showPreview", "blockType": "COMMAND", "text": "show camera preview", "description": "Shows the camera preview." }, { "opcode": "hidePreview", "blockType": "COMMAND", "text": "hide camera preview", "description": "Hides the camera preview." }, { "opcode": "isPreviewVisible", "blockType": "BOOLEAN", "text": "camera preview is visible?", "description": "Reports whether the preview is configured as visible." }, { "opcode": "setPreviewOpacity", "blockType": "COMMAND", "text": "set camera preview opacity to [OPACITY]", "description": "Sets preview opacity from 0 to 1.", "arguments": { "OPACITY": { "type": "NUMBER", "defaultValue": 0.6 } } }, { "opcode": "setPreviewPosition", "blockType": "COMMAND", "text": "set camera preview position to [POSITION]", "description": "Sets the preview position on the stage.", "arguments": { "POSITION": { "type": "STRING", "menu": "positionMenu", "defaultValue": "bottom-right" } } }, { "opcode": "loadModel", "blockType": "COMMAND", "text": "load model", "description": "Loads the configured pose model." }, { "opcode": "isModelLoaded", "blockType": "BOOLEAN", "text": "model is loaded?", "description": "Reports whether the model is loaded." }, { "opcode": "startPredict", "blockType": "COMMAND", "text": "start recognition", "description": "Starts pose recognition." }, { "opcode": "stopPredict", "blockType": "COMMAND", "text": "stop recognition", "description": "Stops pose recognition." }, { "opcode": "isPredicting", "blockType": "BOOLEAN", "text": "recognition is running?", "description": "Reports whether recognition is running." }, { "opcode": "currentPoseReporter", "blockType": "REPORTER", "text": "current pose", "description": "Returns the highest-scoring pose label." }, { "opcode": "scoreReporter", "blockType": "REPORTER", "text": "confidence", "description": "Returns the confidence of the current pose." }, { "opcode": "poseScoreReporter", "blockType": "REPORTER", "text": "confidence of [NAME]", "description": "Returns the confidence for a named pose.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "setAccumulatedPoseParameters", "blockType": "COMMAND", "text": "set accumulated pose accumulation [ACCUMULATION] decay [DECAY]", "description": "Sets the accumulation rate per second and the decay retained per second; decay changes apply to the next recognition session.", "featureFlag": "temporalPoseScoring", "arguments": { "ACCUMULATION": { "type": "NUMBER", "defaultValue": 1 }, "DECAY": { "type": "NUMBER", "defaultValue": 0.9 } } }, { "opcode": "setAccumulatedPoseThreshold", "blockType": "COMMAND", "text": "set accumulated pose threshold [THRESHOLD]", "description": "Sets the minimum accumulated score required to report a pose; values below the threshold report an empty string.", "featureFlag": "temporalPoseScoring", "arguments": { "THRESHOLD": { "type": "NUMBER", "defaultValue": 0 } } }, { "opcode": "resetAccumulatedPose", "blockType": "COMMAND", "text": "reset accumulated pose scores", "description": "Clears all accumulated pose scores.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedPoseReporter", "blockType": "REPORTER", "text": "accumulated pose", "description": "Returns the pose label whose accumulated score is highest and meets the threshold, or an empty string otherwise.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedScoreReporter", "blockType": "REPORTER", "text": "accumulated score", "description": "Returns the highest accumulated pose score without rounding.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedPoseScoreReporter", "blockType": "REPORTER", "text": "accumulated score of [NAME]", "description": "Returns the accumulated score for a named pose without rounding.", "featureFlag": "temporalPoseScoring", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "isPose", "blockType": "BOOLEAN", "text": "pose is [NAME]?", "description": "Reports whether the named pose has at least 0.75 confidence.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "isPoseWithThreshold", "blockType": "BOOLEAN", "text": "pose is [NAME] with confidence at least [THRESHOLD]?", "description": "Reports whether the named pose meets the given threshold.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" }, "THRESHOLD": { "type": "NUMBER", "defaultValue": 0.75 } } }, { "opcode": "cameraMsReporter", "blockType": "REPORTER", "text": "camera startup time (ms)", "description": "Returns camera startup time in milliseconds." }, { "opcode": "modelLoadMsReporter", "blockType": "REPORTER", "text": "model load time (ms)", "description": "Returns model load time in milliseconds." }, { "opcode": "firstPredictMsReporter", "blockType": "REPORTER", "text": "first recognition time (ms)", "description": "Returns first prediction time in milliseconds." }, { "opcode": "lastErrorReporter", "blockType": "REPORTER", "text": "last error", "description": "Returns the latest recorded error message." }];
+  const blocks = [{ "opcode": "versionReporter", "blockType": "REPORTER", "text": "TMPose version", "description": "Returns the extension version." }, { "opcode": "setModelURL", "blockType": "COMMAND", "text": "set model URL to [URL]", "description": "Sets the Teachable Machine Pose model URL.", "arguments": { "URL": { "type": "STRING", "defaultValue": "https://teachablemachine.withgoogle.com/models/XXXX/" } } }, { "opcode": "startCamera", "blockType": "COMMAND", "text": "start camera", "description": "Starts the camera and attaches the preview." }, { "opcode": "stopCamera", "blockType": "COMMAND", "text": "stop camera", "description": "Stops the camera and prediction loop." }, { "opcode": "isCameraRunning", "blockType": "BOOLEAN", "text": "camera is running?", "description": "Reports whether the camera is running." }, { "opcode": "refreshCameraList", "blockType": "COMMAND", "text": "refresh camera list", "description": "Refreshes the list of available video input devices." }, { "opcode": "setCameraSelection", "blockType": "COMMAND", "text": "set camera to [CAMERA]", "description": "Selects the default, front, back, or a detected camera and switches a running camera.", "arguments": { "CAMERA": { "type": "STRING", "menu": "cameraMenu", "defaultValue": "default" } } }, { "opcode": "cameraCountReporter", "blockType": "REPORTER", "text": "camera count", "description": "Returns the number of video input devices found by the latest refresh." }, { "opcode": "cameraDeviceIdReporter", "blockType": "REPORTER", "text": "camera device ID", "description": "Returns the active camera device ID when available." }, { "opcode": "cameraDeviceNameReporter", "blockType": "REPORTER", "text": "camera device name", "description": "Returns the active camera device name when available." }, { "opcode": "showPreview", "blockType": "COMMAND", "text": "show camera preview", "description": "Shows the camera preview." }, { "opcode": "hidePreview", "blockType": "COMMAND", "text": "hide camera preview", "description": "Hides the camera preview." }, { "opcode": "isPreviewVisible", "blockType": "BOOLEAN", "text": "camera preview is visible?", "description": "Reports whether the preview is configured as visible." }, { "opcode": "setPreviewOpacity", "blockType": "COMMAND", "text": "set camera preview opacity to [OPACITY]", "description": "Sets preview opacity from 0 to 1.", "arguments": { "OPACITY": { "type": "NUMBER", "defaultValue": 0.6 } } }, { "opcode": "setPreviewPosition", "blockType": "COMMAND", "text": "set camera preview position to [POSITION]", "description": "Sets the preview position on the stage.", "arguments": { "POSITION": { "type": "STRING", "menu": "positionMenu", "defaultValue": "bottom-right" } } }, { "opcode": "setPreviewMirroring", "blockType": "COMMAND", "text": "set camera preview to [MIRRORING]", "description": "Sets whether the preview is mirrored without changing the recognition input.", "arguments": { "MIRRORING": { "type": "STRING", "menu": "previewMirroringMenu", "defaultValue": "mirrored" } } }, { "opcode": "previewMirroringReporter", "blockType": "REPORTER", "text": "camera preview mirroring", "description": "Returns mirrored or unmirrored for the current preview setting." }, { "opcode": "loadModel", "blockType": "COMMAND", "text": "load model", "description": "Loads the configured pose model." }, { "opcode": "isModelLoaded", "blockType": "BOOLEAN", "text": "model is loaded?", "description": "Reports whether the model is loaded." }, { "opcode": "startPredict", "blockType": "COMMAND", "text": "start recognition", "description": "Starts pose recognition." }, { "opcode": "stopPredict", "blockType": "COMMAND", "text": "stop recognition", "description": "Stops pose recognition." }, { "opcode": "isPredicting", "blockType": "BOOLEAN", "text": "recognition is running?", "description": "Reports whether recognition is running." }, { "opcode": "currentPoseReporter", "blockType": "REPORTER", "text": "current pose", "description": "Returns the highest-scoring pose label." }, { "opcode": "scoreReporter", "blockType": "REPORTER", "text": "confidence", "description": "Returns the confidence of the current pose." }, { "opcode": "poseScoreReporter", "blockType": "REPORTER", "text": "confidence of [NAME]", "description": "Returns the confidence for a named pose.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "setAccumulatedPoseParameters", "blockType": "COMMAND", "text": "set accumulated pose accumulation [ACCUMULATION] decay [DECAY]", "description": "Sets the accumulation rate per second and the decay retained per second; decay changes apply to the next recognition session.", "featureFlag": "temporalPoseScoring", "arguments": { "ACCUMULATION": { "type": "NUMBER", "defaultValue": 1 }, "DECAY": { "type": "NUMBER", "defaultValue": 0.9 } } }, { "opcode": "setAccumulatedPoseThreshold", "blockType": "COMMAND", "text": "set accumulated pose threshold [THRESHOLD]", "description": "Sets the minimum accumulated score required to report a pose; values below the threshold report an empty string.", "featureFlag": "temporalPoseScoring", "arguments": { "THRESHOLD": { "type": "NUMBER", "defaultValue": 0 } } }, { "opcode": "resetAccumulatedPose", "blockType": "COMMAND", "text": "reset accumulated pose scores", "description": "Clears all accumulated pose scores.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedPoseReporter", "blockType": "REPORTER", "text": "accumulated pose", "description": "Returns the pose label whose accumulated score is highest and meets the threshold, or an empty string otherwise.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedScoreReporter", "blockType": "REPORTER", "text": "accumulated score", "description": "Returns the highest accumulated pose score without rounding.", "featureFlag": "temporalPoseScoring" }, { "opcode": "accumulatedPoseScoreReporter", "blockType": "REPORTER", "text": "accumulated score of [NAME]", "description": "Returns the accumulated score for a named pose without rounding.", "featureFlag": "temporalPoseScoring", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "isPose", "blockType": "BOOLEAN", "text": "pose is [NAME]?", "description": "Reports whether the named pose has at least 0.75 confidence.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" } } }, { "opcode": "isPoseWithThreshold", "blockType": "BOOLEAN", "text": "pose is [NAME] with confidence at least [THRESHOLD]?", "description": "Reports whether the named pose meets the given threshold.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "jump" }, "THRESHOLD": { "type": "NUMBER", "defaultValue": 0.75 } } }, { "opcode": "cameraMsReporter", "blockType": "REPORTER", "text": "camera startup time (ms)", "description": "Returns camera startup time in milliseconds." }, { "opcode": "modelLoadMsReporter", "blockType": "REPORTER", "text": "model load time (ms)", "description": "Returns model load time in milliseconds." }, { "opcode": "firstPredictMsReporter", "blockType": "REPORTER", "text": "first recognition time (ms)", "description": "Returns first prediction time in milliseconds." }, { "opcode": "lastErrorReporter", "blockType": "REPORTER", "text": "last error", "description": "Returns the latest recorded error message." }];
   const definitions = {
     extensionName,
     blocks
@@ -18,7 +18,7 @@
     accumulatedPoseEvents: false
   };
   const EXTENSION_ID = "tmpose";
-  const VERSION = "1.5.1-typescript";
+  const VERSION = "1.6.1-typescript";
   const DOCS_URI = "https://kubohiroya.github.io/turbowarp-tmpose/";
   const ACCUMULATED_POSE_CHANGED_EVENT = "TMPOSE_ACCUMULATED_POSE_CHANGED";
   const TFJS_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js";
@@ -45,9 +45,54 @@
     center: "center",
     "full-stage": "full-stage"
   };
+  const PREVIEW_MIRRORING_ITEMS = [
+    { text: "mirrored", value: "mirrored" },
+    { text: "unmirrored", value: "unmirrored" }
+  ];
+  const PREVIEW_MIRRORING_ALIASES = {
+    mirrored: true,
+    unmirrored: false,
+    mirror: true,
+    normal: false,
+    "左右反転": true,
+    "そのまま": false
+  };
+  const CAMERA_SELECTION_ITEMS = [
+    { text: "default camera", value: "default" },
+    { text: "front camera", value: "front" },
+    { text: "back camera", value: "back" }
+  ];
+  const CAMERA_SELECTION_ALIASES = {
+    default: "default",
+    front: "front",
+    back: "back",
+    user: "front",
+    environment: "back",
+    "既定": "default",
+    "インカメラ": "front",
+    "前面カメラ": "front",
+    "背面カメラ": "back"
+  };
   const loadingPromises = /* @__PURE__ */ new Map();
   function normalizePosition(value) {
     return POSITION_ALIASES[String(value ?? "bottom-right")] ?? "bottom-right";
+  }
+  function normalizePreviewMirroring(value) {
+    return PREVIEW_MIRRORING_ALIASES[String(value ?? "mirrored").trim().toLowerCase()] ?? true;
+  }
+  function normalizeCameraSelection(value) {
+    const selection = String(value ?? "default").trim();
+    const normalized = CAMERA_SELECTION_ALIASES[selection.toLowerCase() || "default"];
+    if (normalized === "default" || normalized === "front" || normalized === "back") {
+      return { kind: "preference", value: normalized };
+    }
+    return { kind: "device", value: selection };
+  }
+  function cameraConstraints(selection) {
+    if (selection.kind === "device") return { deviceId: { exact: selection.value } };
+    if (selection.value === "front") return { facingMode: { ideal: "user" } };
+    if (selection.value === "back") return { facingMode: { ideal: "environment" } };
+    return void 0;
   }
   function scriptLoadedFor(src) {
     if (src === TFJS_URL) return typeof globalThis.tf !== "undefined";
@@ -112,6 +157,12 @@
       this.model = null;
       this.webcam = null;
       this.cameraRunning = false;
+      this.cameraSelection = "default";
+      this.cameraSelectionIsDeviceId = false;
+      this.cameraDevices = [];
+      this.activeCameraDeviceId = "";
+      this.activeCameraDeviceName = "";
+      this.cameraSelectionQueue = Promise.resolve();
       this.predicting = false;
       this.loopStarted = false;
       this.loopGeneration = 0;
@@ -129,6 +180,7 @@
       this.lastAccumulationTime = null;
       this.previewOpacity = 0.6;
       this.previewPosition = "bottom-right";
+      this.previewMirrored = true;
       this.previewVisible = true;
       this.previewCanvas = null;
       this.previewStageElement = null;
@@ -167,6 +219,14 @@
           positionMenu: {
             acceptReporters: true,
             items: POSITION_ITEMS.map((item) => ({ text: Scratch.translate(item.text), value: item.value }))
+          },
+          previewMirroringMenu: {
+            acceptReporters: true,
+            items: PREVIEW_MIRRORING_ITEMS.map((item) => ({ text: Scratch.translate(item.text), value: item.value }))
+          },
+          cameraMenu: {
+            acceptReporters: true,
+            items: "getCameraMenuItems"
           }
         }
       };
@@ -207,6 +267,8 @@
       this.previewStageElement = null;
       this.webcam = null;
       this.cameraRunning = false;
+      this.activeCameraDeviceId = "";
+      this.activeCameraDeviceName = "";
       this.loopStarted = false;
       this.loopGeneration += 1;
     }
@@ -220,10 +282,17 @@
         const startedAt = performance.now();
         await this.ensureLibrariesLoaded();
         this.webcam = new this.tmPoseRuntime.Webcam(320, 240, true);
-        await this.webcam.setup();
+        const constraints = cameraConstraints(this.resolvedCameraSelection());
+        if (constraints) await this.webcam.setup(constraints);
+        else await this.webcam.setup();
         await this.webcam.play();
         this.attachPreviewToStage();
         this.cameraRunning = true;
+        try {
+          await this.refreshCameraDevices();
+        } catch {
+        }
+        this.updateActiveCameraInfo();
         this.cameraMs = Math.round(performance.now() - startedAt);
         this.startLoopIfNeeded();
       } catch (error) {
@@ -246,6 +315,105 @@
     }
     isCameraRunning() {
       return this.cameraRunning;
+    }
+    getCameraMenuItems() {
+      const fixedItems = CAMERA_SELECTION_ITEMS.map((item) => ({
+        text: Scratch.translate(item.text),
+        value: item.value
+      }));
+      const seen = /* @__PURE__ */ new Set();
+      const deviceItems = [];
+      this.cameraDevices.forEach((device, index) => {
+        if (!device.deviceId || seen.has(device.deviceId)) return;
+        seen.add(device.deviceId);
+        deviceItems.push({
+          text: device.label || `${Scratch.translate("camera")} ${index + 1}`,
+          value: device.deviceId
+        });
+      });
+      return [...fixedItems, ...deviceItems];
+    }
+    async refreshCameraDevices() {
+      const mediaDevices = typeof navigator === "undefined" ? void 0 : navigator.mediaDevices;
+      if (!mediaDevices || typeof mediaDevices.enumerateDevices !== "function") {
+        throw new Error("TMPose: Camera enumeration is not available in this browser.");
+      }
+      const devices = await mediaDevices.enumerateDevices();
+      this.cameraDevices = devices.filter((device) => device.kind === "videoinput").map((device) => ({ deviceId: device.deviceId, label: device.label }));
+      return this.cameraDevices;
+    }
+    async refreshCameraList() {
+      try {
+        this.lastError = "";
+        await this.refreshCameraDevices();
+        if (this.cameraRunning) this.updateActiveCameraInfo();
+      } catch (error) {
+        this.setLastError(error);
+        throw error;
+      }
+    }
+    setCameraSelection(args) {
+      const selection = normalizeCameraSelection(args.CAMERA);
+      return this.enqueueCameraSelection(selection);
+    }
+    setCameraDeviceId(deviceId) {
+      if (typeof deviceId !== "string" || deviceId.trim().length === 0) {
+        return Promise.reject(new Error("TMPose: Camera device ID must be a non-empty string."));
+      }
+      return this.enqueueCameraSelection({ kind: "device", value: deviceId });
+    }
+    resolvedCameraSelection() {
+      return this.cameraSelectionIsDeviceId ? { kind: "device", value: this.cameraSelection } : { kind: "preference", value: this.cameraSelection };
+    }
+    enqueueCameraSelection(selection) {
+      const operation = this.cameraSelectionQueue.then(() => this.applyCameraSelection(selection));
+      this.cameraSelectionQueue = operation.catch(() => void 0);
+      return operation;
+    }
+    async applyCameraSelection(selection) {
+      const previousSelection = this.cameraSelection;
+      const previousSelectionIsDeviceId = this.cameraSelectionIsDeviceId;
+      const wasRunning = this.cameraRunning;
+      this.cameraSelection = selection.value;
+      this.cameraSelectionIsDeviceId = selection.kind === "device";
+      if (!wasRunning) return;
+      this.cleanupCameraResources();
+      try {
+        await this.startCamera();
+      } catch (switchError) {
+        this.cameraSelection = previousSelection;
+        this.cameraSelectionIsDeviceId = previousSelectionIsDeviceId;
+        try {
+          await this.startCamera();
+        } catch (rollbackError) {
+          const error = new AggregateError(
+            [switchError, rollbackError],
+            "TMPose: Camera switch and rollback both failed."
+          );
+          this.setLastError(error);
+          throw error;
+        }
+        this.setLastError(switchError);
+        throw switchError;
+      }
+    }
+    updateActiveCameraInfo() {
+      const stream = this.webcam?.webcam?.srcObject;
+      const videoTrack = stream?.getVideoTracks?.()[0] ?? stream?.getTracks?.().find((track) => track.kind === "video" || track.kind === void 0);
+      const settings = videoTrack?.getSettings?.() ?? {};
+      const selectedDeviceId = this.cameraSelectionIsDeviceId ? this.cameraSelection : "";
+      this.activeCameraDeviceId = String(settings.deviceId || selectedDeviceId);
+      const device = this.cameraDevices.find((candidate) => candidate.deviceId === this.activeCameraDeviceId);
+      this.activeCameraDeviceName = String(videoTrack?.label || device?.label || "");
+    }
+    cameraCountReporter() {
+      return this.cameraDevices.length;
+    }
+    cameraDeviceIdReporter() {
+      return this.activeCameraDeviceId;
+    }
+    cameraDeviceNameReporter() {
+      return this.activeCameraDeviceName;
     }
     showPreview() {
       try {
@@ -278,6 +446,13 @@
         this.updatePreviewStyle();
         this.validatePreviewAttachment(this.previewStageElement, this.previewCanvas);
       }
+    }
+    setPreviewMirroring(args) {
+      this.previewMirrored = normalizePreviewMirroring(args.MIRRORING);
+      if (this.previewCanvas) this.updatePreviewStyle();
+    }
+    previewMirroringReporter() {
+      return this.previewMirrored ? "mirrored" : "unmirrored";
     }
     async loadModel() {
       if (this.model) return;
@@ -431,6 +606,7 @@
         height: "auto",
         borderRadius: "8px"
       });
+      let positionTransform = "";
       switch (this.previewPosition) {
         case "top-left":
           canvas.style.left = "8px";
@@ -447,7 +623,7 @@
         case "center":
           canvas.style.left = "50%";
           canvas.style.top = "50%";
-          canvas.style.transform = "translate(-50%, -50%)";
+          positionTransform = "translate(-50%, -50%)";
           break;
         case "full-stage":
           canvas.style.left = "0";
@@ -461,6 +637,8 @@
           canvas.style.right = "8px";
           canvas.style.bottom = "8px";
       }
+      const mirroringTransform = this.previewMirrored ? "" : "scaleX(-1)";
+      canvas.style.transform = [positionTransform, mirroringTransform].filter(Boolean).join(" ");
     }
     startLoopIfNeeded() {
       if (this.loopStarted || !this.cameraRunning || !this.webcam) return;
