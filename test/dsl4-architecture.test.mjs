@@ -13,6 +13,7 @@ const pureEntries = [
   'action-registry.js',
   'asset-bundle-descriptor.js',
   'asset-dependency-index.js',
+  'binary-entry-provider.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
   'history-reducer.js',

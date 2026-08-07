@@ -2,6 +2,10 @@ import {
   Dsl4AssetBundleError,
   validateDsl4EmbeddedAssetBundle,
 } from '../dsl4/asset-bundle-descriptor.js';
+import {
+  Dsl4BinaryEntryError,
+  validateDsl4BinaryEntryAssetBundle,
+} from '../dsl4/binary-entry-provider.js';
 import {validateDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
 import {
   Dsl4SourceDescriptorError,
@@ -171,7 +175,9 @@ export async function embedDsl4SourceInSb3(baseSb3Bytes, descriptor, options) {
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {boolean} [options.replaceExisting]
  * @param {unknown} [options.assetBundle]
+ * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
  * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
@@ -186,7 +192,9 @@ export async function installDsl4RuntimeComponent(
     historyNavigationAvailable = false,
     replaceExisting = false,
     assetBundle,
+    assetBundleFormat = 'embedded-base64',
     maxAssetFiles,
+    maxAssetFileBytes,
     maxAssetBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   },
@@ -229,13 +237,31 @@ export async function installDsl4RuntimeComponent(
       throw new TypeError('maxAssetFiles and maxAssetBytes are required with assetBundle');
     }
     try {
-      validatedAssets = await validateDsl4EmbeddedAssetBundle(storyDocument, assetBundle, {
-        maxFiles: maxAssetFiles,
-        maxTotalBytes: maxAssetBytes,
-        subtleCrypto,
-      });
+      if (assetBundleFormat === 'embedded-base64') {
+        validatedAssets = await validateDsl4EmbeddedAssetBundle(storyDocument, assetBundle, {
+          maxFiles: maxAssetFiles,
+          maxTotalBytes: maxAssetBytes,
+          subtleCrypto,
+        });
+      } else if (assetBundleFormat === 'binary-entry') {
+        if (maxAssetFileBytes === undefined) {
+          throw new TypeError('maxAssetFileBytes is required with a binary-entry asset bundle');
+        }
+        validatedAssets = {
+          descriptor: await validateDsl4BinaryEntryAssetBundle(storyDocument, assetBundle, {
+            maxFiles: maxAssetFiles,
+            maxFileBytes: maxAssetFileBytes,
+            maxTotalBytes: maxAssetBytes,
+            subtleCrypto,
+          }),
+        };
+      } else {
+        throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
+      }
     } catch (error) {
-      if (error instanceof Dsl4AssetBundleError) fail(error.message, error.code, error);
+      if (error instanceof Dsl4AssetBundleError || error instanceof Dsl4BinaryEntryError) {
+        fail(error.message, error.code, error);
+      }
       throw error;
     }
   }
@@ -313,6 +339,35 @@ export function installDsl4PackagedRuntimeComponent(
   return installDsl4RuntimeComponent(project, storyDocument, sourceDescriptor, runtimeArtifact, {
     ...options,
     assetBundle,
+    assetBundleFormat: 'embedded-base64',
+  });
+}
+
+/**
+ * Atomically install source, control artifact, and a ZIP-entry asset descriptor.
+ *
+ * This explicit API keeps the binary-entry path opt-in while the Base64 package format remains
+ * the default compatibility path.
+ *
+ * @param {unknown} project
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} sourceDescriptor
+ * @param {unknown} runtimeArtifact
+ * @param {unknown} assetBundle
+ * @param {Parameters<typeof installDsl4RuntimeComponent>[4]} options
+ */
+export function installDsl4BinaryEntryRuntimeComponent(
+  project,
+  storyDocument,
+  sourceDescriptor,
+  runtimeArtifact,
+  assetBundle,
+  options,
+) {
+  return installDsl4RuntimeComponent(project, storyDocument, sourceDescriptor, runtimeArtifact, {
+    ...options,
+    assetBundle,
+    assetBundleFormat: 'binary-entry',
   });
 }
 
