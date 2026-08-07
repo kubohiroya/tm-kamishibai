@@ -1,8 +1,10 @@
 import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {deepFreeze} from './story-document.js';
 
-const requiredManifestKeys = new Set(['formatVersion', 'mode', 'path', 'sourceId']);
-const manifestKeys = new Set([...requiredManifestKeys, 'cacheId', 'cacheDatabaseName']);
+export const dsl4DefaultExternalSourcePath = 'story.kamishibai.yaml';
+
+const requiredManifestKeys = new Set(['formatVersion', 'mode', 'sourceId']);
+const manifestKeys = new Set([...requiredManifestKeys, 'path', 'cacheId', 'cacheDatabaseName']);
 
 export class Dsl4ExternalSourceManifestError extends TypeError {
   /** @param {string} code @param {string} message */
@@ -33,10 +35,10 @@ function nonEmptyString(value, name) {
 
 /** @param {unknown} value */
 function sourcePath(value) {
-  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
+  const source = value === undefined ? dsl4DefaultExternalSourcePath : value;
+  if (typeof source !== 'string' || source.length === 0 || source.includes('\0')) {
     fail('K4-SOURCE-PATH-001', 'path must be a non-empty string without NUL');
   }
-  const source = value;
   const segments = source.split('/');
   if (
     source.includes('\\') ||

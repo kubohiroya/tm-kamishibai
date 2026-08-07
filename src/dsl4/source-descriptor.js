@@ -1,4 +1,4 @@
-import {canonicalizeDsl4Source} from './source-frontend.js';
+import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {deepFreeze} from './story-document.js';
 

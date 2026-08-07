@@ -6,7 +6,10 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 import {validateDsl4Semantics} from './semantic-validator.js';
+import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
+
+export {canonicalizeDsl4Source} from './source-canonicalizer.js';
 
 const forbiddenMappingKeys = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -35,15 +38,6 @@ const forbiddenMappingKeys = new Set(['__proto__', 'constructor', 'prototype']);
  *
  * @typedef {ParseSuccess | ParseFailure} ParseResult
  */
-
-/**
- * @param {string} source
- * @returns {string}
- */
-export function canonicalizeDsl4Source(source) {
-  if (typeof source !== 'string') throw new TypeError('DSL 4.0 source must be a string');
-  return source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-}
 
 /**
  * @param {string} pointer

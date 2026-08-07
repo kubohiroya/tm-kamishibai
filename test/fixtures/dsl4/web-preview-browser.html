@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSL 4.0 Web Preview browser fixture</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 2rem auto;
+        max-width: 52rem;
+        padding: 0 1rem;
+      }
+      button {
+        margin: 0.25rem;
+        padding: 0.5rem 0.75rem;
+      }
+      [role='alert']:not(:empty) {
+        border-inline-start: 0.25rem solid #b42318;
+        padding-inline-start: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p id="fixture-ready" role="status">Loading browser fixture…</p>
+      <div id="web-preview-mount"></div>
+      <section aria-labelledby="fixture-controls-title">
+        <h2 id="fixture-controls-title">Deterministic editor actions</h2>
+        <button id="fixture-save-valid" type="button">Save valid change</button>
+        <button id="fixture-save-invalid" type="button">Save invalid change</button>
+        <button id="fixture-remove-source" type="button">Remove source</button>
+        <button id="fixture-restore-source" type="button">Restore source</button>
+      </section>
+    </main>
+    <script type="module" src="./web-preview-browser.mjs"></script>
+  </body>
+</html>
