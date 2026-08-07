@@ -10,6 +10,9 @@ const browserDocument = globalThis.document;
 const browserLocation = globalThis.location;
 const browserHistory = globalThis.history;
 const mount = browserDocument.querySelector('#dsl4-local-preview-runtime');
+const sourceName = browserDocument.querySelector('#dsl4-local-preview-source-name')?.textContent;
+const sourceDisplayName =
+  typeof sourceName === 'string' && sourceName.length > 0 ? sourceName : 'story.kamishibai.yaml';
 const token = browserLocation.hash.slice(1);
 
 if (!mount) throw new Error('The local preview mount is missing.');
@@ -136,7 +139,7 @@ async function renderSource(source, acknowledgement) {
     shell.update({
       formatVersion: 1,
       phase: 'invalid',
-      sourceDisplayName: 'story.kamishibai.yaml',
+      sourceDisplayName,
       currentIntegrity: acknowledgement.current?.integrity ?? activeDetails?.integrity ?? null,
       candidateIntegrity: null,
       validationStatus: missingCodes.has(diagnostic.code) ? 'missing' : 'invalid',
@@ -162,7 +165,7 @@ async function renderSource(source, acknowledgement) {
     shell.update({
       formatVersion: 1,
       phase: 'candidate',
-      sourceDisplayName: 'story.kamishibai.yaml',
+      sourceDisplayName,
       currentIntegrity: acknowledgement.current?.integrity ?? activeDetails?.integrity ?? null,
       candidateIntegrity: details.integrity,
       validationStatus: 'valid',
@@ -205,7 +208,7 @@ async function renderSource(source, acknowledgement) {
     shell.update({
       formatVersion: 1,
       phase: 'running',
-      sourceDisplayName: 'story.kamishibai.yaml',
+      sourceDisplayName,
       currentIntegrity: acknowledgement.current.integrity,
       candidateIntegrity: null,
       validationStatus: 'valid',
@@ -227,7 +230,7 @@ function renderCommitted(acknowledgement) {
   shell.update({
     formatVersion: 1,
     phase: 'running',
-    sourceDisplayName: 'story.kamishibai.yaml',
+    sourceDisplayName,
     currentIntegrity: acknowledgement.current.integrity,
     candidateIntegrity: null,
     validationStatus: 'valid',

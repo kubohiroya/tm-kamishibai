@@ -61,6 +61,8 @@ browser stream close、host crash、明示stopは、watcher停止、protocol dis
 処理します。protocol disconnectはcandidateを破棄しますが、注入されたruntimeのcurrent executionをdisposeしません。
 runtimeの最終disposeはruntime所有者の責務です。host `dispose()`はstream、manifest watcher、source watcher、protocol
 port、transport policy、HTTP serverを冪等に解放し、途中失敗時も残りを継続して最後に集約します。
+server listen中またはprotocol接続中に`dispose()`された場合も、進行中の初期化を収束させてから同じcleanupへ入り、
+disposed hostからsocketやwatcherが後発で再生成されないことを保証します。
 
 SIGINT／SIGTERMのprocess signal接続と、作者向け`preview --watch` commandのargument／help／browser openは次の
 CLI adapter差分で追加します。この段階ではREADMEやWeb Preview fallbackへ未公開commandを表示しません。
@@ -72,8 +74,9 @@ hostは既存production entryから参照されず、呼出側がdevelopment時�
 Standard palette、Web player、Packagerへhost module、token、bridge、candidate、reload UIを格納しません。
 
 unit統合fixtureはinitial valid、invalid保持、recovery、commit、manifest構造変更、Origin拒否、path confinement、
-redaction、冪等cleanupを検証します。Chromium E2Eは実loopback serverからCLI pageを開き、URL fragment消去、共有
-`data-preview-surface="cli"` overlay、valid auto reload、invalid保持、recovery、full rebuild表示を確認します。
+redaction、起動中dispose、冪等cleanupを検証します。Chromium E2Eは実loopback serverからCLI pageを開き、URL
+fragment消去、manifest指定のsource basename、共有`data-preview-surface="cli"` overlay、valid auto reload、invalid保持、
+recovery、full rebuild表示を確認します。
 
 rollbackは本module、browser client、builder export、test、本文をrevertします。shared watcher、protocol、runtime、
 Web Preview、production artifactのformat migrationはありません。

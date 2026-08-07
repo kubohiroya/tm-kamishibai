@@ -223,7 +223,7 @@ function previewHtml(sourceDisplayName) {
   <body>
     <main id="dsl4-local-preview-mount">
       <h1>DSL 4.0 local preview</h1>
-      <p>Watching <strong>${safeName}</strong>. The project runtime is connected through the shared preview protocol.</p>
+      <p>Watching <strong id="dsl4-local-preview-source-name">${safeName}</strong>. The project runtime is connected through the shared preview protocol.</p>
       <section id="dsl4-local-preview-runtime" aria-label="Project preview runtime"></section>
     </main>
     <script type="module" src="/modules/builder/dsl4-local-preview-client.js"></script>
@@ -506,39 +506,64 @@ export function createDsl4LocalPreviewHost(options) {
     launchToken = null;
     transportConnection = connection;
     const sessionId = `local-${Buffer.from(secureRandomBytes(12)).toString('base64url')}`;
-    sourcePort = createDsl4PreviewSourceProtocolPort({
-      protocolSession,
-      sessionId,
-      onEvent: observeProtocolEvent,
-      onError: reportError,
-    });
-    sourceWatcher = createDsl4PreviewSourceWatcher({
-      ...options.watcherOptions,
-      projectRoot,
-      manifest: sourceManifest,
-      sourceFrontend,
-      maxSourceBytes,
-      async onResult(result) {
-        if (!sourcePort) return;
-        const summary = safeSourceSummary(result);
-        currentSourceSummary = summary;
-        if (result.ok === true) latestValidSourceResult = result;
-        const acknowledgement = await sourcePort.stage(result);
-        publish({type: 'local-preview.source', source: summary, acknowledgement});
-      },
-      onError: reportError,
-    });
+    /** @type {ReturnType<typeof createDsl4PreviewSourceProtocolPort> | null} */
+    let port = null;
+    /** @type {ReturnType<typeof createDsl4PreviewSourceWatcher> | null} */
+    let watcher = null;
     try {
-      await sourcePort.connect();
-      await sourceWatcher.start();
+      const activePort = createDsl4PreviewSourceProtocolPort({
+        protocolSession,
+        sessionId,
+        onEvent: observeProtocolEvent,
+        onError: reportError,
+      });
+      port = activePort;
+      sourcePort = activePort;
+      const activeWatcher = createDsl4PreviewSourceWatcher({
+        ...options.watcherOptions,
+        projectRoot,
+        manifest: sourceManifest,
+        sourceFrontend,
+        maxSourceBytes,
+        async onResult(result) {
+          if (sourcePort !== activePort) return;
+          const summary = safeSourceSummary(result);
+          currentSourceSummary = summary;
+          if (result.ok === true) latestValidSourceResult = result;
+          const acknowledgement = await activePort.stage(result);
+          publish({type: 'local-preview.source', source: summary, acknowledgement});
+        },
+        onError: reportError,
+      });
+      watcher = activeWatcher;
+      sourceWatcher = activeWatcher;
+      await activePort.connect();
+      if (disposed || transportConnection !== connection || sourcePort !== activePort) {
+        throw new TypeError('local preview host was disposed while connecting');
+      }
+      await activeWatcher.start();
+      if (
+        disposed ||
+        transportConnection !== connection ||
+        sourcePort !== activePort ||
+        sourceWatcher !== activeWatcher
+      ) {
+        throw new TypeError('local preview host was disposed while connecting');
+      }
       startStructureWatcher();
+      if (disposed || transportConnection !== connection) {
+        stopStructureWatcher();
+        throw new TypeError('local preview host was disposed while connecting');
+      }
       status = 'connected';
       return {snapshot: snapshot(), events: [...events]};
     } catch (error) {
-      await stopWatcher();
-      await disconnectProtocol();
+      if (sourceWatcher === watcher) await stopWatcher();
+      else await watcher?.dispose();
+      if (sourcePort === port) await disconnectProtocol();
+      else await port?.dispose();
       await connection.disconnect('host-crash');
-      transportConnection = null;
+      if (transportConnection === connection) transportConnection = null;
       throw error;
     }
   }
@@ -717,17 +742,21 @@ export function createDsl4LocalPreviewHost(options) {
   });
 
   function start() {
-    if (startPromise) return startPromise;
     if (disposed) throw new TypeError('local preview host is disposed');
+    if (startPromise) return startPromise;
     startPromise = new Promise((resolve, reject) => {
       /** @param {Error} error */
       const handleError = (error) => {
         server.off('listening', handleListening);
-        status = 'failed';
+        status = disposed ? 'disposed' : 'failed';
         reject(error);
       };
       const handleListening = () => {
         server.off('error', handleError);
+        if (disposed) {
+          reject(new TypeError('local preview host was disposed while starting'));
+          return;
+        }
         const address = server.address();
         if (!isRecord(address) || !Number.isSafeInteger(address.port)) {
           reject(new TypeError('local preview server did not publish a TCP address'));
@@ -763,7 +792,7 @@ export function createDsl4LocalPreviewHost(options) {
   }
 
   function getLaunchUrl() {
-    if (!origin || !launchToken || status !== 'listening') {
+    if (disposed || !origin || !launchToken || status !== 'listening') {
       throw new TypeError('local preview launch URL is unavailable');
     }
     return `${origin}/#${launchToken}`;
@@ -775,6 +804,11 @@ export function createDsl4LocalPreviewHost(options) {
     stopping = true;
     disposePromise = (async () => {
       const errors = [];
+      try {
+        await startPromise;
+      } catch {
+        // A failed or cancelled start still needs the shared server cleanup below.
+      }
       activeResponse?.end();
       activeResponse = null;
       try {

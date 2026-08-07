@@ -598,8 +598,9 @@ test(
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-chromium-'));
     const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-project-'));
     const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
-    const sourcePath = path.join(projectDirectory, 'story.kamishibai.yaml');
-    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main'};
+    const sourceFilename = 'preview.kamishibai.yaml';
+    const sourcePath = path.join(projectDirectory, sourceFilename);
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
     await Promise.all([
       writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
       writeFile(sourcePath, "kamishibai: '4.0'\nscenes:\n  opening: []\n"),
@@ -653,6 +654,10 @@ test(
         'cli',
       );
       assert.equal(host.getSnapshot().status, 'connected');
+      assert.equal(
+        await client.evaluate("document.querySelector('[data-summary-value=source]')?.textContent"),
+        sourceFilename,
+      );
       const initialIntegrity = await client.evaluate(
         "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
       );

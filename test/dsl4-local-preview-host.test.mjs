@@ -141,10 +141,11 @@ async function request(origin, endpoint, {token, body = {}, expectedStatus = 200
 test('connects the loopback browser host, Node watcher, and injected runtime protocol', async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-host-'));
   const sourceManifestPath = path.join(projectRoot, 'project.source.json');
-  const sourcePath = path.join(projectRoot, 'story.kamishibai.yaml');
+  const sourceFilename = 'preview.kamishibai.yaml';
+  const sourcePath = path.join(projectRoot, sourceFilename);
   const sourceWatch = fakeWatchFactory();
   const structureWatch = fakeWatchFactory();
-  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main'};
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
   await Promise.all([
     writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
     writeFile(sourcePath, validSource),
@@ -181,7 +182,12 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     const page = await fetch(origin);
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-security-policy'), /connect-src 'self'/u);
-    assert.match(await page.text(), /dsl4-local-preview-client\.js/u);
+    const pageBody = await page.text();
+    assert.match(pageBody, /dsl4-local-preview-client\.js/u);
+    assert.match(
+      pageBody,
+      /<strong id="dsl4-local-preview-source-name">preview\.kamishibai\.yaml<\/strong>/u,
+    );
     const clientModule = await fetch(`${origin}/modules/builder/dsl4-local-preview-client.js`);
     assert.equal(clientModule.status, 200);
     assert.match(await clientModule.text(), /createDsl4CliPreviewShell/u);
@@ -197,6 +203,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     const serialized = JSON.stringify(connected);
     assert.equal(serialized.includes(validSource.trim()), false);
     assert.equal(serialized.includes(projectRoot), false);
+    assert.equal(serialized.includes(sourceFilename), false);
     assert.equal(serialized.includes(token), false);
 
     const denied = await fetch(`${origin}/api/commit`, {
@@ -218,7 +225,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
 
     await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
     const beforeInvalid = host.getSnapshot().latestSequence;
-    sourceWatch.emit('story.kamishibai.yaml');
+    sourceWatch.emit(sourceFilename);
     await waitFor(
       () => host.getSnapshot().latestSequence > beforeInvalid,
       'invalid source event was not published',
@@ -231,7 +238,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
 
     await writeFile(sourcePath, validSource.replace('opening: []', 'opening:\n    - wait: 60'));
     const beforeCandidate = host.getSnapshot().latestSequence;
-    sourceWatch.emit('story.kamishibai.yaml');
+    sourceWatch.emit(sourceFilename);
     await waitFor(
       () => host.getSnapshot().latestSequence > beforeCandidate,
       'valid candidate event was not published',
@@ -351,4 +358,34 @@ test('fails before opening sockets for unsafe local host configuration', () => {
   );
   assert.throws(() => createDsl4LocalPreviewHost({...base, port: 70_000}), /port/u);
   void runtime.liveReload.dispose();
+});
+
+test('closes the loopback socket when disposal races server startup', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-dispose-race-'));
+  const runtime = createRuntimeProtocol();
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath: path.join(projectRoot, 'project.source.json'),
+    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+  });
+
+  try {
+    const starting = host.start();
+    const disposing = host.dispose();
+    await assert.rejects(starting, /disposed while starting/u);
+    const snapshot = await disposing;
+    assert.equal(snapshot.status, 'disposed');
+    assert.equal(snapshot.disposed, true);
+    assert.equal(snapshot.connected, false);
+    assert.equal(host.getSnapshot().status, 'disposed');
+    assert.throws(() => host.getLaunchUrl(), /unavailable/u);
+    assert.throws(() => host.start(), /disposed/u);
+  } finally {
+    await host.dispose();
+    await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
 });
