@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #423の段階実装（source generation wire）
+文書状態: Issue #423の段階実装（browser TurboWarp platform／bundle）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#423](https://github.com/kubohiroya/tmpose-kamishibai/issues/423)
@@ -71,7 +71,17 @@ byte copyはload完了後に破棄し、公開snapshotにはproject、VM、runti
 
 disposeまたはstartup failureではinput listener、VM target、frame loop、bitmap adapter、audio、renderer、storage、canvas
 を一度だけ解放します。project load中のdisposeはload完了を待ち、VM frame loopを開始せずcleanupします。このownerへ
-渡す実TurboWarp platform adapterとbrowser bundleは次段で固定し、それまではlocal preview clientから有効化しません。
+渡す実TurboWarp platform adapterは、VM、renderer、audio engine、storage、SVG bitmap adapterを`package.json`のexact
+version／commitで固定します。Node-only consumerがDOM libraryを初期化しないようpackage loadはbrowser側で遅延実行し、
+stage dispose時はAudioContextをcloseしWebGL contextを明示的に失効させます。
+
+browser bundleはesbuildで単一ES moduleへ生成し、既定24 MiB、hard maximum 48 MiBとします。固定したTurboWarp sourceが
+使用するwebpack inline loaderのうち、raw text、font base64、Browserify `brfs`だけを明示変換します。music assetは
+data URLとしてbundle内へ保持します。外部extension worker／iframe loaderはbundle時にfail-closed stubへ置換し、
+stage ownerのsecurity policyと二重に無効化します。生成物に未解決loader specifierが残らないことを静的testで確認します。
+
+この段階ではplatformとbundle builderだけを公開し、local preview clientからはまだ有効化しません。base SB3配信、固定
+extension登録、DSL runtime session接続が揃った次段でstage ownerへ注入します。
 
 ## 6. securityとrollback
 
@@ -79,5 +89,5 @@ wire schema自体は認証を置き換えません。PR #421のliteral loopback 
 project-root confinementを通過したclientだけがgenerationを受け取れます。hostはbounded wireを作成できたgeneration
 だけをresponseへ書き、接続切断時は未確定generationを破棄します。
 
-この段階を戻す場合はwire module、export、test、本文をrevertします。既存host、Web Preview、production SB3、
-Standard palette、source／artifact formatにmigrationはありません。
+この段階を戻す場合はbrowser platform／bundle builder、直接依存、export、test、本文を同じPR単位でrevertします。既存
+host、Web Preview、production SB3、Standard palette、source／artifact formatにmigrationはありません。

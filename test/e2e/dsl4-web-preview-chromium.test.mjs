@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
 import {
+  buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
 } from '../../src/builder/index.js';
@@ -56,12 +57,15 @@ function contentType(file) {
   );
 }
 
-async function startFixtureServer(fixturePath = '/test/fixtures/dsl4/web-preview-browser.html') {
+async function startFixtureServer(
+  fixturePath = '/test/fixtures/dsl4/web-preview-browser.html',
+  root = repositoryRoot,
+) {
   const server = createServer(async (request, response) => {
     try {
       const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
-      const file = path.resolve(repositoryRoot, `.${pathname}`);
-      if (!file.startsWith(`${repositoryRoot}${path.sep}`) || !(await stat(file)).isFile()) {
+      const file = path.resolve(root, `.${pathname}`);
+      if (!file.startsWith(`${root}${path.sep}`) || !(await stat(file)).isFile()) {
         response.writeHead(404).end('Not found');
         return;
       }
@@ -85,6 +89,87 @@ async function startFixtureServer(fixturePath = '/test/fixtures/dsl4/web-preview
     url: `http://127.0.0.1:${address.port}${fixturePath}`,
   };
 }
+
+test(
+  'loads the pinned TurboWarp browser platform bundle in real Chromium',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-turbowarp-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-turbowarp-bundle-'));
+    const entryPoint = path.join(fixtureDirectory, 'entry.mjs');
+    const bundlePath = path.join(fixtureDirectory, 'bundle.js');
+    await writeFile(
+      entryPoint,
+      `import {loadDsl4BrowserTurboWarpPlatform} from ${JSON.stringify(path.join(repositoryRoot, 'src/dsl4/browser-turbowarp-platform.js'))};
+try {
+  const platform = await loadDsl4BrowserTurboWarpPlatform();
+  globalThis.turbowarpPlatformFixture = {ready: true, ok: true, methods: Object.keys(platform).sort()};
+} catch (error) {
+  globalThis.turbowarpPlatformFixture = {ready: true, ok: false, error: String(error?.stack ?? error)};
+}
+`,
+    );
+    const bundle = await buildDsl4TurboWarpBrowserBundle({entryPoint});
+    await Promise.all([
+      writeFile(bundlePath, bundle),
+      writeFile(
+        path.join(fixtureDirectory, 'index.html'),
+        '<!doctype html><meta charset="utf-8"><script type="module" src="/bundle.js"></script>',
+      ),
+    ]);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.turbowarpPlatformFixture?.ready === true',
+        'TurboWarp platform package load',
+      );
+      const fixture = await client.evaluate('globalThis.turbowarpPlatformFixture');
+      assert.equal(fixture.ok, true, fixture.error);
+      assert.deepEqual(fixture.methods, [
+        'createAudioEngine',
+        'createBitmapAdapter',
+        'createRenderer',
+        'createStorage',
+        'createVm',
+        'disposeAudioEngine',
+        'disposeBitmapAdapter',
+        'disposeRenderer',
+        'disposeStorage',
+      ]);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+      ]);
+    }
+  },
+);
 
 function waitForDevTools(child) {
   return new Promise((resolve, reject) => {
