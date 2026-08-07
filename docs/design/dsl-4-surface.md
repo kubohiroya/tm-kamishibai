@@ -331,7 +331,8 @@ Scratch runtimeの決定済み実行順による最終値をtick境界でsample�
 追跡は行わないため、通常のScratch last-write-wins semanticsを変更しません。completed／cancelledの
 terminal eventではbindingを無効にして両変数を直ちに0へ戻し、platform sessionのdisposeでも0 resetします。
 platformは0〜100の既存Stage variable slider monitorをvariable IDで一意に解決します。両monitorは
-waiting／chargingのactive期間だけ表示し、completed／cancelled／disposeで非表示へ戻します。
+adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
+completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

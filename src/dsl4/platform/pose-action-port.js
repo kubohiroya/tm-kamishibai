@@ -464,19 +464,17 @@ export function createDsl4PoseActionPort(options) {
         }
         terminalPhase = 'completed';
       } finally {
+        if (statePublished) {
+          statePublished = false;
+          publishPoseState(input, terminalPhase, confidence, progress);
+        }
         try {
           if (input.idleSound) await stopSound(input.idleSound);
         } finally {
-          try {
-            if (statePublished) {
-              publishPoseState(input, terminalPhase, confidence, progress);
-            }
-          } finally {
-            operation.detach();
-            if (activeSequence === operation) activeSequence = null;
-            operation.finish();
-            currentSelection?.wake?.();
-          }
+          operation.detach();
+          if (activeSequence === operation) activeSequence = null;
+          operation.finish();
+          currentSelection?.wake?.();
         }
       }
     },

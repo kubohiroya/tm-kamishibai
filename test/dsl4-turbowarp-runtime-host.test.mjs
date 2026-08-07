@@ -572,15 +572,15 @@ test('continues environment cleanup and aggregates a Scratch reset failure', asy
   const project = await packagedProject();
   const log = [];
   const fixture = platformFixture(log);
-  let progress = 50;
-  fixture.poseConfidence.value = 75;
+  let progress = 0;
+  let rejectReset = false;
   Object.defineProperty(fixture.poseProgress, 'value', {
     configurable: true,
     get() {
       return progress;
     },
     set(value) {
-      if (value === 0) throw new Error('Scratch reset failed');
+      if (rejectReset && value === 0) throw new Error('Scratch reset failed');
       progress = value;
     },
   });
@@ -597,6 +597,9 @@ test('continues environment cleanup and aggregates a Scratch reset failure', asy
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  rejectReset = true;
 
   await assert.rejects(result.host.dispose('reset-failure'), (error) => {
     assert.equal(error instanceof AggregateError, true);

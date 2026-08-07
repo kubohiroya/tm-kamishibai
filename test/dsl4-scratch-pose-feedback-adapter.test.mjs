@@ -102,6 +102,72 @@ function fakeRuntime(overrides = {}) {
   };
 }
 
+test('clears pre-existing values and visible monitors after resolving every channel', () => {
+  const setup = fakeRuntime();
+  setup.confidence.value = 88;
+  setup.progress.value = 67;
+  for (const variable of [setup.confidence, setup.progress]) {
+    setup.monitorBlocksById.get(variable.id).isMonitored = true;
+    setup.monitorRecords.get(variable.id).visible = true;
+  }
+
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: setup.runtime,
+    mode: 'scratchMirror',
+  });
+
+  assert.equal(setup.confidence.value, 0);
+  assert.equal(setup.progress.value, 0);
+  assert.equal(setup.monitorVisible(setup.confidence), false);
+  assert.equal(setup.monitorVisible(setup.progress), false);
+  adapter.dispose();
+});
+
+test('fails closed and aggregates startup reset and monitor cleanup failures', () => {
+  let progressValue = 67;
+  const progressVariable = {};
+  Object.defineProperty(progressVariable, 'value', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return progressValue;
+    },
+    set(value) {
+      if (value === 0) throw new Error('startup reset failed');
+      progressValue = value;
+    },
+  });
+  const setup = fakeRuntime({progressVariable});
+  setup.confidence.value = 88;
+  for (const variable of [setup.confidence, setup.progress]) {
+    setup.monitorBlocksById.get(variable.id).isMonitored = true;
+    setup.monitorRecords.get(variable.id).visible = true;
+  }
+  const changeBlock = setup.monitorBlocks.changeBlock;
+  setup.monitorBlocks.changeBlock = (input) => {
+    if (input.id === setup.progress.id && input.value === false) {
+      throw new Error('startup monitor hide failed');
+    }
+    changeBlock(input);
+  };
+
+  assert.throws(
+    () =>
+      createDsl4ScratchPoseFeedbackAdapter({
+        runtime: setup.runtime,
+        mode: 'scratchBinding',
+      }),
+    (error) => {
+      assert.equal(error instanceof AggregateError, true);
+      assert.match(String(error.errors[0]), /startup reset failed/u);
+      assert.match(String(error.errors[1]), /startup monitor hide failed/u);
+      return true;
+    },
+  );
+  assert.equal(setup.monitorVisible(setup.confidence), false);
+  assert.equal(setup.monitorVisible(setup.progress), true);
+});
+
 test('scratchMirror projects normalized state to 0-100 and never reads Scratch edits back', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({

@@ -395,13 +395,21 @@ test('shows and clears DSL4 Scratch pose feedback monitors in the real TurboWarp
   const confidence = stage.lookupVariableByNameAndType('ポーズ認識', '');
   const progress = stage.lookupVariableByNameAndType('チャージ', '');
   const visible = (variable) => runtime.getMonitorState().get(variable.id).get('visible');
-  assert.equal(visible(confidence), false);
-  assert.equal(visible(progress), false);
+  confidence.value = 75;
+  progress.value = 50;
+  runtime.monitorBlocks.changeBlock({id: confidence.id, element: 'checkbox', value: true}, runtime);
+  runtime.monitorBlocks.changeBlock({id: progress.id, element: 'checkbox', value: true}, runtime);
+  assert.equal(visible(confidence), true);
+  assert.equal(visible(progress), true);
 
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
     runtime,
     mode: 'scratchBinding',
   });
+  assert.equal(confidence.value, 0);
+  assert.equal(progress.value, 0);
+  assert.equal(visible(confidence), false);
+  assert.equal(visible(progress), false);
   adapter.onPoseState({
     phase: 'waiting',
     target: 'Hero',

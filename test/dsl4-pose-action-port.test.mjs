@@ -256,6 +256,68 @@ test('publishes a final cancelled state after action abort and releases its time
   );
 });
 
+test('publishes completed before awaiting asynchronous sound cleanup', async () => {
+  const states = [];
+  let finishSoundCleanup = () => {};
+  const soundCleanup = new Promise((resolve) => {
+    finishSoundCleanup = resolve;
+  });
+  const {pose, clock, port} = setup({
+    onPoseState: (event) => states.push(event),
+    stopSound: () => soundCleanup,
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  let settled = false;
+  pending.then(() => {
+    settled = true;
+  });
+  await flush();
+  pose.confidence.set('help', 1);
+  clock.advance(1000);
+  await flush();
+
+  assert.equal(settled, false);
+  assert.deepEqual(
+    states.map(({phase}) => phase),
+    ['waiting', 'charging', 'completed'],
+  );
+
+  finishSoundCleanup();
+  await pending;
+  assert.equal(states.filter(({phase}) => phase === 'completed').length, 1);
+});
+
+test('publishes cancelled before awaiting asynchronous sound cleanup', async () => {
+  const states = [];
+  let finishSoundCleanup = () => {};
+  const soundCleanup = new Promise((resolve) => {
+    finishSoundCleanup = resolve;
+  });
+  const controller = new AbortController();
+  const {port} = setup({
+    onPoseState: (event) => states.push(event),
+    stopSound: () => soundCleanup,
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  let settled = false;
+  pending.catch(() => {
+    settled = true;
+  });
+  await flush();
+  controller.abort('scene-transition');
+  await flush();
+
+  assert.equal(settled, false);
+  assert.deepEqual(
+    states.map(({phase}) => phase),
+    ['waiting', 'cancelled'],
+  );
+
+  finishSoundCleanup();
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  assert.equal(states.filter(({phase}) => phase === 'cancelled').length, 1);
+});
+
 test('contains synchronous and asynchronous observer failures without changing pose execution', async () => {
   let calls = 0;
   const {pose, clock, sounds, port} = setup({

@@ -387,6 +387,13 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
     throwCollected(errors, 'Scratch pose feedback display cleanup failed');
   }
 
+  try {
+    cleanupDisplay();
+  } catch (error) {
+    const errors = error instanceof AggregateError ? error.errors : [error];
+    throw new AggregateError(errors, 'Scratch pose feedback startup cleanup failed');
+  }
+
   const adapter = {
     /** @param {unknown} input */
     onPoseState(input) {
