@@ -79,8 +79,8 @@ verified remote cacheは取得後のbytesを再検証し、失敗時に未検証
 
 local preview transportはloopback address、許可origin、session token、project root confinementをすべて
 満たす接続だけを受け入れます。protocol、fingerprint、candidate session、reload transaction、transport
-policyは実装済みです。実際のlocal preview host／CLI `--watch`接続はIssue #258で追跡し、実装されるまで
-READMEや作者向け文書で利用可能とは表示しません。
+policyとlocal HTTP host adapterは実装済みです。公開CLI `--watch`のargument／signal／browser open接続はIssue
+#258で追跡し、実装されるまでREADMEや作者向け文書で利用可能とは表示しません。
 
 artifact fingerprintにはbase SB3、asset bundle、app shell、Standard Runtime、builder設定、source path／ID、
 control profileを含めます。YAML textのintegrityだけが変わった場合はlive reload、fingerprintが変わった場合は

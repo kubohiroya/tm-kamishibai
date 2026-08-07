@@ -40,11 +40,12 @@ browser adapter、Node watcher、runtimeは別々のlive reloadを実装しま�
 - `dsl4AppShell`と`dsl4WebPreviewAdapter`: 起動時固定、既定OFFの依存flag
 - `validate-dsl4`と`build-dsl4`: local検証とfull rebuild
 
-一方、`preview --watch`相当のCLI commandはまだ公開されていません。したがって、Web Preview UIで「CLI live
-previewを起動するcommand」が利用可能だと表示してはいけません。後続実装は次を満たしてから一般作者向け
-fallback文言を拡張します。
+一方、`preview --watch`相当のCLI commandはまだ公開されていません。Issue #258のlocal host adapterはNode
+watcher、共有protocol、共有CLI browser shellをloopback HTTPへ接続済みですが、process signalと公開argumentを
+持つCLI adapterは後続です。したがって、Web Preview UIで「CLI live previewを起動するcommand」が利用可能だと
+表示してはいけません。後続実装は次をすべて満たしてから一般作者向けfallback文言を拡張します。
 
-1. local preview hostがNode watcher、共有protocol、共有reload shellを接続する
+1. local preview hostがNode watcher、共有protocol、共有reload shellを接続する（実装済み）
 2. `--help`に実在するcommandと必須limitを表示する
 3. unsupported browserのE2Eがそのcommandを含む案内へ到達する
 

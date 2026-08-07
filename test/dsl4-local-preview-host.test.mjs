@@ -1,0 +1,391 @@
+import assert from 'node:assert/strict';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import {
+  createDsl4LocalPreviewHost,
+  createDsl4ProductionSourceFrontend,
+} from '../src/builder/index.js';
+import {createDsl4LiveReloadSession, createDsl4PreviewProtocolSession} from '../src/dsl4/index.js';
+
+const schema = JSON.parse(
+  await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
+);
+const frontend = createDsl4ProductionSourceFrontend(schema);
+const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
+
+function fakeWatchFactory() {
+  let listener = null;
+  let errorListener = null;
+  let closed = 0;
+  return {
+    factory(_directory, nextListener) {
+      listener = nextListener;
+      return {
+        close() {
+          closed += 1;
+        },
+        on(type, callback) {
+          if (type === 'error') errorListener = callback;
+          return this;
+        },
+      };
+    },
+    emit(filename) {
+      listener?.('change', filename);
+    },
+    emitError(error) {
+      errorListener?.(error);
+    },
+    get closed() {
+      return closed;
+    },
+  };
+}
+
+function createRuntimeProtocol() {
+  const lifecycle = [];
+  const liveReload = createDsl4LiveReloadSession({
+    createSession({storyDocument}) {
+      const firstAction = storyDocument.scenes[0].actions[0] ?? null;
+      let state = {
+        status: 'idle',
+        sceneId: storyDocument.scenes[0].id,
+        actionIndex: 0,
+        actionPath: firstAction?.id ?? null,
+        variables: storyDocument.variables,
+      };
+      let quiesceToken = null;
+      return {
+        start(options = {}) {
+          lifecycle.push(['start', options]);
+          state = {...state, status: 'running'};
+          return Promise.resolve(state);
+        },
+        stop(reason) {
+          lifecycle.push(['stop', reason]);
+          state = {...state, status: 'stopped'};
+          quiesceToken = null;
+        },
+        dispose(reason) {
+          lifecycle.push(['dispose', reason]);
+        },
+        getState() {
+          return {runtime: state};
+        },
+        quiesce({candidateId}) {
+          quiesceToken = Object.freeze({
+            kind: 'Dsl4QuiesceToken',
+            version: 1,
+            candidateId,
+            runtimeGeneration: 1,
+            storyPath: firstAction?.id ?? `/scenes/${state.sceneId}`,
+            actionSignature: firstAction
+              ? {
+                  command: firstAction.command,
+                  target: firstAction.target,
+                  handler: firstAction.handler ?? 'core',
+                }
+              : null,
+            sceneId: state.sceneId,
+            actionIndex: 0,
+            variables: {...state.variables},
+            resumeMode: firstAction ? 'replay-action' : 'finished',
+          });
+          state = {...state, status: 'paused'};
+          return quiesceToken;
+        },
+        resumeQuiesce(candidateId) {
+          if (!quiesceToken || quiesceToken.candidateId !== candidateId) {
+            throw new TypeError('stale quiesce candidate');
+          }
+          quiesceToken = null;
+          state = {...state, status: 'running'};
+          return state;
+        },
+      };
+    },
+  });
+  return {
+    lifecycle,
+    liveReload,
+    protocol: createDsl4PreviewProtocolSession({liveReloadSession: liveReload}),
+  };
+}
+
+async function waitFor(predicate, message) {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(message);
+}
+
+async function request(origin, endpoint, {token, body = {}, expectedStatus = 200}) {
+  const response = await fetch(`${origin}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      origin,
+      'content-type': 'application/json',
+      ...(token ? {authorization: `Bearer ${token}`} : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  assert.equal(response.status, expectedStatus);
+  return response.json();
+}
+
+test('connects the loopback browser host, Node watcher, and injected runtime protocol', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-host-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceFilename = 'preview.k4.yml';
+  const sourcePath = path.join(projectRoot, sourceFilename);
+  const sourceWatch = fakeWatchFactory();
+  const structureWatch = fakeWatchFactory();
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+  await Promise.all([
+    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(sourcePath, validSource),
+  ]);
+  const runtime = createRuntimeProtocol();
+  const observedEvents = [];
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+    watcherOptions: {
+      watchFactory: sourceWatch.factory,
+      quietWindowMs: 0,
+      retryIntervalMs: 1,
+      stabilityTimeoutMs: 3,
+    },
+    structureWatchFactory: structureWatch.factory,
+    onEvent: (event) => observedEvents.push(event),
+  });
+
+  try {
+    const listening = await host.start();
+    assert.equal(listening.status, 'listening');
+    assert.equal(listening.connected, false);
+    assert.equal(JSON.stringify(listening).includes(projectRoot), false);
+    const launchUrl = new URL(host.getLaunchUrl());
+    const origin = launchUrl.origin;
+    const token = launchUrl.hash.slice(1);
+    assert.match(token, /^[A-Za-z0-9_-]{43}$/u);
+
+    const page = await fetch(origin);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-security-policy'), /connect-src 'self'/u);
+    const pageBody = await page.text();
+    assert.match(pageBody, /dsl4-local-preview-client\.js/u);
+    assert.match(
+      pageBody,
+      /<strong id="dsl4-local-preview-source-name">preview\.k4\.yml<\/strong>/u,
+    );
+    const clientModule = await fetch(`${origin}/modules/builder/dsl4-local-preview-client.js`);
+    assert.equal(clientModule.status, 200);
+    assert.match(await clientModule.text(), /createDsl4CliPreviewShell/u);
+    assert.equal((await fetch(`${origin}/modules/builder/../../package.json`)).status, 404);
+
+    const connected = await request(origin, '/api/connect', {body: {token}});
+    assert.equal(connected.snapshot.status, 'connected');
+    assert.equal(runtime.lifecycle[0][0], 'start');
+    const initial = connected.events.find((event) => event.type === 'local-preview.source');
+    assert.equal(initial.source.ok, true);
+    assert.equal(initial.acknowledgement.status, 'active');
+    assert.equal(initial.source.counts.scenes, 1);
+    const serialized = JSON.stringify(connected);
+    assert.equal(serialized.includes(validSource.trim()), false);
+    assert.equal(serialized.includes(projectRoot), false);
+    assert.equal(serialized.includes(sourceFilename), false);
+    assert.equal(serialized.includes(token), false);
+
+    const denied = await fetch(`${origin}/api/commit`, {
+      method: 'POST',
+      headers: {
+        origin: 'http://127.0.0.1:1',
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({choice: 'storyStart'}),
+    });
+    assert.equal(denied.status, 400);
+    const deniedError = (await denied.json()).error;
+    assert.equal(deniedError.code, 'K4-PREVIEW-TRANSPORT-ORIGIN');
+    assert.equal(deniedError.message, 'The local preview host rejected the request');
+    assert.equal(JSON.stringify(deniedError).includes(projectRoot), false);
+    assert.equal(JSON.stringify(deniedError).includes(token), false);
+    assert.equal(host.getSnapshot().status, 'connected');
+
+    await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
+    const beforeInvalid = host.getSnapshot().latestSequence;
+    sourceWatch.emit(sourceFilename);
+    await waitFor(
+      () => host.getSnapshot().latestSequence > beforeInvalid,
+      'invalid source event was not published',
+    );
+    const invalid = observedEvents.findLast((event) => event.type === 'local-preview.source');
+    assert.equal(invalid.source.ok, false);
+    assert.equal(invalid.acknowledgement.status, 'invalid');
+    assert.equal(invalid.acknowledgement.current.generation, 1);
+    assert.equal(runtime.lifecycle.length, 1);
+
+    await writeFile(sourcePath, validSource.replace('opening: []', 'opening:\n    - wait: 60'));
+    const beforeCandidate = host.getSnapshot().latestSequence;
+    sourceWatch.emit(sourceFilename);
+    await waitFor(
+      () => host.getSnapshot().latestSequence > beforeCandidate,
+      'valid candidate event was not published',
+    );
+    const candidate = observedEvents.findLast((event) => event.type === 'local-preview.source');
+    assert.equal(candidate.acknowledgement.status, 'pending');
+    assert.equal(candidate.acknowledgement.candidate.options.storyStart.enabled, true);
+    assert.equal(runtime.lifecycle.length, 1);
+
+    const committed = await request(origin, '/api/commit', {
+      token,
+      body: {choice: 'storyStart'},
+    });
+    assert.equal(committed.acknowledgement.status, 'active');
+    assert.equal(committed.acknowledgement.current.generation, 2);
+    assert.deepEqual(
+      runtime.lifecycle.map(([operation]) => operation),
+      ['start', 'stop', 'dispose', 'start'],
+    );
+
+    const manifestChanged = {...manifest, path: 'alternate.k4.yaml'};
+    await writeFile(sourceManifestPath, `${JSON.stringify(manifestChanged)}\n`);
+    structureWatch.emit('project.source.json');
+    await waitFor(
+      () => host.getSnapshot().rebuildRequired,
+      'structural manifest change did not require a rebuild',
+    );
+    assert.equal(host.getSnapshot().status, 'rebuild-required');
+    assert.equal(runtime.liveReload.getState().hasCurrent, true);
+    assert.equal(sourceWatch.closed, 1);
+    const rebuildEvent = observedEvents.findLast(
+      (event) => event.type === 'local-preview.full-rebuild-required',
+    );
+    assert.equal(rebuildEvent.diagnostic.code, 'K4-PREVIEW-STRUCTURE-CHANGED');
+
+    const disconnectedCommit = await request(origin, '/api/commit', {
+      token,
+      body: {choice: 'storyStart'},
+      expectedStatus: 400,
+    });
+    assert.equal(disconnectedCommit.error.code, 'K4-PREVIEW-TRANSPORT-DISCONNECTED');
+  } finally {
+    assert.deepEqual(await host.dispose(), await host.dispose());
+    await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+  assert.equal(structureWatch.closed, 1);
+});
+
+test('stops both watchers on browser disconnect without stopping the current runtime', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-disconnect-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceWatch = fakeWatchFactory();
+  const structureWatch = fakeWatchFactory();
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main'};
+  await Promise.all([
+    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(path.join(projectRoot, 'story.kamishibai.yaml'), validSource),
+  ]);
+  const runtime = createRuntimeProtocol();
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+    watcherOptions: {
+      watchFactory: sourceWatch.factory,
+      quietWindowMs: 0,
+      retryIntervalMs: 1,
+      stabilityTimeoutMs: 3,
+    },
+    structureWatchFactory: structureWatch.factory,
+  });
+
+  try {
+    await host.start();
+    const launchUrl = new URL(host.getLaunchUrl());
+    const token = launchUrl.hash.slice(1);
+    await request(launchUrl.origin, '/api/connect', {body: {token}});
+    assert.equal(runtime.liveReload.getState().hasCurrent, true);
+
+    const disconnected = await request(launchUrl.origin, '/api/disconnect', {token});
+    assert.equal(disconnected.snapshot.connected, false);
+    assert.equal(disconnected.snapshot.status, 'listening');
+    assert.equal(sourceWatch.closed, 1);
+    assert.equal(structureWatch.closed, 1);
+    assert.equal(runtime.liveReload.getState().hasCurrent, true);
+  } finally {
+    await host.dispose();
+    await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+  assert.equal(sourceWatch.closed, 1);
+  assert.equal(structureWatch.closed, 1);
+});
+
+test('fails before opening sockets for unsafe local host configuration', () => {
+  const runtime = createRuntimeProtocol();
+  const base = {
+    projectRoot: '/tmp/dsl4-project',
+    sourceManifestPath: '/tmp/dsl4-project/project.source.json',
+    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+  };
+  assert.throws(() => createDsl4LocalPreviewHost({...base, bindHost: '0.0.0.0'}), /bindHost/u);
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        sourceManifestPath: '/tmp/other/project.source.json',
+      }),
+    /sourceManifestPath/u,
+  );
+  assert.throws(() => createDsl4LocalPreviewHost({...base, port: 70_000}), /port/u);
+  void runtime.liveReload.dispose();
+});
+
+test('closes the loopback socket when disposal races server startup', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-dispose-race-'));
+  const runtime = createRuntimeProtocol();
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath: path.join(projectRoot, 'project.source.json'),
+    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+  });
+
+  try {
+    const starting = host.start();
+    const disposing = host.dispose();
+    await assert.rejects(starting, /disposed while starting/u);
+    const snapshot = await disposing;
+    assert.equal(snapshot.status, 'disposed');
+    assert.equal(snapshot.disposed, true);
+    assert.equal(snapshot.connected, false);
+    assert.equal(host.getSnapshot().status, 'disposed');
+    assert.throws(() => host.getLaunchUrl(), /unavailable/u);
+    assert.throws(() => host.start(), /disposed/u);
+  } finally {
+    await host.dispose();
+    await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+});
