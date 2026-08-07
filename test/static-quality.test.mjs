@@ -10,6 +10,8 @@ const firstPartyFiles = [
   'bin/tmpose-kamishibai.mjs',
   'eslint.config.mjs',
   'scripts/build-site.mjs',
+  'scripts/download-catalog.mjs',
+  'scripts/sb3/downloadable-releases.mjs',
   'site/site-shell.js',
   'src/builder/index.js',
   'test/turbowarp-vm.test.mjs',
@@ -33,10 +35,15 @@ test('applies static quality rules to every first-party code area', async () => 
   }
 });
 
-test('excludes only upstream-synchronized extension artifacts from local linting', async () => {
+test('excludes immutable synchronized artifacts from local linting', async () => {
   const eslint = new ESLint({cwd: new URL('.', projectRoot).pathname});
   for (const filename of vendoredExtensions) {
     assert.equal(await eslint.isPathIgnored(filename), true, `${filename} must remain vendored`);
   }
+  assert.equal(
+    await eslint.isPathIgnored('release-sources/3.2.3/app/extensions/kubohiroyaassetmanager.js'),
+    true,
+    'Immutable release snapshots must remain excluded from current-source linting.',
+  );
   assert.equal(await eslint.isPathIgnored('app/extensions/kubohiroyaweblink.js'), false);
 });

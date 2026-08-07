@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "project": "project.source.json",
+  "embeddedExtensions": "embedded-extensions.json",
+  "assetsDirectory": "assets",
+  "archiveEntries": [
+    "project.json",
+    "03f3c75c202a3c60e4ffae10cc32872a.svg",
+    "c307dbe27e1733c95382d11de19ae476.svg",
+    "d09cdbee37f6639281dc5cfb263cd417.svg",
+    "d6fd4b1b39db3992a003779ed13c404f.svg",
+    "1d2c326092fa3c0521eeb6008c3c4c87.svg",
+    "47282ff0f7047c6fab9c94b531abf721.png",
+    "5cd59f75ce1972df719e7cbd2e9cdeb7.svg",
+    "21fb7fa07eac4794fded0be4e18e20a2.svg",
+    "b6c18d2f3df8b5d12e2b6a529109fec2.svg",
+    "b85391a10e36ffc5157fa1f4f2d419ce.svg",
+    "ceec75fe8e7f80e5a498fe7faf1055a8.svg",
+    "1766a36329eca190b2b19bba53ef7d8f.svg",
+    "8cf6379b2d82bea5a39bb46757a9bd3d.svg",
+    "fc0a44695524e272260a18d76320828f.svg",
+    "7069974a56d188a8d1e9e79513df9e0e.svg"
+  ]
+}

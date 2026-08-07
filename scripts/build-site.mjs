@@ -2,18 +2,17 @@ import {cp, mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {recommendedDownload, renderDownloadCards} from './download-catalog.mjs';
 import {renderSiteVersion} from './site-version.mjs';
-import {buildKamishibaiSb3} from './sb3/build.mjs';
+import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {verifyBuild} from './verify-build.mjs';
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../dist/', import.meta.url);
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputPath = fileURLToPath(output);
-const packageJsonPath = path.join(projectRoot, 'package.json');
 const siteIndexPath = path.join(outputPath, 'index.html');
+const downloadIndexPath = path.join(outputPath, 'downloads', 'index.html');
 const faviconPath = path.join(outputPath, 'favicon.png');
-const downloadSb3 = new URL('../dist/downloads/kamishibai.sb3', import.meta.url);
 
 async function prepareOutputDirectory() {
   await rm(output, {recursive: true, force: true});
@@ -22,12 +21,14 @@ async function prepareOutputDirectory() {
 }
 
 async function renderSiteMetadata() {
-  const [sourceHtml, packageJsonSource] = await Promise.all([
+  const [sourceHtml, downloadHtml] = await Promise.all([
     readFile(siteIndexPath, 'utf8'),
-    readFile(packageJsonPath, 'utf8'),
+    readFile(downloadIndexPath, 'utf8'),
   ]);
-  const packageJson = JSON.parse(packageJsonSource);
-  await writeFile(siteIndexPath, renderSiteVersion(sourceHtml, packageJson.version));
+  await Promise.all([
+    writeFile(siteIndexPath, renderSiteVersion(sourceHtml, recommendedDownload.version)),
+    writeFile(downloadIndexPath, renderDownloadCards(downloadHtml)),
+  ]);
 }
 
 async function findHtmlFiles(directory) {
@@ -72,10 +73,15 @@ async function addFaviconLinks() {
 
 await prepareOutputDirectory();
 await renderSiteMetadata();
-const sb3Build = await buildKamishibaiSb3({
-  outputPath: fileURLToPath(downloadSb3),
-});
-console.log(`Built downloadable SB3: ${sb3Build.outputPath}`);
+const releaseBuilds = await Promise.all(
+  downloadableReleases.map(async (release) => {
+    const build = await buildDownloadableReleaseSb3(release, {
+      outputPath: path.join(outputPath, 'downloads', release.filename),
+    });
+    console.log(`Built downloadable ${release.series} SB3: ${build.outputPath}`);
+    return {release, titleBuildMetadata: build.titleBuildMetadata};
+  }),
+);
 await addFaviconLinks();
-await verifyBuild({titleBuildMetadata: sb3Build.titleBuildMetadata});
+await verifyBuild({releaseBuilds});
 console.log('Built GitHub Pages content in dist/');

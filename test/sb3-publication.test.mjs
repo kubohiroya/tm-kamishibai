@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFile, readdir} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {
+  downloadCardsPlaceholder,
+  downloadCatalog,
+  recommendedDownload,
+  renderDownloadCards,
+} from '../scripts/download-catalog.mjs';
+import {
+  createDownloadableReleaseSb3,
+  downloadableReleases,
+} from '../scripts/sb3/downloadable-releases.mjs';
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -29,15 +40,41 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
   );
 });
 
-test('links and documents the generated downloadable SB3', async () => {
-  const [downloadPage, readme, packageJsonSource] = await Promise.all([
+test('renders ordered versioned download cards from one release catalog', async () => {
+  const [downloadTemplate, readme, packageJsonSource] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  const downloadPage = renderDownloadCards(downloadTemplate);
 
-  assert.match(downloadPage, /href="kamishibai\.sb3" download/u);
+  assert.equal(downloadTemplate.split(downloadCardsPlaceholder).length - 1, 1);
+  assert(!downloadPage.includes(downloadCardsPlaceholder));
+  const cardPositions = downloadCatalog.map(({series}) =>
+    downloadPage.indexOf(`data-version="${series}"`),
+  );
+  assert(cardPositions.every((position) => position >= 0));
+  assert(
+    cardPositions.every((position, index) => index === 0 || cardPositions[index - 1] < position),
+  );
+  for (const entry of downloadCatalog) {
+    assert(downloadPage.includes(`status--${entry.statusKind}">${entry.status}</span>`));
+    assert(downloadPage.includes(entry.description));
+  }
+  for (const release of downloadableReleases) {
+    assert.match(downloadPage, new RegExp(`href="${release.filename}" download`, 'u'));
+    assert(downloadPage.includes(`<code>${release.filename}</code>（${release.version}）`));
+  }
+  assert.match(
+    downloadPage,
+    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/dsl-author-guides\/dsl-4\.0-author-guide\/"/u,
+  );
+  for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
+    assert(downloadPage.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`));
+    assert(downloadPage.includes(entry.unavailableNote));
+  }
+  assert.doesNotMatch(downloadPage, /href="kamishibai\.sb3"/u);
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.match(
@@ -64,27 +101,50 @@ test('links and documents the generated downloadable SB3', async () => {
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
 });
 
-test('renders the top-page download version from package metadata', async () => {
-  const [siteIndex, packageJson] = await Promise.all([
-    readFile(path.join(projectRoot, 'site/index.html'), 'utf8'),
-    readFile(path.join(projectRoot, 'package.json'), 'utf8').then(JSON.parse),
-  ]);
+test('builds immutable release artifacts from local snapshots without git history', async () => {
+  const implementation = await readFile(
+    path.join(projectRoot, 'scripts/sb3/downloadable-releases.mjs'),
+    'utf8',
+  );
+  assert.doesNotMatch(implementation, /node:child_process|\bgit\b/u);
+
+  for (const release of downloadableReleases) {
+    const result = await createDownloadableReleaseSb3(release, {
+      buildDate: '2099-12-31',
+      now: new Date('2099-12-31T00:00:00Z'),
+    });
+    const digest = createHash('sha256').update(result.archive).digest('hex');
+    assert.equal(result.titleBuildMetadata.buildDate, release.buildDate);
+    assert.equal(digest, release.sha256);
+    await Promise.all([
+      readFile(path.join(projectRoot, release.sourceDirectory, 'project.source.json')),
+      readFile(path.join(projectRoot, release.faviconPath)),
+    ]);
+  }
+});
+
+test('renders the top-page version from the recommended download catalog entry', async () => {
+  const siteIndex = await readFile(path.join(projectRoot, 'site/index.html'), 'utf8');
 
   assert.equal(siteIndex.split(siteVersionPlaceholder).length - 1, 1);
   assert.doesNotMatch(siteIndex, /kamishibai \d/u);
 
-  const rendered = renderSiteVersion(siteIndex, packageJson.version);
+  const rendered = renderSiteVersion(siteIndex, recommendedDownload.version);
   assert.match(
     rendered,
-    new RegExp(`kamishibai\\s+${packageJson.version.replaceAll('.', '\\.')}のSB3ファイル`, 'u'),
+    new RegExp(
+      `kamishibai\\s+${recommendedDownload.version.replaceAll('.', '\\.')}のSB3ファイル`,
+      'u',
+    ),
   );
   assert(!rendered.includes(siteVersionPlaceholder));
   assert.throws(
-    () => renderSiteVersion(siteIndex.replace(siteVersionPlaceholder, ''), packageJson.version),
+    () =>
+      renderSiteVersion(siteIndex.replace(siteVersionPlaceholder, ''), recommendedDownload.version),
     /Expected exactly one/u,
   );
   assert.throws(
-    () => renderSiteVersion(`${siteIndex}\n${siteVersionPlaceholder}`, packageJson.version),
+    () => renderSiteVersion(`${siteIndex}\n${siteVersionPlaceholder}`, recommendedDownload.version),
     /found 2/u,
   );
 });

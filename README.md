@@ -208,6 +208,11 @@ pnpm install
 `pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
 CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
+GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として
+生成します。公開済み系列の入力は`release-sources/<version>/`へ固定し、build dateとSHA-256も
+カタログで固定します。このためサイトの再ビルドに完全なGit履歴は不要で、同じversionの配布物が
+意図せず変化した場合はビルドを失敗させます。
+
 主な生成先は次のとおりです。
 
 - `dist/`: GitHub Pagesへ公開する入口ページと配布用SB3
@@ -216,6 +221,7 @@ CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツ�
 ## リポジトリ構成
 
 - `app/`: 紙芝居SB3のGit管理上の正本
+- `release-sources/`: 公開済みSB3を再生成する不変のversion別source snapshot
 - `src/builder/`、`src/dsl4/`、`schema/`、`bin/`: npmで配布するDSL 3.2／4.0ビルダーAPIとCLI
 - `site/`: 公開サイトの静的ファイル
 - `scripts/`: 公開ページとSB3のビルド処理

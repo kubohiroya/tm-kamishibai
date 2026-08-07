@@ -2,23 +2,26 @@ import {access, readFile, readdir, stat} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {
+  downloadCardsPlaceholder,
+  downloadCatalog,
+  dsl4DocsUrl,
+  recommendedDownload,
+} from './download-catalog.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
-import {createKamishibaiSb3} from './sb3/build.mjs';
+import {createDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
-const packageJsonPath = path.join(projectRoot, 'package.json');
 const siteIndexPath = path.join(outputDirectory, 'index.html');
 const faviconSourcePath = path.join(projectRoot, 'site/favicon.png');
 const faviconPath = path.join(outputDirectory, 'favicon.png');
 const heroImageSourcePath = path.join(projectRoot, 'site/images/image01.png');
 const heroImagePath = path.join(outputDirectory, 'images/image01.png');
-const downloadFilename = 'kamishibai.sb3';
 const downloadSourceDirectory = path.join(projectRoot, 'site/downloads');
 const downloadDirectory = path.join(outputDirectory, 'downloads');
 const downloadIndexPath = path.join(downloadDirectory, 'index.html');
-const downloadPath = path.join(downloadDirectory, downloadFilename);
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const docsSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-docs/';
@@ -171,10 +174,9 @@ async function verifySiteIndex() {
   const allLinks = attributeValues(html, 'a', 'href');
   const altTexts = attributeValues(html, 'img', 'alt');
   const cardCount = (html.match(/<a\b(?=[^>]*class="content-card")[^>]*>/gu) ?? []).length;
-  const [sourceImage, publishedImage, packageJson] = await Promise.all([
+  const [sourceImage, publishedImage] = await Promise.all([
     readFile(heroImageSourcePath),
     readFile(heroImagePath),
-    readFile(packageJsonPath, 'utf8').then(JSON.parse),
   ]);
 
   assert(images.includes('images/image01.png'), 'The top page does not reference the hero image.');
@@ -208,10 +210,10 @@ async function verifySiteIndex() {
     html
       .replace(/\s+/gu, ' ')
       .includes(
-        `TurboWarpで編集・実行できるkamishibai ${packageJson.version}` +
+        `TurboWarpで編集・実行できるkamishibai ${recommendedDownload.version}` +
           'のSB3ファイルをダウンロードできます。',
       ),
-    'The top-page download card does not use the package version.',
+    'The top-page download card does not use the recommended catalog version.',
   );
   assert(
     !html.includes(siteVersionPlaceholder) && !html.includes('kamishibai 3.1a1'),
@@ -219,34 +221,13 @@ async function verifySiteIndex() {
   );
 }
 
-async function verifyDownloads(titleBuildMetadata) {
+async function verifyDownloads(releaseBuilds = []) {
   const html = await readFile(downloadIndexPath, 'utf8');
   const links = await verifyLocalReferences(downloadIndexPath, 'a', 'href');
-  const [sourceEntries, publishedEntries, publishedArchive, archiveStat, packageJson] =
-    await Promise.all([
-      readdir(downloadSourceDirectory, {withFileTypes: true}),
-      readdir(downloadDirectory, {withFileTypes: true}),
-      readFile(downloadPath),
-      stat(downloadPath),
-      readFile(packageJsonPath, 'utf8').then(JSON.parse),
-    ]);
-  const publishedMetadata = readTitleBuildMetadataFromSb3(publishedArchive);
-
-  assert(
-    publishedMetadata.version === packageJson.version,
-    `The published SB3 version ${publishedMetadata.version} differs from package.json.`,
-  );
-  if (titleBuildMetadata) {
-    assert(
-      publishedMetadata.buildDate === titleBuildMetadata.buildDate &&
-        publishedMetadata.version === titleBuildMetadata.version,
-      'The published SB3 metadata differs from the current build metadata.',
-    );
-  }
-  const expectedBuild = await createKamishibaiSb3({
-    buildDate: publishedMetadata.buildDate,
-    version: publishedMetadata.version,
-  });
+  const [sourceEntries, publishedEntries] = await Promise.all([
+    readdir(downloadSourceDirectory, {withFileTypes: true}),
+    readdir(downloadDirectory, {withFileTypes: true}),
+  ]);
   const sourceSb3Files = sourceEntries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sb3'))
     .map((entry) => entry.name);
@@ -254,37 +235,94 @@ async function verifyDownloads(titleBuildMetadata) {
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sb3'))
     .map((entry) => entry.name)
     .sort();
+  const expectedFilenames = downloadableReleases.map(({filename}) => filename).sort();
+  const cardPositions = downloadCatalog.map(({series}) => html.indexOf(`data-version="${series}"`));
 
   assert(
-    links.includes(downloadFilename),
-    `${downloadFilename} is missing from the download page.`,
+    cardPositions.every((position) => position >= 0) &&
+      cardPositions.every((position, index) => index === 0 || cardPositions[index - 1] < position),
+    'The rendered download cards differ from catalog order.',
   );
+  assert(!html.includes(downloadCardsPlaceholder), 'The download page has an unresolved catalog.');
+  for (const entry of downloadCatalog) {
+    assert(
+      html.includes(`<span class="status status--${entry.statusKind}">${entry.status}</span>`),
+      `The ${entry.series} card does not identify itself as ${entry.status}.`,
+    );
+    assert(
+      html.includes(entry.description),
+      `The ${entry.series} card does not use its catalog description.`,
+    );
+  }
   assert(
-    html.includes(`href="${downloadFilename}" download`),
-    'The SB3 link does not use the browser download behavior.',
+    html.includes(`href="${dsl4DocsUrl}"`),
+    'The 4.0 card does not link to the published author guide.',
   );
+  for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
+    assert(
+      html.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`) &&
+        html.includes(entry.unavailableNote),
+      `The ${entry.series} card does not explain that its artifact is unavailable.`,
+    );
+  }
   assert(sourceSb3Files.length === 0, 'site/downloads must not contain tracked SB3 binaries.');
   assert(
-    JSON.stringify(publishedSb3Files) === JSON.stringify([downloadFilename]),
+    JSON.stringify(publishedSb3Files) === JSON.stringify(expectedFilenames),
     `Unexpected published SB3 files: ${publishedSb3Files.join(', ')}`,
   );
-  assert(
-    publishedArchive.equals(Buffer.from(expectedBuild.archive)),
-    'The published SB3 differs from the deterministic app source build.',
-  );
-  assert(
-    archiveStat.size === publishedArchive.length &&
-      archiveStat.size > 0 &&
-      publishedArchive.subarray(0, 2).toString() === 'PK',
-    'The published SB3 is not a non-empty ZIP-based Scratch project.',
-  );
 
-  return {filename: downloadFilename, size: archiveStat.size};
+  const results = [];
+  for (const release of downloadableReleases) {
+    const [publishedArchive, archiveStat] = await Promise.all([
+      readFile(path.join(downloadDirectory, release.filename)),
+      stat(path.join(downloadDirectory, release.filename)),
+    ]);
+    const publishedMetadata = readTitleBuildMetadataFromSb3(publishedArchive);
+    const releaseBuild = releaseBuilds.find(
+      ({release: builtRelease}) => builtRelease.series === release.series,
+    );
+
+    assert(
+      links.includes(release.filename) && html.includes(`href="${release.filename}" download`),
+      `${release.filename} is not a browser download link.`,
+    );
+    assert(
+      html.includes(`<code>${release.filename}</code>（${release.version}）`),
+      `The ${release.series} card version differs from the release catalog.`,
+    );
+    assert(
+      publishedMetadata.version === release.version,
+      `The published ${release.series} SB3 must use version ${release.version}.`,
+    );
+    if (releaseBuild) {
+      assert(
+        publishedMetadata.buildDate === releaseBuild.titleBuildMetadata.buildDate &&
+          publishedMetadata.version === releaseBuild.titleBuildMetadata.version,
+        `The published ${release.series} SB3 metadata differs from its build metadata.`,
+      );
+    }
+    const expectedBuild = await createDownloadableReleaseSb3(release, {
+      buildDate: publishedMetadata.buildDate,
+    });
+    assert(
+      publishedArchive.equals(Buffer.from(expectedBuild.archive)),
+      `The published ${release.series} SB3 differs from its pinned source build.`,
+    );
+    assert(
+      archiveStat.size === publishedArchive.length &&
+        archiveStat.size > 0 &&
+        publishedArchive.subarray(0, 2).toString() === 'PK',
+      `The published ${release.series} SB3 is not a non-empty ZIP-based Scratch project.`,
+    );
+    results.push({filename: release.filename, size: archiveStat.size});
+  }
+
+  return results;
 }
 
-export async function verifyBuild({titleBuildMetadata} = {}) {
+export async function verifyBuild({releaseBuilds} = {}) {
   await verifySiteIndex();
-  const downloadResults = await verifyDownloads(titleBuildMetadata);
+  const downloadResults = await verifyDownloads(releaseBuilds);
   const faviconHtmlCount = await verifyFavicon();
   const appBarHtmlCount = await verifySiteAppBars();
   const docsEntries = await readdir(path.join(outputDirectory, 'docs'));
@@ -298,8 +336,8 @@ export async function verifyBuild({titleBuildMetadata} = {}) {
 
   console.log(
     `Verified favicon links and AppBars in ${faviconHtmlCount}/${appBarHtmlCount} HTML file(s), ` +
-      `${downloadResults.filename} (${downloadResults.size} bytes), the external documentation ` +
-      'link, and the legacy /docs/ redirect.',
+      `${downloadResults.map(({filename, size}) => `${filename} (${size} bytes)`).join(', ')}, ` +
+      'the external documentation link, and the legacy /docs/ redirect.',
   );
 }
 

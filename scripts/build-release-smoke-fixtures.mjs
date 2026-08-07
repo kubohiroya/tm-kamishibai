@@ -5,6 +5,8 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
+import {createDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
+
 import {
   embeddedScriptVariableId,
   embeddedScriptVariableName,
@@ -14,6 +16,9 @@ import {
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const detailedErrorsVariableId = 'featureDetailedScriptErrors';
 const unsupportedVersionScript = 'kamishibai=4.0\n';
+const fixtureBaseRelease = downloadableReleases.find(({series}) => series === '3.2');
+if (!fixtureBaseRelease)
+  throw new Error('The release catalog has no downloadable 3.2 fixture base.');
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -60,10 +65,15 @@ function createFixture(baseArchive, {detailedErrors}) {
 }
 
 export async function buildReleaseSmokeFixtures({
-  baseSb3 = path.join(projectRoot, 'dist/downloads/kamishibai.sb3'),
+  baseSb3,
   outputDirectory = path.join(projectRoot, 'tmp/release-smoke'),
 } = {}) {
-  const baseBytes = await readFile(baseSb3);
+  const baseBytes = baseSb3
+    ? await readFile(baseSb3)
+    : Buffer.from((await createDownloadableReleaseSb3(fixtureBaseRelease)).archive);
+  const basePath = baseSb3
+    ? path.relative(projectRoot, path.resolve(baseSb3))
+    : path.posix.join('dist', 'downloads', fixtureBaseRelease.filename);
   const baseArchive = unzipSync(new Uint8Array(baseBytes));
   const definitions = [
     {filename: 'detailed-on-unsupported-version.sb3', detailedErrors: true},
@@ -86,9 +96,11 @@ export async function buildReleaseSmokeFixtures({
   const manifest = {
     formatVersion: 1,
     base: {
-      path: path.relative(projectRoot, path.resolve(baseSb3)),
+      path: basePath,
       sha256: sha256(baseBytes),
       size: baseBytes.length,
+      sourceCommit: baseSb3 ? null : fixtureBaseRelease.sourceCommit,
+      version: baseSb3 ? null : fixtureBaseRelease.version,
     },
     fixtures,
   };

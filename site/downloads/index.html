@@ -20,15 +20,26 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--canvas); color: var(--ink); }
-    main { max-width: 880px; margin: auto; padding: 40px 24px 72px; }
+    main { max-width: 1080px; margin: auto; padding: 40px 24px 72px; }
     h1 { margin-bottom: .35rem; font-size: clamp(2rem, 6vw, 3.5rem); }
     .lead { color: var(--muted); font-size: 1.1rem; line-height: 1.7; }
-    article { margin-top: 32px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 5px 18px rgb(89 61 43 / 8%); }
-    article h2 { margin-top: 0; }
+    .download-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 32px; }
+    article { display: flex; flex-direction: column; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 5px 18px rgb(89 61 43 / 8%); }
+    article h2 { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin: 0; font-size: 1.45rem; }
     article p { line-height: 1.7; }
-    .status { display: inline-block; margin-left: .5rem; padding: .2rem .55rem; border-radius: 999px; background: #f5e1d8; color: var(--accent); font-size: .78rem; vertical-align: middle; }
-    .button { display: inline-block; margin: .5rem 0; padding: 12px 16px; border-radius: 8px; background: var(--accent); color: white; text-decoration: none; font-weight: 700; }
-    .file-info { color: var(--muted); font-size: .92rem; }
+    .status { display: inline-block; padding: .25rem .6rem; border-radius: 999px; font-size: .78rem; line-height: 1.35; white-space: nowrap; }
+    .status--past { background: #eee8e2; color: #62574f; }
+    .status--stable { background: #e2f0df; color: #315b32; }
+    .status--development { background: #f8e8c9; color: #71491a; }
+    .actions { display: grid; gap: 8px; margin-top: auto; padding-top: .5rem; }
+    .button { display: block; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: white; text-align: center; text-decoration: none; font-weight: 700; }
+    .button--secondary { border: 1px solid var(--accent); background: transparent; color: var(--accent); }
+    .button--disabled { border: 1px solid var(--line); background: #eee8e2; color: var(--muted); cursor: not-allowed; }
+    .file-info { margin-bottom: 0; color: var(--muted); font-size: .88rem; }
+    .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    @media (max-width: 820px) {
+      .download-list { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -59,12 +70,9 @@
     <p class="lead">TurboWarpで編集・実行できるTMPose紙芝居のSB3ファイルを配布しています。</p>
   </header>
 
-  <article>
-    <h2>kamishibai 3.2 <span class="status">ビルド生成</span></h2>
-    <p>Git管理された展開ソースからサイト更新時に生成したSB3です。ダウンロード後、TurboWarpで開いて利用できます。</p>
-    <p><a class="button" href="kamishibai.sb3" download>📁 SB3ファイルをダウンロード</a></p>
-    <p class="file-info">ファイル名: <code>kamishibai.sb3</code></p>
-  </article>
+  <section class="download-list" aria-label="バージョン別ダウンロード">
+{{DOWNLOAD_CARDS}}
+  </section>
 </main>
 </body>
 </html>
