@@ -174,6 +174,13 @@ export {
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
 export {
+  createDsl4SourceGraph,
+  dsl4SourceGraphDefaultLimits,
+  Dsl4SourceGraphError,
+  resolveDsl4IncludePath,
+  resolveDsl4SourceRelativeAssetPath,
+} from './source-graph.js';
+export {
   createDsl4StructuredDataComposition,
   dsl4StructuredDataDefaultLimits,
 } from './structured-data.js';

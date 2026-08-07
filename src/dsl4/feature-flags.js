@@ -2,6 +2,7 @@ import {deepFreeze} from './story-document.js';
 
 const featureFlagKeys = new Set([
   'dsl4Runtime',
+  'dsl4SourceIncludes',
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
   'dsl4WebPreviewAssetLiveReload',
@@ -15,6 +16,7 @@ const featureFlagKeys = new Set([
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
+  dsl4SourceIncludes: false,
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
   dsl4WebPreviewAssetLiveReload: false,
@@ -48,6 +50,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4AppShell && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4AppShell requires dsl4Runtime');
+  }
+  if (resolved.dsl4SourceIncludes && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4SourceIncludes requires dsl4Runtime');
   }
   if (resolved.dsl4WebPreviewAdapter && (!resolved.dsl4Runtime || !resolved.dsl4AppShell)) {
     throw new TypeError('dsl4WebPreviewAdapter requires dsl4Runtime and dsl4AppShell');
