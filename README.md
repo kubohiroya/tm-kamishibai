@@ -72,7 +72,8 @@ DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記する�
 `startSound`は吹き出し表示開始時に1回再生するsound asset、`characterSound`は1文字ごとのsound assetを
 指定します。`startSound`へセリフ音声を指定すると、フルボイスのノベルゲームを構成できます。文字送り中に
 入力またはタイムアウトが成立した場合は、残り全文を効果音なしで一括表示して次のactionへ進み、再生中の
-`startSound`も停止します。
+`startSound`も停止します。speech soundの停止単位はAsset Managerのasset IDです。同じsound assetを
+speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り当ててください。
 
 ```yaml
 - Hero.say:

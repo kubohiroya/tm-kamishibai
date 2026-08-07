@@ -366,10 +366,10 @@ test('stops only speech sound assets whose playback actually started', async () 
     runtime: fake.runtime,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
-    playCharacterSound(sound) {
+    playSpeechSound(sound) {
       sounds.push(['play', sound]);
     },
-    stopCharacterSound(sound) {
+    stopSpeechSound(sound) {
       sounds.push(['stop', sound]);
     },
   });

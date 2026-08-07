@@ -522,12 +522,16 @@ iconへ反映します。
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
 
-`characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。
+`characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
+`Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
 `startSound`は最初の吹き出し内容を表示した直後に1回再生するsound asset IDです。セリフを読んだ音声を
 指定してフルボイスにでき、speech完了、入力、タイムアウト、cancelのいずれでも再生を停止します。
 `characterSound`は`characterIntervalSeconds`と組み合わせるsound asset IDで、実際に1文字ずつ表示した
 各文字に対して再生します。`startSound`と`characterSound`は併用できます。文字送りの途中で入力または
 タイムアウトが成立した場合、残り全文を効果音なしで一括表示してから次のactionへ進みます。
+sound停止はAsset Managerのasset ID単位です。speechに指定したsound asset IDはそのspeechが排他的に
+使用し、BGMや別presentationとの同時再生には別のasset IDを割り当てます。terminal cleanupは、その
+speechが実際に再生を開始したasset IDだけを停止します。
 `dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
 
