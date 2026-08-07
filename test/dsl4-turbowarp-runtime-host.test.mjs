@@ -11,9 +11,11 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
+  loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {
   createDsl4StandardAppShell,
+  createDsl4TurboWarpPreviewSessionFactory,
   createDsl4TurboWarpRuntimeHost,
 } from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
@@ -609,6 +611,108 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
   assert.equal(result.enabled, false);
   assert.equal(result.host, null);
   assert.equal(factoryCalls, 0);
+});
+
+test('creates browser preview sessions from wire StoryDocuments without parsing source again', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const changed = frontend.parse(waitStory.replace('wait: 0', 'wait: 0.001'), {
+    sourceId: 'main',
+  });
+  assert.equal(changed.ok, true, JSON.stringify(changed.diagnostics));
+
+  const log = [];
+  const resets = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {
+      resets.push('reset');
+    },
+  });
+  const first = await createSession({
+    storyDocument: changed.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  await first.start();
+  assert.deepEqual(resets, ['reset']);
+  assert.equal(first.getState().runtime.status, 'finished');
+
+  const second = await createSession({
+    storyDocument: changed.storyDocument,
+    previousSession: first,
+    preserveManagedPresentation: true,
+  });
+  first.stop('preview-reload');
+  await first.dispose('preview-replaced');
+  await second.start();
+  assert.deepEqual(resets, ['reset']);
+
+  const third = await createSession({
+    storyDocument: changed.storyDocument,
+    previousSession: second,
+    preserveManagedPresentation: false,
+  });
+  second.stop('preview-reload');
+  await second.dispose('preview-replaced');
+  await third.start();
+  assert.deepEqual(resets, ['reset', 'reset']);
+  await third.dispose('preview-test');
+  assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 3);
+  assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
+});
+
+test('fails closed before inspecting preview artifacts while the runtime flag is disabled', () => {
+  assert.throws(
+    () =>
+      createDsl4TurboWarpPreviewSessionFactory({
+        featureFlags: {dsl4Runtime: false},
+        runtimeComponent: new Proxy({}, {get: () => assert.fail('component must not be read')}),
+        resetManagedPresentation: new Proxy(() => {}, {
+          get: () => assert.fail('reset callback must not be read'),
+        }),
+      }),
+    /dsl4Runtime feature flag/u,
+  );
+});
+
+test('releases a preview environment when the wire StoryDocument rejects navigation creation', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const incompatible = frontend.parse(waitStory.replace('production:', 'author-preview:'), {
+    sourceId: 'main',
+  });
+  assert.equal(incompatible.ok, true, JSON.stringify(incompatible.diagnostics));
+  const log = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {},
+  });
+
+  await assert.rejects(
+    () =>
+      createSession({
+        storyDocument: incompatible.storyDocument,
+        previousSession: null,
+        preserveManagedPresentation: false,
+      }),
+    /incompatible with the base runtime/u,
+  );
+  assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 1);
+  assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 1);
+  assert.equal(log.filter((entry) => entry[0] === 'pose.release-all').length, 1);
 });
 
 test('withholds every platform dependency until the packaged component validates', async () => {
