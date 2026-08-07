@@ -191,6 +191,36 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
 }
 
 /**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {Record<string, unknown>} branches
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ */
+function mapBranchSources(sourceMap, branches, document, lineCounter) {
+  for (const [branchId, value] of Object.entries(branches)) {
+    if (!Array.isArray(value)) continue;
+    const branchPath = `/branches/${storyPathSegment(branchId)}`;
+    sourceMap[branchPath] = sourceRangeForNode(
+      document.getIn(['branches', branchId], true),
+      lineCounter,
+    );
+    value.forEach((rule, index) => {
+      const rulePath = `${branchPath}/${index}`;
+      sourceMap[rulePath] = sourceRangeForNode(
+        document.getIn(['branches', branchId, index], true),
+        lineCounter,
+      );
+      if (typeof rule === 'object' && rule !== null && Object.hasOwn(rule, 'if')) {
+        sourceMap[`${rulePath}/if`] = sourceRangeForNode(
+          document.getIn(['branches', branchId, index, 'if'], true),
+          lineCounter,
+        );
+      }
+    });
+  }
+}
+
+/**
  * @param {Record<string, unknown>} sourceAction
  * @param {string} sceneId
  * @param {number} actionIndex
@@ -297,6 +327,8 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   /** @type {Record<string, SourceRange>} */
   const sourceMap = {'/': sourceRangeForNode(document.contents, lineCounter)};
   mapPoseRecognitionSource(sourceMap, document, lineCounter);
+  const sourceBranches = /** @type {Record<string, unknown>} */ (story.branches ?? {});
+  mapBranchSources(sourceMap, sourceBranches, document, lineCounter);
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
@@ -384,7 +416,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),
     controls: cloneValue(story.controls ?? null),
-    branches: cloneValue(story.branches ?? {}),
+    branches: cloneValue(sourceBranches),
     scenes,
     sourceMap,
   };

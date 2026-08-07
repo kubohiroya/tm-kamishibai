@@ -13,8 +13,10 @@ import {dsl4PreviewWatchDefaults} from '../src/builder/index.js';
 import {
   dsl4ActionHatDetectorDefaultLimits,
   dsl4CustomActionTimeoutDefaults,
+  dsl4DiagnosticProjectionDefaults,
   dsl4JsonPathDefaultLimits,
   dsl4RuntimeQuiesceDefaults,
+  dsl4SourceFrontendDefaultLimits,
   dsl4StructuredDataDefaultLimits,
 } from '../src/dsl4/index.js';
 
@@ -125,6 +127,14 @@ test('keeps every implemented limit in the design registry synchronized with cod
   assert.deepEqual(contract.implementedLimits.customAction.values, dsl4CustomActionTimeoutDefaults);
   assert.deepEqual(contract.implementedLimits.runtimeQuiesce.values, dsl4RuntimeQuiesceDefaults);
   assert.deepEqual(contract.implementedLimits.previewWatch.values, dsl4PreviewWatchDefaults);
+  assert.deepEqual(
+    contract.implementedLimits.sourceFrontend.values,
+    dsl4SourceFrontendDefaultLimits,
+  );
+  assert.deepEqual(
+    contract.implementedLimits.diagnosticProjection.values,
+    dsl4DiagnosticProjectionDefaults,
+  );
 
   const objectStoreSource = await readFile(
     path.join(repositoryRoot, contract.implementedLimits.objectStore.source),
@@ -140,28 +150,28 @@ test('keeps every implemented limit in the design registry synchronized with cod
   }
 });
 
-test('separates implemented, explicit, and proposed policy values without claiming rollout', () => {
-  assert.equal(contract.proposedSourcePolicy.status, 'proposed-not-implemented');
-  assert.equal(contract.proposedDiagnosticPolicy.status, 'proposed-not-implemented');
+test('separates implemented defaults from required explicit host limits', () => {
+  assert.equal(contract.sourceFrontendPolicy.status, 'implemented-default');
+  assert.equal(contract.diagnosticProjectionPolicy.status, 'implemented-default');
   assert.equal(
     new Set(contract.requiredExplicitLimits).size,
     contract.requiredExplicitLimits.length,
   );
-  assert.equal(contract.proposedSourcePolicy.values.maxCanonicalSourceBytes, 256 * 1024);
+  assert.equal(contract.sourceFrontendPolicy.values.maxCanonicalSourceBytes, 256 * 1024);
   assert.ok(
-    contract.proposedSourcePolicy.values.maxTotalActions <=
-      contract.proposedSourcePolicy.values.maxYamlNodes,
+    contract.sourceFrontendPolicy.values.maxTotalActions <=
+      contract.sourceFrontendPolicy.values.maxYamlNodes,
   );
   assert.ok(
-    contract.proposedDiagnosticPolicy.values.maxUiDiagnostics <=
-      contract.proposedDiagnosticPolicy.values.maxDiagnostics,
+    contract.diagnosticProjectionPolicy.values.maxUiDiagnostics <=
+      contract.diagnosticProjectionPolicy.values.maxDiagnostics,
   );
-  assert.deepEqual(contract.proposedDiagnosticPolicy.sortKeys, [
+  assert.deepEqual(contract.diagnosticProjectionPolicy.sortKeys, [
     'range.start.offset',
     'code',
     'message',
   ]);
-  assert.equal(contract.proposedDiagnosticPolicy.sortStringOrder, 'unicode-code-unit');
+  assert.equal(contract.diagnosticProjectionPolicy.sortStringOrder, 'unicode-code-unit');
 });
 
 test('maps generic expression failures and fixes a redacted telemetry allowlist', () => {

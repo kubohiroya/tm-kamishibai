@@ -1,5 +1,5 @@
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
-export {createDsl4SourceFrontend} from './source-frontend.js';
+export {createDsl4SourceFrontend, dsl4SourceFrontendDefaultLimits} from './source-frontend.js';
 export {
   createDsl4ActionRegistrySnapshot,
   dsl4ActorCoreActionNames,
@@ -91,6 +91,15 @@ export {
   Dsl4DiagnosticPolicyError,
   normalizeDsl4DiagnosticSequence,
 } from './diagnostic-sequence-policy.js';
+export {
+  createDsl4DiagnosticUiProjection,
+  dsl4DiagnosticProjectionDefaults,
+  formatDsl4DiagnosticClipboard,
+  redactDsl4DiagnosticTelemetry,
+  renderDsl4DiagnosticFallbackSvg,
+  serializeDsl4DiagnosticExport,
+} from './diagnostic-projection.js';
+export {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 export {
   dsl4DefaultExternalSourcePath,
   Dsl4ExternalSourceManifestError,

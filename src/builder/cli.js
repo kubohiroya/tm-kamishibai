@@ -6,8 +6,8 @@ import {
   Dsl32ConversionError,
   formatConversionDiagnostic,
 } from '../converter/index.js';
-import {createDsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {packageVersion} from './constants.js';
+import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {
   formatDsl4Diagnostic,
   serializeDsl4ValidationResult,
@@ -365,7 +365,7 @@ export async function runCli(arguments_, io = {}) {
   if (parsed.action === 'validate-dsl4') {
     const result = await validateDsl4SourceFile({
       ...parsed.options,
-      sourceFrontend: createDsl4SourceFrontend(schema),
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema),
     });
     if (parsed.options.format === 'json') {
       stdout.write(serializeDsl4ValidationResult(result));
@@ -380,7 +380,7 @@ export async function runCli(arguments_, io = {}) {
   }
   const result = await buildDsl4RuntimeComponentFile({
     ...parsed.options,
-    sourceFrontend: createDsl4SourceFrontend(schema),
+    sourceFrontend: createDsl4ProductionSourceFrontend(schema),
   });
   stdout.write(`Built ${path.basename(result.outputPath)}\n`);
   return result;

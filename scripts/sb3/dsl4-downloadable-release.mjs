@@ -8,10 +8,10 @@ import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 
 import {installDsl4PackagedRuntimeComponent} from '../../src/builder/dsl4-source.js';
+import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {createDsl4EmbeddedAssetBundle} from '../../src/dsl4/asset-bundle-descriptor.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../../src/dsl4/runtime-artifact-descriptor.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../../src/dsl4/source-descriptor.js';
-import {createDsl4SourceFrontend} from '../../src/dsl4/source-frontend.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
@@ -181,7 +181,7 @@ async function createProject(assets) {
   const schema = JSON.parse(
     await readFile(path.join(projectRoot, 'schema/dsl-4.schema.json'), 'utf8'),
   );
-  const frontend = createDsl4SourceFrontend(schema);
+  const frontend = createDsl4ProductionSourceFrontend(schema);
   const parsed = frontend.parse(sourceText, {sourceId: 'main'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {

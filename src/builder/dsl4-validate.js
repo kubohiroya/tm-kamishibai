@@ -1,6 +1,7 @@
 import {readFile, stat} from 'node:fs/promises';
 
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
+import {formatDsl4DiagnosticClipboard} from '../dsl4/diagnostic-projection.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
@@ -186,9 +187,7 @@ export async function validateDsl4SourceFile({
 
 /** @param {Record<string, any>} diagnostic @param {string} displaySource */
 export function formatDsl4Diagnostic(diagnostic, displaySource) {
-  const line = Number(diagnostic.range?.start?.line ?? 1);
-  const column = Number(diagnostic.range?.start?.column ?? 1);
-  return `${displaySource}:${line}:${column}: ${diagnostic.severity} [${diagnostic.code}] ${diagnostic.message}`;
+  return formatDsl4DiagnosticClipboard({...diagnostic, displayName: displaySource});
 }
 
 /** @param {Awaited<ReturnType<typeof validateDsl4SourceFile>>} result */
