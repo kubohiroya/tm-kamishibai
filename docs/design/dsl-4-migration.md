@@ -60,24 +60,24 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 
 ## 4. action対応表
 
-| 3.1／3.2 action                | 4.0 action                        | 分類／補足                                                |
-| ------------------------------ | --------------------------------- | --------------------------------------------------------- |
-| `stage`                        | `stage`                           | 自動                                                      |
-| `bgm`                          | `bgm`                             | 自動                                                      |
-| `sound`                        | `sound`                           | 自動                                                      |
-| `wait`                         | `wait`                            | 自動                                                      |
-| `transition`                   | `transition: {effect, seconds}`   | warning付き自動。時間を0秒へ明示化                        |
-| Actor `show`                   | `Actor.show: {skin, x, y, scale}` | 自動。costume target補正時はwarning                       |
-| Actor `setSkin`                | `Actor.setSkin`                   | 自動                                                      |
-| Actor `say`                    | `Actor.say: {text, seconds}`      | 時間指定は自動。永続／style付きは手動                     |
-| Actor `moveTo`                 | `Actor.moveTo: {x, y, seconds}`   | 自動                                                      |
-| SVG Text `setText`             | `Actor.setText: {text, style}`    | 自動                                                      |
-| Actor `pose`                   | `Actor.pose.steps[]`              | 自動＋手動model mapping。各stepを順序どおり保持           |
-| `branch`                       | `branch`                          | 自動                                                      |
-| `keyInputToChangeScene`        | code→scene mapping                | 自動。`KeyboardEvent.code`相当だけを受理                  |
-| `touchInputToChangeScene`      | actor→scene mapping               | 自動                                                      |
-| 旧Text Asset `show`／`setSkin` | なし                              | 手動。SVG Text actorの`setText`／通常actor actionへ再設計 |
-| 独自action／不正arity          | なし                              | 変換不能。`K4-CONVERT-ACTION-UNSUPPORTED`等               |
+| 3.1／3.2 action                | 4.0 action                         | 分類／補足                                                |
+| ------------------------------ | ---------------------------------- | --------------------------------------------------------- |
+| `stage`                        | `stage`                            | 自動                                                      |
+| `bgm`                          | `bgm`                              | 自動                                                      |
+| `sound`                        | `sound`                            | 自動                                                      |
+| `wait`                         | `wait`                             | 自動                                                      |
+| `transition`                   | `transition: {effect, seconds}`    | warning付き自動。時間を0秒へ明示化                        |
+| Actor `show`                   | `Actor.show: {skin, x, y, scale}`  | 自動。costume target補正時はwarning                       |
+| Actor `setSkin`                | `Actor.setSkin`                    | 自動                                                      |
+| Actor `say`／`think`           | `Actor.say/think: {text, seconds}` | 時間指定は自動。永続／style付きは手動                     |
+| Actor `moveTo`                 | `Actor.moveTo: {x, y, seconds}`    | 自動                                                      |
+| SVG Text `setText`             | `Actor.setText: {text, style}`     | 自動                                                      |
+| Actor `pose`                   | `Actor.pose.steps[]`               | 自動＋手動model mapping。各stepを順序どおり保持           |
+| `branch`                       | `branch`                           | 自動                                                      |
+| `keyInputToChangeScene`        | code→scene mapping                 | 自動。`KeyboardEvent.code`相当だけを受理                  |
+| `touchInputToChangeScene`      | actor→scene mapping                | 自動                                                      |
+| 旧Text Asset `show`／`setSkin` | なし                               | 手動。SVG Text actorの`setText`／通常actor actionへ再設計 |
+| 独自action／不正arity          | なし                               | 変換不能。`K4-CONVERT-ACTION-UNSUPPORTED`等               |
 
 custom Scratch block、Scratch variable／broadcastへ直接依存する作品固有code、block順に依存する副作用は台本
 sourceだけから検出できません。converter成功後も作品固有blockをレビューし、必要ならDSL4 custom actionとして

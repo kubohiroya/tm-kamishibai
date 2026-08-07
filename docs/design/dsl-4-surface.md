@@ -507,14 +507,29 @@ iconへ反映します。
 
 ### 7.2 Actor action
 
-| action          | 引数                               |
-| --------------- | ---------------------------------- |
-| `Actor.show`    | `{skin, x, y, scale, stableId?}`   |
-| `Actor.moveTo`  | `{x, y, seconds, stableId?}`       |
-| `Actor.say`     | `{text, seconds, stableId?}`       |
-| `Actor.setSkin` | skin ID、または`{skin, stableId?}` |
-| `Actor.setText` | `{text, style, stableId?}`         |
-| `Actor.pose`    | `{steps, stableId?}`               |
+| action                     | 引数                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                    |
+| `Actor.moveTo`             | `{x, y, seconds, stableId?}`                                                        |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, characterIntervalSeconds?, startSound?, characterSound?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                  |
+| `Actor.setText`            | `{text, style, stableId?}`                                                          |
+| `Actor.pose`               | `{steps, stableId?}`                                                                |
+
+`Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
+`seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
+修飾キーを伴わないany key入力後に完了します。両方を指定した場合は入力とタイムアウトのうち先に成立した方で
+完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
+再利用しません。
+
+`characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。
+`startSound`は最初の吹き出し内容を表示した直後に1回再生するsound asset IDです。セリフを読んだ音声を
+指定してフルボイスにでき、speech完了、入力、タイムアウト、cancelのいずれでも再生を停止します。
+`characterSound`は`characterIntervalSeconds`と組み合わせるsound asset IDで、実際に1文字ずつ表示した
+各文字に対して再生します。`startSound`と`characterSound`は併用できます。文字送りの途中で入力または
+タイムアウトが成立した場合、残り全文を効果音なしで一括表示してから次のactionへ進みます。
+`dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
+`Actor.say: {text, seconds}`だけを受理します。
 
 ```yaml
 - Hero.show:
@@ -524,7 +539,15 @@ iconへ反映します。
     scale: 30
 - Hero.say:
     text: 助けに行こう
-    seconds: 2
+    seconds: 8
+    waitFor: advance
+    characterIntervalSeconds: 0.05
+    startSound: HeroGreetingVoice
+    characterSound: Typewriter
+- Hero.think:
+    text: どうしよう……
+    waitFor: advance
+    startSound: HeroThinkingVoice
 - Caption.setText:
     text: おしまい
     style: title
