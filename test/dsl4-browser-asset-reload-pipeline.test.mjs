@@ -5,11 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {createDsl4PreviewReloadSurface} from '../src/builder/index.js';
 import {
   createDsl4BrowserAssetReloadPipeline,
   createDsl4SourceFrontend,
   dsl4AssetReloadProtocolCapabilities,
 } from '../src/dsl4/index.js';
+import {createFakeDocument} from './helpers/fake-dom.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -92,9 +94,14 @@ scenes:
   };
 }
 
-function pipeline({capabilities = dsl4AssetReloadProtocolCapabilities} = {}) {
+function pipeline({
+  capabilities = dsl4AssetReloadProtocolCapabilities,
+  reloadSurface,
+  restartGeneration,
+} = {}) {
   const events = [];
   const lifecycle = [];
+  const errors = [];
   const instance = createDsl4BrowserAssetReloadPipeline({
     sessionId: 'browser-assets',
     negotiatedCapabilities: capabilities,
@@ -125,8 +132,11 @@ function pipeline({capabilities = dsl4AssetReloadProtocolCapabilities} = {}) {
       };
     },
     onEvent: (event) => events.push(event),
+    reloadSurface,
+    restartGeneration,
+    onError: (error) => errors.push(error),
   });
-  return {events, instance, lifecycle};
+  return {errors, events, instance, lifecycle};
 }
 
 test('runs a browser file update through stable read, protocol, prepare, activation, and acknowledgement', async () => {
@@ -154,6 +164,57 @@ test('runs a browser file update through stable read, protocol, prepare, activat
   const disposed = await setup.instance.dispose();
   assert.equal(disposed.disposed, true);
   assert.equal(disposed.adapter.providerCount, 0);
+});
+
+test('auto-applies validated asset generations through the shared reload surface', async () => {
+  const document = createFakeDocument();
+  const restarts = [];
+  const surfaceErrors = [];
+  const reloadSurface = createDsl4PreviewReloadSurface({
+    surface: 'cli',
+    environment: 'development',
+    document,
+    mount: document.body,
+    viewport: {width: 640, height: 480},
+    onError: (error) => surfaceErrors.push(error),
+  });
+  const files = project();
+  const setup = pipeline({
+    reloadSurface,
+    restartGeneration: (request) => restarts.push(request),
+  });
+
+  await setup.instance.start(files.root, context());
+  await setup.instance.whenIdle();
+  await reloadSurface.whenIdle();
+  assert.equal(
+    setup.instance.getState().transaction.generation,
+    1,
+    JSON.stringify({
+      errors: setup.errors.map((error) => String(error?.stack ?? error)),
+      surfaceErrors: surfaceErrors.map((error) => String(error?.stack ?? error)),
+      pipeline: setup.instance.getState(),
+      surface: reloadSurface.getSnapshot(),
+    }),
+  );
+  assert.equal(reloadSurface.policy.getState().lastSuccess.actualAnchor, 'scene');
+
+  files.update();
+  await setup.instance.pollNow();
+  await setup.instance.whenIdle();
+  await reloadSurface.whenIdle();
+  assert.equal(setup.instance.getState().transaction.generation, 2);
+  assert.equal(reloadSurface.getSnapshot().globalRevision, 2);
+
+  await reloadSurface.policy.openDialog();
+  await reloadSurface.policy.selectPosition('story');
+  await reloadSurface.policy.applyScope('reload-once');
+  assert.equal(restarts.length, 1);
+  assert.equal(restarts[0].channel, 'asset');
+  assert.equal(restarts[0].actualAnchor, 'story');
+
+  await setup.instance.dispose();
+  await reloadSurface.dispose();
 });
 
 test('releases the candidate and reports full rebuild when asset capabilities are incomplete', async () => {

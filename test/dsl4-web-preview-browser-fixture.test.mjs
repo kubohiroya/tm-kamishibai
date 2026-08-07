@@ -27,5 +27,6 @@ test('keeps the Chromium Web Preview fixture deterministic and development-only'
   assert.match(moduleSource, /searchParams\.has\('unsupported'\)/u);
   assert.match(moduleSource, /mode !== 'read'/u);
   assert.match(moduleSource, /dsl4WebPreviewAdapter: true/u);
+  assert.match(moduleSource, /dsl4PreviewReloadOverlay: true/u);
   assert.doesNotMatch(moduleSource, /localStorage|sessionStorage|indexedDB/u);
 });

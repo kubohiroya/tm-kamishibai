@@ -37,11 +37,20 @@ export {
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
 export {
+  createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,
   dsl4DevelopmentPreviewShellManifest,
   inspectDsl4ProductionPreviewExclusion,
   validateDsl4PreviewShellView,
 } from './dsl4-preview-shell.js';
+export {
+  createDsl4PreviewReloadOverlay,
+  dsl4PreviewReloadOverlayManifest,
+} from './dsl4-preview-reload-overlay.js';
+export {
+  createDsl4PreviewReloadSurface,
+  dsl4PreviewReloadSurfaceManifest,
+} from './dsl4-preview-reload-surface.js';
 export {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from './dsl4-web-preview-shell.js';
 export {
   createDsl4PreviewTransportPolicy,

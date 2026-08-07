@@ -5,6 +5,7 @@ const featureFlagKeys = new Set([
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
   'dsl4WebPreviewAssetLiveReload',
+  'dsl4PreviewReloadOverlay',
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
@@ -17,6 +18,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
   dsl4WebPreviewAssetLiveReload: false,
+  dsl4PreviewReloadOverlay: false,
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
@@ -57,6 +59,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
     throw new TypeError(
       'dsl4WebPreviewAssetLiveReload requires dsl4Runtime, dsl4AppShell, and dsl4WebPreviewAdapter',
     );
+  }
+  if (resolved.dsl4PreviewReloadOverlay && (!resolved.dsl4Runtime || !resolved.dsl4AppShell)) {
+    throw new TypeError('dsl4PreviewReloadOverlay requires dsl4Runtime and dsl4AppShell');
   }
   if (resolved.dsl4SpeechAdvanceTypewriter && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');

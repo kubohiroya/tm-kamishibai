@@ -74,6 +74,7 @@ function normalizeSelection(value) {
  * @param {() => Readonly<{left: number, top: number, width: number, height: number, visible?: boolean}> | null} options.getPreviewRect
  * @param {Readonly<Record<string, string>>} [options.labels]
  * @param {(callback: () => void) => (() => void)} [options.schedule]
+ * @param {{registerReservedRect: Function, updateReservedRect: Function, unregisterReservedRect: Function}} [options.previewLayout]
  * @param {(error: unknown, context: Readonly<Record<string, string>>) => void} [options.onError]
  */
 export function createDsl4CameraPreviewControls(options) {
@@ -118,10 +119,23 @@ export function createDsl4CameraPreviewControls(options) {
       return () => clearTimeout(frame);
     });
   requireFunction(schedule, 'schedule');
+  /** @type {Record<string, Function> | null} */
+  let previewLayout = null;
+  if (options.previewLayout !== undefined) {
+    if (!isRecord(options.previewLayout)) {
+      throw new TypeError('previewLayout must implement the shared preview layout bridge');
+    }
+    const candidateLayout = /** @type {Record<string, unknown>} */ (options.previewLayout);
+    for (const method of ['registerReservedRect', 'updateReservedRect', 'unregisterReservedRect']) {
+      requireFunction(candidateLayout[method], `previewLayout.${method}`);
+    }
+    previewLayout = /** @type {Record<string, Function>} */ (candidateLayout);
+  }
   if (options.onError !== undefined) requireFunction(options.onError, 'onError');
   const onError = typeof options.onError === 'function' ? options.onError : () => {};
   const document = container.ownerDocument;
   const groups = new Map();
+  const registeredLayoutOwners = new Set();
   /** @type {Array<() => void>} */
   const listeners = [];
   let mirroring = mirroringModes.has(String(preview.mirroring))
@@ -238,8 +252,70 @@ export function createDsl4CameraPreviewControls(options) {
     }
   }
 
+  /** @param {string} position */
+  function layoutOwner(position) {
+    return `camera-controls-${position}`;
+  }
+
+  /** @param {any} group */
+  function measuredControlRect(group) {
+    if (typeof group.getBoundingClientRect !== 'function') return null;
+    const measured = group.getBoundingClientRect();
+    const left = Number(measured.x ?? measured.left);
+    const top = Number(measured.y ?? measured.top);
+    const width = Number(measured.width);
+    const height = Number(measured.height);
+    if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+      return null;
+    }
+    return {
+      x: Math.max(0, left),
+      y: Math.max(0, top),
+      width: Math.max(0, width + Math.min(0, left)),
+      height: Math.max(0, height + Math.min(0, top)),
+    };
+  }
+
+  /** @param {string} position */
+  function unregisterLayoutOwner(position) {
+    if (!previewLayout) return;
+    const owner = layoutOwner(position);
+    if (!registeredLayoutOwners.delete(owner)) return;
+    previewLayout.unregisterReservedRect(owner);
+  }
+
+  function unregisterLayoutOwners() {
+    if (!previewLayout) return;
+    for (const owner of [...registeredLayoutOwners]) {
+      previewLayout.unregisterReservedRect(owner);
+      registeredLayoutOwners.delete(owner);
+    }
+  }
+
+  function publishLayoutRects() {
+    if (!previewLayout) return;
+    for (const [position, group] of groups) {
+      const owner = layoutOwner(position);
+      const measured = measuredControlRect(group);
+      if (!measured || measured.width <= 0 || measured.height <= 0) {
+        unregisterLayoutOwner(position);
+        continue;
+      }
+      if (registeredLayoutOwners.has(owner)) previewLayout.updateReservedRect(owner, measured);
+      else {
+        previewLayout.registerReservedRect(owner, measured);
+        registeredLayoutOwners.add(owner);
+      }
+    }
+  }
+
   function hideAndDetach() {
     const errors = [];
+    try {
+      unregisterLayoutOwners();
+    } catch (error) {
+      errors.push(error);
+    }
     for (const group of groups.values()) {
       try {
         group.style.display = 'none';
@@ -414,6 +490,7 @@ export function createDsl4CameraPreviewControls(options) {
         display: 'flex',
       });
     }
+    publishLayoutRects();
   }
 
   function scheduleRefresh() {
@@ -488,6 +565,11 @@ export function createDsl4CameraPreviewControls(options) {
       } catch (error) {
         errors.push(error);
       }
+    }
+    try {
+      unregisterLayoutOwners();
+    } catch (error) {
+      errors.push(error);
     }
     groups.clear();
     if (errors.length === 1) throw errors[0];

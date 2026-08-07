@@ -83,6 +83,10 @@ function createCoordinatorFixture() {
       calls.push(['commit', choice]);
       return Promise.resolve(state());
     },
+    restart(choice) {
+      calls.push(['restart', choice]);
+      return Promise.resolve(state());
+    },
     defer() {
       calls.push(['defer']);
       return Promise.resolve(state());
@@ -162,12 +166,12 @@ function createAssetPipelineFixture() {
   };
 }
 
-function createShell() {
+function createShell({featureFlags = enabledFlags} = {}) {
   const document = createFakeDocument();
   const fixture = createCoordinatorFixture();
   const errors = [];
   const shell = createDsl4WebPreviewShell({
-    featureFlags: enabledFlags,
+    featureFlags,
     environment: 'development',
     document,
     mount: document.body,
@@ -231,6 +235,7 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'dsl4AppShell',
       'dsl4WebPreviewAdapter',
       'dsl4WebPreviewAssetLiveReload',
+      'dsl4PreviewReloadOverlay',
     ],
     fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
   });
@@ -300,6 +305,53 @@ test('requires and owns the browser asset pipeline only behind its startup flag'
   );
 });
 
+test('connects the owned asset pipeline and camera layout bridge to the shared Web surface', async () => {
+  const document = createFakeDocument();
+  const source = createCoordinatorFixture();
+  const assets = createAssetPipelineFixture();
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: {
+      ...assetEnabledFlags,
+      dsl4PreviewReloadOverlay: true,
+    },
+    environment: 'development',
+    document,
+    mount: document.body,
+    protocolSession: {},
+    sessionId: 'composite-shell-test',
+    sourceFrontend: {parse() {}},
+    maxSourceBytes: 8192,
+    createCoordinator: source.createCoordinator,
+    createAssetPipeline: assets.createAssetPipeline,
+    assetPipelineOptions: {
+      structuralFingerprint: sri('composite-structure'),
+      adapterOptions: {},
+      prepareGeneration() {},
+      restartGeneration() {},
+    },
+    previewViewport: {width: 800, height: 600},
+  });
+
+  assert.equal(typeof assets.options.reloadSurface.submitCandidate, 'function');
+  await assets.options.onDiagnostic({
+    code: 'K4-ASSET-MISSING',
+    severity: 'error',
+    message: 'Asset missing.',
+  });
+  await shell.whenIdle();
+  assert.deepEqual(shell.getSnapshot().reloadOverlay.diagnosticChannels, ['asset']);
+
+  const occupied = shell.getSnapshot().reloadOverlay.overlay.layout.layout.rect;
+  shell.registerReservedRect('camera-controls', occupied);
+  assert.equal(
+    shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor,
+    'top-center',
+  );
+  shell.unregisterReservedRect('camera-controls');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.layout.layout.resolvedAnchor, 'top-right');
+  await shell.dispose();
+});
+
 test('opens the picker directly from a button activation and renders watch status', async () => {
   const {document, fixture, shell} = createShell();
   const button = findById(shell.element, 'dsl4-web-preview-open-project');
@@ -363,6 +415,79 @@ test('maps staged sources and reload choices onto the existing accessible shell'
   assert.equal(shell.getSnapshot().preview.phase, 'running');
   assert.equal(shell.getSnapshot().preview.currentIntegrity, candidateIntegrity);
   await new Promise((resolve) => setImmediate(resolve));
+});
+
+test('auto-applies source updates through the shared non-blocking Web/CLI reload surface', async () => {
+  const {document, fixture, shell} = createShell({
+    featureFlags: {...enabledFlags, dsl4PreviewReloadOverlay: true},
+  });
+  const initialIntegrity = sri('overlay-initial');
+  fixture.options.onSourceResult(sourceResult(initialIntegrity));
+  fixture.setCurrent({integrity: initialIntegrity});
+  fixture.options.onProtocolEvent({
+    type: 'preview.source.staged',
+    revision: 1,
+    sourceIntegrity: initialIntegrity,
+    status: 'active',
+    candidate: null,
+    current: {integrity: initialIntegrity},
+    diagnostics: [],
+  });
+
+  const candidateIntegrity = sri('overlay-candidate');
+  fixture.options.onSourceResult(sourceResult(candidateIntegrity));
+  fixture.options.onProtocolEvent({
+    type: 'preview.source.staged',
+    revision: 2,
+    sourceIntegrity: candidateIntegrity,
+    status: 'pending',
+    candidate: {
+      id: 2,
+      options: {
+        storyStart: {enabled: true, reason: null},
+        currentScene: {enabled: true, reason: null},
+        currentAction: {enabled: false, reason: 'The current action is not replay-safe.'},
+      },
+    },
+    current: {integrity: initialIntegrity},
+    diagnostics: [],
+  });
+  await shell.whenIdle();
+
+  assert.deepEqual(fixture.calls.at(-1), ['commit', 'currentScene']);
+  assert.equal(shell.getSnapshot().preview.phase, 'running');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.status, 'reloaded');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.preference, 'action');
+  assert.equal(shell.getSnapshot().reloadOverlay.overlay.policy.lastSuccess.actualAnchor, 'scene');
+  const statusButton = findById(shell.element, 'dsl4-preview-reload-status-button');
+  assert.equal(statusButton.getAttribute('data-reload-state'), 'reloaded');
+  assert.equal(document.activeElement, null);
+
+  statusButton.click();
+  await shell.whenIdle();
+  findById(shell.element, 'dsl4-preview-reload-position-story').click();
+  await shell.whenIdle();
+  findById(shell.element, 'dsl4-preview-reload-scope-reload-once').click();
+  await shell.whenIdle();
+  assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
+
+  const assetOperations = [];
+  await shell.submitReloadCandidate({
+    channel: 'asset',
+    channelRevision: 1,
+    availability: {
+      story: {available: true, reason: null},
+      scene: {available: true, reason: null},
+      action: {available: true, replaySafe: true, reason: null},
+    },
+    changedIds: ['Backdrop'],
+    initiatingInputId: null,
+    apply: (request) => assetOperations.push(['apply', request.actualAnchor]),
+    restart: (request) => assetOperations.push(['restart', request.actualAnchor]),
+  });
+  assert.deepEqual(assetOperations, [['apply', 'action']]);
+  assert.equal(shell.getSnapshot().reloadOverlay.globalRevision, 2);
+  await shell.dispose();
 });
 
 test('shows recoverable diagnostics and explicit CLI fallback without retaining source text', async () => {

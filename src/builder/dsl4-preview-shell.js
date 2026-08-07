@@ -1,9 +1,12 @@
 import {deepFreeze} from '../dsl4/story-document.js';
+import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {createDsl4PreviewReloadSurface} from './dsl4-preview-reload-surface.js';
 
 const optionKeys = new Set([
   'document',
   'environment',
   'mount',
+  'nonBlockingCandidates',
   'onDefer',
   'onError',
   'onInitialValid',
@@ -57,6 +60,12 @@ export const dsl4DevelopmentPreviewShellManifest = deepFreeze({
     'browserPreviewPendingRead',
     'browserPreviewCandidate',
     'browserPreviewModalState',
+    'previewReloadOverlay',
+    'reloadPreference',
+    'reloadTimestamp',
+    'reloadDialogState',
+    'reloadLayoutState',
+    'reloadCandidateRevision',
   ],
 });
 
@@ -305,6 +314,13 @@ export function createDsl4DevelopmentPreviewShell(input) {
   const onReloadChoice = optionalCallback(options.onReloadChoice, 'onReloadChoice');
   const onDefer = optionalCallback(options.onDefer, 'onDefer');
   const onError = optionalCallback(options.onError, 'onError');
+  if (
+    options.nonBlockingCandidates !== undefined &&
+    typeof options.nonBlockingCandidates !== 'boolean'
+  ) {
+    throw new TypeError('nonBlockingCandidates must be boolean');
+  }
+  const nonBlockingCandidates = options.nonBlockingCandidates === true;
 
   const host = element(document, 'section');
   host.id = 'dsl4-development-preview-shell';
@@ -547,7 +563,7 @@ export function createDsl4DevelopmentPreviewShell(input) {
       ? `Preview cannot start this source: ${view.safeStatusMessage}`
       : '';
 
-    if (view.phase !== 'candidate') {
+    if (view.phase !== 'candidate' || nonBlockingCandidates) {
       closeModal();
       return;
     }
@@ -594,6 +610,203 @@ export function createDsl4DevelopmentPreviewShell(input) {
       if (typeof host.remove === 'function') host.remove();
       currentView = null;
     },
+  });
+}
+
+const cliPreviewOptionKeys = new Set([
+  'createReloadSurface',
+  'document',
+  'environment',
+  'featureFlags',
+  'mount',
+  'onDefer',
+  'onError',
+  'onInitialValid',
+  'onReloadChoice',
+  'previewFormatTime',
+  'previewReducedMotion',
+  'previewSafeArea',
+  'previewStorage',
+  'previewViewport',
+]);
+
+/** @param {unknown} value */
+function validateReloadSurface(value) {
+  if (
+    !isRecord(value) ||
+    typeof value.submitCandidate !== 'function' ||
+    typeof value.setDiagnostic !== 'function' ||
+    typeof value.setWatchState !== 'function' ||
+    typeof value.acknowledgePreviewInput !== 'function' ||
+    typeof value.registerReservedRect !== 'function' ||
+    typeof value.updateReservedRect !== 'function' ||
+    typeof value.unregisterReservedRect !== 'function' ||
+    typeof value.updateViewport !== 'function' ||
+    typeof value.dispose !== 'function' ||
+    typeof value.getSnapshot !== 'function' ||
+    typeof value.whenIdle !== 'function'
+  ) {
+    throw new TypeError('CLI reload surface does not implement the shared preview contract');
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
+/** @param {unknown} value @param {Readonly<Record<string, number>>} fallback */
+function previewGeometry(value, fallback) {
+  return isRecord(value) ? value : fallback;
+}
+
+/**
+ * Create the browser page shell owned by the CLI preview host.
+ * The startup flag selects either the shared non-blocking surface or the legacy candidate dialog.
+ *
+ * @param {unknown} input
+ */
+export function createDsl4CliPreviewShell(input = {}) {
+  if (!isRecord(input)) throw new TypeError('CLI preview shell options must be an object');
+  const unknown = Object.keys(input).filter((key) => !cliPreviewOptionKeys.has(key));
+  if (unknown.length > 0) {
+    throw new TypeError(`Unknown CLI preview shell option: ${unknown.sort().join(', ')}`);
+  }
+  if (input.environment !== 'development') {
+    throw new TypeError('CLI preview shell is available only in the development environment');
+  }
+  const document = requireDocument(input.document);
+  const mount = requireElement(input.mount, 'mount');
+  const featureFlags = resolveDsl4FeatureFlags(input.featureFlags);
+  const createReloadSurface = featureFlags.dsl4PreviewReloadOverlay
+    ? (input.createReloadSurface ?? createDsl4PreviewReloadSurface)
+    : null;
+  if (createReloadSurface !== null && typeof createReloadSurface !== 'function') {
+    throw new TypeError('createReloadSurface must be a function');
+  }
+
+  const host = element(document, 'section');
+  host.id = 'dsl4-cli-preview-shell';
+  host.setAttribute('data-dsl4-development-only', 'true');
+  host.setAttribute('data-preview-host', 'cli');
+  const detailsMount = element(document, 'div');
+  detailsMount.id = 'dsl4-cli-preview-details';
+  host.appendChild(detailsMount);
+  mount.appendChild(host);
+
+  const previewShell = createDsl4DevelopmentPreviewShell({
+    environment: 'development',
+    document,
+    mount: detailsMount,
+    nonBlockingCandidates: featureFlags.dsl4PreviewReloadOverlay,
+    onInitialValid: input.onInitialValid,
+    onReloadChoice: input.onReloadChoice,
+    onDefer: input.onDefer,
+    onError: input.onError,
+  });
+  /** @type {Record<string, Function> | null} */
+  let reloadSurface = null;
+  let disposed = false;
+  /** @type {Promise<unknown> | null} */
+  let disposePromise = null;
+
+  if (createReloadSurface) {
+    try {
+      reloadSurface = validateReloadSurface(
+        createReloadSurface({
+          surface: 'cli',
+          environment: 'development',
+          document,
+          mount: host,
+          viewport: previewGeometry(input.previewViewport, {
+            width: Math.max(44, Number(mount.clientWidth) || 800),
+            height: Math.max(44, Number(mount.clientHeight) || 600),
+          }),
+          safeArea: previewGeometry(input.previewSafeArea, {
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+          }),
+          storage: input.previewStorage,
+          reducedMotion: input.previewReducedMotion,
+          formatTime: input.previewFormatTime,
+          onError: input.onError,
+        }),
+      );
+    } catch (error) {
+      previewShell.dispose();
+      if (typeof host.remove === 'function') host.remove();
+      throw error;
+    }
+  }
+
+  function requireReloadSurface() {
+    if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+    return reloadSurface;
+  }
+
+  function snapshot() {
+    return deepFreeze({
+      version: 1,
+      surface: 'cli',
+      disposed,
+      featureFlags,
+      preview: previewShell.getSnapshot(),
+      reloadOverlay: reloadSurface?.getSnapshot() ?? null,
+    });
+  }
+
+  function dispose() {
+    if (disposePromise) return disposePromise;
+    if (disposed) return Promise.resolve(snapshot());
+    disposed = true;
+    previewShell.dispose();
+    const reloadDisposal = reloadSurface?.dispose();
+    if (typeof host.remove === 'function') host.remove();
+    disposePromise = Promise.resolve(reloadDisposal).then(snapshot);
+    return disposePromise;
+  }
+
+  return Object.freeze({
+    enabled: true,
+    element: host,
+    featureFlags,
+    update: previewShell.update,
+    /** @param {unknown} candidate */
+    submitReloadCandidate(candidate) {
+      return requireReloadSurface().submitCandidate(candidate);
+    },
+    /** @param {'source' | 'asset'} channel @param {unknown} diagnostic */
+    setReloadDiagnostic(channel, diagnostic) {
+      return requireReloadSurface().setDiagnostic(channel, diagnostic);
+    },
+    /** @param {'source' | 'asset'} channel @param {unknown} status */
+    setReloadWatchState(channel, status) {
+      return requireReloadSurface().setWatchState(channel, status);
+    },
+    /** @param {string} inputId */
+    acknowledgePreviewInput(inputId) {
+      return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
+    },
+    /** @param {string} owner @param {unknown} rect */
+    registerReservedRect(owner, rect) {
+      return requireReloadSurface().registerReservedRect(owner, rect);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    updateReservedRect(owner, rect) {
+      return requireReloadSurface().updateReservedRect(owner, rect);
+    },
+    /** @param {string} owner */
+    unregisterReservedRect(owner) {
+      return requireReloadSurface().unregisterReservedRect(owner);
+    },
+    /** @param {unknown} viewport @param {unknown} [safeArea] */
+    updatePreviewViewport(viewport, safeArea) {
+      return requireReloadSurface().updateViewport(viewport, safeArea);
+    },
+    async whenIdle() {
+      await reloadSurface?.whenIdle();
+      return snapshot();
+    },
+    getSnapshot: snapshot,
+    dispose,
   });
 }
 

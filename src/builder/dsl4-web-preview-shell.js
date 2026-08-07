@@ -2,6 +2,7 @@ import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4PreviewReloadSurface} from './dsl4-preview-reload-surface.js';
 import {createDsl4DevelopmentPreviewShell} from './dsl4-preview-shell.js';
 
 const optionKeys = new Set([
@@ -9,6 +10,7 @@ const optionKeys = new Set([
   'capabilities',
   'createAssetPipeline',
   'createCoordinator',
+  'createReloadSurface',
   'document',
   'environment',
   'featureFlags',
@@ -16,6 +18,11 @@ const optionKeys = new Set([
   'mount',
   'onError',
   'protocolSession',
+  'previewFormatTime',
+  'previewReducedMotion',
+  'previewSafeArea',
+  'previewStorage',
+  'previewViewport',
   'sessionId',
   'sourceFrontend',
   'sourceOptions',
@@ -34,6 +41,11 @@ const restartChoiceNames = Object.freeze({
   2: 'currentScene',
   3: 'currentAction',
 });
+const restartAnchorNames = Object.freeze({
+  story: 'storyStart',
+  scene: 'currentScene',
+  action: 'currentAction',
+});
 const fallbackDiagnosticCodes = new Set([
   'K4-WEB-PREVIEW-INSECURE-CONTEXT',
   'K4-WEB-PREVIEW-PERMISSION-DENIED',
@@ -51,6 +63,7 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
     'dsl4AppShell',
     'dsl4WebPreviewAdapter',
     'dsl4WebPreviewAssetLiveReload',
+    'dsl4PreviewReloadOverlay',
   ],
   fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
 });
@@ -131,8 +144,8 @@ function sourceDetails(result) {
   });
 }
 
-/** @param {unknown} value */
-function validateCoordinator(value) {
+/** @param {unknown} value @param {boolean} requireRestart */
+function validateCoordinator(value, requireRestart) {
   if (
     !isRecord(value) ||
     typeof value.openProject !== 'function' ||
@@ -142,7 +155,8 @@ function validateCoordinator(value) {
     typeof value.defer !== 'function' ||
     typeof value.dispose !== 'function' ||
     typeof value.getState !== 'function' ||
-    typeof value.whenIdle !== 'function'
+    typeof value.whenIdle !== 'function' ||
+    (requireRestart && typeof value.restart !== 'function')
   ) {
     throw new TypeError('browser preview coordinator does not implement the required contract');
   }
@@ -166,7 +180,36 @@ function validateAssetPipeline(value) {
 }
 
 /** @param {unknown} value */
-function validateAssetPipelineOptions(value) {
+function restartChoice(value) {
+  if (typeof value !== 'string' || !Object.hasOwn(restartAnchorNames, value)) {
+    throw new TypeError('preview reload anchor is invalid');
+  }
+  return restartAnchorNames[/** @type {'story' | 'scene' | 'action'} */ (value)];
+}
+
+/** @param {unknown} value */
+function validateReloadSurface(value) {
+  if (
+    !isRecord(value) ||
+    typeof value.submitCandidate !== 'function' ||
+    typeof value.setDiagnostic !== 'function' ||
+    typeof value.setWatchState !== 'function' ||
+    typeof value.acknowledgePreviewInput !== 'function' ||
+    typeof value.registerReservedRect !== 'function' ||
+    typeof value.updateReservedRect !== 'function' ||
+    typeof value.unregisterReservedRect !== 'function' ||
+    typeof value.updateViewport !== 'function' ||
+    typeof value.dispose !== 'function' ||
+    typeof value.getSnapshot !== 'function' ||
+    typeof value.whenIdle !== 'function'
+  ) {
+    throw new TypeError('preview reload surface does not implement the required contract');
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
+/** @param {unknown} value @param {boolean} requireRestart */
+function validateAssetPipelineOptions(value, requireRestart) {
   if (!isRecord(value)) throw new TypeError('assetPipelineOptions must be an object');
   if (
     typeof value.structuralFingerprint !== 'string' ||
@@ -177,7 +220,48 @@ function validateAssetPipelineOptions(value) {
   if (!isRecord(value.adapterOptions) || typeof value.prepareGeneration !== 'function') {
     throw new TypeError('assetPipelineOptions must provide adapterOptions and prepareGeneration');
   }
+  if (requireRestart && typeof value.restartGeneration !== 'function') {
+    throw new TypeError(
+      'assetPipelineOptions.restartGeneration is required with the shared reload overlay',
+    );
+  }
   return /** @type {Record<string, any>} */ (value);
+}
+
+/** @param {unknown} value @param {Readonly<Record<string, number>>} fallback */
+function geometry(value, fallback) {
+  return isRecord(value) ? value : fallback;
+}
+
+/** @param {unknown} value */
+function reloadAvailability(value) {
+  if (!isRecord(value)) throw new TypeError('preview reload choices are invalid');
+  /** @param {unknown} choice @param {string} fallbackReason */
+  function available(choice, fallbackReason) {
+    if (!isRecord(choice) || typeof choice.enabled !== 'boolean') {
+      throw new TypeError('preview reload choice is invalid');
+    }
+    return {
+      available: choice.enabled,
+      reason:
+        choice.enabled === true
+          ? null
+          : safeMessage(
+              typeof choice.reason === 'string' && choice.reason.length > 0
+                ? choice.reason
+                : fallbackReason,
+            ).slice(0, 300),
+    };
+  }
+  const story = available(value.storyStart, 'The story restart anchor is unavailable.');
+  if (!story.available) throw new TypeError('story reload anchor must always be available');
+  const scene = available(value.currentScene, 'The current scene is unavailable.');
+  const action = available(value.currentAction, 'The current action is unavailable.');
+  return deepFreeze({
+    story,
+    scene,
+    action: {...action, replaySafe: action.available},
+  });
 }
 
 /**
@@ -221,13 +305,22 @@ export function createDsl4WebPreviewShell(input = {}) {
     throw new TypeError('createCoordinator must be a function');
   }
   const assetPipelineOptions = featureFlags.dsl4WebPreviewAssetLiveReload
-    ? validateAssetPipelineOptions(input.assetPipelineOptions)
+    ? validateAssetPipelineOptions(
+        input.assetPipelineOptions,
+        featureFlags.dsl4PreviewReloadOverlay,
+      )
     : null;
   const createAssetPipeline = featureFlags.dsl4WebPreviewAssetLiveReload
     ? (input.createAssetPipeline ?? createDsl4BrowserAssetReloadPipeline)
     : null;
   if (createAssetPipeline !== null && typeof createAssetPipeline !== 'function') {
     throw new TypeError('createAssetPipeline must be a function');
+  }
+  const createReloadSurface = featureFlags.dsl4PreviewReloadOverlay
+    ? (input.createReloadSurface ?? createDsl4PreviewReloadSurface)
+    : null;
+  if (createReloadSurface !== null && typeof createReloadSurface !== 'function') {
+    throw new TypeError('createReloadSurface must be a function');
   }
 
   const host = element(document, 'section');
@@ -289,6 +382,9 @@ export function createDsl4WebPreviewShell(input = {}) {
   let assetPipeline = null;
   let assetPipelineStarted = false;
   let assetSourceQueue = Promise.resolve();
+  /** @type {Record<string, Function> | null} */
+  let reloadSurface = null;
+  let manualRestartDepth = 0;
 
   /** @param {unknown} error */
   function reportError(error) {
@@ -352,8 +448,8 @@ export function createDsl4WebPreviewShell(input = {}) {
     }
   }
 
-  /** @param {Record<string, any>} diagnostic */
-  function renderDiagnostic(diagnostic) {
+  /** @param {Record<string, any>} diagnostic @param {'source' | 'asset'} [channel] */
+  function renderDiagnostic(diagnostic, channel = 'source') {
     diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code : null;
     const message = safeMessage(
       diagnosticCode
@@ -361,6 +457,7 @@ export function createDsl4WebPreviewShell(input = {}) {
         : diagnostic.message,
     );
     diagnosticStatus.textContent = message;
+    if (reloadSurface) observe(reloadSurface.setDiagnostic(channel, diagnostic));
     fallback.hidden = !diagnosticCode || !fallbackDiagnosticCodes.has(diagnosticCode);
     if (diagnostic.severity !== 'error') return;
     const currentIntegrity = coordinator?.getState()?.protocol?.current?.integrity ?? null;
@@ -403,9 +500,37 @@ export function createDsl4WebPreviewShell(input = {}) {
       diagnosticCode = null;
       diagnosticStatus.textContent = '';
       fallback.hidden = true;
+      if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
       if (event.candidate) {
         candidateDetails = details;
         const choices = event.candidate.options;
+        if (reloadSurface) {
+          if (manualRestartDepth === 0) {
+            observe(
+              reloadSurface.submitCandidate({
+                channel: 'source',
+                channelRevision: event.revision,
+                availability: reloadAvailability(choices),
+                changedIds: ['source-generation'],
+                initiatingInputId: null,
+                async apply(/** @type {Readonly<Record<string, any>>} */ request) {
+                  const choice = restartChoice(request.actualAnchor);
+                  await coordinator.commit(choice);
+                },
+                async restart(/** @type {Readonly<Record<string, any>>} */ request) {
+                  const choice = restartChoice(request.actualAnchor);
+                  manualRestartDepth += 1;
+                  try {
+                    await coordinator.restart(choice);
+                  } finally {
+                    manualRestartDepth -= 1;
+                  }
+                },
+              }),
+            );
+          }
+          return;
+        }
         render({
           formatVersion: 1,
           phase: 'candidate',
@@ -501,6 +626,15 @@ export function createDsl4WebPreviewShell(input = {}) {
       disposed: 'Web Preview stopped.',
     };
     watchStatus.textContent = statusLabels[state.status] ?? 'Web Preview status changed.';
+    if (reloadSurface) {
+      const reloadWatchState = /** @type {Readonly<Record<string, string>>} */ ({
+        stabilizing: 'stabilizing',
+        'watching-visible': 'watching',
+        'background-throttled': 'paused',
+        disposed: 'disconnected',
+      })[state.status];
+      if (reloadWatchState) observe(reloadSurface.setWatchState('source', reloadWatchState));
+    }
     if (typeof state.sourceDisplayName === 'string') sourceDisplayName = state.sourceDisplayName;
     openButton.disabled = state.started === true || state.status === 'selecting';
   }
@@ -518,43 +652,6 @@ export function createDsl4WebPreviewShell(input = {}) {
     },
     onError: reportError,
   });
-
-  if (createAssetPipeline && assetPipelineOptions) {
-    try {
-      assetPipeline = validateAssetPipeline(
-        createAssetPipeline({
-          ...assetPipelineOptions,
-          sessionId: input.sessionId,
-          onEvent: (/** @type {Readonly<Record<string, unknown>>} */ event) =>
-            notifyAssetObserver('onEvent', event),
-          onDiagnostic: async (
-            /** @type {Readonly<Record<string, unknown>> | null} */ diagnostic,
-          ) => {
-            await notifyAssetObserver('onDiagnostic', diagnostic);
-            if (disposed) return;
-            if (diagnostic === null) {
-              if (diagnosticCode?.startsWith('K4-ASSET-')) {
-                diagnosticCode = null;
-                diagnosticStatus.textContent = '';
-              }
-              return;
-            }
-            renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic));
-          },
-          onWatchStatus: (/** @type {Readonly<Record<string, unknown>>} */ state) =>
-            notifyAssetObserver('onWatchStatus', state),
-          onError: (/** @type {unknown} */ error) => {
-            void notifyAssetObserver('onError', error);
-            reportError(error);
-          },
-        }),
-      );
-    } catch (error) {
-      previewShell.dispose();
-      if (typeof host.remove === 'function') host.remove();
-      throw error;
-    }
-  }
 
   /** @type {Record<string, Function>} */
   let coordinator;
@@ -584,17 +681,87 @@ export function createDsl4WebPreviewShell(input = {}) {
             diagnosticCode = null;
             diagnosticStatus.textContent = '';
             fallback.hidden = true;
+            if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
             return;
           }
           renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic));
         },
         onError: reportError,
       }),
+      featureFlags.dsl4PreviewReloadOverlay,
     );
   } catch (error) {
     previewShell.dispose();
     if (typeof host.remove === 'function') host.remove();
     throw error;
+  }
+
+  if (featureFlags.dsl4PreviewReloadOverlay) {
+    try {
+      reloadSurface = validateReloadSurface(
+        /** @type {Function} */ (createReloadSurface)({
+          surface: 'web',
+          environment: 'development',
+          document,
+          mount: host,
+          viewport: geometry(input.previewViewport, {
+            width: Math.max(44, Number(mount.clientWidth) || 800),
+            height: Math.max(44, Number(mount.clientHeight) || 600),
+          }),
+          safeArea: geometry(input.previewSafeArea, {top: 0, right: 0, bottom: 0, left: 0}),
+          storage: input.previewStorage,
+          reducedMotion: input.previewReducedMotion,
+          formatTime: input.previewFormatTime,
+          onError: reportError,
+        }),
+      );
+    } catch (error) {
+      previewShell.dispose();
+      observe(coordinator.dispose());
+      if (typeof host.remove === 'function') host.remove();
+      throw error;
+    }
+  }
+
+  if (createAssetPipeline && assetPipelineOptions) {
+    try {
+      assetPipeline = validateAssetPipeline(
+        createAssetPipeline({
+          ...assetPipelineOptions,
+          sessionId: input.sessionId,
+          ...(reloadSurface ? {reloadSurface} : {}),
+          onEvent: (/** @type {Readonly<Record<string, unknown>>} */ event) =>
+            notifyAssetObserver('onEvent', event),
+          onDiagnostic: async (
+            /** @type {Readonly<Record<string, unknown>> | null} */ diagnostic,
+          ) => {
+            await notifyAssetObserver('onDiagnostic', diagnostic);
+            if (disposed) return;
+            if (diagnostic === null) {
+              if (diagnosticCode?.startsWith('K4-ASSET-')) {
+                diagnosticCode = null;
+                diagnosticStatus.textContent = '';
+              }
+              if (reloadSurface) observe(reloadSurface.setDiagnostic('asset', null));
+              return;
+            }
+            renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic), 'asset');
+          },
+          onWatchStatus: (/** @type {Readonly<Record<string, unknown>>} */ state) =>
+            notifyAssetObserver('onWatchStatus', state),
+          onError: (/** @type {unknown} */ error) => {
+            void notifyAssetObserver('onError', error);
+            reportError(error);
+          },
+        }),
+      );
+    } catch (error) {
+      previewShell.dispose();
+      observe(coordinator.dispose());
+      observe(reloadSurface?.dispose());
+      if (typeof host.remove === 'function') host.remove();
+      throw error;
+    }
   }
 
   function openProject() {
@@ -630,6 +797,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       sourceDisplayName,
       preview: previewShell.getSnapshot(),
       assetPipeline: assetPipeline?.getState() ?? null,
+      reloadOverlay: reloadSurface?.getSnapshot() ?? null,
       coordinator: coordinator.getState(),
     });
   }
@@ -642,13 +810,18 @@ export function createDsl4WebPreviewShell(input = {}) {
       openButton.removeEventListener('click', onOpenProject);
     }
     previewShell.dispose();
+    const reloadDisposal = reloadSurface?.dispose();
     if (typeof host.remove === 'function') host.remove();
     detailsByIntegrity.clear();
     activeDetails = null;
     candidateDetails = null;
     selectedProjectRoot = null;
     latestValidSourceResult = null;
-    disposePromise = Promise.all([coordinator.dispose(), assetPipeline?.dispose()]).then(snapshot);
+    const assetDisposal = assetPipeline?.dispose();
+    reloadSurface = null;
+    disposePromise = Promise.all([coordinator.dispose(), assetDisposal, reloadDisposal]).then(
+      snapshot,
+    );
     return disposePromise;
   }
 
@@ -674,7 +847,62 @@ export function createDsl4WebPreviewShell(input = {}) {
       await coordinator.whenIdle();
       await assetSourceQueue;
       if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
+      await reloadSurface?.whenIdle();
       return snapshot();
+    },
+    /** @param {unknown} candidate */
+    submitReloadCandidate(candidate) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.submitCandidate(candidate);
+    },
+    /** @param {'source' | 'asset'} channel @param {unknown} diagnostic */
+    setReloadDiagnostic(channel, diagnostic) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.setDiagnostic(channel, diagnostic);
+    },
+    /** @param {'source' | 'asset'} channel @param {unknown} status */
+    setReloadWatchState(channel, status) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.setWatchState(channel, status);
+    },
+    /** @param {string} inputId */
+    acknowledgePreviewInput(inputId) {
+      return reloadSurface?.acknowledgePreviewInput(inputId) ?? snapshot();
+    },
+    /** @param {string} owner @param {unknown} rect */
+    registerPreviewControlRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.registerReservedRect(owner, rect);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    updatePreviewControlRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.updateReservedRect(owner, rect);
+    },
+    /** @param {string} owner */
+    unregisterPreviewControlRect(owner) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.unregisterReservedRect(owner);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    registerReservedRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.registerReservedRect(owner, rect);
+    },
+    /** @param {string} owner @param {unknown} rect */
+    updateReservedRect(owner, rect) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.updateReservedRect(owner, rect);
+    },
+    /** @param {string} owner */
+    unregisterReservedRect(owner) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.unregisterReservedRect(owner);
+    },
+    /** @param {unknown} viewport @param {unknown} [safeArea] */
+    updatePreviewViewport(viewport, safeArea) {
+      if (!reloadSurface) throw new TypeError('preview reload overlay is disabled');
+      return reloadSurface.updateViewport(viewport, safeArea);
     },
     getSnapshot: snapshot,
     dispose,

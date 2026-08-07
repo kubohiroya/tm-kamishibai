@@ -201,6 +201,7 @@ const shell = createDsl4WebPreviewShell({
     dsl4Runtime: true,
     dsl4AppShell: true,
     dsl4WebPreviewAdapter: true,
+    dsl4PreviewReloadOverlay: true,
   },
   environment: 'development',
   document: browserDocument,

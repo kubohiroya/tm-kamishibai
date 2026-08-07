@@ -17,6 +17,8 @@ class FakeElement {
     this.alt = '';
     this.style = {};
     this.dataset = {};
+    this.pointerCaptures = new Set();
+    this.boundingClientRect = null;
   }
 
   appendChild(child) {
@@ -63,10 +65,37 @@ class FakeElement {
     );
   }
 
-  dispatch(type) {
-    const event = createFakeEvent({code: '', target: this});
+  dispatch(type, options = {}) {
+    const event = createFakeEvent({code: '', target: this, ...options});
     for (const listener of this.listeners.get(type) ?? []) listener(event);
     return event;
+  }
+
+  setPointerCapture(pointerId) {
+    this.pointerCaptures.add(pointerId);
+  }
+
+  hasPointerCapture(pointerId) {
+    return this.pointerCaptures.has(pointerId);
+  }
+
+  releasePointerCapture(pointerId) {
+    this.pointerCaptures.delete(pointerId);
+  }
+
+  setBoundingClientRect(rect) {
+    this.boundingClientRect = {...rect};
+  }
+
+  getBoundingClientRect() {
+    const rect = this.boundingClientRect ?? {x: 0, y: 0, width: 0, height: 0};
+    return {
+      ...rect,
+      left: rect.left ?? rect.x,
+      top: rect.top ?? rect.y,
+      right: rect.right ?? (rect.x ?? rect.left) + rect.width,
+      bottom: rect.bottom ?? (rect.y ?? rect.top) + rect.height,
+    };
   }
 
   contains(candidate) {
@@ -90,10 +119,11 @@ class FakeElement {
   }
 }
 
-function createFakeEvent({code, target = null, shiftKey = false, modifiers = {}}) {
+function createFakeEvent({code, target = null, shiftKey = false, modifiers = {}, pointerId}) {
   return {
     code,
     target,
+    ...(pointerId === undefined ? {} : {pointerId}),
     shiftKey,
     altKey: modifiers.altKey ?? false,
     ctrlKey: modifiers.ctrlKey ?? false,
@@ -130,6 +160,15 @@ export function createFakeDocument() {
     dispatchKey(code, options = {}) {
       const event = createFakeEvent({code, target: document.activeElement, ...options});
       for (const listener of listeners.get('keydown') ?? []) listener(event);
+      return event;
+    },
+    dispatchPointer(pointerId, options = {}) {
+      return this.dispatchPointerEvent('pointerdown', pointerId, options);
+    },
+    dispatchPointerEvent(type, pointerId, options = {}) {
+      const event = createFakeEvent({code: '', target: document.activeElement, ...options});
+      event.pointerId = pointerId;
+      for (const listener of listeners.get(type) ?? []) listener(event);
       return event;
     },
     listenerCount(type) {
