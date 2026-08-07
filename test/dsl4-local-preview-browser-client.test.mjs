@@ -209,3 +209,75 @@ test('browser preview client owns the authenticated generation stream and preser
   assert.equal(client.getState().status, 'disposed');
   assert.equal(listeners.has('pagehide'), false);
 });
+
+test('browser preview client aborts startup when the page is hidden', async () => {
+  const listeners = new Map();
+  let resolveFetchStarted;
+  const fetchStarted = new Promise((resolve) => {
+    resolveFetchStarted = resolve;
+  });
+  let runtimeCreated = false;
+  let shellDisposed = false;
+  const mount = {appendChild() {}, clientHeight: 360, clientWidth: 480};
+  const client = createDsl4LocalPreviewBrowserClient({
+    document: {
+      querySelector(selector) {
+        if (selector === '#dsl4-local-preview-runtime') return mount;
+        return null;
+      },
+      createElement() {
+        return {setAttribute() {}, remove() {}, textContent: ''};
+      },
+    },
+    location: {hash: `#${'a'.repeat(43)}`, pathname: '/', search: ''},
+    history: {replaceState() {}},
+    eventTarget: {
+      addEventListener(type, listener) {
+        listeners.set(type, listener);
+      },
+      removeEventListener(type) {
+        listeners.delete(type);
+      },
+    },
+    async fetch(_endpoint, init) {
+      resolveFetchStarted();
+      return new Promise((_resolve, reject) => {
+        const abort = () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        };
+        if (init.signal.aborted) abort();
+        else init.signal.addEventListener('abort', abort, {once: true});
+      });
+    },
+    sourceFrontend: {parse() {}},
+    platform: {},
+    runtimeOptions: {},
+    createShell: () => ({
+      async setReloadWatchState() {},
+      async setReloadDiagnostic() {},
+      update() {},
+      getSnapshot() {
+        return {};
+      },
+      async dispose() {
+        shellDisposed = true;
+      },
+    }),
+    createRuntime() {
+      runtimeCreated = true;
+      throw new Error('runtime creation is not expected');
+    },
+  });
+
+  const startup = client.start();
+  await fetchStarted;
+  const rejectedStartup = assert.rejects(startup, {name: 'AbortError'});
+  listeners.get('pagehide')();
+  await rejectedStartup;
+  await waitFor(() => client.getState().status === 'disposed', 'pagehide cleanup');
+  assert.equal(runtimeCreated, false);
+  assert.equal(shellDisposed, true);
+  assert.equal(listeners.has('pagehide'), false);
+});

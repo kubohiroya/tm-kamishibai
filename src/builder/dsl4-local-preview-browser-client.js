@@ -183,6 +183,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
   let candidateDetails = null;
   /** @type {ReturnType<typeof createDsl4LocalPreviewBrowserRuntime> | null} */
   let runtime = null;
+  const lifecycleController = new AbortController();
   /** @type {AbortController | null} */
   let streamController = null;
   /** @type {ReadableStreamDefaultReader<string> | null} */
@@ -244,6 +245,13 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
     });
   }
 
+  function ensureActive() {
+    if (!disposed && !lifecycleController.signal.aborted) return;
+    const error = new Error('Local preview browser client startup was aborted');
+    error.name = 'AbortError';
+    throw error;
+  }
+
   /** @param {string} endpoint @param {unknown} body @param {boolean} [authorize] */
   async function post(endpoint, body, authorize = true) {
     const response = await fetchRequest(endpoint, {
@@ -255,6 +263,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
       body: JSON.stringify(body),
       cache: 'no-store',
       credentials: 'same-origin',
+      signal: lifecycleController.signal,
     });
     let result = null;
     try {
@@ -281,6 +290,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
       body: '{}',
       cache: 'no-store',
       credentials: 'same-origin',
+      signal: lifecycleController.signal,
     });
     if (!response.ok) throw new Error('The preview runtime project could not be loaded');
     const declaredLength = Number(response.headers.get('content-length'));
@@ -573,18 +583,23 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
     if (startPromise) return startPromise;
     status = 'starting';
     startPromise = (async () => {
+      ensureActive();
       await shell.setReloadWatchState('source', 'stabilizing');
+      ensureActive();
       const connected = await post('/api/connect', {token: bearerToken}, false);
+      ensureActive();
       const connectedEvents = Array.isArray(connected.events) ? connected.events : [];
       for (const event of connectedEvents) {
         const characters = JSON.stringify(event).length;
         ingestRecord(event, characters);
       }
       await openEventStream();
+      ensureActive();
       const projectBytes = await fetchProject();
       /** @type {ReturnType<typeof createDsl4LocalPreviewBrowserRuntime>} */
       let activeRuntime;
       try {
+        ensureActive();
         activeRuntime = createRuntime({
           projectBytes,
           sourceFrontend: options.sourceFrontend,
@@ -609,9 +624,11 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
         projectBytes.fill(0);
       }
       await activeRuntime.start();
+      ensureActive();
       runtimeReady = true;
       scheduleDrain();
       await waitForDrain();
+      ensureActive();
       if (streamDisconnected) {
         throw new Error('The preview event stream disconnected during startup');
       }
@@ -619,8 +636,11 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
       status = 'running';
       return snapshot();
     })().catch(async (error) => {
-      status = 'failed';
-      reportError(error);
+      const stoppedByDisposal = disposed || lifecycleController.signal.aborted;
+      if (!stoppedByDisposal) {
+        status = 'failed';
+        reportError(error);
+      }
       streamController?.abort();
       try {
         await runtime?.dispose();
@@ -647,6 +667,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
     disposed = true;
     status = 'disposing';
     eventTarget.removeEventListener('pagehide', handlePageHide);
+    lifecycleController.abort();
     streamController?.abort();
     void streamReader?.cancel().catch(() => {});
     disposePromise = (async () => {
