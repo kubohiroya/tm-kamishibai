@@ -437,6 +437,24 @@ StoryDocument、scene-entry consumerを使います。
 development preview専用の暗黙上書きは設けません。flag OFF時とDSL 3.1／3.2 SB3は対象外で、TMPoseの
 既存mirrored表示、recognition入力、Standalone paletteを変更しません。
 
+camera preview操作UIは`poseRecognition.preview.controls`で任意に構成します。`mirroring`は
+`showMirrored`／`showUnmirrored`のtarget-state icon、`cameraMenu`はmenu trigger iconを、それぞれ
+target非依存`kind: image` assetとして参照します。両controlは8 anchor位置と0〜1のopacityを持ち、同じ
+anchorでは`mirroring`、`cameraMenu`の順に並びます。暗黙の標準iconはなく、control省略時はDOMも上流APIも
+生成しません。iconは`loading: eager`だけを許可します。
+
+app shell rendererはpreview表示矩形を追跡し、camera停止、preview非表示、runtimeの自然終了／failで
+controlを隠してlistenerを外します。自然終了／failでは履歴からの巻き戻しのためDOMとasset・
+Object URL leaseを保持し、`navigation.reposition`／`runtime.resume`でrendererを再開します。明示的な
+story stopまたはhost disposeでDOMとleaseを解放します。反転は`setPreviewMirroring`成功後だけiconを
+commitします。camera menuはopenごとに
+再列挙し、`default | front | back | {deviceId}`を`listCameraDevices`／`selectCamera`へ渡します。opaqueな
+device IDはsession内のmenu mappingだけに保持し、StoryDocumentやruntime variableへ保存しません。
+`dsl4CameraPreviewControls`は起動時固定・既定OFFです。OFFではcontrol assetをstartup materialize対象から
+除外し、renderer optionと上流camera methodを検査・呼出ししません。`mirroring` controlを有効にした
+sessionでは#387のstory／scene effective mirroringも同時に適用し、scene入場など外部の反転変更をtarget-state
+iconへ反映します。
+
 ## 7. Core action
 
 ### 7.1 Global action

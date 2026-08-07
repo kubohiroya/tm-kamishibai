@@ -111,6 +111,182 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   assert.equal(audio.mimeType, 'audio/wav');
 });
 
+test('materializes a target-independent image Object URL and revokes it with the asset lease', async () => {
+  const fake = fakeComposition();
+  const created = [];
+  const revoked = [];
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    createObjectURL(blob) {
+      created.push(blob);
+      return 'blob:dsl4-control-icon';
+    },
+    revokeObjectURL(url) {
+      revoked.push(url);
+    },
+  });
+  const resource = await adapter.prepare(
+    embeddedAsset('ControlIcon', 'image', 'ui/control.svg', new TextEncoder().encode('<svg/>')),
+  );
+  assert.equal(resource.kind, 'image');
+  assert.equal(resource.objectUrl, 'blob:dsl4-control-icon');
+  assert.equal(created.length, 1);
+  assert.equal(created[0].type, 'image/svg+xml');
+  adapter.release(resource);
+  adapter.release(resource);
+  assert.deepEqual(fake.calls.release, ['ControlIcon']);
+  assert.deepEqual(revoked, ['blob:dsl4-control-icon']);
+
+  await assert.rejects(
+    adapter.prepare(projectAsset('ProjectImage', 'image', 'CostumeLike')),
+    (error) => error.code === 'K4-ASSET-ADAPTER-002',
+  );
+});
+
+test('requires injected Object URL creation and revocation as one owner pair', () => {
+  const fake = fakeComposition();
+  assert.throws(
+    () =>
+      createDsl4AssetManagerAdapter({
+        composition: fake.composition,
+        createObjectURL: () => 'blob:unowned',
+      }),
+    /must be provided together/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4AssetManagerAdapter({
+        composition: fake.composition,
+        revokeObjectURL: () => {},
+      }),
+    /must be provided together/u,
+  );
+});
+
+test('uses Object URL methods from the same global URL owner when no pair is injected', async () => {
+  const originalUrlOwner = globalThis.URL;
+  const fake = fakeComposition();
+  const calls = [];
+  const urlOwner = {
+    createObjectURL(blob) {
+      assert.strictEqual(this, urlOwner);
+      calls.push(['create', blob.type]);
+      return 'blob:global-owner';
+    },
+    revokeObjectURL(url) {
+      assert.strictEqual(this, urlOwner);
+      calls.push(['revoke', url]);
+    },
+  };
+  globalThis.URL = urlOwner;
+  try {
+    const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+    const resource = await adapter.prepare(embeddedAsset('GlobalIcon', 'image', 'ui/global.svg'));
+    adapter.release(resource);
+  } finally {
+    globalThis.URL = originalUrlOwner;
+  }
+  assert.deepEqual(calls, [
+    ['create', 'image/svg+xml'],
+    ['revoke', 'blob:global-owner'],
+  ]);
+});
+
+test('fails closed when the global URL owner does not provide a complete pair', async () => {
+  const originalUrlOwner = globalThis.URL;
+  const fake = fakeComposition();
+  globalThis.URL = {createObjectURL: () => 'blob:without-revoker'};
+  try {
+    const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+    await assert.rejects(
+      adapter.prepare(embeddedAsset('UnownedIcon', 'image', 'ui/unowned.svg')),
+      (error) => error.code === 'K4-ASSET-ADAPTER-006',
+    );
+  } finally {
+    globalThis.URL = originalUrlOwner;
+  }
+  assert.deepEqual(fake.calls, {project: [], embedded: [], release: []});
+});
+
+test('cleans registrations and created URLs on Object URL error and abort paths', async () => {
+  const creationFailure = fakeComposition();
+  const creationFailureAdapter = createDsl4AssetManagerAdapter({
+    composition: creationFailure.composition,
+    createObjectURL() {
+      throw new Error('creation failed');
+    },
+    revokeObjectURL() {
+      assert.fail('no URL was created');
+    },
+  });
+  await assert.rejects(
+    creationFailureAdapter.prepare(
+      embeddedAsset('CreationFailure', 'image', 'ui/creation-failure.svg'),
+    ),
+    (error) => error.code === 'K4-ASSET-ADAPTER-006',
+  );
+  assert.deepEqual(creationFailure.calls.release, ['CreationFailure']);
+
+  const invalidUrl = fakeComposition();
+  const invalidUrlAdapter = createDsl4AssetManagerAdapter({
+    composition: invalidUrl.composition,
+    createObjectURL: () => '',
+    revokeObjectURL() {
+      assert.fail('no valid URL was created');
+    },
+  });
+  await assert.rejects(
+    invalidUrlAdapter.prepare(embeddedAsset('InvalidUrl', 'image', 'ui/invalid-url.svg')),
+    (error) => error.code === 'K4-ASSET-ADAPTER-006',
+  );
+  assert.deepEqual(invalidUrl.calls.release, ['InvalidUrl']);
+
+  const controller = new AbortController();
+  const aborted = fakeComposition();
+  const revoked = [];
+  const abortedAdapter = createDsl4AssetManagerAdapter({
+    composition: aborted.composition,
+    createObjectURL() {
+      controller.abort('story-stopped');
+      return 'blob:aborted';
+    },
+    revokeObjectURL(url) {
+      revoked.push(url);
+    },
+  });
+  await assert.rejects(
+    abortedAdapter.prepare(embeddedAsset('AbortedIcon', 'image', 'ui/aborted.svg'), {
+      signal: controller.signal,
+    }),
+    (error) => error.name === 'AbortError',
+  );
+  assert.deepEqual(aborted.calls.release, ['AbortedIcon']);
+  assert.deepEqual(revoked, ['blob:aborted']);
+});
+
+test('revokes an Object URL even when composition release fails', async () => {
+  const releaseCalls = [];
+  const revoked = [];
+  const fake = fakeComposition({
+    releaseAsset(name) {
+      releaseCalls.push(name);
+      throw new Error('release failed');
+    },
+  });
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    createObjectURL: () => 'blob:release-failure',
+    revokeObjectURL: (url) => revoked.push(url),
+  });
+  const resource = await adapter.prepare(
+    embeddedAsset('ReleaseFailure', 'image', 'ui/release-failure.svg'),
+  );
+  assert.throws(() => adapter.release(resource), /release failed/u);
+  adapter.release(resource);
+  assert.deepEqual(releaseCalls, ['ReleaseFailure']);
+  assert.deepEqual(revoked, ['blob:release-failure']);
+});
+
 test('registers verified remote bytes with their declared Content-Type', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});

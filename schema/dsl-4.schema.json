@@ -235,13 +235,39 @@
         }
       ]
     },
+    "namedImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"const": "image"},
+        "file": {"$ref": "#/$defs/filePath"},
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
+      },
+      "oneOf": [
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {"properties": {"source": true}, "required": ["source"]}
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {"properties": {"file": true}, "required": ["file"]}
+        }
+      ]
+    },
     "asset": {
       "oneOf": [
         {"$ref": "#/$defs/compactAsset"},
         {"$ref": "#/$defs/namedBackdrop"},
         {"$ref": "#/$defs/namedSound"},
         {"$ref": "#/$defs/namedCostume"},
-        {"$ref": "#/$defs/namedPoseModel"}
+        {"$ref": "#/$defs/namedPoseModel"},
+        {"$ref": "#/$defs/namedImage"}
       ]
     },
     "assets": {
@@ -320,7 +346,66 @@
       "additionalProperties": false,
       "required": ["mirroring"],
       "properties": {
+        "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]},
+        "controls": {"$ref": "#/$defs/posePreviewControls"}
+      }
+    },
+    "scenePosePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mirroring"],
+      "properties": {
         "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]}
+      }
+    },
+    "posePreviewControlPosition": {
+      "type": "string",
+      "enum": [
+        "top-center",
+        "bottom-center",
+        "left-center",
+        "right-center",
+        "top-right",
+        "bottom-right",
+        "top-left",
+        "bottom-left"
+      ]
+    },
+    "posePreviewMirroringControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "assets"],
+      "properties": {
+        "position": {"$ref": "#/$defs/posePreviewControlPosition"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 1},
+        "assets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["showMirrored", "showUnmirrored"],
+          "properties": {
+            "showMirrored": {"$ref": "#/$defs/assetId"},
+            "showUnmirrored": {"$ref": "#/$defs/assetId"}
+          }
+        }
+      }
+    },
+    "posePreviewCameraMenuControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "buttonAsset"],
+      "properties": {
+        "position": {"$ref": "#/$defs/posePreviewControlPosition"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 1},
+        "buttonAsset": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "posePreviewControls": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "mirroring": {"$ref": "#/$defs/posePreviewMirroringControl"},
+        "cameraMenu": {"$ref": "#/$defs/posePreviewCameraMenuControl"}
       }
     },
     "poseFeedback": {
@@ -817,7 +902,7 @@
       "required": ["actions"],
       "properties": {
         "poseModel": {"$ref": "#/$defs/assetId"},
-        "posePreview": {"$ref": "#/$defs/posePreview"},
+        "posePreview": {"$ref": "#/$defs/scenePosePreview"},
         "actions": {"$ref": "#/$defs/actions"}
       }
     },

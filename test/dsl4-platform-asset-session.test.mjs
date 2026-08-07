@@ -19,6 +19,7 @@ function runtimeComponent() {
     ['RescuePose\0metadata.json', new TextEncoder().encode('{"labels":["rescue"]}')],
     ['RescuePose\0model.json', new TextEncoder().encode('{"model":true}')],
     ['RescuePose\0weights.bin', new Uint8Array([1, 2, 3])],
+    ['ControlIcon\0ui/control.svg', new TextEncoder().encode('<svg/>')],
   ]);
   return {
     storyDocument: {kind: 'StoryDocument', version: '4.0'},
@@ -30,6 +31,17 @@ function runtimeComponent() {
             kind: 'backdrop',
             loading: 'eager',
             source: {type: 'project', name: 'Beach'},
+          },
+          {
+            id: 'ControlIcon',
+            kind: 'image',
+            loading: 'eager',
+            source: {
+              type: 'file',
+              files: [
+                {path: 'ui/control.svg', size: files.get('ControlIcon\0ui/control.svg').length},
+              ],
+            },
           },
           {
             id: 'RescuePose',
@@ -438,6 +450,95 @@ test('gates pose preview mirroring and uses one composition method before or dur
     () => enabled.posePreviewPort.setPosePreviewMirroring('mirrored'),
     (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
   );
+});
+
+test('gates camera preview control methods and exposes leased image URLs only while enabled', async () => {
+  const disabledSetup = options(runtimeComponent(), []);
+  for (const method of [
+    'setPreviewMirroring',
+    'listCameraDevices',
+    'selectCamera',
+    'getCameraSelection',
+    'getActiveCamera',
+  ]) {
+    Object.defineProperty(disabledSetup.created.tmposeComposition, method, {
+      get() {
+        assert.fail(`disabled camera preview controls must not inspect ${method}`);
+      },
+    });
+  }
+  const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
+  assert.equal(disabled.cameraPreviewControlsPort, null);
+  await disabled.dispose('camera-preview-controls-disabled');
+
+  const missingSetup = options(runtimeComponent(), []);
+  assert.throws(
+    () =>
+      createDsl4PlatformAssetSession({
+        ...missingSetup.value,
+        cameraPreviewControlsEnabled: true,
+      }),
+    /setPreviewMirroring|listCameraDevices/u,
+  );
+
+  const mirroringOnlySetup = options(runtimeComponent(), [], {
+    tmpose: {setPreviewMirroring() {}},
+  });
+  const mirroringOnly = createDsl4PlatformAssetSession({
+    ...mirroringOnlySetup.value,
+    cameraPreviewControlsEnabled: true,
+    cameraPreviewMirroringControlEnabled: true,
+    cameraMenuControlEnabled: false,
+  });
+  assert.equal(typeof mirroringOnly.cameraPreviewControlsPort.setPreviewMirroring, 'function');
+  assert.equal('listCameraDevices' in mirroringOnly.cameraPreviewControlsPort, false);
+  await mirroringOnly.dispose('mirroring-only');
+
+  const log = [];
+  let selection = 'default';
+  const revoked = [];
+  const enabledSetup = options(runtimeComponent(), log, {
+    tmpose: {
+      setPreviewMirroring(mode) {
+        log.push(['control.mirroring', mode]);
+      },
+      async listCameraDevices() {
+        return [{deviceId: 'opaque', label: 'External'}];
+      },
+      async selectCamera(next) {
+        selection = next;
+      },
+      getCameraSelection() {
+        return selection;
+      },
+      getActiveCamera() {
+        return null;
+      },
+    },
+  });
+  const enabled = createDsl4PlatformAssetSession({
+    ...enabledSetup.value,
+    cameraPreviewControlsEnabled: true,
+    createObjectURL: () => 'blob:control-icon',
+    revokeObjectURL: (url) => revoked.push(url),
+  });
+  await enabled.lifecycle.prepare({assetIds: ['ControlIcon']}, context());
+  assert.deepEqual(enabled.getAssetResource('ControlIcon'), {
+    adapter: 'asset-manager',
+    assetId: 'ControlIcon',
+    kind: 'image',
+    name: 'ControlIcon',
+    mimeType: 'image/svg+xml',
+    objectUrl: 'blob:control-icon',
+  });
+  await enabled.cameraPreviewControlsPort.setPreviewMirroring('unmirrored');
+  assert.deepEqual(await enabled.cameraPreviewControlsPort.listCameraDevices(), [
+    {deviceId: 'opaque', label: 'External'},
+  ]);
+  await enabled.cameraPreviewControlsPort.selectCamera({deviceId: 'opaque'});
+  assert.deepEqual(enabled.cameraPreviewControlsPort.getCameraSelection(), {deviceId: 'opaque'});
+  await enabled.dispose('camera-preview-controls-enabled');
+  assert.deepEqual(revoked, ['blob:control-icon']);
 });
 
 test('keeps compositions, resources, and final disposal isolated between sessions', async () => {

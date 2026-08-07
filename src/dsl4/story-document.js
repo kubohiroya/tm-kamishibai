@@ -98,11 +98,24 @@ function normalizePoseRecognition(value) {
   const feedback = /** @type {Record<string, unknown>} */ (source.feedback ?? {});
   const navigation = /** @type {Record<string, unknown>} */ (source.navigation ?? {});
   const preview = /** @type {Record<string, unknown>} */ (source.preview ?? {});
+  const controls =
+    preview.controls && typeof preview.controls === 'object'
+      ? /** @type {Record<string, Record<string, unknown>>} */ (preview.controls)
+      : null;
+  const normalizedControls = controls
+    ? Object.fromEntries(
+        Object.entries(controls).map(([name, control]) => [name, {opacity: 1, ...control}]),
+      )
+    : undefined;
   return {
     ...source,
     feedback: {mode: 'scratchMirror', ...feedback},
     navigation: {allowSkip: false, ...navigation},
-    preview: {mirroring: 'mirrored', ...preview},
+    preview: {
+      mirroring: 'mirrored',
+      ...preview,
+      ...(normalizedControls ? {controls: normalizedControls} : {}),
+    },
   };
 }
 
@@ -132,7 +145,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
       selection: ['accumulationPerSecond', 'decayPerSecond', 'scoreThreshold'],
       feedback: ['mode'],
       navigation: ['allowSkip'],
-      preview: ['mirroring'],
+      preview: ['mirroring', 'controls'],
     }[field];
     for (const nestedField of nestedFields ?? []) {
       const nestedNode = document.getIn(['poseRecognition', field, nestedField], true);
@@ -141,6 +154,37 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
           nestedNode,
           lineCounter,
         );
+      }
+    }
+    if (field === 'preview') {
+      for (const controlName of ['mirroring', 'cameraMenu']) {
+        const controlPath = ['poseRecognition', 'preview', 'controls', controlName];
+        const controlNode = document.getIn(controlPath, true);
+        if (!controlNode) continue;
+        sourceMap[`/poseRecognition/preview/controls/${controlName}`] = sourceRangeForNode(
+          controlNode,
+          lineCounter,
+        );
+        const controlFields =
+          controlName === 'mirroring'
+            ? ['position', 'opacity', 'assets']
+            : ['position', 'opacity', 'buttonAsset'];
+        for (const controlField of controlFields) {
+          const controlFieldNode = document.getIn([...controlPath, controlField], true);
+          if (controlFieldNode) {
+            sourceMap[`/poseRecognition/preview/controls/${controlName}/${controlField}`] =
+              sourceRangeForNode(controlFieldNode, lineCounter);
+          }
+        }
+        if (controlName === 'mirroring') {
+          for (const assetField of ['showMirrored', 'showUnmirrored']) {
+            const assetNode = document.getIn([...controlPath, 'assets', assetField], true);
+            if (assetNode) {
+              sourceMap[`/poseRecognition/preview/controls/mirroring/assets/${assetField}`] =
+                sourceRangeForNode(assetNode, lineCounter);
+            }
+          }
+        }
       }
     }
   }

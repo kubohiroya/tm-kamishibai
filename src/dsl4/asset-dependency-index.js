@@ -90,9 +90,23 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     storyDocument.poseRecognition ?? null
   );
   const poseRecognitionDependencies = new Set();
+  const posePreviewControlDependencies = new Set();
   if (poseRecognition) {
     addDependency(poseRecognition.idleSound, poseRecognitionDependencies);
     addDependency(poseRecognition.chargeSound, poseRecognitionDependencies);
+    const preview = /** @type {Readonly<Record<string, unknown>>} */ (
+      poseRecognition.preview ?? {}
+    );
+    const controls = /** @type {Readonly<Record<string, unknown>>} */ (preview.controls ?? {});
+    const mirroring = /** @type {Readonly<Record<string, unknown>>} */ (controls.mirroring ?? {});
+    const mirroringAssets = /** @type {Readonly<Record<string, unknown>>} */ (
+      mirroring.assets ?? {}
+    );
+    const cameraMenu = /** @type {Readonly<Record<string, unknown>>} */ (controls.cameraMenu ?? {});
+    addDependency(mirroringAssets.showMirrored, posePreviewControlDependencies);
+    addDependency(mirroringAssets.showUnmirrored, posePreviewControlDependencies);
+    addDependency(cameraMenu.buttonAsset, posePreviewControlDependencies);
+    for (const assetId of posePreviewControlDependencies) startup.add(assetId);
   }
 
   const startupAssets = sortedUnique(startup);
@@ -128,6 +142,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     actors: sortedUnique(actorDependencies),
     loading: sortedUnique(loadingDependencies),
     poseRecognition: sortedUnique(poseRecognitionDependencies),
+    posePreviewControls: sortedUnique(posePreviewControlDependencies),
     sceneRetained: sortedUnique(sceneRetainedAssets),
     scenes,
   });

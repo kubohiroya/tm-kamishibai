@@ -153,6 +153,16 @@ export function validateDsl4Semantics(
           message: 'Remote asset URL must be an absolute HTTPS URL without credentials or fragment',
         });
       }
+      if (
+        assetRecord.kind === 'image' &&
+        (typeof source.contentType !== 'string' || !source.contentType.startsWith('image/'))
+      ) {
+        issues.push({
+          code: 'K4-ASSET-IMAGE-MIME-001',
+          path: `$.assets.${id}.source.contentType`,
+          message: 'Target-independent image assets require an image Content-Type',
+        });
+      }
     }
     if (typeof file !== 'string') continue;
     const components = file.split('/');
@@ -202,6 +212,39 @@ export function validateDsl4Semantics(
   if (poseRecognition) {
     for (const key of ['idleSound', 'chargeSound']) {
       addReferenceIssue(issues, assets, poseRecognition[key], 'sound', `$.poseRecognition.${key}`);
+    }
+    const preview = /** @type {Record<string, unknown>} */ (poseRecognition.preview ?? {});
+    const previewControls = /** @type {Record<string, unknown>} */ (preview.controls ?? {});
+    const mirroringControl = /** @type {Record<string, unknown>} */ (
+      previewControls.mirroring ?? {}
+    );
+    const mirroringAssets = /** @type {Record<string, unknown>} */ (mirroringControl.assets ?? {});
+    const cameraMenuControl = /** @type {Record<string, unknown>} */ (
+      previewControls.cameraMenu ?? {}
+    );
+    /** @type {Array<[string, unknown]>} */
+    const controlAssetReferences = [
+      [
+        '$.poseRecognition.preview.controls.mirroring.assets.showMirrored',
+        mirroringAssets.showMirrored,
+      ],
+      [
+        '$.poseRecognition.preview.controls.mirroring.assets.showUnmirrored',
+        mirroringAssets.showUnmirrored,
+      ],
+      ['$.poseRecognition.preview.controls.cameraMenu.buttonAsset', cameraMenuControl.buttonAsset],
+    ];
+    for (const [path, id] of controlAssetReferences) {
+      if (typeof id !== 'string') continue;
+      addReferenceIssue(issues, assets, id, 'image', path);
+      const asset = /** @type {Record<string, unknown>} */ (assets[String(id)] ?? {});
+      if (asset.loading === 'lazy') {
+        issues.push({
+          code: 'K4-PREVIEW-CONTROL-ASSET-001',
+          path,
+          message: `Camera preview control asset ${id} must use eager loading`,
+        });
+      }
     }
   }
 

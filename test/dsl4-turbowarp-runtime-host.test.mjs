@@ -13,6 +13,7 @@ import {
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
 import {createDsl4TurboWarpRuntimeHost} from '../src/dsl4/platform/index.js';
+import {createFakeDocument} from './helpers/fake-dom.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -52,13 +53,83 @@ scenes:
     actions: []
   reset: []
 `;
+const cameraPreviewControlsStory = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  ShowMirrored:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/show-mirrored.svg
+      integrity: sha256-0000000000000000000000000000000000000000000000000000000000000000
+      contentType: image/svg+xml
+      size: 6
+  ShowUnmirrored:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/show-unmirrored.svg
+      integrity: sha256-1111111111111111111111111111111111111111111111111111111111111111
+      contentType: image/svg+xml
+      size: 6
+  CameraMenu:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/camera-menu.svg
+      integrity: sha256-2222222222222222222222222222222222222222222222222222222222222222
+      contentType: image/svg+xml
+      size: 6
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-center
+        assets:
+          showMirrored: ShowMirrored
+          showUnmirrored: ShowUnmirrored
+      cameraMenu:
+        position: bottom-center
+        buttonAsset: CameraMenu
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    posePreview:
+      mirroring: unmirrored
+    actions:
+      - wait: 3600
+`;
+const cameraPreviewControlsHistoryStory = cameraPreviewControlsStory.replace(
+  '      Space: navigation.nextAction',
+  '      Space: navigation.nextAction\n      ArrowLeft: history.previousAction',
+);
+
+function findByDataset(root, key, value) {
+  if (root.dataset?.[key] === value) return root;
+  for (const child of root.children ?? []) {
+    const found = findByDataset(child, key, value);
+    if (found) return found;
+  }
+  return null;
+}
 
 function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 
-async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
-  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+async function packagedProject(
+  sourceText = waitStory,
+  {cacheIdentity, historyNavigationAvailable = false} = {},
+) {
+  const parsed = frontend.parse(sourceText, {sourceId: 'main', historyNavigationAvailable});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
@@ -71,7 +142,7 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
     parsed.storyDocument,
     sourceDescriptor,
     'production',
-    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
+    {maxSourceBytes: limits.maxSourceBytes, historyNavigationAvailable, subtleCrypto},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
   const snapshotAssets = Object.values(parsed.storyDocument.assets)
@@ -103,6 +174,7 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
     {
       channel: 'unbundled',
       ...limits,
+      historyNavigationAvailable,
       subtleCrypto,
     },
   );
@@ -714,6 +786,326 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
     ],
   );
   await enabled.host.dispose('pose-preview-enabled');
+});
+
+test('connects camera preview controls, assets, and upstream methods only behind their flag', async () => {
+  const cacheIdentity = {
+    id: 'camera-controls',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--camera-controls',
+  };
+  const project = await packagedProject(cameraPreviewControlsStory, {cacheIdentity});
+
+  const disabledLog = [];
+  const disabledFixture = platformFixture(disabledLog);
+  const disabledCreateTMPose = disabledFixture.createTMPoseComposition;
+  disabledFixture.createTMPoseComposition = (...args) => {
+    const composition = disabledCreateTMPose(...args);
+    for (const method of [
+      'setPreviewMirroring',
+      'listCameraDevices',
+      'selectCamera',
+      'getCameraSelection',
+      'getActiveCamera',
+    ]) {
+      delete composition[method];
+      Object.defineProperty(composition, method, {
+        get() {
+          assert.fail(`disabled host must not inspect ${method}`);
+        },
+      });
+    }
+    return composition;
+  };
+  const disabledOptions = enabledOptions(project, disabledFixture);
+  for (const option of ['cameraPreviewControls', 'createObjectURL', 'revokeObjectURL']) {
+    Object.defineProperty(disabledOptions, option, {
+      get() {
+        assert.fail(`disabled host must not inspect ${option}`);
+      },
+    });
+  }
+  const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
+  assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
+  const disabledRun = disabled.host.start();
+  await Promise.resolve();
+  disabled.host.stop('test-complete');
+  await disabledRun;
+  assert.equal(
+    disabledLog.some(([event, id]) => event === 'media.register-embedded' && id !== undefined),
+    false,
+  );
+  await disabled.host.dispose('camera-controls-disabled');
+
+  const enabledLog = [];
+  const enabledFixture = platformFixture(enabledLog);
+  let selection = 'default';
+  const enabledCreateTMPose = enabledFixture.createTMPoseComposition;
+  enabledFixture.createTMPoseComposition = (...args) => {
+    const composition = enabledCreateTMPose(...args);
+    return {
+      ...composition,
+      isCameraRunning: () => true,
+      async listCameraDevices() {
+        enabledLog.push(['camera.list']);
+        return [{deviceId: 'opaque-camera', label: 'External camera'}];
+      },
+      async selectCamera(next) {
+        selection = next;
+        enabledLog.push(['camera.select', next]);
+      },
+      getCameraSelection: () => selection,
+      getActiveCamera: () => null,
+    };
+  };
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const pendingSchedules = [];
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, enabledFixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule(callback) {
+          pendingSchedules.push(callback);
+          return () => {
+            const index = pendingSchedules.indexOf(callback);
+            if (index >= 0) pendingSchedules.splice(index, 1);
+          };
+        },
+      },
+      createObjectURL() {
+        const value = `blob:control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  const enabledRun = enabled.host.start();
+  for (let attempt = 0; attempt < 20 && document.body.children.length === 0; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children.length, 2);
+  assert.equal(objectUrls.length, 3);
+  for (
+    let attempt = 0;
+    attempt < 20 && document.body.children[0].children[0].children[0].src !== 'blob:control-2';
+    attempt += 1
+  ) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children[0].children[0].children[0].src, 'blob:control-2');
+  assert.equal(enabledLog.filter(([event]) => event === 'media.register-embedded').length, 3);
+  enabled.host.stop('test-complete');
+  await enabledRun;
+  assert.equal(document.body.children.length, 0);
+  await enabled.host.dispose('camera-controls-enabled');
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+});
+
+test('releases every control Object URL when renderer DOM disposal fails', async () => {
+  const project = await packagedProject(cameraPreviewControlsStory, {
+    cacheIdentity: {
+      id: 'camera-controls-disposal-failure',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-disposal-failure',
+    },
+  });
+  const log = [];
+  const fixture = platformFixture(log);
+  const createTMPoseComposition = fixture.createTMPoseComposition;
+  fixture.createTMPoseComposition = (...args) => ({
+    ...createTMPoseComposition(...args),
+    isCameraRunning: () => true,
+    async listCameraDevices() {
+      return [];
+    },
+    async selectCamera() {},
+    getCameraSelection: () => 'default',
+    getActiveCamera: () => null,
+  });
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule: () => () => {},
+      },
+      createObjectURL() {
+        const value = `blob:failing-control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 20 && document.body.children.length < 2; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children.length, 2);
+  assert.equal(objectUrls.length, 3);
+  const failingGroup = document.body.children[0];
+  const removeFailingGroup = failingGroup.remove.bind(failingGroup);
+  failingGroup.remove = () => {
+    throw new Error('control DOM removal failed');
+  };
+
+  result.host.stop('renderer-disposal-failure');
+  await run;
+  for (let attempt = 0; attempt < 20 && revoked.length < objectUrls.length; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+  assert.equal(document.body.children.length, 1);
+
+  removeFailingGroup();
+  await result.host.dispose('renderer-disposal-failure');
+  assert.equal(document.body.children.length, 0);
+});
+
+test('suspends camera controls at natural finish and resumes the same leases for history', async () => {
+  const project = await packagedProject(cameraPreviewControlsHistoryStory, {
+    historyNavigationAvailable: true,
+    cacheIdentity: {
+      id: 'camera-controls-history',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-history',
+    },
+  });
+  const log = [];
+  const fixture = platformFixture(log);
+  const createTMPoseComposition = fixture.createTMPoseComposition;
+  fixture.createTMPoseComposition = (...args) => ({
+    ...createTMPoseComposition(...args),
+    isCameraRunning: () => true,
+    async listCameraDevices() {
+      return [];
+    },
+    async selectCamera() {},
+    getCameraSelection: () => 'default',
+    getActiveCamera: () => null,
+  });
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const pendingSchedules = [];
+  const events = [];
+  const pendingWaits = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      historyNavigationAvailable: true,
+      historyLimits: {maxActionEntries: 8, maxSceneVisits: 8},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule(callback) {
+          pendingSchedules.push(callback);
+          return () => {
+            const index = pendingSchedules.indexOf(callback);
+            if (index >= 0) pendingSchedules.splice(index, 1);
+          };
+        },
+      },
+      waitSchedule(callback) {
+        pendingWaits.push(callback);
+        return () => {
+          const index = pendingWaits.indexOf(callback);
+          if (index >= 0) pendingWaits.splice(index, 1);
+        };
+      },
+      createObjectURL() {
+        const value = `blob:history-control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+      onEvent(event) {
+        events.push(event.type);
+        if (event.type === 'runtime.finish') throw new Error('consumer observer failed');
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  while (pendingWaits.length === 0) await Promise.resolve();
+  const mirror = findByDataset(document.body, 'dsl4PreviewControl', 'mirroring');
+  const camera = findByDataset(document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = findByDataset(document.body, 'dsl4PreviewCameraMenu', 'true');
+  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(camera.listeners.get('click').length, 1);
+  assert.equal(menu.listeners.get('change').length, 1);
+
+  pendingWaits.shift()();
+  const finished = await run;
+  assert.equal(finished.status, 'finished');
+  assert.equal(document.body.children.length, 2);
+  assert.ok(document.body.children.every((group) => group.style.display === 'none'));
+  assert.equal(pendingSchedules.length, 0);
+  assert.equal(revoked.length, 0);
+  assert.equal(mirror.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
+
+  const rewound = result.host.dispatchCommand('history.previousAction');
+  assert.equal(rewound.ok, true, JSON.stringify(rewound.diagnostics));
+  assert.equal(rewound.changed, true);
+  assert.equal(result.host.getState().runtime.status, 'paused');
+  assert.ok(document.body.children.every((group) => group.style.display === 'flex'));
+  assert.equal(pendingSchedules.length, 1);
+  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(camera.listeners.get('click').length, 1);
+  assert.equal(menu.listeners.get('change').length, 1);
+
+  const resumed = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(resumed.ok, true, JSON.stringify(resumed.diagnostics));
+  while (pendingWaits.length === 0) await Promise.resolve();
+  pendingWaits.shift()();
+  await result.host.getRunPromise();
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.ok(document.body.children.every((group) => group.style.display === 'none'));
+  assert.equal(pendingSchedules.length, 0);
+  assert.equal(revoked.length, 0);
+  assert.equal(mirror.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
+  assert.deepEqual(
+    events.filter((type) =>
+      ['runtime.finish', 'navigation.reposition', 'runtime.resume'].includes(type),
+    ),
+    ['runtime.finish', 'navigation.reposition', 'runtime.resume', 'runtime.finish'],
+  );
+
+  await result.host.dispose('history-camera-controls');
+  assert.equal(document.body.children.length, 0);
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
 });
 
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {

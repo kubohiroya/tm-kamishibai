@@ -5,6 +5,7 @@ import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-star
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
+import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
@@ -235,15 +236,19 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
  * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
+ * @param {(observer: ((event: Readonly<Record<string, unknown>>) => void) | null) => void} publishRuntimeLifecycleObserver
  * @param {boolean} poseFeedbackEnabled
  * @param {boolean} posePreviewMirroringEnabled
+ * @param {boolean} cameraPreviewControlsEnabled
  */
 async function createRuntimeEnvironment(
   options,
   runtimeComponent,
   publishVerifiedRemoteCache,
+  publishRuntimeLifecycleObserver,
   poseFeedbackEnabled,
   posePreviewMirroringEnabled,
+  cameraPreviewControlsEnabled,
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -257,8 +262,20 @@ async function createRuntimeEnvironment(
   let scratchPoseFeedbackAdapter = null;
   /** @type {Record<string, Function> | null} */
   let runtimeExpressionComposition = null;
+  /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
+  let cameraPreviewControls = null;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
+  const preview = isRecord(component.storyDocument.poseRecognition)
+    ? /** @type {Record<string, any>} */ (component.storyDocument.poseRecognition).preview
+    : null;
+  const hasConfiguredPreviewControls =
+    cameraPreviewControlsEnabled && isRecord(preview) && isRecord(preview.controls);
+  const configuredPreviewControls = hasConfiguredPreviewControls
+    ? /** @type {Record<string, any>} */ (preview.controls)
+    : {};
+  const effectivePosePreviewMirroringEnabled =
+    posePreviewMirroringEnabled || isRecord(configuredPreviewControls.mirroring);
   const embeddedCacheIdentity =
     component.sourceDescriptor?.cacheIdentity === undefined
       ? undefined
@@ -341,7 +358,28 @@ async function createRuntimeEnvironment(
             ...(poseStateBinding === undefined ? {} : {readPoseStateBinding: poseStateBinding}),
           }
         : {}),
-      ...(posePreviewMirroringEnabled ? {posePreviewMirroringEnabled: true} : {}),
+      ...(effectivePosePreviewMirroringEnabled ? {posePreviewMirroringEnabled: true} : {}),
+      ...(hasConfiguredPreviewControls ? {cameraPreviewControlsEnabled: true} : {}),
+      ...(hasConfiguredPreviewControls
+        ? {
+            cameraPreviewMirroringControlEnabled: isRecord(configuredPreviewControls.mirroring),
+            cameraMenuControlEnabled: isRecord(configuredPreviewControls.cameraMenu),
+          }
+        : {}),
+      ...(hasConfiguredPreviewControls && options.createObjectURL !== undefined
+        ? {createObjectURL: options.createObjectURL}
+        : {}),
+      ...(hasConfiguredPreviewControls && options.revokeObjectURL !== undefined
+        ? {revokeObjectURL: options.revokeObjectURL}
+        : {}),
+      ...(isRecord(configuredPreviewControls.mirroring)
+        ? {
+            /** @param {'mirrored' | 'unmirrored'} mode */
+            onPreviewMirroringChange(mode) {
+              cameraPreviewControls?.setMirroring(mode);
+            },
+          }
+        : {}),
     });
     const mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
@@ -436,19 +474,128 @@ async function createRuntimeEnvironment(
     validateStoryCapabilities(component.storyDocument, port, evaluateCondition);
     Object.freeze(port);
 
+    const activeAssetSession = assetSession;
+    const baseAssetLifecycle = activeAssetSession.lifecycle;
+    const previewControls = configuredPreviewControls;
+    const controlAssetIds = hasConfiguredPreviewControls
+      ? [
+          previewControls.mirroring?.assets?.showMirrored,
+          previewControls.mirroring?.assets?.showUnmirrored,
+          previewControls.cameraMenu?.buttonAsset,
+        ].filter((value) => typeof value === 'string')
+      : [];
+    /** @param {() => unknown} releaseBase @param {string} message */
+    async function releaseCameraPreviewControls(releaseBase, message) {
+      const renderer = cameraPreviewControls;
+      cameraPreviewControls = null;
+      const errors = [];
+      try {
+        renderer?.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await releaseBase();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) throw new AggregateError(errors, message);
+    }
+    const assetLifecycle = hasConfiguredPreviewControls
+      ? Object.freeze({
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          async prepare(payload, context) {
+            await baseAssetLifecycle.prepare(payload, context);
+            if (
+              cameraPreviewControls ||
+              !controlAssetIds.every((assetId) => payload.assetIds.includes(assetId))
+            ) {
+              return;
+            }
+            if (!isRecord(options.cameraPreviewControls)) {
+              throw new TypeError(
+                'cameraPreviewControls app-shell options are required when preview controls are configured',
+              );
+            }
+            const assetUrls = Object.fromEntries(
+              controlAssetIds.map((assetId) => {
+                const resource = activeAssetSession.getAssetResource(assetId);
+                if (!isRecord(resource) || typeof resource.objectUrl !== 'string') {
+                  throw new TypeError(
+                    `Camera preview control asset is not materialized: ${assetId}`,
+                  );
+                }
+                return [assetId, resource.objectUrl];
+              }),
+            );
+            cameraPreviewControls = createDsl4CameraPreviewControls(
+              /** @type {any} */ ({
+                ...options.cameraPreviewControls,
+                preview,
+                assetUrls: Object.freeze(assetUrls),
+                port: activeAssetSession.cameraPreviewControlsPort,
+              }),
+            );
+            cameraPreviewControls.start();
+          },
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          setLoading(payload, context) {
+            return baseAssetLifecycle.setLoading(payload, context);
+          },
+          /** @param {Record<string, any>} payload */
+          async releaseAssets(payload) {
+            if (controlAssetIds.some((assetId) => payload.assetIds.includes(assetId))) {
+              return releaseCameraPreviewControls(
+                () => baseAssetLifecycle.releaseAssets(payload),
+                'Camera preview controls and selected assets could not be released',
+              );
+            }
+            return baseAssetLifecycle.releaseAssets(payload);
+          },
+          /** @param {Record<string, any>} payload */
+          async release(payload) {
+            return releaseCameraPreviewControls(
+              () => baseAssetLifecycle.release(payload),
+              'Camera preview controls and assets could not be released',
+            );
+          },
+        })
+      : baseAssetLifecycle;
+
+    publishRuntimeLifecycleObserver(
+      hasConfiguredPreviewControls
+        ? (event) => {
+            if (
+              event.type === 'runtime.finish' ||
+              event.type === 'runtime.fail' ||
+              event.type === 'runtime.stop'
+            ) {
+              cameraPreviewControls?.stop();
+              return;
+            }
+            if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
+              cameraPreviewControls?.start();
+            }
+          }
+        : null,
+    );
+
     /** @type {Promise<void> | null} */
     let disposePromise = null;
     const environment = {
       port,
-      assetLifecycle: assetSession.lifecycle,
+      assetLifecycle,
       evaluateCondition,
       /** @param {string} [reason] */
       dispose(reason = 'dispose') {
         if (disposePromise) return disposePromise;
+        publishRuntimeLifecycleObserver(null);
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
             () => scratchPoseFeedbackAdapter?.dispose(),
+            () => cameraPreviewControls?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
@@ -473,6 +620,7 @@ async function createRuntimeEnvironment(
     const cleanupErrors = [];
     for (const release of [
       () => scratchPoseFeedbackAdapter?.dispose(),
+      () => cameraPreviewControls?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
@@ -532,6 +680,9 @@ async function createRuntimeEnvironment(
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState] presenter observer
+ * @param {Readonly<Record<string, unknown>>} [options.cameraPreviewControls]
+ * @param {(blob: Blob) => string} [options.createObjectURL]
+ * @param {(url: string) => void} [options.revokeObjectURL]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -562,6 +713,8 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
 
   /** @type {Record<string, any> | null} */
   let verifiedRemoteCache = null;
+  /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
+  let runtimeLifecycleObserver = null;
   if (
     options.createRuntimeExpressionComposition !== undefined &&
     typeof options.createRuntimeExpressionComposition !== 'function'
@@ -587,7 +740,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     historyNavigationAvailable: options.historyNavigationAvailable,
     historyLimits: options.historyLimits,
     evaluateCondition: options.evaluateCondition,
-    onEvent: options.onEvent,
+    onEvent(event) {
+      try {
+        runtimeLifecycleObserver?.(event);
+      } catch {
+        // Internal UI observers cannot change runtime execution or suppress consumer events.
+      }
+      options.onEvent?.(event);
+    },
     onInputError: options.onInputError,
     subtleCrypto: options.subtleCrypto,
     async createRuntimeEnvironment(
@@ -600,15 +760,19 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         (/** @type {any} */ cache) => {
           verifiedRemoteCache = cache;
         },
+        (observer) => {
+          runtimeLifecycleObserver = observer;
+        },
         startupContext.featureFlags.dsl4PoseFeedbackModes,
         startupContext.featureFlags.dsl4PosePreviewMirroring,
+        startupContext.featureFlags.dsl4CameraPreviewControls,
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;

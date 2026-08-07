@@ -74,6 +74,7 @@ function historyFailure(result) {
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
  * @param {boolean} [options.structuredDataIntegrationEnabled]
  * @param {boolean} [options.posePreviewMirroringEnabled]
+ * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
  * @param {number} [options.quiesceTimeoutMs]
@@ -92,6 +93,7 @@ export function createDsl4NavigationSession({
   onInputError,
   structuredDataIntegrationEnabled = false,
   posePreviewMirroringEnabled = false,
+  cameraPreviewControlsEnabled = false,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
   quiesceTimeoutMs,
@@ -102,6 +104,9 @@ export function createDsl4NavigationSession({
   }
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (typeof cameraPreviewControlsEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewControlsEnabled must be boolean');
   }
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
@@ -210,6 +215,7 @@ export function createDsl4NavigationSession({
       onEvent: handleRuntimeEvent,
       structuredDataIntegration: structuredDataIntegration ?? undefined,
       posePreviewMirroringEnabled,
+      cameraPreviewControlsEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });

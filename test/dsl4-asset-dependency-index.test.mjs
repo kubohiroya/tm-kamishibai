@@ -41,6 +41,7 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
   assert.deepEqual(index.actors, ['CaptionIdle', 'HeroIdle']);
   assert.deepEqual(index.loading, ['Loading1', 'Loading2', 'LoadingBackground']);
   assert.deepEqual(index.poseRecognition, ['ClockTicking', 'Success']);
+  assert.deepEqual(index.posePreviewControls, []);
   assert.deepEqual(index.sceneRetained, ['救助Pose']);
   assert.deepEqual(index.scenes, {
     opening: {
@@ -63,6 +64,46 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
     },
     ending: {all: ['Beach'], eager: ['Beach'], lazy: [], sceneRetained: []},
   });
+});
+
+test('indexes eager camera preview control images as startup-only app-shell dependencies', () => {
+  const storyDocument = parse(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  ShowMirrored:
+    kind: image
+    file: ui/show-mirrored.svg
+  ShowUnmirrored:
+    kind: image
+    file: ui/show-unmirrored.svg
+  CameraMenu:
+    kind: image
+    file: ui/camera.svg
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-center
+        assets:
+          showMirrored: ShowMirrored
+          showUnmirrored: ShowUnmirrored
+      cameraMenu:
+        position: bottom-center
+        buttonAsset: CameraMenu
+scenes:
+  first: []
+`);
+  const index = createDsl4AssetDependencyIndex(storyDocument);
+  assert.deepEqual(index.posePreviewControls, ['CameraMenu', 'ShowMirrored', 'ShowUnmirrored']);
+  assert.ok(index.startup.includes('CameraMenu'));
+  assert.ok(index.startup.includes('ShowMirrored'));
+  assert.ok(index.startup.includes('ShowUnmirrored'));
+  assert.deepEqual(index.scenes.first.all, []);
 });
 
 test('forces lazy loading UI assets into startup without preloading unrelated lazy assets', () => {
