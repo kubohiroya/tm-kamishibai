@@ -1,0 +1,114 @@
+import {loadDsl4BrowserTurboWarpPlatform} from '../dsl4/browser-turbowarp-platform.js';
+import {deepFreeze} from '../dsl4/story-document.js';
+import {createDsl4LocalPreviewBrowserClient} from './dsl4-local-preview-browser-client.js';
+
+export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
+  maxSourceBytes: 64 * 1024,
+  maxAssetFiles: 64,
+  maxAssetBytes: 64 * 1024 * 1024,
+});
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function createLazyTurboWarpPlatform() {
+  let platformPromise = null;
+  const load = () => {
+    platformPromise ??= loadDsl4BrowserTurboWarpPlatform();
+    return platformPromise;
+  };
+  return Object.freeze({
+    async createVm() {
+      return (await load()).createVm();
+    },
+    /** @param {unknown} canvas */
+    async createRenderer(canvas) {
+      return (await load()).createRenderer(canvas);
+    },
+    async createAudioEngine() {
+      return (await load()).createAudioEngine();
+    },
+    async createStorage() {
+      return (await load()).createStorage();
+    },
+    async createBitmapAdapter() {
+      return (await load()).createBitmapAdapter();
+    },
+    /** @param {unknown} renderer */
+    async disposeRenderer(renderer) {
+      return (await load()).disposeRenderer(renderer);
+    },
+    /** @param {unknown} audioEngine */
+    async disposeAudioEngine(audioEngine) {
+      return (await load()).disposeAudioEngine(audioEngine);
+    },
+    /** @param {unknown} storage */
+    async disposeStorage(storage) {
+      return (await load()).disposeStorage(storage);
+    },
+    /** @param {unknown} bitmapAdapter */
+    async disposeBitmapAdapter(bitmapAdapter) {
+      return (await load()).disposeBitmapAdapter(bitmapAdapter);
+    },
+  });
+}
+
+/**
+ * Compose the browser-owned local preview client from explicit browser and pose boundaries.
+ *
+ * @param {object} optionsInput
+ */
+export function createDsl4LocalPreviewBrowserBootstrap(optionsInput) {
+  if (!isRecord(optionsInput)) {
+    throw new TypeError('local preview browser bootstrap options are required');
+  }
+  const options = /** @type {Record<string, any>} */ (optionsInput);
+  const globalObject = isRecord(options.globalObject)
+    ? /** @type {Record<string, any>} */ (options.globalObject)
+    : /** @type {Record<string, any>} */ (globalThis);
+  if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
+    throw new TypeError('sourceFrontend must provide parse');
+  }
+  const getTMPoseRuntime =
+    typeof options.getTMPoseRuntime === 'function'
+      ? options.getTMPoseRuntime
+      : () => options.tmPoseRuntime;
+  if (
+    typeof options.getTMPoseRuntime !== 'function' &&
+    (!isRecord(options.tmPoseRuntime) ||
+      typeof options.tmPoseRuntime.Webcam !== 'function' ||
+      typeof options.tmPoseRuntime.loadFromFiles !== 'function')
+  ) {
+    throw new TypeError('tmPoseRuntime must provide Webcam and loadFromFiles');
+  }
+  if (!isRecord(globalObject.crypto) || typeof globalObject.crypto.randomUUID !== 'function') {
+    throw new TypeError('browser crypto.randomUUID is required');
+  }
+  const sessionId = options.sessionId ?? `browser-${globalObject.crypto.randomUUID()}`;
+  return createDsl4LocalPreviewBrowserClient({
+    document: globalObject.document,
+    location: globalObject.location,
+    history: globalObject.history,
+    eventTarget: globalObject,
+    fetch: globalObject.fetch.bind(globalObject),
+    sourceFrontend: options.sourceFrontend,
+    platform: createLazyTurboWarpPlatform(),
+    runtimeOptions: {
+      get tmPoseRuntime() {
+        return getTMPoseRuntime();
+      },
+      setLoading() {},
+    },
+    sessionId,
+    featureFlags: options.featureFlags ?? {dsl4Runtime: true},
+    maxSourceBytes:
+      options.maxSourceBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
+    maxAssetFiles: options.maxAssetFiles ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
+    maxAssetBytes: options.maxAssetBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    subtleCrypto: globalObject.crypto.subtle,
+    onRuntimeEvent: options.onRuntimeEvent,
+    onError: options.onError,
+  });
+}
