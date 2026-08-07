@@ -100,6 +100,29 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
 });
 
+test('preserves the embedded source descriptor through a pinned TurboWarp resave', async () => {
+  const result = await buildRelease();
+  const archive = unzipSync(result.archive);
+  const originalProject = JSON.parse(strFromU8(archive['project.json']));
+  const originalSource = originalProject.extensionStorage[extensionId].source;
+  const restoreGlobals = installUnsandboxedScriptDom();
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+
+    const resavedProject = JSON.parse(vm.toJSON());
+    assert.deepEqual(resavedProject.extensionStorage[extensionId].source, originalSource);
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
+});
+
 test('starts and finishes the downloaded DSL 4.0 story in the pinned TurboWarp VM', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();

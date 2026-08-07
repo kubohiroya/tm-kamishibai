@@ -88,6 +88,19 @@ control profileを含めます。YAML textのintegrityだけが変わった場�
 full rebuildしてentrypointから再開します。reload preference、dialog layout、token、candidate revisionは
 fingerprintにもproduction artifactにも含めません。
 
+### 5.1 sourceの読込・保存sequence
+
+| surface              | 作者入力                                                          | 読込sequence                                                                                                        | 保存／再読込                                                                                  |
+| -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Web Preview          | read-onlyに選択したproject rootの`project.source.json`と`.k4.yml` | browser adapterの安定読込 → production source frontend → 共有preview protocol → browser runtime                     | 台本は外部editorが保存し、Web PreviewはfileやSB3を書き込まない                                |
+| local development    | `preview-dsl4 --watch`に渡すbase SB3、project root、manifest      | Node安定読込 → production source frontend → 認証済みgeneration → browser-owned実TurboWarp runtime                   | YAML-only保存はruntime generationだけを更新し、SB3を再buildしない                             |
+| TurboWarp editor     | `build-dsl4 --channel unbundled`で生成した自己完結SB3             | editorがSB3を読み、runtimeは`kubohiroyakamishibairuntime4.source`のembedded descriptorだけを読む                    | TurboWarp再保存後もdescriptorを同一extension storageに保持し、再読込で同じintegrityを検証する |
+| Web player／Packager | `build-dsl4 --channel bundled`で生成した自己完結SB3               | production shellはpackaged runtime member内のembedded descriptorだけを読み、external pathやpreview bridgeを読まない | playerは保存せず、Packagerは検証済みSB3のsource／artifact／asset storageを保持する            |
+
+4.0 Standardはsource-composed Standalone runtimeであり、3.2の`extensionBundles`変換対象ではありません。
+そのためsource descriptorの可逆性は、unbundled／bundledの両storage pathで同じdescriptorを検証するtestと、
+固定TurboWarp VMの実際のload → `toJSON()`再保存testを正本とします。
+
 ## 6. lifecycle
 
 Standard Runtimeはsource frontend、StoryDocument、scene dependency、asset preload、image／audio／pose model、
