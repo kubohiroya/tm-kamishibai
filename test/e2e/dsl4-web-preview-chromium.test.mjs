@@ -47,7 +47,7 @@ function contentType(file) {
   );
 }
 
-async function startFixtureServer() {
+async function startFixtureServer(fixturePath = '/test/fixtures/dsl4/web-preview-browser.html') {
   const server = createServer(async (request, response) => {
     try {
       const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
@@ -73,7 +73,7 @@ async function startFixtureServer() {
   if (!address || typeof address === 'string') throw new Error('Fixture server did not bind TCP');
   return {
     server,
-    url: `http://127.0.0.1:${address.port}/test/fixtures/dsl4/web-preview-browser.html`,
+    url: `http://127.0.0.1:${address.port}${fixturePath}`,
   };
 }
 
@@ -126,7 +126,10 @@ class CdpClient {
     socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
       if (message.method === 'Runtime.exceptionThrown') {
-        this.exceptions.push(message.params.exceptionDetails.text);
+        this.exceptions.push(
+          message.params.exceptionDetails.exception?.description ??
+            message.params.exceptionDetails.text,
+        );
       }
       if (!message.id) return;
       const request = this.pending.get(message.id);
@@ -407,6 +410,88 @@ test(
         client,
         'globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.policy.lastSuccess.acknowledged',
         'touch acknowledgement',
+      );
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(profileDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      });
+    }
+  },
+);
+
+test(
+  'bounds TMPose classifier, PoseNet, and JavaScript heap across repeated scene retention',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-pose-memory-chromium-'));
+    const {server, url} = await startFixtureServer(
+      '/test/fixtures/dsl4/browser/pose-memory-retention.html',
+    );
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--enable-precise-memory-info',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      try {
+        await waitForEvaluation(
+          client,
+          'globalThis.poseMemoryFixture !== undefined',
+          'pose memory fixture completion',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          status: document.querySelector('#status')?.textContent,
+          result: document.querySelector('#result')?.textContent
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, exceptions: client.exceptions})}`,
+        );
+      }
+      const fixture = await client.evaluate('globalThis.poseMemoryFixture');
+      assert.equal(fixture.passed, true, fixture.error);
+      const observed = await client.evaluate('globalThis.poseMemoryFixture.observed');
+      assert.equal(observed.backend, 'instrumented-disposable-browser-backend');
+      assert.equal(observed.visits, 24);
+      assert.deepEqual(observed.logicalMemory, {
+        numTensors: 0,
+        numBytes: 0,
+        unreliable: false,
+      });
+      assert.equal(observed.maximumTensors, 20);
+      assert.equal(observed.classifierDisposals, 24);
+      assert.equal(observed.poseNetDisposals, 24);
+
+      await client.send('HeapProfiler.enable');
+      await client.send('HeapProfiler.collectGarbage');
+      const afterGcHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
+      assert.ok(
+        afterGcHeapBytes <= observed.baselineHeapBytes + 8 * 1024 * 1024,
+        JSON.stringify({...observed, afterGcHeapBytes}),
       );
       assert.deepEqual(client.exceptions, []);
     } finally {

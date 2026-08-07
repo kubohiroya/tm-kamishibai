@@ -3,6 +3,7 @@ export {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 export {createDsl4ActorActionPort} from './actor-action-port.js';
 export {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 export {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
+export {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 export {createDsl4MediaActionPort} from './media-action-port.js';
 export {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 export {createDsl4PoseActionPort} from './pose-action-port.js';

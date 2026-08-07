@@ -8,6 +8,7 @@ import {
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
+import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
 import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
@@ -19,8 +20,8 @@ function isRecord(value) {
 
 const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
 
-/** @param {unknown} value */
-function validateRuntimeComponent(value) {
+/** @param {unknown} value @param {boolean} binaryEntryEnabled */
+function validateRuntimeComponent(value, binaryEntryEnabled) {
   const component = isRecord(value) ? value : {};
   const storyDocument = isRecord(component.storyDocument) ? component.storyDocument : null;
   const assetBundle = isRecord(component.assetBundle) ? component.assetBundle : null;
@@ -29,7 +30,9 @@ function validateRuntimeComponent(value) {
     storyDocument?.kind !== 'StoryDocument' ||
     storyDocument.version !== '4.0' ||
     !Array.isArray(manifest?.assets) ||
-    typeof component.getAssetFile !== 'function'
+    (binaryEntryEnabled
+      ? typeof assetBundle?.integrity !== 'string' || !Array.isArray(assetBundle?.files)
+      : typeof component.getAssetFile !== 'function')
   ) {
     throw new TypeError('runtimeComponent must provide a validated StoryDocument and asset bundle');
   }
@@ -109,6 +112,8 @@ function disposedError() {
  *
  * @param {object} options
  * @param {unknown} options.runtimeComponent
+ * @param {unknown} [options.binaryEntryProvider]
+ * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
@@ -137,7 +142,8 @@ function disposedError() {
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
-  const runtimeComponent = validateRuntimeComponent(options.runtimeComponent);
+  const binaryEntryEnabled = options.binaryEntryProvider !== undefined;
+  const runtimeComponent = validateRuntimeComponent(options.runtimeComponent, binaryEntryEnabled);
   const tmPoseRuntime = validateTMPoseRuntime(options.tmPoseRuntime);
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
@@ -148,9 +154,11 @@ export function createDsl4PlatformAssetSession(options) {
   const remoteEnabled = typeof options.loadRemoteAsset === 'function';
   const remoteLoader = remoteEnabled ? /** @type {Function} */ (options.loadRemoteAsset) : null;
   let cacheIdentity = null;
-  if (remoteEnabled) {
+  if (remoteEnabled || binaryEntryEnabled) {
     if (options.cacheIdentity === undefined) {
-      throw new TypeError('cacheIdentity must be an object when remote loading is enabled');
+      throw new TypeError(
+        'cacheIdentity must be an object when remote or binary-entry loading is enabled',
+      );
     }
     cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
   }
@@ -167,6 +175,12 @@ export function createDsl4PlatformAssetSession(options) {
     !isRecord(options.verifiedRemoteCacheOptions)
   ) {
     throw new TypeError('verifiedRemoteCacheOptions must be an object');
+  }
+  if (
+    options.binaryBundleStoreOptions !== undefined &&
+    !isRecord(options.binaryBundleStoreOptions)
+  ) {
+    throw new TypeError('binaryBundleStoreOptions must be an object');
   }
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
@@ -242,14 +256,29 @@ export function createDsl4PlatformAssetSession(options) {
 
   const created = [];
   try {
-    const assetManagerCandidate = remoteEnabled
-      ? createAssetManager(undefined, {
-          verifiedRemoteCache: {
-            ...options.verifiedRemoteCacheOptions,
-            cacheIdentity,
-          },
-        })
-      : createAssetManager();
+    const compositionOptions = {
+      ...(remoteEnabled
+        ? {
+            verifiedRemoteCache: {
+              ...options.verifiedRemoteCacheOptions,
+              cacheIdentity,
+            },
+          }
+        : {}),
+      ...(binaryEntryEnabled
+        ? {
+            binaryBundleStore: {
+              ...options.binaryBundleStoreOptions,
+              databaseName: `${/** @type {Record<string, any>} */ (cacheIdentity).databaseName}--binary-v1`,
+              ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
+            },
+          }
+        : {}),
+    };
+    const assetManagerCandidate =
+      remoteEnabled || binaryEntryEnabled
+        ? createAssetManager(undefined, compositionOptions)
+        : createAssetManager();
     created.push(assetManagerCandidate);
     const assetManagerMethods = [
       'registerProjectAsset',
@@ -276,12 +305,26 @@ export function createDsl4PlatformAssetSession(options) {
             'releaseVerifiedRemoteStoryCacheLease',
           ]
         : []),
+      ...(binaryEntryEnabled
+        ? ['putBinaryBundle', 'getBinaryBundle', 'deleteBinaryBundle', 'releaseBinaryStore']
+        : []),
     ];
     const assetManagerComposition = validateCompositionMethods(
       assetManagerCandidate,
       'Asset Manager composition',
       assetManagerMethods,
     );
+    const binaryAssetBacking = binaryEntryEnabled
+      ? createDsl4BinaryEntryBacking({
+          runtimeComponent,
+          provider: options.binaryEntryProvider,
+          composition: assetManagerComposition,
+          namespace: /** @type {Record<string, any>} */ (cacheIdentity).id,
+        })
+      : null;
+    if (binaryAssetBacking) {
+      created.push(Object.freeze({releaseAll: () => binaryAssetBacking.dispose()}));
+    }
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
       ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
@@ -420,6 +463,14 @@ export function createDsl4PlatformAssetSession(options) {
       runtimeComponent,
       adapter,
       setLoading: options.setLoading,
+      ...(binaryAssetBacking
+        ? {
+            /** @param {string} assetId @param {Readonly<Record<string, any>>} context */
+            resolveEmbeddedAssetFiles(assetId, context) {
+              return binaryAssetBacking.getAssetFiles(assetId, {signal: context.signal});
+            },
+          }
+        : {}),
       ...(remoteEnabled ? {resolveVerifiedRemoteAsset} : {}),
       ...(poseArchiveExtractor ? {extractRemotePoseArchive: poseArchiveExtractor} : {}),
     };
@@ -566,6 +617,7 @@ export function createDsl4PlatformAssetSession(options) {
         const errors = [];
         for (const release of [
           () => poseActionPort.dispose(),
+          ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
           () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
           () => tmposeComposition.releaseAll(),
@@ -600,6 +652,7 @@ export function createDsl4PlatformAssetSession(options) {
         if (disposePromise) throw disposedError();
         return assetLifecycle.getResource(assetId);
       },
+      binaryAssetBacking,
       verifiedRemoteCache,
       dispose,
     });

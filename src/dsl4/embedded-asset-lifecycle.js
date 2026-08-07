@@ -46,6 +46,7 @@ async function sha256Hex(bytes, subtleCrypto) {
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.resolveVerifiedRemoteAsset]
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.extractRemotePoseArchive]
+ * @param {(assetId: string, context: Readonly<Record<string, unknown>>) => ReadonlyArray<Readonly<Record<string, unknown>>> | Promise<ReadonlyArray<Readonly<Record<string, unknown>>>>} [options.resolveEmbeddedAssetFiles]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export function createDsl4EmbeddedAssetLifecycle({
@@ -55,6 +56,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   loadRemoteAsset,
   resolveVerifiedRemoteAsset,
   extractRemotePoseArchive,
+  resolveEmbeddedAssetFiles,
   subtleCrypto = globalThis.crypto?.subtle,
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
@@ -68,7 +70,8 @@ export function createDsl4EmbeddedAssetLifecycle({
     !assetBundle ||
     !isRecord(assetBundle.manifest) ||
     !Array.isArray(assetBundle.manifest.assets) ||
-    typeof runtimeComponent.getAssetFile !== 'function'
+    (typeof runtimeComponent.getAssetFile !== 'function' &&
+      typeof resolveEmbeddedAssetFiles !== 'function')
   ) {
     throw new TypeError('runtimeComponent must provide a validated StoryDocument and asset bundle');
   }
@@ -92,12 +95,20 @@ export function createDsl4EmbeddedAssetLifecycle({
   if (extractRemotePoseArchive !== undefined && typeof extractRemotePoseArchive !== 'function') {
     throw new TypeError('extractRemotePoseArchive must be a function');
   }
+  if (resolveEmbeddedAssetFiles !== undefined && typeof resolveEmbeddedAssetFiles !== 'function') {
+    throw new TypeError('resolveEmbeddedAssetFiles must be a function');
+  }
   const remoteLoader = typeof loadRemoteAsset === 'function' ? loadRemoteAsset : null;
   const verifiedRemoteResolver =
     typeof resolveVerifiedRemoteAsset === 'function' ? resolveVerifiedRemoteAsset : null;
   const poseArchiveExtractor =
     typeof extractRemotePoseArchive === 'function' ? extractRemotePoseArchive : null;
-  const getAssetFile = /** @type {Function} */ (runtimeComponent.getAssetFile);
+  const getAssetFile =
+    typeof runtimeComponent.getAssetFile === 'function'
+      ? /** @type {Function} */ (runtimeComponent.getAssetFile)
+      : null;
+  const embeddedFileResolver =
+    typeof resolveEmbeddedAssetFiles === 'function' ? resolveEmbeddedAssetFiles : null;
 
   const manifest = new Map();
   for (const candidate of assetBundle.manifest.assets) {
@@ -269,6 +280,58 @@ export function createDsl4EmbeddedAssetLifecycle({
       })();
     }
     const sourceFiles = /** @type {Record<string, any>[]} */ (source.files ?? []);
+    if (source.type === 'file' && embeddedFileResolver) {
+      return (async () => {
+        const resolved = await embeddedFileResolver(asset.id, context);
+        if (!Array.isArray(resolved)) {
+          throw assetError(
+            asset.id,
+            'K4-ASSET-EMBEDDED-RESOLVER-001',
+            `Embedded asset resolver returned invalid files: ${asset.id}`,
+          );
+        }
+        const expected = new Map(sourceFiles.map((file) => [file.path, file]));
+        if (resolved.length !== expected.size) {
+          throw assetError(
+            asset.id,
+            'K4-ASSET-EMBEDDED-RESOLVER-001',
+            `Embedded asset resolver returned an incomplete asset: ${asset.id}`,
+          );
+        }
+        const seen = new Set();
+        const files = resolved.map((candidate) => {
+          if (!isRecord(candidate) || !(candidate.bytes instanceof Uint8Array)) {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-EMBEDDED-RESOLVER-001',
+              `Embedded asset resolver returned an invalid file: ${asset.id}`,
+            );
+          }
+          const expectedFile = expected.get(candidate.path);
+          if (
+            !expectedFile ||
+            seen.has(candidate.path) ||
+            candidate.size !== expectedFile.size ||
+            candidate.integrity !== expectedFile.integrity ||
+            candidate.bytes.byteLength !== expectedFile.size
+          ) {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-EMBEDDED-RESOLVER-001',
+              `Embedded asset resolver file does not match the manifest: ${asset.id}`,
+            );
+          }
+          seen.add(candidate.path);
+          return Object.freeze({
+            path: candidate.path,
+            size: candidate.size,
+            integrity: candidate.integrity,
+            bytes: new Uint8Array(candidate.bytes),
+          });
+        });
+        return Object.freeze({asset, files: Object.freeze(files)});
+      })();
+    }
     const files =
       source.type === 'file'
         ? sourceFiles.map((file) =>
@@ -276,7 +339,7 @@ export function createDsl4EmbeddedAssetLifecycle({
               path: file.path,
               size: file.size,
               integrity: file.integrity,
-              bytes: new Uint8Array(getAssetFile(asset.id, file.path)),
+              bytes: new Uint8Array(/** @type {Function} */ (getAssetFile)(asset.id, file.path)),
             }),
           )
         : [];
