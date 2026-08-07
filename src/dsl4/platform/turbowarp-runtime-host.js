@@ -243,7 +243,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} cameraPreviewControlsEnabled
  * @param {boolean} speechAdvanceTypewriterEnabled
  */
-async function createRuntimeEnvironment(
+export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
   runtimeComponent,
   publishVerifiedRemoteCache,
@@ -836,7 +836,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {Readonly<Record<string, unknown>>} */ runtimeComponent,
       /** @type {Readonly<Record<string, any>>} */ startupContext,
     ) {
-      return createRuntimeEnvironment(
+      return createDsl4TurboWarpRuntimeEnvironment(
         options,
         runtimeComponent,
         (/** @type {any} */ cache) => {

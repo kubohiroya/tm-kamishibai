@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #423の段階実装（browser TurboWarp platform／bundle）
+文書状態: Issue #423の段階実装（browser TurboWarp runtime session factory）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#423](https://github.com/kubohiroya/tmpose-kamishibai/issues/423)
@@ -97,6 +97,25 @@ fail-closedにし、source／generation APIのJSON payloadへSB3 byteを混在�
 artifact pairはhost disposeまたはbase SB3、asset、app shell、extension、builder設定のfull rebuild要求で参照を破棄します。
 同じNode processで新しいartifactへ暗黙差し替えせず、新host／browser sessionを要求します。この段階では配信境界だけを
 追加し、既存のfake runtime clientとpublic CLIからは有効化しません。
+
+### 5.2 runtime session factory
+
+browser runtime bridgeへ注入するfactoryは、base SB3から一度だけ検証したruntime componentを静的な土台とします。
+各generationではNodeのproduction frontendが生成し、wire decoderを通過したimmutable `StoryDocument`だけを差し替え、
+runtime artifact、asset bundle、asset byte getterはbase componentと共有します。factoryはsource frontendやYAML textを受け取らず、
+browserでsourceを再parseしません。
+
+factoryは起動時固定の`dsl4Runtime` flagが明示的にONの場合だけ作成できます。generationごとに同じbrowser VM runtimeへ
+TurboWarp environmentとnavigation sessionを新規作成し、sessionがnavigation、asset、actor、pose、input、SVG text、
+expression compositionを一括所有します。作成途中の例外、control profile不整合、通常disposeのいずれでもenvironmentを
+一度だけ解放します。
+
+初回、story先頭、scene先頭からの開始では、次sessionの実行前にbrowser stage ownerが提供する
+`resetManagedPresentation`を呼びます。現在actionからの再開だけは同じVM target上のmanaged presentationを保持し、resetを
+呼びません。factoryはこのcallbackを必須とするため、reset境界を実装していないstageを実runtimeへ誤接続できません。
+
+この段階でもlocal preview clientは従来のfake runtime protocolを使用し、public CLIは未公開です。次段でbase SB3からの
+component読込、stage reset、generation stream、runtime bridgeを単一browser bootstrapへ接続します。
 
 ## 6. securityとrollback
 
