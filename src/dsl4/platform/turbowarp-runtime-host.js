@@ -259,6 +259,8 @@ async function createRuntimeEnvironment(
     );
   /** @type {ReturnType<typeof createDsl4PlatformAssetSession> | null} */
   let assetSession = null;
+  /** @type {ReturnType<typeof createDsl4TurboWarpActorPlatform> | null} */
+  let actorPlatform = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
@@ -304,7 +306,7 @@ async function createRuntimeEnvironment(
   const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
-    const actorPlatform = createDsl4TurboWarpActorPlatform({
+    actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
       ...(speechAdvanceTypewriterEnabled
         ? {
@@ -474,9 +476,16 @@ async function createRuntimeEnvironment(
     addPortMethods(
       port,
       actorPort,
-      ['show', 'moveTo', 'say', ...(speechAdvanceTypewriterEnabled ? ['think'] : [])],
+      [
+        'show',
+        'setTransparency',
+        'moveTo',
+        'say',
+        ...(speechAdvanceTypewriterEnabled ? ['think'] : []),
+      ],
       'actor action port',
     );
+    port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
       port,
@@ -640,6 +649,7 @@ async function createRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
             () => poseFeedbackPresenter?.dispose(),
             () => cameraPreviewControls?.dispose(),
@@ -666,6 +676,7 @@ async function createRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
       () => poseFeedbackPresenter?.dispose(),
       () => cameraPreviewControls?.dispose(),

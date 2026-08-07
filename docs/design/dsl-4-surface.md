@@ -40,20 +40,20 @@ Copyright © 2026 Hiroya Kubo.
 台本はUTF-8で記述した単一のYAML 1.2文書です。トップレベルで使用できるキーは次だけです。
 未知のキーは警告ではなくエラーにします。
 
-| キー              | 必須 | 役割                                 |
-| ----------------- | ---- | ------------------------------------ |
-| `kamishibai`      | 必須 | 文字列`'4.0'`                        |
-| `assets`          | 任意 | 型付きアセットの宣言                 |
-| `actors`          | 任意 | actorと初期costumeの対応             |
-| `cover`           | 任意 | 表紙の背景とBGM                      |
-| `textStyles`      | 任意 | SVG Textの名前付きstyle              |
-| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle    |
-| `variables`       | 任意 | string、number、booleanの初期値      |
-| `loading`         | 任意 | 読み込み中の背景とcostume列          |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音               |
-| `controls`        | 任意 | 環境別の開発・チート機能用keymap     |
-| `branches`        | 任意 | 順序付き条件分岐                     |
-| `scenes`          | 必須 | 一つ以上のscene                      |
+| キー              | 必須 | 役割                              |
+| ----------------- | ---- | --------------------------------- |
+| `kamishibai`      | 必須 | 文字列`'4.0'`                     |
+| `assets`          | 任意 | 型付きアセットの宣言              |
+| `actors`          | 任意 | actorと初期costumeの対応          |
+| `cover`           | 任意 | 表紙の背景とBGM                   |
+| `textStyles`      | 任意 | SVG Textの名前付きstyle           |
+| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle |
+| `variables`       | 任意 | string、number、booleanの初期値   |
+| `loading`         | 任意 | 読み込み中の背景とcostume列       |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音            |
+| `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
+| `branches`        | 任意 | 順序付き条件分岐                  |
+| `scenes`          | 必須 | 一つ以上のscene                   |
 
 識別子にはUnicodeの文字、数字、`_`、`-`を使用できます。先頭は文字または`_`とし、
 `.`はactor actionの区切りとして予約します。すべての識別子はUnicode NFCでなければなりません。
@@ -524,6 +524,7 @@ iconへ反映します。
 | action                     | 引数                                                                                                                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
+| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                     |
 | `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
 | `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                           |
@@ -569,6 +570,12 @@ speechが実際に再生を開始したasset IDだけを停止します。
     x: 0
     y: -60
     scale: 30
+- Hero.setTransparency: 50
+- Hero.setTransparency:
+    from: 0
+    to: 50
+    seconds: 1
+    background: true
 - Hero.moveTo:
     x: 100
     y: -60
@@ -602,6 +609,18 @@ speechが実際に再生を開始したasset IDだけを停止します。
 
 `Actor.moveTo.easing`は`linear | easeIn | easeOut | easeInOut`から選びます。省略時は従来どおり
 `linear`です。easingはX/Yへ同じ比率で適用し、0秒またはactionのskip時は即座に終点へ確定します。
+
+`Actor.setTransparency`はScratch／TurboWarpの「幽霊の効果を指定値にする」へ一対一で対応します。
+`0`は完全不透明、`50`は「幽霊の効果を50にする」、`100`は完全透明です。値の反転や換算は
+行いません。
+
+`from`、`to`、`seconds`を指定すると、透明度を`from`から`to`まで線形に変化させます。
+`background`を省略するか`false`にすると、変化が完了するまでactionを待つforeground動作です。
+`true`にすると、`from`を同期適用した直後に次actionへ進み、変化をbackgroundで続けます。
+foreground・backgroundのどちらも、途中でスキップ、停止、再開始、破棄された場合は、`to`を
+同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
+先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
+進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

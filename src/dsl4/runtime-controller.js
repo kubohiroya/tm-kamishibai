@@ -209,6 +209,12 @@ export function createDsl4RuntimeController({
   if (typeof scheduleQuiesceTimeout !== 'function') {
     throw new TypeError('scheduleQuiesceTimeout must be a function');
   }
+  if (
+    port.finishPresentationTransitions !== undefined &&
+    typeof port.finishPresentationTransitions !== 'function'
+  ) {
+    throw new TypeError('finishPresentationTransitions runtime port method must be a function');
+  }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
@@ -788,6 +794,11 @@ export function createDsl4RuntimeController({
     return operation(payload, context);
   }
 
+  /** @param {string} reason */
+  function finishPresentationTransitions(reason) {
+    port.finishPresentationTransitions?.(reason);
+  }
+
   /** @param {Readonly<Record<string, unknown>>} scene */
   function applyPosePreviewMirroring(scene) {
     if (!posePreviewMirroringEnabled) return;
@@ -1236,6 +1247,7 @@ export function createDsl4RuntimeController({
     }
     const nextVariables = resolveStartVariables(startVariables);
     const previousStatus = status;
+    finishPresentationTransitions('restart');
     abandonQuiesce('restart');
     if (status === 'running' || status === 'paused') stop('restart');
     else if (previousStatus === 'failed' || previousStatus === 'finished') releaseAssets('restart');
@@ -1278,6 +1290,7 @@ export function createDsl4RuntimeController({
    */
   function stop(reason = 'stop') {
     abandonQuiesce(reason);
+    finishPresentationTransitions(reason);
     if (status !== 'running' && status !== 'paused') {
       try {
         endStructuredStory(reason);
@@ -1423,6 +1436,7 @@ export function createDsl4RuntimeController({
     if (poseAdvanceLock) return poseAdvanceLock.operation;
     if (!canAdvance(reason)) return Promise.resolve(snapshot());
     const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    finishPresentationTransitions(reason);
     if (isPoseNavigationAdvance(reason)) {
       const activeRun = runPromise;
       actionAbortController?.abort(reason);
@@ -1474,6 +1488,7 @@ export function createDsl4RuntimeController({
     const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
     const wasRunning = status === 'running';
     const action = currentAction();
+    finishPresentationTransitions(reason);
     if (wasRunning) actionAbortController?.abort(reason);
     generation += 1;
     if (wasRunning && action) emit('action.cancel', {reason});
@@ -1542,6 +1557,7 @@ export function createDsl4RuntimeController({
     }
 
     const action = currentAction();
+    finishPresentationTransitions(reason);
     actionAbortController?.abort(reason);
     generation += 1;
     if (action) emit('action.cancel', {reason});

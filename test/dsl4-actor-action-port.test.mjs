@@ -47,6 +47,23 @@ function fakeHost(overrides = {}) {
       showActor(actor, transform, context) {
         calls.push(['showActor', actor.id, transform, context.sceneId]);
       },
+      setTransparency(actor, effect, context) {
+        calls.push(['setTransparency', actor.id, effect, context.sceneId]);
+      },
+      createTransparencyTransition(actor, transition, context) {
+        calls.push(['createTransparencyTransition', actor.id, transition, context.sceneId]);
+        return {
+          start() {
+            calls.push(['startTransparencyTransition']);
+          },
+          startBackground() {
+            calls.push(['startBackgroundTransparencyTransition']);
+          },
+          finish() {
+            calls.push(['finishTransparencyTransition']);
+          },
+        };
+      },
       createMove(actor, destination, context) {
         calls.push(['createMove', actor.id, destination, context.sceneId]);
         return {
@@ -90,7 +107,7 @@ function actorPort({composition, host, resolveActor} = {}) {
   });
 }
 
-test('maps show, moveTo, and say through one shared composition and presentation host', async () => {
+test('maps show, setTransparency, moveTo, and say through one shared presentation host', async () => {
   const fake = fakeComposition();
   const presentation = fakeHost();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
@@ -106,6 +123,7 @@ test('maps show, moveTo, and say through one shared composition and presentation
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
+  await port.setTransparency({target: 'Hero', transparency: 50}, actionContext());
   await port.moveTo(
     {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
     actionContext(),
@@ -120,12 +138,14 @@ test('maps show, moveTo, and say through one shared composition and presentation
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
+    ['setTransparency', 'hero-target', {transparency: 50}, 'opening'],
     ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
     ['createSay', 'hero-target', {text: '助けに行こう', seconds: 2}, 'opening'],
     ['startSay'],
   ]);
   assert.deepEqual(resolved, [
+    ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
@@ -175,6 +195,97 @@ test('defaults moveTo easing to linear before presentation', async () => {
     ['createMove', 'hero-target', {x: 10, y: 20, seconds: 1, easing: 'linear'}, 'opening'],
     ['startMove'],
   ]);
+});
+
+test('waits for foreground transparency and finishes it before cancellation rejects', async () => {
+  const transition = deferred();
+  const started = deferred();
+  const presentation = fakeHost({
+    createTransparencyTransition(actor, value) {
+      presentation.calls.push(['createTransparencyTransition', actor.id, value]);
+      return {
+        start() {
+          presentation.calls.push(['startTransparencyTransition']);
+          started.resolve();
+          return transition.promise;
+        },
+        finish() {
+          presentation.calls.push(['finishTransparencyTransition', value.to]);
+        },
+      };
+    },
+  });
+  const port = actorPort({host: presentation.host});
+  const controller = new AbortController();
+  const pending = port.setTransparency(
+    {target: 'Hero', from: 0, to: 50, seconds: 1, background: false},
+    actionContext(controller),
+  );
+  await started.promise;
+  controller.abort('advance');
+
+  assert.deepEqual(presentation.calls.at(-1), ['finishTransparencyTransition', 50]);
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  transition.resolve();
+  await Promise.resolve();
+});
+
+test('delegates background transparency ownership and returns without waiting for completion', async () => {
+  const transition = deferred();
+  const presentation = fakeHost({
+    createTransparencyTransition(actor, value) {
+      presentation.calls.push(['createTransparencyTransition', actor.id, value]);
+      return {
+        start() {
+          presentation.calls.push(['startTransparencyTransition']);
+          return transition.promise;
+        },
+        startBackground() {
+          presentation.calls.push(['startBackgroundTransparencyTransition']);
+          void transition.promise.catch((error) => {
+            presentation.calls.push(['backgroundTransparencyFailure', error.message]);
+          });
+        },
+        finish() {
+          presentation.calls.push(['finishTransparencyTransition']);
+        },
+      };
+    },
+  });
+  const port = actorPort({host: presentation.host});
+
+  await port.setTransparency(
+    {target: 'Hero', from: 0, to: 50, seconds: 1, background: true},
+    actionContext(),
+  );
+  assert.deepEqual(presentation.calls, [
+    ['createTransparencyTransition', 'hero-target', {from: 0, to: 50, seconds: 1}],
+    ['startBackgroundTransparencyTransition'],
+  ]);
+
+  transition.reject(new Error('owned background failure'));
+  await Promise.resolve();
+  assert.deepEqual(presentation.calls.at(-1), [
+    'backgroundTransparencyFailure',
+    'owned background failure',
+  ]);
+});
+
+test('rejects a background transparency operation without a background owner', async () => {
+  const presentation = fakeHost({
+    createTransparencyTransition() {
+      return {start() {}, finish() {}};
+    },
+  });
+  const port = actorPort({host: presentation.host});
+
+  await assert.rejects(
+    port.setTransparency(
+      {target: 'Hero', from: 0, to: 50, seconds: 1, background: true},
+      actionContext(),
+    ),
+    /must provide startBackground/u,
+  );
 });
 
 test('keeps AbortError when finish synchronously settles the presentation promise', async () => {
@@ -279,6 +390,23 @@ test('rejects malformed and unresolved inputs before presentation side effects',
         actionContext(),
       ),
     () => port.show({target: 'Hero', skin: 'HeroHappy', x: 0, y: 0, scale: 0}, actionContext()),
+    () => port.setTransparency({target: 'Hero', transparency: -1}, actionContext()),
+    () => port.setTransparency({target: 'Hero', transparency: 101}, actionContext()),
+    () => port.setTransparency({target: 'Hero', transparency: Number.NaN}, actionContext()),
+    () => port.setTransparency({target: 'Hero', transparency: 50, extra: true}, actionContext()),
+    () => port.setTransparency({target: 'Hero', from: -1, to: 50, seconds: 1}, actionContext()),
+    () => port.setTransparency({target: 'Hero', from: 0, to: 101, seconds: 1}, actionContext()),
+    () => port.setTransparency({target: 'Hero', from: 0, to: 50, seconds: -1}, actionContext()),
+    () =>
+      port.setTransparency(
+        {target: 'Hero', from: 0, to: 50, seconds: 1, background: 'yes'},
+        actionContext(),
+      ),
+    () =>
+      port.setTransparency(
+        {target: 'Hero', from: 0, to: 50, seconds: 1, extra: true},
+        actionContext(),
+      ),
     () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: -1}, actionContext()),
     () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: 1, easing: 'spring'}, actionContext()),
     () =>
@@ -437,6 +565,10 @@ test('does not inspect dependencies for a pre-aborted action', async () => {
   );
   await assert.rejects(
     port.moveTo({target: 'Hero', x: 0, y: 0, seconds: 1}, actionContext(controller)),
+    (error) => error.name === 'AbortError',
+  );
+  await assert.rejects(
+    port.setTransparency({target: 'Hero', transparency: 50}, actionContext(controller)),
     (error) => error.name === 'AbortError',
   );
   assert.deepEqual(fake.calls, []);
