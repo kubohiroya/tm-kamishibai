@@ -315,6 +315,83 @@ test('validates a presentation operation before start and isolates port instance
   ]);
 });
 
+test('fails closed and cleans speech presentation for invalid advance handles or outcomes', async () => {
+  async function exercise(createAdvanceWait, expectedMessage, expectedStarts) {
+    const calls = [];
+    const presentation = deferred();
+    const host = fakeHost({
+      createThink() {
+        calls.push(['createThink']);
+        return {
+          start() {
+            calls.push(['start']);
+            return presentation.promise;
+          },
+          finish(reason) {
+            calls.push(['finish', reason]);
+            presentation.resolve();
+          },
+        };
+      },
+    });
+    const port = createDsl4ActorActionPort({
+      composition: fakeComposition().composition,
+      host: host.host,
+      resolveActor: () => ({id: 'hero-target', isStage: false}),
+      speechAdvanceTypewriterEnabled: true,
+    });
+    const controller = new AbortController();
+    await assert.rejects(
+      port.think(
+        {target: 'Hero', text: 'hmm', waitFor: 'advance'},
+        {...actionContext(controller), createAdvanceWait},
+      ),
+      expectedMessage,
+    );
+    assert.equal(calls.filter(([name]) => name === 'start').length, expectedStarts);
+    if (expectedStarts > 0) assert.deepEqual(calls.at(-1), ['finish', 'cancel']);
+  }
+
+  let invalidCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: 42,
+      cancel() {
+        invalidCancelCalls += 1;
+      },
+    }),
+    /invalid handle/u,
+    0,
+  );
+  assert.equal(invalidCancelCalls, 1);
+
+  let rejectedCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: Promise.reject(new Error('advance source failed')),
+      cancel() {
+        rejectedCancelCalls += 1;
+      },
+    }),
+    /advance source failed/u,
+    1,
+  );
+  assert.equal(rejectedCancelCalls, 1);
+
+  let outcomeCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: Promise.resolve({outcome: 'unexpected'}),
+      cancel() {
+        outcomeCancelCalls += 1;
+      },
+    }),
+    /invalid outcome/u,
+    1,
+  );
+  assert.equal(outcomeCancelCalls, 1);
+});
+
 test('does not inspect dependencies for a pre-aborted action', async () => {
   const fake = fakeComposition();
   const presentation = fakeHost();
