@@ -18,6 +18,7 @@ export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
 const assetManagerSetTextValueOpcodes = new Set([
   'kubohiroyaassetmanager_setTextValue',
+  'kubohiroyakamishibairuntime4_setTextValue',
   'tmposebundle_kubohiroyaassetmanager__setTextValue',
 ]);
 

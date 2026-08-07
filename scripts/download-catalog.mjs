@@ -31,16 +31,21 @@ export const downloadCatalog = deepFreeze([
     version: '3.2.3',
   },
   {
-    artifact: null,
+    artifact: {
+      buildDate: '2026-08-07',
+      filename: 'kamishibai-4.0.sb3',
+      faviconPath: 'site/favicon.png',
+      sha256: 'bdd4f8a1c18527ad1909981095d32b182e11ef4b24ba695ee43094a6f7759e3d',
+      sourceCommit: 'bce34dc17db5f6e686459b1c13bad35778adfbfe',
+      sourceDirectory: 'release-sources/4.0.0-dev/app',
+    },
     description:
-      'YAMLを採用する次期版です。現在は開発中のため、実行可能なSB3の公開に先立って台本仕様を案内しています。',
+      'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試し、4.0ドキュメントを参照できます。',
     docsUrl: dsl4DocsUrl,
     series: '4.0',
     status: '開発版',
     statusKind: 'development',
-    unavailableLabel: 'SB3は準備中',
-    unavailableNote: '4.0の実行用SB3は、アプリ統合完了後に公開します。',
-    version: '4.0',
+    version: '4.0.0-dev',
   },
   {
     artifact: {
