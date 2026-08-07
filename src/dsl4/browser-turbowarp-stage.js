@@ -157,7 +157,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
   if (options.prepareVm !== undefined && typeof options.prepareVm !== 'function') {
     throw new TypeError('prepareVm must be a function');
   }
-  let retainedProjectBytes = projectBytes(options.projectBytes, maximum);
+  let baseProjectBytes = projectBytes(options.projectBytes, maximum);
 
   const canvasCandidate = document.createElement('canvas');
   if (
@@ -200,6 +200,8 @@ export function createDsl4BrowserTurboWarpStage(options) {
   let inputAttached = false;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let startPromise = null;
+  /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
+  let resetPromise = null;
   /** @type {Promise<void> | null} */
   let cleanupPromise = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
@@ -301,7 +303,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
         }
         mounted = false;
       }
-      retainedProjectBytes = new Uint8Array(0);
+      baseProjectBytes = new Uint8Array(0);
       vm = null;
       renderer = null;
       audioEngine = null;
@@ -318,7 +320,11 @@ export function createDsl4BrowserTurboWarpStage(options) {
   function start() {
     if (disposed || disposeRequested) throw new TypeError('TurboWarp browser stage is disposed');
     if (status === 'ready') return Promise.resolve(snapshot());
+    if (resetPromise) return resetPromise;
     if (startPromise) return startPromise;
+    if (status !== 'idle') {
+      throw new TypeError(`TurboWarp browser stage cannot start from status ${status}`);
+    }
     status = 'starting';
     startPromise = (async () => {
       try {
@@ -338,8 +344,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
         vm.setCompilerOptions({enabled: false});
         vm.securityManager.canLoadExtensionFromProject = () => false;
         await options.prepareVm?.(vm);
-        await vm.loadProject(retainedProjectBytes);
-        retainedProjectBytes = new Uint8Array(0);
+        await vm.loadProject(baseProjectBytes);
         if (disposeRequested) {
           await cleanup('dispose-during-start');
           status = 'disposed';
@@ -368,6 +373,43 @@ export function createDsl4BrowserTurboWarpStage(options) {
     return startPromise;
   }
 
+  function resetManagedPresentation() {
+    if (disposed || disposeRequested) {
+      throw new TypeError('TurboWarp browser stage is disposed');
+    }
+    if (resetPromise) return resetPromise;
+    if (status !== 'ready' || !vm) {
+      throw new TypeError('TurboWarp browser stage is not ready');
+    }
+    const activeVm = vm;
+    status = 'resetting';
+    detachInput();
+    resetPromise = (async () => {
+      try {
+        await activeVm.loadProject(baseProjectBytes);
+        if (!disposeRequested) {
+          attachInput();
+          status = 'ready';
+        }
+        return snapshot();
+      } catch (error) {
+        status = 'failed';
+        try {
+          await cleanup('reset-failed');
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            'TurboWarp browser stage reset and cleanup failed',
+          );
+        }
+        throw error;
+      } finally {
+        resetPromise = null;
+      }
+    })();
+    return resetPromise;
+  }
+
   function getRuntime() {
     if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
     return vm.runtime;
@@ -391,6 +433,13 @@ export function createDsl4BrowserTurboWarpStage(options) {
           // The startup failure already performed cleanup.
         }
       }
+      if (resetPromise) {
+        try {
+          await resetPromise;
+        } catch {
+          // The reset failure already performed cleanup.
+        }
+      }
       await cleanup('dispose');
       disposed = true;
       status = 'disposed';
@@ -399,5 +448,12 @@ export function createDsl4BrowserTurboWarpStage(options) {
     return disposePromise;
   }
 
-  return Object.freeze({start, dispose, getRuntime, getCanvas, getState: snapshot});
+  return Object.freeze({
+    start,
+    resetManagedPresentation,
+    dispose,
+    getRuntime,
+    getCanvas,
+    getState: snapshot,
+  });
 }
