@@ -191,6 +191,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       branch: 'branch',
       goto: 'scene',
       setSkin: 'skin',
+      setTransparency: 'transparency',
       sound: 'sound',
       stage: 'backdrop',
       wait: 'seconds',

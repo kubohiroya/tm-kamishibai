@@ -251,6 +251,8 @@ async function createRuntimeEnvironment(
     );
   /** @type {ReturnType<typeof createDsl4PlatformAssetSession> | null} */
   let assetSession = null;
+  /** @type {ReturnType<typeof createDsl4TurboWarpActorPlatform> | null} */
+  let actorPlatform = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
@@ -282,7 +284,7 @@ async function createRuntimeEnvironment(
   const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
-    const actorPlatform = createDsl4TurboWarpActorPlatform({
+    actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
       ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
       ...(options.actorFrameMilliseconds === undefined
@@ -392,7 +394,13 @@ async function createRuntimeEnvironment(
 
     const port = /** @type {Record<string, Function>} */ ({});
     addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
-    addPortMethods(port, actorPort, ['show', 'moveTo', 'say'], 'actor action port');
+    addPortMethods(
+      port,
+      actorPort,
+      ['show', 'setTransparency', 'moveTo', 'say'],
+      'actor action port',
+    );
+    port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
       port,
@@ -448,6 +456,7 @@ async function createRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
@@ -472,6 +481,7 @@ async function createRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),

@@ -458,14 +458,15 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
 
 ### 7.2 Actor action
 
-| action          | 引数                               |
-| --------------- | ---------------------------------- |
-| `Actor.show`    | `{skin, x, y, scale, stableId?}`   |
-| `Actor.moveTo`  | `{x, y, seconds, stableId?}`       |
-| `Actor.say`     | `{text, seconds, stableId?}`       |
-| `Actor.setSkin` | skin ID、または`{skin, stableId?}` |
-| `Actor.setText` | `{text, style, stableId?}`         |
-| `Actor.pose`    | `{steps, stableId?}`               |
+| action                  | 引数                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `Actor.show`            | `{skin, x, y, scale, stableId?}`                                              |
+| `Actor.setTransparency` | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}` |
+| `Actor.moveTo`          | `{x, y, seconds, stableId?}`                                                  |
+| `Actor.say`             | `{text, seconds, stableId?}`                                                  |
+| `Actor.setSkin`         | skin ID、または`{skin, stableId?}`                                            |
+| `Actor.setText`         | `{text, style, stableId?}`                                                    |
+| `Actor.pose`            | `{steps, stableId?}`                                                          |
 
 ```yaml
 - Hero.show:
@@ -473,6 +474,12 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
     x: 0
     y: -60
     scale: 30
+- Hero.setTransparency: 50
+- Hero.setTransparency:
+    from: 0
+    to: 50
+    seconds: 1
+    background: true
 - Hero.say:
     text: 助けに行こう
     seconds: 2
@@ -491,6 +498,18 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
     help: ending
     jump: retry
 ```
+
+`Actor.setTransparency`はScratch／TurboWarpの「幽霊の効果を指定値にする」へ一対一で対応します。
+`0`は完全不透明、`50`は「幽霊の効果を50にする」、`100`は完全透明です。値の反転や換算は
+行いません。
+
+`from`、`to`、`seconds`を指定すると、透明度を`from`から`to`まで線形に変化させます。
+`background`を省略するか`false`にすると、変化が完了するまでactionを待つforeground動作です。
+`true`にすると、`from`を同期適用した直後に次actionへ進み、変化をbackgroundで続けます。
+foreground・backgroundのどちらも、途中でスキップ、停止、再開始、破棄された場合は、`to`を
+同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
+先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
+進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

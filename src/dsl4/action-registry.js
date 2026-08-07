@@ -21,6 +21,7 @@ export const dsl4GlobalCoreActionNames = Object.freeze([
 
 export const dsl4ActorCoreActionNames = Object.freeze([
   'show',
+  'setTransparency',
   'moveTo',
   'say',
   'setSkin',

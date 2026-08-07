@@ -29,7 +29,13 @@ function validateComposition(value) {
 
 /** @param {unknown} value */
 function validateHost(value) {
-  const methods = ['showActor', 'createMove', 'createSay'];
+  const methods = [
+    'showActor',
+    'setTransparency',
+    'createTransparencyTransition',
+    'createMove',
+    'createSay',
+  ];
   if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
     throw new TypeError(`Actor presentation host must provide ${methods.join(', ')}`);
   }
@@ -79,6 +85,14 @@ function requireNonEmptyString(value, field, command) {
 function requireFiniteNumber(value, field, command) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw portError('K4-ACTOR-PORT-001', `${command}.${field} must be a finite number`);
+  }
+  return value;
+}
+
+/** @param {number} value @param {string} field */
+function requireTransparency(value, field) {
+  if (value < 0 || value > 100) {
+    throw portError('K4-ACTOR-PORT-001', `setTransparency.${field} must be between 0 and 100`);
   }
   return value;
 }
@@ -137,7 +151,7 @@ async function runCancellable(start, signal) {
   }
 }
 
-/** @param {unknown} value @param {'moveTo' | 'say'} command */
+/** @param {unknown} value @param {'setTransparency' | 'moveTo' | 'say'} command */
 function validatePresentationOperation(value, command) {
   if (!isRecord(value) || typeof value.start !== 'function' || typeof value.finish !== 'function') {
     throw portError(
@@ -145,7 +159,7 @@ function validatePresentationOperation(value, command) {
       `${command} presentation operation must provide start and finish`,
     );
   }
-  return /** @type {{start: () => unknown, finish: () => unknown}} */ (
+  return /** @type {{start: () => unknown, startBackground?: () => void, finish: () => unknown}} */ (
     /** @type {unknown} */ (value)
   );
 }
@@ -274,6 +288,89 @@ export function createDsl4ActorActionPort(options) {
         () => host.showActor(actor, Object.freeze({x, y, scale}), actionContext),
         signal,
       );
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async setTransparency(payload, context) {
+      const transitionRequested =
+        isRecord(payload) &&
+        ['from', 'to', 'seconds', 'background'].some((field) => Object.hasOwn(payload, field));
+      const transition = transitionRequested
+        ? Object.hasOwn(/** @type {Record<string, unknown>} */ (payload), 'background')
+          ? validatePayloadShape(
+              payload,
+              ['target', 'from', 'to', 'seconds', 'background'],
+              'setTransparency',
+            )
+          : validatePayloadShape(payload, ['target', 'from', 'to', 'seconds'], 'setTransparency')
+        : null;
+      const value =
+        transition ?? validatePayloadShape(payload, ['target', 'transparency'], 'setTransparency');
+      const target = requireNonEmptyString(value.target, 'target', 'setTransparency');
+      const effect = transition
+        ? (() => {
+            const from = requireTransparency(
+              requireFiniteNumber(transition.from, 'from', 'setTransparency'),
+              'from',
+            );
+            const to = requireTransparency(
+              requireFiniteNumber(transition.to, 'to', 'setTransparency'),
+              'to',
+            );
+            const seconds = requireFiniteNumber(transition.seconds, 'seconds', 'setTransparency');
+            if (seconds < 0 || !Number.isFinite(seconds * 1000)) {
+              throw portError(
+                'K4-ACTOR-PORT-001',
+                'setTransparency.seconds must produce a finite non-negative duration',
+              );
+            }
+            const background = transition.background ?? false;
+            if (typeof background !== 'boolean') {
+              throw portError('K4-ACTOR-PORT-001', 'setTransparency.background must be a boolean');
+            }
+            return Object.freeze({from, to, seconds, background});
+          })()
+        : Object.freeze({
+            transparency: requireTransparency(
+              requireFiniteNumber(value.transparency, 'transparency', 'setTransparency'),
+              'transparency',
+            ),
+          });
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = await resolveTarget(target, actionContext, signal);
+      if (!transition) {
+        await runCancellable(() => host.setTransparency(actor, effect, actionContext), signal);
+        return;
+      }
+      const transitionEffect =
+        /** @type {Readonly<{from: number, to: number, seconds: number, background: boolean}>} */ (
+          effect
+        );
+      const operation = validatePresentationOperation(
+        host.createTransparencyTransition(
+          actor,
+          Object.freeze({
+            from: transitionEffect.from,
+            to: transitionEffect.to,
+            seconds: transitionEffect.seconds,
+          }),
+          actionContext,
+        ),
+        'setTransparency',
+      );
+      if (!transitionEffect.background) return runPresentationOperation(operation, signal);
+      if (signal.aborted) throw abortError();
+      if (typeof operation.startBackground !== 'function') {
+        throw portError(
+          'K4-ACTOR-PORT-004',
+          'setTransparency background operation must provide startBackground',
+        );
+      }
+      operation.startBackground();
     },
 
     /** @param {unknown} payload @param {unknown} context */
