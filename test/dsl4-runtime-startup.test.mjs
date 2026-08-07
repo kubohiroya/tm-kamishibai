@@ -137,6 +137,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
@@ -177,6 +178,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   };
   assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
@@ -186,6 +188,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
@@ -193,6 +196,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: true,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
@@ -200,6 +204,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: true,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
@@ -207,12 +212,29 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: true,
   });
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4SpeechAdvanceTypewriter: true}),
+    /requires dsl4Runtime/u,
+  );
+  assert.deepEqual(
+    resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true}),
+    {
+      dsl4Runtime: true,
+      dsl4PoseFeedbackModes: false,
+      dsl4PosePreviewMirroring: false,
+      dsl4CameraPreviewControls: false,
+      dsl4SpeechAdvanceTypewriter: true,
+      structuredDataIntegrationEnabled: false,
+    },
+  );
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4CameraPreviewControls: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4SpeechAdvanceTypewriter: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
 
@@ -230,6 +252,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
@@ -389,6 +412,7 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4PoseFeedbackModes: false,
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
+    dsl4SpeechAdvanceTypewriter: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.equal((await result.session.start()).status, 'finished');
@@ -454,6 +478,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
+      dsl4SpeechAdvanceTypewriter: false,
       structuredDataIntegrationEnabled: false,
     },
   });
@@ -579,6 +604,7 @@ test('creates an atomic runtime environment only after component validation', as
       dsl4PoseFeedbackModes: false,
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
+      dsl4SpeechAdvanceTypewriter: false,
       structuredDataIntegrationEnabled: false,
     },
   });

@@ -939,11 +939,11 @@ class Converter {
       }
       return {[key]: {x: coordinates[0], y: coordinates[1], seconds: coordinates[2]}};
     }
-    if (actionName === 'say') {
+    if (actionName === 'say' || actionName === 'think') {
       if (parts.length === 3) {
         this.error(
           'K4-CONVERT-PERSISTENT-SPEECH',
-          'A DSL 3.1/3.2 say action without seconds is persistent and has no equivalent DSL 4.0 core action.',
+          `A DSL 3.1/3.2 ${actionName} action without seconds is persistent and has no equivalent DSL 4.0 core action.`,
           command,
         );
         return null;
@@ -951,16 +951,16 @@ class Converter {
       if (parts.length === 5) {
         this.error(
           'K4-CONVERT-SPEECH-STYLE',
-          'Styled say is not part of the DSL 4.0 core schema and requires manual migration.',
+          `Styled ${actionName} is not part of the DSL 4.0 core schema and requires manual migration.`,
           command,
         );
         return null;
       }
       if (parts.length !== 4) {
-        this.error('K4-CONVERT-ACTION-ARGS', 'say requires TEXT:SECONDS.', command);
+        this.error('K4-CONVERT-ACTION-ARGS', `${actionName} requires TEXT:SECONDS.`, command);
         return null;
       }
-      const seconds = this.parseNumber(parts[3], 'say seconds', command, {minimum: 0});
+      const seconds = this.parseNumber(parts[3], `${actionName} seconds`, command, {minimum: 0});
       return seconds === null ? null : {[key]: {text: parts[2].replaceAll('\\n', '\n'), seconds}};
     }
     if (actionName === 'setSkin') {

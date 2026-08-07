@@ -353,6 +353,41 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
   );
 });
 
+test('converts timed think and rejects persistent or styled legacy speech', () => {
+  const timed = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=HeroIdle,costume:Actor:hero-idle',
+      'actor=Hero,HeroIdle',
+      'sceneLabel=opening',
+      'action=Hero:think:どうしよう\\n困った:2',
+    ].join('\n'),
+    {sourceId: 'timed-think.txt'},
+  );
+  assert.equal(timed.ok, true);
+  assert.deepEqual(timed.document?.scenes.opening, [
+    {'Hero.think': {text: 'どうしよう\n困った', seconds: 2}},
+  ]);
+
+  for (const [sourceId, action, code] of [
+    ['persistent-think.txt', 'action=Hero:think:待って', 'K4-CONVERT-PERSISTENT-SPEECH'],
+    ['styled-think.txt', 'action=Hero:think:待って:2:balloonStyle', 'K4-CONVERT-SPEECH-STYLE'],
+  ]) {
+    const result = convertDsl32ToDsl4(
+      [
+        'kamishibai=3.2',
+        'asset=HeroIdle,costume:Actor:hero-idle',
+        'actor=Hero,HeroIdle',
+        'sceneLabel=opening',
+        action,
+      ].join('\n'),
+      {sourceId},
+    );
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === code));
+  }
+});
+
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tmpose-converter-'));
   context.after(() => rm(directory, {recursive: true, force: true}));

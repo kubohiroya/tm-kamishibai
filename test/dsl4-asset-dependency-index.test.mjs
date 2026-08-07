@@ -185,6 +185,40 @@ scenes:
   });
 });
 
+test('indexes lazy character sounds for say and think in their owning scene', () => {
+  const storyDocument = parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick:
+    kind: sound
+    name: TalkTick
+    loading: lazy
+actors:
+  Hero: HeroIdle
+scenes:
+  first:
+    - Hero.say:
+        text: hello
+        waitFor: advance
+        characterIntervalSeconds: 0.1
+        characterSound: TalkTick
+    - Hero.think:
+        text: hmm
+        seconds: 1
+        characterIntervalSeconds: 0.2
+        characterSound: TalkTick
+`);
+  const index = createDsl4AssetDependencyIndex(storyDocument);
+
+  assert.deepEqual(index.scenes.first, {
+    all: ['TalkTick'],
+    eager: [],
+    lazy: ['TalkTick'],
+    sceneRetained: [],
+  });
+});
+
 test('returns a deeply immutable index and rejects non-StoryDocument input', () => {
   const index = createDsl4AssetDependencyIndex(
     parse(`

@@ -67,6 +67,119 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
+test('normalizes say and think speech completion, typewriter, sound, and source positions', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick: sound
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.say:
+        text: 時間で進む
+        seconds: 2
+    - Hero.say:
+        text: 入力で進む
+        waitFor: advance
+    - Hero.think:
+        stableId: thinking
+        text: どちらか早い方
+        seconds: 5
+        waitFor: advance
+        characterIntervalSeconds: 0.08
+        characterSound: TalkTick
+`;
+  const result = frontend.parse(source, {sourceId: 'speech.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+      command,
+      target,
+      args,
+      ...(stableId ? {stableId} : {}),
+    })),
+    [
+      {command: 'say', target: 'Hero', args: {text: '時間で進む', seconds: 2}},
+      {command: 'say', target: 'Hero', args: {text: '入力で進む', waitFor: 'advance'}},
+      {
+        command: 'think',
+        target: 'Hero',
+        args: {
+          text: 'どちらか早い方',
+          seconds: 5,
+          waitFor: 'advance',
+          characterIntervalSeconds: 0.08,
+          characterSound: 'TalkTick',
+        },
+        stableId: 'thinking',
+      },
+    ],
+  );
+  for (const field of [
+    'text',
+    'seconds',
+    'waitFor',
+    'characterIntervalSeconds',
+    'characterSound',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
+  }
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
+});
+
+test('rejects incomplete or malformed speech and non-sound character assets', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick: sound
+  WrongTick: backdrop
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.say:
+        text: hello
+        seconds: 1
+`;
+  const replacements = [
+    ['        seconds: 1\n', ''],
+    ['        seconds: 1', '        waitFor: click'],
+    ['        seconds: 1', '        seconds: -1'],
+    ['        seconds: 1', '        seconds: 1\n        characterIntervalSeconds: 0'],
+    ['        seconds: 1', '        seconds: 1\n        characterSound: TalkTick'],
+    ['        seconds: 1', '        seconds: 1\n        unexpected: true'],
+  ];
+  for (const [needle, replacement] of replacements) {
+    const result = frontend.parse(source.replace(needle, replacement));
+    assert.equal(result.ok, false, replacement);
+    assert.ok(
+      result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')),
+      replacement,
+    );
+  }
+
+  for (const characterSound of ['MissingTick', 'WrongTick']) {
+    const result = frontend.parse(
+      source.replace(
+        '        seconds: 1',
+        `        waitFor: advance\n        characterIntervalSeconds: 0.1\n        characterSound: ${characterSound}`,
+      ),
+    );
+    assert.equal(result.ok, false, characterSound);
+    assert.ok(
+      result.diagnostics.some(
+        ({code, storyPath}) =>
+          code === (characterSound === 'MissingTick' ? 'K4-REF-001' : 'K4-REF-002') &&
+          storyPath === '/scenes/opening/actions/0/args/characterSound',
+      ),
+      JSON.stringify(result.diagnostics),
+    );
+  }
+});
+
 test('normalizes pose policy defaults and rejects unknown keys, values, or types', () => {
   const base = [
     "kamishibai: '4.0'",
