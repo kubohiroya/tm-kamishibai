@@ -239,7 +239,7 @@ export async function validateDsl4AssetCandidate({
       const decoded = decodedMetrics(
         await inspectImage(
           file.bytes,
-          deepFreeze({assetId: asset.id, mediaType: actualType, signal: abortSignal}),
+          Object.freeze({assetId: asset.id, mediaType: actualType, signal: abortSignal}),
         ),
         'image',
       );
@@ -280,7 +280,7 @@ export async function validateDsl4AssetCandidate({
       const decoded = decodedMetrics(
         await inspectAudio(
           file.bytes,
-          deepFreeze({assetId: asset.id, mediaType: actualType, signal: abortSignal}),
+          Object.freeze({assetId: asset.id, mediaType: actualType, signal: abortSignal}),
         ),
         'audio',
       );

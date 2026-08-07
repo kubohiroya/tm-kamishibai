@@ -58,6 +58,11 @@ export {
   Dsl4BrowserPreviewSourceError,
   inspectDsl4BrowserPreviewSupport,
 } from './browser-preview-source-adapter.js';
+export {
+  createDsl4BrowserPreviewAssetAdapter,
+  dsl4BrowserPreviewAssetDefaults,
+  Dsl4BrowserPreviewAssetError,
+} from './browser-preview-asset-adapter.js';
 export {createDsl4BrowserPreviewCoordinator} from './browser-preview-coordinator.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
