@@ -40,7 +40,9 @@
   "scripts": {
     "build": "node scripts/build-site.mjs",
     "sb3:build": "node scripts/sb3/build.mjs",
-    "sb3:check": "sb3-toolchain check app",
+    "sb3:check": "sb3-toolchain check app && pnpm sb3:dsl4-release:check",
+    "sb3:dsl4-release:check": "node scripts/sb3/dsl4-downloadable-release.mjs",
+    "sb3:dsl4-release:write": "node scripts/sb3/dsl4-downloadable-release.mjs --write",
     "sb3:import": "sb3-toolchain import --output app",
     "sb3:extensions:status": "sb3-toolchain extensions status app",
     "sb3:extensions:sync": "sb3-toolchain extensions sync app",
@@ -71,8 +73,8 @@
   "author": "Hiroya Kubo",
   "license": "MPL-2.0",
   "dependencies": {
-    "@kubohiroya/turbowarp-async-input": "0.3.0",
     "@kubohiroya/turbowarp-asset-manager": "0.7.0",
+    "@kubohiroya/turbowarp-async-input": "0.3.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
     "@kubohiroya/turbowarp-svg-text": "0.3.0",
     "@kubohiroya/turbowarp-tmpose": "1.6.1",
@@ -84,6 +86,7 @@
     "@turbowarp/scratch-svg-renderer": "1.1.0",
     "@types/node": "^26.1.2",
     "ajv": "8.18.0",
+    "esbuild": "0.28.1",
     "eslint": "^10.8.0",
     "fake-indexeddb": "6.2.5",
     "gh-pages": "^6.3.0",

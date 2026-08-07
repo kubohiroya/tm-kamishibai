@@ -3,6 +3,7 @@ packages:
 
 allowBuilds:
   '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b': true
+  esbuild: true
   fsevents: false
 
 minimumReleaseAgeExclude:

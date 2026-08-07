@@ -1,0 +1,154 @@
+{
+  "targets": [
+    {
+      "isStage": true,
+      "name": "Stage",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "titleSetVersion": {
+          "opcode": "kubohiroyakamishibairuntime4_setTextValue",
+          "next": null,
+          "parent": null,
+          "inputs": {
+            "NAME": [
+              1,
+              [
+                10,
+                "about.version"
+              ]
+            ],
+            "VALUE": [
+              1,
+              [
+                10,
+                "Version {{VERSION}} ({{BUILD_DATE}})"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 0
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "assetId": "73cf5ffc7974bb88be15795241beac25",
+          "name": "Title",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "73cf5ffc7974bb88be15795241beac25.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        },
+        {
+          "assetId": "51276950e8742c503b80c8cafe055190",
+          "name": "TitleRuntime",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "51276950e8742c503b80c8cafe055190.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 0,
+      "tempo": 60,
+      "videoTransparency": 50,
+      "videoState": "on",
+      "textToSpeechLanguage": null
+    },
+    {
+      "isStage": false,
+      "name": "officialWebsiteButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {},
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "assetId": "d6f7f3387ffb150b0f5bf4f7e3609679",
+          "name": "official-website-button",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "d6f7f3387ffb150b0f5bf4f7e3609679.svg",
+          "rotationCenterX": 80,
+          "rotationCenterY": 32
+        },
+        {
+          "assetId": "09a2cc36ec9762e01fb072255931a046",
+          "name": "official-website-button-runtime",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "09a2cc36ec9762e01fb072255931a046.svg",
+          "rotationCenterX": 32,
+          "rotationCenterY": 32
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 1,
+      "visible": false,
+      "x": 0,
+      "y": 0,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    }
+  ],
+  "monitors": [],
+  "extensions": [
+    "kubohiroyakamishibairuntime4"
+  ],
+  "extensionURLs": {
+    "kubohiroyakamishibairuntime4": "embedded-extension:extensions/kubohiroyakamishibairuntime4.js"
+  },
+  "extensionStorage": {
+    "kubohiroyakamishibairuntime4": {
+      "source": {
+        "formatVersion": 1,
+        "mode": "embedded",
+        "sourceId": "main",
+        "displayName": "story.kamishibai.yaml",
+        "mediaType": "application/yaml",
+        "encoding": "utf-8",
+        "byteLength": 123,
+        "integrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+        "text": "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 0\n"
+      },
+      "artifact": {
+        "formatVersion": 1,
+        "sourceIntegrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+        "controlProfile": "production",
+        "resolvedKeymap": {
+          "Space": "navigation.nextAction"
+        },
+        "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
+        "historyNavigationEnabled": false
+      },
+      "assets": {
+        "formatVersion": 1,
+        "manifest": {
+          "formatVersion": 1,
+          "assets": []
+        },
+        "files": [],
+        "integrity": "sha256-R3aRODkmOs97zX1b31v33yudY+C5gYxKiryx/XRGmic="
+      }
+    }
+  },
+  "meta": {
+    "semver": "3.0.0",
+    "vm": "0.2.0-turbowarp-c4823421cb7c17d8d8a89878851ce1668c26a21f",
+    "agent": "tmpose-kamishibai DSL 4.0 release generator"
+  }
+}
