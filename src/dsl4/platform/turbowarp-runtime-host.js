@@ -753,12 +753,24 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         const errors = [];
         const pending = [];
         try {
-          await deactivateCacheLease();
           const activeRun = session.getRunPromise();
-          const sessionDisposal = session.dispose(reason);
-          pending.push(Promise.resolve(session.whenInputIdle()));
           if (activeRun) pending.push(Promise.resolve(activeRun));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          const sessionDisposal = session.dispose(reason);
           if (sessionDisposal) pending.push(Promise.resolve(sessionDisposal));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          pending.push(Promise.resolve(session.whenInputIdle()));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          pending.push(Promise.resolve(deactivateCacheLease()));
         } catch (error) {
           errors.push(error);
         }

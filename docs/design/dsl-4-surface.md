@@ -330,6 +330,8 @@ pair全体を取り込まず、直前のJavaScript投影値へ戻します。同
 Scratch runtimeの決定済み実行順による最終値をtick境界でsampleします。variable setterのwrapやwrite回数の
 追跡は行わないため、通常のScratch last-write-wins semanticsを変更しません。completed／cancelledの
 terminal eventではbindingを無効にして両変数を直ちに0へ戻し、platform sessionのdisposeでも0 resetします。
+platformは0〜100の既存Stage variable slider monitorをvariable IDで一意に解決します。両monitorは
+waiting／chargingのactive期間だけ表示し、completed／cancelled／disposeで非表示へ戻します。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

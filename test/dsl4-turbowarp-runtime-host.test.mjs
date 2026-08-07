@@ -109,11 +109,69 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
 }
 
 function platformFixture(log) {
-  const poseConfidence = {value: 0};
-  const poseProgress = {value: 0};
+  const poseConfidence = {
+    id: 'pose-confidence',
+    name: 'ポーズ認識',
+    type: '',
+    isCloud: false,
+    value: 0,
+  };
+  const poseProgress = {
+    id: 'pose-progress',
+    name: 'チャージ',
+    type: '',
+    isCloud: false,
+    value: 0,
+  };
+  const monitorRecords = new Map();
+  const monitorBlocksById = new Map();
+  for (const variable of [poseConfidence, poseProgress]) {
+    monitorRecords.set(variable.id, {
+      id: variable.id,
+      opcode: 'data_variable',
+      params: {VARIABLE: variable.name},
+      targetId: null,
+      spriteName: null,
+      mode: 'slider',
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+      visible: false,
+      get(property) {
+        return this[property];
+      },
+    });
+    monitorBlocksById.set(variable.id, {
+      id: variable.id,
+      opcode: 'data_variable',
+      fields: {VARIABLE: {id: variable.id, value: variable.name}},
+      isMonitored: false,
+    });
+  }
+  const monitorBlocks = {
+    getBlock: (id) => monitorBlocksById.get(id),
+    getScripts: () => [...monitorBlocksById.keys()],
+    changeBlock({id, element, value}) {
+      assert.equal(element, 'checkbox');
+      const block = monitorBlocksById.get(id);
+      const record = monitorRecords.get(id);
+      if (!block || !record) return;
+      block.isMonitored = value;
+      record.visible = value;
+    },
+  };
+  const monitorState = {
+    has: (id) => monitorRecords.has(id),
+    get: (id) => monitorRecords.get(id),
+    valueSeq: () => monitorRecords.values(),
+  };
   const stage = {
     id: 'stage-target',
     isStage: true,
+    variables: {
+      [poseConfidence.id]: poseConfidence,
+      [poseProgress.id]: poseProgress,
+    },
     lookupVariableByNameAndType(name, type) {
       assert.equal(type, '');
       if (name === 'ポーズ認識') return poseConfidence;
@@ -251,6 +309,8 @@ function platformFixture(log) {
   };
   const runtime = {
     targets: [stage, actor],
+    monitorBlocks,
+    getMonitorState: () => monitorState,
     getTargetForStage() {
       return stage;
     },
@@ -264,6 +324,7 @@ function platformFixture(log) {
     runtime,
     poseConfidence,
     poseProgress,
+    monitorRecords,
     tmPoseRuntime: {Webcam: class {}, loadFromFiles() {}},
     setLoading(payload) {
       log.push(['loading', payload.visible]);
@@ -545,6 +606,52 @@ test('continues environment cleanup and aggregates a Scratch reset failure', asy
   assert.equal(log.filter(([event]) => event === 'svg.release-all').length, 1);
   assert.equal(log.filter(([event]) => event === 'pose.release-all').length, 1);
   assert.equal(log.filter(([event]) => event === 'media.release-all').length, 1);
+});
+
+test('resets Scratch pose feedback before awaiting a pending remote cache lease release', async () => {
+  const cacheIdentity = {
+    id: 'resetlease000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--resetlease000001',
+  };
+  const project = await packagedProject(waitStory, {cacheIdentity});
+  const fixture = platformFixture([]);
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  const createAssetManagerComposition = fixture.createAssetManagerComposition;
+  let releaseCalls = 0;
+  let finishFirstRelease = null;
+  fixture.createAssetManagerComposition = (...args) => {
+    const composition = createAssetManagerComposition(...args);
+    return {
+      ...composition,
+      releaseVerifiedRemoteStoryCacheLease() {
+        releaseCalls += 1;
+        if (releaseCalls > 1) return Promise.resolve();
+        return new Promise((resolve) => {
+          finishFirstRelease = resolve;
+        });
+      },
+    };
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const disposal = result.host.dispose('pending-cache-release');
+  while (!finishFirstRelease) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+
+  finishFirstRelease();
+  await disposal;
+  assert.equal(releaseCalls, 2);
 });
 
 test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {

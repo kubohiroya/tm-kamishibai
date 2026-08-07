@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
+import {createDsl4ScratchPoseFeedbackAdapter} from '../src/dsl4/platform/index.js';
 import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 import {appShellLocales, appShellSelectedLanguageNames} from '../scripts/sb3/app-shell-locales.mjs';
 
@@ -384,6 +385,48 @@ test('pins and loads the generated SB3 in the TurboWarp VM', async (context) => 
   assert.equal(harness.getStageVariable('cloneUiItemsEnabled'), true);
   assert.equal(harness.getSprite('UiItem').visible, false);
   assert.equal(harness.getClones('UiItem').length, 0);
+});
+
+test('shows and clears DSL4 Scratch pose feedback monitors in the real TurboWarp VM', async (context) => {
+  const harness = await loadKamishibaiVm();
+  context.after(() => harness.quit());
+  const runtime = harness.vm.runtime;
+  const stage = harness.getStage();
+  const confidence = stage.lookupVariableByNameAndType('ポーズ認識', '');
+  const progress = stage.lookupVariableByNameAndType('チャージ', '');
+  const visible = (variable) => runtime.getMonitorState().get(variable.id).get('visible');
+  assert.equal(visible(confidence), false);
+  assert.equal(visible(progress), false);
+
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime,
+    mode: 'scratchBinding',
+  });
+  adapter.onPoseState({
+    phase: 'waiting',
+    target: 'Hero',
+    pose: 'help',
+    stepIndex: 0,
+    confidence: 0.75,
+    progress: 0.5,
+  });
+  assert.equal(confidence.value, 75);
+  assert.equal(progress.value, 50);
+  assert.equal(visible(confidence), true);
+  assert.equal(visible(progress), true);
+
+  adapter.onPoseState({
+    phase: 'completed',
+    target: 'Hero',
+    pose: 'help',
+    stepIndex: 0,
+    confidence: 1,
+    progress: 1,
+  });
+  assert.equal(confidence.value, 0);
+  assert.equal(progress.value, 0);
+  assert.equal(visible(confidence), false);
+  assert.equal(visible(progress), false);
 });
 
 test('shows an SVG error and stops on an unsupported kamishibai version', async (context) => {

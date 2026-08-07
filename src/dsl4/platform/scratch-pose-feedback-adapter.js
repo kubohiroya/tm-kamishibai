@@ -55,13 +55,149 @@ function resolveStage(runtime) {
 /** @param {ReturnType<typeof resolveStage>} stage @param {string} name */
 function resolveVariable(stage, name) {
   const variable = stage.lookupVariableByNameAndType(name, '');
-  if (!isRecord(variable) || !Object.hasOwn(variable, 'value') || variable.isCloud === true) {
+  if (
+    !isRecord(variable) ||
+    typeof variable.id !== 'string' ||
+    variable.id.length === 0 ||
+    variable.name !== name ||
+    variable.type !== '' ||
+    !Object.hasOwn(variable, 'value') ||
+    variable.isCloud === true
+  ) {
     throw adapterError(
       'K4-TW-POSE-FEEDBACK-001',
       `Scratch stage variable is unavailable or unsupported: ${name}`,
     );
   }
   return variable;
+}
+
+/** @param {unknown} record @param {string} property */
+function monitorProperty(record, property) {
+  if (!isRecord(record) || typeof record.get !== 'function') {
+    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'Scratch monitor state is unavailable');
+  }
+  return record.get(property);
+}
+
+/**
+ * Resolve exactly one Stage scalar monitor through the same monitor block contract used by
+ * Scratch's data_showvariable/data_hidevariable primitives.
+ *
+ * @param {Record<string, unknown>} runtime
+ * @param {Record<string, unknown>} variable
+ * @param {string} name
+ */
+function createMonitorChannel(runtime, variable, name) {
+  const monitorBlocksCandidate = runtime.monitorBlocks;
+  const getMonitorState = runtime.getMonitorState;
+  if (
+    !isRecord(monitorBlocksCandidate) ||
+    typeof monitorBlocksCandidate.getBlock !== 'function' ||
+    typeof monitorBlocksCandidate.getScripts !== 'function' ||
+    typeof monitorBlocksCandidate.changeBlock !== 'function' ||
+    typeof getMonitorState !== 'function'
+  ) {
+    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'TurboWarp monitor API is unavailable');
+  }
+  const monitorBlocks =
+    /** @type {{getBlock: Function, getScripts: Function, changeBlock: Function}} */ (
+      monitorBlocksCandidate
+    );
+  const monitorState = getMonitorState.call(runtime);
+  if (
+    !isRecord(monitorState) ||
+    typeof monitorState.has !== 'function' ||
+    typeof monitorState.get !== 'function' ||
+    typeof monitorState.valueSeq !== 'function'
+  ) {
+    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'TurboWarp monitor state is unavailable');
+  }
+
+  const id = /** @type {string} */ (variable.id);
+  const matchingBlocks = monitorBlocks
+    .getScripts()
+    .map((/** @type {string} */ blockId) => monitorBlocks.getBlock(blockId))
+    .filter(
+      (/** @type {unknown} */ candidate) =>
+        isRecord(candidate) &&
+        candidate.opcode === 'data_variable' &&
+        isRecord(candidate.fields) &&
+        isRecord(candidate.fields.VARIABLE) &&
+        candidate.fields.VARIABLE.id === id &&
+        candidate.fields.VARIABLE.value === name,
+    );
+  const matchingRecords = [...monitorState.valueSeq()].filter((candidate) => {
+    const params = monitorProperty(candidate, 'params');
+    return (
+      monitorProperty(candidate, 'opcode') === 'data_variable' &&
+      monitorProperty(candidate, 'id') === id &&
+      monitorProperty(candidate, 'targetId') === null &&
+      isRecord(params) &&
+      params.VARIABLE === name
+    );
+  });
+  const block = monitorBlocks.getBlock(id);
+  const record = monitorState.get(id);
+  if (
+    matchingBlocks.length !== 1 ||
+    matchingBlocks[0] !== block ||
+    matchingRecords.length !== 1 ||
+    matchingRecords[0] !== record ||
+    !isRecord(block) ||
+    block.id !== id ||
+    block.opcode !== 'data_variable' ||
+    !isRecord(block.fields) ||
+    !isRecord(block.fields.VARIABLE) ||
+    block.fields.VARIABLE.id !== id ||
+    block.fields.VARIABLE.value !== name ||
+    typeof block.isMonitored !== 'boolean' ||
+    !monitorState.has(id) ||
+    monitorProperty(record, 'id') !== id ||
+    monitorProperty(record, 'opcode') !== 'data_variable' ||
+    monitorProperty(record, 'targetId') !== null ||
+    monitorProperty(record, 'spriteName') !== null ||
+    monitorProperty(record, 'mode') !== 'slider' ||
+    monitorProperty(record, 'sliderMin') !== 0 ||
+    monitorProperty(record, 'sliderMax') !== 100 ||
+    monitorProperty(record, 'isDiscrete') !== true ||
+    typeof monitorProperty(record, 'visible') !== 'boolean' ||
+    block.isMonitored !== monitorProperty(record, 'visible')
+  ) {
+    throw adapterError(
+      'K4-TW-POSE-FEEDBACK-001',
+      `Scratch Stage variable monitor is missing, ambiguous, or unsupported: ${name}`,
+    );
+  }
+
+  function readVisible() {
+    const currentBlock = monitorBlocks.getBlock(id);
+    const currentRecord = monitorState.get(id);
+    const blockVisible = isRecord(currentBlock) ? currentBlock.isMonitored : undefined;
+    const stateVisible = monitorProperty(currentRecord, 'visible');
+    if (typeof blockVisible !== 'boolean' || blockVisible !== stateVisible) {
+      throw adapterError(
+        'K4-TW-POSE-FEEDBACK-001',
+        `Scratch Stage variable monitor state is inconsistent: ${name}`,
+      );
+    }
+    return blockVisible;
+  }
+
+  return {
+    readVisible,
+    /** @param {boolean} visible */
+    writeVisible(visible) {
+      if (readVisible() === visible) return;
+      monitorBlocks.changeBlock({id, element: 'checkbox', value: visible}, runtime);
+      if (readVisible() !== visible) {
+        throw adapterError(
+          'K4-TW-POSE-FEEDBACK-001',
+          `Scratch Stage variable monitor visibility did not update: ${name}`,
+        );
+      }
+    },
+  };
 }
 
 /** @param {Record<string, unknown>} variable @param {string} name */
@@ -151,6 +287,13 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
   } catch (error) {
     throw error;
   }
+  const runtime = /** @type {Record<string, unknown>} */ (options.runtime);
+  const confidenceMonitor = createMonitorChannel(
+    runtime,
+    confidenceVariable,
+    variableNames.confidence,
+  );
+  const progressMonitor = createMonitorChannel(runtime, progressVariable, variableNames.progress);
 
   let disposed = false;
   let active = false;
@@ -192,6 +335,58 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
     }
   }
 
+  /** @param {boolean} visible */
+  function writeMonitorPair(visible) {
+    const previous = {
+      confidence: confidenceMonitor.readVisible(),
+      progress: progressMonitor.readVisible(),
+    };
+    try {
+      confidenceMonitor.writeVisible(visible);
+      progressMonitor.writeVisible(visible);
+    } catch (error) {
+      const errors = [error];
+      try {
+        progressMonitor.writeVisible(previous.progress);
+      } catch (rollbackError) {
+        errors.push(rollbackError);
+      }
+      try {
+        confidenceMonitor.writeVisible(previous.confidence);
+      } catch (rollbackError) {
+        errors.push(rollbackError);
+      }
+      throwCollected(errors, 'Scratch pose feedback monitor update and rollback failed');
+    }
+  }
+
+  function hideMonitorPair() {
+    const errors = [];
+    for (const monitor of [confidenceMonitor, progressMonitor]) {
+      try {
+        monitor.writeVisible(false);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwCollected(errors, 'Scratch pose feedback monitor cleanup failed');
+  }
+
+  function cleanupDisplay() {
+    const errors = [];
+    for (const cleanup of [
+      () => writePair({confidence: 0, progress: 0}),
+      () => hideMonitorPair(),
+    ]) {
+      try {
+        cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwCollected(errors, 'Scratch pose feedback display cleanup failed');
+  }
+
   const adapter = {
     /** @param {unknown} input */
     onPoseState(input) {
@@ -201,15 +396,31 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
       if (terminal) {
         active = false;
         sampled = true;
-        writePair({confidence: 0, progress: 0});
         projection = null;
+        cleanupDisplay();
         return;
       }
       const nextProjection = {
         confidence: event.confidence * 100,
         progress: event.progress * 100,
       };
-      writePair(nextProjection);
+      if (!active) {
+        const errors = [];
+        try {
+          writePair(nextProjection);
+          writeMonitorPair(true);
+        } catch (error) {
+          errors.push(error);
+          try {
+            cleanupDisplay();
+          } catch (cleanupError) {
+            errors.push(cleanupError);
+          }
+          throwCollected(errors, 'Scratch pose feedback activation failed');
+        }
+      } else {
+        writePair(nextProjection);
+      }
       projection = nextProjection;
       active = true;
       sampled = false;
@@ -243,7 +454,7 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
       projection = null;
       const errors = [];
       try {
-        writePair({confidence: 0, progress: 0});
+        cleanupDisplay();
       } catch (error) {
         errors.push(error);
       }

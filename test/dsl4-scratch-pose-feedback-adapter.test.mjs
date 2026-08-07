@@ -21,12 +21,61 @@ function event(overrides = {}) {
 function fakeRuntime(overrides = {}) {
   const confidence = overrides.confidenceVariable ?? {value: 0};
   const progress = overrides.progressVariable ?? {value: 0};
+  Object.assign(confidence, {id: 'pose-confidence', name: 'ポーズ認識', type: '', isCloud: false});
+  Object.assign(progress, {id: 'pose-progress', name: 'チャージ', type: '', isCloud: false});
   const variables = new Map([
     [dsl4ScratchPoseFeedbackVariableNames.confidence, confidence],
     [dsl4ScratchPoseFeedbackVariableNames.progress, progress],
   ]);
+  const monitorRecords = new Map();
+  const monitorBlocksById = new Map();
+  for (const variable of [confidence, progress]) {
+    const record = {
+      id: variable.id,
+      opcode: 'data_variable',
+      params: {VARIABLE: variable.name},
+      targetId: null,
+      spriteName: null,
+      mode: 'slider',
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+      visible: false,
+      get(property) {
+        return this[property];
+      },
+    };
+    monitorRecords.set(variable.id, record);
+    monitorBlocksById.set(variable.id, {
+      id: variable.id,
+      opcode: 'data_variable',
+      fields: {VARIABLE: {id: variable.id, value: variable.name}},
+      isMonitored: false,
+    });
+  }
+  const monitorState = {
+    has: (id) => monitorRecords.has(id),
+    get: (id) => monitorRecords.get(id),
+    valueSeq: () => monitorRecords.values(),
+  };
+  const monitorBlocks = {
+    getBlock: (id) => monitorBlocksById.get(id),
+    getScripts: () => [...monitorBlocksById.keys()],
+    changeBlock({id, element, value}) {
+      assert.equal(element, 'checkbox');
+      const block = monitorBlocksById.get(id);
+      const record = monitorRecords.get(id);
+      if (!block || !record) return;
+      block.isMonitored = value;
+      record.visible = value;
+    },
+  };
   const stage = {
     isStage: true,
+    variables: Object.fromEntries([
+      [confidence.id, confidence],
+      [progress.id, progress],
+    ]),
     lookupVariableByNameAndType(name, type) {
       assert.equal(type, '');
       return variables.get(name) ?? null;
@@ -37,9 +86,17 @@ function fakeRuntime(overrides = {}) {
     confidence,
     progress,
     variables,
+    monitorBlocks,
+    monitorBlocksById,
+    monitorRecords,
+    monitorVisible(variable) {
+      return monitorRecords.get(variable.id)?.visible;
+    },
     stage,
     runtime: {
       getTargetForStage: () => stage,
+      getMonitorState: () => monitorState,
+      monitorBlocks,
       ...overrides.runtime,
     },
   };
@@ -55,6 +112,8 @@ test('scratchMirror projects normalized state to 0-100 and never reads Scratch e
   adapter.onPoseState(event());
   assert.equal(setup.confidence.value, 82);
   assert.equal(setup.progress.value, 64);
+  assert.equal(setup.monitorVisible(setup.confidence), true);
+  assert.equal(setup.monitorVisible(setup.progress), true);
   setup.confidence.value = 100;
   setup.progress.value = 100;
   assert.equal(adapter.readPoseStateBinding(), null);
@@ -149,14 +208,20 @@ test('completed and cancelled terminal states disable binding and reset both var
   adapter.onPoseState(event({phase: 'completed', confidence: 1, progress: 1}));
   assert.equal(setup.confidence.value, 0);
   assert.equal(setup.progress.value, 0);
+  assert.equal(setup.monitorVisible(setup.confidence), false);
+  assert.equal(setup.monitorVisible(setup.progress), false);
   setup.confidence.value = 50;
   setup.progress.value = 50;
   assert.equal(adapter.readPoseStateBinding(), null);
 
   adapter.onPoseState(event({phase: 'waiting', confidence: 0.2, progress: 0.1}));
+  assert.equal(setup.monitorVisible(setup.confidence), true);
+  assert.equal(setup.monitorVisible(setup.progress), true);
   adapter.onPoseState(event({phase: 'cancelled', confidence: 0.2, progress: 0.1}));
   assert.equal(setup.confidence.value, 0);
   assert.equal(setup.progress.value, 0);
+  assert.equal(setup.monitorVisible(setup.confidence), false);
+  assert.equal(setup.monitorVisible(setup.progress), false);
 
   adapter.dispose();
   assert.equal(setup.confidence.value, 0);
@@ -250,4 +315,121 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
   assert.deepEqual(fixedAdapter.readPoseStateBinding(), {confidence: 0.75});
   fixedAdapter.dispose();
   assert.equal(fixed.confidence.value, 0);
+});
+
+test('fails closed before mutation when a Stage variable monitor is missing or ambiguous', () => {
+  const missing = fakeRuntime();
+  missing.monitorBlocksById.delete(missing.progress.id);
+  missing.monitorRecords.delete(missing.progress.id);
+  assert.throws(
+    () => createDsl4ScratchPoseFeedbackAdapter({runtime: missing.runtime, mode: 'scratchMirror'}),
+    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+  );
+  assert.equal(missing.confidence.value, 0);
+  assert.equal(missing.monitorVisible(missing.confidence), false);
+
+  const ambiguous = fakeRuntime();
+  ambiguous.monitorBlocksById.set('duplicate-monitor', {
+    id: 'duplicate-monitor',
+    opcode: 'data_variable',
+    fields: {
+      VARIABLE: {id: ambiguous.confidence.id, value: ambiguous.confidence.name},
+    },
+    isMonitored: false,
+  });
+  ambiguous.monitorRecords.set('duplicate-monitor', {
+    id: 'duplicate-monitor',
+    opcode: 'data_variable',
+    params: {VARIABLE: ambiguous.confidence.name},
+    targetId: null,
+    spriteName: null,
+    mode: 'slider',
+    sliderMin: 0,
+    sliderMax: 100,
+    isDiscrete: true,
+    visible: false,
+    get(property) {
+      return this[property];
+    },
+  });
+  assert.throws(
+    () =>
+      createDsl4ScratchPoseFeedbackAdapter({runtime: ambiguous.runtime, mode: 'scratchBinding'}),
+    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+  );
+  assert.equal(ambiguous.monitorVisible(ambiguous.confidence), false);
+});
+
+test('ignores an unrelated sprite monitor with the same variable name', () => {
+  const setup = fakeRuntime();
+  setup.monitorBlocksById.set('sprite-local-confidence', {
+    id: 'sprite-local-confidence',
+    opcode: 'data_variable',
+    fields: {
+      VARIABLE: {id: 'sprite-local-confidence', value: setup.confidence.name},
+    },
+    isMonitored: false,
+  });
+  setup.monitorRecords.set('sprite-local-confidence', {
+    id: 'sprite-local-confidence',
+    opcode: 'data_variable',
+    params: {VARIABLE: setup.confidence.name},
+    targetId: 'sprite-target',
+    spriteName: 'Sprite',
+    mode: 'default',
+    sliderMin: 0,
+    sliderMax: 100,
+    isDiscrete: true,
+    visible: false,
+    get(property) {
+      return this[property];
+    },
+  });
+
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: setup.runtime,
+    mode: 'scratchMirror',
+  });
+  adapter.onPoseState(event());
+  assert.equal(setup.monitorVisible(setup.confidence), true);
+  assert.equal(setup.monitorRecords.get('sprite-local-confidence').visible, false);
+  adapter.dispose();
+});
+
+test('attempts monitor cleanup after reset failure and aggregates both failures', () => {
+  let progressValue = 0;
+  const progressVariable = {};
+  Object.defineProperty(progressVariable, 'value', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return progressValue;
+    },
+    set(value) {
+      if (value === 0 && progressValue !== 0) throw new Error('reset failed');
+      progressValue = value;
+    },
+  });
+  const setup = fakeRuntime({progressVariable});
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: setup.runtime,
+    mode: 'scratchBinding',
+  });
+  adapter.onPoseState(event({confidence: 0.7, progress: 0.6}));
+  const changeBlock = setup.monitorBlocks.changeBlock;
+  setup.monitorBlocks.changeBlock = (input) => {
+    if (input.id === setup.progress.id && input.value === false) {
+      throw new Error('monitor hide failed');
+    }
+    changeBlock(input);
+  };
+
+  assert.throws(adapter.dispose, (error) => {
+    assert.equal(error instanceof AggregateError, true);
+    assert.match(String(error.errors[0]), /reset failed/u);
+    assert.match(String(error.errors[1]), /monitor hide failed/u);
+    return true;
+  });
+  assert.equal(setup.monitorVisible(setup.confidence), false);
+  assert.equal(setup.monitorVisible(setup.progress), true);
 });

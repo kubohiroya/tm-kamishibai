@@ -565,8 +565,8 @@ Scratch consumerはplatform composition境界に置き、coreにScratch variable
 `scratchBinding`の入力はrenderer非依存な0〜1の`confidence`／`progress`sampleとして、各計算tickの
 開始時に最大1回取り込みます。invalidなScratch snapshotは両fieldともfail-closedで無視し、
 センサー値、sequence積分、soundを変更しません。同一tick内の複数writeはScratch runtimeの実行順に従い、
-tick境界の最終pairを決定的にsampleします。terminal eventはbindingを無効にし、Scratchの一時表示値を
-直ちに0へresetします。
+tick境界の最終pairを決定的にsampleします。active stateでは専用の2つのStage variable monitorだけを
+表示し、terminal eventはbindingを無効にしてmonitorを隠し、Scratchの一時表示値を直ちに0へresetします。
 
 ### 3.11 分岐 `[提案]`
 
