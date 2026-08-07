@@ -76,6 +76,7 @@ function historyFailure(result) {
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
+ * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
  * @param {number} [options.quiesceTimeoutMs]
@@ -96,6 +97,7 @@ export function createDsl4NavigationSession({
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
+  speechAdvanceTypewriterEnabled = false,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
   quiesceTimeoutMs,
@@ -112,6 +114,9 @@ export function createDsl4NavigationSession({
   }
   if (typeof poseNavigationPolicyEnabled !== 'boolean') {
     throw new TypeError('poseNavigationPolicyEnabled must be boolean');
+  }
+  if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
+    throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
@@ -222,6 +227,7 @@ export function createDsl4NavigationSession({
       posePreviewMirroringEnabled,
       cameraPreviewControlsEnabled,
       poseNavigationPolicyEnabled,
+      speechAdvanceTypewriterEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });
@@ -317,6 +323,16 @@ export function createDsl4NavigationSession({
   const inputAdapter = createDsl4KeymapInputAdapter({
     keymap: profile.keymap,
     dispatchCommand,
+    ...(speechAdvanceTypewriterEnabled
+      ? {
+          consumeAnyKey({code}) {
+            return controller.acceptAdvanceInput({kind: 'key', code});
+          },
+          consumePointer({pointerType}) {
+            return controller.acceptAdvanceInput({kind: 'pointer', pointerType});
+          },
+        }
+      : {}),
     ...(poseNavigationPolicyEnabled
       ? {
           shouldConsumeCommand(command) {
@@ -358,8 +374,11 @@ export function createDsl4NavigationSession({
     },
     dispatchCommand,
     attach: inputAdapter.attach,
+    attachStagePointer: inputAdapter.attachPointer,
     detach: inputAdapter.detach,
+    detachStagePointer: inputAdapter.detachPointer,
     handleKeyDown: inputAdapter.handleKeyDown,
+    handlePointerUp: inputAdapter.handlePointerUp,
     whenInputIdle: inputAdapter.whenIdle,
     getState: snapshot,
     getRunPromise: controller.getRunPromise,

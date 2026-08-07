@@ -76,6 +76,8 @@ function shouldIgnore(event) {
  * @param {object} options
  * @param {Readonly<Record<string, string>>} options.keymap
  * @param {(command: string, context: Readonly<{code: string}>) => unknown | Promise<unknown>} options.dispatchCommand
+ * @param {(context: Readonly<{code: string}>) => boolean} [options.consumeAnyKey]
+ * @param {(context: Readonly<{pointerType: string}>) => boolean} [options.consumePointer]
  * @param {(command: string, context: Readonly<{code: string}>) => boolean | undefined} [options.shouldConsumeCommand]
  * @param {boolean} [options.dispatchImmediately]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onError]
@@ -83,6 +85,8 @@ function shouldIgnore(event) {
 export function createDsl4KeymapInputAdapter({
   keymap,
   dispatchCommand,
+  consumeAnyKey,
+  consumePointer,
   shouldConsumeCommand,
   dispatchImmediately = false,
   onError,
@@ -95,6 +99,12 @@ export function createDsl4KeymapInputAdapter({
   }
   if (typeof dispatchCommand !== 'function') {
     throw new TypeError('dispatchCommand must be a function');
+  }
+  if (consumeAnyKey !== undefined && typeof consumeAnyKey !== 'function') {
+    throw new TypeError('consumeAnyKey must be a function');
+  }
+  if (consumePointer !== undefined && typeof consumePointer !== 'function') {
+    throw new TypeError('consumePointer must be a function');
   }
   if (shouldConsumeCommand !== undefined && typeof shouldConsumeCommand !== 'function') {
     throw new TypeError('shouldConsumeCommand must be a function');
@@ -113,6 +123,8 @@ export function createDsl4KeymapInputAdapter({
   let disposed = false;
   /** @type {Record<string, Function> | null} */
   let attachedTarget = null;
+  /** @type {Record<string, Function> | null} */
+  let attachedPointerTarget = null;
   /** @type {Promise<unknown>} */
   let queue = Promise.resolve();
 
@@ -138,6 +150,18 @@ export function createDsl4KeymapInputAdapter({
       return false;
     }
     const code = typeof event.code === 'string' ? event.code : '';
+    if (!event.repeat && code && consumeAnyKey) {
+      try {
+        if (consumeAnyKey(deepFreeze({code}))) {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          return true;
+        }
+      } catch (error) {
+        reportError(error, 'speech.advance', code);
+        return false;
+      }
+    }
     if (!Object.hasOwn(resolvedKeymap, code)) return false;
     const command = resolvedKeymap[code];
     const context = deepFreeze({code});
@@ -176,6 +200,31 @@ export function createDsl4KeymapInputAdapter({
     return true;
   }
 
+  /** @param {Record<string, any>} event */
+  function handlePointerUp(event) {
+    if (
+      disposed ||
+      !consumePointer ||
+      typeof event !== 'object' ||
+      event === null ||
+      shouldIgnore(event) ||
+      event.isPrimary === false ||
+      (event.button !== undefined && event.button !== 0)
+    ) {
+      return false;
+    }
+    const pointerType = typeof event.pointerType === 'string' ? event.pointerType : 'unknown';
+    try {
+      if (!consumePointer(deepFreeze({pointerType}))) return false;
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      return true;
+    } catch (error) {
+      reportError(error, 'speech.advance', `Pointer:${pointerType}`);
+      return false;
+    }
+  }
+
   /**
    * @param {Record<string, Function>} target
    */
@@ -193,21 +242,50 @@ export function createDsl4KeymapInputAdapter({
     attachedTarget = target;
   }
 
+  /**
+   * Attach pointer advance separately so a shell can scope it to the rendered stage.
+   *
+   * @param {Record<string, Function>} target
+   */
+  function attachPointer(target) {
+    if (disposed) throw new Error('Keymap input adapter is disposed');
+    if (!consumePointer) throw new Error('Pointer input consumer is not configured');
+    if (
+      typeof target?.addEventListener !== 'function' ||
+      typeof target?.removeEventListener !== 'function'
+    ) {
+      throw new TypeError('Pointer target must support event listener registration');
+    }
+    if (attachedPointerTarget === target) return;
+    if (attachedPointerTarget) throw new Error('Pointer input adapter is already attached');
+    target.addEventListener('pointerup', handlePointerUp);
+    attachedPointerTarget = target;
+  }
+
   function detach() {
     attachedTarget?.removeEventListener?.('keydown', handleKeyDown);
     attachedTarget = null;
   }
 
+  function detachPointer() {
+    attachedPointerTarget?.removeEventListener?.('pointerup', handlePointerUp);
+    attachedPointerTarget = null;
+  }
+
   function dispose() {
     detach();
+    detachPointer();
     disposed = true;
   }
 
   return Object.freeze({
     attach,
+    attachPointer,
     detach,
+    detachPointer,
     dispose,
     handleKeyDown,
+    handlePointerUp,
     whenIdle() {
       return queue;
     },
