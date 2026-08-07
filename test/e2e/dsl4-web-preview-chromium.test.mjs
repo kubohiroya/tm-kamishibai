@@ -598,7 +598,7 @@ test(
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-chromium-'));
     const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-local-preview-project-'));
     const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
-    const sourceFilename = 'preview.kamishibai.yaml';
+    const sourceFilename = 'preview.k4.yml';
     const sourcePath = path.join(projectDirectory, sourceFilename);
     const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
     await Promise.all([
@@ -727,7 +727,7 @@ test(
 
       await writeFile(
         sourceManifestPath,
-        `${JSON.stringify({...manifest, path: 'alternate.kamishibai.yaml'})}\n`,
+        `${JSON.stringify({...manifest, path: 'alternate.k4.yaml'})}\n`,
       );
       await waitForEvaluation(
         client,

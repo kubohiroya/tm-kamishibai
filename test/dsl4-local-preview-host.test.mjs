@@ -141,7 +141,7 @@ async function request(origin, endpoint, {token, body = {}, expectedStatus = 200
 test('connects the loopback browser host, Node watcher, and injected runtime protocol', async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-host-'));
   const sourceManifestPath = path.join(projectRoot, 'project.source.json');
-  const sourceFilename = 'preview.kamishibai.yaml';
+  const sourceFilename = 'preview.k4.yml';
   const sourcePath = path.join(projectRoot, sourceFilename);
   const sourceWatch = fakeWatchFactory();
   const structureWatch = fakeWatchFactory();
@@ -186,7 +186,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.match(pageBody, /dsl4-local-preview-client\.js/u);
     assert.match(
       pageBody,
-      /<strong id="dsl4-local-preview-source-name">preview\.kamishibai\.yaml<\/strong>/u,
+      /<strong id="dsl4-local-preview-source-name">preview\.k4\.yml<\/strong>/u,
     );
     const clientModule = await fetch(`${origin}/modules/builder/dsl4-local-preview-client.js`);
     assert.equal(clientModule.status, 200);
@@ -259,7 +259,7 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
       ['start', 'stop', 'dispose', 'start'],
     );
 
-    const manifestChanged = {...manifest, path: 'alternate.kamishibai.yaml'};
+    const manifestChanged = {...manifest, path: 'alternate.k4.yaml'};
     await writeFile(sourceManifestPath, `${JSON.stringify(manifestChanged)}\n`);
     structureWatch.emit('project.source.json');
     await waitFor(

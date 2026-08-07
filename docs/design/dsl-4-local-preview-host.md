@@ -28,6 +28,9 @@ sourceのread、canonicalize、parse、schema／semantic diagnosticは`validate-
 source frontendへ委譲します。HTTP responseとbrowser eventにはsource text、絶対path、runtime variable、tokenを
 含めず、integrity、有限count、diagnostic envelope、protocol acknowledgementだけを送ります。
 
+新規sourceの推奨suffixは`.k4.yml`です。entrypoint basenameは`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、
+`.kamishibai.yaml`を正式に受理し、`path`省略時の`story.kamishibai.yaml`は後方互換として維持します。
+
 ## 2. 接続とsecurity
 
 - bind先はliteral `127.0.0.1`または`::1`だけとし、port `0`はOSによる空きport選択として受理する
