@@ -670,14 +670,23 @@
         "seconds": {"type": "number", "minimum": 0}
       }
     },
-    "sayArgs": {
+    "speechArgs": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text", "seconds"],
+      "required": ["text"],
+      "anyOf": [
+        {"required": ["seconds"], "properties": {"seconds": true}},
+        {"required": ["waitFor"], "properties": {"waitFor": true}}
+      ],
+      "dependentRequired": {"characterSound": ["characterIntervalSeconds"]},
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
-        "seconds": {"type": "number", "minimum": 0}
+        "seconds": {"type": "number", "minimum": 0},
+        "waitFor": {"const": "advance"},
+        "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "startSound": {"$ref": "#/$defs/assetId"},
+        "characterSound": {"$ref": "#/$defs/assetId"}
       }
     },
     "setSkinArgs": {
@@ -830,7 +839,16 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.say$": {"$ref": "#/$defs/sayArgs"}
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.say$": {"$ref": "#/$defs/speechArgs"}
+      }
+    },
+    "thinkAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.think$": {"$ref": "#/$defs/speechArgs"}
       }
     },
     "setSkinAction": {
@@ -866,7 +884,7 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
           "$ref": "#/$defs/customActorActionArgs"
         }
       }
@@ -886,6 +904,7 @@
         {"$ref": "#/$defs/showAction"},
         {"$ref": "#/$defs/moveToAction"},
         {"$ref": "#/$defs/sayAction"},
+        {"$ref": "#/$defs/thinkAction"},
         {"$ref": "#/$defs/setSkinAction"},
         {"$ref": "#/$defs/setTextAction"},
         {"$ref": "#/$defs/poseAction"},

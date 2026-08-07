@@ -23,6 +23,7 @@ export const dsl4ActorCoreActionNames = Object.freeze([
   'show',
   'moveTo',
   'say',
+  'think',
   'setSkin',
   'setText',
   'pose',

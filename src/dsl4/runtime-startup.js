@@ -4,7 +4,7 @@ import {deepFreeze} from './story-document.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
@@ -14,6 +14,7 @@ const featureFlagKeys = new Set([
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
+  'dsl4SpeechAdvanceTypewriter',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -22,6 +23,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
+  dsl4SpeechAdvanceTypewriter: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -99,6 +101,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   const resolved = {...dsl4DefaultFeatureFlags, ...input};
   for (const [name, value] of Object.entries(resolved)) {
     if (typeof value !== 'boolean') throw new TypeError(`${name} feature flag must be boolean`);
+  }
+  if (resolved.dsl4SpeechAdvanceTypewriter && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');
   }
   return deepFreeze(resolved);
 }

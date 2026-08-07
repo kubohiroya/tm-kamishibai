@@ -355,6 +355,11 @@ export function validateDsl4Semantics(
         } else if (opcode === 'setText') {
           const style = /** @type {Record<string, unknown>} */ (value).style;
           addReferenceIssue(issues, styles, style, undefined, `${actionPath}.style`);
+        } else if (opcode === 'say' || opcode === 'think') {
+          const speech = /** @type {Record<string, unknown>} */ (value);
+          for (const field of ['startSound', 'characterSound']) {
+            addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
+          }
         } else if (opcode === 'pose') {
           usesPoseRecognition = true;
           const steps = /** @type {{pose: string, skin?: string, sound?: string}[]} */ (

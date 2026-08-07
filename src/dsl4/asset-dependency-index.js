@@ -20,6 +20,10 @@ function addActionDependencies(action, dependencies) {
   const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
   if (command === 'stage') addDependency(args.backdrop, dependencies);
   if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
+  if (command === 'say' || command === 'think') {
+    addDependency(args.startSound, dependencies);
+    addDependency(args.characterSound, dependencies);
+  }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
   if (command !== 'pose') return false;
 
