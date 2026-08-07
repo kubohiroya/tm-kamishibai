@@ -247,6 +247,31 @@ test('publishes a final cancelled state after action abort and releases its time
   );
 });
 
+test('contains synchronous and asynchronous observer failures without changing pose execution', async () => {
+  let calls = 0;
+  const {pose, clock, sounds, port} = setup({
+    onPoseState() {
+      calls += 1;
+      if (calls === 1) throw new Error('sync observer failure');
+      return Promise.reject(new Error('async observer failure'));
+    },
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  await flush();
+  pose.confidence.set('help', 1);
+  clock.advance(1000);
+  await pending;
+  await flush();
+
+  assert.equal(calls, 3);
+  assert.equal(clock.size, 0);
+  assert.deepEqual(sounds, [
+    ['play', 'Tick'],
+    ['play', 'Charge'],
+    ['stop', 'Tick'],
+  ]);
+});
+
 test('uses idleChargePerSecond only while confidence is below threshold', async () => {
   const {pose, clock, sounds, port} = setup();
   pose.confidence.set('help', 0.49);

@@ -246,6 +246,76 @@ test('dispatches every core action and keeps transition separate from scene move
   );
 });
 
+test('preserves non-default pose policy and increments stepIndex across ordered steps', async () => {
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+            - pose: stand
+`),
+    port: {
+      waitForPose: async (payload) => calls.push(payload),
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(
+    calls.map(({pose, stepIndex, recognition}) => ({pose, stepIndex, recognition})),
+    [
+      {
+        pose: 'help',
+        stepIndex: 0,
+        recognition: {
+          confidenceThreshold: 0.5,
+          fullConfidenceHoldSeconds: 1,
+          idleChargePerSecond: 0,
+          idleSound: 'Tick',
+          chargeSound: 'Charge',
+          feedback: {mode: 'presenter'},
+          navigation: {allowSkip: true},
+        },
+      },
+      {
+        pose: 'stand',
+        stepIndex: 1,
+        recognition: {
+          confidenceThreshold: 0.5,
+          fullConfidenceHoldSeconds: 1,
+          idleChargePerSecond: 0,
+          idleSound: 'Tick',
+          chargeSound: 'Charge',
+          feedback: {mode: 'presenter'},
+          navigation: {allowSkip: true},
+        },
+      },
+    ],
+  );
+});
+
 test('runs every Actor.pose step in order with optional skin and sound', async () => {
   const calls = [];
   const story = parseStory(`

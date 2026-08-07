@@ -248,16 +248,19 @@ export function createDsl4PoseActionPort(options) {
    */
   function publishPoseState(input, phase, confidence, progress) {
     if (!onPoseState) return;
-    onPoseState(
-      createDsl4PoseStateEvent({
-        phase,
-        target: input.target,
-        pose: input.pose,
-        stepIndex: input.stepIndex,
-        confidence,
-        progress,
-      }),
-    );
+    const event = createDsl4PoseStateEvent({
+      phase,
+      target: input.target,
+      pose: input.pose,
+      stepIndex: input.stepIndex,
+      confidence,
+      progress,
+    });
+    try {
+      Promise.resolve(onPoseState(event)).catch(() => {});
+    } catch {
+      // A non-authoritative observer cannot change pose execution semantics.
+    }
   }
 
   /** @param {string} poseModel @param {ReadonlyArray<string>} poses */
