@@ -131,6 +131,7 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {Record<string, Function>} [options.structuredDataIntegration]
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {boolean} [options.cameraPreviewControlsEnabled]
+ * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -143,6 +144,7 @@ export function createDsl4RuntimeController({
   structuredDataIntegration,
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
+  poseNavigationPolicyEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -180,6 +182,9 @@ export function createDsl4RuntimeController({
         throw new TypeError(`structuredDataIntegration.${method} is required`);
       }
     }
+  }
+  if (typeof poseNavigationPolicyEnabled !== 'boolean') {
+    throw new TypeError('poseNavigationPolicyEnabled must be boolean');
   }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
@@ -247,6 +252,10 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
+  /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  let poseAdvanceLock = null;
+  /** @type {{generation: number} | null} */
+  let activePoseWait = null;
   /** @type {Record<string, any> | null} */
   let quiesceRequest = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -854,17 +863,23 @@ export function createDsl4RuntimeController({
           await invokePort('setSkin', {target, skin: step.skin}, context);
           ensureActive(context);
         }
-        await invokePort(
-          'waitForPose',
-          {
-            target,
-            pose: step.pose,
-            stepIndex,
-            poseModel,
-            recognition: cloneValue(poseSequenceRecognition),
-          },
-          context,
-        );
+        const poseWait = {generation: context.generation};
+        activePoseWait = poseWait;
+        try {
+          await invokePort(
+            'waitForPose',
+            {
+              target,
+              pose: step.pose,
+              stepIndex,
+              poseModel,
+              recognition: cloneValue(poseSequenceRecognition),
+            },
+            context,
+          );
+        } finally {
+          if (activePoseWait === poseWait) activePoseWait = null;
+        }
         ensureActive(context);
         if (typeof step.sound === 'string') {
           await invokePort('sound', {sound: step.sound}, context);
@@ -1139,9 +1154,10 @@ export function createDsl4RuntimeController({
     }
     const action = currentAction();
     const wasRunning = status === 'running';
-    if (wasRunning) actionAbortController?.abort(reason);
+    const poseCancellationPending = poseAdvanceLock?.runId === runId;
+    if (wasRunning && !poseCancellationPending) actionAbortController?.abort(reason);
     generation += 1;
-    if (wasRunning && action) emit('action.cancel', {reason});
+    if (wasRunning && action && !poseCancellationPending) emit('action.cancel', {reason});
     try {
       endStructuredStory(reason);
     } catch (error) {
@@ -1155,23 +1171,39 @@ export function createDsl4RuntimeController({
     return snapshot();
   }
 
+  /** @param {string} reason */
+  function isPoseNavigationAdvance(reason) {
+    return (
+      poseNavigationPolicyEnabled &&
+      reason === 'navigation.nextAction' &&
+      status === 'running' &&
+      actionAbortController !== null &&
+      activePoseWait?.generation === generation &&
+      currentAction()?.command === 'pose'
+    );
+  }
+
+  /** @param {string} [reason] */
+  function canAdvance(reason = 'navigation.nextAction') {
+    if (status !== 'running') return false;
+    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock) return false;
+    if (!isPoseNavigationAdvance(reason)) return true;
+    return poseSequenceRecognition.navigation.allowSkip;
+  }
+
   /**
-   * Cancel the current action and continue at the next normal execution boundary.
+   * Continue at the next normal execution boundary after the active action is cancelled.
    *
-   * @param {string} [reason]
-   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   * @param {string} reason
+   * @param {string} fromStoryPath
+   * @param {number} activeRunId
    */
-  function advance(reason = 'navigation.nextAction') {
-    if (status !== 'running') return Promise.resolve(snapshot());
+  function continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId) {
     const scene = currentScene();
     const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       scene?.actions ?? []
     );
-    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
-    const action = currentAction();
-    actionAbortController?.abort(reason);
-    generation += 1;
-    if (action) emit('action.cancel', {reason});
     try {
       releaseStructuredAction(reason);
     } catch (error) {
@@ -1179,8 +1211,6 @@ export function createDsl4RuntimeController({
       return Promise.resolve(snapshot());
     }
     actionAbortController = null;
-    runId += 1;
-    runPromise = null;
 
     const nextActionIndex = currentActionIndex + 1;
     if (nextActionIndex < actions.length) {
@@ -1189,7 +1219,7 @@ export function createDsl4RuntimeController({
         toStoryPath: storyPathAt(currentSceneIndex, nextActionIndex),
         reason,
       });
-      runPromise = run(runId);
+      runPromise = run(activeRunId);
       return runPromise;
     }
     if (currentSceneIndex + 1 < scenes.length) {
@@ -1199,7 +1229,6 @@ export function createDsl4RuntimeController({
         toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
         reason,
       });
-      const activeRunId = runId;
       if (!assetCoordinator) {
         try {
           transitionTo(nextSceneId, reason);
@@ -1228,6 +1257,64 @@ export function createDsl4RuntimeController({
     emit('navigation.advance', {fromStoryPath, toStoryPath: null, reason});
     emit('runtime.finish');
     return Promise.resolve(snapshot());
+  }
+
+  /**
+   * @param {string} reason
+   * @param {string} fromStoryPath
+   * @param {Promise<Readonly<Record<string, unknown>>> | null} activeRun
+   * @param {{runId: number, operation: Promise<Readonly<Record<string, unknown>>> | null}} lock
+   */
+  async function advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock) {
+    try {
+      if (activeRun) await activeRun;
+    } finally {
+      if (poseAdvanceLock === lock) poseAdvanceLock = null;
+    }
+    const activeRunId = lock.runId;
+    if (status !== 'running' || runId !== activeRunId) return snapshot();
+    return continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId);
+  }
+
+  /**
+   * Cancel the current action and continue at the next normal execution boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advance(reason = 'navigation.nextAction') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock) return poseAdvanceLock.operation;
+    if (!canAdvance(reason)) return Promise.resolve(snapshot());
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    if (isPoseNavigationAdvance(reason)) {
+      const activeRun = runPromise;
+      actionAbortController?.abort(reason);
+      generation += 1;
+      emit('action.cancel', {reason});
+      runId += 1;
+      /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
+      const lock = {runId, operation: Promise.resolve(snapshot())};
+      const operation = advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock);
+      lock.operation = operation;
+      poseAdvanceLock = lock;
+      runPromise = operation;
+      void operation
+        .finally(() => {
+          if (poseAdvanceLock === lock) poseAdvanceLock = null;
+          if (runPromise === operation) runPromise = null;
+        })
+        .catch(() => {});
+      return operation;
+    }
+    const action = currentAction();
+    actionAbortController?.abort(reason);
+    generation += 1;
+    if (action) emit('action.cancel', {reason});
+    runId += 1;
+    runPromise = null;
+    return continueAfterAdvanceCancellation(reason, fromStoryPath, runId);
   }
 
   /**
@@ -1521,6 +1608,7 @@ export function createDsl4RuntimeController({
   return Object.freeze({
     start,
     stop,
+    canAdvance,
     advance,
     navigate,
     reposition,

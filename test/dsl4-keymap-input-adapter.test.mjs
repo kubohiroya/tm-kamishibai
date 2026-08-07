@@ -64,6 +64,17 @@ test('validates the resolved keymap and event target contract', () => {
     dispatchCommand: async () => {},
   });
   assert.throws(() => adapter.attach({addEventListener() {}}), /event listener registration/);
+  assert.throws(
+    () =>
+      createDsl4KeymapInputAdapter({
+        keymap: {},
+        dispatchCommand() {},
+        shouldConsumeCommand() {
+          return true;
+        },
+      }),
+    /requires immediate command dispatch/u,
+  );
 });
 
 test('uses code only and never falls back to locale-dependent key', async () => {
@@ -161,6 +172,51 @@ test('consumes one bound initial keydown and suppresses repeat dispatch', async 
   await adapter.whenIdle();
   assert.deepEqual(initial.counters, {preventDefault: 1, stopPropagation: 1});
   assert.deepEqual(repeated.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(calls, ['history.previousAction']);
+});
+
+test('does not consume a synchronously refused command and reserves an accepted command immediately', async () => {
+  let available = true;
+  const calls = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {Space: 'navigation.nextAction'},
+    shouldConsumeCommand: () => available,
+    dispatchImmediately: true,
+    dispatchCommand(command) {
+      calls.push(command);
+      available = false;
+    },
+  });
+
+  const accepted = keyEvent('Space');
+  assert.equal(adapter.handleKeyDown(accepted), true);
+  assert.deepEqual(accepted.counters, {preventDefault: 1, stopPropagation: 1});
+
+  const refused = keyEvent('Space');
+  assert.equal(adapter.handleKeyDown(refused), false);
+  assert.deepEqual(refused.counters, {preventDefault: 0, stopPropagation: 0});
+  const repeated = keyEvent('Space', {repeat: true});
+  assert.equal(adapter.handleKeyDown(repeated), false);
+  assert.deepEqual(repeated.counters, {preventDefault: 0, stopPropagation: 0});
+
+  await adapter.whenIdle();
+  assert.deepEqual(calls, ['navigation.nextAction']);
+});
+
+test('keeps commands without a consumption decision on the serialized queue', async () => {
+  const calls = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {ArrowLeft: 'history.previousAction'},
+    shouldConsumeCommand: () => undefined,
+    dispatchImmediately: true,
+    dispatchCommand: async (command) => calls.push(command),
+  });
+  const event = keyEvent('ArrowLeft');
+
+  assert.equal(adapter.handleKeyDown(event), true);
+  assert.deepEqual(event.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(calls, []);
+  await adapter.whenIdle();
   assert.deepEqual(calls, ['history.previousAction']);
 });
 

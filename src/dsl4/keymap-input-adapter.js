@@ -76,9 +76,17 @@ function shouldIgnore(event) {
  * @param {object} options
  * @param {Readonly<Record<string, string>>} options.keymap
  * @param {(command: string, context: Readonly<{code: string}>) => unknown | Promise<unknown>} options.dispatchCommand
+ * @param {(command: string, context: Readonly<{code: string}>) => boolean | undefined} [options.shouldConsumeCommand]
+ * @param {boolean} [options.dispatchImmediately]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onError]
  */
-export function createDsl4KeymapInputAdapter({keymap, dispatchCommand, onError}) {
+export function createDsl4KeymapInputAdapter({
+  keymap,
+  dispatchCommand,
+  shouldConsumeCommand,
+  dispatchImmediately = false,
+  onError,
+}) {
   if (typeof keymap !== 'object' || keymap === null || Array.isArray(keymap)) {
     throw new TypeError('keymap must be an object');
   }
@@ -87,6 +95,15 @@ export function createDsl4KeymapInputAdapter({keymap, dispatchCommand, onError})
   }
   if (typeof dispatchCommand !== 'function') {
     throw new TypeError('dispatchCommand must be a function');
+  }
+  if (shouldConsumeCommand !== undefined && typeof shouldConsumeCommand !== 'function') {
+    throw new TypeError('shouldConsumeCommand must be a function');
+  }
+  if (typeof dispatchImmediately !== 'boolean') {
+    throw new TypeError('dispatchImmediately must be boolean');
+  }
+  if (shouldConsumeCommand && !dispatchImmediately) {
+    throw new TypeError('shouldConsumeCommand requires immediate command dispatch');
   }
   if (onError !== undefined && typeof onError !== 'function') {
     throw new TypeError('onError must be a function');
@@ -123,11 +140,36 @@ export function createDsl4KeymapInputAdapter({keymap, dispatchCommand, onError})
     const code = typeof event.code === 'string' ? event.code : '';
     if (!Object.hasOwn(resolvedKeymap, code)) return false;
     const command = resolvedKeymap[code];
+    const context = deepFreeze({code});
+    let dispatchNow = dispatchImmediately && !shouldConsumeCommand;
+    if (shouldConsumeCommand) {
+      try {
+        const consumption = shouldConsumeCommand(command, context);
+        if (consumption !== undefined && typeof consumption !== 'boolean') {
+          throw new TypeError('shouldConsumeCommand must return boolean or undefined');
+        }
+        if (consumption === false) return false;
+        dispatchNow = consumption === true && dispatchImmediately;
+      } catch (error) {
+        reportError(error, command, code);
+        return false;
+      }
+    }
     event.preventDefault?.();
     event.stopPropagation?.();
     if (event.repeat) return true;
 
-    const context = deepFreeze({code});
+    if (dispatchNow) {
+      try {
+        const operation = Promise.resolve(dispatchCommand(command, context)).catch((error) =>
+          reportError(error, command, code),
+        );
+        queue = Promise.all([queue, operation]).then(() => undefined);
+      } catch (error) {
+        reportError(error, command, code);
+      }
+      return true;
+    }
     queue = queue
       .then(() => dispatchCommand(command, context))
       .catch((error) => reportError(error, command, code));

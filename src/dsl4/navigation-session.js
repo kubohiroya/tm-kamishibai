@@ -75,6 +75,7 @@ function historyFailure(result) {
  * @param {boolean} [options.structuredDataIntegrationEnabled]
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {boolean} [options.cameraPreviewControlsEnabled]
+ * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
  * @param {number} [options.quiesceTimeoutMs]
@@ -94,6 +95,7 @@ export function createDsl4NavigationSession({
   structuredDataIntegrationEnabled = false,
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
+  poseNavigationPolicyEnabled = false,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
   quiesceTimeoutMs,
@@ -107,6 +109,9 @@ export function createDsl4NavigationSession({
   }
   if (typeof cameraPreviewControlsEnabled !== 'boolean') {
     throw new TypeError('cameraPreviewControlsEnabled must be boolean');
+  }
+  if (typeof poseNavigationPolicyEnabled !== 'boolean') {
+    throw new TypeError('poseNavigationPolicyEnabled must be boolean');
   }
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
@@ -216,6 +221,7 @@ export function createDsl4NavigationSession({
       structuredDataIntegration: structuredDataIntegration ?? undefined,
       posePreviewMirroringEnabled,
       cameraPreviewControlsEnabled,
+      poseNavigationPolicyEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });
@@ -278,6 +284,9 @@ export function createDsl4NavigationSession({
         historyState = result.state;
         void controller.resume(command);
       } else {
+        if (poseNavigationPolicyEnabled && !controller.canAdvance(command)) {
+          return deepFreeze({ok: true, changed: false, state: snapshot(), diagnostics: []});
+        }
         void controller.advance(command);
       }
       return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
@@ -308,6 +317,20 @@ export function createDsl4NavigationSession({
   const inputAdapter = createDsl4KeymapInputAdapter({
     keymap: profile.keymap,
     dispatchCommand,
+    ...(poseNavigationPolicyEnabled
+      ? {
+          shouldConsumeCommand(command) {
+            if (
+              command !== 'navigation.nextAction' ||
+              (historyReducer && historyState?.mode === 'history')
+            ) {
+              return true;
+            }
+            return controller.canAdvance(command);
+          },
+          dispatchImmediately: true,
+        }
+      : {}),
     onError: onInputError,
   });
 

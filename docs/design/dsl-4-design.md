@@ -550,6 +550,9 @@ mappingへまとめます。sequenceとselectionは排他でActor sequenceを優
 state eventはrenderer非依存とし、`phase`、`target`、`pose`、`stepIndex`、0〜1の`confidence`／`progress`
 だけを通知します。Scratch／presenter adapterとnavigation bypassはこのpure event契約のconsumerとして
 分離し、起動時固定・既定OFFの`dsl4PoseFeedbackModes`がOFFなら登録しません。
+`allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
+消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
+`navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
