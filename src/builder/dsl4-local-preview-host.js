@@ -6,6 +6,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4PreviewSourceProtocolPort} from '../dsl4/preview-source-protocol-port.js';
+import {
+  createDsl4PreviewSourceGenerationWire,
+  dsl4PreviewSourceGenerationWireDefaults,
+  dsl4PreviewSourceGenerationWireMaximumMessageBytes,
+} from '../dsl4/preview-source-generation-wire.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {Sb3BuilderError} from './errors.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
@@ -23,6 +28,7 @@ export const dsl4LocalPreviewHostDefaults = deepFreeze({
   port: 0,
   tokenTtlMs: 2 * 60 * 1_000,
   maxTokenRecords: 4,
+  maxGenerationMessageBytes: dsl4PreviewSourceGenerationWireDefaults.maxMessageBytes,
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -246,6 +252,7 @@ function previewHtml(sourceDisplayName) {
  * @param {number} [options.port]
  * @param {number} [options.tokenTtlMs]
  * @param {number} [options.maxTokenRecords]
+ * @param {number} [options.maxGenerationMessageBytes]
  * @param {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} [options.structureWatchFactory]
  * @param {Record<string, unknown>} [options.watcherOptions]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onEvent]
@@ -283,6 +290,16 @@ export function createDsl4LocalPreviewHost(options) {
     'maxTokenRecords',
     1,
   );
+  const maxGenerationMessageBytes = safeInteger(
+    options.maxGenerationMessageBytes ?? dsl4LocalPreviewHostDefaults.maxGenerationMessageBytes,
+    'maxGenerationMessageBytes',
+    1,
+  );
+  if (maxGenerationMessageBytes > dsl4PreviewSourceGenerationWireMaximumMessageBytes) {
+    throw new TypeError(
+      `maxGenerationMessageBytes must be <= ${dsl4PreviewSourceGenerationWireMaximumMessageBytes}`,
+    );
+  }
   const structureWatchFactory =
     /** @type {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} */ (
       options.structureWatchFactory ??
@@ -313,6 +330,7 @@ export function createDsl4LocalPreviewHost(options) {
   let disposed = false;
   let stopping = false;
   let sequence = 0;
+  let generationRevision = 0;
   /** @type {string | null} */
   let origin = null;
   /** @type {Buffer | null} */
@@ -342,6 +360,8 @@ export function createDsl4LocalPreviewHost(options) {
   let structuralOperation = Promise.resolve();
   /** @type {Readonly<Record<string, unknown>>[]} */
   const events = [];
+  /** @type {Readonly<Record<string, unknown>> | null} */
+  let latestGenerationRecord = null;
 
   function snapshot() {
     return deepFreeze({
@@ -352,7 +372,7 @@ export function createDsl4LocalPreviewHost(options) {
       connected: transportConnection !== null,
       rebuildRequired: status === 'rebuild-required',
       latestSequence: sequence,
-      retainedEvents: events.length,
+      retainedEvents: events.length + (latestGenerationRecord ? 1 : 0),
       source: currentSourceSummary,
     });
   }
@@ -372,9 +392,20 @@ export function createDsl4LocalPreviewHost(options) {
     const record = deepFreeze({sequence: ++sequence, ...event});
     events.push(record);
     if (events.length > maximumEventRecords) events.shift();
+    writeActiveRecord(record);
+    notifyEventObserver(record);
+    return record;
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} record */
+  function writeActiveRecord(record) {
     if (activeResponse && !activeResponse.destroyed) {
       activeResponse.write(`${JSON.stringify(record)}\n`);
     }
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} record */
+  function notifyEventObserver(record) {
     try {
       options.onEvent?.(record);
     } catch (error) {
@@ -384,7 +415,32 @@ export function createDsl4LocalPreviewHost(options) {
         // Observers cannot change transport or watch state.
       }
     }
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} result */
+  function publishGeneration(result) {
+    const revision = generationRevision + 1;
+    const generation = createDsl4PreviewSourceGenerationWire({
+      revision,
+      result,
+      maxMessageBytes: maxGenerationMessageBytes,
+    });
+    generationRevision = revision;
+    const record = deepFreeze({
+      sequence: ++sequence,
+      type: 'local-preview.generation',
+      generation,
+    });
+    latestGenerationRecord = record;
+    writeActiveRecord(record);
     return record;
+  }
+
+  /** @param {number} after */
+  function retainedRecords(after) {
+    return [...events, ...(latestGenerationRecord ? [latestGenerationRecord] : [])]
+      .filter((event) => Number(event.sequence) > after)
+      .sort((left, right) => Number(left.sequence) - Number(right.sequence));
   }
 
   async function disconnectProtocol() {
@@ -414,6 +470,7 @@ export function createDsl4LocalPreviewHost(options) {
     stopStructureWatcher();
     await stopWatcher();
     await disconnectProtocol();
+    latestGenerationRecord = null;
     publish({
       type: 'local-preview.full-rebuild-required',
       diagnostic: {version: 1, code, severity: 'error', message},
@@ -527,6 +584,7 @@ export function createDsl4LocalPreviewHost(options) {
         maxSourceBytes,
         async onResult(result) {
           if (sourcePort !== activePort) return;
+          publishGeneration(result);
           const summary = safeSourceSummary(result);
           currentSourceSummary = summary;
           if (result.ok === true) latestValidSourceResult = result;
@@ -556,7 +614,7 @@ export function createDsl4LocalPreviewHost(options) {
         throw new TypeError('local preview host was disposed while connecting');
       }
       status = 'connected';
-      return {snapshot: snapshot(), events: [...events]};
+      return {snapshot: snapshot(), events: retainedRecords(0)};
     } catch (error) {
       if (sourceWatcher === watcher) await stopWatcher();
       else await watcher?.dispose();
@@ -611,8 +669,8 @@ export function createDsl4LocalPreviewHost(options) {
         'x-accel-buffering': 'no',
         'x-content-type-options': 'nosniff',
       });
-      for (const event of events) {
-        if (Number(event.sequence) > after) response.write(`${JSON.stringify(event)}\n`);
+      for (const event of retainedRecords(after)) {
+        response.write(`${JSON.stringify(event)}\n`);
       }
       activeResponse = response;
       response.on('close', () => {
@@ -673,6 +731,7 @@ export function createDsl4LocalPreviewHost(options) {
     stopStructureWatcher();
     await stopWatcher();
     await disconnectProtocol();
+    latestGenerationRecord = null;
     if (connection) await connection.disconnect(reason);
     if (!disposed && status !== 'rebuild-required') status = 'listening';
   }

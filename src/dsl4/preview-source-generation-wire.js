@@ -3,7 +3,7 @@ import {deepFreeze} from './story-document.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
-const hardMaximumMessageBytes = 16 * 1024 * 1024;
+export const dsl4PreviewSourceGenerationWireMaximumMessageBytes = 16 * 1024 * 1024;
 const integrityPattern = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 const wireKeys = new Set(['formatVersion', 'type', 'revision', 'result']);
 const resultKeys = new Set(['ok', 'sourceSnapshot', 'diagnostics', 'storyDocument']);
@@ -89,8 +89,11 @@ function limits(input) {
     'maxMessageBytes',
     1,
   );
-  if (maxMessageBytes > hardMaximumMessageBytes) {
-    fail('K4-PREVIEW-GENERATION-LIMIT', `maxMessageBytes must be <= ${hardMaximumMessageBytes}`);
+  if (maxMessageBytes > dsl4PreviewSourceGenerationWireMaximumMessageBytes) {
+    fail(
+      'K4-PREVIEW-GENERATION-LIMIT',
+      `maxMessageBytes must be <= ${dsl4PreviewSourceGenerationWireMaximumMessageBytes}`,
+    );
   }
   const maxDiagnostics = safeInteger(
     input.maxDiagnostics ?? dsl4PreviewSourceGenerationWireDefaults.maxDiagnostics,

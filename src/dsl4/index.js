@@ -132,6 +132,7 @@ export {
   createDsl4PreviewSourceGenerationWire,
   decodeDsl4PreviewSourceGenerationWire,
   dsl4PreviewSourceGenerationWireDefaults,
+  dsl4PreviewSourceGenerationWireMaximumMessageBytes,
   Dsl4PreviewSourceGenerationWireError,
   encodeDsl4PreviewSourceGenerationWire,
 } from './preview-source-generation-wire.js';

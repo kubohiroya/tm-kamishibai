@@ -8,7 +8,12 @@ import {
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
 } from '../src/builder/index.js';
-import {createDsl4LiveReloadSession, createDsl4PreviewProtocolSession} from '../src/dsl4/index.js';
+import {
+  createDsl4LiveReloadSession,
+  createDsl4PreviewProtocolSession,
+  decodeDsl4PreviewSourceGenerationWire,
+  dsl4PreviewSourceGenerationWireMaximumMessageBytes,
+} from '../src/dsl4/index.js';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -200,6 +205,19 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(initial.source.ok, true);
     assert.equal(initial.acknowledgement.status, 'active');
     assert.equal(initial.source.counts.scenes, 1);
+    const generationEvent = connected.events.find(
+      (event) => event.type === 'local-preview.generation',
+    );
+    const generation = decodeDsl4PreviewSourceGenerationWire(
+      new TextEncoder().encode(JSON.stringify(generationEvent.generation)),
+    );
+    assert.equal(generation.revision, 1);
+    assert.equal(generation.result.ok, true);
+    assert.equal(generation.result.storyDocument.scenes[0].id, 'opening');
+    assert.equal(
+      observedEvents.some((event) => event.type === 'local-preview.generation'),
+      false,
+    );
     const serialized = JSON.stringify(connected);
     assert.equal(serialized.includes(validSource.trim()), false);
     assert.equal(serialized.includes(projectRoot), false);
@@ -224,28 +242,42 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(host.getSnapshot().status, 'connected');
 
     await writeFile(sourcePath, "kamishibai: '4.0'\nscenes: {}\n");
-    const beforeInvalid = host.getSnapshot().latestSequence;
+    const beforeInvalid = host.getSnapshot();
+    const beforeInvalidSources = observedEvents.filter(
+      (event) => event.type === 'local-preview.source',
+    ).length;
     sourceWatch.emit(sourceFilename);
     await waitFor(
-      () => host.getSnapshot().latestSequence > beforeInvalid,
+      () =>
+        observedEvents.filter((event) => event.type === 'local-preview.source').length >
+        beforeInvalidSources,
       'invalid source event was not published',
     );
     const invalid = observedEvents.findLast((event) => event.type === 'local-preview.source');
     assert.equal(invalid.source.ok, false);
     assert.equal(invalid.acknowledgement.status, 'invalid');
     assert.equal(invalid.acknowledgement.current.generation, 1);
+    assert.equal(host.getSnapshot().latestSequence, beforeInvalid.latestSequence + 2);
+    assert.equal(host.getSnapshot().retainedEvents, beforeInvalid.retainedEvents + 1);
     assert.equal(runtime.lifecycle.length, 1);
 
     await writeFile(sourcePath, validSource.replace('opening: []', 'opening:\n    - wait: 60'));
-    const beforeCandidate = host.getSnapshot().latestSequence;
+    const beforeCandidate = host.getSnapshot();
+    const beforeCandidateSources = observedEvents.filter(
+      (event) => event.type === 'local-preview.source',
+    ).length;
     sourceWatch.emit(sourceFilename);
     await waitFor(
-      () => host.getSnapshot().latestSequence > beforeCandidate,
+      () =>
+        observedEvents.filter((event) => event.type === 'local-preview.source').length >
+        beforeCandidateSources,
       'valid candidate event was not published',
     );
     const candidate = observedEvents.findLast((event) => event.type === 'local-preview.source');
     assert.equal(candidate.acknowledgement.status, 'pending');
     assert.equal(candidate.acknowledgement.candidate.options.storyStart.enabled, true);
+    assert.equal(host.getSnapshot().latestSequence, beforeCandidate.latestSequence + 2);
+    assert.equal(host.getSnapshot().retainedEvents, beforeCandidate.retainedEvents + 1);
     assert.equal(runtime.lifecycle.length, 1);
 
     const committed = await request(origin, '/api/commit', {
@@ -357,6 +389,14 @@ test('fails before opening sockets for unsafe local host configuration', () => {
     /sourceManifestPath/u,
   );
   assert.throws(() => createDsl4LocalPreviewHost({...base, port: 70_000}), /port/u);
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        maxGenerationMessageBytes: dsl4PreviewSourceGenerationWireMaximumMessageBytes + 1,
+      }),
+    /maxGenerationMessageBytes/u,
+  );
   void runtime.liveReload.dispose();
 });
 
