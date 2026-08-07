@@ -320,6 +320,39 @@ test('withholds every platform dependency until the packaged component validates
   assert.deepEqual(log, []);
 });
 
+test('forwards the pose observer only when its startup-fixed feature flag is enabled', async () => {
+  const project = await packagedProject();
+  const disabledLog = [];
+  const disabledOptions = enabledOptions(project, platformFixture(disabledLog));
+  Object.defineProperty(disabledOptions, 'onPoseState', {
+    get() {
+      assert.fail('disabled pose feedback must not inspect its observer');
+    },
+  });
+  const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
+  assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
+  await disabled.host.dispose('feedback-disabled');
+
+  const enabledLog = [];
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, platformFixture(enabledLog), {
+        featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      }),
+    ),
+    /onPoseState/u,
+  );
+
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture([]), {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      onPoseState() {},
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  await enabled.host.dispose('feedback-enabled');
+});
+
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {
   const project = await packagedProject();
   const log = [];

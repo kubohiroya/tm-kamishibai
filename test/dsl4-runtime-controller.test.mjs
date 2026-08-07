@@ -191,6 +191,7 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
     pose: 'happy',
+    stepIndex: 0,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.6,
@@ -198,6 +199,8 @@ test('dispatches every core action and keeps transition separate from scene move
       idleChargePerSecond: 0.1,
       idleSound: 'Effect',
       chargeSound: 'Effect',
+      feedback: {mode: 'scratchMirror'},
+      navigation: {allowSkip: false},
     },
   });
   assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
@@ -299,6 +302,8 @@ scenes:
     idleChargePerSecond: 0,
     idleSound: null,
     chargeSound: null,
+    feedback: {mode: 'scratchMirror'},
+    navigation: {allowSkip: false},
   });
 });
 

@@ -23,6 +23,7 @@ const pureEntries = [
   'navigation-session.js',
   'object-store/index.js',
   'preview-protocol.js',
+  'pose-feedback-policy.js',
   'reload-planner.js',
   'runtime-artifact-descriptor.js',
   'runtime-artifact-loader.js',

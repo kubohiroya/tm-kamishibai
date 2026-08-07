@@ -70,6 +70,7 @@ export {
   dsl4PreviewRequiredCapabilities,
   Dsl4PreviewProtocolError,
 } from './preview-protocol.js';
+export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
 export {

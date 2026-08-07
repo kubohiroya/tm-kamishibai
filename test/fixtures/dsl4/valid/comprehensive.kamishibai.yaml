@@ -61,6 +61,10 @@ poseRecognition:
     accumulationPerSecond: 1
     decayPerSecond: 0.9
     scoreThreshold: 0
+  feedback:
+    mode: scratchMirror
+  navigation:
+    allowSkip: false
 
 controls:
   keymaps:

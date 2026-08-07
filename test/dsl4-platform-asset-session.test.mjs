@@ -328,6 +328,39 @@ test('passes pose, key, and actor touch sources into one Async Input composition
   assert.equal(releaseCalls, 1);
 });
 
+test('keeps pose feedback observer behind an explicit default-off session gate', async () => {
+  const disabledLog = [];
+  const disabledSetup = options(runtimeComponent(), disabledLog);
+  Object.defineProperty(disabledSetup.value, 'onPoseState', {
+    get() {
+      assert.fail('disabled pose feedback must not inspect its observer');
+    },
+  });
+  const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
+  await disabled.dispose('feedback-disabled');
+
+  const invalidLog = [];
+  const invalidSetup = options(runtimeComponent(), invalidLog);
+  assert.throws(
+    () =>
+      createDsl4PlatformAssetSession({
+        ...invalidSetup.value,
+        poseFeedbackEnabled: true,
+      }),
+    /onPoseState/u,
+  );
+  assert.deepEqual(invalidLog, []);
+
+  const enabledLog = [];
+  const enabledSetup = options(runtimeComponent(), enabledLog);
+  const enabled = createDsl4PlatformAssetSession({
+    ...enabledSetup.value,
+    poseFeedbackEnabled: true,
+    onPoseState() {},
+  });
+  await enabled.dispose('feedback-enabled');
+});
+
 test('keeps compositions, resources, and final disposal isolated between sessions', async () => {
   const firstLog = [];
   const secondLog = [];
