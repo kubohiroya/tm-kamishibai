@@ -47,6 +47,7 @@ export {
   Dsl4BrowserPreviewSourceError,
   inspectDsl4BrowserPreviewSupport,
 } from './browser-preview-source-adapter.js';
+export {createDsl4BrowserPreviewCoordinator} from './browser-preview-coordinator.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
   dsl4DiagnosticTruncationCode,
@@ -80,6 +81,7 @@ export {
   dsl4PreviewRequiredCapabilities,
   Dsl4PreviewProtocolError,
 } from './preview-protocol.js';
+export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
