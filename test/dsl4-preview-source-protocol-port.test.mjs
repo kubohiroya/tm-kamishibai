@@ -463,6 +463,9 @@ test('composes browser polling with handshake, stage, commit, and disconnect', a
   const committed = await coordinator.commit('storyStart');
   assert.equal(committed.result.type, 'preview.source.committed');
   assert.equal(committed.state.protocol.candidate, null);
+  const restarted = await coordinator.restart('storyStart');
+  assert.equal(restarted.result.type, 'preview.source.committed');
+  assert.equal(restarted.state.protocol.latestRevision, 3);
   const disposed = await coordinator.dispose();
   assert.equal(disposed.disposed, true);
   assert.equal(disposed.source.status, 'disposed');
@@ -473,6 +476,8 @@ test('composes browser polling with handshake, stage, commit, and disconnect', a
     [
       'preview.handshake',
       'preview.source.stage',
+      'preview.source.stage',
+      'preview.source.commit',
       'preview.source.stage',
       'preview.source.commit',
       'preview.disconnect',

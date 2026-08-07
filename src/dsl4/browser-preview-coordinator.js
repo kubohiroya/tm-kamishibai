@@ -66,12 +66,15 @@ export function createDsl4BrowserPreviewCoordinator(options) {
   });
   /** @type {Promise<unknown>} */
   let protocolReady = Promise.resolve(protocol.getState());
+  /** @type {Readonly<Record<string, unknown>> | null} */
+  let latestValidSourceResult = null;
   const source = createDsl4BrowserPreviewSourceAdapter({
     ...sourceOptions,
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
     onProjectRoot: options.onProjectRoot,
     onResult(result) {
+      if (result.ok === true) latestValidSourceResult = result;
       try {
         Promise.resolve(options.onSourceResult?.(result)).catch(reportError);
       } catch (error) {
@@ -115,6 +118,7 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     if (disposePromise) return disposePromise;
     if (disposed) return Promise.resolve(snapshot());
     disposed = true;
+    latestValidSourceResult = null;
     source.dispose();
     disposePromise = protocol.dispose().then(snapshot);
     return disposePromise;
@@ -141,6 +145,20 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     },
     /** @param {'storyStart' | 'currentScene' | 'currentAction'} choice */
     async commit(choice) {
+      const result = await protocol.commit(choice);
+      return deepFreeze({result, state: snapshot()});
+    },
+    /** @param {'storyStart' | 'currentScene' | 'currentAction'} choice */
+    async restart(choice) {
+      if (disposed) throw new TypeError('browser preview coordinator is disposed');
+      if (!['storyStart', 'currentScene', 'currentAction'].includes(choice)) {
+        throw new TypeError('preview restart choice is invalid');
+      }
+      if (!latestValidSourceResult) {
+        throw new TypeError('browser preview coordinator has no validated source generation');
+      }
+      await protocol.stage(latestValidSourceResult);
+      await protocol.whenIdle();
       const result = await protocol.commit(choice);
       return deepFreeze({result, state: snapshot()});
     },
