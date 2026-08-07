@@ -152,6 +152,30 @@ test('defines finite development defaults and has no side effects before start',
   assert.equal(setup.watched.closed, 1);
 });
 
+test('watches an explicit root-level source basename without accepting other files', async () => {
+  let loads = 0;
+  const setup = watcherOptions({
+    manifest: {...manifest, path: 'alternate.kamishibai.yaml'},
+    loadSource: async () => {
+      loads += 1;
+      return {descriptor: descriptor(validSource, 'sha256-explicit')};
+    },
+  });
+  const watcher = createDsl4PreviewSourceWatcher(setup.options);
+  await watcher.start();
+  assert.equal(setup.watched.directory, '/project');
+  assert.equal(loads, 1);
+
+  setup.watched.emit('story.kamishibai.yaml');
+  assert.equal(setup.clock.pendingTimers(), 0);
+  setup.watched.emit('alternate.kamishibai.yaml');
+  assert.equal(setup.clock.pendingTimers(), 1);
+  setup.clock.advance(100);
+  await watcher.whenIdle();
+  assert.equal(loads, 2);
+  await watcher.dispose();
+});
+
 test('coalesces source events and publishes only changed stable integrity', async () => {
   let current = descriptor(validSource, 'sha256-initial');
   let loads = 0;
