@@ -128,6 +128,19 @@ camera／asset／input ownerが重複する時間を作りません。
 この段階でもlocal preview clientは従来のfake runtime protocolを使用し、public CLIは未公開です。次段でbase SB3からの
 component読込、stage reset、generation stream、runtime bridgeを単一browser bootstrapへ接続します。
 
+### 5.3 base runtime component loader
+
+browserは認証済みendpointから取得したbase SB3の防御的copyをloaderへ渡し、`project.json`だけを展開します。compressed
+SB3は既定64 MiB／hard maximum 128 MiB、ZIP entry数は既定4096／hard maximum 16384、展開後`project.json`は
+既定48 MiB／hard maximum 96 MiBです。全entryの重複とunsafe pathを検査し、`project.json`の存在、compression method、
+UTF-8、JSON object、`targets`配列を検証してからruntime component loaderへ渡します。展開用SB3 copyとJSON byte列は
+処理終了時に空にし、projectやarchiveを公開snapshotへ含めません。
+
+base SB3内のembedded sourceは、runtime artifactとasset bundleが同じ固定snapshotに対応することを確認するため、注入された
+production frontendでbrowser起動時に一度だけparseします。これはNode watcherが生成した外部source generationとは別の
+artifact検証です。generation wireの`StoryDocument`、raw YAML、source pathをbase loaderへ渡さず、reloadごとの再parseは
+行いません。base component診断時はpartial componentを返さず、stage／sessionを開始しません。
+
 ## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
