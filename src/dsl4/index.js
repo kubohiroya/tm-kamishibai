@@ -28,6 +28,11 @@ export {
 export {createDsl4ActionQuiesceResolver, dsl4CoreActionQuiesceModes} from './action-quiesce.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {classifyDsl4AssetReload, createDsl4AssetReloadSnapshot} from './asset-reload-policy.js';
+export {
+  createDsl4AssetSnapshotWatch,
+  dsl4AssetSnapshotWatchDefaults,
+  Dsl4AssetSnapshotWatchError,
+} from './asset-snapshot-watch.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
   createDsl4EmbeddedAssetBundle,
