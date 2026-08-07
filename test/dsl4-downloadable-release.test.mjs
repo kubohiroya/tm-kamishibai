@@ -6,22 +6,22 @@ import test from 'node:test';
 
 import {strFromU8, unzipSync} from 'fflate';
 
-import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
+import {
+  createDownloadableReleaseSb3,
+  downloadableReleases,
+} from '../scripts/sb3/downloadable-releases.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const require = createRequire(import.meta.url);
 const VirtualMachine = require('scratch-vm');
 const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
+const vmLog = require('scratch-vm/src/util/log');
 const extensionId = 'kubohiroyakamishibairuntime4';
-const sourceDirectory = 'release-sources/4.0.0-dev/app';
+const release = downloadableReleases.find(({series}) => series === '4.0');
+assert(release, 'The release catalog must publish a DSL 4.0 artifact.');
 
 async function buildRelease() {
-  return createKamishibaiSb3({
-    sourceDirectory,
-    faviconPath: 'site/favicon.png',
-    version: '4.0.0-dev',
-    buildDate: '2026-08-07',
-  });
+  return createDownloadableReleaseSb3(release);
 }
 
 function installUnsandboxedScriptDom() {
@@ -68,6 +68,19 @@ async function extensionReporter(vm, opcode) {
   return dispatch.call(service, opcode);
 }
 
+async function loadProjectQuietly(vm, archive) {
+  const originalWarn = vmLog.warn;
+  const originalWarning = vmLog.warning;
+  vmLog.warn = () => {};
+  vmLog.warning = () => {};
+  try {
+    await vm.loadProject(archive);
+  } finally {
+    vmLog.warn = originalWarn;
+    vmLog.warning = originalWarning;
+  }
+}
+
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
   const result = await buildRelease();
   const archive = unzipSync(result.archive);
@@ -75,6 +88,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   const extensionUrl = project.extensionURLs[extensionId];
 
   assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
+  assert.deepEqual(Object.keys(project.extensionURLs), [extensionId]);
   assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
   assert(project.extensions.includes(extensionId));
   assert.equal(
@@ -83,8 +97,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   );
   assert.equal(project.extensionStorage[extensionId].artifact.controlProfile, 'production');
   assert.deepEqual(project.extensionStorage[extensionId].assets.manifest.assets, []);
-  assert.doesNotMatch(extensionUrl, /https?:\/\//u);
-  assert.equal(createHash('sha256').update(result.archive).digest('hex').length, 64);
+  assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
 });
 
 test('starts and finishes the downloaded DSL 4.0 story in the pinned TurboWarp VM', async () => {
@@ -97,7 +110,7 @@ test('starts and finishes the downloaded DSL 4.0 story in the pinned TurboWarp V
     vm.setCompilerOptions({enabled: false});
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
-    await vm.loadProject(result.archive);
+    await loadProjectQuietly(vm, result.archive);
     vm.runtime.renderer = {
       createSVGSkin() {
         return 1;
