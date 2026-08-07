@@ -27,6 +27,7 @@ export {
 } from './action-context-turbowarp.js';
 export {createDsl4ActionQuiesceResolver, dsl4CoreActionQuiesceModes} from './action-quiesce.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+export {classifyDsl4AssetReload, createDsl4AssetReloadSnapshot} from './asset-reload-policy.js';
 export {validateDsl4CacheIdentity} from './cache-identity.js';
 export {
   createDsl4EmbeddedAssetBundle,
