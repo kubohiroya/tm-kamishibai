@@ -634,6 +634,8 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
       }
       await shell.setReloadWatchState('source', 'watching');
       status = 'running';
+      await post('/api/runtime-ready', {version: 1});
+      ensureActive();
       return snapshot();
     })().catch(async (error) => {
       const stoppedByDisposal = disposed || lifecycleController.signal.aborted;

@@ -406,6 +406,7 @@ export function createDsl4LocalPreviewHost(options) {
   let status = 'idle';
   let disposed = false;
   let stopping = false;
+  let browserRuntimeReady = false;
   let sequence = 0;
   let generationRevision = 0;
   /** @type {string | null} */
@@ -448,6 +449,7 @@ export function createDsl4LocalPreviewHost(options) {
       disposed,
       origin,
       connected: transportConnection !== null,
+      browserRuntimeReady: runtimeOwner === 'browser' ? browserRuntimeReady : null,
       rebuildRequired: status === 'rebuild-required',
       latestSequence: sequence,
       retainedEvents: events.length + (latestGenerationRecord ? 1 : 0),
@@ -551,6 +553,7 @@ export function createDsl4LocalPreviewHost(options) {
   async function requireFullRebuild(code, message) {
     if (disposed || status === 'rebuild-required') return snapshot();
     status = 'rebuild-required';
+    browserRuntimeReady = false;
     const connection = transportConnection;
     transportConnection = null;
     stopStructureWatcher();
@@ -650,6 +653,7 @@ export function createDsl4LocalPreviewHost(options) {
     activeTokenDigest = tokenDigest(body.token);
     launchToken = null;
     transportConnection = connection;
+    browserRuntimeReady = false;
     const sessionId = `local-${Buffer.from(secureRandomBytes(12)).toString('base64url')}`;
     /** @type {ReturnType<typeof createDsl4PreviewSourceProtocolPort> | null} */
     let port = null;
@@ -736,6 +740,7 @@ export function createDsl4LocalPreviewHost(options) {
       else await port?.dispose();
       await connection.disconnect('host-crash');
       if (transportConnection === connection) transportConnection = null;
+      browserRuntimeReady = false;
       throw error;
     }
   }
@@ -825,6 +830,21 @@ export function createDsl4LocalPreviewHost(options) {
       response.end(projectArtifactBytes);
       return;
     }
+    if (requestUrl.pathname === '/api/runtime-ready') {
+      if (runtimeOwner !== 'browser') {
+        fail('Preview runtime operations are protocol-owned', 'K4-PREVIEW-HOST-RUNTIME-OWNER');
+      }
+      const body = await readJsonBody(request);
+      if (Object.keys(body).length !== 1 || body.version !== 1) {
+        fail('Browser runtime ready acknowledgement is invalid', 'K4-PREVIEW-HOST-REQUEST');
+      }
+      if (!browserRuntimeReady) {
+        browserRuntimeReady = true;
+        publish({type: 'local-preview.runtime-ready'});
+      }
+      writeJson(response, 200, {snapshot: snapshot()});
+      return;
+    }
     if (requestUrl.pathname === '/api/commit') {
       const activePort = requireProtocolPort();
       const body = await readJsonBody(request);
@@ -872,6 +892,7 @@ export function createDsl4LocalPreviewHost(options) {
   async function teardownConnection(reason) {
     const connection = transportConnection;
     transportConnection = null;
+    browserRuntimeReady = false;
     const response = activeResponse;
     activeResponse = null;
     response?.end();
@@ -1056,6 +1077,7 @@ export function createDsl4LocalPreviewHost(options) {
         errors.push(error);
       }
       transportPolicy = null;
+      browserRuntimeReady = false;
       activeTokenDigest = null;
       launchToken = null;
       projectArtifactBytes = null;

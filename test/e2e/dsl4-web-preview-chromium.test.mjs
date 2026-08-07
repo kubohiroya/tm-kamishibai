@@ -998,6 +998,7 @@ test(
         );
       }
       assert.equal(host.getSnapshot().status, 'connected');
+      assert.equal(host.getSnapshot().browserRuntimeReady, true);
       assert.equal(await client.evaluate('location.hash'), '');
       assert.equal(
         await client.evaluate(
@@ -1069,6 +1070,7 @@ test(
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
       assert.equal(host.getSnapshot().status, 'listening');
+      assert.equal(host.getSnapshot().browserRuntimeReady, false);
       assert.deepEqual(hostErrors, []);
     } finally {
       client?.close();
@@ -1408,6 +1410,7 @@ scenes:
         '/scenes/opening/actions/2',
       ]);
       assert.equal(observed.started, true);
+      assert.equal(host.getSnapshot().browserRuntimeReady, true);
       assert.equal(observed.metrics.cameraStarts, 1);
       assert.equal(observed.metrics.modelLoads, 1);
       assert.ok(observed.metrics.predictions >= 1);
@@ -1447,6 +1450,7 @@ scenes:
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
       assert.equal(host.getSnapshot().status, 'listening');
+      assert.equal(host.getSnapshot().browserRuntimeReady, false);
       assert.deepEqual(hostErrors, []);
       assert.deepEqual(client.exceptions, []);
     } finally {

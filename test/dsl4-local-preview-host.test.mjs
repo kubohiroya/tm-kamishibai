@@ -203,6 +203,12 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     const connected = await request(origin, '/api/connect', {body: {token}});
     assert.equal(connected.snapshot.status, 'connected');
     assert.equal(runtime.lifecycle[0][0], 'start');
+    const deniedRuntimeReady = await request(origin, '/api/runtime-ready', {
+      token,
+      body: {version: 1},
+      expectedStatus: 400,
+    });
+    assert.equal(deniedRuntimeReady.error.code, 'K4-PREVIEW-HOST-RUNTIME-OWNER');
     const initial = connected.events.find((event) => event.type === 'local-preview.source');
     assert.equal(initial.source.ok, true);
     assert.equal(initial.acknowledgement.status, 'active');
@@ -522,6 +528,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
 
   try {
     assert.equal(host.getSnapshot().runtimeOwner, 'browser');
+    assert.equal(host.getSnapshot().browserRuntimeReady, false);
     await host.start();
     const launchUrl = new URL(host.getLaunchUrl());
     const token = launchUrl.hash.slice(1);
@@ -563,6 +570,28 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.equal(projectResponse.status, 200);
     assert.deepEqual([...new Uint8Array(await projectResponse.arrayBuffer())], [...projectBytes]);
 
+    const invalidRuntimeReady = await request(launchUrl.origin, '/api/runtime-ready', {
+      token,
+      body: {version: 2},
+      expectedStatus: 400,
+    });
+    assert.equal(invalidRuntimeReady.error.code, 'K4-PREVIEW-HOST-REQUEST');
+    const runtimeReady = await request(launchUrl.origin, '/api/runtime-ready', {
+      token,
+      body: {version: 1},
+    });
+    assert.equal(runtimeReady.snapshot.browserRuntimeReady, true);
+    assert.equal(host.getSnapshot().browserRuntimeReady, true);
+    assert.equal(
+      observedEvents.filter((event) => event.type === 'local-preview.runtime-ready').length,
+      1,
+    );
+    await request(launchUrl.origin, '/api/runtime-ready', {token, body: {version: 1}});
+    assert.equal(
+      observedEvents.filter((event) => event.type === 'local-preview.runtime-ready').length,
+      1,
+    );
+
     const deniedCommit = await request(launchUrl.origin, '/api/commit', {
       token,
       body: {choice: 'storyStart'},
@@ -584,6 +613,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
   }
   assert.equal(sourceWatch.closed, 1);
   assert.equal(structureWatch.closed, 1);
+  assert.equal(host.getSnapshot().browserRuntimeReady, false);
 });
 
 test('fails before opening sockets for unsafe local host configuration', () => {

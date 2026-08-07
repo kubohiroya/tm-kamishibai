@@ -196,6 +196,11 @@ startupは20秒以下、強制GC後のJavaScript heapは192 MiB以下を有限�
 151.0.7922.76で確認し、実測値はtest diagnosticへ毎回記録します。source 64 KiB、asset 64件／64 MiB、base SB3 64 MiB、browser
 bundle 24 MiBという既存の入力上限は同じfixtureでも維持します。
 
+browser clientはbase component、stage、runtime owner、初回generation queue、共有overlayがすべて起動した後だけ、same-origin bearer認証済み
+`/api/runtime-ready`へversion 1のackを送ります。hostはbrowser-owned接続だけでこれを受理し、redacted snapshot／eventへready状態を
+投影します。protocol-owned接続、未知version、追加fieldは拒否し、transport切断、full rebuild、host disposeではready状態をfalseへ戻します。
+公開CLIはこのackを受け取るまでpreview成功を表示せず、HTTP connectだけで実runtime起動済みと判断しません。
+
 ## 6. securityとrollback
 
 wire schema自体は認証を置き換えません。PR #421のliteral loopback bind、exact Origin、one-use token、
