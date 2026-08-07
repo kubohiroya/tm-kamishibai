@@ -78,6 +78,9 @@ function shouldIgnore(event) {
  * @param {(command: string, context: Readonly<{code: string}>) => unknown | Promise<unknown>} options.dispatchCommand
  * @param {(context: Readonly<{code: string}>) => boolean} [options.consumeAnyKey]
  * @param {(context: Readonly<{pointerType: string}>) => boolean} [options.consumePointer]
+ * @param {(context: Readonly<{code: string}>) => boolean} [options.shouldDeferKey]
+ * @param {(context: Readonly<{pointerType: string}>) => 'allow' | 'defer' | 'suppress'} [options.arbitratePointer]
+ * @param {(context: Readonly<{pointerType: string}>) => unknown} [options.cancelPointer]
  * @param {(command: string, context: Readonly<{code: string}>) => boolean | undefined} [options.shouldConsumeCommand]
  * @param {boolean} [options.dispatchImmediately]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onError]
@@ -87,6 +90,9 @@ export function createDsl4KeymapInputAdapter({
   dispatchCommand,
   consumeAnyKey,
   consumePointer,
+  shouldDeferKey,
+  arbitratePointer,
+  cancelPointer,
   shouldConsumeCommand,
   dispatchImmediately = false,
   onError,
@@ -105,6 +111,18 @@ export function createDsl4KeymapInputAdapter({
   }
   if (consumePointer !== undefined && typeof consumePointer !== 'function') {
     throw new TypeError('consumePointer must be a function');
+  }
+  if (shouldDeferKey !== undefined && typeof shouldDeferKey !== 'function') {
+    throw new TypeError('shouldDeferKey must be a function');
+  }
+  if (arbitratePointer !== undefined && typeof arbitratePointer !== 'function') {
+    throw new TypeError('arbitratePointer must be a function');
+  }
+  if (cancelPointer !== undefined && typeof cancelPointer !== 'function') {
+    throw new TypeError('cancelPointer must be a function');
+  }
+  if ((arbitratePointer || cancelPointer) && !consumePointer) {
+    throw new TypeError('pointer arbitration requires consumePointer');
   }
   if (shouldConsumeCommand !== undefined && typeof shouldConsumeCommand !== 'function') {
     throw new TypeError('shouldConsumeCommand must be a function');
@@ -150,6 +168,18 @@ export function createDsl4KeymapInputAdapter({
       return false;
     }
     const code = typeof event.code === 'string' ? event.code : '';
+    if (!event.repeat && code && shouldDeferKey) {
+      try {
+        const deferred = shouldDeferKey(deepFreeze({code}));
+        if (typeof deferred !== 'boolean') {
+          throw new TypeError('shouldDeferKey must return boolean');
+        }
+        if (deferred) return false;
+      } catch (error) {
+        reportError(error, 'input.arbitration', code);
+        return false;
+      }
+    }
     if (!event.repeat && code && consumeAnyKey) {
       try {
         if (consumeAnyKey(deepFreeze({code}))) {
@@ -214,8 +244,26 @@ export function createDsl4KeymapInputAdapter({
       return false;
     }
     const pointerType = typeof event.pointerType === 'string' ? event.pointerType : 'unknown';
+    const context = deepFreeze({pointerType});
+    if (arbitratePointer) {
+      try {
+        const decision = arbitratePointer(context);
+        if (decision === 'defer') return false;
+        if (decision === 'suppress') {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          return true;
+        }
+        if (decision !== 'allow') {
+          throw new TypeError('arbitratePointer must return allow, defer, or suppress');
+        }
+      } catch (error) {
+        reportError(error, 'input.arbitration', `Pointer:${pointerType}`);
+        return false;
+      }
+    }
     try {
-      if (!consumePointer(deepFreeze({pointerType}))) return false;
+      if (!consumePointer(context)) return false;
       event.preventDefault?.();
       event.stopPropagation?.();
       return true;
@@ -223,6 +271,26 @@ export function createDsl4KeymapInputAdapter({
       reportError(error, 'speech.advance', `Pointer:${pointerType}`);
       return false;
     }
+  }
+
+  /** @param {Record<string, any>} event */
+  function handlePointerCancel(event) {
+    if (
+      disposed ||
+      !cancelPointer ||
+      typeof event !== 'object' ||
+      event === null ||
+      event.isPrimary === false
+    ) {
+      return false;
+    }
+    const pointerType = typeof event.pointerType === 'string' ? event.pointerType : 'unknown';
+    try {
+      cancelPointer(deepFreeze({pointerType}));
+    } catch (error) {
+      reportError(error, 'input.arbitration', `Pointer:${pointerType}`);
+    }
+    return false;
   }
 
   /**
@@ -259,6 +327,7 @@ export function createDsl4KeymapInputAdapter({
     if (attachedPointerTarget === target) return;
     if (attachedPointerTarget) throw new Error('Pointer input adapter is already attached');
     target.addEventListener('pointerup', handlePointerUp);
+    if (cancelPointer) target.addEventListener('pointercancel', handlePointerCancel);
     attachedPointerTarget = target;
   }
 
@@ -269,6 +338,9 @@ export function createDsl4KeymapInputAdapter({
 
   function detachPointer() {
     attachedPointerTarget?.removeEventListener?.('pointerup', handlePointerUp);
+    if (cancelPointer) {
+      attachedPointerTarget?.removeEventListener?.('pointercancel', handlePointerCancel);
+    }
     attachedPointerTarget = null;
   }
 
@@ -286,6 +358,7 @@ export function createDsl4KeymapInputAdapter({
     dispose,
     handleKeyDown,
     handlePointerUp,
+    handlePointerCancel,
     whenIdle() {
       return queue;
     },

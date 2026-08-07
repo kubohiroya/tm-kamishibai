@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {createDsl4InputArbitration} from '../src/dsl4/index.js';
 import {createDsl4AsyncInputActionPort} from '../src/dsl4/platform/index.js';
 
 function context(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, resolve, reject};
 }
 
 test('adapts key and actor candidates with the action AbortSignal unchanged', async () => {
@@ -64,4 +75,33 @@ test('rejects malformed payloads, contexts, and compositions before subscribing'
     (error) => error.code === 'K4-ASYNC-INPUT-PORT-001',
   );
   assert.throws(() => createDsl4AsyncInputActionPort({composition: {}}), /waitForKeyCandidate/u);
+});
+
+test('publishes action wait ownership and one accepted touch release to the arbiter', async () => {
+  const arbitration = createDsl4InputArbitration();
+  const keyWait = deferred();
+  const touchWait = deferred();
+  const port = createDsl4AsyncInputActionPort({
+    inputArbitration: arbitration,
+    composition: {
+      waitForKeyCandidate: () => keyWait.promise,
+      waitForActorTouchCandidate: () => touchWait.promise,
+    },
+  });
+
+  const keyOperation = port.keyInputToChangeScene({codes: ['Enter']}, context());
+  assert.equal(arbitration.getState().activeStoryInputKind, 'key');
+  keyWait.resolve('Enter');
+  assert.equal(await keyOperation, 'Enter');
+  assert.equal(arbitration.getState().activeStoryInputKind, null);
+
+  const touchOperation = port.touchInputToChangeScene({actors: ['Hero']}, context());
+  assert.equal(arbitration.getState().activeStoryInputKind, 'touch');
+  touchWait.resolve('Hero');
+  assert.equal(await touchOperation, 'Hero');
+  assert.equal(arbitration.getState().suppressPointerRelease, true);
+  assert.equal(
+    arbitration.arbitrateNavigationPointer({pointerType: 'touch', historyPaused: false}),
+    'suppress',
+  );
 });
