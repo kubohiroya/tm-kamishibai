@@ -358,6 +358,61 @@ test('contains character sound cleanup failure and still settles and clears the 
   assert.equal(clock.pendingCount(), 0);
 });
 
+test('stops only speech sound assets whose playback actually started', async () => {
+  const fake = speechRuntime();
+  const clock = manualScheduler();
+  const sounds = [];
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: fake.runtime,
+    scheduler: clock.scheduler,
+    speechAdvanceTypewriterEnabled: true,
+    playCharacterSound(sound) {
+      sounds.push(['play', sound]);
+    },
+    stopCharacterSound(sound) {
+      sounds.push(['stop', sound]);
+    },
+  });
+  const operation = platform.host.createSay(fake.actor, {
+    text: '',
+    seconds: 0,
+    characterIntervalSeconds: 0.1,
+    startSound: 'Voice',
+    characterSound: 'Tick',
+  });
+
+  await operation.start();
+  assert.deepEqual(sounds, [
+    ['play', 'Voice'],
+    ['stop', 'Voice'],
+  ]);
+});
+
+test('fails closed when Unicode grapheme segmentation is unavailable', () => {
+  const fake = speechRuntime();
+  const clock = manualScheduler();
+  const descriptor = Object.getOwnPropertyDescriptor(Intl, 'Segmenter');
+  Object.defineProperty(Intl, 'Segmenter', {configurable: true, value: undefined});
+  try {
+    const platform = createDsl4TurboWarpActorPlatform({
+      runtime: fake.runtime,
+      scheduler: clock.scheduler,
+      speechAdvanceTypewriterEnabled: true,
+    });
+    assert.throws(
+      () =>
+        platform.host.createSay(fake.actor, {
+          text: 'é',
+          seconds: 1,
+          characterIntervalSeconds: 0.1,
+        }),
+      /Intl\.Segmenter is required/u,
+    );
+  } finally {
+    Object.defineProperty(Intl, 'Segmenter', descriptor);
+  }
+});
+
 test('typewriter reveals one grapheme cluster per tick and validates character sound input', async () => {
   const fake = speechRuntime();
   const clock = manualScheduler();

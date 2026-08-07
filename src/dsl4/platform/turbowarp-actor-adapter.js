@@ -91,7 +91,12 @@ function validateSpeechSpec(value, operation, extended) {
 
 /** @param {string} text */
 function defaultSegmentText(text) {
-  if (typeof Intl !== 'object' || typeof Intl.Segmenter !== 'function') return Array.from(text);
+  if (typeof Intl !== 'object' || typeof Intl.Segmenter !== 'function') {
+    throw adapterError(
+      'K4-TW-ACTOR-002',
+      'Intl.Segmenter is required for Unicode grapheme segmentation',
+    );
+  }
   const segmenter = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
   return [...segmenter.segment(text)].map(({segment}) => segment);
 }
@@ -260,10 +265,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
       );
     }
     if (startSound !== null && (!playCharacterSound || !stopCharacterSound)) {
-      throw adapterError(
-        'K4-TW-ACTOR-002',
-        `${kind}.startSound requires sound playback callbacks`,
-      );
+      throw adapterError('K4-TW-ACTOR-002', `${kind}.startSound requires sound playback callbacks`);
     }
     const segments = segmentText(text);
     if (!Array.isArray(segments) || segments.some((segment) => typeof segment !== 'string')) {
@@ -280,6 +282,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
     let resolveOperation;
     /** @type {((error: unknown) => void) | undefined} */
     let rejectOperation;
+    const playedSounds = new Set();
 
     const cancelTimers = () => {
       if (deadlineTimer !== undefined) scheduler.clearTimeout(deadlineTimer);
@@ -289,14 +292,15 @@ export function createDsl4TurboWarpActorPlatform(options) {
     };
     const stopSounds = () => {
       if (!stopCharacterSound) return;
-      for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
+      for (const sound of playedSounds) {
         try {
-          const operation = Promise.resolve(stopCharacterSound(/** @type {string} */ (sound)));
+          const operation = Promise.resolve(stopCharacterSound(sound));
           void operation.catch(() => {});
         } catch {
           // Sound cleanup cannot prevent the speech operation from settling.
         }
       }
+      playedSounds.clear();
     };
     /** @param {string | null} sound */
     const playSound = (sound) => {
@@ -304,6 +308,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
       let playback;
       try {
         playback = Promise.resolve(playCharacterSound(sound));
+        playedSounds.add(sound);
       } catch (error) {
         fail(error);
         return;
