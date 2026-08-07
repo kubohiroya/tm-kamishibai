@@ -199,6 +199,39 @@ scenes:
   }
 });
 
+test('accepts named moveTo easing values and rejects unsupported movement curves', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.moveTo: {x: 10, y: 20, seconds: 1}
+    - Hero.moveTo: {x: 20, y: 30, seconds: 1, easing: linear}
+    - Hero.moveTo: {x: 30, y: 40, seconds: 1, easing: easeIn}
+    - Hero.moveTo: {x: 40, y: 50, seconds: 1, easing: easeOut}
+    - Hero.moveTo: {x: 50, y: 60, seconds: 1, easing: easeInOut}
+`;
+  const valid = frontend.parse(source, {sourceId: 'move-easing.kamishibai.yaml'});
+  assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
+  assert.deepEqual(
+    valid.storyDocument.scenes[0].actions.map(({args}) => args.easing),
+    [undefined, 'linear', 'easeIn', 'easeOut', 'easeInOut'],
+  );
+  assert.ok(valid.storyDocument.sourceMap['/scenes/opening/actions/4/args/easing']);
+
+  for (const easing of ['ease-in', 'spring', true, 1]) {
+    const invalid = frontend.parse(
+      source.replace('easing: easeInOut', `easing: ${String(easing)}`),
+      {sourceId: 'invalid-move-easing.kamishibai.yaml'},
+    );
+    assert.equal(invalid.ok, false, String(easing));
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('normalizes pose policy defaults and rejects unknown keys, values, or types', () => {
   const base = [
     "kamishibai: '4.0'",

@@ -1,3 +1,5 @@
+import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -93,16 +95,17 @@ function validateContext(value) {
   return /** @type {AbortSignal} */ (/** @type {unknown} */ (signal));
 }
 
-/** @param {unknown} value @param {string[]} keys @param {string} command */
-function validatePayloadShape(value, keys, command) {
+/** @param {unknown} value @param {string[]} keys @param {string} command @param {string[]} [optionalKeys] */
+function validatePayloadShape(value, keys, command, optionalKeys = []) {
+  const allowedKeys = new Set([...keys, ...optionalKeys]);
   if (
     !isRecord(value) ||
-    Object.keys(value).length !== keys.length ||
+    Object.keys(value).some((key) => !allowedKeys.has(key)) ||
     keys.some((key) => !Object.hasOwn(value, key))
   ) {
     throw portError(
       'K4-ACTOR-PORT-001',
-      `${command} payload must provide exactly ${keys.join(', ')}`,
+      `${command} payload must provide ${keys.join(', ')}${optionalKeys.length > 0 ? ` and only optional ${optionalKeys.join(', ')}` : ''}`,
     );
   }
   return value;
@@ -458,11 +461,20 @@ export function createDsl4ActorActionPort(options) {
 
     /** @param {unknown} payload @param {unknown} context */
     async moveTo(payload, context) {
-      const value = validatePayloadShape(payload, ['target', 'x', 'y', 'seconds'], 'moveTo');
+      const value = validatePayloadShape(payload, ['target', 'x', 'y', 'seconds'], 'moveTo', [
+        'easing',
+      ]);
       const target = requireNonEmptyString(value.target, 'target', 'moveTo');
       const x = requireFiniteNumber(value.x, 'x', 'moveTo');
       const y = requireFiniteNumber(value.y, 'y', 'moveTo');
       const seconds = requireFiniteNumber(value.seconds, 'seconds', 'moveTo');
+      const easing = value.easing ?? 'linear';
+      if (!isDsl4MoveEasing(easing)) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `moveTo.easing must be one of ${dsl4MoveEasingNames.join(', ')}`,
+        );
+      }
       if (seconds < 0) {
         throw portError('K4-ACTOR-PORT-001', 'moveTo.seconds must not be negative');
       }
@@ -473,7 +485,7 @@ export function createDsl4ActorActionPort(options) {
       );
       const actor = await resolveTarget(target, actionContext, signal);
       const operation = validatePresentationOperation(
-        host.createMove(actor, Object.freeze({x, y, seconds}), actionContext),
+        host.createMove(actor, Object.freeze({x, y, seconds, easing}), actionContext),
         'moveTo',
       );
       return runPresentationOperation(operation, signal);

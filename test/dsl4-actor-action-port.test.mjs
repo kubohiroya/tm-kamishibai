@@ -106,7 +106,10 @@ test('maps show, moveTo, and say through one shared composition and presentation
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
-  await port.moveTo({target: 'Hero', x: 40, y: 50, seconds: 1.5}, actionContext());
+  await port.moveTo(
+    {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
+    actionContext(),
+  );
   await port.say({target: 'Hero', text: '助けに行こう', seconds: 2}, actionContext());
 
   assert.equal(Object.isFrozen(port), true);
@@ -117,7 +120,7 @@ test('maps show, moveTo, and say through one shared composition and presentation
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
-    ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5}, 'opening'],
+    ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
     ['createSay', 'hero-target', {text: '助けに行こう', seconds: 2}, 'opening'],
     ['startSay'],
@@ -160,6 +163,18 @@ test('synchronously finishes moveTo at its destination before cancellation rejec
   await assert.rejects(pending, (error) => error.name === 'AbortError');
   movement.reject(new Error('late movement failure'));
   await Promise.resolve();
+});
+
+test('defaults moveTo easing to linear before presentation', async () => {
+  const presentation = fakeHost();
+  const port = actorPort({host: presentation.host});
+
+  await port.moveTo({target: 'Hero', x: 10, y: 20, seconds: 1}, actionContext());
+
+  assert.deepEqual(presentation.calls.slice(0, 2), [
+    ['createMove', 'hero-target', {x: 10, y: 20, seconds: 1, easing: 'linear'}, 'opening'],
+    ['startMove'],
+  ]);
 });
 
 test('keeps AbortError when finish synchronously settles the presentation promise', async () => {
@@ -265,6 +280,12 @@ test('rejects malformed and unresolved inputs before presentation side effects',
       ),
     () => port.show({target: 'Hero', skin: 'HeroHappy', x: 0, y: 0, scale: 0}, actionContext()),
     () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: -1}, actionContext()),
+    () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: 1, easing: 'spring'}, actionContext()),
+    () =>
+      port.moveTo(
+        {target: 'Hero', x: 0, y: 0, seconds: 1, easing: 'linear', extra: true},
+        actionContext(),
+      ),
     () => port.say({target: 'Hero', text: 42, seconds: 1}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1, extra: true}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1}, {}),
