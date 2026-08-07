@@ -21,6 +21,7 @@ const sourceManifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
+  path: 'story.kamishibai.yaml',
   cacheId: 'story000000000001',
   cacheDatabaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
 });

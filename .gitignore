@@ -5,6 +5,8 @@ tmp/
 /urashima.sb3
 /site/downloads/*.sb3
 /.serena/
+/.playwright-mcp/
+/output/
 .idea/
 .DS_Store
 Thumbs.db
