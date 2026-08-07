@@ -164,7 +164,7 @@ blockを一つも配置しなくても実行できなければなりません。
 actionを要求する場合は、作者へblock組立てを求め続けず、core actionまたはDSL schemaへ昇格させるかを
 レビューします。
 
-現行`app/project.source.json`は合計1,781 block（Stage 1,349、Actor 221、UI系211）です。4.0の定量目標は
+現行`app/project.source.json`は合計1,811 block（Stage 1,359、Actor 241、その他211）です。4.0の定量目標は
 次とします。作品固有custom actionの演出本体は別集計にします。
 
 | 指標                               | 4.0目標                                      |
@@ -1410,28 +1410,25 @@ command name -> argument schema -> validator -> executor
 変換し、controllerへ失敗結果を返します。プログラミングエラーまで利用者向けエラーとして
 隠さず、console用causeと画面用messageを分離します。
 
-### 10.4 固定テンプレートのblock facade `[提案]`
+### 10.4 固定テンプレートのblock facade `[決定済み #265]`
 
-標準テンプレートと任意custom actionが利用するKamishibai固有block typeは、概ね次の11種以内に制限します。
+app shell、palette、surface、budgetの正本を
+[`dsl-4-app-shell-palette.md`](dsl-4-app-shell-palette.md)に分離します。標準の台本製作者が追加する
+必須blockと、Standard Compositeがpaletteへ表示するDSL 4.0 blockはいずれも0個です。
+
+標準テンプレートが内部で使用する論理opcodeを次の5種に固定します。
 
 ```text
-start kamishibai from configured source
-stop kamishibai
-retry kamishibai
-when kamishibai finished
-when kamishibai failed
-when kamishibai action [name]
-current action target
-current action argument [name]
-complete current action
-fail current action [message]
-go to scene [name] from current action
+startConfiguredSource
+stopKamishibai
+retryKamishibai
+whenKamishibaiFinished
+whenKamishibaiFailed
 ```
 
-最初の五つはテンプレート保守者が固定app shellで使用し、通常の台本製作者が配置しません。後半は
-作品カスタマイザーだけが必要に応じて使用します。parse、validate、StoryDocument作成、iterator操作、
-asset準備を個別command blockとして接続させないため、標準作者フローでは開始block一回から成功時の
-実行または失敗時の診断までをruntimeがtransactionとして進めます。
+これらはテンプレート保守者が固定app shellで使用し、`hideFromPalette: true`にします。parse、validate、
+StoryDocument作成、iterator操作、asset準備を個別command blockとして接続させず、標準作者フローでは
+開始入力から成功時の実行または失敗時の診断までをruntimeがtransactionとして進めます。
 
 固定テンプレート内のDSL接続blockは30個以下とし、台本sourceだけを差し替えたprojectで増減しないことを
 受け入れ基準にします。app shell全体を含むproject block数は500以下、目標350以下とします。
@@ -1441,15 +1438,16 @@ asset準備を個別command blockとして接続させないため、標準作�
 標準作者用と開発者用の全blockを一つのpaletteへ並べません。ただしTurboWarp内で利用者roleを切り替える
 二つのpalette profileを設けるのでもなく、次の配布面に分けます。
 
-| 配布面                        | 標準テンプレートでの状態 | paletteに表示するもの                                        |
-| ----------------------------- | ------------------------ | ------------------------------------------------------------ |
-| Kamishibai標準Composite       | 読み込み済み             | 任意custom action用のhat、target、argument、完了／失敗／遷移 |
-| template内部control           | 保存済み                 | `hideFromPalette`にしたstart／stop／retry／終了hat           |
-| Structured Data Standalone    | 読み込まない             | Store、scope、lease、Iterator、JSONPath                      |
-| Kamishibai developer／debug版 | 読み込まない             | 診断、realm、adapter、lifecycle検査block                     |
+| 配布面                        | 標準テンプレートでの状態 | paletteに表示するもの                              |
+| ----------------------------- | ------------------------ | -------------------------------------------------- |
+| Kamishibai標準Composite       | 読み込み済み             | DSL 4.0 blockは0                                   |
+| template内部control           | 保存済み                 | `hideFromPalette`にしたstart／stop／retry／終了hat |
+| Action Context developer面    | 読み込まない             | custom action用のhat、context、完了／失敗／遷移    |
+| Structured Data Standalone    | 読み込まない             | Store、scope、lease、Iterator、JSONPath            |
+| Kamishibai developer／debug版 | 読み込まない             | 診断、realm、adapter、lifecycle検査block           |
 
-標準Compositeのcustom action blockは見えていても必須ではなく、台本だけを書く利用者は触れません。template
-内部controlは保存済みprojectで実行できますが、新規配置を促さないよう`hideFromPalette: true`とします。
+Standard Compositeにはcustom action blockを表示しません。template内部controlは保存済みprojectで
+実行できますが、新規配置を促さないよう`hideFromPalette: true`とします。
 テンプレート保守者はbuilderの生成fixtureで保存済みblockを保守し、標準配布の`getInfo()`では同じopcodeを
 非表示にします。
 
@@ -1462,7 +1460,7 @@ optional argument存在判定、typed argument、complete／fail／gotoの8 opco
 startupへ自動登録せず、作品固有custom actionを作る配布面だけが明示的に登録します。custom handlerのblock
 budgetは`test/fixtures/dsl4/custom-action-block-budget.json`で8 block以下を検証します。
 
-### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装待ち #327]`
+### 10.5 アセットのstorage／memory lifecycle `[決定済み／実装中 #327]`
 
 アセットの「どこから読むか」「いつ準備するか」「いつメモリから解放するか」「検証済みbyte列を
 いつ永続cacheから削除するか」を一つのcache概念へまとめません。
@@ -1570,14 +1568,31 @@ self-contained SB3のbinary payloadは、長寿命JavaScript literal、data URL�
 せず、manifestへbindingされたZIP entryからone-shot providerで取り込みます。editor／builderは同一integrityの
 SB3を再保存できるよう、providerを破棄する前にIndexedDB backing bytesを再供給できることを確認します。
 
+binary-entry経路は互換用Base64経路を置換せず、明示APIでのみ選択する既定OFFのformatとします。descriptor
+format version 2は各fileを`assetId`、台本内path、展開後size、SHA-256 integrity、content-addressed ZIP entryへ
+bindingし、payload自体を`project.json`へ格納しません。ZIP layout version 1のentry名は
+`kamishibai/assets/v1/<sha256-hex>`とし、同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+
+runtimeはSB3全体を展開せず、中央directoryを走査してから要求されたassetのentryだけを展開します。providerは
+同じassetの2回目の取得と同時取得を拒否し、最後のembedded assetを渡した時点、または明示`release()`時点で
+SB3 byte snapshot、entry reader、release callbackへの参照を破棄します。`AbortSignal`による取得中断を
+machine-readable errorとして扱います。editorのpreview／再保存では破棄済みproviderを再利用せず、同じ
+snapshotまたは永続backing storeから新しいproviderを供給します。
+
+この経路では呼出側がarchive byte数、archive entry数、1 entryの展開後byte数、archive全体の展開後byte数、
+asset file数、1 asset fileのbyte数、asset file合計byte数、圧縮比の上限をすべて明示します。path traversal、
+duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの宣言size不一致、未対応圧縮方式は展開前に、
+展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
+
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
 同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
-この節はDSL 4.0の契約を定めますが、PR #290の現headにはschema、dependency diff、asset単位release、
-台本単位cache接続が未実装です。Issue #327のfixtureと上流Asset Manager／TMPoseのrelease契約を満たすまで、
-remote asset PRをmerge可能とは扱いません。
+Issue #327 step 3ではbinary descriptor、SB3 embed/read境界、one-shot provider、editor再供給境界を実装します。
+一方、Asset Manager／TMPose adapter接続、dependency pin、scene retention、同時materialize poseModel数、
+IndexedDB budget／台本単位cache接続は後続stepであり、このPRでは有効化しません。これらと上流のrelease契約を
+満たすまで、remote asset経路全体をmerge可能または既定ONとは扱いません。
 
 ### 10.6 development preview protocol `[決定済み／実装中 #266]`
 
@@ -1624,6 +1639,20 @@ graceful stop、host crash、transport切断はいずれもprotocolのdisconnect
 pending／deferred candidateとcandidate診断だけを破棄し、現在のruntimeを停止・巻き戻ししません。再接続は
 revisionを1から再開し、必要なsourceを新sessionへ再stageします。session token、Origin、loopback bind、
 project root外file拒否はtransport層の責務であり、このpure session coreには含めません。
+
+transport adapterは、protocolへ接続またはsource readを渡す前に、builderのpure security policyを必ず通します。
+bind先はIP literalの`127.0.0.1`または`::1`、接続元はloopback addressだけを許可し、設定済みのcanonicalな
+HTTP(S) Originをscheme／host／portまで完全一致で照合します。tokenは暗号学的乱数32 bytesから生成する
+base64url文字列とし、raw tokenを発行結果以外へ保持せず、policy内部ではSHA-256 digestだけをmemory上に
+保持します。tokenは単回消費かつ期限付きとし、TTLは最大5分、同時に保持するpending／consumed recordは
+合計64件までです。TTLとrecord上限はhostが有限値を明示し、永続設定、source manifest、SB3、YAMLへ
+tokenを保存しません。
+
+source readは検証済みexternal source manifestの相対pathとの完全一致だけを許可し、project rootと実fileの
+realpath／symlink検証は既存external source loaderで重ねて行います。graceful stop、host crash、
+transport closeは同じcallbackを一度だけ実行し、その完了前の再接続を拒否します。callback失敗後は同じpolicyで
+接続を再開せず、hostがpolicyを破棄して新sessionを作り直します。このpolicy自体はsocketを開かず、
+HTTP／WebSocketの選択、CLI、remote preview、production artifactには接続しません。
 
 ## 11. 独立capability projectとKamishibai Bundle
 
@@ -2134,16 +2163,19 @@ metadataをtransactionで更新します。外部projectのsourceを由来情報
 
 ## 12. 3.1／3.2から4.0への移行
 
-### 12.1 ランタイムの分離 `[提案]`
+converterの規範的な対応表、判定分類、旧Text Asset移行例、追加block 0契約は
+[`dsl-4-migration.md`](./dsl-4-migration.md)を正本とします。
+
+### 12.1 ランタイムの分離 `[決定済み #263]`
 
 - 3.1／3.2作品は3.2.3以降の3.2アプリで引き続き実行する
 - 4.0アプリは4.0台本だけを実行する
 - 4.0パーサー内へ3.1／3.2構文解析や旧Text Asset互換を残さない
 - 3.1／3.2から4.0への変換はruntime外のconverterで行う
 
-converterを本リポジトリへ置くか、builder CLIへ含めるかは未決です。
+converterは本repositoryの`./converter` package exportと`convert-dsl4` CLIで公開し、runtimeからは呼びません。
 
-### 12.2 変換可能性
+### 12.2 変換可能性 `[決定済み #263]`
 
 機械変換しやすい項目:
 
@@ -2271,7 +2303,8 @@ runtimeで追加コードをdownloadしません。
 - 標準テンプレートへ台本A／Bを適用しても`targets[].blocks`が同一である
 - 最小台本と全core action台本で、台本製作者が追加する必須blockが0である
 - 固定テンプレートのDSL接続blockが30以下である
-- 標準Compositeのvisible paletteが任意custom action用の6 block type以下である
+- 標準Compositeのvisible DSL 4.0 paletteが0 blockである
+- Action Context developer surfaceの公開opcodeが別拡張の8個だけである
 - template内部controlが保存済みprojectで実行でき、paletteでは非表示である
 - Structured Data Standaloneとdeveloper／debug blockが標準テンプレートへ読み込まれない
 - project全体が500 block以下、目標fixtureでは350 block以下である
@@ -2305,7 +2338,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [x] Scratch Action Registryを任意の作品固有拡張とし、標準作品には要求しない
 - [x] custom actionの定型overheadを一件8 block以下とする
 - [ ] 台本source channelをproject variable、asset、builder source、専用editorのどれにするか
-- [ ] 標準テンプレートのapp shellをどこまでScratch blockとして残すか
+- [x] 標準テンプレートのapp shellをどこまでScratch blockとして残すか（#265）
 
 ### 表層構文
 
@@ -2346,9 +2379,9 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 
 ### 互換性と配布
 
-- [ ] 3.1／3.2 converterの配置と公開単位
-- [ ] 旧Text AssetからSVG Textへ自動変換できない項目のwarning仕様
-- [ ] 4.0のminor version互換規則
+- [x] 3.1／3.2 converterの配置と公開単位
+- [x] 旧Text AssetからSVG Textへ自動変換できない項目のwarning仕様
+- [x] 4.0のminor version互換規則
 - [ ] `kubohiroyastructdata1`を同時に公開するか
 - [ ] extension API manifestをScratchから参照するblockを公開するか
 

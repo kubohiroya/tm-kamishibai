@@ -22,12 +22,31 @@ export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
 export {
+  classifyDsl4PreviewChange,
+  createDsl4ArtifactFingerprint,
+} from './dsl4-artifact-fingerprint.js';
+export {
+  createDsl4BinaryEntryProviderFromSb3,
+  embedDsl4BinaryEntryRuntimeComponentInSb3,
+} from './dsl4-binary-entry-sb3.js';
+export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
+export {
+  createDsl4DevelopmentPreviewShell,
+  dsl4DevelopmentPreviewShellManifest,
+  inspectDsl4ProductionPreviewExclusion,
+  validateDsl4PreviewShellView,
+} from './dsl4-preview-shell.js';
+export {
+  createDsl4PreviewTransportPolicy,
+  dsl4PreviewTransportLimits,
+  dsl4PreviewTransportTokenBytes,
+} from './dsl4-preview-transport-policy.js';
 export {
   Dsl4ValidationInternalError,
   formatDsl4Diagnostic,
@@ -38,6 +57,7 @@ export {
   embedDsl4PackagedRuntimeComponentInSb3,
   embedDsl4RuntimeComponentInSb3,
   embedDsl4SourceInSb3,
+  installDsl4BinaryEntryRuntimeComponent,
   installDsl4EmbeddedSource,
   installDsl4PackagedRuntimeComponent,
   installDsl4RuntimeComponent,
