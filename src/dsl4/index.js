@@ -35,6 +35,11 @@ export {
 } from './asset-bundle-descriptor.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 export {
+  dsl4DiagnosticTruncationCode,
+  Dsl4DiagnosticPolicyError,
+  normalizeDsl4DiagnosticSequence,
+} from './diagnostic-sequence-policy.js';
+export {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
 } from './embedded-asset-lifecycle.js';
