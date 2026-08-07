@@ -56,6 +56,10 @@ test('renders separate accessible recognition and charge progress without Scratc
   assert.equal(root.dataset.phase, 'waiting');
   assert.equal(confidence.tagName, 'PROGRESS');
   assert.equal(progress.tagName, 'PROGRESS');
+  assert.equal(confidenceRow.tagName, 'DIV');
+  assert.equal(progressRow.tagName, 'DIV');
+  assert.equal(confidenceOutput.tagName, 'SPAN');
+  assert.equal(progressOutput.tagName, 'SPAN');
   assert.equal(confidence.max, 100);
   assert.equal(progress.max, 100);
   assert.equal(confidence.value, 82.3);
@@ -67,10 +71,21 @@ test('renders separate accessible recognition and charge progress without Scratc
   assert.match(root.children[0].textContent, /ポーズ待機中: Hero \/ rescue \/ 手順 1/u);
   assert.match(status.textContent, /認識度 82\.3%; チャージ 25%/u);
 
+  const waitingAnnouncement = status.textContent;
+  presenter.onPoseState({...event, confidence: 0.9, progress: 0.5});
+  assert.equal(confidence.value, 90);
+  assert.equal(progress.value, 50);
+  assert.match(root.children[0].textContent, /認識度 90%; チャージ 50%/u);
+  assert.equal(status.textContent, waitingAnnouncement);
+
   presenter.onPoseState({...event, phase: 'charging', stepIndex: 1, progress: 0.6});
   assert.equal(root.dataset.phase, 'charging');
   assert.match(root.children[0].textContent, /ポーズ保持中: Hero \/ rescue \/ 手順 2/u);
   assert.equal(progress.value, 60);
+  const chargingAnnouncement = status.textContent;
+  presenter.onPoseState({...event, phase: 'charging', stepIndex: 1, progress: 0.8});
+  assert.equal(progress.value, 80);
+  assert.equal(status.textContent, chargingAnnouncement);
 
   presenter.onPoseState({...event, phase: 'completed', confidence: 1, progress: 1});
   assert.equal(root.hidden, true);
@@ -102,6 +117,10 @@ test('fails closed on invalid presenter configuration and semantic events', () =
   assert.throws(
     () => createDsl4PoseFeedbackPresenter({container: document.body, labels: {colour: 'red'}}),
     /Unknown pose feedback presenter label: colour/u,
+  );
+  assert.throws(
+    () => createDsl4PoseFeedbackPresenter({container: document.body, labels: {region: ' '}}),
+    /region must be a non-empty string/u,
   );
   const presenter = createDsl4PoseFeedbackPresenter({container: document.body});
   assert.throws(() => presenter.onPoseState({...event, confidence: 101}), /between 0 and 1/u);

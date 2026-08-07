@@ -325,6 +325,8 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 チャージを別々のnative `progress`と数値で表示します。領域にはaccessible nameを付け、状態変化を
 `role="status"`のpolite live regionでも通知するため、色だけには依存しません。文言のlocaleは
 台本ではなくapp shellの起動時optionで与えます。Scratch variable、monitor、palette blockは作成・参照しません。
+visualなprogressと数値は各tickで更新しますが、live regionはphase、actor、pose、stepのいずれかが変化した
+場合だけ更新します。同じphaseの連続tickを読み上げqueueへ追加しません。
 
 `waiting`／`charging`の間だけ表示し、`completed`／`cancelled`では値を0へ戻して領域を隠します。terminal
 状態自体はlive regionへ通知してから保持し、次のactive eventで更新します。scene移動、skip、abort、stop、
@@ -345,18 +347,20 @@ platformは0〜100の既存Stage variable slider monitorをvariable IDで一意�
 adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
 completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
 
-presenterのsurface境界は次のとおりです。いずれも同じsemantic event consumerを使用し、
-`dsl4PoseFeedbackModes=true`かつ台本が`feedback.mode: presenter`の場合だけapp shellがcontainerを接続します。
+presenterの現行実装範囲はplatform rendererとTurboWarp runtime hostの明示的な
+`poseFeedbackPresenter` optionまでです。`dsl4PoseFeedbackModes=true`かつ台本が
+`feedback.mode: presenter`の場合に、custom hostがcontainerを渡せば利用できます。Standard app shellへの
+自動登録と`dsl4AppShell` flagはまだ実装していません。
 
-| surface              | source channel | presenter接続                                                |
-| -------------------- | -------------- | ------------------------------------------------------------ |
-| Web player           | bundled        | production app shellの固定DOM領域                            |
-| 通常TurboWarp editor | unbundled      | DSL 4.0 hostを明示接続したeditor shellのDOM領域              |
-| Packager             | bundled        | package済みproduction app shellの固定DOM領域                 |
-| development preview  | unbundled      | preview shellのDOM領域。reload後も新sessionのeventだけを表示 |
+| surface              | source channel | 現在のStandard接続 | 対応方針                                                     |
+| -------------------- | -------------- | ------------------ | ------------------------------------------------------------ |
+| Web player           | bundled        | 未接続             | production app shellが同じhost optionへ固定DOM領域を渡す     |
+| 通常TurboWarp editor | unbundled      | 未接続             | editor shellが明示的にhost optionへDOM領域を渡す             |
+| Packager             | bundled        | 未接続             | package済みproduction app shellが同じconsumerを使用する      |
+| development preview  | unbundled      | 未接続             | preview shellが新sessionごとのcontainerを所有し、旧DOMを破棄 |
 
-surface固有の暗黙modeは設けません。flag OFF、別のfeedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、
-DOMを生成しません。
+各surfaceの接続は`dsl4AppShell`実装の後続作業です。surface固有の暗黙modeは設けません。flag OFF、別の
+feedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、DOMを生成しません。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

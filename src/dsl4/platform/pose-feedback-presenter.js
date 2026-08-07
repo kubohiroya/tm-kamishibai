@@ -29,7 +29,12 @@ function isRecord(value) {
 
 /** @param {unknown} value @param {string} label */
 function requireElement(value, label) {
-  if (!isRecord(value) || typeof value.append !== 'function' || !isRecord(value.ownerDocument)) {
+  if (
+    !isRecord(value) ||
+    typeof value.append !== 'function' ||
+    !isRecord(value.ownerDocument) ||
+    typeof value.ownerDocument.createElement !== 'function'
+  ) {
     throw new TypeError(`${label} must be a DOM element`);
   }
   return /** @type {HTMLElement} */ (/** @type {unknown} */ (value));
@@ -46,7 +51,7 @@ function resolveLabels(input) {
   /** @type {Record<string, string>} */
   const labels = {...defaultLabels};
   for (const [name, value] of Object.entries(input)) {
-    if (typeof value !== 'string' || value.length === 0) {
+    if (typeof value !== 'string' || value.trim().length === 0) {
       throw new TypeError(`pose feedback presenter label ${name} must be a non-empty string`);
     }
     labels[name] = value;
@@ -73,6 +78,8 @@ export function createDsl4PoseFeedbackPresenter(options) {
   const labels = resolveLabels(options.labels);
   const document = container.ownerDocument;
   let disposed = false;
+  /** @type {string | null} */
+  let lastAnnouncementKey = null;
 
   const root = /** @type {HTMLElement} */ (document.createElement('section'));
   root.dataset.dsl4PoseFeedback = 'true';
@@ -87,7 +94,7 @@ export function createDsl4PoseFeedbackPresenter(options) {
 
   /** @param {'confidence' | 'progress'} name */
   function createProgress(name) {
-    const row = /** @type {HTMLLabelElement} */ (document.createElement('label'));
+    const row = /** @type {HTMLElement} */ (document.createElement('div'));
     row.dataset.dsl4PoseFeedbackMetric = name;
     const text = /** @type {HTMLElement} */ (document.createElement('span'));
     text.textContent = labels[name];
@@ -96,7 +103,8 @@ export function createDsl4PoseFeedbackPresenter(options) {
     progress.value = 0;
     progress.setAttribute('aria-label', labels[name]);
     progress.setAttribute('aria-valuetext', '0%');
-    const output = /** @type {HTMLOutputElement} */ (document.createElement('output'));
+    const output = /** @type {HTMLElement} */ (document.createElement('span'));
+    output.dataset.dsl4PoseFeedbackValue = name;
     output.textContent = '0%';
     row.append(text, progress, output);
     root.append(row);
@@ -121,7 +129,7 @@ export function createDsl4PoseFeedbackPresenter(options) {
   });
   container.append(root, status);
 
-  /** @param {{progress: HTMLProgressElement, output: HTMLOutputElement}} metric @param {number} value */
+  /** @param {{progress: HTMLProgressElement, output: HTMLElement}} metric @param {number} value */
   function updateMetric(metric, value) {
     const text = `${percentage(value)}%`;
     metric.progress.value = value * 100;
@@ -150,7 +158,16 @@ export function createDsl4PoseFeedbackPresenter(options) {
     if (disposed) throw new Error('pose feedback presenter is disposed');
     const event = createDsl4PoseStateEvent(input);
     const description = describe(event);
-    status.textContent = description;
+    const announcementKey = JSON.stringify([
+      event.phase,
+      event.target,
+      event.pose,
+      event.stepIndex,
+    ]);
+    if (announcementKey !== lastAnnouncementKey) {
+      lastAnnouncementKey = announcementKey;
+      status.textContent = description;
+    }
     if (event.phase === 'completed' || event.phase === 'cancelled') {
       resetVisibleState();
       return;

@@ -738,6 +738,25 @@ scenes:
   assert.equal(root.hidden, true);
   assert.match(status.textContent, /Pose completed/u);
 
+  confidence = 0;
+  now = 2000;
+  scheduled = null;
+  const stoppedRun = result.host.start();
+  for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof scheduled, 'function');
+  assert.equal(root.hidden, false);
+  assert.equal(root.dataset.phase, 'waiting');
+  assert.equal(result.host.stop('presenter-stop').status, 'stopped');
+  await stoppedRun;
+  assert.deepEqual(phases.slice(-2), ['waiting', 'cancelled']);
+  assert.equal(root.hidden, true);
+  assert.match(status.textContent, /Pose cancelled/u);
+  for (const row of root.children.filter((child) => child.tagName === 'DIV')) {
+    assert.equal(row.children[1].value, 0);
+  }
+
   await result.host.dispose('presenter-lifecycle');
   assert.equal(document.body.children.length, 0);
 });

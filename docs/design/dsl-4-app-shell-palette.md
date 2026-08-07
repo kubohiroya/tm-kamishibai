@@ -116,6 +116,9 @@ pose feedbackの`presenter` modeはScratch costume、variable、monitorを使い
 投影します。active pose待機だけを表示し、完了・中止・scene移動・stop・live reloadで値をresetして隠し、
 host disposeでDOMを解放します。作者palette／developer paletteのどちらにもblockを追加しません。
 `dsl4PoseFeedbackModes=false`または別の`feedback.mode`ではcontainer設定を読まず、rendererを作りません。
+現段階の実装はrenderer moduleとTurboWarp runtime hostの明示optionまでであり、Standard Web／editor／
+Packager／development previewからの接続と`dsl4AppShell` flagは未実装です。各surfaceは後続のapp shell
+実装で同じconsumerへcontainerを渡します。
 
 camera previewの反転buttonとcamera menuもDSL actionやScratch spriteではありません。Standard production
 app shellの固定rendererが台本の`poseRecognition.preview.controls`を投影し、locale対応accessible name、
