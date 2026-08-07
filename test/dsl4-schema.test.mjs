@@ -67,6 +67,273 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
+test('normalizes say and think completion, typewriter, start sound, and source positions', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  HeroVoice: sound
+  TalkTick: sound
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.say:
+        text: 時間で進む
+        seconds: 2
+    - Hero.say:
+        text: 入力で進む
+        waitFor: advance
+    - Hero.think:
+        stableId: thinking
+        text: どちらか早い方
+        seconds: 5
+        waitFor: advance
+        characterIntervalSeconds: 0.08
+        startSound: HeroVoice
+        characterSound: TalkTick
+        noSoundCharacters: "「」"
+        restCharacters: "、。…"
+        restCharacterIntervalSeconds: 0.5
+`;
+  const result = frontend.parse(source, {sourceId: 'speech.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+      command,
+      target,
+      args,
+      ...(stableId ? {stableId} : {}),
+    })),
+    [
+      {command: 'say', target: 'Hero', args: {text: '時間で進む', seconds: 2}},
+      {command: 'say', target: 'Hero', args: {text: '入力で進む', waitFor: 'advance'}},
+      {
+        command: 'think',
+        target: 'Hero',
+        args: {
+          text: 'どちらか早い方',
+          seconds: 5,
+          waitFor: 'advance',
+          characterIntervalSeconds: 0.08,
+          startSound: 'HeroVoice',
+          characterSound: 'TalkTick',
+          noSoundCharacters: '「」',
+          restCharacters: '、。…',
+          restCharacterIntervalSeconds: 0.5,
+        },
+        stableId: 'thinking',
+      },
+    ],
+  );
+  for (const field of [
+    'text',
+    'seconds',
+    'waitFor',
+    'characterIntervalSeconds',
+    'startSound',
+    'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[`/scenes/opening/actions/2/args/${field}`], field);
+  }
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
+});
+
+test('normalizes reusable speech styles and validates style references and dependencies', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick: sound
+  WrongTick: backdrop
+actors:
+  Hero: HeroIdle
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.08
+    characterSound: TalkTick
+    noSoundCharacters: "「」"
+    restCharacters: "、。…"
+    restCharacterIntervalSeconds: 0.5
+scenes:
+  opening:
+    - Hero.say:
+        text: スタイルで進む。
+        waitFor: advance
+        style: novel
+`;
+  const result = frontend.parse(source, {sourceId: 'speech-style.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.speechStyles, {
+    novel: {
+      characterIntervalSeconds: 0.08,
+      characterSound: 'TalkTick',
+      noSoundCharacters: '「」',
+      restCharacters: '、。…',
+      restCharacterIntervalSeconds: 0.5,
+    },
+  });
+  assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {
+    text: 'スタイルで進む。',
+    waitFor: 'advance',
+    style: 'novel',
+  });
+  for (const field of [
+    'characterIntervalSeconds',
+    'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[`/speechStyles/novel/${field}`], field);
+  }
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/style']);
+
+  for (const [needle, replacement] of [
+    ['        style: novel', '        style: missing'],
+    ['        style: novel', '        style: novel\n        characterIntervalSeconds: 0.1'],
+    ['    characterSound: TalkTick\n', ''],
+    ['    characterSound: TalkTick', '    characterSound: WrongTick'],
+    ['    restCharacterIntervalSeconds: 0.5\n', ''],
+  ]) {
+    const invalid = frontend.parse(source.replace(needle, replacement));
+    assert.equal(invalid.ok, false, replacement);
+  }
+
+  const missingSound = frontend.parse(
+    source.replace('    characterSound: TalkTick', '    characterSound: MissingTick'),
+  );
+  assert.equal(missingSound.ok, false);
+  assert.ok(
+    missingSound.diagnostics.some(
+      ({code, path}) => code === 'K4-REF-001' && path === '$.speechStyles.novel.characterSound',
+    ),
+    JSON.stringify(missingSound.diagnostics),
+  );
+});
+
+test('rejects incomplete or malformed speech and non-sound speech assets', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  TalkTick: sound
+  WrongTick: backdrop
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.say:
+        text: hello
+        seconds: 1
+`;
+  const replacements = [
+    ['        seconds: 1\n', ''],
+    ['        seconds: 1', '        waitFor: click'],
+    ['        seconds: 1', '        seconds: -1'],
+    ['        seconds: 1', '        seconds: 1\n        characterIntervalSeconds: 0'],
+    ['        seconds: 1', '        seconds: 1\n        characterSound: TalkTick'],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        noSoundCharacters: "「」"',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacters: "、。…"',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacterIntervalSeconds: 0.5',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        restCharacters: "、。…"\n        restCharacterIntervalSeconds: 0',
+    ],
+    [
+      '        seconds: 1',
+      '        seconds: 1\n        characterIntervalSeconds: 0.1\n        characterSound: TalkTick\n        noSoundCharacters: ""',
+    ],
+    ['        seconds: 1', '        seconds: 1\n        unexpected: true'],
+  ];
+  for (const [needle, replacement] of replacements) {
+    const result = frontend.parse(source.replace(needle, replacement));
+    assert.equal(result.ok, false, replacement);
+    assert.ok(
+      result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')),
+      replacement,
+    );
+  }
+
+  for (const characterSound of ['MissingTick', 'WrongTick']) {
+    const result = frontend.parse(
+      source.replace(
+        '        seconds: 1',
+        `        waitFor: advance\n        characterIntervalSeconds: 0.1\n        characterSound: ${characterSound}`,
+      ),
+    );
+    assert.equal(result.ok, false, characterSound);
+    assert.ok(
+      result.diagnostics.some(
+        ({code, storyPath}) =>
+          code === (characterSound === 'MissingTick' ? 'K4-REF-001' : 'K4-REF-002') &&
+          storyPath === '/scenes/opening/actions/0/args/characterSound',
+      ),
+      JSON.stringify(result.diagnostics),
+    );
+  }
+
+  for (const startSound of ['MissingVoice', 'WrongTick']) {
+    const result = frontend.parse(
+      source.replace('        seconds: 1', `        seconds: 1\n        startSound: ${startSound}`),
+    );
+    assert.equal(result.ok, false, startSound);
+    assert.ok(
+      result.diagnostics.some(
+        ({code, storyPath}) =>
+          code === (startSound === 'MissingVoice' ? 'K4-REF-001' : 'K4-REF-002') &&
+          storyPath === '/scenes/opening/actions/0/args/startSound',
+      ),
+      JSON.stringify(result.diagnostics),
+    );
+  }
+});
+
+test('accepts named moveTo easing values and rejects unsupported movement curves', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.moveTo: {x: 10, y: 20, seconds: 1}
+    - Hero.moveTo: {x: 20, y: 30, seconds: 1, easing: linear}
+    - Hero.moveTo: {x: 30, y: 40, seconds: 1, easing: easeIn}
+    - Hero.moveTo: {x: 40, y: 50, seconds: 1, easing: easeOut}
+    - Hero.moveTo: {x: 50, y: 60, seconds: 1, easing: easeInOut}
+`;
+  const valid = frontend.parse(source, {sourceId: 'move-easing.kamishibai.yaml'});
+  assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
+  assert.deepEqual(
+    valid.storyDocument.scenes[0].actions.map(({args}) => args.easing),
+    [undefined, 'linear', 'easeIn', 'easeOut', 'easeInOut'],
+  );
+  assert.ok(valid.storyDocument.sourceMap['/scenes/opening/actions/4/args/easing']);
+
+  for (const easing of ['ease-in', 'spring', true, 1]) {
+    const invalid = frontend.parse(
+      source.replace('easing: easeInOut', `easing: ${String(easing)}`),
+      {sourceId: 'invalid-move-easing.kamishibai.yaml'},
+    );
+    assert.equal(invalid.ok, false, String(easing));
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('normalizes pose policy defaults and rejects unknown keys, values, or types', () => {
   const base = [
     "kamishibai: '4.0'",
@@ -141,6 +408,125 @@ test('normalizes a scene pose preview override and maps its source position', ()
     assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
     assert.ok(invalid.diagnostics.every(({range}) => range.start.line > 0));
   }
+});
+
+test('normalizes camera preview controls, image assets, defaults, and source ranges', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  ShowMirrored:
+    kind: image
+    file: ui/show-mirrored.svg
+    loading: eager
+  ShowUnmirrored:
+    kind: image
+    file: ui/show-unmirrored.svg
+  CameraMenu:
+    kind: image
+    file: ui/camera.svg
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-center
+        opacity: 0.8
+        assets:
+          showMirrored: ShowMirrored
+          showUnmirrored: ShowUnmirrored
+      cameraMenu:
+        position: bottom-right
+        buttonAsset: CameraMenu
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source, {sourceId: 'camera-preview-controls.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.ShowMirrored.kind, 'image');
+  assert.equal(result.storyDocument.assets.ShowMirrored.retention, 'story');
+  assert.deepEqual(result.storyDocument.poseRecognition.preview.controls, {
+    mirroring: {
+      opacity: 0.8,
+      position: 'top-center',
+      assets: {showMirrored: 'ShowMirrored', showUnmirrored: 'ShowUnmirrored'},
+    },
+    cameraMenu: {opacity: 1, position: 'bottom-right', buttonAsset: 'CameraMenu'},
+  });
+  for (const path of [
+    '/poseRecognition/preview/controls',
+    '/poseRecognition/preview/controls/mirroring/position',
+    '/poseRecognition/preview/controls/mirroring/opacity',
+    '/poseRecognition/preview/controls/mirroring/assets/showMirrored',
+    '/poseRecognition/preview/controls/mirroring/assets/showUnmirrored',
+    '/poseRecognition/preview/controls/cameraMenu/position',
+    '/poseRecognition/preview/controls/cameraMenu/buttonAsset',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+  for (const position of [
+    'top-center',
+    'bottom-center',
+    'left-center',
+    'right-center',
+    'top-right',
+    'bottom-right',
+    'top-left',
+    'bottom-left',
+  ]) {
+    const positioned = frontend.parse(
+      source.replace('position: top-center', `position: ${position}`),
+    );
+    assert.equal(positioned.ok, true, position);
+  }
+
+  for (const [needle, replacement] of [
+    ['position: top-center', 'position: middle'],
+    ['opacity: 0.8', 'opacity: 1.1'],
+    [
+      'showUnmirrored: ShowUnmirrored',
+      'showUnmirrored: ShowUnmirrored\n          extra: ShowUnmirrored',
+    ],
+  ]) {
+    const candidate = source.replace(needle, replacement);
+    const invalid = frontend.parse(candidate);
+    assert.equal(invalid.ok, false, replacement);
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
+test('requires eager image references for every configured camera preview control', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  Icon:
+    kind: image
+    file: ui/icon.svg
+    loading: lazy
+  Wrong: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-left
+        assets:
+          showMirrored: Icon
+          showUnmirrored: Wrong
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source);
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({code}) => code === 'K4-PREVIEW-CONTROL-ASSET-001'));
+  assert.ok(result.diagnostics.some(({code}) => code === 'K4-REF-002'));
 });
 
 test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separate', async () => {

@@ -18,6 +18,7 @@ export const dsl4CoreActionQuiesceModes = Object.freeze({
   show: 'finish-only',
   moveTo: 'cancel-replay-safe',
   say: 'cancel-replay-safe',
+  think: 'cancel-replay-safe',
   setSkin: 'finish-only',
   setText: 'finish-only',
   pose: 'cancel-replay-safe',

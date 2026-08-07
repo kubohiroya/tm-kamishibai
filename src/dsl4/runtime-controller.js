@@ -1,4 +1,5 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
+import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {deepFreeze} from './story-document.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
@@ -12,6 +13,13 @@ const defaultPoseSelectionRecognition = Object.freeze({
   scoreThreshold: 0,
 });
 const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
+const speechPresentationArgumentNames = Object.freeze([
+  'characterIntervalSeconds',
+  'characterSound',
+  'noSoundCharacters',
+  'restCharacters',
+  'restCharacterIntervalSeconds',
+]);
 
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
@@ -59,6 +67,7 @@ function deferred() {
  * @property {Readonly<{actionScopeRef: string, actionViewRef: string}>} [structuredData]
  * @property {(name: string) => string | number | boolean | undefined} getVariable
  * @property {(name: string, value: string | number | boolean) => boolean} setVariable
+ * @property {() => Readonly<{promise: Promise<Readonly<Record<string, unknown>>>, cancel: () => void}>} createAdvanceWait
  */
 
 /**
@@ -129,6 +138,9 @@ function runtimeDiagnostic(storyDocument, storyPath, code, message) {
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  * @param {Record<string, Function>} [options.structuredDataIntegration]
  * @param {boolean} [options.posePreviewMirroringEnabled]
+ * @param {boolean} [options.cameraPreviewControlsEnabled]
+ * @param {boolean} [options.poseNavigationPolicyEnabled]
+ * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -140,6 +152,9 @@ export function createDsl4RuntimeController({
   onEvent,
   structuredDataIntegration,
   posePreviewMirroringEnabled = false,
+  cameraPreviewControlsEnabled = false,
+  poseNavigationPolicyEnabled = false,
+  speechAdvanceTypewriterEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -148,6 +163,9 @@ export function createDsl4RuntimeController({
   }
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (typeof cameraPreviewControlsEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewControlsEnabled must be boolean');
   }
   if (
     posePreviewMirroringEnabled &&
@@ -175,6 +193,12 @@ export function createDsl4RuntimeController({
       }
     }
   }
+  if (typeof poseNavigationPolicyEnabled !== 'boolean') {
+    throw new TypeError('poseNavigationPolicyEnabled must be boolean');
+  }
+  if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
+    throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -189,6 +213,33 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  const speechStylesValue = storyDocument.speechStyles ?? {};
+  if (!isRecord(speechStylesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument speechStyles must be an object');
+  }
+  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    speechStylesValue
+  );
+  if (!speechAdvanceTypewriterEnabled) {
+    const extendedSpeechAction = scenes
+      .flatMap(
+        (scene) =>
+          /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions ?? []),
+      )
+      .find((action) => {
+        if (action.command === 'think') return true;
+        if (action.command !== 'say') return false;
+        const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
+        return ['waitFor', 'startSound', 'style', ...speechPresentationArgumentNames].some((key) =>
+          Object.hasOwn(args, key),
+        );
+      });
+    if (extendedSpeechAction) {
+      throw new TypeError(
+        'dsl4SpeechAdvanceTypewriter must be enabled for think, waitFor, or extended speech',
+      );
+    }
+  }
   const sceneIndex = new Map(scenes.map((scene, index) => [scene.id, index]));
   const branches = /** @type {Record<string, ReadonlyArray<Readonly<Record<string, string>>>>} */ (
     storyDocument.branches ?? {}
@@ -241,6 +292,12 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
+  /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  let poseAdvanceLock = null;
+  /** @type {{generation: number} | null} */
+  let activePoseWait = null;
+  /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void} | null} */
+  let activeAdvanceWait = null;
   /** @type {Record<string, any> | null} */
   let quiesceRequest = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -252,6 +309,12 @@ export function createDsl4RuntimeController({
         storyDocument,
         lifecycle: assetLifecycle,
         onEvent: (type, details) => emit(type, details),
+        ...(cameraPreviewControlsEnabled
+          ? {}
+          : {
+              excludedStartupAssetIds:
+                createDsl4AssetDependencyIndex(storyDocument).posePreviewControls,
+            }),
       })
     : null;
   let assetsReleased = true;
@@ -630,7 +693,73 @@ export function createDsl4RuntimeController({
         variables[name] = value;
         return true;
       },
+      createAdvanceWait() {
+        if (!speechAdvanceTypewriterEnabled) {
+          throw new TypeError('Speech advance input is disabled');
+        }
+        if (!isCurrent(actionGeneration) || signal.aborted) {
+          throw Object.assign(new Error('DSL 4.0 runtime action was cancelled'), {
+            name: 'AbortError',
+          });
+        }
+        if (activeAdvanceWait) {
+          throw new Error('Only one speech advance wait may be active');
+        }
+        const completion = deferred();
+        /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void}} */
+        const wait = {
+          generation: actionGeneration,
+          armed: false,
+          completion,
+          cleanup: () => {},
+        };
+        const close = (outcome = 'cancelled', input = null) => {
+          if (activeAdvanceWait !== wait) return;
+          activeAdvanceWait = null;
+          wait.cleanup();
+          completion.resolve(deepFreeze({outcome, ...(input ? {input: cloneValue(input)} : {})}));
+        };
+        const handleAbort = () => close();
+        wait.cleanup = () => signal.removeEventListener('abort', handleAbort);
+        signal.addEventListener('abort', handleAbort, {once: true});
+        activeAdvanceWait = wait;
+        queueMicrotask(() => {
+          if (activeAdvanceWait === wait && isCurrent(actionGeneration) && !signal.aborted) {
+            wait.armed = true;
+          }
+        });
+        return Object.freeze({
+          promise: completion.promise,
+          cancel: () => close(),
+        });
+      },
     };
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} input */
+  function acceptAdvanceInput(input) {
+    if (!speechAdvanceTypewriterEnabled || !isRecord(input)) return false;
+    const wait = activeAdvanceWait;
+    if (!wait || !wait.armed || !isCurrent(wait.generation)) return false;
+    activeAdvanceWait = null;
+    wait.cleanup();
+    wait.completion.resolve(deepFreeze({outcome: 'advance', input: cloneValue(input)}));
+    emit('speech.advance', {input: cloneValue(input)});
+    return true;
+  }
+
+  /**
+   * Consume an eligible input while an advance wait is active, including the
+   * unarmed interval that protects the speech-starting event from reuse.
+   *
+   * @param {Readonly<Record<string, unknown>>} input
+   */
+  function consumeAdvanceInput(input) {
+    if (!speechAdvanceTypewriterEnabled || !isRecord(input)) return false;
+    const wait = activeAdvanceWait;
+    if (!wait || !isCurrent(wait.generation)) return false;
+    if (!wait.armed) return true;
+    return acceptAdvanceInput(input);
   }
 
   /**
@@ -762,6 +891,31 @@ export function createDsl4RuntimeController({
   }
 
   /**
+   * @param {'say' | 'think'} command
+   * @param {Record<string, unknown>} args
+   */
+  function resolveSpeechStyle(command, args) {
+    if (!Object.hasOwn(args, 'style')) return args;
+    if (speechPresentationArgumentNames.some((key) => Object.hasOwn(args, key))) {
+      const error = new Error(
+        `${command}.style cannot be combined with inline speech presentation`,
+      );
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
+      throw error;
+    }
+    const styleId = args.style;
+    const style = typeof styleId === 'string' ? speechStyles[styleId] : undefined;
+    if (!isRecord(style)) {
+      const error = new Error(`Speech style is unavailable: ${String(styleId)}`);
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
+      throw error;
+    }
+    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'style'));
+    const resolvedStyle = /** @type {Record<string, unknown>} */ (cloneValue(style));
+    return {...resolvedStyle, ...actionArgs};
+  }
+
+  /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
    * @returns {Promise<{sceneId: string, reason: string} | null>}
@@ -842,17 +996,23 @@ export function createDsl4RuntimeController({
           await invokePort('setSkin', {target, skin: step.skin}, context);
           ensureActive(context);
         }
-        await invokePort(
-          'waitForPose',
-          {
-            target,
-            pose: step.pose,
-            stepIndex,
-            poseModel,
-            recognition: cloneValue(poseSequenceRecognition),
-          },
-          context,
-        );
+        const poseWait = {generation: context.generation};
+        activePoseWait = poseWait;
+        try {
+          await invokePort(
+            'waitForPose',
+            {
+              target,
+              pose: step.pose,
+              stepIndex,
+              poseModel,
+              recognition: cloneValue(poseSequenceRecognition),
+            },
+            context,
+          );
+        } finally {
+          if (activePoseWait === poseWait) activePoseWait = null;
+        }
         ensureActive(context);
         if (typeof step.sound === 'string') {
           await invokePort('sound', {sound: step.sound}, context);
@@ -861,7 +1021,9 @@ export function createDsl4RuntimeController({
       }
       return null;
     }
-    await invokePort(command, target === null ? {...args} : {target, ...args}, context);
+    const portArgs =
+      command === 'say' || command === 'think' ? resolveSpeechStyle(command, args) : args;
+    await invokePort(command, target === null ? {...portArgs} : {target, ...portArgs}, context);
     return null;
   }
 
@@ -1127,9 +1289,10 @@ export function createDsl4RuntimeController({
     }
     const action = currentAction();
     const wasRunning = status === 'running';
-    if (wasRunning) actionAbortController?.abort(reason);
+    const poseCancellationPending = poseAdvanceLock?.runId === runId;
+    if (wasRunning && !poseCancellationPending) actionAbortController?.abort(reason);
     generation += 1;
-    if (wasRunning && action) emit('action.cancel', {reason});
+    if (wasRunning && action && !poseCancellationPending) emit('action.cancel', {reason});
     try {
       endStructuredStory(reason);
     } catch (error) {
@@ -1143,23 +1306,39 @@ export function createDsl4RuntimeController({
     return snapshot();
   }
 
+  /** @param {string} reason */
+  function isPoseNavigationAdvance(reason) {
+    return (
+      poseNavigationPolicyEnabled &&
+      reason === 'navigation.nextAction' &&
+      status === 'running' &&
+      actionAbortController !== null &&
+      activePoseWait?.generation === generation &&
+      currentAction()?.command === 'pose'
+    );
+  }
+
+  /** @param {string} [reason] */
+  function canAdvance(reason = 'navigation.nextAction') {
+    if (status !== 'running') return false;
+    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock) return false;
+    if (!isPoseNavigationAdvance(reason)) return true;
+    return poseSequenceRecognition.navigation.allowSkip;
+  }
+
   /**
-   * Cancel the current action and continue at the next normal execution boundary.
+   * Continue at the next normal execution boundary after the active action is cancelled.
    *
-   * @param {string} [reason]
-   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   * @param {string} reason
+   * @param {string} fromStoryPath
+   * @param {number} activeRunId
    */
-  function advance(reason = 'navigation.nextAction') {
-    if (status !== 'running') return Promise.resolve(snapshot());
+  function continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId) {
     const scene = currentScene();
     const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       scene?.actions ?? []
     );
-    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
-    const action = currentAction();
-    actionAbortController?.abort(reason);
-    generation += 1;
-    if (action) emit('action.cancel', {reason});
     try {
       releaseStructuredAction(reason);
     } catch (error) {
@@ -1167,8 +1346,6 @@ export function createDsl4RuntimeController({
       return Promise.resolve(snapshot());
     }
     actionAbortController = null;
-    runId += 1;
-    runPromise = null;
 
     const nextActionIndex = currentActionIndex + 1;
     if (nextActionIndex < actions.length) {
@@ -1177,7 +1354,7 @@ export function createDsl4RuntimeController({
         toStoryPath: storyPathAt(currentSceneIndex, nextActionIndex),
         reason,
       });
-      runPromise = run(runId);
+      runPromise = run(activeRunId);
       return runPromise;
     }
     if (currentSceneIndex + 1 < scenes.length) {
@@ -1187,7 +1364,6 @@ export function createDsl4RuntimeController({
         toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
         reason,
       });
-      const activeRunId = runId;
       if (!assetCoordinator) {
         try {
           transitionTo(nextSceneId, reason);
@@ -1216,6 +1392,64 @@ export function createDsl4RuntimeController({
     emit('navigation.advance', {fromStoryPath, toStoryPath: null, reason});
     emit('runtime.finish');
     return Promise.resolve(snapshot());
+  }
+
+  /**
+   * @param {string} reason
+   * @param {string} fromStoryPath
+   * @param {Promise<Readonly<Record<string, unknown>>> | null} activeRun
+   * @param {{runId: number, operation: Promise<Readonly<Record<string, unknown>>> | null}} lock
+   */
+  async function advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock) {
+    try {
+      if (activeRun) await activeRun;
+    } finally {
+      if (poseAdvanceLock === lock) poseAdvanceLock = null;
+    }
+    const activeRunId = lock.runId;
+    if (status !== 'running' || runId !== activeRunId) return snapshot();
+    return continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId);
+  }
+
+  /**
+   * Cancel the current action and continue at the next normal execution boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advance(reason = 'navigation.nextAction') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock) return poseAdvanceLock.operation;
+    if (!canAdvance(reason)) return Promise.resolve(snapshot());
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    if (isPoseNavigationAdvance(reason)) {
+      const activeRun = runPromise;
+      actionAbortController?.abort(reason);
+      generation += 1;
+      emit('action.cancel', {reason});
+      runId += 1;
+      /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
+      const lock = {runId, operation: Promise.resolve(snapshot())};
+      const operation = advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock);
+      lock.operation = operation;
+      poseAdvanceLock = lock;
+      runPromise = operation;
+      void operation
+        .finally(() => {
+          if (poseAdvanceLock === lock) poseAdvanceLock = null;
+          if (runPromise === operation) runPromise = null;
+        })
+        .catch(() => {});
+      return operation;
+    }
+    const action = currentAction();
+    actionAbortController?.abort(reason);
+    generation += 1;
+    if (action) emit('action.cancel', {reason});
+    runId += 1;
+    runPromise = null;
+    return continueAfterAdvanceCancellation(reason, fromStoryPath, runId);
   }
 
   /**
@@ -1509,6 +1743,9 @@ export function createDsl4RuntimeController({
   return Object.freeze({
     start,
     stop,
+    canAdvance,
+    acceptAdvanceInput,
+    consumeAdvanceInput,
     advance,
     navigate,
     reposition,

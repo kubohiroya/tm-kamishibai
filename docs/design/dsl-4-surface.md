@@ -40,19 +40,20 @@ Copyright © 2026 Hiroya Kubo.
 台本はUTF-8で記述した単一のYAML 1.2文書です。トップレベルで使用できるキーは次だけです。
 未知のキーは警告ではなくエラーにします。
 
-| キー              | 必須 | 役割                             |
-| ----------------- | ---- | -------------------------------- |
-| `kamishibai`      | 必須 | 文字列`'4.0'`                    |
-| `assets`          | 任意 | 型付きアセットの宣言             |
-| `actors`          | 任意 | actorと初期costumeの対応         |
-| `cover`           | 任意 | 表紙の背景とBGM                  |
-| `textStyles`      | 任意 | SVG Textの名前付きstyle          |
-| `variables`       | 任意 | string、number、booleanの初期値  |
-| `loading`         | 任意 | 読み込み中の背景とcostume列      |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音           |
-| `controls`        | 任意 | 環境別の開発・チート機能用keymap |
-| `branches`        | 任意 | 順序付き条件分岐                 |
-| `scenes`          | 必須 | 一つ以上のscene                  |
+| キー              | 必須 | 役割                                 |
+| ----------------- | ---- | ------------------------------------ |
+| `kamishibai`      | 必須 | 文字列`'4.0'`                        |
+| `assets`          | 任意 | 型付きアセットの宣言                 |
+| `actors`          | 任意 | actorと初期costumeの対応             |
+| `cover`           | 任意 | 表紙の背景とBGM                      |
+| `textStyles`      | 任意 | SVG Textの名前付きstyle              |
+| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle    |
+| `variables`       | 任意 | string、number、booleanの初期値      |
+| `loading`         | 任意 | 読み込み中の背景とcostume列          |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音               |
+| `controls`        | 任意 | 環境別の開発・チート機能用keymap     |
+| `branches`        | 任意 | 順序付き条件分岐                     |
+| `scenes`          | 必須 | 一つ以上のscene                      |
 
 識別子にはUnicodeの文字、数字、`_`、`-`を使用できます。先頭は文字または`_`とし、
 `.`はactor actionの区切りとして予約します。すべての識別子はUnicode NFCでなければなりません。
@@ -290,9 +291,22 @@ textStyles:
     size: 150
     align: center
     direction: up
+
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.05
+    characterSound: Typewriter
+    noSoundCharacters: '「」'
+    restCharacters: '、。…'
+    restCharacterIntervalSeconds: 0.5
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
+
+`speechStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
+各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
+`restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
+セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -321,6 +335,19 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 - `scratchBinding`: Scratch側の有限な0〜100の変更を定義済みtick境界で取り込む
 - `presenter`: Scratch変数を使わず、app shellの専用presenterへsemantic stateを通知する
 
+`presenter`はapp shellが所有するDOM rendererです。対象actor／pose／stepを文字で示し、認識度と
+チャージを別々のnative `progress`と数値で表示します。領域にはaccessible nameを付け、状態変化を
+`role="status"`のpolite live regionでも通知するため、色だけには依存しません。文言のlocaleは
+台本ではなくapp shellの起動時optionで与えます。Scratch variable、monitor、palette blockは作成・参照しません。
+visualなprogressと数値は各tickで更新しますが、live regionはphase、actor、pose、stepのいずれかが変化した
+場合だけ更新します。同じphaseの連続tickを読み上げqueueへ追加しません。
+
+`waiting`／`charging`の間だけ表示し、`completed`／`cancelled`では値を0へ戻して領域を隠します。terminal
+状態自体はlive regionへ通知してから保持し、次のactive eventで更新します。scene移動、skip、abort、stop、
+live reload、runtime disposeはpose actionの最終`cancelled`を同じrendererへ通し、host disposeではDOMと
+live regionを解放します。追加の開発者observerはpresenterと独立して通知し、一方の例外やrejectで他方または
+pose実行を停止しません。
+
 Scratch方式はStageの非cloud scalar変数「ポーズ認識」「チャージ」を使い、0〜1のsemantic
 stateを0〜100へ投影します。`scratchMirror`はScratch側の書換えを読みません。
 `scratchBinding`は各pose計算tickの開始時に1回だけ両変数をatomicにsampleし、そのtickの
@@ -334,6 +361,21 @@ platformは0〜100の既存Stage variable slider monitorをvariable IDで一意�
 adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
 completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
 
+presenterの現行実装範囲はplatform rendererとTurboWarp runtime hostの明示的な
+`poseFeedbackPresenter` optionまでです。`dsl4PoseFeedbackModes=true`かつ台本が
+`feedback.mode: presenter`の場合に、custom hostがcontainerを渡せば利用できます。Standard app shellへの
+自動登録と`dsl4AppShell` flagはまだ実装していません。
+
+| surface              | source channel | 現在のStandard接続 | 対応方針                                                     |
+| -------------------- | -------------- | ------------------ | ------------------------------------------------------------ |
+| Web player           | bundled        | 未接続             | production app shellが同じhost optionへ固定DOM領域を渡す     |
+| 通常TurboWarp editor | unbundled      | 未接続             | editor shellが明示的にhost optionへDOM領域を渡す             |
+| Packager             | bundled        | 未接続             | package済みproduction app shellが同じconsumerを使用する      |
+| development preview  | unbundled      | 未接続             | preview shellが新sessionごとのcontainerを所有し、旧DOMを破棄 |
+
+各surfaceの接続は`dsl4AppShell`実装の後続作業です。surface固有の暗黙modeは設けません。flag OFF、別の
+feedback mode、DSL 3.1／3.2ではpresenter optionを検査せず、DOMを生成しません。
+
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。
 開始時、各計算tick、完了、cancelで通知し、scene移動、停止、live reload、disposeでは最終`cancelled`を
@@ -341,6 +383,9 @@ completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し
 
 `navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
 `navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+`false`で拒否されたkeymap入力はDOM eventを消費せず、`setSkin`やstep soundなどpose待機外の処理は
+従来どおりnavigation可能です。policy有効時の受理commandは同じ同期dispatch境界で処理し、historyと
+`navigation.nextAction`の混在連打でも到着順を変更しません。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
 起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
 
@@ -437,6 +482,24 @@ StoryDocument、scene-entry consumerを使います。
 development preview専用の暗黙上書きは設けません。flag OFF時とDSL 3.1／3.2 SB3は対象外で、TMPoseの
 既存mirrored表示、recognition入力、Standalone paletteを変更しません。
 
+camera preview操作UIは`poseRecognition.preview.controls`で任意に構成します。`mirroring`は
+`showMirrored`／`showUnmirrored`のtarget-state icon、`cameraMenu`はmenu trigger iconを、それぞれ
+target非依存`kind: image` assetとして参照します。両controlは8 anchor位置と0〜1のopacityを持ち、同じ
+anchorでは`mirroring`、`cameraMenu`の順に並びます。暗黙の標準iconはなく、control省略時はDOMも上流APIも
+生成しません。iconは`loading: eager`だけを許可します。
+
+app shell rendererはpreview表示矩形を追跡し、camera停止、preview非表示、runtimeの自然終了／failで
+controlを隠してlistenerを外します。自然終了／failでは履歴からの巻き戻しのためDOMとasset・
+Object URL leaseを保持し、`navigation.reposition`／`runtime.resume`でrendererを再開します。明示的な
+story stopまたはhost disposeでDOMとleaseを解放します。反転は`setPreviewMirroring`成功後だけiconを
+commitします。camera menuはopenごとに
+再列挙し、`default | front | back | {deviceId}`を`listCameraDevices`／`selectCamera`へ渡します。opaqueな
+device IDはsession内のmenu mappingだけに保持し、StoryDocumentやruntime variableへ保存しません。
+`dsl4CameraPreviewControls`は起動時固定・既定OFFです。OFFではcontrol assetをstartup materialize対象から
+除外し、renderer optionと上流camera methodを検査・呼出ししません。`mirroring` controlを有効にした
+sessionでは#387のstory／scene effective mirroringも同時に適用し、scene入場など外部の反転変更をtarget-state
+iconへ反映します。
+
 ## 7. Core action
 
 ### 7.1 Global action
@@ -458,14 +521,47 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
 
 ### 7.2 Actor action
 
-| action          | 引数                               |
-| --------------- | ---------------------------------- |
-| `Actor.show`    | `{skin, x, y, scale, stableId?}`   |
-| `Actor.moveTo`  | `{x, y, seconds, stableId?}`       |
-| `Actor.say`     | `{text, seconds, stableId?}`       |
-| `Actor.setSkin` | skin ID、または`{skin, stableId?}` |
-| `Actor.setText` | `{text, style, stableId?}`         |
-| `Actor.pose`    | `{steps, stableId?}`               |
+| action                     | 引数                                                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                           |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                   |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                         |
+
+`Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
+`seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
+修飾キーを伴わないany key入力後に完了します。両方を指定した場合は入力とタイムアウトのうち先に成立した方で
+完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
+再利用しません。
+
+`style`にはトップレベルの`speechStyles`で宣言したIDを指定します。styleを指定したactionでは、
+`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
+`restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
+引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、
+platform adapterはstyle registryを参照しません。style内の`characterSound`は、そのstyleを参照したsceneの
+asset依存として扱います。
+
+`characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
+`Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
+`startSound`は最初の吹き出し内容を表示した直後に1回再生するsound asset IDです。セリフを読んだ音声を
+指定してフルボイスにでき、speech完了、入力、タイムアウト、cancelのいずれでも再生を停止します。
+`characterSound`は`characterIntervalSeconds`と組み合わせるsound asset IDで、実際に1文字ずつ表示した
+各文字に対して再生します。`startSound`と`characterSound`は併用できます。文字送りの途中で入力または
+タイムアウトが成立した場合、残り全文を効果音なしで一括表示してから次のactionへ進みます。
+`noSoundCharacters`は`characterSound`を鳴らさない文字を連結した文字列です。
+`restCharacters`は対象文字を無音にし、その文字を表示してから次の文字を表示するまでの間隔を
+`restCharacterIntervalSeconds`へ置き換えます。両方の文字列は本文と同じUnicode grapheme cluster単位で
+判定します。`noSoundCharacters`は`characterSound`と、`restCharacters`は
+`restCharacterIntervalSeconds`と組み合わせ、いずれも`characterIntervalSeconds`による文字送りが必要です。
+休止中に入力、タイムアウト、cancelが発生した場合は休止を即座に解除し、残り全文を一括表示する場合は
+文字別の休止も効果音も適用しません。
+sound停止はAsset Managerのasset ID単位です。speechに指定したsound asset IDはそのspeechが排他的に
+使用し、BGMや別presentationとの同時再生には別のasset IDを割り当てます。terminal cleanupは、その
+speechが実際に再生を開始したasset IDだけを停止します。
+`dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
+`Actor.say: {text, seconds}`だけを受理します。
 
 ```yaml
 - Hero.show:
@@ -473,9 +569,21 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
     x: 0
     y: -60
     scale: 30
+- Hero.moveTo:
+    x: 100
+    y: -60
+    seconds: 1.5
+    easing: easeInOut
 - Hero.say:
     text: 助けに行こう
-    seconds: 2
+    seconds: 8
+    waitFor: advance
+    style: novel
+    startSound: HeroGreetingVoice
+- Hero.think:
+    text: どうしよう……
+    waitFor: advance
+    startSound: HeroThinkingVoice
 - Caption.setText:
     text: おしまい
     style: title
@@ -491,6 +599,9 @@ development preview専用の暗黙上書きは設けません。flag OFF時とDS
     help: ending
     jump: retry
 ```
+
+`Actor.moveTo.easing`は`linear | easeIn | easeOut | easeInOut`から選びます。省略時は従来どおり
+`linear`です。easingはX/Yへ同じ比率で適用し、0秒またはactionのskip時は即座に終点へ確定します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

@@ -18,7 +18,7 @@ const validManifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
-  path: 'scripts/story.kamishibai.yaml',
+  path: 'story.kamishibai.yaml',
 });
 
 test('creates one stable cache identity and preserves its database name across renames', async () => {
@@ -33,16 +33,15 @@ test('creates one stable cache identity and preserves its database name across r
   });
   const renamed = ensureDsl4ExternalSourceCacheIdentity({
     ...created.manifest,
-    path: 'scripts/renamed.kamishibai.yaml',
+    path: 'renamed.kamishibai.yaml',
   });
   assert.equal(renamed.created, false);
   assert.equal(renamed.cacheIdentity.label, 'renamed.kamishibai.yaml');
   assert.equal(renamed.cacheIdentity.databaseName, created.cacheIdentity.databaseName);
 
   await withTemporaryDirectory(async (directory) => {
-    await mkdir(path.join(directory, 'scripts'));
     await writeFile(
-      path.join(directory, 'scripts', 'story.kamishibai.yaml'),
+      path.join(directory, 'story.kamishibai.yaml'),
       "kamishibai: '4.0'\nscenes: {}\n",
     );
     const loaded = await loadDsl4ExternalSource(directory, created.manifest, {
@@ -84,14 +83,7 @@ test('strictly validates the external manifest and returns an immutable copy', (
     mode: 'external',
     sourceId: 'main',
   });
-  assert.deepEqual(defaulted, {...validManifest, path: 'story.kamishibai.yaml'});
-  assert.equal(
-    validateDsl4ExternalSourceManifest({
-      ...validManifest,
-      path: 'scripts/story.kamishibai.yaml',
-    }).path,
-    'scripts/story.kamishibai.yaml',
-  );
+  assert.deepEqual(defaulted, validManifest);
 
   for (const invalid of [
     {...validManifest, mode: 'embedded'},
@@ -107,12 +99,13 @@ test('strictly validates the external manifest and returns an immutable copy', (
   }
 });
 
-test('rejects absolute, URL, backslash, empty, dot-segment, and non-source paths', () => {
+test('accepts only a root-level source basename', () => {
   for (const sourcePath of [
     '',
     '/story.kamishibai.yaml',
     'C:/story.kamishibai.yaml',
     'https://example.com/story.kamishibai.yaml',
+    'scripts/story.kamishibai.yaml',
     'scripts\\story.kamishibai.yaml',
     './story.kamishibai.yaml',
     'scripts/../story.kamishibai.yaml',
@@ -129,9 +122,7 @@ test('rejects absolute, URL, backslash, empty, dot-segment, and non-source paths
 
 test('loads a canonical immutable descriptor without exposing or changing the source path', async () => {
   await withTemporaryDirectory(async (directory) => {
-    const scripts = path.join(directory, 'scripts');
-    await mkdir(scripts);
-    const sourcePath = path.join(scripts, 'story.kamishibai.yaml');
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     const original = Buffer.from(
       "\uFEFFkamishibai: '4.0'\r\n# 日本語\rscenes:\r\n  opening: []\r\n",
     );
@@ -154,7 +145,6 @@ test('loads a canonical immutable descriptor without exposing or changing the so
 
 test('rejects missing source, directories, root escape, and symlink escape', async () => {
   await withTemporaryDirectory(async (directory) => {
-    await mkdir(path.join(directory, 'scripts'));
     await rejectsCode(
       loadDsl4ExternalSource(directory, validManifest, {maxSourceBytes, subtleCrypto}),
       'K4-SOURCE-MISSING',
@@ -175,7 +165,7 @@ test('rejects missing source, directories, root escape, and symlink escape', asy
     try {
       const outsideSource = path.join(outside, 'story.kamishibai.yaml');
       await writeFile(outsideSource, "kamishibai: '4.0'\nscenes: {}\n");
-      await symlink(outsideSource, path.join(directory, 'scripts', 'story.kamishibai.yaml'));
+      await symlink(outsideSource, path.join(directory, 'story.kamishibai.yaml'));
       await rejectsCode(
         loadDsl4ExternalSource(directory, validManifest, {maxSourceBytes, subtleCrypto}),
         'K4-SOURCE-PATH-001',
@@ -188,8 +178,7 @@ test('rejects missing source, directories, root escape, and symlink escape', asy
 
 test('rejects invalid UTF-8 and a canonical source over the explicit limit', async () => {
   await withTemporaryDirectory(async (directory) => {
-    await mkdir(path.join(directory, 'scripts'));
-    const sourcePath = path.join(directory, 'scripts', 'story.kamishibai.yaml');
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, Buffer.from([0xc3, 0x28]));
     await rejectsCode(
       loadDsl4ExternalSource(directory, validManifest, {maxSourceBytes, subtleCrypto}),
@@ -212,8 +201,7 @@ test('rejects invalid UTF-8 and a canonical source over the explicit limit', asy
 
 test('accepts bounded CRLF overhead but rejects bytes that change between reads', async () => {
   await withTemporaryDirectory(async (directory) => {
-    await mkdir(path.join(directory, 'scripts'));
-    const sourcePath = path.join(directory, 'scripts', 'story.kamishibai.yaml');
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, 'a\r\nb\r\n');
     const loaded = await loadDsl4ExternalSource(directory, validManifest, {
       maxSourceBytes: 4,

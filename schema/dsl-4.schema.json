@@ -11,6 +11,7 @@
     "actors": {"$ref": "#/$defs/actors"},
     "cover": {"$ref": "#/$defs/cover"},
     "textStyles": {"$ref": "#/$defs/textStyles"},
+    "speechStyles": {"$ref": "#/$defs/speechStyles"},
     "variables": {"$ref": "#/$defs/variables"},
     "loading": {"$ref": "#/$defs/loadingScreen"},
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
@@ -235,13 +236,39 @@
         }
       ]
     },
+    "namedImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"const": "image"},
+        "file": {"$ref": "#/$defs/filePath"},
+        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "delivery": {"$ref": "#/$defs/deliveryPolicy"},
+        "loading": {"$ref": "#/$defs/loadingPolicy"},
+        "retention": {"$ref": "#/$defs/retentionPolicy"}
+      },
+      "oneOf": [
+        {
+          "required": ["file"],
+          "properties": {"file": true, "delivery": {"const": "embedded"}},
+          "not": {"properties": {"source": true}, "required": ["source"]}
+        },
+        {
+          "required": ["delivery", "source"],
+          "properties": {"delivery": {"const": "remote"}, "source": true},
+          "not": {"properties": {"file": true}, "required": ["file"]}
+        }
+      ]
+    },
     "asset": {
       "oneOf": [
         {"$ref": "#/$defs/compactAsset"},
         {"$ref": "#/$defs/namedBackdrop"},
         {"$ref": "#/$defs/namedSound"},
         {"$ref": "#/$defs/namedCostume"},
-        {"$ref": "#/$defs/namedPoseModel"}
+        {"$ref": "#/$defs/namedPoseModel"},
+        {"$ref": "#/$defs/namedImage"}
       ]
     },
     "assets": {
@@ -279,6 +306,28 @@
       "type": "object",
       "propertyNames": {"$ref": "#/$defs/id"},
       "additionalProperties": {"$ref": "#/$defs/textStyle"}
+    },
+    "speechStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characterIntervalSeconds"],
+      "dependentRequired": {
+        "noSoundCharacters": ["characterSound"],
+        "restCharacters": ["restCharacterIntervalSeconds"],
+        "restCharacterIntervalSeconds": ["restCharacters"]
+      },
+      "properties": {
+        "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "characterSound": {"$ref": "#/$defs/assetId"},
+        "noSoundCharacters": {"type": "string", "minLength": 1},
+        "restCharacters": {"type": "string", "minLength": 1},
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "speechStyles": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/speechStyle"}
     },
     "variableValue": {
       "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}]
@@ -320,7 +369,66 @@
       "additionalProperties": false,
       "required": ["mirroring"],
       "properties": {
+        "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]},
+        "controls": {"$ref": "#/$defs/posePreviewControls"}
+      }
+    },
+    "scenePosePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mirroring"],
+      "properties": {
         "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]}
+      }
+    },
+    "posePreviewControlPosition": {
+      "type": "string",
+      "enum": [
+        "top-center",
+        "bottom-center",
+        "left-center",
+        "right-center",
+        "top-right",
+        "bottom-right",
+        "top-left",
+        "bottom-left"
+      ]
+    },
+    "posePreviewMirroringControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "assets"],
+      "properties": {
+        "position": {"$ref": "#/$defs/posePreviewControlPosition"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 1},
+        "assets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["showMirrored", "showUnmirrored"],
+          "properties": {
+            "showMirrored": {"$ref": "#/$defs/assetId"},
+            "showUnmirrored": {"$ref": "#/$defs/assetId"}
+          }
+        }
+      }
+    },
+    "posePreviewCameraMenuControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "buttonAsset"],
+      "properties": {
+        "position": {"$ref": "#/$defs/posePreviewControlPosition"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 1},
+        "buttonAsset": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "posePreviewControls": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "mirroring": {"$ref": "#/$defs/posePreviewMirroringControl"},
+        "cameraMenu": {"$ref": "#/$defs/posePreviewCameraMenuControl"}
       }
     },
     "poseFeedback": {
@@ -582,17 +690,70 @@
         "stableId": {"$ref": "#/$defs/stableId"},
         "x": {"type": "number"},
         "y": {"type": "number"},
-        "seconds": {"type": "number", "minimum": 0}
+        "seconds": {"type": "number", "minimum": 0},
+        "easing": {"enum": ["linear", "easeIn", "easeOut", "easeInOut"]}
       }
     },
-    "sayArgs": {
+    "speechArgs": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text", "seconds"],
+      "required": ["text"],
+      "anyOf": [
+        {"required": ["seconds"], "properties": {"seconds": true}},
+        {"required": ["waitFor"], "properties": {"waitFor": true}}
+      ],
+      "dependentRequired": {
+        "characterSound": ["characterIntervalSeconds"],
+        "noSoundCharacters": ["characterIntervalSeconds", "characterSound"],
+        "restCharacters": ["characterIntervalSeconds", "restCharacterIntervalSeconds"],
+        "restCharacterIntervalSeconds": ["characterIntervalSeconds", "restCharacters"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"style": true},
+            "required": ["style"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {"characterIntervalSeconds": true},
+                  "required": ["characterIntervalSeconds"]
+                },
+                {
+                  "properties": {"characterSound": true},
+                  "required": ["characterSound"]
+                },
+                {
+                  "properties": {"noSoundCharacters": true},
+                  "required": ["noSoundCharacters"]
+                },
+                {
+                  "properties": {"restCharacters": true},
+                  "required": ["restCharacters"]
+                },
+                {
+                  "properties": {"restCharacterIntervalSeconds": true},
+                  "required": ["restCharacterIntervalSeconds"]
+                }
+              ]
+            }
+          }
+        }
+      ],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
-        "seconds": {"type": "number", "minimum": 0}
+        "seconds": {"type": "number", "minimum": 0},
+        "waitFor": {"const": "advance"},
+        "style": {"$ref": "#/$defs/styleId"},
+        "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "startSound": {"$ref": "#/$defs/assetId"},
+        "characterSound": {"$ref": "#/$defs/assetId"},
+        "noSoundCharacters": {"type": "string", "minLength": 1},
+        "restCharacters": {"type": "string", "minLength": 1},
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "setSkinArgs": {
@@ -745,7 +906,16 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.say$": {"$ref": "#/$defs/sayArgs"}
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.say$": {"$ref": "#/$defs/speechArgs"}
+      }
+    },
+    "thinkAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.think$": {"$ref": "#/$defs/speechArgs"}
       }
     },
     "setSkinAction": {
@@ -781,7 +951,7 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
           "$ref": "#/$defs/customActorActionArgs"
         }
       }
@@ -801,6 +971,7 @@
         {"$ref": "#/$defs/showAction"},
         {"$ref": "#/$defs/moveToAction"},
         {"$ref": "#/$defs/sayAction"},
+        {"$ref": "#/$defs/thinkAction"},
         {"$ref": "#/$defs/setSkinAction"},
         {"$ref": "#/$defs/setTextAction"},
         {"$ref": "#/$defs/poseAction"},
@@ -817,7 +988,7 @@
       "required": ["actions"],
       "properties": {
         "poseModel": {"$ref": "#/$defs/assetId"},
-        "posePreview": {"$ref": "#/$defs/posePreview"},
+        "posePreview": {"$ref": "#/$defs/scenePosePreview"},
         "actions": {"$ref": "#/$defs/actions"}
       }
     },

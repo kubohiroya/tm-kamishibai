@@ -176,7 +176,7 @@
     };
   }
   const EXTENSION_ID = "kubohiroyaassetmanager";
-  const EXTENSION_VERSION = "0.4.1";
+  const EXTENSION_VERSION = "0.7.0";
   const EXTENSION_DOCS_URI = "https://kubohiroya.github.io/turbowarp-asset-manager/";
   const DB_NAME = "tw-asset-manager";
   const DB_VERSION = 1;
@@ -383,6 +383,36 @@
       );
     }
     return name;
+  }
+  function copyEmbeddedBytes(value, assetName) {
+    let bytes;
+    if (value instanceof ArrayBuffer) {
+      bytes = new Uint8Array(value);
+    } else if (value instanceof Uint8Array) {
+      bytes = value;
+    } else {
+      throw new AssetManagerError(
+        "RESOURCE_ID_INVALID",
+        `Embedded asset "${assetName}" must provide an ArrayBuffer or Uint8Array.`,
+        {
+          operation: "registerEmbeddedAsset",
+          assetName,
+          hint: "Pass validated binary image or audio bytes."
+        }
+      );
+    }
+    if (bytes.byteLength === 0) {
+      throw new AssetManagerError(
+        "RESOURCE_ID_INVALID",
+        `Embedded asset "${assetName}" is empty.`,
+        {
+          operation: "registerEmbeddedAsset",
+          assetName,
+          hint: "Pass at least one byte."
+        }
+      );
+    }
+    return Uint8Array.from(bytes).buffer;
   }
   function findStageTarget(runtime) {
     const stage = runtime.targets.find((target) => target.isStage);
@@ -732,6 +762,38 @@
         }
         throw diagnostic;
       }
+    }
+    async registerEmbeddedAsset(input) {
+      const name = this.requireAssetName(input.name, "registerEmbeddedAsset");
+      const sourceName = normalizeName(input.sourceName) || name;
+      const mimeType = normalizeMimeType(input.mimeType, sourceName);
+      const mediaKind = mimeType.startsWith("image/") ? "image" : mimeType.startsWith("audio/") ? "audio" : "unknown";
+      if (mediaKind === "unknown") {
+        throw new AssetManagerError(
+          "ASSET_TYPE_MISMATCH",
+          `Embedded asset "${name}" has unsupported MIME type ${mimeType}.`,
+          {
+            operation: "registerEmbeddedAsset",
+            assetName: name,
+            expectedKind: "image or audio",
+            actualKind: mimeType,
+            hint: "Use an image/* or audio/* MIME type."
+          }
+        );
+      }
+      const data = copyEmbeddedBytes(input.bytes, name);
+      const token = this.beginRegistration(name);
+      const prepared = {
+        kind: "external",
+        name,
+        url: sourceName,
+        mimeType,
+        data,
+        cachedAt: Date.now(),
+        skinId: null
+      };
+      await this.commitPreparedAsset(name, "external", prepared, token);
+      return Object.freeze({ name, mimeType });
     }
     assetErrorType() {
       return this.lastAssetErrorType;

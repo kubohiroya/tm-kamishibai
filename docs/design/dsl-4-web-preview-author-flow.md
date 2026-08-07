@@ -40,9 +40,9 @@ project-root/
 }
 ```
 
-`path`を省略すると`story.kamishibai.yaml`を使用します。別名または分類directoryを指定する場合は、dot segmentを
-含まないnormalized POSIX-relative `.kamishibai.yaml` pathだけを許可します。Web PreviewはmanifestとそのYAML
-だけを読み、asset、base SB3、builder設定は変更しません。
+`path`を省略すると`story.kamishibai.yaml`を使用します。別名を指定する場合もproject root直下の
+`.kamishibai.yaml` basenameだけを許可し、`/`または`\\`を含むサブディレクトリは受理しません。Web Previewは
+manifestとそのYAMLだけを読み、asset、base SB3、builder設定は変更しません。
 
 ## 3. 開始と保存
 

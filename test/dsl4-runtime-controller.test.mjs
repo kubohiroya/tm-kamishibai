@@ -28,6 +28,14 @@ function deferred() {
   return {promise, resolve, reject};
 }
 
+async function waitFor(predicate, message) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return;
+    await Promise.resolve();
+  }
+  assert.fail(message);
+}
+
 const allCoreActionsStory = `
 kamishibai: '4.0'
 assets:
@@ -87,6 +95,7 @@ scenes:
           x: 10
           y: 20
           seconds: 0
+          easing: easeOut
       - Hero.say:
           text: hello
           seconds: 0
@@ -211,6 +220,13 @@ test('dispatches every core action and keeps transition separate from scene move
       decayPerSecond: 0.8,
       scoreThreshold: 1,
     },
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'moveTo').payload, {
+    target: 'Hero',
+    x: 10,
+    y: 20,
+    seconds: 0,
+    easing: 'easeOut',
   });
   const trace = controller.getTrace();
   assert.deepEqual(
@@ -792,6 +808,475 @@ scenes:
     [advanceEvent.details.fromStoryPath, advanceEvent.details.toStoryPath],
     ['/scenes/opening/actions/0', '/scenes/opening/actions/1'],
   );
+});
+
+function poseNavigationStory(allowSkip, feedbackMode = 'scratchMirror') {
+  return parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  Beach: backdrop
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: ${feedbackMode}
+  navigation:
+    allowSkip: ${allowSkip}
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+      - stage: Beach
+`);
+}
+
+function poseWaitWithDeferredCleanup(cleanup, events) {
+  return (_payload, context) =>
+    new Promise((_resolve, reject) => {
+      context.signal.addEventListener(
+        'abort',
+        () => {
+          events.push('abort');
+          void cleanup.promise.then(() => {
+            events.push('cleanup');
+            const error = new Error('pose wait cancelled');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        },
+        {once: true},
+      );
+    });
+}
+
+function poseSuboperationStory() {
+  return parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  StepSound: sound
+  HeroIdle: costume:Hero
+  HeroReady: costume:Hero
+  Beach: backdrop
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: false
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+              skin: HeroReady
+              sound: StepSound
+      - stage: Beach
+`);
+}
+
+test('pose navigation policy refuses nextAction without cancelling an unskippable pose', async () => {
+  const cleanup = deferred();
+  const events = [];
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: poseNavigationStory(false),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: poseWaitWithDeferredCleanup(cleanup, events),
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const run = controller.start();
+  assert.equal(controller.canAdvance('navigation.nextAction'), false);
+  const unchanged = await controller.advance('navigation.nextAction');
+  assert.equal(unchanged.status, 'running');
+  assert.deepEqual(events, []);
+  assert.equal(stageCalls, 0);
+
+  controller.stop('test-cleanup');
+  cleanup.resolve();
+  await run;
+  assert.deepEqual(events, ['abort', 'cleanup']);
+});
+
+test('pose navigation policy is independent of all feedback modes', async () => {
+  for (const feedbackMode of ['scratchMirror', 'scratchBinding', 'presenter']) {
+    const blockedCleanup = deferred();
+    const blocked = createDsl4RuntimeController({
+      storyDocument: poseNavigationStory(false, feedbackMode),
+      poseNavigationPolicyEnabled: true,
+      port: {
+        waitForPose: poseWaitWithDeferredCleanup(blockedCleanup, []),
+        stage: async () => {},
+      },
+    });
+    const blockedRun = blocked.start();
+    assert.equal(blocked.canAdvance('navigation.nextAction'), false, feedbackMode);
+    blocked.stop('test-cleanup');
+    blockedCleanup.resolve();
+    await blockedRun;
+
+    const allowedCleanup = deferred();
+    const allowed = createDsl4RuntimeController({
+      storyDocument: poseNavigationStory(true, feedbackMode),
+      poseNavigationPolicyEnabled: true,
+      port: {
+        waitForPose: poseWaitWithDeferredCleanup(allowedCleanup, []),
+        stage: async () => {},
+      },
+    });
+    const allowedRun = allowed.start();
+    assert.equal(allowed.canAdvance('navigation.nextAction'), true, feedbackMode);
+    allowed.stop('test-cleanup');
+    allowedCleanup.resolve();
+    await allowedRun;
+  }
+});
+
+test('unskippable pose policy does not block navigation outside waitForPose', async () => {
+  const skinPending = deferred();
+  let skinWaitCalls = 0;
+  let skinStageCalls = 0;
+  const skinController = createDsl4RuntimeController({
+    storyDocument: poseSuboperationStory(),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: () => skinPending.promise,
+      waitForPose: async () => skinWaitCalls++,
+      sound: async () => {},
+      stage: async () => skinStageCalls++,
+    },
+  });
+  const skinRun = skinController.start();
+  assert.equal(skinController.canAdvance('navigation.nextAction'), true);
+  const skinAdvance = skinController.advance('navigation.nextAction');
+  assert.equal((await skinAdvance).status, 'finished');
+  assert.equal(skinStageCalls, 1);
+  assert.equal(skinWaitCalls, 0);
+  skinPending.resolve();
+  await skinRun;
+
+  const soundPending = deferred();
+  let soundCalls = 0;
+  let soundStageCalls = 0;
+  const soundController = createDsl4RuntimeController({
+    storyDocument: poseSuboperationStory(),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: async () => {},
+      waitForPose: async () => {},
+      sound: () => {
+        soundCalls += 1;
+        return soundPending.promise;
+      },
+      stage: async () => soundStageCalls++,
+    },
+  });
+  const soundRun = soundController.start();
+  await waitFor(() => soundCalls === 1, 'pose step sound did not start');
+  assert.equal(soundController.canAdvance('navigation.nextAction'), true);
+  const soundAdvance = soundController.advance('navigation.nextAction');
+  assert.equal((await soundAdvance).status, 'finished');
+  assert.equal(soundStageCalls, 1);
+  soundPending.resolve();
+  await soundRun;
+});
+
+test('pose navigation policy waits for cleanup and advances a skippable pose once', async () => {
+  const cleanup = deferred();
+  const events = [];
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: poseNavigationStory(true),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: poseWaitWithDeferredCleanup(cleanup, events),
+      stage: async () => {
+        events.push('stage');
+        stageCalls += 1;
+      },
+    },
+  });
+
+  const staleRun = controller.start();
+  assert.equal(controller.canAdvance('navigation.nextAction'), true);
+  const firstAdvance = controller.advance('navigation.nextAction');
+  assert.equal(controller.canAdvance('navigation.nextAction'), false);
+  const duplicateAdvance = controller.advance('navigation.nextAction');
+  assert.strictEqual(duplicateAdvance, firstAdvance);
+  assert.strictEqual(controller.getRunPromise(), firstAdvance);
+  assert.deepEqual(events, ['abort']);
+  assert.equal(stageCalls, 0);
+
+  cleanup.resolve();
+  const state = await firstAdvance;
+  await duplicateAdvance;
+  await staleRun;
+  assert.equal(state.status, 'finished');
+  assert.equal(stageCalls, 1);
+  assert.deepEqual(events, ['abort', 'cleanup', 'stage']);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+  assert.equal(controller.getRunPromise(), null);
+});
+
+test('stop wins while a skippable pose is waiting for cancellation cleanup', async () => {
+  const cleanup = deferred();
+  const events = [];
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: poseNavigationStory(true),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: poseWaitWithDeferredCleanup(cleanup, events),
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const staleRun = controller.start();
+  const advance = controller.advance('navigation.nextAction');
+  const stopped = controller.stop('runtime-stop');
+  assert.equal(stopped.status, 'stopped');
+  cleanup.resolve();
+  const finalState = await advance;
+  await staleRun;
+
+  assert.equal(finalState.status, 'stopped');
+  assert.equal(stageCalls, 0);
+  assert.deepEqual(events, ['abort', 'cleanup']);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 1);
+  assert.equal(controller.getRunPromise(), null);
+});
+
+test('releases the pose cleanup lock when the next pending action starts', async () => {
+  const poseCleanup = deferred();
+  const nextWait = deferred();
+  let stageCalls = 0;
+  const story = parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  Beach: backdrop
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+      - wait: 1
+      - stage: Beach
+`);
+  const controller = createDsl4RuntimeController({
+    storyDocument: story,
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: poseWaitWithDeferredCleanup(poseCleanup, []),
+      wait: () => nextWait.promise,
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const initialRun = controller.start();
+  const poseAdvance = controller.advance('navigation.nextAction');
+  poseCleanup.resolve();
+  await waitFor(
+    () => controller.getState().actionPath === '/scenes/rescue/actions/1',
+    'next pending action did not start after pose cleanup',
+  );
+
+  const waitAdvance = controller.advance('navigation.nextAction');
+  const state = await waitAdvance;
+  assert.equal(state.status, 'finished');
+  assert.equal(stageCalls, 1);
+
+  nextWait.resolve();
+  await Promise.all([initialRun, poseAdvance]);
+});
+
+test('pose skip at a scene end waits for cleanup before asset-coordinated next scene effects', async () => {
+  const cleanup = deferred();
+  const events = [];
+  const lifecycleCalls = [];
+  const story = parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  NextBackdrop:
+    kind: backdrop
+    name: NextBackdrop
+    loading: lazy
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+  ending:
+    - stage: NextBackdrop
+`);
+  const controller = createDsl4RuntimeController({
+    storyDocument: story,
+    poseNavigationPolicyEnabled: true,
+    port: {
+      waitForPose: (_payload, context) =>
+        new Promise((_resolve, reject) => {
+          events.push('pose-start');
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              events.push('abort');
+              void cleanup.promise.then(() => {
+                events.push('cleanup');
+                const error = new Error('pose wait cancelled');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            },
+            {once: true},
+          );
+        }),
+      stage: async () => events.push('stage'),
+    },
+    assetLifecycle: {
+      async prepare(payload) {
+        lifecycleCalls.push({method: 'prepare', payload});
+      },
+      async setLoading(payload) {
+        lifecycleCalls.push({method: 'setLoading', payload});
+      },
+      async releaseAssets(payload) {
+        lifecycleCalls.push({method: 'releaseAssets', payload});
+      },
+      async release(payload) {
+        lifecycleCalls.push({method: 'release', payload});
+      },
+    },
+  });
+
+  const initialRun = controller.start();
+  await waitFor(() => events.includes('pose-start'), 'pose did not start after asset startup');
+  const advance = controller.advance('navigation.nextAction');
+  assert.deepEqual(events, ['pose-start', 'abort']);
+  cleanup.resolve();
+
+  const state = await advance;
+  await initialRun;
+  assert.equal(state.status, 'finished');
+  assert.equal(state.sceneId, 'ending');
+  assert.ok(events.indexOf('cleanup') < events.indexOf('stage'));
+  assert.equal(
+    lifecycleCalls.some(
+      ({method, payload}) =>
+        method === 'prepare' && payload.phase === 'scene' && payload.sceneId === 'ending',
+    ),
+    true,
+  );
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+});
+
+test('restart invalidates an old pose cleanup lock without waiting for it', async () => {
+  const oldCleanup = deferred();
+  const newCleanup = deferred();
+  const cancelReasons = [];
+  let poseCalls = 0;
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: poseNavigationStory(true),
+    poseNavigationPolicyEnabled: true,
+    onEvent(event) {
+      if (event.type === 'action.cancel') cancelReasons.push(event.details.reason);
+    },
+    port: {
+      waitForPose(payload, context) {
+        poseCalls += 1;
+        const cleanup = poseCalls === 1 ? oldCleanup : newCleanup;
+        return poseWaitWithDeferredCleanup(cleanup, [])(payload, context);
+      },
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const firstRun = controller.start();
+  const oldAdvance = controller.advance('navigation.nextAction');
+  const restartedRun = controller.start();
+  assert.equal(poseCalls, 2);
+  assert.equal(controller.canAdvance('navigation.nextAction'), true);
+
+  const newAdvance = controller.advance('navigation.nextAction');
+  newCleanup.resolve();
+  const state = await newAdvance;
+  assert.equal(state.status, 'finished');
+  assert.equal(stageCalls, 1);
+
+  oldCleanup.resolve();
+  await Promise.all([firstRun, oldAdvance, restartedRun]);
+  assert.equal(controller.getState().status, 'finished');
+  assert.equal(stageCalls, 1);
+  assert.deepEqual(cancelReasons, ['navigation.nextAction', 'navigation.nextAction']);
+});
+
+test('pose navigation policy remains inert while its startup gate is disabled', async () => {
+  const pending = deferred();
+  let stageCalls = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: poseNavigationStory(false),
+    port: {
+      waitForPose: () => pending.promise,
+      stage: async () => stageCalls++,
+    },
+  });
+
+  const staleRun = controller.start();
+  await controller.advance('navigation.nextAction');
+  assert.equal(stageCalls, 1);
+  pending.resolve();
+  await staleRun;
 });
 
 test('advance crosses a scene boundary and finishes at the final action boundary', async () => {

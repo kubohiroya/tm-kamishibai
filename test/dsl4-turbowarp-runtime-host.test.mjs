@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {webcrypto} from 'node:crypto';
+import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -13,6 +13,7 @@ import {
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
 import {createDsl4TurboWarpRuntimeHost} from '../src/dsl4/platform/index.js';
+import {createFakeDocument} from './helpers/fake-dom.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -29,6 +30,29 @@ controls:
       Space: navigation.nextAction
 scenes:
   opening:
+    - wait: 0
+`;
+const speechStory = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Voice: sound
+actors:
+  Hero: HeroIdle
+speechStyles:
+  novel:
+    characterIntervalSeconds: 60
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.think:
+        text: どうしよう
+        waitFor: advance
+        style: novel
+        startSound: Voice
     - wait: 0
 `;
 const posePreviewStory = `
@@ -52,13 +76,83 @@ scenes:
     actions: []
   reset: []
 `;
+const cameraPreviewControlsStory = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  ShowMirrored:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/show-mirrored.svg
+      integrity: sha256-0000000000000000000000000000000000000000000000000000000000000000
+      contentType: image/svg+xml
+      size: 6
+  ShowUnmirrored:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/show-unmirrored.svg
+      integrity: sha256-1111111111111111111111111111111111111111111111111111111111111111
+      contentType: image/svg+xml
+      size: 6
+  CameraMenu:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/camera-menu.svg
+      integrity: sha256-2222222222222222222222222222222222222222222222222222222222222222
+      contentType: image/svg+xml
+      size: 6
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  preview:
+    mirroring: mirrored
+    controls:
+      mirroring:
+        position: top-center
+        assets:
+          showMirrored: ShowMirrored
+          showUnmirrored: ShowUnmirrored
+      cameraMenu:
+        position: bottom-center
+        buttonAsset: CameraMenu
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    posePreview:
+      mirroring: unmirrored
+    actions:
+      - wait: 3600
+`;
+const cameraPreviewControlsHistoryStory = cameraPreviewControlsStory.replace(
+  '      Space: navigation.nextAction',
+  '      Space: navigation.nextAction\n      ArrowLeft: history.previousAction',
+);
+
+function findByDataset(root, key, value) {
+  if (root.dataset?.[key] === value) return root;
+  for (const child of root.children ?? []) {
+    const found = findByDataset(child, key, value);
+    if (found) return found;
+  }
+  return null;
+}
 
 function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 
-async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
-  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+async function packagedProject(
+  sourceText = waitStory,
+  {cacheIdentity, historyNavigationAvailable = false} = {},
+) {
+  const parsed = frontend.parse(sourceText, {sourceId: 'main', historyNavigationAvailable});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
@@ -71,7 +165,7 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
     parsed.storyDocument,
     sourceDescriptor,
     'production',
-    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
+    {maxSourceBytes: limits.maxSourceBytes, historyNavigationAvailable, subtleCrypto},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
   const snapshotAssets = Object.values(parsed.storyDocument.assets)
@@ -103,8 +197,73 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
     {
       channel: 'unbundled',
       ...limits,
+      historyNavigationAvailable,
       subtleCrypto,
     },
+  );
+}
+
+async function packagedPoseProject(sourceText) {
+  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
+    sourceId: 'main',
+    displayName: 'story.kamishibai.yaml',
+    maxSourceBytes: limits.maxSourceBytes,
+    subtleCrypto,
+  });
+  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    sourceDescriptor,
+    'production',
+    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
+  );
+  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const poseFiles = new Map([
+    ['metadata.json', new TextEncoder().encode('{"labels":["help"]}')],
+    ['model.json', new TextEncoder().encode('{"modelTopology":{}}')],
+    ['weights.bin', new Uint8Array([1])],
+  ]);
+  const poseSourceFiles = [...poseFiles].map(([filePath, bytes]) => ({
+    path: filePath,
+    size: bytes.byteLength,
+    integrity: `sha256-${createHash('sha256').update(bytes).digest('base64')}`,
+  }));
+  const snapshotAssets = Object.values(parsed.storyDocument.assets)
+    .map((asset) => ({
+      id: asset.id,
+      kind: asset.kind,
+      loading: asset.loading,
+      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      source:
+        asset.kind === 'poseModel'
+          ? {
+              type: 'file',
+              inputPath: asset.file,
+              mode: 'directory',
+              files: poseSourceFiles,
+            }
+          : {type: 'project', name: asset.name},
+    }))
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  const assetBundle = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    {
+      manifest: {formatVersion: 1, assets: snapshotAssets},
+      getFile(assetId, filePath) {
+        assert.equal(assetId, 'RescuePose');
+        return new Uint8Array(poseFiles.get(filePath));
+      },
+    },
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+  );
+  return installDsl4PackagedRuntimeComponent(
+    baseProject(),
+    parsed.storyDocument,
+    sourceDescriptor,
+    artifactResult.artifact,
+    assetBundle,
+    {channel: 'unbundled', ...limits, subtleCrypto},
   );
 }
 
@@ -222,7 +381,7 @@ function platformFixture(log) {
       return true;
     },
     getMimeType(name) {
-      return name === 'Bell' ? 'audio/wav' : 'image/svg+xml';
+      return name === 'Bell' || name === 'Tick' || name === 'Voice' ? 'audio/wav' : 'image/svg+xml';
     },
     applyToStage(name) {
       log.push(['media.stage', name]);
@@ -318,10 +477,14 @@ function platformFixture(log) {
       _say(message) {
         log.push(['actor.say', message]);
       },
+      _think(message) {
+        log.push(['actor.think', message]);
+      },
     },
   };
   return {
     runtime,
+    tmposeComposition,
     poseConfidence,
     poseProgress,
     monitorRecords,
@@ -431,6 +594,11 @@ test('selects the startup-fixed Scratch consumer and reserves host observers for
       assert.fail('disabled pose feedback must not inspect its observer');
     },
   });
+  Object.defineProperty(disabledOptions, 'poseFeedbackPresenter', {
+    get() {
+      assert.fail('disabled pose feedback must not inspect its presenter');
+    },
+  });
   const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
   await disabled.host.dispose('feedback-disabled');
@@ -457,11 +625,20 @@ scenes:
   const scratchFixture = platformFixture([]);
   scratchFixture.poseConfidence.value = 75;
   scratchFixture.poseProgress.value = 50;
-  const scratch = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(scratchProject, scratchFixture, {
-      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
-    }),
-  );
+  const scratchOptions = enabledOptions(scratchProject, scratchFixture, {
+    featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+  });
+  Object.defineProperty(scratchOptions, 'onPoseState', {
+    get() {
+      assert.fail('Scratch feedback must not inspect a presenter observer');
+    },
+  });
+  Object.defineProperty(scratchOptions, 'poseFeedbackPresenter', {
+    get() {
+      assert.fail('Scratch feedback must not inspect DOM presenter options');
+    },
+  });
+  const scratch = await createDsl4TurboWarpRuntimeHost(scratchOptions);
   assert.equal(scratch.ok, true, JSON.stringify(scratch.diagnostics));
   await scratch.host.dispose('scratch-feedback-enabled');
   assert.equal(scratchFixture.poseConfidence.value, 0);
@@ -494,14 +671,120 @@ scenes:
     ),
     /onPoseState/u,
   );
+  const presenterDocument = createFakeDocument();
   const presenter = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(presenterProject, platformFixture([]), {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
-      onPoseState() {},
+      poseFeedbackPresenter: {container: presenterDocument.body},
     }),
   );
   assert.equal(presenter.ok, true, JSON.stringify(presenter.diagnostics));
+  assert.equal(findByDataset(presenterDocument.body, 'dsl4PoseFeedback', 'true').hidden, true);
+  assert.ok(findByDataset(presenterDocument.body, 'dsl4PoseFeedbackStatus', 'true'));
   await presenter.host.dispose('presenter-feedback-enabled');
+  assert.equal(presenterDocument.body.children.length, 0);
+});
+
+test('renders presenter pose lifecycle and isolates its additional developer observer', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 1
+    idleChargePerSecond: 0
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+`);
+  const fixture = platformFixture([]);
+  const document = createFakeDocument();
+  const phases = [];
+  let confidence = 0;
+  let now = 0;
+  let scheduled = null;
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmposeComposition.confidenceOf = () => confidence;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      poseFeedbackPresenter: {container: document.body},
+      onPoseState(event) {
+        phases.push(event.phase);
+        if (event.phase === 'charging') throw new Error('developer observer failed');
+      },
+      poseNow: () => now,
+      poseSchedule(callback) {
+        scheduled = callback;
+        return () => {
+          if (scheduled === callback) scheduled = null;
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const root = findByDataset(document.body, 'dsl4PoseFeedback', 'true');
+  const status = findByDataset(document.body, 'dsl4PoseFeedbackStatus', 'true');
+
+  const run = result.host.start();
+  for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof scheduled, 'function');
+  assert.equal(root.hidden, false);
+  assert.equal(root.dataset.phase, 'waiting');
+  assert.match(status.textContent, /Waiting for pose: Hero \/ help \/ Step 1/u);
+
+  confidence = 1;
+  now = 1000;
+  scheduled();
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(phases, ['waiting', 'charging', 'completed']);
+  assert.equal(root.hidden, true);
+  assert.match(status.textContent, /Pose completed/u);
+
+  confidence = 0;
+  now = 2000;
+  scheduled = null;
+  const stoppedRun = result.host.start();
+  for (let attempts = 0; attempts < 50 && scheduled === null; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof scheduled, 'function');
+  assert.equal(root.hidden, false);
+  assert.equal(root.dataset.phase, 'waiting');
+  assert.equal(result.host.stop('presenter-stop').status, 'stopped');
+  await stoppedRun;
+  assert.deepEqual(phases.slice(-2), ['waiting', 'cancelled']);
+  assert.equal(root.hidden, true);
+  assert.match(status.textContent, /Pose cancelled/u);
+  for (const row of root.children.filter((child) => child.tagName === 'DIV')) {
+    assert.equal(row.children[1].value, 0);
+  }
+
+  await result.host.dispose('presenter-lifecycle');
+  assert.equal(document.body.children.length, 0);
 });
 
 test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
@@ -714,6 +997,394 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
     ],
   );
   await enabled.host.dispose('pose-preview-enabled');
+});
+
+test('connects camera preview controls, assets, and upstream methods only behind their flag', async () => {
+  const cacheIdentity = {
+    id: 'camera-controls',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--camera-controls',
+  };
+  const project = await packagedProject(cameraPreviewControlsStory, {cacheIdentity});
+
+  const disabledLog = [];
+  const disabledFixture = platformFixture(disabledLog);
+  const disabledCreateTMPose = disabledFixture.createTMPoseComposition;
+  disabledFixture.createTMPoseComposition = (...args) => {
+    const composition = disabledCreateTMPose(...args);
+    for (const method of [
+      'setPreviewMirroring',
+      'listCameraDevices',
+      'selectCamera',
+      'getCameraSelection',
+      'getActiveCamera',
+    ]) {
+      delete composition[method];
+      Object.defineProperty(composition, method, {
+        get() {
+          assert.fail(`disabled host must not inspect ${method}`);
+        },
+      });
+    }
+    return composition;
+  };
+  const disabledOptions = enabledOptions(project, disabledFixture);
+  for (const option of ['cameraPreviewControls', 'createObjectURL', 'revokeObjectURL']) {
+    Object.defineProperty(disabledOptions, option, {
+      get() {
+        assert.fail(`disabled host must not inspect ${option}`);
+      },
+    });
+  }
+  const disabled = await createDsl4TurboWarpRuntimeHost(disabledOptions);
+  assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
+  const disabledRun = disabled.host.start();
+  await Promise.resolve();
+  disabled.host.stop('test-complete');
+  await disabledRun;
+  assert.equal(
+    disabledLog.some(([event, id]) => event === 'media.register-embedded' && id !== undefined),
+    false,
+  );
+  await disabled.host.dispose('camera-controls-disabled');
+
+  const enabledLog = [];
+  const enabledFixture = platformFixture(enabledLog);
+  let selection = 'default';
+  const enabledCreateTMPose = enabledFixture.createTMPoseComposition;
+  enabledFixture.createTMPoseComposition = (...args) => {
+    const composition = enabledCreateTMPose(...args);
+    return {
+      ...composition,
+      isCameraRunning: () => true,
+      async listCameraDevices() {
+        enabledLog.push(['camera.list']);
+        return [{deviceId: 'opaque-camera', label: 'External camera'}];
+      },
+      async selectCamera(next) {
+        selection = next;
+        enabledLog.push(['camera.select', next]);
+      },
+      getCameraSelection: () => selection,
+      getActiveCamera: () => null,
+    };
+  };
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const pendingSchedules = [];
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, enabledFixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule(callback) {
+          pendingSchedules.push(callback);
+          return () => {
+            const index = pendingSchedules.indexOf(callback);
+            if (index >= 0) pendingSchedules.splice(index, 1);
+          };
+        },
+      },
+      createObjectURL() {
+        const value = `blob:control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  const enabledRun = enabled.host.start();
+  for (let attempt = 0; attempt < 20 && document.body.children.length === 0; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children.length, 2);
+  assert.equal(objectUrls.length, 3);
+  for (
+    let attempt = 0;
+    attempt < 20 && document.body.children[0].children[0].children[0].src !== 'blob:control-2';
+    attempt += 1
+  ) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children[0].children[0].children[0].src, 'blob:control-2');
+  assert.equal(enabledLog.filter(([event]) => event === 'media.register-embedded').length, 3);
+  enabled.host.stop('test-complete');
+  await enabledRun;
+  assert.equal(document.body.children.length, 0);
+  await enabled.host.dispose('camera-controls-enabled');
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+});
+
+test('releases every control Object URL when renderer DOM disposal fails', async () => {
+  const project = await packagedProject(cameraPreviewControlsStory, {
+    cacheIdentity: {
+      id: 'camera-controls-disposal-failure',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-disposal-failure',
+    },
+  });
+  const log = [];
+  const fixture = platformFixture(log);
+  const createTMPoseComposition = fixture.createTMPoseComposition;
+  fixture.createTMPoseComposition = (...args) => ({
+    ...createTMPoseComposition(...args),
+    isCameraRunning: () => true,
+    async listCameraDevices() {
+      return [];
+    },
+    async selectCamera() {},
+    getCameraSelection: () => 'default',
+    getActiveCamera: () => null,
+  });
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule: () => () => {},
+      },
+      createObjectURL() {
+        const value = `blob:failing-control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 20 && document.body.children.length < 2; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(document.body.children.length, 2);
+  assert.equal(objectUrls.length, 3);
+  const failingGroup = document.body.children[0];
+  const removeFailingGroup = failingGroup.remove.bind(failingGroup);
+  failingGroup.remove = () => {
+    throw new Error('control DOM removal failed');
+  };
+
+  result.host.stop('renderer-disposal-failure');
+  await run;
+  for (let attempt = 0; attempt < 20 && revoked.length < objectUrls.length; attempt += 1) {
+    await Promise.resolve();
+  }
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+  assert.equal(document.body.children.length, 1);
+
+  removeFailingGroup();
+  await result.host.dispose('renderer-disposal-failure');
+  assert.equal(document.body.children.length, 0);
+});
+
+test('suspends camera controls at natural finish and resumes the same leases for history', async () => {
+  const project = await packagedProject(cameraPreviewControlsHistoryStory, {
+    historyNavigationAvailable: true,
+    cacheIdentity: {
+      id: 'camera-controls-history',
+      label: 'story.kamishibai.yaml',
+      databaseName: 'tw-kamishibai-assets-v1--story--camera-controls-history',
+    },
+  });
+  const log = [];
+  const fixture = platformFixture(log);
+  const createTMPoseComposition = fixture.createTMPoseComposition;
+  fixture.createTMPoseComposition = (...args) => ({
+    ...createTMPoseComposition(...args),
+    isCameraRunning: () => true,
+    async listCameraDevices() {
+      return [];
+    },
+    async selectCamera() {},
+    getCameraSelection: () => 'default',
+    getActiveCamera: () => null,
+  });
+  const document = createFakeDocument();
+  const objectUrls = [];
+  const revoked = [];
+  const pendingSchedules = [];
+  const events = [];
+  const pendingWaits = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CameraPreviewControls: true},
+      historyNavigationAvailable: true,
+      historyLimits: {maxActionEntries: 8, maxSceneVisits: 8},
+      async loadRemoteAsset() {
+        return {bytes: new TextEncoder().encode('<svg/>'), contentType: 'image/svg+xml'};
+      },
+      cameraPreviewControls: {
+        container: document.body,
+        getPreviewRect: () => ({left: 0, top: 0, width: 320, height: 180}),
+        schedule(callback) {
+          pendingSchedules.push(callback);
+          return () => {
+            const index = pendingSchedules.indexOf(callback);
+            if (index >= 0) pendingSchedules.splice(index, 1);
+          };
+        },
+      },
+      waitSchedule(callback) {
+        pendingWaits.push(callback);
+        return () => {
+          const index = pendingWaits.indexOf(callback);
+          if (index >= 0) pendingWaits.splice(index, 1);
+        };
+      },
+      createObjectURL() {
+        const value = `blob:history-control-${objectUrls.length + 1}`;
+        objectUrls.push(value);
+        return value;
+      },
+      revokeObjectURL(url) {
+        revoked.push(url);
+      },
+      onEvent(event) {
+        events.push(event.type);
+        if (event.type === 'runtime.finish') throw new Error('consumer observer failed');
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  while (pendingWaits.length === 0) await Promise.resolve();
+  const mirror = findByDataset(document.body, 'dsl4PreviewControl', 'mirroring');
+  const camera = findByDataset(document.body, 'dsl4PreviewControl', 'cameraMenu');
+  const menu = findByDataset(document.body, 'dsl4PreviewCameraMenu', 'true');
+  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(camera.listeners.get('click').length, 1);
+  assert.equal(menu.listeners.get('change').length, 1);
+
+  pendingWaits.shift()();
+  const finished = await run;
+  assert.equal(finished.status, 'finished');
+  assert.equal(document.body.children.length, 2);
+  assert.ok(document.body.children.every((group) => group.style.display === 'none'));
+  assert.equal(pendingSchedules.length, 0);
+  assert.equal(revoked.length, 0);
+  assert.equal(mirror.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
+
+  const rewound = result.host.dispatchCommand('history.previousAction');
+  assert.equal(rewound.ok, true, JSON.stringify(rewound.diagnostics));
+  assert.equal(rewound.changed, true);
+  assert.equal(result.host.getState().runtime.status, 'paused');
+  assert.ok(document.body.children.every((group) => group.style.display === 'flex'));
+  assert.equal(pendingSchedules.length, 1);
+  assert.equal(mirror.listeners.get('click').length, 1);
+  assert.equal(camera.listeners.get('click').length, 1);
+  assert.equal(menu.listeners.get('change').length, 1);
+
+  const resumed = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(resumed.ok, true, JSON.stringify(resumed.diagnostics));
+  while (pendingWaits.length === 0) await Promise.resolve();
+  pendingWaits.shift()();
+  await result.host.getRunPromise();
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.ok(document.body.children.every((group) => group.style.display === 'none'));
+  assert.equal(pendingSchedules.length, 0);
+  assert.equal(revoked.length, 0);
+  assert.equal(mirror.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(camera.listeners.get('click')?.length ?? 0, 0);
+  assert.equal(menu.listeners.get('change')?.length ?? 0, 0);
+  assert.deepEqual(
+    events.filter((type) =>
+      ['runtime.finish', 'navigation.reposition', 'runtime.resume'].includes(type),
+    ),
+    ['runtime.finish', 'navigation.reposition', 'runtime.resume', 'runtime.finish'],
+  );
+
+  await result.host.dispose('history-camera-controls');
+  assert.equal(document.body.children.length, 0);
+  assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
+});
+
+test('wires flagged think advance through the standard TurboWarp runtime host', async () => {
+  const project = await packagedProject(speechStory);
+  const log = [];
+  const fixture = platformFixture(log);
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true},
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const stageListeners = new Map();
+  const stageTarget = {
+    addEventListener(type, listener) {
+      stageListeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (stageListeners.get(type) === listener) stageListeners.delete(type);
+    },
+  };
+  result.host.attachStagePointer(stageTarget);
+  assert.equal(stageListeners.has('pointerup'), true);
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (log.some(([name, message]) => name === 'actor.think' && message === 'ど')) break;
+    await Promise.resolve();
+  }
+  assert.equal(
+    log.some(([name, message]) => name === 'actor.think' && message === 'ど'),
+    true,
+    JSON.stringify(log),
+  );
+  assert.equal(log.filter(([name, sound]) => name === 'media.play' && sound === 'Voice').length, 1);
+  assert.ok(
+    log.findIndex(([name, message]) => name === 'actor.think' && message === 'ど') <
+      log.findIndex(([name, sound]) => name === 'media.play' && sound === 'Voice'),
+    JSON.stringify(log),
+  );
+  await Promise.resolve();
+  const counters = {preventDefault: 0, stopPropagation: 0};
+  const event = {
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    preventDefault() {
+      counters.preventDefault += 1;
+    },
+    stopPropagation() {
+      counters.stopPropagation += 1;
+    },
+  };
+  assert.equal(stageListeners.get('pointerup')(event), true);
+  assert.deepEqual(counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal((await run).status, 'finished');
+  assert.equal(
+    log.filter(([name, message]) => name === 'actor.think' && message === 'どうしよう').length,
+    1,
+    JSON.stringify(log),
+  );
+  assert.equal(
+    log.filter(([name, message]) => name === 'actor.think' && message === '').length,
+    1,
+    JSON.stringify(log),
+  );
+  assert.equal(log.filter(([name, sound]) => name === 'media.stop' && sound === 'Voice').length, 1);
+  await result.host.dispose('test-complete');
+  assert.equal(stageListeners.has('pointerup'), false);
 });
 
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {

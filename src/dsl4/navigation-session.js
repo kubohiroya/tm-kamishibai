@@ -74,6 +74,9 @@ function historyFailure(result) {
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
  * @param {boolean} [options.structuredDataIntegrationEnabled]
  * @param {boolean} [options.posePreviewMirroringEnabled]
+ * @param {boolean} [options.cameraPreviewControlsEnabled]
+ * @param {boolean} [options.poseNavigationPolicyEnabled]
+ * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
  * @param {number} [options.quiesceTimeoutMs]
@@ -92,6 +95,9 @@ export function createDsl4NavigationSession({
   onInputError,
   structuredDataIntegrationEnabled = false,
   posePreviewMirroringEnabled = false,
+  cameraPreviewControlsEnabled = false,
+  poseNavigationPolicyEnabled = false,
+  speechAdvanceTypewriterEnabled = false,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
   quiesceTimeoutMs,
@@ -102,6 +108,15 @@ export function createDsl4NavigationSession({
   }
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
+  }
+  if (typeof cameraPreviewControlsEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewControlsEnabled must be boolean');
+  }
+  if (typeof poseNavigationPolicyEnabled !== 'boolean') {
+    throw new TypeError('poseNavigationPolicyEnabled must be boolean');
+  }
+  if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
+    throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
@@ -210,6 +225,9 @@ export function createDsl4NavigationSession({
       onEvent: handleRuntimeEvent,
       structuredDataIntegration: structuredDataIntegration ?? undefined,
       posePreviewMirroringEnabled,
+      cameraPreviewControlsEnabled,
+      poseNavigationPolicyEnabled,
+      speechAdvanceTypewriterEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });
@@ -272,6 +290,9 @@ export function createDsl4NavigationSession({
         historyState = result.state;
         void controller.resume(command);
       } else {
+        if (poseNavigationPolicyEnabled && !controller.canAdvance(command)) {
+          return deepFreeze({ok: true, changed: false, state: snapshot(), diagnostics: []});
+        }
         void controller.advance(command);
       }
       return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
@@ -302,6 +323,30 @@ export function createDsl4NavigationSession({
   const inputAdapter = createDsl4KeymapInputAdapter({
     keymap: profile.keymap,
     dispatchCommand,
+    ...(speechAdvanceTypewriterEnabled
+      ? {
+          consumeAnyKey({code}) {
+            return controller.consumeAdvanceInput({kind: 'key', code});
+          },
+          consumePointer({pointerType}) {
+            return controller.consumeAdvanceInput({kind: 'pointer', pointerType});
+          },
+        }
+      : {}),
+    ...(poseNavigationPolicyEnabled
+      ? {
+          shouldConsumeCommand(command) {
+            if (
+              command !== 'navigation.nextAction' ||
+              (historyReducer && historyState?.mode === 'history')
+            ) {
+              return true;
+            }
+            return controller.canAdvance(command);
+          },
+          dispatchImmediately: true,
+        }
+      : {}),
     onError: onInputError,
   });
 
@@ -329,8 +374,11 @@ export function createDsl4NavigationSession({
     },
     dispatchCommand,
     attach: inputAdapter.attach,
+    attachStagePointer: inputAdapter.attachPointer,
     detach: inputAdapter.detach,
+    detachStagePointer: inputAdapter.detachPointer,
     handleKeyDown: inputAdapter.handleKeyDown,
+    handlePointerUp: inputAdapter.handlePointerUp,
     whenInputIdle: inputAdapter.whenIdle,
     getState: snapshot,
     getRunPromise: controller.getRunPromise,

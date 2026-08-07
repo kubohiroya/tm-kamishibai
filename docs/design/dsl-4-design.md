@@ -550,6 +550,18 @@ mappingへまとめます。sequenceとselectionは排他でActor sequenceを優
 state eventはrenderer非依存とし、`phase`、`target`、`pose`、`stepIndex`、0〜1の`confidence`／`progress`
 だけを通知します。Scratch／presenter adapterとnavigation bypassはこのpure event契約のconsumerとして
 分離し、起動時固定・既定OFFの`dsl4PoseFeedbackModes`がOFFなら登録しません。
+Standardの`presenter` consumerはScratch variableやmonitorを使わず、actor／pose／step、認識度、チャージを
+app shell所有のDOMへ表示します。認識度とチャージは別々のnative `progress`と数値で示し、accessible nameと
+polite live regionを持たせ、色だけに依存しません。`waiting`／`charging`で表示し、`completed`／`cancelled`で
+値を0へ戻して隠します。scene移動、skip、abort、stop、live reload、disposeの最終`cancelled`も同じ経路で
+処理し、disposeではDOMを解放します。追加の開発者observerはpresenterと独立して例外隔離します。
+visual値は各tickで更新しますが、live regionはphase／actor／pose／stepの変化だけを通知します。現段階は
+rendererとTurboWarp runtime hostの明示optionまでを実装し、Web player、通常editor、Packager、development
+previewのStandard app shell接続と`dsl4AppShell` flagは未実装です。後続接続でも同じconsumerを使用し、
+surface固有の暗黙modeを追加しません。flag OFFまたは別modeではpresenter optionを検査しません。
+`allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
+消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
+`navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
@@ -568,6 +580,18 @@ Scratch consumerはplatform composition境界に置き、coreにScratch variable
 tick境界の最終pairを決定的にsampleします。adapter startupでは専用の2つのStage variableを0へ戻して
 monitorを隠し、active stateでだけ表示します。terminal eventは非同期sound cleanupより先にbindingを
 無効化してmonitorを隠し、Scratchの一時表示値を直ちに0へresetします。
+
+`preview.controls`はapp shell所有の任意camera UIです。`mirroring`と`cameraMenu`は8 anchor、個別opacity、
+eagerな`kind: image` assetを指定します。同一anchorはこの順序でgroup化し、preview矩形へ追従します。
+反転iconは操作後のtarget stateを示し、composition成功時だけ更新します。camera menuはopenごとに端末を
+再列挙し、opaque device IDをsession外へ保存しません。asset byte、Object URL、DOM listener/nodeは同じ
+story owner scopeで解放します。自然終了またはfail時はrendererとlistenerを停止する一方、履歴からの
+巻き戻しに備えてDOMとasset・Object URL leaseをsession内に保持します。`navigation.reposition`または
+`runtime.resume`で同じrendererを再開し、明示的なstory stopまたはhost disposeで初めて所有resourceを解放します。
+起動時固定・既定OFFの`dsl4CameraPreviewControls`がOFFならcontrol専用assetを
+startup準備から除外し、TMPose camera APIもDOM rendererも検査しません。これはStandard productionの固定UI
+であり、台本製作者の必須block 0、palette block 0を維持します。`mirroring` controlがあるsessionは#387の
+story／scene effective mirroringを同じcompositionへ適用し、外部の反転変更もtarget-state iconへ同期します。
 
 ### 3.11 分岐 `[提案]`
 

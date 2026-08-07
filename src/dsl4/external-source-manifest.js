@@ -45,13 +45,11 @@ function sourcePath(value) {
     source.startsWith('/') ||
     /^[A-Za-z]:/u.test(source) ||
     /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
+    segments.length !== 1 ||
     segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
     !source.endsWith('.kamishibai.yaml')
   ) {
-    fail(
-      'K4-SOURCE-PATH-001',
-      'path must be a normalized POSIX-relative .kamishibai.yaml path without dot segments',
-    );
+    fail('K4-SOURCE-PATH-001', 'path must be a root-level .kamishibai.yaml basename');
   }
   return source;
 }

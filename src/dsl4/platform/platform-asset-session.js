@@ -128,6 +128,12 @@ function disposedError() {
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {() => Readonly<{confidence?: number, progress?: number}> | null} [options.readPoseStateBinding]
+ * @param {boolean} [options.cameraPreviewControlsEnabled]
+ * @param {boolean} [options.cameraPreviewMirroringControlEnabled]
+ * @param {boolean} [options.cameraMenuControlEnabled]
+ * @param {(blob: Blob) => string} [options.createObjectURL]
+ * @param {(url: string) => void} [options.revokeObjectURL]
+ * @param {(mode: 'mirrored' | 'unmirrored') => void} [options.onPreviewMirroringChange]
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
@@ -212,6 +218,27 @@ export function createDsl4PlatformAssetSession(options) {
   ) {
     throw new TypeError('readPoseStateBinding must be a function');
   }
+  const cameraPreviewControlsEnabled = options.cameraPreviewControlsEnabled ?? false;
+  if (typeof cameraPreviewControlsEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewControlsEnabled must be boolean');
+  }
+  const cameraPreviewMirroringControlEnabled =
+    options.cameraPreviewMirroringControlEnabled ?? cameraPreviewControlsEnabled;
+  const cameraMenuControlEnabled = options.cameraMenuControlEnabled ?? cameraPreviewControlsEnabled;
+  if (typeof cameraPreviewMirroringControlEnabled !== 'boolean') {
+    throw new TypeError('cameraPreviewMirroringControlEnabled must be boolean');
+  }
+  if (typeof cameraMenuControlEnabled !== 'boolean') {
+    throw new TypeError('cameraMenuControlEnabled must be boolean');
+  }
+  if (posePreviewMirroringEnabled || cameraPreviewMirroringControlEnabled) {
+    if (
+      options.onPreviewMirroringChange !== undefined &&
+      typeof options.onPreviewMirroringChange !== 'function'
+    ) {
+      throw new TypeError('onPreviewMirroringChange must be a function');
+    }
+  }
 
   const created = [];
   try {
@@ -257,6 +284,8 @@ export function createDsl4PlatformAssetSession(options) {
     );
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
+      ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
+      ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
     });
 
     const tmpose = createDsl4TMPosePlatform({
@@ -286,7 +315,12 @@ export function createDsl4PlatformAssetSession(options) {
       'configureAccumulatedPose',
       'resetAccumulatedPose',
       'subscribeAccumulatedPose',
-      ...(posePreviewMirroringEnabled ? ['setPreviewMirroring'] : []),
+      ...(posePreviewMirroringEnabled || cameraPreviewMirroringControlEnabled
+        ? ['setPreviewMirroring']
+        : []),
+      ...(cameraMenuControlEnabled
+        ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
+        : []),
     ]);
     const asyncInputCandidate = createAsyncInput({
       poseSource: tmposeComposition,
@@ -404,6 +438,52 @@ export function createDsl4PlatformAssetSession(options) {
               throw new TypeError('pose preview mirroring mode is invalid');
             }
             tmposeComposition.setPreviewMirroring(mode);
+            options.onPreviewMirroringChange?.(/** @type {'mirrored' | 'unmirrored'} */ (mode));
+          },
+        })
+      : null;
+    const cameraPreviewControlsPort = cameraPreviewControlsEnabled
+      ? Object.freeze({
+          ...(cameraPreviewMirroringControlEnabled
+            ? {
+                /** @param {unknown} mode */
+                setPreviewMirroring(mode) {
+                  if (disposePromise) throw disposedError();
+                  if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
+                    throw new TypeError('pose preview mirroring mode is invalid');
+                  }
+                  const result = tmposeComposition.setPreviewMirroring(mode);
+                  options.onPreviewMirroringChange?.(
+                    /** @type {'mirrored' | 'unmirrored'} */ (mode),
+                  );
+                  return result;
+                },
+              }
+            : {}),
+          ...(cameraMenuControlEnabled
+            ? {
+                listCameraDevices() {
+                  if (disposePromise) throw disposedError();
+                  return tmposeComposition.listCameraDevices();
+                },
+                /** @param {unknown} selection */
+                selectCamera(selection) {
+                  if (disposePromise) throw disposedError();
+                  return tmposeComposition.selectCamera(selection);
+                },
+                getCameraSelection() {
+                  if (disposePromise) throw disposedError();
+                  return tmposeComposition.getCameraSelection();
+                },
+                getActiveCamera() {
+                  if (disposePromise) throw disposedError();
+                  return tmposeComposition.getActiveCamera();
+                },
+              }
+            : {}),
+          isCameraRunning() {
+            if (disposePromise) return false;
+            return tmposeComposition.isCameraRunning();
           },
         })
       : null;
@@ -514,6 +594,12 @@ export function createDsl4PlatformAssetSession(options) {
       asyncInputComposition,
       poseActionPort,
       posePreviewPort,
+      cameraPreviewControlsPort,
+      /** @param {unknown} assetId */
+      getAssetResource(assetId) {
+        if (disposePromise) throw disposedError();
+        return assetLifecycle.getResource(assetId);
+      },
       verifiedRemoteCache,
       dispose,
     });

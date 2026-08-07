@@ -12,12 +12,34 @@ class FakeElement {
     this.disabled = false;
     this.tabIndex = 0;
     this.type = '';
+    this.value = '';
+    this.src = '';
+    this.alt = '';
+    this.style = {};
+    this.dataset = {};
   }
 
   appendChild(child) {
     child.parentNode = this;
     this.children.push(child);
     return child;
+  }
+
+  append(...children) {
+    for (const child of children) this.appendChild(child);
+  }
+
+  after(child) {
+    if (!this.parentNode) return;
+    const index = this.parentNode.children.indexOf(this);
+    child.parentNode = this.parentNode;
+    this.parentNode.children.splice(index + 1, 0, child);
+  }
+
+  replaceChildren(...children) {
+    for (const child of this.children) child.parentNode = null;
+    this.children = [];
+    this.append(...children);
   }
 
   setAttribute(name, value) {
@@ -34,6 +56,19 @@ class FakeElement {
     this.listeners.set(type, listeners);
   }
 
+  removeEventListener(type, listener) {
+    this.listeners.set(
+      type,
+      (this.listeners.get(type) ?? []).filter((value) => value !== listener),
+    );
+  }
+
+  dispatch(type) {
+    const event = createFakeEvent({code: '', target: this});
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+    return event;
+  }
+
   contains(candidate) {
     if (candidate === this) return true;
     return this.children.some((child) => child.contains(candidate));
@@ -45,8 +80,7 @@ class FakeElement {
 
   click() {
     if (this.disabled) return;
-    const event = createFakeEvent({code: '', target: this});
-    for (const listener of this.listeners.get('click') ?? []) listener(event);
+    this.dispatch('click');
   }
 
   remove() {

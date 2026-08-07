@@ -94,20 +94,38 @@ custom handler一件の接続用overheadは演出本体を除き8 block以下と
 
 app shellは紙芝居のpresentationと最小のlifecycle入力だけを担当します。
 
-| 要素          | Scratch固定template                    | Standard Composite／host                                 |
-| ------------- | -------------------------------------- | -------------------------------------------------------- |
-| title         | costume、配置、表示／非表示            | 表示状態とstart要求を受け取る                            |
-| language menu | button／labelのpresentationと選択入力  | localeを検証し、shell用文言と作品のlocaleを返す          |
-| loading       | costume／animation                     | asset準備状態と進捗のsemantic valueを返す                |
-| error         | icon／message領域／retry button        | redacted diagnosticとretry可否を返す                     |
-| retry         | button入力                             | sourceの再検証または同じimmutable snapshotの再起動を行う |
-| close         | button入力とtitle presentationへの復帰 | 実行中sessionをstopし、所有resourceを解放する            |
-| official site | 固定button target                      | 既存のWeb Link capabilityで固定HTTPS URLを開く           |
-| finished      | costume／次の操作button                | 最終actionのcommit後に終了状態を返す                     |
+| 要素                    | Scratch固定template                    | Standard Composite／host                                 |
+| ----------------------- | -------------------------------------- | -------------------------------------------------------- |
+| title                   | costume、配置、表示／非表示            | 表示状態とstart要求を受け取る                            |
+| language menu           | button／labelのpresentationと選択入力  | localeを検証し、shell用文言と作品のlocaleを返す          |
+| loading                 | costume／animation                     | asset準備状態と進捗のsemantic valueを返す                |
+| error                   | icon／message領域／retry button        | redacted diagnosticとretry可否を返す                     |
+| retry                   | button入力                             | sourceの再検証または同じimmutable snapshotの再起動を行う |
+| close                   | button入力とtitle presentationへの復帰 | 実行中sessionをstopし、所有resourceを解放する            |
+| official site           | 固定button target                      | 既存のWeb Link capabilityで固定HTTPS URLを開く           |
+| finished                | costume／次の操作button                | 最終actionのcommit後に終了状態を返す                     |
+| pose feedback           | なし                                   | 認識度／チャージの専用DOM表示とlive status               |
+| camera preview controls | 固定DOM button／menuとaccessibility    | preview geometry、反転、camera列挙／選択へ接続する       |
 
 language menu、close、official siteはDSL actionではなくapp shellの固定UIです。作品ごとの台本からopcodeや
 URLを追加できる経路にしません。Web Link capabilityは標準作品に必要なproduction依存ですが、その
 汎用paletteを作者へ表示する必要はありません。
+
+pose feedbackの`presenter` modeはScratch costume、variable、monitorを使いません。Standard app shellの
+固定DOM rendererがactor／pose／step、認識度、チャージを、二つのnative `progress`、数値、polite live regionへ
+投影します。active pose待機だけを表示し、完了・中止・scene移動・stop・live reloadで値をresetして隠し、
+host disposeでDOMを解放します。作者palette／developer paletteのどちらにもblockを追加しません。
+`dsl4PoseFeedbackModes=false`または別の`feedback.mode`ではcontainer設定を読まず、rendererを作りません。
+現段階の実装はrenderer moduleとTurboWarp runtime hostの明示optionまでであり、Standard Web／editor／
+Packager／development previewからの接続と`dsl4AppShell` flagは未実装です。各surfaceは後続のapp shell
+実装で同じconsumerへcontainerを渡します。
+
+camera previewの反転buttonとcamera menuもDSL actionやScratch spriteではありません。Standard production
+app shellの固定rendererが台本の`poseRecognition.preview.controls`を投影し、locale対応accessible name、
+focus表示、native button／select keyboard操作を提供します。作者palette／developer paletteのどちらにも
+blockを追加せず、`dsl4CameraPreviewControls=false`ならrendererとcontrol asset leaseを作りません。
+自然終了／fail時はrendererだけを停止して履歴巻き戻しで再開できるようleaseを保持し、明示的な
+story stopまたはhost disposeでDOMとleaseを解放します。
 
 | 残す                                           | 機能拡張／hostへ移す                             |
 | ---------------------------------------------- | ------------------------------------------------ |

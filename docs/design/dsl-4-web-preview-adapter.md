@@ -92,12 +92,12 @@ adapterは選択されたroot直下の`project.source.json`だけを最初に読
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
 - 省略時は`story.kamishibai.yaml`へ正規化する
-- normalized POSIX-relative `.kamishibai.yaml` pathである
-- 空、`.`、`..` segment、backslash、absolute path、drive prefix、URL scheme、NULを含まない
+- project root直下の`.kamishibai.yaml` basenameである
+- `/`、backslash、absolute path、drive prefix、URL scheme、NULを含まない
 - directoryを走査または推測して別のYAMLへfallbackしない
 
-選択済みroot handleからpath segmentごとに`getDirectoryHandle()`で辿り、最後に`getFileHandle()`でYAMLだけを取得
-します。文字列pathをOS pathへ変換せず、root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
+選択済みroot handleへ`getFileHandle()`を一回だけ呼び、root直下のYAMLを取得します。文字列pathをOS pathへ変換せず、
+root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
 
 一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。pose modelはbundle自体を
 directoryにしますが、`assets/`、`images/`、`sounds/`、`pose-models/`等の分類directoryは任意です。
@@ -114,8 +114,8 @@ project-root/
     └── weights.bin
 ```
 
-YAML内のlocal asset pathはproject root基準です。YAMLをroot直下へ置く最小構成でも、分類directoryへ置く構成でも、
-adapter／builderはproject rootから同じ正規化済みpathを解決します。
+YAML内のlocal asset pathはproject root基準です。YAML自体をroot直下に限定するため、adapter／builderはproject root
+から同じ正規化済みpathを解決します。
 
 manifestのraw上限は32 KiBです。UTF-8をfatal decodeし、JSON objectと既存manifest schemaを検証します。
 初版session中にmanifestが変更された場合はadapter設定を暗黙更新せず、project再選択またはlocal full rebuildを

@@ -35,6 +35,26 @@ function keyEvent(code, overrides = {}) {
   };
 }
 
+function pointerEvent(overrides = {}) {
+  const counters = {preventDefault: 0, stopPropagation: 0};
+  return {
+    pointerType: 'mouse',
+    isPrimary: true,
+    button: 0,
+    defaultPrevented: false,
+    target: null,
+    preventDefault() {
+      counters.preventDefault += 1;
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      counters.stopPropagation += 1;
+    },
+    counters,
+    ...overrides,
+  };
+}
+
 function element({tagName = 'DIV', role, contentEditable, parentElement, ignore = false} = {}) {
   const attributes = new Map();
   if (role !== undefined) attributes.set('role', role);
@@ -64,6 +84,28 @@ test('validates the resolved keymap and event target contract', () => {
     dispatchCommand: async () => {},
   });
   assert.throws(() => adapter.attach({addEventListener() {}}), /event listener registration/);
+  assert.throws(
+    () =>
+      createDsl4KeymapInputAdapter({
+        keymap: {},
+        dispatchCommand() {},
+        shouldConsumeCommand() {
+          return true;
+        },
+      }),
+    /requires immediate command dispatch/u,
+  );
+  for (const option of ['consumeAnyKey', 'consumePointer']) {
+    assert.throws(
+      () =>
+        createDsl4KeymapInputAdapter({
+          keymap: {},
+          dispatchCommand() {},
+          [option]: true,
+        }),
+      new RegExp(option, 'u'),
+    );
+  }
 });
 
 test('uses code only and never falls back to locale-dependent key', async () => {
@@ -148,6 +190,94 @@ test('does not consume keys from interactive or explicitly ignored focus paths',
   assert.equal(calls, 0);
 });
 
+test('routes an eligible initial key to speech advance before mapped navigation', async () => {
+  const advances = [];
+  const commands = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {Space: 'navigation.nextAction'},
+    consumeAnyKey(context) {
+      advances.push(context);
+      return true;
+    },
+    dispatchCommand: async (command) => commands.push(command),
+  });
+  const accepted = keyEvent('Space');
+  assert.equal(adapter.handleKeyDown(accepted), true);
+  assert.deepEqual(accepted.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(advances, [{code: 'Space'}]);
+  assert.equal(Object.isFrozen(advances[0]), true);
+  await adapter.whenIdle();
+  assert.deepEqual(commands, []);
+
+  for (const event of [
+    keyEvent('Space', {repeat: true}),
+    keyEvent('Space', {isComposing: true}),
+    keyEvent('Space', {ctrlKey: true}),
+    keyEvent('Space', {target: element({tagName: 'BUTTON'})}),
+  ]) {
+    adapter.handleKeyDown(event);
+  }
+  await adapter.whenIdle();
+  assert.deepEqual(advances, [{code: 'Space'}]);
+  assert.deepEqual(commands, []);
+});
+
+test('falls through to an ordinary mapped command when speech advance is inactive', async () => {
+  const commands = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {Space: 'navigation.nextAction'},
+    consumeAnyKey: () => false,
+    dispatchCommand: async (command) => commands.push(command),
+  });
+  assert.equal(adapter.handleKeyDown(keyEvent('Space')), true);
+  await adapter.whenIdle();
+  assert.deepEqual(commands, ['navigation.nextAction']);
+});
+
+test('attaches pointer advance only to the explicitly scoped stage target', () => {
+  const keyListeners = new Map();
+  const stageListeners = new Map();
+  const target = (listeners) => ({
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+  });
+  const pointers = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {},
+    consumePointer(context) {
+      pointers.push(context);
+      return true;
+    },
+    dispatchCommand() {},
+  });
+  adapter.attach(target(keyListeners));
+  assert.equal(keyListeners.has('keydown'), true);
+  assert.equal(keyListeners.has('pointerup'), false);
+  adapter.attachPointer(target(stageListeners));
+  assert.equal(stageListeners.has('pointerup'), true);
+
+  const accepted = pointerEvent({pointerType: 'touch'});
+  assert.equal(stageListeners.get('pointerup')(accepted), true);
+  assert.deepEqual(accepted.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(pointers, [{pointerType: 'touch'}]);
+  for (const event of [
+    pointerEvent({isPrimary: false}),
+    pointerEvent({button: 1}),
+    pointerEvent({target: element({tagName: 'BUTTON'})}),
+  ]) {
+    assert.equal(adapter.handlePointerUp(event), false);
+    assert.deepEqual(event.counters, {preventDefault: 0, stopPropagation: 0});
+  }
+  adapter.detachPointer();
+  assert.equal(stageListeners.has('pointerup'), false);
+  adapter.dispose();
+  assert.equal(keyListeners.has('keydown'), false);
+});
+
 test('consumes one bound initial keydown and suppresses repeat dispatch', async () => {
   const calls = [];
   const adapter = createDsl4KeymapInputAdapter({
@@ -161,6 +291,51 @@ test('consumes one bound initial keydown and suppresses repeat dispatch', async 
   await adapter.whenIdle();
   assert.deepEqual(initial.counters, {preventDefault: 1, stopPropagation: 1});
   assert.deepEqual(repeated.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(calls, ['history.previousAction']);
+});
+
+test('does not consume a synchronously refused command and reserves an accepted command immediately', async () => {
+  let available = true;
+  const calls = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {Space: 'navigation.nextAction'},
+    shouldConsumeCommand: () => available,
+    dispatchImmediately: true,
+    dispatchCommand(command) {
+      calls.push(command);
+      available = false;
+    },
+  });
+
+  const accepted = keyEvent('Space');
+  assert.equal(adapter.handleKeyDown(accepted), true);
+  assert.deepEqual(accepted.counters, {preventDefault: 1, stopPropagation: 1});
+
+  const refused = keyEvent('Space');
+  assert.equal(adapter.handleKeyDown(refused), false);
+  assert.deepEqual(refused.counters, {preventDefault: 0, stopPropagation: 0});
+  const repeated = keyEvent('Space', {repeat: true});
+  assert.equal(adapter.handleKeyDown(repeated), false);
+  assert.deepEqual(repeated.counters, {preventDefault: 0, stopPropagation: 0});
+
+  await adapter.whenIdle();
+  assert.deepEqual(calls, ['navigation.nextAction']);
+});
+
+test('keeps commands without a consumption decision on the serialized queue', async () => {
+  const calls = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {ArrowLeft: 'history.previousAction'},
+    shouldConsumeCommand: () => undefined,
+    dispatchImmediately: true,
+    dispatchCommand: async (command) => calls.push(command),
+  });
+  const event = keyEvent('ArrowLeft');
+
+  assert.equal(adapter.handleKeyDown(event), true);
+  assert.deepEqual(event.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.deepEqual(calls, []);
+  await adapter.whenIdle();
   assert.deepEqual(calls, ['history.previousAction']);
 });
 

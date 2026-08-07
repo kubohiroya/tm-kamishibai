@@ -174,6 +174,33 @@ scenes:
   );
 });
 
+test('snapshots a target-independent image file without a Scratch target', async (t) => {
+  const fixture = await workspace(t);
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  ControlIcon:
+    kind: image
+    file: assets/ocean.svg
+scenes:
+  opening: []
+`);
+  const snapshot = await loadDsl4LocalAssetSnapshot(fixture.root, storyDocument, {
+    ...standardLimits,
+    subtleCrypto: webcrypto.subtle,
+  });
+  assert.equal(snapshot.manifest.assets[0].kind, 'image');
+  assert.equal('target' in snapshot.manifest.assets[0], false);
+  assert.deepEqual(snapshot.manifest.assets[0].source, {
+    type: 'file',
+    inputPath: 'assets/ocean.svg',
+    mode: 'file',
+    files: [
+      {path: 'ocean.svg', size: fixture.files.ocean.length, integrity: sri(fixture.files.ocean)},
+    ],
+  });
+});
+
 test('rejects non-normalized and non-local locators before filesystem access', async (t) => {
   const fixture = await workspace(t);
   const base = comprehensiveStory();

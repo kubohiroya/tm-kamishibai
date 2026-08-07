@@ -4,7 +4,15 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 
-const identifierSections = ['assets', 'actors', 'textStyles', 'variables', 'branches', 'scenes'];
+const identifierSections = [
+  'assets',
+  'actors',
+  'textStyles',
+  'speechStyles',
+  'variables',
+  'branches',
+  'scenes',
+];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
 /**
@@ -123,7 +131,10 @@ export function validateDsl4Semantics(
   const actors = /** @type {Record<string, string>} */ (story.actors ?? {});
   const scenes = /** @type {Record<string, unknown>} */ (story.scenes ?? {});
   const branches = /** @type {Record<string, Record<string, string>[]>} */ (story.branches ?? {});
-  const styles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
+  const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
+  const speechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.speechStyles ?? {}
+  );
   const stableIds = new Map();
   const storyInputCodes = new Map();
 
@@ -151,6 +162,16 @@ export function validateDsl4Semantics(
           code: 'K4-ASSET-REMOTE-URL-001',
           path: `$.assets.${id}.source.url`,
           message: 'Remote asset URL must be an absolute HTTPS URL without credentials or fragment',
+        });
+      }
+      if (
+        assetRecord.kind === 'image' &&
+        (typeof source.contentType !== 'string' || !source.contentType.startsWith('image/'))
+      ) {
+        issues.push({
+          code: 'K4-ASSET-IMAGE-MIME-001',
+          path: `$.assets.${id}.source.contentType`,
+          message: 'Target-independent image assets require an image Content-Type',
         });
       }
     }
@@ -182,6 +203,16 @@ export function validateDsl4Semantics(
     }
   }
 
+  for (const [styleId, style] of Object.entries(speechStyles)) {
+    addReferenceIssue(
+      issues,
+      assets,
+      style.characterSound,
+      'sound',
+      `$.speechStyles.${styleId}.characterSound`,
+    );
+  }
+
   const cover = /** @type {Record<string, unknown> | undefined} */ (story.cover);
   if (cover) {
     addReferenceIssue(issues, assets, cover.backdrop, 'backdrop', '$.cover.backdrop');
@@ -202,6 +233,39 @@ export function validateDsl4Semantics(
   if (poseRecognition) {
     for (const key of ['idleSound', 'chargeSound']) {
       addReferenceIssue(issues, assets, poseRecognition[key], 'sound', `$.poseRecognition.${key}`);
+    }
+    const preview = /** @type {Record<string, unknown>} */ (poseRecognition.preview ?? {});
+    const previewControls = /** @type {Record<string, unknown>} */ (preview.controls ?? {});
+    const mirroringControl = /** @type {Record<string, unknown>} */ (
+      previewControls.mirroring ?? {}
+    );
+    const mirroringAssets = /** @type {Record<string, unknown>} */ (mirroringControl.assets ?? {});
+    const cameraMenuControl = /** @type {Record<string, unknown>} */ (
+      previewControls.cameraMenu ?? {}
+    );
+    /** @type {Array<[string, unknown]>} */
+    const controlAssetReferences = [
+      [
+        '$.poseRecognition.preview.controls.mirroring.assets.showMirrored',
+        mirroringAssets.showMirrored,
+      ],
+      [
+        '$.poseRecognition.preview.controls.mirroring.assets.showUnmirrored',
+        mirroringAssets.showUnmirrored,
+      ],
+      ['$.poseRecognition.preview.controls.cameraMenu.buttonAsset', cameraMenuControl.buttonAsset],
+    ];
+    for (const [path, id] of controlAssetReferences) {
+      if (typeof id !== 'string') continue;
+      addReferenceIssue(issues, assets, id, 'image', path);
+      const asset = /** @type {Record<string, unknown>} */ (assets[String(id)] ?? {});
+      if (asset.loading === 'lazy') {
+        issues.push({
+          code: 'K4-PREVIEW-CONTROL-ASSET-001',
+          path,
+          message: `Camera preview control asset ${id} must use eager loading`,
+        });
+      }
     }
   }
 
@@ -311,7 +375,13 @@ export function validateDsl4Semantics(
           }
         } else if (opcode === 'setText') {
           const style = /** @type {Record<string, unknown>} */ (value).style;
-          addReferenceIssue(issues, styles, style, undefined, `${actionPath}.style`);
+          addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
+        } else if (opcode === 'say' || opcode === 'think') {
+          const speech = /** @type {Record<string, unknown>} */ (value);
+          addReferenceIssue(issues, speechStyles, speech.style, undefined, `${actionPath}.style`);
+          for (const field of ['startSound', 'characterSound']) {
+            addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
+          }
         } else if (opcode === 'pose') {
           usesPoseRecognition = true;
           const steps = /** @type {{pose: string, skin?: string, sound?: string}[]} */ (

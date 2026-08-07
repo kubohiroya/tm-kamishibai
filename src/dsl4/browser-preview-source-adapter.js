@@ -155,12 +155,7 @@ function sourceFailure(code, severity, sourceId) {
 
 /** @param {unknown} value */
 function requireDirectoryHandle(value) {
-  if (
-    !isRecord(value) ||
-    value.kind !== 'directory' ||
-    typeof value.getFileHandle !== 'function' ||
-    typeof value.getDirectoryHandle !== 'function'
-  ) {
+  if (!isRecord(value) || value.kind !== 'directory' || typeof value.getFileHandle !== 'function') {
     throw new TypeError('project root must be a FileSystemDirectoryHandle');
   }
   if (value.queryPermission !== undefined && typeof value.queryPermission !== 'function') {
@@ -227,13 +222,8 @@ function decodeUtf8(bytes, code) {
 
 /** @param {Record<string, any>} root @param {string} sourcePath */
 async function resolveSourceHandle(root, sourcePath) {
-  const segments = sourcePath.split('/');
-  let directory = root;
   try {
-    for (const segment of segments.slice(0, -1)) {
-      directory = requireDirectoryHandle(await directory.getDirectoryHandle(segment));
-    }
-    return requireFileHandle(await directory.getFileHandle(segments.at(-1)));
+    return requireFileHandle(await root.getFileHandle(sourcePath));
   } catch (error) {
     if (expectedError(error)) throw error;
     if (errorName(error) === 'TypeMismatchError') fail('K4-SOURCE-FILE-001', error);

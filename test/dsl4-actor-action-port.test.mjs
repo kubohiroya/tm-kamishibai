@@ -106,7 +106,10 @@ test('maps show, moveTo, and say through one shared composition and presentation
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
-  await port.moveTo({target: 'Hero', x: 40, y: 50, seconds: 1.5}, actionContext());
+  await port.moveTo(
+    {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
+    actionContext(),
+  );
   await port.say({target: 'Hero', text: '助けに行こう', seconds: 2}, actionContext());
 
   assert.equal(Object.isFrozen(port), true);
@@ -117,7 +120,7 @@ test('maps show, moveTo, and say through one shared composition and presentation
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
-    ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5}, 'opening'],
+    ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
     ['createSay', 'hero-target', {text: '助けに行こう', seconds: 2}, 'opening'],
     ['startSay'],
@@ -160,6 +163,18 @@ test('synchronously finishes moveTo at its destination before cancellation rejec
   await assert.rejects(pending, (error) => error.name === 'AbortError');
   movement.reject(new Error('late movement failure'));
   await Promise.resolve();
+});
+
+test('defaults moveTo easing to linear before presentation', async () => {
+  const presentation = fakeHost();
+  const port = actorPort({host: presentation.host});
+
+  await port.moveTo({target: 'Hero', x: 10, y: 20, seconds: 1}, actionContext());
+
+  assert.deepEqual(presentation.calls.slice(0, 2), [
+    ['createMove', 'hero-target', {x: 10, y: 20, seconds: 1, easing: 'linear'}, 'opening'],
+    ['startMove'],
+  ]);
 });
 
 test('keeps AbortError when finish synchronously settles the presentation promise', async () => {
@@ -265,6 +280,12 @@ test('rejects malformed and unresolved inputs before presentation side effects',
       ),
     () => port.show({target: 'Hero', skin: 'HeroHappy', x: 0, y: 0, scale: 0}, actionContext()),
     () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: -1}, actionContext()),
+    () => port.moveTo({target: 'Hero', x: 0, y: 0, seconds: 1, easing: 'spring'}, actionContext()),
+    () =>
+      port.moveTo(
+        {target: 'Hero', x: 0, y: 0, seconds: 1, easing: 'linear', extra: true},
+        actionContext(),
+      ),
     () => port.say({target: 'Hero', text: 42, seconds: 1}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1, extra: true}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1}, {}),
@@ -313,6 +334,83 @@ test('validates a presentation operation before start and isolates port instance
     ['createSay', 'hero-target', {text: '', seconds: 0}, 'opening'],
     ['startSay'],
   ]);
+});
+
+test('fails closed and cleans speech presentation for invalid advance handles or outcomes', async () => {
+  async function exercise(createAdvanceWait, expectedMessage, expectedStarts) {
+    const calls = [];
+    const presentation = deferred();
+    const host = fakeHost({
+      createThink() {
+        calls.push(['createThink']);
+        return {
+          start() {
+            calls.push(['start']);
+            return presentation.promise;
+          },
+          finish(reason) {
+            calls.push(['finish', reason]);
+            presentation.resolve();
+          },
+        };
+      },
+    });
+    const port = createDsl4ActorActionPort({
+      composition: fakeComposition().composition,
+      host: host.host,
+      resolveActor: () => ({id: 'hero-target', isStage: false}),
+      speechAdvanceTypewriterEnabled: true,
+    });
+    const controller = new AbortController();
+    await assert.rejects(
+      port.think(
+        {target: 'Hero', text: 'hmm', waitFor: 'advance'},
+        {...actionContext(controller), createAdvanceWait},
+      ),
+      expectedMessage,
+    );
+    assert.equal(calls.filter(([name]) => name === 'start').length, expectedStarts);
+    if (expectedStarts > 0) assert.deepEqual(calls.at(-1), ['finish', 'cancel']);
+  }
+
+  let invalidCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: 42,
+      cancel() {
+        invalidCancelCalls += 1;
+      },
+    }),
+    /invalid handle/u,
+    0,
+  );
+  assert.equal(invalidCancelCalls, 1);
+
+  let rejectedCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: Promise.reject(new Error('advance source failed')),
+      cancel() {
+        rejectedCancelCalls += 1;
+      },
+    }),
+    /advance source failed/u,
+    1,
+  );
+  assert.equal(rejectedCancelCalls, 1);
+
+  let outcomeCancelCalls = 0;
+  await exercise(
+    () => ({
+      promise: Promise.resolve({outcome: 'unexpected'}),
+      cancel() {
+        outcomeCancelCalls += 1;
+      },
+    }),
+    /invalid outcome/u,
+    1,
+  );
+  assert.equal(outcomeCancelCalls, 1);
 });
 
 test('does not inspect dependencies for a pre-aborted action', async () => {

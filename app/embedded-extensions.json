@@ -11,9 +11,9 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-asset-manager",
         "ref": "main",
-        "resolvedCommit": "c55e65787eed21d2e70b96a28dd6705d118f9995",
+        "resolvedCommit": "c0f596bf81de67aed9f84f381c65858e2bb30e4e",
         "artifact": "dist/asset-manager.js",
-        "integrity": "sha256-EcTQdC7fHug/cRgZpA/FVy3tp7hhnoALWzEz86j9FYg="
+        "integrity": "sha256-ZoDLjg3r46ezDycobR7UvlKbEzKLKsbGqQjfY4u1/ow="
       }
     },
     {
@@ -41,9 +41,9 @@
         "provider": "github",
         "repository": "kubohiroya/turbowarp-tmpose",
         "ref": "main",
-        "resolvedCommit": "08fe0cf9da061b1eba75297b8ee187d68549eed4",
+        "resolvedCommit": "9274b0f4ad5a1bf2dfe174381ad088240e1b9d1e",
         "artifact": "dist/tmpose.js",
-        "integrity": "sha256-YD8hvVmUwdjSOajGV2MuGgWEfBOLhPPmMgBZ98fKBHg="
+        "integrity": "sha256-LI8tEA1iy8ktjUT3AooT4rM2fjhahUHisNWoQzotae0="
       }
     },
     {

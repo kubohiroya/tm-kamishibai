@@ -6,6 +6,8 @@ const featureFlagKeys = new Set([
   'dsl4WebPreviewAdapter',
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
+  'dsl4CameraPreviewControls',
+  'dsl4SpeechAdvanceTypewriter',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -15,6 +17,8 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4WebPreviewAdapter: false,
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
+  dsl4CameraPreviewControls: false,
+  dsl4SpeechAdvanceTypewriter: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -43,6 +47,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4WebPreviewAdapter && (!resolved.dsl4Runtime || !resolved.dsl4AppShell)) {
     throw new TypeError('dsl4WebPreviewAdapter requires dsl4Runtime and dsl4AppShell');
+  }
+  if (resolved.dsl4SpeechAdvanceTypewriter && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');
   }
   return deepFreeze(resolved);
 }

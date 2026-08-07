@@ -13,13 +13,23 @@ function addDependency(value, dependencies) {
 /**
  * @param {Readonly<Record<string, unknown>>} action
  * @param {Set<string>} dependencies
+ * @param {Readonly<Record<string, Readonly<Record<string, unknown>>>>} speechStyles
  * @returns {boolean}
  */
-function addActionDependencies(action, dependencies) {
+function addActionDependencies(action, dependencies, speechStyles) {
   const command = String(action.command);
   const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
   if (command === 'stage') addDependency(args.backdrop, dependencies);
   if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
+  if (command === 'say' || command === 'think') {
+    addDependency(args.startSound, dependencies);
+    addDependency(args.characterSound, dependencies);
+    const style =
+      typeof args.style === 'string'
+        ? /** @type {Readonly<Record<string, unknown>> | undefined} */ (speechStyles[args.style])
+        : undefined;
+    addDependency(style?.characterSound, dependencies);
+  }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
   if (command !== 'pose') return false;
 
@@ -46,6 +56,9 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
 
   const assets = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     storyDocument.assets ?? {}
+  );
+  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    storyDocument.speechStyles ?? {}
   );
   const sceneRetainedAssets = new Set(
     Object.entries(assets)
@@ -90,9 +103,23 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     storyDocument.poseRecognition ?? null
   );
   const poseRecognitionDependencies = new Set();
+  const posePreviewControlDependencies = new Set();
   if (poseRecognition) {
     addDependency(poseRecognition.idleSound, poseRecognitionDependencies);
     addDependency(poseRecognition.chargeSound, poseRecognitionDependencies);
+    const preview = /** @type {Readonly<Record<string, unknown>>} */ (
+      poseRecognition.preview ?? {}
+    );
+    const controls = /** @type {Readonly<Record<string, unknown>>} */ (preview.controls ?? {});
+    const mirroring = /** @type {Readonly<Record<string, unknown>>} */ (controls.mirroring ?? {});
+    const mirroringAssets = /** @type {Readonly<Record<string, unknown>>} */ (
+      mirroring.assets ?? {}
+    );
+    const cameraMenu = /** @type {Readonly<Record<string, unknown>>} */ (controls.cameraMenu ?? {});
+    addDependency(mirroringAssets.showMirrored, posePreviewControlDependencies);
+    addDependency(mirroringAssets.showUnmirrored, posePreviewControlDependencies);
+    addDependency(cameraMenu.buttonAsset, posePreviewControlDependencies);
+    for (const assetId of posePreviewControlDependencies) startup.add(assetId);
   }
 
   const startupAssets = sortedUnique(startup);
@@ -107,7 +134,8 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     for (const action of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       scene.actions ?? []
     )) {
-      usesPoseRecognition = addActionDependencies(action, dependencies) || usesPoseRecognition;
+      usesPoseRecognition =
+        addActionDependencies(action, dependencies, speechStyles) || usesPoseRecognition;
     }
     if (usesPoseRecognition) {
       for (const assetId of poseRecognitionDependencies) dependencies.add(assetId);
@@ -128,6 +156,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     actors: sortedUnique(actorDependencies),
     loading: sortedUnique(loadingDependencies),
     poseRecognition: sortedUnique(poseRecognitionDependencies),
+    posePreviewControls: sortedUnique(posePreviewControlDependencies),
     sceneRetained: sortedUnique(sceneRetainedAssets),
     scenes,
   });

@@ -1,3 +1,5 @@
+import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -27,13 +29,84 @@ function validateComposition(value) {
   return /** @type {Record<string, Function>} */ (value);
 }
 
-/** @param {unknown} value */
-function validateHost(value) {
-  const methods = ['showActor', 'createMove', 'createSay'];
+/** @param {unknown} value @param {boolean} speechAdvanceTypewriterEnabled */
+function validateHost(value, speechAdvanceTypewriterEnabled) {
+  const methods = [
+    'showActor',
+    'createMove',
+    'createSay',
+    ...(speechAdvanceTypewriterEnabled ? ['createThink'] : []),
+  ];
   if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
     throw new TypeError(`Actor presentation host must provide ${methods.join(', ')}`);
   }
   return /** @type {Record<string, Function>} */ (value);
+}
+
+/** @param {unknown} value @param {string} command @param {boolean} extended */
+function validateSpeechPayload(value, command, extended) {
+  if (!extended) return validatePayloadShape(value, ['target', 'text', 'seconds'], command);
+  if (!isRecord(value)) {
+    throw portError('K4-ACTOR-PORT-001', `${command} payload must be an object`);
+  }
+  const allowed = new Set([
+    'target',
+    'text',
+    'seconds',
+    'waitFor',
+    'characterIntervalSeconds',
+    'startSound',
+    'characterSound',
+    'noSoundCharacters',
+    'restCharacters',
+    'restCharacterIntervalSeconds',
+  ]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
+  if (
+    unknown.length > 0 ||
+    missing.length > 0 ||
+    (!Object.hasOwn(value, 'seconds') && !Object.hasOwn(value, 'waitFor'))
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command} payload keys are invalid (unknown: ${unknown.sort().join(', ') || 'none'}; missing: ${missing.sort().join(', ') || 'seconds or waitFor'})`,
+    );
+  }
+  if (Object.hasOwn(value, 'characterSound') && !Object.hasOwn(value, 'characterIntervalSeconds')) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.characterSound requires characterIntervalSeconds`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'noSoundCharacters') &&
+    (!Object.hasOwn(value, 'characterIntervalSeconds') || !Object.hasOwn(value, 'characterSound'))
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.noSoundCharacters requires characterIntervalSeconds and characterSound`,
+    );
+  }
+  if (
+    Object.hasOwn(value, 'restCharacters') !== Object.hasOwn(value, 'restCharacterIntervalSeconds')
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.restCharacters and restCharacterIntervalSeconds must be specified together`,
+    );
+  }
+  if (
+    (Object.hasOwn(value, 'restCharacters') ||
+      Object.hasOwn(value, 'restCharacterIntervalSeconds')) &&
+    !Object.hasOwn(value, 'characterIntervalSeconds')
+  ) {
+    throw portError(
+      'K4-ACTOR-PORT-001',
+      `${command}.restCharacters requires characterIntervalSeconds`,
+    );
+  }
+  return value;
 }
 
 /** @param {unknown} value */
@@ -52,16 +125,17 @@ function validateContext(value) {
   return /** @type {AbortSignal} */ (/** @type {unknown} */ (signal));
 }
 
-/** @param {unknown} value @param {string[]} keys @param {string} command */
-function validatePayloadShape(value, keys, command) {
+/** @param {unknown} value @param {string[]} keys @param {string} command @param {string[]} [optionalKeys] */
+function validatePayloadShape(value, keys, command, optionalKeys = []) {
+  const allowedKeys = new Set([...keys, ...optionalKeys]);
   if (
     !isRecord(value) ||
-    Object.keys(value).length !== keys.length ||
+    Object.keys(value).some((key) => !allowedKeys.has(key)) ||
     keys.some((key) => !Object.hasOwn(value, key))
   ) {
     throw portError(
       'K4-ACTOR-PORT-001',
-      `${command} payload must provide exactly ${keys.join(', ')}`,
+      `${command} payload must provide ${keys.join(', ')}${optionalKeys.length > 0 ? ` and only optional ${optionalKeys.join(', ')}` : ''}`,
     );
   }
   return value;
@@ -137,7 +211,7 @@ async function runCancellable(start, signal) {
   }
 }
 
-/** @param {unknown} value @param {'moveTo' | 'say'} command */
+/** @param {unknown} value @param {'moveTo' | 'say' | 'think'} command */
 function validatePresentationOperation(value, command) {
   if (!isRecord(value) || typeof value.start !== 'function' || typeof value.finish !== 'function') {
     throw portError(
@@ -145,7 +219,7 @@ function validatePresentationOperation(value, command) {
       `${command} presentation operation must provide start and finish`,
     );
   }
-  return /** @type {{start: () => unknown, finish: () => unknown}} */ (
+  return /** @type {{start: () => unknown, finish: (reason?: string) => unknown}} */ (
     /** @type {unknown} */ (value)
   );
 }
@@ -153,7 +227,7 @@ function validatePresentationOperation(value, command) {
 /**
  * Start a validated presentation operation. Abort synchronously calls finish before rejection.
  *
- * @param {{start: () => unknown, finish: () => unknown}} operation
+ * @param {{start: () => unknown, finish: (reason?: string) => unknown}} operation
  * @param {AbortSignal} signal
  */
 async function runPresentationOperation(operation, signal) {
@@ -215,6 +289,62 @@ async function runPresentationOperation(operation, signal) {
 }
 
 /**
+ * Complete one speech operation from its timer or an explicitly armed advance gate.
+ *
+ * @param {{start: () => unknown, finish: (reason?: string) => unknown}} operation
+ * @param {AbortSignal} signal
+ * @param {unknown} context
+ * @param {boolean} waitForAdvance
+ */
+async function runSpeechPresentationOperation(operation, signal, context, waitForAdvance) {
+  if (!waitForAdvance) return runPresentationOperation(operation, signal);
+  if (!isRecord(context) || typeof context.createAdvanceWait !== 'function') {
+    throw portError('K4-ACTOR-PORT-001', 'speech advance context must provide createAdvanceWait');
+  }
+  const advanceWait = context.createAdvanceWait();
+  if (
+    !isRecord(advanceWait) ||
+    !isRecord(advanceWait.promise) ||
+    typeof advanceWait.promise.then !== 'function' ||
+    typeof advanceWait.cancel !== 'function'
+  ) {
+    if (isRecord(advanceWait) && typeof advanceWait.cancel === 'function') {
+      advanceWait.cancel();
+    }
+    throw portError('K4-ACTOR-PORT-001', 'createAdvanceWait returned an invalid handle');
+  }
+  const presentation = runPresentationOperation(operation, signal);
+  try {
+    const outcome = await Promise.race([
+      presentation.then(() => 'presentation'),
+      advanceWait.promise.then((/** @type {unknown} */ result) => {
+        if (isRecord(result) && result.outcome === 'advance') return 'advance';
+        if (isRecord(result) && result.outcome === 'cancelled') return 'cancelled';
+        throw portError('K4-ACTOR-PORT-001', 'speech advance wait returned an invalid outcome');
+      }),
+    ]);
+    if (outcome === 'advance') operation.finish('advance');
+    if (outcome === 'cancelled') {
+      operation.finish('cancel');
+      if (signal.aborted) throw abortError();
+      throw portError('K4-ACTOR-PORT-001', 'speech advance wait was cancelled unexpectedly');
+    }
+    return await presentation;
+  } catch (error) {
+    try {
+      operation.finish('cancel');
+    } catch (finishError) {
+      if (error instanceof Error && error.cause === undefined) {
+        Object.defineProperty(error, 'cause', {value: finishError});
+      }
+    }
+    throw error;
+  } finally {
+    advanceWait.cancel();
+  }
+}
+
+/**
  * Adapt DSL 4.0 actor actions to an app-shell-scoped presentation host.
  *
  * The host must create move/say operations without presentation side effects. Their start method
@@ -224,6 +354,7 @@ async function runPresentationOperation(operation, signal) {
  * @param {unknown} options.composition
  * @param {(actorId: string, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.resolveActor
  * @param {unknown} options.host
+ * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -232,7 +363,11 @@ export function createDsl4ActorActionPort(options) {
     throw new TypeError('resolveActor must be a function');
   }
   const resolveActor = options.resolveActor;
-  const host = validateHost(options.host);
+  const speechAdvanceTypewriterEnabled = options.speechAdvanceTypewriterEnabled ?? false;
+  if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
+    throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
+  }
+  const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
 
   /** @param {string} skin */
   function requireImageAsset(skin) {
@@ -245,9 +380,116 @@ export function createDsl4ActorActionPort(options) {
     }
   }
 
+  /** @param {string} sound */
+  function requireAudioAsset(sound) {
+    if (!composition.isRegistered(sound)) {
+      throw portError('K4-ACTOR-PORT-002', `Character sound is not registered: ${sound}`);
+    }
+    const mimeType = composition.getMimeType(sound);
+    if (typeof mimeType !== 'string' || !mimeType.startsWith('audio/')) {
+      throw portError('K4-ACTOR-PORT-002', `Character sound ${sound} must have audio MIME type`);
+    }
+  }
+
   /** @param {string} target @param {Readonly<Record<string, unknown>>} context @param {AbortSignal} signal */
   async function resolveTarget(target, context, signal) {
     return validateActor(await runCancellable(() => resolveActor(target, context), signal), target);
+  }
+
+  /** @param {'say' | 'think'} command @param {unknown} payload @param {unknown} context */
+  async function runSpeech(command, payload, context) {
+    const value = validateSpeechPayload(payload, command, speechAdvanceTypewriterEnabled);
+    const target = requireNonEmptyString(value.target, 'target', command);
+    if (typeof value.text !== 'string') {
+      throw portError('K4-ACTOR-PORT-001', `${command}.text must be a string`);
+    }
+    const text = value.text;
+    let seconds;
+    if (Object.hasOwn(value, 'seconds')) {
+      seconds = requireFiniteNumber(value.seconds, 'seconds', command);
+      if (seconds < 0) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.seconds must not be negative`);
+      }
+    }
+    const waitFor = value.waitFor;
+    if (waitFor !== undefined && waitFor !== 'advance') {
+      throw portError('K4-ACTOR-PORT-001', `${command}.waitFor must be advance`);
+    }
+    let characterIntervalSeconds;
+    if (Object.hasOwn(value, 'characterIntervalSeconds')) {
+      characterIntervalSeconds = requireFiniteNumber(
+        value.characterIntervalSeconds,
+        'characterIntervalSeconds',
+        command,
+      );
+      if (characterIntervalSeconds <= 0) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.characterIntervalSeconds must be greater than zero`,
+        );
+      }
+    }
+    let startSound;
+    if (Object.hasOwn(value, 'startSound')) {
+      startSound = requireNonEmptyString(value.startSound, 'startSound', command);
+    }
+    let characterSound;
+    if (Object.hasOwn(value, 'characterSound')) {
+      characterSound = requireNonEmptyString(value.characterSound, 'characterSound', command);
+    }
+    let noSoundCharacters;
+    if (Object.hasOwn(value, 'noSoundCharacters')) {
+      noSoundCharacters = requireNonEmptyString(
+        value.noSoundCharacters,
+        'noSoundCharacters',
+        command,
+      );
+    }
+    let restCharacters;
+    if (Object.hasOwn(value, 'restCharacters')) {
+      restCharacters = requireNonEmptyString(value.restCharacters, 'restCharacters', command);
+    }
+    let restCharacterIntervalSeconds;
+    if (Object.hasOwn(value, 'restCharacterIntervalSeconds')) {
+      restCharacterIntervalSeconds = requireFiniteNumber(
+        value.restCharacterIntervalSeconds,
+        'restCharacterIntervalSeconds',
+        command,
+      );
+      if (restCharacterIntervalSeconds <= 0) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.restCharacterIntervalSeconds must be greater than zero`,
+        );
+      }
+    }
+    const signal = validateContext(context);
+    if (signal.aborted) throw abortError();
+    for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
+      requireAudioAsset(/** @type {string} */ (sound));
+    }
+    const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+      /** @type {unknown} */ (context)
+    );
+    const actor = await resolveTarget(target, actionContext, signal);
+    const operation = validatePresentationOperation(
+      host[command === 'say' ? 'createSay' : 'createThink'](
+        actor,
+        Object.freeze({
+          text,
+          ...(seconds === undefined ? {} : {seconds}),
+          ...(characterIntervalSeconds === undefined ? {} : {characterIntervalSeconds}),
+          ...(startSound === undefined ? {} : {startSound}),
+          ...(characterSound === undefined ? {} : {characterSound}),
+          ...(noSoundCharacters === undefined ? {} : {noSoundCharacters}),
+          ...(restCharacters === undefined ? {} : {restCharacters}),
+          ...(restCharacterIntervalSeconds === undefined ? {} : {restCharacterIntervalSeconds}),
+        }),
+        actionContext,
+      ),
+      command,
+    );
+    return runSpeechPresentationOperation(operation, signal, context, waitFor === 'advance');
   }
 
   return Object.freeze({
@@ -278,11 +520,20 @@ export function createDsl4ActorActionPort(options) {
 
     /** @param {unknown} payload @param {unknown} context */
     async moveTo(payload, context) {
-      const value = validatePayloadShape(payload, ['target', 'x', 'y', 'seconds'], 'moveTo');
+      const value = validatePayloadShape(payload, ['target', 'x', 'y', 'seconds'], 'moveTo', [
+        'easing',
+      ]);
       const target = requireNonEmptyString(value.target, 'target', 'moveTo');
       const x = requireFiniteNumber(value.x, 'x', 'moveTo');
       const y = requireFiniteNumber(value.y, 'y', 'moveTo');
       const seconds = requireFiniteNumber(value.seconds, 'seconds', 'moveTo');
+      const easing = value.easing ?? 'linear';
+      if (!isDsl4MoveEasing(easing)) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `moveTo.easing must be one of ${dsl4MoveEasingNames.join(', ')}`,
+        );
+      }
       if (seconds < 0) {
         throw portError('K4-ACTOR-PORT-001', 'moveTo.seconds must not be negative');
       }
@@ -293,35 +544,23 @@ export function createDsl4ActorActionPort(options) {
       );
       const actor = await resolveTarget(target, actionContext, signal);
       const operation = validatePresentationOperation(
-        host.createMove(actor, Object.freeze({x, y, seconds}), actionContext),
+        host.createMove(actor, Object.freeze({x, y, seconds, easing}), actionContext),
         'moveTo',
       );
       return runPresentationOperation(operation, signal);
     },
 
     /** @param {unknown} payload @param {unknown} context */
-    async say(payload, context) {
-      const value = validatePayloadShape(payload, ['target', 'text', 'seconds'], 'say');
-      const target = requireNonEmptyString(value.target, 'target', 'say');
-      if (typeof value.text !== 'string') {
-        throw portError('K4-ACTOR-PORT-001', 'say.text must be a string');
+    say(payload, context) {
+      return runSpeech('say', payload, context);
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    think(payload, context) {
+      if (!speechAdvanceTypewriterEnabled) {
+        throw portError('K4-ACTOR-PORT-001', 'think is disabled');
       }
-      const text = value.text;
-      const seconds = requireFiniteNumber(value.seconds, 'seconds', 'say');
-      if (seconds < 0) {
-        throw portError('K4-ACTOR-PORT-001', 'say.seconds must not be negative');
-      }
-      const signal = validateContext(context);
-      if (signal.aborted) throw abortError();
-      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
-        /** @type {unknown} */ (context)
-      );
-      const actor = await resolveTarget(target, actionContext, signal);
-      const operation = validatePresentationOperation(
-        host.createSay(actor, Object.freeze({text, seconds}), actionContext),
-        'say',
-      );
-      return runPresentationOperation(operation, signal);
+      return runSpeech('think', payload, context);
     },
   });
 }
