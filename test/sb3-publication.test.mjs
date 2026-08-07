@@ -49,6 +49,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   const packageJson = JSON.parse(packageJsonSource);
   const downloadPage = renderDownloadCards(downloadTemplate);
 
+  assert.deepEqual(
+    downloadCatalog.map(({series}) => series),
+    ['4.0', '3.2', '3.1'],
+  );
   assert.equal(downloadTemplate.split(downloadCardsPlaceholder).length - 1, 1);
   assert(!downloadPage.includes(downloadCardsPlaceholder));
   const cardPositions = downloadCatalog.map(({series}) =>
