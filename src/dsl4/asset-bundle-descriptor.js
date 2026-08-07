@@ -155,7 +155,7 @@ function sri(value, name) {
 }
 
 /** @param {Readonly<Record<string, unknown>>} storyDocument @param {unknown} inputManifest */
-function validateManifest(storyDocument, inputManifest) {
+export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
   if (!isRecord(inputManifest)) {
     fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', 'Asset bundle manifest must be an object');
   }
@@ -296,7 +296,7 @@ export async function validateDsl4EmbeddedAssetBundle(
   if (input.formatVersion !== 1 || !Array.isArray(input.files)) {
     fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', 'Asset bundle format is invalid');
   }
-  const manifest = validateManifest(storyDocument, input.manifest);
+  const manifest = validateDsl4AssetBundleManifest(storyDocument, input.manifest);
   if (input.files.length > fileLimit)
     fail('K4-ASSET-BUNDLE-LIMIT-001', 'Asset bundle exceeds maxFiles');
   const expectedFiles = new Map();
@@ -405,7 +405,7 @@ export async function createDsl4EmbeddedAssetBundle(storyDocument, snapshot, opt
   if (!snapshot || typeof snapshot.getFile !== 'function') {
     throw new TypeError('asset snapshot must provide manifest and getFile');
   }
-  const manifest = validateManifest(storyDocument, snapshot.manifest);
+  const manifest = validateDsl4AssetBundleManifest(storyDocument, snapshot.manifest);
   const files = [];
   for (const asset of /** @type {ReadonlyArray<Record<string, any>>} */ (manifest.assets)) {
     if (asset.source.type !== 'file') continue;
