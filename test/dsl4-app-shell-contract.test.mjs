@@ -19,16 +19,15 @@ const opcodes = (manifest) => manifest.blocks.map((definition) => definition.opc
 
 test('freezes the #265 Standard author and template-internal palette boundary', () => {
   assert.equal(contract.formatVersion, 1);
-  assert.equal(contract.standardComposite.extensionId, 'kubohiroyakamishibai4');
-  assert.deepEqual(contract.standardComposite.visibleOpcodes, []);
-  assert.deepEqual(contract.standardComposite.hiddenOpcodes, [
-    'startConfiguredSource',
-    'stopKamishibai',
-    'retryKamishibai',
-    'whenKamishibaiFinished',
-    'whenKamishibaiFailed',
+  assert.equal(contract.standardRuntime.extensionId, 'kubohiroyakamishibairuntime4');
+  assert.deepEqual(contract.standardRuntime.visibleOpcodes, []);
+  assert.deepEqual(contract.standardRuntime.hiddenOpcodes, [
+    'versionReporter',
+    'statusReporter',
+    'lastErrorReporter',
+    'setTextValue',
   ]);
-  assert.equal(new Set(contract.standardComposite.hiddenOpcodes).size, 5);
+  assert.equal(new Set(contract.standardRuntime.hiddenOpcodes).size, 4);
 });
 
 test('specifies the app shell as a startup-fixed default-off implementation flag', () => {
@@ -74,7 +73,7 @@ test('keeps actual developer manifests aligned with the optional-surface contrac
 
 test('uses distinct extension IDs and no TurboWarp extension for the preview host', () => {
   const extensionIds = [
-    contract.standardComposite.extensionId,
+    contract.standardRuntime.extensionId,
     ...Object.values(contract.optionalSurfaces)
       .map((surface) => surface.extensionId)
       .filter(Boolean),

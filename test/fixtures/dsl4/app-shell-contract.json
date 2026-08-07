@@ -1,16 +1,10 @@
 {
   "formatVersion": 1,
   "issue": 265,
-  "standardComposite": {
-    "extensionId": "kubohiroyakamishibai4",
+  "standardRuntime": {
+    "extensionId": "kubohiroyakamishibairuntime4",
     "visibleOpcodes": [],
-    "hiddenOpcodes": [
-      "startConfiguredSource",
-      "stopKamishibai",
-      "retryKamishibai",
-      "whenKamishibaiFinished",
-      "whenKamishibaiFailed"
-    ]
+    "hiddenOpcodes": ["versionReporter", "statusReporter", "lastErrorReporter", "setTextValue"]
   },
   "featureFlags": {
     "appShell": {

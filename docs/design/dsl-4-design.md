@@ -1735,7 +1735,13 @@ unsupported browser fallbackの正本は
 
 ## 11. 独立capability projectとKamishibai Bundle
 
-### 11.0 現行Bundle契約 `[現行事実]`
+> **4.0.0-dev closeout（2026-08-07）:** この章には3.2 `extensionBundles`を4.0へ適用する比較検討の
+> 履歴が含まれます。実装済み4.0 Standardの正本は
+> [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。競合する記述では、
+> source-composed Standard Runtime ID `kubohiroyakamishibairuntime4`、完全固定npm provider、
+> `./composition`、first-party Structured Dataというcloseout契約を優先します。
+
+### 11.0 3.2 legacy Bundle契約 `[現行事実]`
 
 3.2の`tmposebundle`によって、Issue初回着手時に想定していた「合成専用entrypointがなければ
 Standalone拡張を静的bundle化できない」という前提は解消されました。`sb3-toolchain`は個別の
