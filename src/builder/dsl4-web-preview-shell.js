@@ -728,7 +728,7 @@ export function createDsl4WebPreviewShell(input = {}) {
   if (featureFlags.dsl4PreviewReloadOverlay) {
     try {
       reloadSurface = validateReloadSurface(
-        createReloadSurface({
+        /** @type {Function} */ (createReloadSurface)({
           surface: 'web',
           environment: 'development',
           document,
