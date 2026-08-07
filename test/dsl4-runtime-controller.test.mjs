@@ -91,6 +91,7 @@ scenes:
           x: 0
           y: 0
           scale: 100
+      - Hero.setTransparency: 50
       - Hero.moveTo:
           x: 10
           y: 20
@@ -137,6 +138,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'wait',
       'transition',
       'show',
+      'setTransparency',
       'moveTo',
       'say',
       'setSkin',
@@ -185,6 +187,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'wait',
       'transition',
       'show',
+      'setTransparency',
       'moveTo',
       'say',
       'setSkin',
@@ -197,6 +200,10 @@ test('dispatches every core action and keeps transition separate from scene move
       'poseInputToChangeScene',
     ],
   );
+  assert.deepEqual(calls.find(({method}) => method === 'setTransparency').payload, {
+    target: 'Hero',
+    transparency: 50,
+  });
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
     pose: 'happy',
@@ -239,8 +246,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 16);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 16);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 17);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 17);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
@@ -1276,6 +1283,126 @@ test('pose navigation policy remains inert while its startup gate is disabled', 
   await controller.advance('navigation.nextAction');
   assert.equal(stageCalls, 1);
   pending.resolve();
+  await staleRun;
+});
+
+test('finishes background presentation state before advance aborts the current action', async () => {
+  const waitPending = deferred();
+  const waitStarted = deferred();
+  const order = [];
+  let transitionActive = false;
+  let ghost = null;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+        background: true
+    - wait: 1
+`),
+    port: {
+      setTransparency(payload) {
+        transitionActive = true;
+        ghost = payload.from;
+      },
+      wait(_payload, context) {
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            order.push('abort-current-action');
+          },
+          {once: true},
+        );
+        waitStarted.resolve();
+        return waitPending.promise;
+      },
+      finishPresentationTransitions() {
+        if (!transitionActive) return;
+        ghost = 50;
+        transitionActive = false;
+        order.push('finish-to-50');
+      },
+    },
+  });
+  const staleRun = controller.start();
+  await waitStarted.promise;
+  const advanced = await controller.advance('skip');
+
+  assert.equal(advanced.status, 'finished');
+  assert.equal(ghost, 50);
+  assert.deepEqual(order, ['finish-to-50', 'abort-current-action']);
+  waitPending.resolve();
+  await staleRun;
+});
+
+test('does not skip when background presentation finalization fails and permits a retry', async () => {
+  const waitPending = deferred();
+  const waitStarted = deferred();
+  const order = [];
+  let finalizationFailures = 1;
+  let transitionActive = false;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+        background: true
+    - wait: 1
+`),
+    port: {
+      setTransparency() {
+        transitionActive = true;
+      },
+      wait(_payload, context) {
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            order.push('abort-current-action');
+          },
+          {once: true},
+        );
+        waitStarted.resolve();
+        return waitPending.promise;
+      },
+      finishPresentationTransitions() {
+        if (!transitionActive) return;
+        if (finalizationFailures > 0) {
+          finalizationFailures -= 1;
+          order.push('finish-failed');
+          throw new Error('finalization failed');
+        }
+        transitionActive = false;
+        order.push('finish-to-50');
+      },
+    },
+  });
+  const staleRun = controller.start();
+  await waitStarted.promise;
+
+  assert.throws(() => controller.advance('first-skip'), /finalization failed/u);
+  assert.equal(controller.getState().status, 'running');
+  assert.deepEqual(order, ['finish-failed']);
+
+  const advanced = await controller.advance('retry-skip');
+  assert.equal(advanced.status, 'finished');
+  assert.deepEqual(order, ['finish-failed', 'finish-to-50', 'abort-current-action']);
+  waitPending.resolve();
   await staleRun;
 });
 

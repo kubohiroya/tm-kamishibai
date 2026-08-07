@@ -160,6 +160,17 @@ function validateActor(value) {
   );
 }
 
+/** @param {unknown} value */
+function validateEffectActor(value) {
+  const actor = validateActor(value);
+  if (typeof actor.setEffect !== 'function') {
+    throw adapterError('K4-TW-ACTOR-002', 'TurboWarp actor target must provide setEffect');
+  }
+  return /** @type {ReturnType<typeof validateActor> & {setEffect: (effect: string, value: number) => void}} */ (
+    actor
+  );
+}
+
 /** @param {unknown} value @param {string[]} keys @param {string} operation @param {string[]} [optionalKeys] */
 function validateSpec(value, keys, operation, optionalKeys = []) {
   const allowedKeys = new Set([...keys, ...optionalKeys]);
@@ -170,7 +181,7 @@ function validateSpec(value, keys, operation, optionalKeys = []) {
   ) {
     throw adapterError(
       'K4-TW-ACTOR-002',
-      `${operation} specification must provide ${keys.join(', ')}${optionalKeys.length > 0 ? ` and only optional ${optionalKeys.join(', ')}` : ''}`,
+      `${operation} specification must provide exactly ${keys.join(', ')}${optionalKeys.length > 0 ? ` with only optional ${optionalKeys.join(', ')}` : ''}`,
     );
   }
   return value;
@@ -226,9 +237,33 @@ export function createDsl4TurboWarpActorPlatform(options) {
   if (frameMilliseconds <= 0) {
     throw new TypeError('frameMilliseconds must be greater than zero');
   }
+  /** @type {Map<ReturnType<typeof validateEffectActor>, {finish: () => void}>} */
+  const activeTransparencyTransitions = new Map();
+  let disposed = false;
+
+  function ensureActive() {
+    if (disposed) {
+      throw adapterError('K4-TW-ACTOR-004', 'TurboWarp actor platform is disposed');
+    }
+  }
+
+  function finishTransparencyTransitions() {
+    const errors = [];
+    for (const transition of [...activeTransparencyTransitions.values()]) {
+      try {
+        transition.finish();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'TurboWarp actor transparency transition cleanup failed');
+    }
+  }
 
   /** @param {string} actorId */
   function resolveActor(actorId) {
+    ensureActive();
     if (typeof actorId !== 'string' || actorId.length === 0) {
       throw adapterError('K4-TW-ACTOR-001', 'actorId must be a non-empty string');
     }
@@ -482,6 +517,182 @@ export function createDsl4TurboWarpActorPlatform(options) {
       actor.setVisible(true);
     },
 
+    /** @param {unknown} target @param {unknown} effect */
+    setTransparency(target, effect) {
+      ensureActive();
+      const actor = validateEffectActor(target);
+      const value = validateSpec(effect, ['transparency'], 'setTransparency');
+      const transparency = finiteNumber(value.transparency, 'setTransparency.transparency');
+      if (transparency < 0 || transparency > 100) {
+        throw adapterError(
+          'K4-TW-ACTOR-002',
+          'setTransparency.transparency must be between 0 and 100',
+        );
+      }
+      activeTransparencyTransitions.get(actor)?.finish();
+      actor.setEffect('ghost', transparency);
+    },
+
+    /** @param {unknown} target @param {unknown} transition */
+    createTransparencyTransition(target, transition) {
+      ensureActive();
+      const actor = validateEffectActor(target);
+      const value = validateSpec(transition, ['from', 'to', 'seconds'], 'setTransparency');
+      const from = finiteNumber(value.from, 'setTransparency.from');
+      const to = finiteNumber(value.to, 'setTransparency.to');
+      if (from < 0 || from > 100 || to < 0 || to > 100) {
+        throw adapterError(
+          'K4-TW-ACTOR-002',
+          'setTransparency from and to must be between 0 and 100',
+        );
+      }
+      const duration = durationMilliseconds(
+        /** @type {number} */ (value.seconds),
+        'setTransparency',
+      );
+      let state = 'idle';
+      /** @type {unknown} */
+      let timer;
+      /** @type {(() => void) | undefined} */
+      let resolveOperation;
+      /** @type {((error: unknown) => void) | undefined} */
+      let rejectOperation;
+      /** @type {unknown} */
+      let backgroundFailure;
+      let operationSettled = false;
+      let backgroundOwned = false;
+
+      const cancelTimer = () => {
+        if (timer === undefined) return;
+        scheduler.clearTimeout(timer);
+        timer = undefined;
+      };
+      const removeActiveTransition = () => {
+        if (activeTransparencyTransitions.get(actor)?.finish === finish) {
+          activeTransparencyTransitions.delete(actor);
+        }
+      };
+      const resolvePresentation = () => {
+        if (operationSettled) return;
+        operationSettled = true;
+        resolveOperation?.();
+      };
+      /** @param {unknown} error */
+      const rejectPresentation = (error) => {
+        if (operationSettled) return;
+        operationSettled = true;
+        rejectOperation?.(error);
+      };
+      const applyFinalState = () => {
+        cancelTimer();
+        try {
+          actor.setEffect('ghost', to);
+        } catch (error) {
+          state = 'finalization-pending';
+          throw error;
+        }
+        state = 'completed';
+        removeActiveTransition();
+      };
+      const finish = () => {
+        if (state === 'completed') return;
+        try {
+          applyFinalState();
+        } catch (error) {
+          const terminalError =
+            backgroundFailure === undefined
+              ? error
+              : new AggregateError(
+                  [backgroundFailure, error],
+                  'TurboWarp actor transparency finalization retry failed',
+                );
+          backgroundFailure = terminalError;
+          if (backgroundOwned) rejectPresentation(terminalError);
+          throw terminalError;
+        }
+        resolvePresentation();
+      };
+      /** @param {unknown} error */
+      const fail = (error) => {
+        if (state !== 'running') return;
+        cancelTimer();
+        backgroundFailure = error;
+        try {
+          applyFinalState();
+        } catch (finishError) {
+          backgroundFailure = new AggregateError(
+            [error, finishError],
+            'TurboWarp actor transparency transition and finalization failed',
+          );
+        }
+        rejectPresentation(backgroundFailure);
+      };
+
+      /** @param {boolean} background */
+      const startOperation = (background) => {
+        if (state !== 'idle') {
+          throw adapterError('K4-TW-ACTOR-003', 'setTransparency operation can only start once');
+        }
+        ensureActive();
+        backgroundOwned = background;
+        const startTime = finiteNumber(scheduler.now(), 'scheduler.now()');
+        activeTransparencyTransitions.get(actor)?.finish();
+        actor.setEffect('ghost', from);
+        state = 'running';
+        activeTransparencyTransitions.set(actor, operation);
+        return new Promise((resolve, reject) => {
+          resolveOperation = () => resolve(undefined);
+          rejectOperation = (error) => reject(error);
+          if (duration === 0) {
+            try {
+              finish();
+            } catch (error) {
+              backgroundFailure = error;
+            }
+            return;
+          }
+          const tick = () => {
+            timer = undefined;
+            if (state !== 'running') return;
+            try {
+              const elapsed = Math.max(
+                0,
+                finiteNumber(scheduler.now(), 'scheduler.now()') - startTime,
+              );
+              const progress = Math.min(elapsed / duration, 1);
+              if (progress >= 1) {
+                finish();
+                return;
+              }
+              actor.setEffect('ghost', from + (to - from) * progress);
+              timer = scheduler.setTimeout(tick, Math.min(frameMilliseconds, duration - elapsed));
+            } catch (error) {
+              fail(error);
+            }
+          };
+          try {
+            timer = scheduler.setTimeout(tick, Math.min(frameMilliseconds, duration));
+          } catch (error) {
+            fail(error);
+          }
+        });
+      };
+
+      const operation = Object.freeze({
+        start() {
+          return startOperation(false);
+        },
+        startBackground() {
+          const presentation = startOperation(true);
+          void presentation.catch((error) => {
+            backgroundFailure = error;
+          });
+        },
+        finish,
+      });
+      return operation;
+    },
+
     /** @param {unknown} target @param {unknown} destination */
     createMove(target, destination) {
       const actor = validateActor(target);
@@ -588,5 +799,14 @@ export function createDsl4TurboWarpActorPlatform(options) {
     },
   });
 
-  return Object.freeze({host, resolveActor});
+  return Object.freeze({
+    host,
+    resolveActor,
+    finishTransparencyTransitions,
+    dispose() {
+      if (disposed) return;
+      finishTransparencyTransitions();
+      disposed = true;
+    },
+  });
 }

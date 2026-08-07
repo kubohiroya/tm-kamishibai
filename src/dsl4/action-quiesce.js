@@ -16,6 +16,7 @@ export const dsl4CoreActionQuiesceModes = Object.freeze({
   touchInputToChangeScene: 'cancel-replay-safe',
   poseInputToChangeScene: 'cancel-replay-safe',
   show: 'finish-only',
+  setTransparency: 'finish-only',
   moveTo: 'cancel-replay-safe',
   say: 'cancel-replay-safe',
   think: 'cancel-replay-safe',

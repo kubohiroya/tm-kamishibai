@@ -148,6 +148,41 @@ function baseProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 
+function manualScheduler() {
+  let currentTime = 0;
+  let nextId = 1;
+  const timers = new Map();
+  return {
+    scheduler: {
+      now: () => currentTime,
+      setTimeout(callback, milliseconds) {
+        const id = nextId;
+        nextId += 1;
+        timers.set(id, {callback, due: currentTime + milliseconds});
+        return id;
+      },
+      clearTimeout(id) {
+        timers.delete(id);
+      },
+    },
+    pendingCount: () => timers.size,
+    advance(milliseconds) {
+      const targetTime = currentTime + milliseconds;
+      while (true) {
+        const next = [...timers.entries()]
+          .filter(([, timer]) => timer.due <= targetTime)
+          .sort((left, right) => left[1].due - right[1].due || left[0] - right[0])[0];
+        if (!next) break;
+        const [id, timer] = next;
+        timers.delete(id);
+        currentTime = timer.due;
+        timer.callback();
+      }
+      currentTime = targetTime;
+    },
+  };
+}
+
 async function packagedProject(
   sourceText = waitStory,
   {cacheIdentity, historyNavigationAvailable = false} = {},
@@ -357,6 +392,9 @@ function platformFixture(log) {
     },
     setVisible(visible) {
       log.push(['actor.visible', visible]);
+    },
+    setEffect(effect, value) {
+      log.push(['actor.effect', effect, value]);
     },
   };
   const assetManagerComposition = {
@@ -1721,6 +1759,7 @@ scenes:
         x: 10
         y: 20
         scale: 30
+    - Hero.setTransparency: 50
     - Hero.moveTo:
         x: 40
         y: 50
@@ -1747,6 +1786,7 @@ scenes:
     ['media.play', 'Bell'],
     ['actor.size', 30],
     ['actor.visible', true],
+    ['actor.effect', 'ghost', 50],
     ['actor.xy', 40, 50],
     ['actor.say', 'hello'],
     ['svg.text', 'title', 'title'],
@@ -1757,6 +1797,229 @@ scenes:
       `${JSON.stringify(event)} not found in ${JSON.stringify(log)}`,
     );
   }
+  await result.host.dispose();
+});
+
+test('foreground transparency waits and skip commits its final state before navigation', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+`);
+  const log = [];
+  const clock = manualScheduler();
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      actorScheduler: clock.scheduler,
+      actorFrameMilliseconds: 500,
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.host.start();
+  while (clock.pendingCount() === 0) await Promise.resolve();
+  clock.advance(500);
+  assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 25]);
+
+  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(skipped.ok, true);
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 50]);
+  assert.equal(clock.pendingCount(), 0);
+  await run;
+  await result.host.dispose();
+});
+
+test('foreground transparency remains running after failed skip finalization and retries', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+`);
+  const log = [];
+  const fixture = platformFixture(log);
+  const actor = fixture.runtime.targets.find((target) => target.isStage === false);
+  const originalSetEffect = actor.setEffect.bind(actor);
+  let finalizationFailures = 1;
+  actor.setEffect = (effect, value) => {
+    originalSetEffect(effect, value);
+    if (value === 50 && finalizationFailures > 0) {
+      finalizationFailures -= 1;
+      throw new Error('finalization failed');
+    }
+  };
+  const clock = manualScheduler();
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      actorScheduler: clock.scheduler,
+      actorFrameMilliseconds: 500,
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.host.start();
+  while (clock.pendingCount() === 0) await Promise.resolve();
+
+  assert.throws(
+    () => result.host.dispatchCommand('navigation.nextAction'),
+    /transparency transition cleanup failed/u,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(result.host.getState().runtime.status, 'running');
+  assert.equal(clock.pendingCount(), 0);
+
+  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(skipped.ok, true);
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.equal(
+    log.filter(
+      ([event, effect, value]) => event === 'actor.effect' && effect === 'ghost' && value === 50,
+    ).length,
+    2,
+  );
+  await run;
+  await result.host.dispose();
+});
+
+test('background transparency runs with the next action and stop finalizes it before cancellation', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+        background: true
+    - wait: 30
+`);
+  const log = [];
+  const clock = manualScheduler();
+  let waitScheduled = false;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      actorScheduler: clock.scheduler,
+      actorFrameMilliseconds: 500,
+      waitSchedule() {
+        waitScheduled = true;
+        return () => log.push(['wait.cancel']);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.host.start();
+  while (!waitScheduled) await Promise.resolve();
+  clock.advance(500);
+  assert.deepEqual(log.at(-1), ['actor.effect', 'ghost', 25]);
+
+  const stopped = result.host.stop('test-stop');
+  assert.equal(stopped.status, 'stopped');
+  assert.deepEqual(log.slice(-2), [['actor.effect', 'ghost', 50], ['wait.cancel']]);
+  assert.equal(clock.pendingCount(), 0);
+  await run;
+  await result.host.dispose();
+});
+
+test('background transparency blocks skip until a failed final state can be retried', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.setTransparency:
+        from: 0
+        to: 50
+        seconds: 1
+        background: true
+    - wait: 30
+`);
+  const log = [];
+  const fixture = platformFixture(log);
+  const actor = fixture.runtime.targets.find((target) => target.isStage === false);
+  const originalSetEffect = actor.setEffect.bind(actor);
+  let interpolationFailures = 1;
+  let finalizationFailures = 2;
+  actor.setEffect = (effect, value) => {
+    originalSetEffect(effect, value);
+    if (value === 25 && interpolationFailures > 0) {
+      interpolationFailures -= 1;
+      throw new Error('interpolation failed');
+    }
+    if (value === 50 && finalizationFailures > 0) {
+      finalizationFailures -= 1;
+      throw new Error('finalization failed');
+    }
+  };
+  const clock = manualScheduler();
+  let waitScheduled = false;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      actorScheduler: clock.scheduler,
+      actorFrameMilliseconds: 500,
+      waitSchedule() {
+        waitScheduled = true;
+        return () => log.push(['wait.cancel']);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const run = result.host.start();
+  while (!waitScheduled) await Promise.resolve();
+  clock.advance(500);
+  await Promise.resolve();
+
+  assert.throws(
+    () => result.host.dispatchCommand('navigation.nextAction'),
+    /transparency transition cleanup failed/u,
+  );
+  assert.equal(result.host.getState().runtime.status, 'running');
+  assert.equal(
+    log.some(([event]) => event === 'wait.cancel'),
+    false,
+  );
+
+  const skipped = result.host.dispatchCommand('navigation.nextAction');
+  assert.equal(skipped.ok, true);
+  assert.equal(result.host.getState().runtime.status, 'finished');
+  assert.deepEqual(log.slice(-2), [['actor.effect', 'ghost', 50], ['wait.cancel']]);
+  await run;
   await result.host.dispose();
 });
 

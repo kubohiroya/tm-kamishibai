@@ -682,6 +682,32 @@
         "scale": {"type": "number", "exclusiveMinimum": 0}
       }
     },
+    "setTransparencyArgs": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 100},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["transparency"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "transparency": {"type": "number", "minimum": 0, "maximum": 100}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to", "seconds"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "from": {"type": "number", "minimum": 0, "maximum": 100},
+            "to": {"type": "number", "minimum": 0, "maximum": 100},
+            "seconds": {"type": "number", "minimum": 0},
+            "background": {"type": "boolean"}
+          }
+        }
+      ]
+    },
     "moveToArgs": {
       "type": "object",
       "additionalProperties": false,
@@ -891,6 +917,17 @@
         "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.show$": {"$ref": "#/$defs/showArgs"}
       }
     },
+    "setTransparencyAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.setTransparency$": {
+          "$ref": "#/$defs/setTransparencyArgs"
+        }
+      }
+    },
     "moveToAction": {
       "type": "object",
       "minProperties": 1,
@@ -951,7 +988,7 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|setTransparency|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
           "$ref": "#/$defs/customActorActionArgs"
         }
       }
@@ -969,6 +1006,7 @@
         {"$ref": "#/$defs/touchInputAction"},
         {"$ref": "#/$defs/poseInputAction"},
         {"$ref": "#/$defs/showAction"},
+        {"$ref": "#/$defs/setTransparencyAction"},
         {"$ref": "#/$defs/moveToAction"},
         {"$ref": "#/$defs/sayAction"},
         {"$ref": "#/$defs/thinkAction"},

@@ -334,6 +334,95 @@ scenes:
   }
 });
 
+test('normalizes setTransparency as a direct 0 to 100 transparency value', () => {
+  const source = (value) => `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.setTransparency: ${value}
+`;
+  for (const transparency of [0, 50, 100]) {
+    const result = frontend.parse(source(transparency), {sourceId: 'transparency.yaml'});
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {transparency});
+    assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/transparency']);
+  }
+
+  const named = frontend.parse(source('\n        stableId: halfVisible\n        transparency: 50'));
+  assert.equal(named.ok, true, JSON.stringify(named.diagnostics));
+  assert.equal(named.storyDocument.scenes[0].actions[0].stableId, 'halfVisible');
+  assert.deepEqual(named.storyDocument.scenes[0].actions[0].args, {transparency: 50});
+
+  for (const invalid of [-1, 101, 'half', '{transparency: 50, extra: true}']) {
+    const result = frontend.parse(source(invalid));
+    assert.equal(result.ok, false, String(invalid));
+    assert.ok(result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
+test('normalizes foreground and background transparency transitions', () => {
+  const source = (argumentsSource) => `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+scenes:
+  opening:
+    - Hero.setTransparency:
+${argumentsSource}
+`;
+  const foreground = frontend.parse(source('        from: 0\n        to: 50\n        seconds: 1'), {
+    sourceId: 'foreground-transparency.yaml',
+  });
+  assert.equal(foreground.ok, true, JSON.stringify(foreground.diagnostics));
+  assert.deepEqual(foreground.storyDocument.scenes[0].actions[0].args, {
+    from: 0,
+    to: 50,
+    seconds: 1,
+  });
+  const explicitForeground = frontend.parse(
+    source('        from: 0\n        to: 50\n        seconds: 1\n        background: false'),
+  );
+  assert.equal(explicitForeground.ok, true, JSON.stringify(explicitForeground.diagnostics));
+  assert.equal(explicitForeground.storyDocument.scenes[0].actions[0].args.background, false);
+
+  const background = frontend.parse(
+    source(
+      '        stableId: fadeHero\n        from: 0\n        to: 50\n        seconds: 1\n        background: true',
+    ),
+    {sourceId: 'background-transparency.yaml'},
+  );
+  assert.equal(background.ok, true, JSON.stringify(background.diagnostics));
+  assert.equal(background.storyDocument.scenes[0].actions[0].stableId, 'fadeHero');
+  assert.deepEqual(background.storyDocument.scenes[0].actions[0].args, {
+    from: 0,
+    to: 50,
+    seconds: 1,
+    background: true,
+  });
+  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/from']);
+  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/to']);
+  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/seconds']);
+  assert.ok(background.storyDocument.sourceMap['/scenes/opening/actions/0/args/background']);
+
+  for (const invalid of [
+    '        from: -1\n        to: 50\n        seconds: 1',
+    '        from: 0\n        to: 101\n        seconds: 1',
+    '        from: 0\n        to: 50\n        seconds: -1',
+    '        from: 0\n        to: 50\n        seconds: 1\n        background: yes',
+    '        from: 0\n        to: 50\n        seconds: 1\n        extra: true',
+  ]) {
+    const result = frontend.parse(source(invalid));
+    assert.equal(result.ok, false, invalid);
+    assert.ok(result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('normalizes pose policy defaults and rejects unknown keys, values, or types', () => {
   const base = [
     "kamishibai: '4.0'",
