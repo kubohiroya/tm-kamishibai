@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #258の段階実装（local host adapter）
+文書状態: Issue #258実装済み（public local preview CLI）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#390](https://github.com/kubohiroya/tmpose-kamishibai/issues/390)、
@@ -68,8 +68,16 @@ port、transport policy、HTTP serverを冪等に解放し、途中失敗時も�
 server listen中またはprotocol接続中に`dispose()`された場合も、進行中の初期化を収束させてから同じcleanupへ入り、
 disposed hostからsocketやwatcherが後発で再生成されないことを保証します。
 
-SIGINT／SIGTERMのprocess signal接続と、作者向け`preview --watch` commandのargument／help／browser openは次の
-CLI adapter差分で追加します。この段階ではREADMEやWeb Preview fallbackへ未公開commandを表示しません。
+`preview-dsl4 --watch`は`preview --watch`相当の公開adapterです。base SB3、project root、
+`project.source.json`、control profile、channel、source／assetの有限上限を明示必須とし、port省略時は
+OSにloopback空portを選択させます。remote bindは提供しません。hostとbrowser bundleをmemory上で生成し、
+one-use tokenをfragmentに含むURLをsystem browserに一度だけ渡します。CLI出力はtokenやsourceの絶対pathを
+表示しません。
+
+browserのbase component、stage、runtime owner、初回generation、共有overlayが起動し、認証済み
+`local-preview.runtime-ready`をhostが受け取るまで`Preview ready`を表示しません。ready timeout、ready前の
+disconnect／crashは有限診断でfail-closedします。SIGINT／SIGTERM、browser close、full rebuild要求はすべて
+watcher、transport、runtime、VM、socketの同じ冪等cleanupへ収束します。
 
 ## 5. rollout、検証、rollback
 

@@ -75,8 +75,19 @@ folder APIがない、secure contextではない、またはpermissionを得ら�
 commandを表示します。
 
 ```bash
+pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+  --base BASE.sb3 \
+  --project-root PROJECT_ROOT \
+  --source-manifest PROJECT_ROOT/project.source.json \
+  --control-profile production \
+  --channel bundled \
+  --max-source-bytes N \
+  --max-asset-file-bytes N \
+  --max-asset-files N \
+  --max-total-asset-bytes N
+
 pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.kamishibai.yaml \
+  --input story.k4.yml \
   --max-source-bytes N \
   --format pretty
 
@@ -93,7 +104,7 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes N
 ```
 
-現在はCLI live preview commandを公開していないため、架空の`preview --watch`は案内しません。
+`preview-dsl4 --watch`は認証済みloopback browserで実TurboWarp runtimeを起動し、台本を監視します。
 
 ## 6. rollback
 

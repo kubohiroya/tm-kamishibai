@@ -7,6 +7,8 @@ import {
   formatConversionDiagnostic,
 } from '../converter/index.js';
 import {packageVersion} from './constants.js';
+import {runDsl4LocalPreviewCommand} from './dsl4-local-preview-command.js';
+import {dsl4LocalPreviewBrowserBootstrapDefaults} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {
   formatDsl4Diagnostic,
@@ -35,6 +37,11 @@ export function usage() {
   tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
     --max-source-bytes N [--format pretty|json]
 
+  tmpose-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
+    --source-manifest project.source.json --control-profile production \\
+    --channel bundled --max-source-bytes N --max-asset-file-bytes N \\
+    --max-asset-files N --max-total-asset-bytes N [options]
+
 DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
   --allow-http            Permit plain HTTP assets (HTTPS is the default)
@@ -45,6 +52,11 @@ DSL 3.1/3.2 build-sb3 options:
 
 DSL 4.0 build-dsl4 options:
   --history-navigation-available  Permit a selected history.* keymap
+  --replace-existing              Replace a same-channel component in the base SB3
+
+DSL 4.0 preview-dsl4 options:
+  --watch                         Keep watching the selected source (required)
+  --port N                        Loopback port; 0 lets the OS select one (default)
   --replace-existing              Replace a same-channel component in the base SB3
 
 convert-dsl4 options:
@@ -59,6 +71,8 @@ General options:
 
 build-sb3 takes an output basename and writes .sb3, .txt, and .manifest.json.
 build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
+preview-dsl4 builds a development-only browser runtime in memory, opens the system
+browser, and reports success only after the authenticated runtime-ready acknowledgement.
 validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics.
 convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
 explicitly selected YAML output.`;
@@ -295,8 +309,121 @@ function parseBuildDsl4Arguments(rest) {
 }
 
 /**
+ * @typedef {Omit<Dsl4CliOptions, 'output' | 'historyNavigationAvailable'> & {watch: true, port: number}} Dsl4PreviewCliOptions
+ */
+
+/**
+ * @param {string[]} rest
+ * @returns {Dsl4PreviewCliOptions}
+ */
+function parsePreviewDsl4Arguments(rest) {
+  const values = new Map();
+  const flags = new Set();
+  const booleanOptions = new Set(['--watch', '--replace-existing']);
+  const requiredValueOptions = new Set([
+    '--base',
+    '--project-root',
+    '--source-manifest',
+    '--control-profile',
+    '--channel',
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]);
+  const valueOptions = new Set([...requiredValueOptions, '--port']);
+  for (let index = 0; index < rest.length; index += 1) {
+    const option = rest[index];
+    if (booleanOptions.has(option)) {
+      if (flags.has(option)) {
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
+      flags.add(option);
+      continue;
+    }
+    if (!valueOptions.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    const value = rest[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+    index += 1;
+  }
+  if (!flags.has('--watch')) {
+    throw new Sb3BuilderError('Missing required option: --watch', {stage: 'cli'});
+  }
+  for (const required of requiredValueOptions) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  /** @param {string} option */
+  const positiveInteger = (option) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const port = values.has('--port') ? Number(values.get('--port')) : 0;
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
+    throw new Sb3BuilderError('--port must be an integer between 0 and 65535.', {stage: 'cli'});
+  }
+  const channel = values.get('--channel');
+  if (channel !== 'bundled' && channel !== 'unbundled') {
+    throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
+  }
+  const maxAssetFileBytes = positiveInteger('--max-asset-file-bytes');
+  const maxTotalAssetBytes = positiveInteger('--max-total-asset-bytes');
+  if (maxAssetFileBytes > maxTotalAssetBytes) {
+    throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
+      stage: 'cli',
+    });
+  }
+  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxAssetFiles = positiveInteger('--max-asset-files');
+  for (const [option, value, maximum] of [
+    ['--max-source-bytes', maxSourceBytes, dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes],
+    [
+      '--max-asset-file-bytes',
+      maxAssetFileBytes,
+      dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    ],
+    ['--max-asset-files', maxAssetFiles, dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles],
+    [
+      '--max-total-asset-bytes',
+      maxTotalAssetBytes,
+      dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    ],
+  ]) {
+    if (value > maximum) {
+      throw new Sb3BuilderError(`${option} must be <= ${maximum}.`, {stage: 'cli'});
+    }
+  }
+  return {
+    watch: true,
+    baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    controlProfile: /** @type {string} */ (values.get('--control-profile')),
+    channel,
+    maxSourceBytes,
+    maxAssetFileBytes,
+    maxAssetFiles,
+    maxTotalAssetBytes,
+    replaceExisting: flags.has('--replace-existing'),
+    port,
+  };
+}
+
+/**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -314,8 +441,11 @@ export function parseCliArguments(arguments_) {
   if (command === 'validate-dsl4') {
     return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
   }
+  if (command === 'preview-dsl4') {
+    return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
+  }
   throw new Sb3BuilderError(
-    `Expected the build-sb3, build-dsl4, convert-dsl4, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the build-sb3, build-dsl4, convert-dsl4, preview-dsl4, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -323,8 +453,9 @@ export function parseCliArguments(arguments_) {
 /**
  * @param {string[]} arguments_
  * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>, stderr?: Pick<NodeJS.WriteStream, 'write'>}} [io]
+ * @param {{runPreview?: typeof runDsl4LocalPreviewCommand}} [dependencies]
  */
-export async function runCli(arguments_, io = {}) {
+export async function runCli(arguments_, io = {}, dependencies = {}) {
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   const parsed = parseCliArguments(arguments_);
@@ -377,6 +508,17 @@ export async function runCli(arguments_, io = {}) {
       }
     }
     return {...result, exitCode: result.ok ? 0 : 1};
+  }
+  if (parsed.action === 'preview-dsl4') {
+    const runPreview = dependencies.runPreview ?? runDsl4LocalPreviewCommand;
+    if (typeof runPreview !== 'function') throw new TypeError('runPreview must be a function');
+    return runPreview(
+      {
+        ...parsed.options,
+        sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+      },
+      {stdout, stderr},
+    );
   }
   const result = await buildDsl4RuntimeComponentFile({
     ...parsed.options,

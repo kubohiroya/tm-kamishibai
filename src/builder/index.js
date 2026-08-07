@@ -41,6 +41,11 @@ export {
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';
 export {
+  dsl4LocalPreviewCommandDefaults,
+  openDsl4LocalPreviewBrowser,
+  runDsl4LocalPreviewCommand,
+} from './dsl4-local-preview-command.js';
+export {
   dsl4BrowserRuntimeComponentDefaults,
   dsl4BrowserRuntimeComponentMaximums,
   Dsl4BrowserRuntimeComponentError,

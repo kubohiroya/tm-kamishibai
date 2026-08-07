@@ -118,8 +118,8 @@
     {"code": "K4-WEB-PREVIEW-PROTOCOL-001", "severity": "error"}
   ],
   "fallback": {
-    "livePreviewCommand": null,
-    "livePreviewCommandImplemented": false,
+    "livePreviewCommand": "tmpose-kamishibai preview-dsl4 --watch",
+    "livePreviewCommandImplemented": true,
     "trackingIssue": 258,
     "validateCommand": "tmpose-kamishibai validate-dsl4",
     "buildCommand": "tmpose-kamishibai build-dsl4",

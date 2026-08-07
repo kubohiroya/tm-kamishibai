@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash, webcrypto} from 'node:crypto';
+import {EventEmitter} from 'node:events';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
@@ -15,6 +16,7 @@ import {
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
   installDsl4PackagedRuntimeComponent,
+  runDsl4LocalPreviewCommand,
 } from '../../src/builder/index.js';
 import {
   createDsl4EmbeddedAssetBundle,
@@ -1076,6 +1078,159 @@ test(
       client?.close();
       await stopChrome(chrome);
       await host.dispose();
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(projectDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
+
+test(
+  'runs the public preview command through runtime-ready and browser disconnect in real Chromium',
+  {timeout: 60_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-command-chromium-'));
+    const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-command-project-'));
+    const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
+    const sourceFilename = 'command.k4.yml';
+    const sourcePath = path.join(projectDirectory, sourceFilename);
+    const baseSb3Path = path.join(projectDirectory, 'base.sb3');
+    const backdropAssetId = '00000000000000000000000000000000';
+    const backdropFilename = `${backdropAssetId}.svg`;
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+    const source =
+      "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening: []\n";
+    const baseProject = {
+      extensionStorage: {},
+      targets: [
+        {
+          isStage: true,
+          name: 'Stage',
+          variables: {},
+          lists: {},
+          broadcasts: {},
+          blocks: {},
+          comments: {},
+          currentCostume: 0,
+          costumes: [
+            {
+              name: 'backdrop1',
+              assetId: backdropAssetId,
+              dataFormat: 'svg',
+              md5ext: backdropFilename,
+              rotationCenterX: 240,
+              rotationCenterY: 180,
+            },
+          ],
+          sounds: [],
+          volume: 100,
+          layerOrder: 0,
+          tempo: 60,
+          videoTransparency: 50,
+          videoState: 'on',
+          textToSpeechLanguage: null,
+        },
+      ],
+      monitors: [],
+      extensions: [],
+      meta: {semver: '3.0.0'},
+    };
+    await Promise.all([
+      writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+      writeFile(sourcePath, source),
+      writeFile(
+        baseSb3Path,
+        zipSync({
+          'project.json': strToU8(`${JSON.stringify(baseProject)}\n`),
+          [backdropFilename]: strToU8(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+          ),
+        }),
+      ),
+    ]);
+    const schema = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+    );
+    const signalTarget = new EventEmitter();
+    let stdout = '';
+    let stderr = '';
+    let chrome = null;
+    let client = null;
+    let launchUrl = null;
+    const commandPromise = runDsl4LocalPreviewCommand(
+      {
+        watch: true,
+        baseSb3: baseSb3Path,
+        projectRoot: projectDirectory,
+        sourceManifest: sourceManifestPath,
+        sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+        controlProfile: 'production',
+        channel: 'unbundled',
+        maxSourceBytes: 64 * 1024,
+        maxAssetFileBytes: 1024 * 1024,
+        maxAssetFiles: 64,
+        maxTotalAssetBytes: 64 * 1024 * 1024,
+        replaceExisting: false,
+        port: 0,
+      },
+      {
+        signalTarget,
+        stdout: {write: (chunk) => (stdout += chunk)},
+        stderr: {write: (chunk) => (stderr += chunk)},
+        async openBrowser(url) {
+          launchUrl = url;
+          chrome = spawn(
+            chromeExecutable,
+            [
+              '--headless=new',
+              '--disable-background-networking',
+              '--disable-dev-shm-usage',
+              '--use-angle=swiftshader',
+              '--no-first-run',
+              '--no-sandbox',
+              '--remote-debugging-port=0',
+              `--user-data-dir=${profileDirectory}`,
+              url,
+            ],
+            {stdio: ['ignore', 'pipe', 'pipe']},
+          );
+          const browserWebSocketUrl = await waitForDevTools(chrome);
+          const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+          client = await CdpClient.connect(pageWebSocketUrl);
+          await client.send('Runtime.enable');
+        },
+      },
+    );
+    try {
+      const readyDeadline = Date.now() + 30_000;
+      while (Date.now() < readyDeadline && !stdout.includes('Preview ready at ')) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      assert.match(stdout, /Preview ready at .*watching command\.k4\.yml/u, stderr);
+      assert.ok(client, 'preview command did not create a Chromium page');
+      await waitForEvaluation(
+        client,
+        "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid' && document.querySelector('canvas[data-dsl4-turbo-warp-stage=true]')",
+        'public preview command stage activation',
+      );
+      assert.equal(new URL(launchUrl).hostname, '127.0.0.1');
+      assert.equal(stdout.includes(new URL(launchUrl).hash.slice(1)), false);
+      assert.deepEqual(client.exceptions, []);
+
+      await client.send('Page.navigate', {url: 'about:blank'});
+      const result = await commandPromise;
+      assert.deepEqual(result, {exitCode: 0, reason: 'browser-disconnected'});
+      assert.match(stdout, /browser disconnected/u);
+      assert.equal(stderr, '');
+      assert.equal(signalTarget.listenerCount('SIGINT'), 0);
+      assert.equal(signalTarget.listenerCount('SIGTERM'), 0);
+    } finally {
+      signalTarget.emit('SIGTERM');
+      await commandPromise.catch(() => {});
+      client?.close();
+      if (chrome) await stopChrome(chrome);
       await Promise.all([
         rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
         rm(projectDirectory, {recursive: true, force: true}),

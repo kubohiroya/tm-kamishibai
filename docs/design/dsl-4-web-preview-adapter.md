@@ -39,18 +39,12 @@ browser adapter、Node watcher、runtimeは別々のlive reloadを実装しま�
 - `createDsl4WebPreviewShell`: project open、watch status、診断、reload UI、CLI fallback
 - `dsl4AppShell`と`dsl4WebPreviewAdapter`: 起動時固定、既定OFFの依存flag
 - `validate-dsl4`と`build-dsl4`: local検証とfull rebuild
+- `preview-dsl4 --watch`: loopback host、browser-owned実TurboWarp runtime、共通reload overlay
 
-一方、`preview --watch`相当のCLI commandはまだ公開されていません。Issue #258のlocal host adapterはNode
-watcher、共有protocol、共有CLI browser shellをloopback HTTPへ接続済みですが、process signalと公開argumentを
-持つCLI adapterは後続です。したがって、Web Preview UIで「CLI live previewを起動するcommand」が利用可能だと
-表示してはいけません。後続実装は次をすべて満たしてから一般作者向けfallback文言を拡張します。
-
-1. local preview hostがNode watcher、共有protocol、共有reload shellを接続する（実装済み）
-2. `--help`に実在するcommandと必須limitを表示する
-3. unsupported browserのE2Eがそのcommandを含む案内へ到達する
-
-それまでのfallbackは、`validate-dsl4`で台本を検証し、`build-dsl4`でfull rebuildする既存commandを正確に
-表示します。Web Previewを既定ONにする条件に、local live preview commandの公開を含めます。
+`preview-dsl4 --watch`はIssue #258の`preview --watch`相当として公開済みです。`--help`はbase SB3、
+project root、manifest、control profile、channel、有限resource limitを必須とする実在commandを表示します。
+Web Previewが非対応の場合はこのlive preview、`validate-dsl4`、`build-dsl4`へ案内し、downloadや
+polyfillへ暗黙fallbackしません。
 
 ## 3. browser対応表
 
@@ -270,8 +264,19 @@ UIの固定要旨は次です。
 現時点で案内できる実在commandは次です。`N`やasset limitをUIが推測せず、projectの設定値を表示します。
 
 ```bash
+pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+  --base BASE.sb3 \
+  --project-root PROJECT_ROOT \
+  --source-manifest PROJECT_ROOT/project.source.json \
+  --control-profile production \
+  --channel bundled \
+  --max-source-bytes N \
+  --max-asset-file-bytes N \
+  --max-asset-files N \
+  --max-total-asset-bytes N
+
 pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.kamishibai.yaml \
+  --input story.k4.yml \
   --max-source-bytes N \
   --format pretty
 
@@ -288,8 +293,7 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes N
 ```
 
-live preview commandが実装されるまでは架空の`preview --watch` commandをcopy buttonへ入れません。browser非対応時も
-download、polyfill、`webkitdirectory`へ自動fallbackせず、上の明示経路へ案内します。
+browser非対応時もdownload、polyfill、`webkitdirectory`へ自動fallbackせず、上の明示経路へ案内します。
 
 ## 11. test matrixと測定
 
@@ -333,7 +337,7 @@ Chrome／Edge、OS、version、sample数とともにIssueへ記録しますが�
 4. `dsl4AppShell`と`dsl4WebPreviewAdapter`を既定OFFでUIへ接続
 5. Chromium fixture、作者向け手順、既存local validate／build fallback
 
-1〜5はIssue #390で実装済みです。local live preview commandはIssue #258、Edgeと実editorのlatency測定は一般作者向け
+1〜5とlocal live preview commandは実装済みです。Edgeと実editorのlatency測定は一般作者向け
 既定ONのrelease gateとして追跡します。
 
 rollbackは`dsl4WebPreviewAdapter=false`だけでWeb固有UIとadapterを初期化しない状態へ戻します。共有source

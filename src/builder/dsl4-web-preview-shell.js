@@ -65,7 +65,11 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
     'dsl4WebPreviewAssetLiveReload',
     'dsl4PreviewReloadOverlay',
   ],
-  fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
+  fallbackCommands: [
+    'tmpose-kamishibai preview-dsl4 --watch',
+    'tmpose-kamishibai validate-dsl4',
+    'tmpose-kamishibai build-dsl4',
+  ],
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -348,7 +352,7 @@ export function createDsl4WebPreviewShell(input = {}) {
   const fallback = element(
     document,
     'p',
-    'Browser folder access is unavailable. Use `tmpose-kamishibai validate-dsl4` and `tmpose-kamishibai build-dsl4` from a terminal.',
+    'Browser folder access is unavailable. Use `tmpose-kamishibai preview-dsl4 --watch`, `tmpose-kamishibai validate-dsl4`, or `tmpose-kamishibai build-dsl4` from a terminal.',
   );
   fallback.id = 'dsl4-web-preview-fallback';
   fallback.hidden = true;
