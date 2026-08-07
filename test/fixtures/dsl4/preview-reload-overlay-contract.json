@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "issue": 394,
+  "featureFlag": {
+    "name": "dsl4PreviewReloadOverlay",
+    "default": false,
+    "startupFixed": true,
+    "requires": ["dsl4Runtime", "dsl4AppShell"],
+    "webPreviewSpecific": false
+  },
+  "states": [
+    "watching",
+    "stabilizing",
+    "applying",
+    "reloaded",
+    "diagnostic",
+    "paused",
+    "disconnected"
+  ],
+  "displayPriority": [
+    "diagnostic",
+    "applying",
+    "reloaded",
+    "stabilizing",
+    "paused",
+    "disconnected",
+    "watching"
+  ],
+  "preferences": ["story", "scene", "action"],
+  "defaultPreference": "action",
+  "fallbackOrder": ["action", "scene", "story"],
+  "manualScopes": ["reload-once", "reload-and-save", "save-next", "cancel"],
+  "minimumSuccessDisplayMs": 2000,
+  "maximumPulseMs": 5000,
+  "targetCssPixels": 44,
+  "minimumTargetCssPixels": 24,
+  "defaultAnchor": "top-right",
+  "anchorStorageKey": "dsl4.preview.reload.anchor.v1",
+  "anchors": [
+    "top-left",
+    "top-center",
+    "top-right",
+    "right-center",
+    "bottom-right",
+    "bottom-center",
+    "bottom-left",
+    "left-center"
+  ],
+  "productionExclusions": [
+    "previewReloadOverlay",
+    "reloadPreference",
+    "reloadTimestamp",
+    "reloadDialogState",
+    "reloadLayoutState",
+    "reloadCandidateRevision"
+  ],
+  "rollbackFlag": "dsl4PreviewReloadOverlay"
+}
