@@ -1,0 +1,164 @@
+{
+  "formatVersion": 1,
+  "issue": 266,
+  "standardArtifact": {
+    "series": "4.0",
+    "version": "4.0.0-dev",
+    "extensionId": "kubohiroyakamishibairuntime4",
+    "integration": "source-composition",
+    "registrationCount": 1,
+    "visibleOpcodes": [],
+    "hiddenOpcodes": ["versionReporter", "statusReporter", "lastErrorReporter", "setTextValue"],
+    "projectSource": "release-sources/4.0.0-dev/app/project.source.json",
+    "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
+    "allowsRemoteExtensionCode": false,
+    "includesPreviewSurface": false
+  },
+  "capabilities": [
+    {
+      "id": "asset-manager",
+      "package": "@kubohiroya/turbowarp-asset-manager",
+      "version": "0.7.0",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
+      "compositionExport": "./composition",
+      "standaloneExtensionId": "kubohiroyaassetmanager",
+      "license": "MPL-2.0",
+      "role": "asset bytes, skin, sound, and verified remote cache"
+    },
+    {
+      "id": "async-input",
+      "package": "@kubohiroya/turbowarp-async-input",
+      "version": "0.3.0",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-async-input",
+      "compositionExport": "./composition",
+      "standaloneExtensionId": "kubohiroyaasyncinput",
+      "license": "MPL-2.0",
+      "role": "scene transition and skip input"
+    },
+    {
+      "id": "runtime-expression",
+      "package": "@kubohiroya/turbowarp-runtime-expression",
+      "version": "0.3.0",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-runtime-expression",
+      "compositionExport": "./composition",
+      "standaloneExtensionId": "kubohiroyaruntimeexpression",
+      "license": "MPL-2.0",
+      "role": "branch condition validation and evaluation"
+    },
+    {
+      "id": "svg-text",
+      "package": "@kubohiroya/turbowarp-svg-text",
+      "version": "0.3.0",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-svg-text",
+      "compositionExport": "./composition",
+      "standaloneExtensionId": "kubohiroyasvgtext",
+      "license": "MPL-2.0",
+      "role": "text actor and speech bubble rendering"
+    },
+    {
+      "id": "tmpose",
+      "package": "@kubohiroya/turbowarp-tmpose",
+      "version": "1.6.1",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
+      "compositionExport": "./composition",
+      "standaloneExtensionId": "tmpose",
+      "license": "MPL-2.0",
+      "role": "pose model and recognition lifecycle"
+    },
+    {
+      "id": "structured-data",
+      "package": null,
+      "version": "1",
+      "provider": "first-party-source",
+      "repository": "https://github.com/kubohiroya/tmpose-kamishibai",
+      "compositionExport": "src/dsl4/structured-data.js",
+      "standaloneExtensionId": "kubohiroyastructdata1",
+      "debugExtensionId": "kubohiroyastructdata1debug",
+      "license": "MPL-2.0",
+      "role": "StoryDocument view, object store, iterator, and JSONPath"
+    }
+  ],
+  "supportPackages": [
+    {"package": "fflate", "version": "0.8.3", "license": "MIT"},
+    {"package": "yaml", "version": "2.8.1", "license": "ISC"}
+  ],
+  "compositionImports": {
+    "@kubohiroya/turbowarp-asset-manager/composition": [
+      "src/builder/dsl4-external-source.js",
+      "src/dsl4/platform/asset-manager-adapter.js",
+      "src/dsl4/platform/platform-asset-session.js"
+    ],
+    "@kubohiroya/turbowarp-async-input/composition": [
+      "src/dsl4/platform/platform-asset-session.js"
+    ],
+    "@kubohiroya/turbowarp-runtime-expression/composition": [
+      "src/dsl4/platform/turbowarp-runtime-host.js"
+    ],
+    "@kubohiroya/turbowarp-svg-text/composition": ["src/dsl4/platform/svg-text-action-port.js"],
+    "@kubohiroya/turbowarp-tmpose/composition": ["src/dsl4/platform/tmpose-model-adapter.js"]
+  },
+  "bundleBoundaries": {
+    "standard4": {
+      "kind": "source-composition",
+      "unbundle": "not-applicable",
+      "provenance": ["package.json", "pnpm-lock.yaml", "LICENSES.md"]
+    },
+    "legacy32": {
+      "kind": "extensionBundles",
+      "unbundle": "recovery-capsule",
+      "provenance": ["app/project.source.json", "app/embedded-extensions.json"]
+    }
+  },
+  "apiCompatibility": {
+    "sourceComposition": [
+      "exact-package-version",
+      "lockfile-integrity",
+      "composition-export",
+      "integration-tests"
+    ],
+    "staticBundleMember": ["api-manifest", "artifact-integrity", "saved-opcode-compatibility"]
+  },
+  "assetPolicy": {
+    "remoteExtensionCode": "forbidden",
+    "embeddedAssetBytes": "self-contained",
+    "remoteAssetBytes": "explicit-verified-opt-in",
+    "remoteAssetRequirements": ["https", "sha256-integrity", "declared-media-type"]
+  },
+  "previewPolicy": {
+    "remotePreview": "forbidden",
+    "transport": "loopback-origin-token-root-restricted",
+    "productionPersistence": "forbidden",
+    "localPreviewHost": "tracked-by-issue-258"
+  },
+  "releaseOrder": [
+    "release-capability-packages",
+    "update-exact-package-and-lock-pins",
+    "run-full-verification",
+    "write-versioned-release-source",
+    "verify-deterministic-sb3",
+    "update-download-catalog-integrity-and-source-commit",
+    "publish-site"
+  ],
+  "rollbackOrder": [
+    "disable-default-off-feature-surface",
+    "restore-previous-exact-package-and-lock-pins",
+    "restore-previous-release-source-and-download-catalog",
+    "rerun-full-verification",
+    "republish-site"
+  ],
+  "evidence": [
+    "test/dsl4-extension-pins.test.mjs",
+    "test/dsl4-downloadable-release.test.mjs",
+    "test/dsl4-artifact-fingerprint.test.mjs",
+    "test/dsl4-preview-transport-policy.test.mjs",
+    "test/dsl4-preview-protocol.test.mjs",
+    "test/dsl4-live-reload-session.test.mjs",
+    "test/dsl4-embedded-asset-lifecycle.test.mjs",
+    "test/dsl4-pose-action-port.test.mjs"
+  ]
+}

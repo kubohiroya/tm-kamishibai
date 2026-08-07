@@ -14,8 +14,8 @@ Copyright © 2026 Hiroya Kubo.
 
 ## 1. 結論
 
-標準の台本製作者が追加するTurboWarpブロックは**0個**とします。標準Compositeは起動、停止、
-再試行、終了通知に必要な固定block facadeだけをtemplate内部へ保存し、そのblockをpaletteへ表示しません。
+標準の台本製作者が追加するTurboWarpブロックは**0個**とします。標準Runtimeは起動、停止、
+状態確認に必要な固定block facadeだけをtemplate内部へ保存し、そのblockをpaletteへ表示しません。
 作品固有actionをScratchで実装する利用者だけが、別配布のAction Context developer surfaceを明示的に
 有効化します。
 
@@ -47,34 +47,33 @@ JavaScript runtimeが所有し、Scratch variable、list、broadcastを保存形
 
 | 配布面                     | 拡張ID                               | 標準作品           | palette                   | 用途                                                   |
 | -------------------------- | ------------------------------------ | ------------------ | ------------------------- | ------------------------------------------------------ |
-| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み       | DSL 4.0 blockは0          | 台本の検証、実行、asset制御と固定shell                 |
-| template内部control        | Standard Composite内                 | 保存済み           | `hideFromPalette: true`   | 起動、停止、再試行、終了／失敗通知                     |
+| Standard Runtime           | `kubohiroyakamishibairuntime4`       | 読み込み済み       | DSL 4.0 blockは0          | 台本の検証、実行、asset制御と固定shell                 |
+| template内部control        | Standard Runtime内                   | 保存済み           | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
 | Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない       | 8 opcode                  | 作品固有custom actionをScratchで実装するcustomizer向け |
 | Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない       | Store／Iterator／JSONPath | 汎用データ処理を使う開発者向け                         |
 | Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない       | 診断opcode                | capability開発者向け                                   |
 | app shell debug（予定）    | `kubohiroyakamishibai4debug`         | 読み込まない       | shell診断opcode           | template／runtime開発者向け                            |
 | development preview host   | 拡張IDなし                           | productionから除外 | DOM／CLI UI               | source watch、reload選択、診断表示                     |
 
-Standard Compositeが通常の台本製作者へ見せるDSL 4.0 blockは0個です。機能拡張がTurboWarpの
+Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個です。機能拡張がTurboWarpの
 「拡張を追加」画面に現れるかどうかと、作品内paletteへ個別blockを表示するかどうかは別の契約です。
 
 ### 3.1 template内部control
 
-初版の論理opcodeを次の5個に固定します。実装時には同じ意味を保ったままComposite member namespaceへ
-変換できますが、標準配布の`getInfo()`ではすべて`hideFromPalette: true`にします。
+4.0.0-devの内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
+`hideFromPalette: true`にします。
 
-- `startConfiguredSource`
-- `stopKamishibai`
-- `retryKamishibai`
-- `whenKamishibaiFinished`
-- `whenKamishibaiFailed`
+- `versionReporter`
+- `statusReporter`
+- `lastErrorReporter`
+- `setTextValue`
 
 台本製作者はこれらを配置しません。builderがversion付きcanonical templateを複製し、保存済みblockが
 存在すること、opcodeが許可listと一致すること、block graph digestが期待値と一致することを検証します。
 
 ### 3.2 Action Context developer surface
 
-Action ContextはStandard Compositeの「作者向けblock」ではなく、作品カスタマイザーが明示的に追加する
+Action ContextはStandard Runtimeの「作者向けblock」ではなく、作品カスタマイザーが明示的に追加する
 別surfaceです。`dsl4CustomActionsEnabled`は起動時固定かつ既定OFFで、Standard startupは自動登録しません。
 公開opcodeは次の8個に固定します。
 
@@ -94,7 +93,7 @@ custom handler一件の接続用overheadは演出本体を除き8 block以下と
 
 app shellは紙芝居のpresentationと最小のlifecycle入力だけを担当します。
 
-| 要素                    | Scratch固定template                    | Standard Composite／host                                 |
+| 要素                    | Scratch固定template                    | Standard Runtime／host                                   |
 | ----------------------- | -------------------------------------- | -------------------------------------------------------- |
 | title                   | costume、配置、表示／非表示            | 表示状態とstart要求を受け取る                            |
 | language menu           | button／labelのpresentationと選択入力  | localeを検証し、shell用文言と作品のlocaleを返す          |
@@ -241,7 +240,7 @@ builderは作品ごとのScratch block graphを生成しません。version付�
 
 1. templateのID、version、block graph digestが許可値と一致する
 2. target別／project全体のblock、variable、list、broadcast budgetを満たす
-3. Standard Compositeのvisible DSL 4.0 opcodeが0である
+3. Standard Runtimeのvisible DSL 4.0 opcodeが0である
 4. template内部controlが許可listだけで、すべてpalette非表示である
 5. Standard artifactがAction Context、Structured Data、debug、preview ID／opcodeを含まない
 6. sourceだけを変更したbuildで`targets[].blocks`がbyte-equivalentなcanonical JSONになる
@@ -253,7 +252,7 @@ sourceとtemplateのfingerprint、incremental buildとfull rebuildを切り替�
 
 - 台本Aと台本Bのbuildで`targets[].blocks`が同一になる
 - 最小台本と全core action台本のどちらも作者追加blockが0になる
-- Standard Compositeのvisible DSL 4.0 blockが0になる
+- Standard Runtimeのvisible DSL 4.0 blockが0になる
 - Action Contextの8 opcodeと各default-OFF flagが機械可読契約と実装manifestで一致する
 - Web、通常editor、Packager成果物からpreview shellとdebug surfaceが除外される
 - block、variable、list、broadcast budgetをbuild errorとして検出できる
@@ -261,4 +260,4 @@ sourceとtemplateのfingerprint、incremental buildとfull rebuildを切り替�
 - app shell実装前、または`dsl4AppShell=false`で現行3.2のbuildと実行が変化しない
 
 rollbackは`dsl4AppShell`をOFFにして現行3.2 shellへ戻します。Action Context、Structured Data、debug、
-previewはそれぞれ独立した既定OFF surfaceであり、Standard Compositeのrollback条件へ混在させません。
+previewはそれぞれ独立した既定OFF surfaceであり、Standard Runtimeのrollback条件へ混在させません。

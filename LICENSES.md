@@ -15,3 +15,18 @@ Copyright © 2026 Hiroya Kubo.
 第三者のソフトウェア、フォント、画像、音声その他の素材には、それぞれの権利者が
 定めたライセンスまたは利用条件が適用されます。個別のライセンス表示がある場合は、
 この一覧より個別表示を優先します。
+
+## DSL 4.0 Standard Runtimeの直接依存
+
+次の一覧は`package.json`と`pnpm-lock.yaml`で完全固定している直接依存です。各packageに同梱された
+license表示とsource repositoryを正本とします。
+
+| package                                  | version | license | source repository                         |
+| ---------------------------------------- | ------- | ------- | ----------------------------------------- |
+| @kubohiroya/turbowarp-asset-manager      | 0.7.0   | MPL-2.0 | `kubohiroya/turbowarp-asset-manager`      |
+| @kubohiroya/turbowarp-async-input        | 0.3.0   | MPL-2.0 | `kubohiroya/turbowarp-async-input`        |
+| @kubohiroya/turbowarp-runtime-expression | 0.3.0   | MPL-2.0 | `kubohiroya/turbowarp-runtime-expression` |
+| @kubohiroya/turbowarp-svg-text           | 0.3.0   | MPL-2.0 | `kubohiroya/turbowarp-svg-text`           |
+| @kubohiroya/turbowarp-tmpose             | 1.6.1   | MPL-2.0 | `kubohiroya/turbowarp-tmpose`             |
+| fflate                                   | 0.8.3   | MIT     | `101arrowz/fflate`                        |
+| yaml                                     | 2.8.1   | ISC     | `eemeli/yaml`                             |
