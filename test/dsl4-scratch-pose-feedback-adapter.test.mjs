@@ -19,8 +19,8 @@ function event(overrides = {}) {
 }
 
 function fakeRuntime(overrides = {}) {
-  const confidence = {value: 0};
-  const progress = {value: 0};
+  const confidence = overrides.confidenceVariable ?? {value: 0};
+  const progress = overrides.progressVariable ?? {value: 0};
   const variables = new Map([
     [dsl4ScratchPoseFeedbackVariableNames.confidence, confidence],
     [dsl4ScratchPoseFeedbackVariableNames.progress, progress],
@@ -64,7 +64,7 @@ test('scratchMirror projects normalized state to 0-100 and never reads Scratch e
   assert.equal(setup.progress.value, 25);
 });
 
-test('scratchBinding samples one final valid Scratch snapshot at each tick boundary', () => {
+test('scratchBinding accepts one valid write per variable at each tick boundary', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
     runtime: setup.runtime,
@@ -72,7 +72,6 @@ test('scratchBinding samples one final valid Scratch snapshot at each tick bound
   });
   adapter.onPoseState(event({phase: 'waiting', confidence: 0, progress: 0}));
 
-  setup.confidence.value = 25;
   setup.confidence.value = '75';
   setup.progress.value = '50.0';
   const sample = adapter.readPoseStateBinding();
@@ -89,6 +88,30 @@ test('scratchBinding samples one final valid Scratch snapshot at each tick bound
   setup.confidence.value = '80';
   setup.progress.value = 70;
   assert.deepEqual(adapter.readPoseStateBinding(), {progress: 0.7});
+});
+
+test('scratchBinding rejects repeated writes in one projected tick instead of choosing a winner', () => {
+  const setup = fakeRuntime();
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: setup.runtime,
+    mode: 'scratchBinding',
+  });
+  adapter.onPoseState(event({phase: 'waiting', confidence: 0.4, progress: 0.2}));
+
+  setup.confidence.value = 25;
+  setup.confidence.value = 75;
+  setup.progress.value = 50;
+  assert.equal(adapter.readPoseStateBinding(), null);
+  assert.equal(setup.confidence.value, 40);
+  assert.equal(setup.progress.value, 20);
+
+  adapter.onPoseState(event({phase: 'charging', confidence: 0.5, progress: 0.3}));
+  setup.confidence.value = 80;
+  setup.progress.value = 60;
+  setup.progress.value = 70;
+  assert.equal(adapter.readPoseStateBinding(), null);
+  assert.equal(setup.confidence.value, 50);
+  assert.equal(setup.progress.value, 30);
 });
 
 test('scratchBinding rejects an invalid pair atomically and restores the last projection', () => {
@@ -118,25 +141,75 @@ test('scratchBinding rejects an invalid pair atomically and restores the last pr
   }
 });
 
-test('terminal state stops binding and dispose clears both variables exactly once', () => {
+test('completed and cancelled terminal states disable binding and reset both variables', () => {
   const setup = fakeRuntime();
+  const originalDescriptor = Object.getOwnPropertyDescriptor(setup.confidence, 'value');
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
     runtime: setup.runtime,
     mode: 'scratchBinding',
   });
+  assert.equal(typeof Object.getOwnPropertyDescriptor(setup.confidence, 'value').set, 'function');
+  adapter.onPoseState(event({phase: 'charging', confidence: 0.7, progress: 0.6}));
   adapter.onPoseState(event({phase: 'completed', confidence: 1, progress: 1}));
+  assert.equal(setup.confidence.value, 0);
+  assert.equal(setup.progress.value, 0);
   setup.confidence.value = 50;
   setup.progress.value = 50;
   assert.equal(adapter.readPoseStateBinding(), null);
 
+  adapter.onPoseState(event({phase: 'waiting', confidence: 0.2, progress: 0.1}));
+  adapter.onPoseState(event({phase: 'cancelled', confidence: 0.2, progress: 0.1}));
+  assert.equal(setup.confidence.value, 0);
+  assert.equal(setup.progress.value, 0);
+
   adapter.dispose();
   assert.equal(setup.confidence.value, 0);
   assert.equal(setup.progress.value, 0);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(setup.confidence, 'value'), {
+    ...originalDescriptor,
+    value: 0,
+  });
   setup.confidence.value = 12;
   adapter.dispose();
   adapter.onPoseState(event());
   assert.equal(setup.confidence.value, 12);
   assert.equal(adapter.readPoseStateBinding(), null);
+});
+
+test('rolls back both variables when a special setter fails halfway through projection', () => {
+  let progressValue = 0;
+  let rejectedValue = null;
+  const progressVariable = {};
+  Object.defineProperty(progressVariable, 'value', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return progressValue;
+    },
+    set(value) {
+      if (value === rejectedValue) throw new Error(`setter rejected ${value}`);
+      progressValue = value;
+    },
+  });
+  const setup = fakeRuntime({progressVariable});
+  const adapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: setup.runtime,
+    mode: 'scratchBinding',
+  });
+  adapter.onPoseState(event({phase: 'waiting', confidence: 0.4, progress: 0.2}));
+  rejectedValue = 60;
+
+  assert.throws(
+    () => adapter.onPoseState(event({phase: 'charging', confidence: 0.8, progress: 0.6})),
+    /setter rejected 60/u,
+  );
+  assert.equal(setup.confidence.value, 40);
+  assert.equal(setup.progress.value, 20);
+
+  rejectedValue = null;
+  adapter.dispose();
+  assert.equal(setup.confidence.value, 0);
+  assert.equal(setup.progress.value, 0);
 });
 
 test('fails closed before mutation when the stage variables are missing, cloud, or ambiguous', () => {
@@ -163,6 +236,17 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
         runtime: ambiguous.runtime,
         mode: 'scratchBinding',
       }),
+    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
+  );
+
+  const fixed = fakeRuntime();
+  Object.defineProperty(fixed.confidence, 'value', {
+    value: 0,
+    writable: true,
+    configurable: false,
+  });
+  assert.throws(
+    () => createDsl4ScratchPoseFeedbackAdapter({runtime: fixed.runtime, mode: 'scratchBinding'}),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
   );
 });

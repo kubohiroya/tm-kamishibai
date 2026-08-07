@@ -564,7 +564,9 @@ Web player、通常editor、Packager、development previewは同じconsumerを�
 Scratch consumerはplatform composition境界に置き、coreにScratch variable IDやVM targetを持ち込みません。
 `scratchBinding`の入力はrenderer非依存な0〜1の`confidence`／`progress`sampleとして、各計算tickの
 開始時に最大1回取り込みます。invalidなScratch snapshotは両fieldともfail-closedで無視し、
-センサー値、sequence積分、soundを変更しません。
+センサー値、sequence積分、soundを変更しません。同一tick内の同一variableへの複数writeはplatform variable setterの
+単調revisionで検出し、最終writeを選ばずpair全体を拒否します。terminal eventはbindingを無効にし、
+Scratchの一時表示値を0へresetします。
 
 ### 3.11 分岐 `[提案]`
 
