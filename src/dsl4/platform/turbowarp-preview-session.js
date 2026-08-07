@@ -1,5 +1,6 @@
 import {createDsl4NavigationSession} from '../navigation-session.js';
 import {resolveDsl4FeatureFlags} from '../runtime-startup.js';
+import {deepFreeze} from '../story-document.js';
 import {createDsl4TurboWarpRuntimeEnvironment} from './turbowarp-runtime-host.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -111,11 +112,11 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
     throw new TypeError('onEvent must be a function');
   }
 
-  return async function createPreviewSession(contextInput) {
-    const context = validateSessionContext(contextInput);
+  /** @param {Readonly<Record<string, unknown>>} storyDocument */
+  async function createConcreteSession(storyDocument) {
     const generationComponent = Object.freeze({
       ...runtimeComponent,
-      storyDocument: context.storyDocument,
+      storyDocument,
     });
     /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
     let runtimeLifecycleObserver = null;
@@ -134,15 +135,15 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
 
     let created;
     try {
-      const poseRecognition = isRecord(context.storyDocument.poseRecognition)
-        ? context.storyDocument.poseRecognition
+      const poseRecognition = isRecord(storyDocument.poseRecognition)
+        ? storyDocument.poseRecognition
         : {};
       const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
       const posePreviewControls = isRecord(posePreview.controls) ? posePreview.controls : {};
       const cameraMirroringControlEnabled =
         featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);
       created = createDsl4NavigationSession({
-        storyDocument: context.storyDocument,
+        storyDocument,
         controlProfile: String(runtimeComponent.runtimeArtifact.controlProfile),
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         historyLimits: options.historyLimits,
@@ -194,20 +195,123 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
       /** @type {unknown} */ (created)
     ).session;
     const owned = ownRuntimeEnvironment(navigationSession, environment);
+    return owned;
+  }
+
+  return async function createPreviewSession(contextInput) {
+    const context = validateSessionContext(contextInput);
+    /** @type {Readonly<Record<string, Function>> | null} */
+    let concreteSession = null;
+    /** @type {Promise<Readonly<Record<string, Function>>> | null} */
+    let initializationPromise = null;
     /** @type {Promise<unknown> | null} */
-    let startPromise = null;
+    let runPromise = null;
+    /** @type {Promise<void> | null} */
+    let disposePromise = null;
+    /** @type {string | null} */
+    let stopReason = null;
+    let status = 'idle';
+    let disposed = false;
+
+    function snapshot() {
+      if (concreteSession) return concreteSession.getState();
+      return deepFreeze({
+        runtime: {
+          status,
+          sceneId: null,
+          actionIndex: 0,
+          actionPath: null,
+          variables: isRecord(context.storyDocument.variables)
+            ? {...context.storyDocument.variables}
+            : {},
+          generation: 0,
+        },
+        disposed,
+      });
+    }
+
+    function disposedError() {
+      return new TypeError('TurboWarp preview runtime session is disposed');
+    }
+
+    function initialize() {
+      if (initializationPromise) return initializationPromise;
+      status = 'starting';
+      initializationPromise = (async () => {
+        if (!context.preserveManagedPresentation) {
+          await options.resetManagedPresentation();
+        }
+        if (disposed) throw disposedError();
+        const created = await createConcreteSession(context.storyDocument);
+        if (disposed) {
+          const failure = disposedError();
+          try {
+            await created.dispose('preview-disposed-during-initialization');
+          } catch (disposeError) {
+            throw new AggregateError(
+              [failure, disposeError],
+              'DSL 4.0 preview initialization cancellation cleanup failed',
+            );
+          }
+          throw failure;
+        }
+        concreteSession = created;
+        status = stopReason === null ? 'ready' : 'stopped';
+        return created;
+      })().catch((error) => {
+        if (!disposed) status = 'failed';
+        throw error;
+      });
+      return initializationPromise;
+    }
+
     return Object.freeze({
-      ...owned,
       /** @param {Readonly<Record<string, unknown>>} [startOptions] */
       start(startOptions) {
-        if (startPromise) return startPromise;
-        startPromise = (async () => {
-          if (!context.preserveManagedPresentation) {
-            await options.resetManagedPresentation();
+        if (disposed) return Promise.reject(disposedError());
+        if (runPromise) return runPromise;
+        runPromise = initialize().then((session) => {
+          if (disposed || stopReason !== null) return snapshot();
+          status = 'running';
+          return session.start(startOptions);
+        });
+        return runPromise;
+      },
+      /** @param {string} [reason] */
+      stop(reason = 'stop') {
+        if (stopReason === null) stopReason = reason;
+        status = 'stopped';
+        return concreteSession ? concreteSession.stop(reason) : snapshot();
+      },
+      /** @param {string} [reason] */
+      dispose(reason = 'dispose') {
+        if (disposePromise) return disposePromise;
+        if (disposed) return Promise.resolve();
+        disposed = true;
+        status = 'disposing';
+        disposePromise = (async () => {
+          if (initializationPromise) {
+            try {
+              await initializationPromise;
+            } catch {
+              // Initialization owns its partial cleanup and its caller owns the original failure.
+            }
           }
-          return owned.start(startOptions);
+          if (concreteSession) await concreteSession.dispose(reason);
+          status = 'disposed';
         })();
-        return startPromise;
+        return disposePromise;
+      },
+      getState: snapshot,
+      /** @param {{candidateId: number}} quiesceOptions */
+      quiesce(quiesceOptions) {
+        if (disposed) return Promise.reject(disposedError());
+        return initialize().then((session) => session.quiesce(quiesceOptions));
+      },
+      /** @param {number} candidateId */
+      resumeQuiesce(candidateId) {
+        if (disposed) return Promise.reject(disposedError());
+        return initialize().then((session) => session.resumeQuiesce(candidateId));
       },
     });
   };

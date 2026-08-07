@@ -110,6 +110,11 @@ TurboWarp environmentとnavigation sessionを新規作成し、sessionがnavigat
 expression compositionを一括所有します。作成途中の例外、control profile不整合、通常disposeのいずれでもenvironmentを
 一度だけ解放します。
 
+candidateの生成時点では軽量なlazy sessionだけを返し、TurboWarp environmentは確保しません。旧sessionのsafe boundary確認と
+commitが完了し、next sessionの`start()`が呼ばれた後にだけreset、environment生成、navigation開始をこの順で行います。
+deferされたcandidate、未開始candidateのdispose、reset中のpage closeではplatform compositionを作らず、旧sessionと
+camera／asset／input ownerが重複する時間を作りません。
+
 初回、story先頭、scene先頭からの開始では、次sessionの実行前にbrowser stage ownerが提供する
 `resetManagedPresentation`を呼びます。現在actionからの再開だけは同じVM target上のmanaged presentationを保持し、resetを
 呼びません。factoryはこのcallbackを必須とするため、reset境界を実装していないstageを実runtimeへ誤接続できません。
