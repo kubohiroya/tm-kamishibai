@@ -80,6 +80,49 @@ function componentError(result) {
 }
 
 /**
+ * Scope the legacy global expected by pinned block-free TurboWarp compositions to this page.
+ * The exact prior value is restored when the browser runtime owner is disposed.
+ *
+ * @param {Record<string, any>} globalObject
+ * @param {Record<string, any>} runtime
+ */
+function installScratchCompatibility(globalObject, runtime) {
+  const hadScratch = Object.hasOwn(globalObject, 'Scratch');
+  const previousScratch = globalObject.Scratch;
+  const inheritedScratch = isRecord(previousScratch)
+    ? /** @type {Record<string, any>} */ (previousScratch)
+    : {};
+  const inheritedVm = isRecord(inheritedScratch.vm)
+    ? /** @type {Record<string, any>} */ (inheritedScratch.vm)
+    : {};
+  const inheritedCast = isRecord(inheritedScratch.Cast)
+    ? /** @type {Record<string, any>} */ (inheritedScratch.Cast)
+    : {};
+  globalObject.Scratch = Object.freeze({
+    ...inheritedScratch,
+    vm: Object.freeze({...inheritedVm, runtime}),
+    Cast: Object.freeze({
+      ...inheritedCast,
+      toString:
+        typeof inheritedCast.toString === 'function'
+          ? inheritedCast.toString.bind(inheritedCast)
+          : /** @param {unknown} value */ (value) => String(value ?? ''),
+    }),
+    translate:
+      typeof inheritedScratch.translate === 'function'
+        ? inheritedScratch.translate.bind(inheritedScratch)
+        : /** @param {unknown} value */ (value) => String(value ?? ''),
+  });
+  let restored = false;
+  return () => {
+    if (restored) return;
+    restored = true;
+    if (hadScratch) globalObject.Scratch = previousScratch;
+    else delete globalObject.Scratch;
+  };
+}
+
+/**
  * Own the validated base component, one visible TurboWarp stage, and the generation bridge.
  * External source text and paths never cross this browser boundary.
  *
@@ -107,6 +150,9 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
   if (!isRecord(options.runtimeOptions)) {
     throw new TypeError('runtimeOptions must be an object');
   }
+  const globalObject = isRecord(options.globalObject)
+    ? /** @type {Record<string, any>} */ (options.globalObject)
+    : /** @type {Record<string, any>} */ (globalThis);
   if (typeof options.sessionId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(options.sessionId)) {
     throw new TypeError('sessionId must contain 1-128 URL-safe characters');
   }
@@ -123,6 +169,8 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
   let stage = null;
   /** @type {ReturnType<typeof createDsl4BrowserPreviewRuntimeBridge> | null} */
   let bridge = null;
+  /** @type {(() => void) | null} */
+  let restoreScratchCompatibility = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let startPromise = null;
   /** @type {Promise<void> | null} */
@@ -171,6 +219,14 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
         } catch (error) {
           errors.push(error);
         }
+      }
+      if (restoreScratchCompatibility) {
+        try {
+          restoreScratchCompatibility();
+        } catch (error) {
+          errors.push(error);
+        }
+        restoreScratchCompatibility = null;
       }
       retainedProjectBytes.fill(0);
       retainedProjectBytes = new Uint8Array(0);
@@ -221,6 +277,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
         if (disposeRequested) throw disposedError();
 
         const canvas = activeStage.getCanvas();
+        restoreScratchCompatibility = installScratchCompatibility(
+          globalObject,
+          activeStage.getRuntime(),
+        );
         const createSession = createDsl4TurboWarpPreviewSessionFactory({
           ...runtimeOptions,
           featureFlags,

@@ -214,7 +214,21 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   const bytes = sb3(await packagedProject());
   const log = [];
   let parseCount = 0;
-  const options = runtimeOptions(bytes, {platform: platformFixture(log)});
+  const previousScratch = {
+    legacyHost: true,
+    prefix: 'translate',
+    Cast: {
+      prefix: 'cast',
+      toString(value) {
+        return `${this.prefix}:${value}`;
+      },
+    },
+    translate(value) {
+      return `${this.prefix}:${value}`;
+    },
+  };
+  const globalObject = {Scratch: previousScratch};
+  const options = runtimeOptions(bytes, {platform: platformFixture(log), globalObject});
   options.sourceFrontend = {
     parse(text, parseOptions) {
       parseCount += 1;
@@ -232,6 +246,10 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   assert.equal(parseCount, 1);
   assert.equal(options.dom.children.length, 1);
   assert.equal(log.filter((entry) => entry === 'vm.loadProject').length, 1);
+  assert.equal(globalObject.Scratch.legacyHost, true);
+  assert.deepEqual(globalObject.Scratch.vm.runtime.targets, [{isStage: true}]);
+  assert.equal(globalObject.Scratch.Cast.toString('value'), 'cast:value');
+  assert.equal(globalObject.Scratch.translate('value'), 'translate:value');
 
   const disposed = await runtime.dispose();
   assert.equal(disposed.status, 'disposed');
@@ -239,6 +257,7 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   assert.equal(log.filter((entry) => entry === 'vm.clear').length, 1);
   assert.equal(log.filter((entry) => entry === 'vm.quit').length, 1);
   assert.equal(log.filter((entry) => entry === 'platform.disposeRenderer').length, 1);
+  assert.strictEqual(globalObject.Scratch, previousScratch);
 });
 
 test('rejects an invalid base component before allocating any TurboWarp platform resource', async () => {

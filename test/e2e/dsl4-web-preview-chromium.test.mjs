@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
+import {webcrypto} from 'node:crypto';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
@@ -7,14 +8,20 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
+  installDsl4PackagedRuntimeComponent,
 } from '../../src/builder/index.js';
 import {
+  createDsl4EmbeddedAssetBundle,
+  createDsl4EmbeddedSourceDescriptor,
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
+  createDsl4RuntimeArtifactDescriptor,
 } from '../../src/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -832,6 +839,241 @@ test(
       await stopChrome(chrome);
       await host.dispose();
       await runtime.liveReload.dispose();
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(projectDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
+
+test(
+  'runs the browser-owned TurboWarp stage and source reload lifecycle in real Chromium',
+  {timeout: 60_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-runtime-chromium-'));
+    const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-runtime-project-'));
+    const sourceManifestPath = path.join(projectDirectory, 'project.source.json');
+    const sourceFilename = 'story.k4.yml';
+    const sourcePath = path.join(projectDirectory, sourceFilename);
+    const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+    const initialSource =
+      "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening: []\n";
+    await Promise.all([
+      writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+      writeFile(sourcePath, initialSource),
+    ]);
+    const schema = JSON.parse(
+      await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
+    );
+    const sourceFrontend = createDsl4ProductionSourceFrontend(schema);
+    const limits = {maxSourceBytes: 64 * 1024, maxAssetFiles: 64, maxAssetBytes: 64 * 1024 * 1024};
+    const parsed = sourceFrontend.parse(initialSource, {sourceId: 'main'});
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(initialSource, {
+      sourceId: 'main',
+      displayName: sourceFilename,
+      maxSourceBytes: limits.maxSourceBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    const artifact = await createDsl4RuntimeArtifactDescriptor(
+      parsed.storyDocument,
+      sourceDescriptor,
+      'production',
+      {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
+    );
+    assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
+    const assets = await createDsl4EmbeddedAssetBundle(
+      parsed.storyDocument,
+      {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+      {
+        maxFiles: limits.maxAssetFiles,
+        maxTotalBytes: limits.maxAssetBytes,
+        subtleCrypto: webcrypto.subtle,
+      },
+    );
+    const backdropAssetId = '00000000000000000000000000000000';
+    const backdropFilename = `${backdropAssetId}.svg`;
+    const project = await installDsl4PackagedRuntimeComponent(
+      {
+        extensionStorage: {},
+        targets: [
+          {
+            isStage: true,
+            name: 'Stage',
+            variables: {},
+            lists: {},
+            broadcasts: {},
+            blocks: {},
+            comments: {},
+            currentCostume: 0,
+            costumes: [
+              {
+                name: 'backdrop1',
+                assetId: backdropAssetId,
+                dataFormat: 'svg',
+                md5ext: backdropFilename,
+                rotationCenterX: 240,
+                rotationCenterY: 180,
+              },
+            ],
+            sounds: [],
+            volume: 100,
+            layerOrder: 0,
+            tempo: 60,
+            videoTransparency: 50,
+            videoState: 'on',
+            textToSpeechLanguage: null,
+          },
+        ],
+        monitors: [],
+        extensions: [],
+        meta: {semver: '3.0.0'},
+      },
+      parsed.storyDocument,
+      sourceDescriptor,
+      artifact.artifact,
+      assets,
+      {channel: 'unbundled', ...limits, subtleCrypto: webcrypto.subtle},
+    );
+    const projectBytes = new Uint8Array(
+      zipSync({
+        'project.json': strToU8(`${JSON.stringify(project)}\n`),
+        [backdropFilename]: strToU8(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+        ),
+      }),
+    );
+    const browserBundleBytes = await buildDsl4TurboWarpBrowserBundle({
+      entryPoint: path.join(repositoryRoot, 'src/builder/dsl4-local-preview-browser-entry.js'),
+    });
+    const hostErrors = [];
+    const host = createDsl4LocalPreviewHost({
+      projectRoot: projectDirectory,
+      sourceManifestPath,
+      sourceManifest: manifest,
+      sourceFrontend,
+      maxSourceBytes: limits.maxSourceBytes,
+      runtimeOwner: 'browser',
+      projectBytes,
+      browserBundleBytes,
+      onError: (error) => hostErrors.push(String(error?.stack ?? error)),
+    });
+    await host.start();
+    const url = host.getLaunchUrl();
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      try {
+        await waitForEvaluation(
+          client,
+          "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid' && document.querySelector('canvas[data-dsl4-turbo-warp-stage=true]')",
+          'browser-owned initial stage activation',
+        );
+      } catch (error) {
+        const page = await client.evaluate(
+          `({body: document.body.textContent, html: document.body.innerHTML})`,
+        );
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+        );
+      }
+      assert.equal(host.getSnapshot().status, 'connected');
+      assert.equal(await client.evaluate('location.hash'), '');
+      assert.equal(
+        await client.evaluate(
+          "document.querySelectorAll('canvas[data-dsl4-turbo-warp-stage=true]').length",
+        ),
+        1,
+      );
+      const initialIntegrity = await client.evaluate(
+        "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+      );
+
+      await writeFile(
+        sourcePath,
+        "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 60\n",
+      );
+      try {
+        await waitForEvaluation(
+          client,
+          "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState === 'reloaded'",
+          'browser-owned automatic reload',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          status: document.querySelector('#dsl4-preview-status')?.textContent,
+          current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
+          candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
+          reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
+          body: document.body.textContent
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostErrors, exceptions: client.exceptions})}`,
+        );
+      }
+      const reloadedIntegrity = await client.evaluate(
+        "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+      );
+      assert.notEqual(reloadedIntegrity, initialIntegrity);
+
+      await writeFile(
+        sourcePath,
+        "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes: {}\n",
+      );
+      await waitForEvaluation(
+        client,
+        "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'invalid'",
+        'browser-owned invalid source diagnostic',
+      );
+      assert.equal(
+        await client.evaluate(
+          "document.querySelector('[data-summary-value=currentIntegrity]')?.textContent",
+        ),
+        reloadedIntegrity,
+      );
+
+      await writeFile(
+        sourcePath,
+        "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 30\n",
+      );
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-summary-value=currentIntegrity]')?.textContent !== ${JSON.stringify(reloadedIntegrity)}`,
+        'browser-owned recovery reload',
+      );
+      assert.deepEqual(client.exceptions, []);
+
+      await client.send('Page.navigate', {url: 'about:blank'});
+      const disconnectDeadline = Date.now() + 10_000;
+      while (Date.now() < disconnectDeadline && host.getSnapshot().status !== 'listening') {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      assert.equal(host.getSnapshot().status, 'listening');
+      assert.deepEqual(hostErrors, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await host.dispose();
       await Promise.all([
         rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
         rm(projectDirectory, {recursive: true, force: true}),

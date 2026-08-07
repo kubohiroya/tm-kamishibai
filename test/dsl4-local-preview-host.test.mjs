@@ -529,6 +529,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     const pageBody = await page.text();
     assert.match(pageBody, /src="\/runtime\/browser\.js"/u);
     assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
+    assert.match(page.headers.get('content-security-policy'), /script-src 'self' 'unsafe-eval'/u);
 
     const connected = await request(launchUrl.origin, '/api/connect', {body: {token}});
     assert.equal(connected.snapshot.status, 'connected');
