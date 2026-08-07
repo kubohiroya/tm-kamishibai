@@ -191,6 +191,22 @@ export function createDsl4RuntimeController({
     idleSound: typeof poseRecognition.idleSound === 'string' ? poseRecognition.idleSound : null,
     chargeSound:
       typeof poseRecognition.chargeSound === 'string' ? poseRecognition.chargeSound : null,
+    feedback: {
+      mode:
+        typeof (
+          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.feedback)?.mode
+        ) === 'string'
+          ? /** @type {Readonly<Record<string, string>>} */ (poseRecognition.feedback).mode
+          : 'scratchMirror',
+    },
+    navigation: {
+      allowSkip:
+        typeof (
+          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.navigation)?.allowSkip
+        ) === 'boolean'
+          ? /** @type {Readonly<Record<string, boolean>>} */ (poseRecognition.navigation).allowSkip
+          : false,
+    },
   });
   const poseSelectionRecognition = deepFreeze({
     ...defaultPoseSelectionRecognition,
@@ -790,7 +806,7 @@ export function createDsl4RuntimeController({
     if (command === 'pose') {
       const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
       const poseModel = String(currentScene()?.poseModel ?? '');
-      for (const step of steps) {
+      for (const [stepIndex, step] of steps.entries()) {
         if (typeof step.skin === 'string') {
           await invokePort('setSkin', {target, skin: step.skin}, context);
           ensureActive(context);
@@ -800,6 +816,7 @@ export function createDsl4RuntimeController({
           {
             target,
             pose: step.pose,
+            stepIndex,
             poseModel,
             recognition: cloneValue(poseSequenceRecognition),
           },

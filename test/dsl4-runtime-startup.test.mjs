@@ -105,6 +105,7 @@ const enabledOptions = (project, extra = {}) => ({
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
     dsl4Runtime: false,
+    dsl4PoseFeedbackModes: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
@@ -140,18 +141,30 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
 });
 
 test('strictly resolves one immutable startup flag snapshot', async () => {
-  const disabledFlags = {dsl4Runtime: false, structuredDataIntegrationEnabled: false};
+  const disabledFlags = {
+    dsl4Runtime: false,
+    dsl4PoseFeedbackModes: false,
+    structuredDataIntegrationEnabled: false,
+  };
   assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
   assert.deepEqual(resolveDsl4FeatureFlags({}), disabledFlags);
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
     dsl4Runtime: true,
+    dsl4PoseFeedbackModes: false,
+    structuredDataIntegrationEnabled: false,
+  });
+  assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
+    dsl4Runtime: false,
+    dsl4PoseFeedbackModes: true,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
     dsl4Runtime: false,
+    dsl4PoseFeedbackModes: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: false, extra: true}), TypeError);
 
@@ -166,6 +179,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(result.enabled, true);
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4PoseFeedbackModes: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
@@ -195,6 +209,7 @@ test('enables internal Structured Data independently without exposing a generic 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4PoseFeedbackModes: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.equal((await result.session.start()).status, 'finished');
@@ -255,7 +270,11 @@ test('creates a component-aware asset lifecycle after validation and releases it
   assert.equal(typeof receivedComponent.getAssetFile, 'function');
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
-    featureFlags: {dsl4Runtime: true, structuredDataIntegrationEnabled: false},
+    featureFlags: {
+      dsl4Runtime: true,
+      dsl4PoseFeedbackModes: false,
+      structuredDataIntegrationEnabled: false,
+    },
   });
   assert.equal(Object.isFrozen(receivedContext), true);
   assert.equal(Object.isFrozen(receivedContext.featureFlags), true);
@@ -374,7 +393,11 @@ test('creates an atomic runtime environment only after component validation', as
   assert.strictEqual(receivedComponent, result.runtimeComponent);
   assert.deepEqual(receivedContext, {
     channel: 'unbundled',
-    featureFlags: {dsl4Runtime: true, structuredDataIntegrationEnabled: false},
+    featureFlags: {
+      dsl4Runtime: true,
+      dsl4PoseFeedbackModes: false,
+      structuredDataIntegrationEnabled: false,
+    },
   });
   assert.deepEqual(calls, ['create']);
   assert.equal(result.session.getState().runtime.status, 'idle');

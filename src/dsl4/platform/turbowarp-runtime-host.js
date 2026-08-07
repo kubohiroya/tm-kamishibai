@@ -221,8 +221,14 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
  * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
+ * @param {boolean} poseFeedbackEnabled
  */
-async function createRuntimeEnvironment(options, runtimeComponent, publishVerifiedRemoteCache) {
+async function createRuntimeEnvironment(
+  options,
+  runtimeComponent,
+  publishVerifiedRemoteCache,
+  poseFeedbackEnabled,
+) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
       /** @type {unknown} */ (runtimeComponent)
@@ -294,6 +300,7 @@ async function createRuntimeEnvironment(options, runtimeComponent, publishVerifi
         : {actorTouchSource: options.actorTouchSource}),
       ...(options.poseSchedule === undefined ? {} : {poseSchedule: options.poseSchedule}),
       ...(options.poseNow === undefined ? {} : {poseNow: options.poseNow}),
+      ...(poseFeedbackEnabled ? {poseFeedbackEnabled: true, onPoseState: options.onPoseState} : {}),
     });
     const mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
@@ -473,6 +480,7 @@ async function createRuntimeEnvironment(options, runtimeComponent, publishVerifi
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
+ * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -533,16 +541,22 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     subtleCrypto: options.subtleCrypto,
     async createRuntimeEnvironment(
       /** @type {Readonly<Record<string, unknown>>} */ runtimeComponent,
+      /** @type {Readonly<Record<string, any>>} */ startupContext,
     ) {
-      return createRuntimeEnvironment(options, runtimeComponent, (/** @type {any} */ cache) => {
-        verifiedRemoteCache = cache;
-      });
+      return createRuntimeEnvironment(
+        options,
+        runtimeComponent,
+        (/** @type {any} */ cache) => {
+          verifiedRemoteCache = cache;
+        },
+        startupContext.featureFlags.dsl4PoseFeedbackModes,
+      );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4PoseFeedbackModes: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;

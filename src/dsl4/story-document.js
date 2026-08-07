@@ -91,6 +91,57 @@ function normalizeAsset(asset, id) {
   };
 }
 
+/** @param {unknown} value */
+function normalizePoseRecognition(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const source = /** @type {Record<string, unknown>} */ (cloneValue(value));
+  const feedback = /** @type {Record<string, unknown>} */ (source.feedback ?? {});
+  const navigation = /** @type {Record<string, unknown>} */ (source.navigation ?? {});
+  return {
+    ...source,
+    feedback: {mode: 'scratchMirror', ...feedback},
+    navigation: {allowSkip: false, ...navigation},
+  };
+}
+
+/**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ */
+function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
+  const poseRecognitionNode = document.getIn(['poseRecognition'], true);
+  if (!poseRecognitionNode) return;
+  sourceMap['/poseRecognition'] = sourceRangeForNode(poseRecognitionNode, lineCounter);
+  for (const field of [
+    'idleSound',
+    'chargeSound',
+    'sequence',
+    'selection',
+    'feedback',
+    'navigation',
+  ]) {
+    const fieldNode = document.getIn(['poseRecognition', field], true);
+    if (!fieldNode) continue;
+    sourceMap[`/poseRecognition/${field}`] = sourceRangeForNode(fieldNode, lineCounter);
+    const nestedFields = {
+      sequence: ['confidenceThreshold', 'fullConfidenceHoldSeconds', 'idleChargePerSecond'],
+      selection: ['accumulationPerSecond', 'decayPerSecond', 'scoreThreshold'],
+      feedback: ['mode'],
+      navigation: ['allowSkip'],
+    }[field];
+    for (const nestedField of nestedFields ?? []) {
+      const nestedNode = document.getIn(['poseRecognition', field, nestedField], true);
+      if (nestedNode) {
+        sourceMap[`/poseRecognition/${field}/${nestedField}`] = sourceRangeForNode(
+          nestedNode,
+          lineCounter,
+        );
+      }
+    }
+  }
+}
+
 /**
  * @param {Record<string, unknown>} sourceAction
  * @param {string} sceneId
@@ -196,6 +247,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
 export function createStoryDocument(story, document, lineCounter, sourceId) {
   /** @type {Record<string, SourceRange>} */
   const sourceMap = {'/': sourceRangeForNode(document.contents, lineCounter)};
+  mapPoseRecognitionSource(sourceMap, document, lineCounter);
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
@@ -251,7 +303,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     textStyles: cloneValue(story.textStyles ?? {}),
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
-    poseRecognition: cloneValue(story.poseRecognition ?? null),
+    poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),
     controls: cloneValue(story.controls ?? null),
     branches: cloneValue(story.branches ?? {}),
     scenes,

@@ -275,6 +275,10 @@ poseRecognition:
     accumulationPerSecond: 1
     decayPerSecond: 0.9
     scoreThreshold: 0
+  feedback:
+    mode: scratchMirror
+  navigation:
+    allowSkip: false
 
 textStyles:
   title:
@@ -308,6 +312,22 @@ selectionの有効期限は`poseInputToChangeScene`の1回のaction実行です�
 重ねた場合は直近の1回だけを残し、以前の待機を自動cancelします。候補決定、scene移動、巻き戻し、
 停止、live reload、`Actor.pose`開始、runtime解放で失効し、同じsceneへ再入場した場合も新しい
 selectionとしてscore 0から開始します。selectionのresetでsequenceのstep進捗は変更しません。
+
+`feedback.mode`は`Actor.pose.steps`のsequence進捗をどこへ投影するかを選びます。
+
+- `scratchMirror`: JavaScriptを正本とし、0〜100の認識度／進捗をScratch変数へ一方向投影する
+- `scratchBinding`: Scratch側の有限な0〜100の変更を定義済みtick境界で取り込む
+- `presenter`: Scratch変数を使わず、app shellの専用presenterへsemantic stateを通知する
+
+省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
+0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。
+開始時、各計算tick、完了、cancelで通知し、scene移動、停止、live reload、disposeでは最終`cancelled`を
+通知して一時状態を残しません。
+
+`navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
+`navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
+起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
 
 ## 5. 環境別keymap
 

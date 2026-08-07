@@ -13,6 +13,7 @@ function sequencePayload(overrides = {}) {
   return {
     target: 'Hero',
     pose: 'help',
+    stepIndex: 0,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.5,
@@ -20,6 +21,8 @@ function sequencePayload(overrides = {}) {
       idleChargePerSecond: 0,
       idleSound: 'Tick',
       chargeSound: 'Charge',
+      feedback: {mode: 'scratchMirror'},
+      navigation: {allowSkip: false},
     },
     ...overrides,
   };
@@ -135,7 +138,7 @@ function fakeTMPose(overrides = {}) {
   };
 }
 
-function setup() {
+function setup(overrides = {}) {
   const pose = fakeTMPose();
   const asyncInput = createAsyncInputComposition({poseSource: pose.composition});
   const clock = manualClock();
@@ -152,6 +155,7 @@ function setup() {
     },
     schedule: clock.schedule,
     now: clock.now,
+    ...overrides,
   });
   return {pose, asyncInput, clock, sounds, port};
 }
@@ -190,6 +194,84 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
   ]);
 });
 
+test('publishes deterministic immutable state through completion without Scratch or DOM fields', async () => {
+  const states = [];
+  const {pose, clock, port} = setup({
+    onPoseState(event) {
+      states.push(event);
+    },
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  await flush();
+
+  pose.confidence.set('help', 0.4);
+  clock.advance(500);
+  await flush();
+  pose.confidence.set('help', 1);
+  clock.advance(1000);
+  await pending;
+
+  assert.deepEqual(
+    states.map(({phase, confidence, progress}) => [phase, confidence, progress]),
+    [
+      ['waiting', 0, 0],
+      ['waiting', 0.4, 0],
+      ['charging', 1, 1],
+      ['completed', 1, 1],
+    ],
+  );
+  assert.ok(states.every((event) => Object.isFrozen(event)));
+  assert.ok(
+    states.every(
+      ({target, pose: poseName, stepIndex}) =>
+        target === 'Hero' && poseName === 'help' && stepIndex === 0,
+    ),
+  );
+  assert.ok(states.every((event) => !Object.hasOwn(event, 'scratchVariableId')));
+  assert.ok(states.every((event) => !Object.hasOwn(event, 'element')));
+});
+
+test('publishes a final cancelled state after action abort and releases its timer', async () => {
+  const states = [];
+  const {clock, port} = setup({onPoseState: (event) => states.push(event)});
+  const controller = new AbortController();
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  await flush();
+  controller.abort('scene-transition');
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+
+  assert.equal(clock.size, 0);
+  assert.deepEqual(
+    states.map(({phase}) => phase),
+    ['waiting', 'cancelled'],
+  );
+});
+
+test('contains synchronous and asynchronous observer failures without changing pose execution', async () => {
+  let calls = 0;
+  const {pose, clock, sounds, port} = setup({
+    onPoseState() {
+      calls += 1;
+      if (calls === 1) throw new Error('sync observer failure');
+      return Promise.reject(new Error('async observer failure'));
+    },
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  await flush();
+  pose.confidence.set('help', 1);
+  clock.advance(1000);
+  await pending;
+  await flush();
+
+  assert.equal(calls, 3);
+  assert.equal(clock.size, 0);
+  assert.deepEqual(sounds, [
+    ['play', 'Tick'],
+    ['play', 'Charge'],
+    ['stop', 'Tick'],
+  ]);
+});
+
 test('uses idleChargePerSecond only while confidence is below threshold', async () => {
   const {pose, clock, sounds, port} = setup();
   pose.confidence.set('help', 0.49);
@@ -200,6 +282,8 @@ test('uses idleChargePerSecond only while confidence is below threshold', async 
       idleChargePerSecond: 1,
       idleSound: null,
       chargeSound: null,
+      feedback: {mode: 'scratchMirror'},
+      navigation: {allowSkip: false},
     },
   });
   const pending = port.waitForPose(payload, actionContext());
@@ -261,6 +345,8 @@ test('cancels active selection for Actor sequence and queues selection until seq
         idleChargePerSecond: 0,
         idleSound: null,
         chargeSound: null,
+        feedback: {mode: 'scratchMirror'},
+        navigation: {allowSkip: false},
       },
     }),
     actionContext(),

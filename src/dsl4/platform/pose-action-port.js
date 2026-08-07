@@ -1,7 +1,11 @@
+import {createDsl4PoseStateEvent} from '../pose-feedback-policy.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+const feedbackModes = new Set(['scratchMirror', 'scratchBinding', 'presenter']);
 
 /** @param {string} code @param {string} message */
 function portError(code, message) {
@@ -38,6 +42,14 @@ function requireString(value, label) {
 function requireNumber(value, label, accepts) {
   if (typeof value !== 'number' || !Number.isFinite(value) || !accepts(value)) {
     throw portError('K4-POSE-PORT-001', `${label} is invalid`);
+  }
+  return value;
+}
+
+/** @param {unknown} value @param {string} label */
+function requireBoolean(value, label) {
+  if (typeof value !== 'boolean') {
+    throw portError('K4-POSE-PORT-001', `${label} must be boolean`);
   }
   return value;
 }
@@ -94,8 +106,28 @@ function validateSequencePayload(value) {
     throw portError('K4-POSE-PORT-001', 'waitForPose payload is invalid');
   }
   const recognition = value.recognition;
+  const feedback = recognition.feedback === undefined ? {} : recognition.feedback;
+  const navigation = recognition.navigation === undefined ? {} : recognition.navigation;
+  if (!isRecord(feedback) || !isRecord(navigation)) {
+    throw portError('K4-POSE-PORT-001', 'waitForPose policy is invalid');
+  }
+  const feedbackRecord = /** @type {Record<string, unknown>} */ (feedback);
+  const navigationRecord = /** @type {Record<string, unknown>} */ (navigation);
+  const feedbackMode =
+    feedbackRecord.mode === undefined
+      ? 'scratchMirror'
+      : requireString(feedbackRecord.mode, 'feedback.mode');
+  if (!feedbackModes.has(feedbackMode)) {
+    throw portError('K4-POSE-PORT-001', 'feedback.mode is unsupported');
+  }
   return {
+    target: requireString(value.target, 'target'),
     pose: requireString(value.pose, 'pose'),
+    stepIndex: requireNumber(
+      value.stepIndex ?? 0,
+      'stepIndex',
+      (number) => Number.isSafeInteger(number) && number >= 0,
+    ),
     poseModel: requireString(value.poseModel, 'poseModel'),
     confidenceThreshold: requireNumber(
       recognition.confidenceThreshold,
@@ -118,6 +150,11 @@ function validateSequencePayload(value) {
       recognition.chargeSound === null
         ? null
         : requireString(recognition.chargeSound, 'chargeSound'),
+    feedbackMode,
+    allowSkip:
+      navigationRecord.allowSkip === undefined
+        ? false
+        : requireBoolean(navigationRecord.allowSkip, 'navigation.allowSkip'),
   };
 }
 
@@ -167,6 +204,7 @@ function defaultSchedule(callback, delayMilliseconds) {
  * @param {(poseModel: string) => ReadonlyArray<string> | null} options.getPoseModelLabels
  * @param {(sound: string) => unknown | Promise<unknown>} [options.playSound]
  * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSound]
+ * @param {(event: Readonly<{phase: 'waiting' | 'charging' | 'completed' | 'cancelled', target: string, pose: string, stepIndex: number, confidence: number, progress: number}>) => unknown} [options.onPoseState]
  * @param {(callback: () => void, delayMilliseconds: number) => () => void} [options.schedule]
  * @param {() => number} [options.now]
  */
@@ -180,10 +218,14 @@ export function createDsl4PoseActionPort(options) {
   const getPoseModelLabels = options.getPoseModelLabels;
   const playSound = options.playSound ?? (() => undefined);
   const stopSound = options.stopSound ?? (() => undefined);
+  const onPoseState = options.onPoseState;
   const schedule = options.schedule ?? defaultSchedule;
   const now = options.now ?? (() => performance.now());
   for (const [name, value] of Object.entries({playSound, stopSound, schedule, now})) {
     if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
+  }
+  if (onPoseState !== undefined && typeof onPoseState !== 'function') {
+    throw new TypeError('onPoseState must be a function');
   }
 
   let released = false;
@@ -196,6 +238,29 @@ export function createDsl4PoseActionPort(options) {
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
+  }
+
+  /**
+   * @param {ReturnType<typeof validateSequencePayload>} input
+   * @param {'waiting' | 'charging' | 'completed' | 'cancelled'} phase
+   * @param {number} confidence
+   * @param {number} progress
+   */
+  function publishPoseState(input, phase, confidence, progress) {
+    if (!onPoseState) return;
+    const event = createDsl4PoseStateEvent({
+      phase,
+      target: input.target,
+      pose: input.pose,
+      stepIndex: input.stepIndex,
+      confidence,
+      progress,
+    });
+    try {
+      Promise.resolve(onPoseState(event)).catch(() => {});
+    } catch {
+      // A non-authoritative observer cannot change pose execution semantics.
+    }
   }
 
   /** @param {string} poseModel @param {ReadonlyArray<string>} poses */
@@ -319,18 +384,23 @@ export function createDsl4PoseActionPort(options) {
       activeSequence = operation;
       const displacedSelection = currentSelection;
       displacedSelection?.controller.abort('actor-sequence-priority');
+      let confidence = 0;
+      let progress = 0;
+      let statePublished = false;
+      let terminalPhase = /** @type {'completed' | 'cancelled'} */ ('cancelled');
       try {
+        publishPoseState(input, 'waiting', confidence, progress);
+        statePublished = true;
         if (displacedSelection) await displacedSelection.done;
         await ensureRecognition(input.poseModel, operation.controller.signal);
         if (input.idleSound) await playSound(input.idleSound);
         if (operation.controller.signal.aborted) throw abortError('pose sequence was cancelled');
-        let progress = 0;
         let previousTime = now();
         while (progress < 1) {
           const timestamp = /** @type {number} */ (await waitForTick(operation.controller.signal));
           const elapsedSeconds = Math.max(0, (timestamp - previousTime) / 1000);
           previousTime = timestamp;
-          const confidence = Number(tmpose.confidenceOf(input.pose));
+          confidence = Number(tmpose.confidenceOf(input.pose));
           if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
             throw portError('K4-POSE-PORT-007', 'TMPose returned an invalid confidence');
           }
@@ -343,15 +413,29 @@ export function createDsl4PoseActionPort(options) {
           } else {
             progress += input.idleChargePerSecond * elapsedSeconds;
           }
+          progress = Math.min(1, progress);
+          publishPoseState(
+            input,
+            confidence >= input.confidenceThreshold ? 'charging' : 'waiting',
+            confidence,
+            progress,
+          );
         }
+        terminalPhase = 'completed';
       } finally {
         try {
           if (input.idleSound) await stopSound(input.idleSound);
         } finally {
-          operation.detach();
-          if (activeSequence === operation) activeSequence = null;
-          operation.finish();
-          currentSelection?.wake?.();
+          try {
+            if (statePublished) {
+              publishPoseState(input, terminalPhase, confidence, progress);
+            }
+          } finally {
+            operation.detach();
+            if (activeSequence === operation) activeSequence = null;
+            operation.finish();
+            currentSelection?.wake?.();
+          }
         }
       }
     },

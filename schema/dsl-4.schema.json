@@ -309,7 +309,28 @@
         "idleSound": {"$ref": "#/$defs/assetId"},
         "chargeSound": {"$ref": "#/$defs/assetId"},
         "sequence": {"$ref": "#/$defs/poseSequenceRecognition"},
-        "selection": {"$ref": "#/$defs/poseSelectionRecognition"}
+        "selection": {"$ref": "#/$defs/poseSelectionRecognition"},
+        "feedback": {"$ref": "#/$defs/poseFeedback"},
+        "navigation": {"$ref": "#/$defs/poseNavigation"}
+      }
+    },
+    "poseFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["scratchMirror", "scratchBinding", "presenter"]
+        }
+      }
+    },
+    "poseNavigation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowSkip"],
+      "properties": {
+        "allowSkip": {"type": "boolean"}
       }
     },
     "poseSequenceRecognition": {

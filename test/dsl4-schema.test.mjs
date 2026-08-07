@@ -55,6 +55,40 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.equal(result.storyDocument.scenes[0].actions[2].id, '/scenes/opening/actions/2');
   assert.equal(result.storyDocument.scenes[0].actions[2].stableId, 'openingTitle');
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
+  assert.deepEqual(result.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(result.storyDocument.poseRecognition.navigation, {allowSkip: false});
+  assert.ok(result.storyDocument.sourceMap['/poseRecognition/feedback/mode']);
+  assert.ok(result.storyDocument.sourceMap['/poseRecognition/navigation/allowSkip']);
+});
+
+test('normalizes pose feedback defaults and rejects unknown policy keys or values', () => {
+  const base = [
+    "kamishibai: '4.0'",
+    'assets:',
+    '  Tick: sound',
+    '  Charge: sound',
+    'poseRecognition:',
+    '  idleSound: Tick',
+    '  chargeSound: Charge',
+    'scenes:',
+    '  opening: []',
+  ].join('\n');
+  const valid = frontend.parse(base);
+  assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
+  assert.deepEqual(valid.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
+
+  for (const policy of [
+    ['feedback', '    mode: hidden\n'],
+    ['feedback', '    mode: presenter\n    extra: true\n'],
+    ['navigation', '    allowSkip: yes\n'],
+    ['navigation', '    allowSkip: false\n    extra: true\n'],
+  ]) {
+    const source = base.replace('scenes:', `  ${policy[0]}:\n${policy[1]}scenes:`);
+    const result = frontend.parse(source);
+    assert.equal(result.ok, false, source);
+    assert.ok(result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
 });
 
 test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separate', async () => {

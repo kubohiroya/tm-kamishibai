@@ -122,6 +122,8 @@ function disposedError() {
  * @param {unknown} [options.actorTouchSource]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
+ * @param {boolean} [options.poseFeedbackEnabled]
+ * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
  */
 export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
@@ -187,6 +189,13 @@ export function createDsl4PlatformAssetSession(options) {
   }
   if (options.poseNow !== undefined && typeof options.poseNow !== 'function') {
     throw new TypeError('poseNow must be a function');
+  }
+  const poseFeedbackEnabled = options.poseFeedbackEnabled ?? false;
+  if (typeof poseFeedbackEnabled !== 'boolean') {
+    throw new TypeError('poseFeedbackEnabled must be boolean');
+  }
+  if (poseFeedbackEnabled && typeof options.onPoseState !== 'function') {
+    throw new TypeError('onPoseState must be a function when pose feedback is enabled');
   }
 
   const created = [];
@@ -293,6 +302,7 @@ export function createDsl4PlatformAssetSession(options) {
       ...(options.poseNow === undefined
         ? {}
         : {now: /** @type {() => number} */ (options.poseNow)}),
+      ...(poseFeedbackEnabled ? {onPoseState: options.onPoseState} : {}),
     });
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,

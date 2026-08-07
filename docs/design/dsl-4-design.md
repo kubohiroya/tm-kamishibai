@@ -533,11 +533,21 @@ poseRecognition:
     accumulationPerSecond: 1
     decayPerSecond: 0.9
     scoreThreshold: 0
+  feedback:
+    mode: scratchMirror
+  navigation:
+    allowSkip: false
 ```
 
 3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
 mappingへまとめます。sequenceとselectionは排他でActor sequenceを優先し、selectionはaction
 実行ごとに蓄積scoreをresetします。重複するselectionは直近の1回だけを有効にします。
+
+`feedback.mode`は`scratchMirror | scratchBinding | presenter`の3値に限定し、省略時は
+`scratchMirror`です。`navigation.allowSkip`は独立したbooleanで、省略時は`false`です。semantic pose
+state eventはrenderer非依存とし、`phase`、`target`、`pose`、`stepIndex`、0〜1の`confidence`／`progress`
+だけを通知します。Scratch／presenter adapterとnavigation bypassはこのpure event契約のconsumerとして
+分離し、起動時固定・既定OFFの`dsl4PoseFeedbackModes`がOFFなら登録しません。
 
 ### 3.11 分岐 `[提案]`
 

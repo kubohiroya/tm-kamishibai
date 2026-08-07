@@ -191,6 +191,7 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
     pose: 'happy',
+    stepIndex: 0,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.6,
@@ -198,6 +199,8 @@ test('dispatches every core action and keeps transition separate from scene move
       idleChargePerSecond: 0.1,
       idleSound: 'Effect',
       chargeSound: 'Effect',
+      feedback: {mode: 'scratchMirror'},
+      navigation: {allowSkip: false},
     },
   });
   assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
@@ -240,6 +243,76 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.equal(
     transitions.some(({reason}) => reason === 'transition'),
     false,
+  );
+});
+
+test('preserves non-default pose policy and increments stepIndex across ordered steps', async () => {
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+            - pose: stand
+`),
+    port: {
+      waitForPose: async (payload) => calls.push(payload),
+    },
+  });
+
+  const state = await controller.start();
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(
+    calls.map(({pose, stepIndex, recognition}) => ({pose, stepIndex, recognition})),
+    [
+      {
+        pose: 'help',
+        stepIndex: 0,
+        recognition: {
+          confidenceThreshold: 0.5,
+          fullConfidenceHoldSeconds: 1,
+          idleChargePerSecond: 0,
+          idleSound: 'Tick',
+          chargeSound: 'Charge',
+          feedback: {mode: 'presenter'},
+          navigation: {allowSkip: true},
+        },
+      },
+      {
+        pose: 'stand',
+        stepIndex: 1,
+        recognition: {
+          confidenceThreshold: 0.5,
+          fullConfidenceHoldSeconds: 1,
+          idleChargePerSecond: 0,
+          idleSound: 'Tick',
+          chargeSound: 'Charge',
+          feedback: {mode: 'presenter'},
+          navigation: {allowSkip: true},
+        },
+      },
+    ],
   );
 });
 
@@ -299,6 +372,8 @@ scenes:
     idleChargePerSecond: 0,
     idleSound: null,
     chargeSound: null,
+    feedback: {mode: 'scratchMirror'},
+    navigation: {allowSkip: false},
   });
 });
 
