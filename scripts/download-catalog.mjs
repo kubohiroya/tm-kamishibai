@@ -13,6 +13,21 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
+      buildDate: '2026-08-07',
+      filename: 'kamishibai-4.0.sb3',
+      faviconPath: 'site/favicon.png',
+      sha256: 'b46bc9fa5a7733d959fa7e11a5fe5085ebfd433706ffdc58fb4d0a0e977ba8f3',
+      sourceCommit: 'd115ffdb5e93c23605dffeabbe9ea7e302e23cde',
+      sourceDirectory: 'release-sources/4.0.0-dev/app',
+    },
+    description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
+    series: '4.0',
+    status: '開発版',
+    statusKind: 'development',
+    version: '4.0.0-dev',
+  },
+  {
+    artifact: {
       buildDate: '2026-08-06',
       filename: 'kamishibai-3.2.sb3',
       faviconPath: 'release-sources/3.2.3/site/favicon.png',
@@ -27,21 +42,6 @@ export const downloadCatalog = deepFreeze([
     status: '安定版',
     statusKind: 'stable',
     version: '3.2.3',
-  },
-  {
-    artifact: {
-      buildDate: '2026-08-07',
-      filename: 'kamishibai-4.0.sb3',
-      faviconPath: 'site/favicon.png',
-      sha256: 'b46bc9fa5a7733d959fa7e11a5fe5085ebfd433706ffdc58fb4d0a0e977ba8f3',
-      sourceCommit: 'd115ffdb5e93c23605dffeabbe9ea7e302e23cde',
-      sourceDirectory: 'release-sources/4.0.0-dev/app',
-    },
-    description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
-    series: '4.0',
-    status: '開発版',
-    statusKind: 'development',
-    version: '4.0.0-dev',
   },
   {
     artifact: {
