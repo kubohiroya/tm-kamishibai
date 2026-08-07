@@ -28,6 +28,15 @@ function sequencePayload(overrides = {}) {
   };
 }
 
+/** @param {'scratchMirror' | 'scratchBinding' | 'presenter'} mode */
+function sequencePayloadWithFeedback(mode) {
+  const payload = sequencePayload();
+  return {
+    ...payload,
+    recognition: {...payload.recognition, feedback: {mode}},
+  };
+}
+
 function selectionPayload(overrides = {}) {
   return {
     poses: ['help', 'stand'],
@@ -247,6 +256,68 @@ test('publishes a final cancelled state after action abort and releases its time
   );
 });
 
+test('publishes completed before awaiting asynchronous sound cleanup', async () => {
+  const states = [];
+  let finishSoundCleanup = () => {};
+  const soundCleanup = new Promise((resolve) => {
+    finishSoundCleanup = resolve;
+  });
+  const {pose, clock, port} = setup({
+    onPoseState: (event) => states.push(event),
+    stopSound: () => soundCleanup,
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  let settled = false;
+  pending.then(() => {
+    settled = true;
+  });
+  await flush();
+  pose.confidence.set('help', 1);
+  clock.advance(1000);
+  await flush();
+
+  assert.equal(settled, false);
+  assert.deepEqual(
+    states.map(({phase}) => phase),
+    ['waiting', 'charging', 'completed'],
+  );
+
+  finishSoundCleanup();
+  await pending;
+  assert.equal(states.filter(({phase}) => phase === 'completed').length, 1);
+});
+
+test('publishes cancelled before awaiting asynchronous sound cleanup', async () => {
+  const states = [];
+  let finishSoundCleanup = () => {};
+  const soundCleanup = new Promise((resolve) => {
+    finishSoundCleanup = resolve;
+  });
+  const controller = new AbortController();
+  const {port} = setup({
+    onPoseState: (event) => states.push(event),
+    stopSound: () => soundCleanup,
+  });
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  let settled = false;
+  pending.catch(() => {
+    settled = true;
+  });
+  await flush();
+  controller.abort('scene-transition');
+  await flush();
+
+  assert.equal(settled, false);
+  assert.deepEqual(
+    states.map(({phase}) => phase),
+    ['waiting', 'cancelled'],
+  );
+
+  finishSoundCleanup();
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  assert.equal(states.filter(({phase}) => phase === 'cancelled').length, 1);
+});
+
 test('contains synchronous and asynchronous observer failures without changing pose execution', async () => {
   let calls = 0;
   const {pose, clock, sounds, port} = setup({
@@ -270,6 +341,89 @@ test('contains synchronous and asynchronous observer failures without changing p
     ['play', 'Charge'],
     ['stop', 'Tick'],
   ]);
+});
+
+test('applies one normalized Scratch binding snapshot before the deterministic pose tick', async () => {
+  const states = [];
+  let reads = 0;
+  const {clock, sounds, port} = setup({
+    onPoseState: (event) => states.push(event),
+    readPoseStateBinding() {
+      reads += 1;
+      return {confidence: 1, progress: 0.5};
+    },
+  });
+  const pending = port.waitForPose(sequencePayloadWithFeedback('scratchBinding'), actionContext());
+  await flush();
+  clock.advance(500);
+  await pending;
+
+  assert.equal(reads, 1);
+  assert.deepEqual(
+    states.map(({phase, confidence, progress}) => [phase, confidence, progress]),
+    [
+      ['waiting', 0, 0],
+      ['charging', 1, 1],
+      ['completed', 1, 1],
+    ],
+  );
+  assert.deepEqual(sounds, [
+    ['play', 'Tick'],
+    ['play', 'Charge'],
+    ['stop', 'Tick'],
+  ]);
+});
+
+test('never samples a Scratch binding for mirror or presenter feedback', async () => {
+  for (const mode of ['scratchMirror', 'presenter']) {
+    let reads = 0;
+    const {pose, clock, port} = setup({
+      readPoseStateBinding() {
+        reads += 1;
+        return {progress: 1};
+      },
+    });
+    pose.confidence.set('help', 1);
+
+    const pending = port.waitForPose(sequencePayloadWithFeedback(mode), actionContext());
+    await flush();
+    clock.advance(1000);
+    await pending;
+
+    assert.equal(reads, 0, mode);
+  }
+});
+
+test('ignores asynchronous or malformed binding samples and waits for the next valid tick', async () => {
+  let reads = 0;
+  const {clock, port} = setup({
+    readPoseStateBinding() {
+      reads += 1;
+      if (reads === 1) return Promise.resolve({progress: 1});
+      return {progress: 1};
+    },
+  });
+  const pending = port.waitForPose(
+    sequencePayload({
+      recognition: {
+        confidenceThreshold: 0.5,
+        fullConfidenceHoldSeconds: 1,
+        idleChargePerSecond: 0,
+        idleSound: null,
+        chargeSound: null,
+        feedback: {mode: 'scratchBinding'},
+        navigation: {allowSkip: false},
+      },
+    }),
+    actionContext(),
+  );
+  await flush();
+  clock.advance(100);
+  await flush();
+  assert.equal(reads, 1);
+  clock.advance(100);
+  await pending;
+  assert.equal(reads, 2);
 });
 
 test('uses idleChargePerSecond only while confidence is below threshold', async () => {

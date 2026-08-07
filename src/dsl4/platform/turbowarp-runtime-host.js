@@ -7,6 +7,7 @@ import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
+import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 
@@ -217,6 +218,19 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
   }
 }
 
+/** @param {Readonly<Record<string, unknown>>} storyDocument */
+function resolvePoseFeedbackMode(storyDocument) {
+  const poseRecognition = isRecord(storyDocument.poseRecognition)
+    ? storyDocument.poseRecognition
+    : null;
+  const feedback = isRecord(poseRecognition?.feedback) ? poseRecognition.feedback : null;
+  const mode = feedback?.mode ?? 'scratchMirror';
+  if (!['scratchMirror', 'scratchBinding', 'presenter'].includes(String(mode))) {
+    throw hostError('K4-HOST-POSE-FEEDBACK-001', 'Pose feedback mode is unsupported');
+  }
+  return /** @type {'scratchMirror' | 'scratchBinding' | 'presenter'} */ (mode);
+}
+
 /**
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
@@ -239,6 +253,8 @@ async function createRuntimeEnvironment(
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
+  /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
+  let scratchPoseFeedbackAdapter = null;
   /** @type {Record<string, Function> | null} */
   let runtimeExpressionComposition = null;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
@@ -273,6 +289,22 @@ async function createRuntimeEnvironment(
         ? {}
         : {frameMilliseconds: options.actorFrameMilliseconds}),
     });
+    const feedbackMode = poseFeedbackEnabled
+      ? resolvePoseFeedbackMode(component.storyDocument)
+      : null;
+    if (feedbackMode === 'scratchMirror' || feedbackMode === 'scratchBinding') {
+      scratchPoseFeedbackAdapter = createDsl4ScratchPoseFeedbackAdapter({
+        runtime: options.runtime,
+        mode: feedbackMode,
+      });
+    }
+    const poseStateObserver = poseFeedbackEnabled
+      ? (scratchPoseFeedbackAdapter?.onPoseState ?? options.onPoseState)
+      : undefined;
+    const poseStateBinding =
+      feedbackMode === 'scratchBinding'
+        ? scratchPoseFeedbackAdapter?.readPoseStateBinding
+        : undefined;
     assetSession = createDsl4PlatformAssetSession({
       runtimeComponent,
       tmPoseRuntime: options.tmPoseRuntime,
@@ -302,7 +334,13 @@ async function createRuntimeEnvironment(
         : {actorTouchSource: options.actorTouchSource}),
       ...(options.poseSchedule === undefined ? {} : {poseSchedule: options.poseSchedule}),
       ...(options.poseNow === undefined ? {} : {poseNow: options.poseNow}),
-      ...(poseFeedbackEnabled ? {poseFeedbackEnabled: true, onPoseState: options.onPoseState} : {}),
+      ...(poseFeedbackEnabled
+        ? {
+            poseFeedbackEnabled: true,
+            onPoseState: poseStateObserver,
+            ...(poseStateBinding === undefined ? {} : {readPoseStateBinding: poseStateBinding}),
+          }
+        : {}),
       ...(posePreviewMirroringEnabled ? {posePreviewMirroringEnabled: true} : {}),
     });
     const mediaPort = createDsl4MediaActionPort({
@@ -410,6 +448,7 @@ async function createRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => scratchPoseFeedbackAdapter?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
@@ -433,6 +472,7 @@ async function createRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => scratchPoseFeedbackAdapter?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
@@ -491,7 +531,7 @@ async function createRuntimeEnvironment(
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
- * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState]
+ * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onPoseState] presenter observer
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
@@ -713,12 +753,24 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         const errors = [];
         const pending = [];
         try {
-          await deactivateCacheLease();
           const activeRun = session.getRunPromise();
-          const sessionDisposal = session.dispose(reason);
-          pending.push(Promise.resolve(session.whenInputIdle()));
           if (activeRun) pending.push(Promise.resolve(activeRun));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          const sessionDisposal = session.dispose(reason);
           if (sessionDisposal) pending.push(Promise.resolve(sessionDisposal));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          pending.push(Promise.resolve(session.whenInputIdle()));
+        } catch (error) {
+          errors.push(error);
+        }
+        try {
+          pending.push(Promise.resolve(deactivateCacheLease()));
         } catch (error) {
           errors.push(error);
         }

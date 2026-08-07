@@ -321,6 +321,19 @@ selectionとしてscore 0から開始します。selectionのresetでsequenceの
 - `scratchBinding`: Scratch側の有限な0〜100の変更を定義済みtick境界で取り込む
 - `presenter`: Scratch変数を使わず、app shellの専用presenterへsemantic stateを通知する
 
+Scratch方式はStageの非cloud scalar変数「ポーズ認識」「チャージ」を使い、0〜1のsemantic
+stateを0〜100へ投影します。`scratchMirror`はScratch側の書換えを読みません。
+`scratchBinding`は各pose計算tickの開始時に1回だけ両変数をatomicにsampleし、そのtickの
+confidence積分前に反映します。Scratch VMがnumeric inputをstringで保持する場合に限り、十進数と
+等価なstringも数値化します。空文字、非数文字列、NaN、Infinity、0〜100範囲外、hex等は
+pair全体を取り込まず、直前のJavaScript投影値へ戻します。同tick内に同じ変数へ複数回書かれた場合は、
+Scratch runtimeの決定済み実行順による最終値をtick境界でsampleします。variable setterのwrapやwrite回数の
+追跡は行わないため、通常のScratch last-write-wins semanticsを変更しません。completed／cancelledの
+terminal eventではbindingを無効にして両変数を直ちに0へ戻し、platform sessionのdisposeでも0 resetします。
+platformは0〜100の既存Stage variable slider monitorをvariable IDで一意に解決します。両monitorは
+adapter startupで両変数を0、両monitorを非表示へ初期化し、waiting／chargingのactive期間だけ表示します。
+completed／cancelledは非同期sound cleanupより先に0／非表示へ戻し、disposeでも同じcleanupを行います。
+
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。
 開始時、各計算tick、完了、cancelで通知し、scene移動、停止、live reload、disposeでは最終`cancelled`を

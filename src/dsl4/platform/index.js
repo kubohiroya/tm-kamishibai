@@ -6,6 +6,10 @@ export {createDsl4MediaActionPort} from './media-action-port.js';
 export {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 export {createDsl4PoseActionPort} from './pose-action-port.js';
 export {
+  createDsl4ScratchPoseFeedbackAdapter,
+  dsl4ScratchPoseFeedbackVariableNames,
+} from './scratch-pose-feedback-adapter.js';
+export {
   createDsl4PoseArchiveExtractor,
   DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT,
 } from './pose-archive-extractor.js';

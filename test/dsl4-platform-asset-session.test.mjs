@@ -337,6 +337,11 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
       assert.fail('disabled pose feedback must not inspect its observer');
     },
   });
+  Object.defineProperty(disabledSetup.value, 'readPoseStateBinding', {
+    get() {
+      assert.fail('disabled pose feedback must not inspect its binding reader');
+    },
+  });
   const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
   await disabled.dispose('feedback-disabled');
 
@@ -351,6 +356,17 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
     /onPoseState/u,
   );
   assert.deepEqual(invalidLog, []);
+  assert.throws(
+    () =>
+      createDsl4PlatformAssetSession({
+        ...invalidSetup.value,
+        poseFeedbackEnabled: true,
+        onPoseState() {},
+        readPoseStateBinding: true,
+      }),
+    /readPoseStateBinding/u,
+  );
+  assert.deepEqual(invalidLog, []);
 
   const enabledLog = [];
   const enabledSetup = options(runtimeComponent(), enabledLog);
@@ -358,6 +374,9 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
     ...enabledSetup.value,
     poseFeedbackEnabled: true,
     onPoseState() {},
+    readPoseStateBinding() {
+      return null;
+    },
   });
   await enabled.dispose('feedback-enabled');
 });

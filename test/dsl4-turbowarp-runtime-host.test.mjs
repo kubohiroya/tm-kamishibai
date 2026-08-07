@@ -109,6 +109,76 @@ async function packagedProject(sourceText = waitStory, {cacheIdentity} = {}) {
 }
 
 function platformFixture(log) {
+  const poseConfidence = {
+    id: 'pose-confidence',
+    name: 'ポーズ認識',
+    type: '',
+    isCloud: false,
+    value: 0,
+  };
+  const poseProgress = {
+    id: 'pose-progress',
+    name: 'チャージ',
+    type: '',
+    isCloud: false,
+    value: 0,
+  };
+  const monitorRecords = new Map();
+  const monitorBlocksById = new Map();
+  for (const variable of [poseConfidence, poseProgress]) {
+    monitorRecords.set(variable.id, {
+      id: variable.id,
+      opcode: 'data_variable',
+      params: {VARIABLE: variable.name},
+      targetId: null,
+      spriteName: null,
+      mode: 'slider',
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+      visible: false,
+      get(property) {
+        return this[property];
+      },
+    });
+    monitorBlocksById.set(variable.id, {
+      id: variable.id,
+      opcode: 'data_variable',
+      fields: {VARIABLE: {id: variable.id, value: variable.name}},
+      isMonitored: false,
+    });
+  }
+  const monitorBlocks = {
+    getBlock: (id) => monitorBlocksById.get(id),
+    getScripts: () => [...monitorBlocksById.keys()],
+    changeBlock({id, element, value}) {
+      assert.equal(element, 'checkbox');
+      const block = monitorBlocksById.get(id);
+      const record = monitorRecords.get(id);
+      if (!block || !record) return;
+      block.isMonitored = value;
+      record.visible = value;
+    },
+  };
+  const monitorState = {
+    has: (id) => monitorRecords.has(id),
+    get: (id) => monitorRecords.get(id),
+    valueSeq: () => monitorRecords.values(),
+  };
+  const stage = {
+    id: 'stage-target',
+    isStage: true,
+    variables: {
+      [poseConfidence.id]: poseConfidence,
+      [poseProgress.id]: poseProgress,
+    },
+    lookupVariableByNameAndType(name, type) {
+      assert.equal(type, '');
+      if (name === 'ポーズ認識') return poseConfidence;
+      if (name === 'チャージ') return poseProgress;
+      return null;
+    },
+  };
   const actor = {
     id: 'actor-target',
     isStage: false,
@@ -238,7 +308,12 @@ function platformFixture(log) {
     },
   };
   const runtime = {
-    targets: [actor],
+    targets: [stage, actor],
+    monitorBlocks,
+    getMonitorState: () => monitorState,
+    getTargetForStage() {
+      return stage;
+    },
     ext_scratch3_looks: {
       _say(message) {
         log.push(['actor.say', message]);
@@ -247,6 +322,9 @@ function platformFixture(log) {
   };
   return {
     runtime,
+    poseConfidence,
+    poseProgress,
+    monitorRecords,
     tmPoseRuntime: {Webcam: class {}, loadFromFiles() {}},
     setLoading(payload) {
       log.push(['loading', payload.visible]);
@@ -344,7 +422,7 @@ test('withholds every platform dependency until the packaged component validates
   assert.deepEqual(log, []);
 });
 
-test('forwards the pose observer only when its startup-fixed feature flag is enabled', async () => {
+test('selects the startup-fixed Scratch consumer and reserves host observers for presenter mode', async () => {
   const project = await packagedProject();
   const disabledLog = [];
   const disabledOptions = enabledOptions(project, platformFixture(disabledLog));
@@ -357,24 +435,226 @@ test('forwards the pose observer only when its startup-fixed feature flag is ena
   assert.equal(disabled.ok, true, JSON.stringify(disabled.diagnostics));
   await disabled.host.dispose('feedback-disabled');
 
-  const enabledLog = [];
+  const scratchBindingSource = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: scratchBinding
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`;
+  const scratchProject = await packagedProject(scratchBindingSource);
+  const scratchFixture = platformFixture([]);
+  scratchFixture.poseConfidence.value = 75;
+  scratchFixture.poseProgress.value = 50;
+  const scratch = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(scratchProject, scratchFixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+    }),
+  );
+  assert.equal(scratch.ok, true, JSON.stringify(scratch.diagnostics));
+  await scratch.host.dispose('scratch-feedback-enabled');
+  assert.equal(scratchFixture.poseConfidence.value, 0);
+  assert.equal(scratchFixture.poseProgress.value, 0);
+
+  const presenterSource = `
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: presenter
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0
+`;
+  const presenterProject = await packagedProject(presenterSource);
   await assert.rejects(
     createDsl4TurboWarpRuntimeHost(
-      enabledOptions(project, platformFixture(enabledLog), {
+      enabledOptions(presenterProject, platformFixture([]), {
         featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       }),
     ),
     /onPoseState/u,
   );
-
-  const enabled = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, platformFixture([]), {
+  const presenter = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(presenterProject, platformFixture([]), {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       onPoseState() {},
     }),
   );
-  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
-  await enabled.host.dispose('feedback-enabled');
+  assert.equal(presenter.ok, true, JSON.stringify(presenter.diagnostics));
+  await presenter.host.dispose('presenter-feedback-enabled');
+});
+
+test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  let finishHostPortCleanup = null;
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      createHostPort() {
+        return {
+          dispose() {
+            return new Promise((resolve) => {
+              finishHostPortCleanup = resolve;
+            });
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+
+  const disposal = result.host.dispose('pending-environment-cleanup');
+  while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+
+  finishHostPortCleanup();
+  await disposal;
+});
+
+test('resets Scratch pose feedback before awaiting partial-creation cleanup', async () => {
+  const project = await packagedProject();
+  const fixture = platformFixture([]);
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  let finishHostPortCleanup = null;
+  const rejection = assert.rejects(
+    createDsl4TurboWarpRuntimeHost(
+      enabledOptions(project, fixture, {
+        featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+        createHostPort() {
+          return {
+            stage() {},
+            dispose() {
+              return new Promise((resolve) => {
+                finishHostPortCleanup = resolve;
+              });
+            },
+          };
+        },
+      }),
+    ),
+    (error) => error.code === 'K4-HOST-PORT-COLLISION',
+  );
+
+  while (!finishHostPortCleanup) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+
+  finishHostPortCleanup();
+  await rejection;
+});
+
+test('continues environment cleanup and aggregates a Scratch reset failure', async () => {
+  const project = await packagedProject();
+  const log = [];
+  const fixture = platformFixture(log);
+  let progress = 0;
+  let rejectReset = false;
+  Object.defineProperty(fixture.poseProgress, 'value', {
+    configurable: true,
+    get() {
+      return progress;
+    },
+    set(value) {
+      if (rejectReset && value === 0) throw new Error('Scratch reset failed');
+      progress = value;
+    },
+  });
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      createHostPort() {
+        return {
+          dispose() {
+            log.push(['host-port.dispose']);
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  rejectReset = true;
+
+  await assert.rejects(result.host.dispose('reset-failure'), (error) => {
+    assert.equal(error instanceof AggregateError, true);
+    return true;
+  });
+  assert.equal(log.filter(([event]) => event === 'host-port.dispose').length, 1);
+  assert.equal(log.filter(([event]) => event === 'svg.release-all').length, 1);
+  assert.equal(log.filter(([event]) => event === 'pose.release-all').length, 1);
+  assert.equal(log.filter(([event]) => event === 'media.release-all').length, 1);
+});
+
+test('resets Scratch pose feedback before awaiting a pending remote cache lease release', async () => {
+  const cacheIdentity = {
+    id: 'resetlease000001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--resetlease000001',
+  };
+  const project = await packagedProject(waitStory, {cacheIdentity});
+  const fixture = platformFixture([]);
+  fixture.poseConfidence.value = 75;
+  fixture.poseProgress.value = 50;
+  const createAssetManagerComposition = fixture.createAssetManagerComposition;
+  let releaseCalls = 0;
+  let finishFirstRelease = null;
+  fixture.createAssetManagerComposition = (...args) => {
+    const composition = createAssetManagerComposition(...args);
+    return {
+      ...composition,
+      releaseVerifiedRemoteStoryCacheLease() {
+        releaseCalls += 1;
+        if (releaseCalls > 1) return Promise.resolve();
+        return new Promise((resolve) => {
+          finishFirstRelease = resolve;
+        });
+      },
+    };
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const disposal = result.host.dispose('pending-cache-release');
+  while (!finishFirstRelease) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+
+  finishFirstRelease();
+  await disposal;
+  assert.equal(releaseCalls, 2);
 });
 
 test('applies scene pose preview mirroring only through its startup-fixed feature gate', async () => {
