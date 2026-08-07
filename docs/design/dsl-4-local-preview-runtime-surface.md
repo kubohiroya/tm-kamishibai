@@ -80,8 +80,23 @@ browser bundleはesbuildで単一ES moduleへ生成し、既定24 MiB、hard max
 data URLとしてbundle内へ保持します。外部extension worker／iframe loaderはbundle時にfail-closed stubへ置換し、
 stage ownerのsecurity policyと二重に無効化します。生成物に未解決loader specifierが残らないことを静的testで確認します。
 
-この段階ではplatformとbundle builderだけを公開し、local preview clientからはまだ有効化しません。base SB3配信、固定
-extension登録、DSL runtime session接続が揃った次段でstage ownerへ注入します。
+platformとbundle builderはlocal preview clientから直接有効化せず、次のartifact delivery境界からbase SB3とbundleを
+受け取ります。固定extension登録とDSL runtime session接続が揃った段階でstage ownerへ注入します。
+
+### 5.1 runtime artifact delivery
+
+Node hostはbase SB3と単一browser runtime bundleを必ず一組で受け取り、入力と共有しないbounded byte copyとして所有します。
+base SB3は既定64 MiB／hard maximum 128 MiB、browser bundleは既定24 MiB／hard maximum 48 MiBです。snapshotには
+availabilityとbyte lengthだけを出し、実byte、project内容、path、tokenを含めません。
+
+browser bundleはpage bootstrapに必要なため`/runtime/browser.js`から配信しますが、`no-store`、`nosniff`、
+`Cross-Origin-Resource-Policy: same-origin`を必須にします。assetを内包するbase SB3は`/api/runtime-project`から、activeな
+preview接続のexact Originとbearer tokenを再検証した後だけ配信します。未接続、token／Origin不一致、full rebuild後は
+fail-closedにし、source／generation APIのJSON payloadへSB3 byteを混在させません。
+
+artifact pairはhost disposeまたはbase SB3、asset、app shell、extension、builder設定のfull rebuild要求で参照を破棄します。
+同じNode processで新しいartifactへ暗黙差し替えせず、新host／browser sessionを要求します。この段階では配信境界だけを
+追加し、既存のfake runtime clientとpublic CLIからは有効化しません。
 
 ## 6. securityとrollback
 

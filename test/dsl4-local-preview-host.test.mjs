@@ -7,11 +7,13 @@ import test from 'node:test';
 import {
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
+  dsl4TurboWarpBrowserBundleMaximumBytes,
 } from '../src/builder/index.js';
 import {
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
   decodeDsl4PreviewSourceGenerationWire,
+  dsl4BrowserTurboWarpStageMaximumProjectBytes,
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
 } from '../src/dsl4/index.js';
 
@@ -369,6 +371,121 @@ test('stops both watchers on browser disconnect without stopping the current run
   assert.equal(structureWatch.closed, 1);
 });
 
+test('serves copied browser and project artifacts through separate authenticated boundaries', async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-artifacts-'));
+  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceFilename = 'preview.k4.yml';
+  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
+  await Promise.all([
+    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(path.join(projectRoot, sourceFilename), validSource),
+  ]);
+  const runtime = createRuntimeProtocol();
+  const sourceWatch = fakeWatchFactory();
+  const structureWatch = fakeWatchFactory();
+  const projectBytes = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x01]);
+  const browserBundleBytes = new TextEncoder().encode('export const previewRuntime = true;\n');
+  const expectedProject = [...projectBytes];
+  const expectedBundle = new TextDecoder().decode(browserBundleBytes);
+  const host = createDsl4LocalPreviewHost({
+    projectRoot,
+    sourceManifestPath,
+    sourceManifest: manifest,
+    sourceFrontend: frontend,
+    maxSourceBytes: 4096,
+    protocolSession: runtime.protocol,
+    projectBytes,
+    browserBundleBytes,
+    watcherOptions: {
+      watchFactory: sourceWatch.factory,
+      quietWindowMs: 0,
+      retryIntervalMs: 1,
+      stabilityTimeoutMs: 3,
+    },
+    structureWatchFactory: structureWatch.factory,
+  });
+  projectBytes.fill(0);
+  browserBundleBytes.fill(0);
+
+  try {
+    const beforeStart = host.getSnapshot();
+    assert.deepEqual(beforeStart.runtimeArtifacts, {
+      available: true,
+      projectBytes: expectedProject.length,
+      browserBundleBytes: Buffer.byteLength(expectedBundle),
+    });
+    assert.equal(JSON.stringify(beforeStart).includes(expectedBundle), false);
+    await host.start();
+    const launchUrl = new URL(host.getLaunchUrl());
+    const token = launchUrl.hash.slice(1);
+
+    const bundleResponse = await fetch(`${launchUrl.origin}/runtime/browser.js`);
+    assert.equal(bundleResponse.status, 200);
+    assert.equal(bundleResponse.headers.get('cache-control'), 'no-store');
+    assert.equal(bundleResponse.headers.get('cross-origin-resource-policy'), 'same-origin');
+    assert.equal(await bundleResponse.text(), expectedBundle);
+
+    const disconnectedProject = await fetch(`${launchUrl.origin}/api/runtime-project`, {
+      method: 'POST',
+      headers: {
+        origin: launchUrl.origin,
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    assert.equal(disconnectedProject.status, 400);
+    assert.equal(
+      (await disconnectedProject.json()).error.code,
+      'K4-PREVIEW-TRANSPORT-DISCONNECTED',
+    );
+
+    await request(launchUrl.origin, '/api/connect', {body: {token}});
+    const deniedProject = await fetch(`${launchUrl.origin}/api/runtime-project`, {
+      method: 'POST',
+      headers: {
+        origin: 'http://127.0.0.1:1',
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    assert.equal(deniedProject.status, 400);
+    assert.equal((await deniedProject.json()).error.code, 'K4-PREVIEW-TRANSPORT-ORIGIN');
+
+    const projectResponse = await fetch(`${launchUrl.origin}/api/runtime-project`, {
+      method: 'POST',
+      headers: {
+        origin: launchUrl.origin,
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    assert.equal(projectResponse.status, 200);
+    assert.equal(projectResponse.headers.get('cache-control'), 'no-store');
+    assert.equal(projectResponse.headers.get('cross-origin-resource-policy'), 'same-origin');
+    assert.deepEqual([...new Uint8Array(await projectResponse.arrayBuffer())], expectedProject);
+
+    await writeFile(
+      sourceManifestPath,
+      `${JSON.stringify({...manifest, path: 'replacement.k4.yml'})}\n`,
+    );
+    structureWatch.emit('project.source.json');
+    await waitFor(
+      () => host.getSnapshot().rebuildRequired,
+      'artifact structural change did not require a rebuild',
+    );
+    assert.equal(host.getSnapshot().runtimeArtifacts, null);
+    assert.equal((await fetch(`${launchUrl.origin}/runtime/browser.js`)).status, 404);
+  } finally {
+    const disposed = await host.dispose();
+    assert.equal(disposed.runtimeArtifacts, null);
+    await runtime.liveReload.dispose();
+    await rm(projectRoot, {recursive: true, force: true});
+  }
+});
+
 test('fails before opening sockets for unsafe local host configuration', () => {
   const runtime = createRuntimeProtocol();
   const base = {
@@ -396,6 +513,35 @@ test('fails before opening sockets for unsafe local host configuration', () => {
         maxGenerationMessageBytes: dsl4PreviewSourceGenerationWireMaximumMessageBytes + 1,
       }),
     /maxGenerationMessageBytes/u,
+  );
+  assert.throws(
+    () => createDsl4LocalPreviewHost({...base, projectBytes: Uint8Array.of(1)}),
+    /must be provided together/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        projectBytes: new Uint8Array(0),
+        browserBundleBytes: Uint8Array.of(1),
+      }),
+    /projectBytes must contain/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        maxProjectBytes: dsl4BrowserTurboWarpStageMaximumProjectBytes + 1,
+      }),
+    /maxProjectBytes must be <=/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4LocalPreviewHost({
+        ...base,
+        maxBrowserBundleBytes: dsl4TurboWarpBrowserBundleMaximumBytes + 1,
+      }),
+    /maxBrowserBundleBytes must be <=/u,
   );
   void runtime.liveReload.dispose();
 });
