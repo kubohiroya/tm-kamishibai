@@ -138,6 +138,30 @@ test('parses a complete build-dsl4 contract and rejects incomplete or unbounded 
   assert.equal(parsed.options.historyNavigationAvailable, false);
   assert.equal(parsed.options.replaceExisting, false);
   assert.match(usage(), /build-dsl4/u);
+  assert.match(usage(), /--enable-source-includes/u);
+
+  const includes = parseCliArguments(
+    cliArguments(fixture, 'story.sb3', [
+      '--enable-source-includes',
+      '--max-source-files',
+      '8',
+      '--max-total-source-bytes',
+      String(limits.maxSourceBytes),
+      '--max-include-depth',
+      '4',
+    ]),
+  );
+  assert.deepEqual(includes.options.featureFlags, {
+    dsl4Runtime: true,
+    dsl4SourceIncludes: true,
+  });
+  assert.equal(includes.options.maxSourceFiles, 8);
+  assert.equal(includes.options.maxTotalSourceBytes, limits.maxSourceBytes);
+  assert.equal(includes.options.maxIncludeDepth, 4);
+  assert.throws(
+    () => parseCliArguments([...cliArguments(fixture), '--enable-source-includes']),
+    /Missing required option: --max-source-files/u,
+  );
 
   assert.throws(
     () => parseCliArguments(cliArguments(fixture).filter((value) => value !== '--channel')),
@@ -208,6 +232,67 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     assert.deepEqual(await readFile(fixture.baseSb3Path), inputBefore[0]);
     assert.deepEqual(await readFile(fixture.sourcePath), inputBefore[2]);
     assert.notDeepEqual(await readFile(fixture.sourceManifestPath), inputBefore[1]);
+  });
+});
+
+test('builds included sources only with the explicit CLI feature flag and graph limits', async () => {
+  await withFixture(async (fixture) => {
+    const chapterDirectory = path.join(fixture.directory, 'chapters', 'chapter1');
+    await mkdir(path.join(chapterDirectory, 'image'), {recursive: true});
+    await writeFile(
+      fixture.sourcePath,
+      `
+include: chapters/chapter1/scenario.k4.yml
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - goto: chapter1
+`,
+    );
+    await writeFile(
+      path.join(chapterDirectory, 'scenario.k4.yml'),
+      `
+assets:
+  ChapterBackground:
+    kind: backdrop
+    file: image/background.svg
+scenes:
+  chapter1:
+    - stage: ChapterBackground
+`,
+    );
+    await writeFile(path.join(chapterDirectory, 'image', 'background.svg'), '<svg/>');
+
+    const result = await runCli(
+      cliArguments(fixture, 'included.sb3', [
+        '--enable-source-includes',
+        '--max-source-files',
+        '8',
+        '--max-total-source-bytes',
+        String(limits.maxSourceBytes),
+        '--max-include-depth',
+        '4',
+      ]),
+      {stdout: {write() {}}},
+    );
+    const {project} = readSb3(await readFile(result.outputPath));
+    const loaded = await loadDsl4RuntimeComponent(project, frontend, {
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetBytes: limits.maxTotalAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+    assert.doesNotMatch(loaded.sourceDescriptor.text, /^include:/mu);
+    assert.match(loaded.sourceDescriptor.text, /chapters\/chapter1\/image\/background\.svg/u);
+    assert.deepEqual(
+      loaded.getAssetFile('ChapterBackground', 'background.svg'),
+      new TextEncoder().encode('<svg/>'),
+    );
   });
 });
 

@@ -90,6 +90,10 @@ async function persistSourceManifest(manifestPath, manifest) {
  * @param {number} options.maxAssetFileBytes
  * @param {number} options.maxAssetFiles
  * @param {number} options.maxTotalAssetBytes
+ * @param {unknown} [options.featureFlags]
+ * @param {number} [options.maxSourceFiles]
+ * @param {number} [options.maxTotalSourceBytes]
+ * @param {number} [options.maxIncludeDepth]
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {boolean} [options.replaceExisting]
  * @param {{digest: Function}} [options.subtleCrypto]
@@ -138,6 +142,12 @@ export async function buildDsl4RuntimeComponentFile(options) {
     maxAssetFileBytes: options.maxAssetFileBytes,
     maxAssetFiles: options.maxAssetFiles,
     maxTotalAssetBytes: options.maxTotalAssetBytes,
+    ...(options.featureFlags === undefined ? {} : {featureFlags: options.featureFlags}),
+    ...(options.maxSourceFiles === undefined ? {} : {maxSourceFiles: options.maxSourceFiles}),
+    ...(options.maxTotalSourceBytes === undefined
+      ? {}
+      : {maxTotalSourceBytes: options.maxTotalSourceBytes}),
+    ...(options.maxIncludeDepth === undefined ? {} : {maxIncludeDepth: options.maxIncludeDepth}),
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     replaceExisting: options.replaceExisting ?? false,
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),

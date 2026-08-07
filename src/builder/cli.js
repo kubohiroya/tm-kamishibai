@@ -51,6 +51,10 @@ DSL 3.1/3.2 build-sb3 options:
   --max-redirects N       Maximum HTTP redirects
 
 DSL 4.0 build-dsl4 options:
+  --enable-source-includes       Enable multi-file include processing
+  --max-source-files N          Maximum files in the include graph
+  --max-total-source-bytes N    Maximum total bytes in the include graph
+  --max-include-depth N         Maximum include graph depth
   --history-navigation-available  Permit a selected history.* keymap
   --replace-existing              Replace a same-channel component in the base SB3
 
@@ -240,8 +244,12 @@ function parseBuildSb3Arguments(rest) {
 function parseBuildDsl4Arguments(rest) {
   const values = new Map();
   const flags = new Set();
-  const booleanOptions = new Set(['--history-navigation-available', '--replace-existing']);
-  const valueOptions = new Set([
+  const booleanOptions = new Set([
+    '--enable-source-includes',
+    '--history-navigation-available',
+    '--replace-existing',
+  ]);
+  const requiredValueOptions = new Set([
     '--base',
     '--project-root',
     '--source-manifest',
@@ -252,6 +260,12 @@ function parseBuildDsl4Arguments(rest) {
     '--max-asset-file-bytes',
     '--max-asset-files',
     '--max-total-asset-bytes',
+  ]);
+  const valueOptions = new Set([
+    ...requiredValueOptions,
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
   ]);
   for (let index = 0; index < rest.length; index += 1) {
     const option = rest[index];
@@ -275,9 +289,20 @@ function parseBuildDsl4Arguments(rest) {
     values.set(option, value);
     index += 1;
   }
-  for (const required of valueOptions) {
+  for (const required of requiredValueOptions) {
     if (!values.has(required)) {
       throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+  if (flags.has('--enable-source-includes')) {
+    for (const required of [
+      '--max-source-files',
+      '--max-total-source-bytes',
+      '--max-include-depth',
+    ]) {
+      if (!values.has(required)) {
+        throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+      }
     }
   }
   /** @param {string} option */
@@ -303,6 +328,14 @@ function parseBuildDsl4Arguments(rest) {
     maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
     maxAssetFiles: positiveInteger('--max-asset-files'),
     maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
+    ...(flags.has('--enable-source-includes')
+      ? {
+          featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+          maxSourceFiles: positiveInteger('--max-source-files'),
+          maxTotalSourceBytes: positiveInteger('--max-total-source-bytes'),
+          maxIncludeDepth: positiveInteger('--max-include-depth'),
+        }
+      : {}),
     historyNavigationAvailable: flags.has('--history-navigation-available'),
     replaceExisting: flags.has('--replace-existing'),
   };
