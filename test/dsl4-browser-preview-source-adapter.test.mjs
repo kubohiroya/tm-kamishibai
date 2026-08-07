@@ -176,6 +176,63 @@ function createProject({
   };
 }
 
+function createIncludedProject() {
+  const manifest = {
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+    path: 'story.k4.yml',
+  };
+  const sources = new Map([
+    ['story.k4.yml', "include: chapters/scene.k4.yml\nkamishibai: '4.0'\nscenes:\n  opening: []\n"],
+    ['chapters/scene.k4.yml', 'scenes:\n  initial: []\n'],
+  ]);
+  const queuedChildReads = [];
+
+  function directory(prefix = '') {
+    return {
+      kind: 'directory',
+      async getDirectoryHandle(name) {
+        const nextPrefix = `${prefix}${name}/`;
+        if (![...sources.keys()].some((sourcePath) => sourcePath.startsWith(nextPrefix))) {
+          throw domError('NotFoundError');
+        }
+        return directory(nextPrefix);
+      },
+      async getFileHandle(name) {
+        if (prefix === '' && name === 'project.source.json') {
+          return createFileHandle(async () => encoder.encode(JSON.stringify(manifest)));
+        }
+        const sourcePath = `${prefix}${name}`;
+        const source = sources.get(sourcePath);
+        if (source === undefined) throw domError('NotFoundError');
+        return createFileHandle(async () => {
+          const queued =
+            sourcePath === 'chapters/scene.k4.yml' ? queuedChildReads.shift() : undefined;
+          return encoder.encode(queued ?? source);
+        });
+      },
+    };
+  }
+
+  const root = {
+    ...directory(),
+    async queryPermission() {
+      return 'granted';
+    },
+  };
+  return {
+    root,
+    queueChildReads(...sourcesToRead) {
+      queuedChildReads.push(...sourcesToRead);
+    },
+    setChild(source) {
+      if (source === null) sources.delete('chapters/scene.k4.yml');
+      else sources.set('chapters/scene.k4.yml', source);
+    },
+  };
+}
+
 function createFrontend() {
   return Object.freeze({
     parse(source, {sourceId}) {
@@ -204,7 +261,13 @@ function createFrontend() {
         ok: true,
         canonicalSource: source,
         diagnostics: [],
-        storyDocument: Object.freeze({kind: 'StoryDocument', version: '4.0'}),
+        storyDocument: Object.freeze({
+          kind: 'StoryDocument',
+          version: '4.0',
+          metadata: {},
+          scenes: [],
+          sourceMap: {},
+        }),
       });
     },
   });
@@ -271,7 +334,7 @@ test('loads the root-level default source when manifest path is omitted', async 
   const state = await setup.adapter.start(project.root);
   assert.equal(state.sourceDisplayName, 'story.kamishibai.yaml');
   assert.equal(setup.results.length, 1);
-  assert.equal(setup.results[0].ok, true);
+  assert.equal(setup.results[0].ok, true, JSON.stringify(setup.results[0].diagnostics));
   setup.adapter.dispose();
 });
 
@@ -432,6 +495,38 @@ test('coalesces overlapping polls and publishes only the latest stable rapid sav
     setup.results.some((result) => result.canonicalSource.includes('second')),
     false,
   );
+  setup.adapter.dispose();
+});
+
+test('publishes included browser sources only as one matching graph generation', async () => {
+  const project = createIncludedProject();
+  project.queueChildReads(
+    'scenes:\n  draft: []\n',
+    'scenes:\n  saved: []\n',
+    'scenes:\n  saved: []\n',
+    'scenes:\n  saved: []\n',
+  );
+  const setup = createAdapter(project, {
+    featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+    maxSourceFiles: 8,
+    maxTotalSourceBytes: 16 * 1024,
+    maxIncludeDepth: 4,
+    quietWindowMs: 1,
+    stabilityTimeoutMs: 100,
+    retryIntervalMs: 10,
+  });
+  await setup.adapter.start(project.root);
+
+  assert.equal(setup.results.length, 1);
+  assert.equal(setup.results[0].ok, true, JSON.stringify(setup.results[0].diagnostics));
+  assert.match(setup.results[0].canonicalSource, /saved/u);
+  assert.doesNotMatch(setup.results[0].canonicalSource, /draft/u);
+  assert.match(setup.results[0].sourceSnapshot.integrity, /^sha256-/u);
+
+  project.setChild(null);
+  await setup.adapter.pollNow();
+  assert.equal(setup.results.at(-1).ok, false);
+  assert.equal(setup.results.at(-1).diagnostics[0].code, 'K4-SOURCE-MISSING');
   setup.adapter.dispose();
 });
 

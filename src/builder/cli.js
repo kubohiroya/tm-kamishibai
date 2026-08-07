@@ -60,6 +60,10 @@ DSL 4.0 build-dsl4 options:
 
 DSL 4.0 preview-dsl4 options:
   --watch                         Keep watching the selected source (required)
+  --enable-source-includes        Enable transactional Source Graph watching
+  --max-source-files N            Maximum files in the include graph
+  --max-total-source-bytes N      Maximum graph total and composed source bytes
+  --max-include-depth N           Maximum include graph depth
   --port N                        Loopback port; 0 lets the OS select one (default)
   --replace-existing              Replace a same-channel component in the base SB3
 
@@ -363,7 +367,7 @@ function parseBuildDsl4Arguments(rest) {
 function parsePreviewDsl4Arguments(rest) {
   const values = new Map();
   const flags = new Set();
-  const booleanOptions = new Set(['--watch', '--replace-existing']);
+  const booleanOptions = new Set(['--watch', '--replace-existing', '--enable-source-includes']);
   const requiredValueOptions = new Set([
     '--base',
     '--project-root',
@@ -375,7 +379,12 @@ function parsePreviewDsl4Arguments(rest) {
     '--max-asset-files',
     '--max-total-asset-bytes',
   ]);
-  const valueOptions = new Set([...requiredValueOptions, '--port']);
+  const graphValueOptions = new Set([
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
+  ]);
+  const valueOptions = new Set([...requiredValueOptions, ...graphValueOptions, '--port']);
   for (let index = 0; index < rest.length; index += 1) {
     const option = rest[index];
     if (booleanOptions.has(option)) {
@@ -406,6 +415,20 @@ function parsePreviewDsl4Arguments(rest) {
       throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
     }
   }
+  const sourceIncludesEnabled = flags.has('--enable-source-includes');
+  if (sourceIncludesEnabled) {
+    for (const required of graphValueOptions) {
+      if (!values.has(required)) {
+        throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+      }
+    }
+  } else {
+    for (const option of graphValueOptions) {
+      if (values.has(option)) {
+        throw new Sb3BuilderError(`${option} requires --enable-source-includes.`, {stage: 'cli'});
+      }
+    }
+  }
   /** @param {string} option */
   const positiveInteger = (option) => {
     const value = Number(values.get(option));
@@ -430,6 +453,15 @@ function parsePreviewDsl4Arguments(rest) {
     });
   }
   const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxTotalSourceBytes = sourceIncludesEnabled
+    ? positiveInteger('--max-total-source-bytes')
+    : null;
+  if (maxTotalSourceBytes !== null && maxTotalSourceBytes < maxSourceBytes) {
+    throw new Sb3BuilderError(
+      '--max-total-source-bytes must be greater than or equal to --max-source-bytes.',
+      {stage: 'cli'},
+    );
+  }
   const maxAssetFiles = positiveInteger('--max-asset-files');
   for (const [option, value, maximum] of [
     ['--max-source-bytes', maxSourceBytes, dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes],
@@ -460,6 +492,14 @@ function parsePreviewDsl4Arguments(rest) {
     maxAssetFileBytes,
     maxAssetFiles,
     maxTotalAssetBytes,
+    ...(sourceIncludesEnabled
+      ? {
+          featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+          maxSourceFiles: positiveInteger('--max-source-files'),
+          maxTotalSourceBytes: /** @type {number} */ (maxTotalSourceBytes),
+          maxIncludeDepth: positiveInteger('--max-include-depth'),
+        }
+      : {}),
     replaceExisting: flags.has('--replace-existing'),
     port,
   };
@@ -561,7 +601,12 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
     return runPreview(
       {
         ...parsed.options,
-        sourceFrontend: createDsl4ProductionSourceFrontend(schema),
+        sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+          limits: {
+            maxCanonicalSourceBytes:
+              parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
+          },
+        }),
       },
       {stdout, stderr},
     );

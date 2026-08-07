@@ -449,11 +449,15 @@ test(
       client = await CdpClient.connect(pageWebSocketUrl);
       await client.send('Runtime.enable');
       await client.send('Page.enable');
-      await waitForEvaluation(
-        client,
-        "document.querySelector('#fixture-ready')?.textContent === 'Browser fixture ready.'",
-        'browser fixture startup',
-      );
+      try {
+        await waitForEvaluation(
+          client,
+          "document.querySelector('#fixture-ready')?.textContent === 'Browser fixture ready.'",
+          'browser fixture startup',
+        );
+      } catch (error) {
+        throw new Error(`${error.message}\n${JSON.stringify({exceptions: client.exceptions})}`);
+      }
 
       await click(client, '#dsl4-web-preview-open-project');
       await waitForEvaluation(

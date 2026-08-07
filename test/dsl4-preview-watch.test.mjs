@@ -7,7 +7,11 @@ import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from '../src/builder/index.js';
-import {createDsl4LiveReloadSession, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  createDsl4LiveReloadSession,
+  createDsl4SourceFrontend,
+  createDsl4SourceGraph,
+} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -56,11 +60,13 @@ function createFakeWatchFactory() {
   let listener = null;
   let errorListener = null;
   let directory = null;
+  let options = null;
   let closed = 0;
   return {
-    factory(watchedDirectory, watchedListener) {
+    factory(watchedDirectory, watchedListener, watchedOptions) {
       directory = watchedDirectory;
       listener = watchedListener;
+      options = watchedOptions ?? null;
       return {
         close() {
           closed += 1;
@@ -80,10 +86,27 @@ function createFakeWatchFactory() {
     get directory() {
       return directory;
     },
+    get options() {
+      return options;
+    },
     get closed() {
       return closed;
     },
   };
+}
+
+async function includedGraph(sceneId) {
+  const sources = new Map([
+    ['story.k4.yml', "include: chapters/scene.k4.yml\nkamishibai: '4.0'\nscenes:\n  opening: []\n"],
+    ['chapters/scene.k4.yml', `scenes:\n  ${sceneId}: []\n`],
+  ]);
+  return createDsl4SourceGraph('story.k4.yml', {
+    readSource(sourcePath) {
+      const source = sources.get(sourcePath);
+      if (source === undefined) throw sourceError('K4-SOURCE-MISSING');
+      return source;
+    },
+  });
 }
 
 function descriptor(text, integrity) {
@@ -402,6 +425,55 @@ test('uses the authorized stable loader and shared frontend for real disk update
   } finally {
     await rm(directory, {recursive: true, force: true});
   }
+});
+
+test('publishes one recursive Source Graph and asset generation only after two matching captures', async () => {
+  const graphSequence = ['draft', 'saved', 'saved', 'saved'];
+  let assetLoads = 0;
+  const setup = watcherOptions({
+    manifest: {...manifest, path: 'story.k4.yml'},
+    featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+    maxSourceFiles: 8,
+    maxTotalSourceBytes: 16 * 1024,
+    maxIncludeDepth: 4,
+    maxAssetFileBytes: 4096,
+    maxAssetFiles: 8,
+    maxTotalAssetBytes: 16 * 1024,
+    quietWindowMs: 1,
+    retryIntervalMs: 10,
+    stabilityTimeoutMs: 100,
+    loadSource: async () => ({descriptor: descriptor(validSource, 'sha256-entry')}),
+    loadSourceGraph: async () => includedGraph(graphSequence.shift() ?? 'saved'),
+    loadAssets: async () => {
+      assetLoads += 1;
+      return {manifest: {formatVersion: 1, assets: []}};
+    },
+  });
+  const watcher = createDsl4PreviewSourceWatcher(setup.options);
+  await watcher.start();
+
+  assert.equal(setup.watched.directory, '/project');
+  assert.deepEqual(setup.watched.options, {recursive: true});
+  assert.equal(assetLoads, 4);
+  assert.equal(setup.results.length, 1);
+  assert.equal(setup.results[0].ok, true);
+  assert.deepEqual(
+    setup.results[0].storyDocument.scenes.map(({id}) => id),
+    ['opening', 'saved'],
+  );
+  assert.doesNotMatch(setup.results[0].canonicalSource, /draft/u);
+  assert.equal(setup.results[0].sourceSnapshot.byteLength > validSource.length, true);
+
+  graphSequence.push('next', 'next');
+  setup.watched.emit('chapters/scene.k4.yml');
+  setup.clock.advance(1);
+  await watcher.whenIdle();
+  assert.equal(setup.results.length, 2);
+  assert.deepEqual(
+    setup.results[1].storyDocument.scenes.map(({id}) => id),
+    ['opening', 'next'],
+  );
+  await watcher.dispose();
 });
 
 test('feeds initial, invalid, and recovered snapshots directly into live reload', async () => {

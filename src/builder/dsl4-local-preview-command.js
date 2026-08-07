@@ -3,6 +3,7 @@ import {open} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {buildDsl4RuntimeComponent} from './dsl4-build.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {dsl4LocalPreviewBrowserBootstrapDefaults} from './dsl4-local-preview-browser-bootstrap.js';
@@ -10,6 +11,7 @@ import {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';
+import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {buildDsl4TurboWarpBrowserBundle} from './dsl4-turbowarp-browser-bundle.js';
 import {Sb3BuilderError} from './errors.js';
 
@@ -198,6 +200,29 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     1,
     dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
   );
+  const featureFlags = resolveDsl4FeatureFlags(options.featureFlags ?? {});
+  const sourceLimits = resolveDsl4BuildSourceLimits({
+    sourceIncludesEnabled: featureFlags.dsl4SourceIncludes,
+    maxSourceBytes,
+    maxTotalSourceBytes: options.maxTotalSourceBytes,
+  });
+  const graphOptions = featureFlags.dsl4SourceIncludes
+    ? {
+        maxSourceFiles: boundedInteger(
+          options.maxSourceFiles,
+          'maxSourceFiles',
+          1,
+          Number.MAX_SAFE_INTEGER,
+        ),
+        maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
+        maxIncludeDepth: boundedInteger(
+          options.maxIncludeDepth,
+          'maxIncludeDepth',
+          1,
+          Number.MAX_SAFE_INTEGER,
+        ),
+      }
+    : {};
   const maxAssetFileBytes = boundedInteger(
     options.maxAssetFileBytes,
     'maxAssetFileBytes',
@@ -336,6 +361,8 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
           maxAssetFileBytes,
           maxAssetFiles,
           maxTotalAssetBytes,
+          featureFlags,
+          ...graphOptions,
           replaceExisting: options.replaceExisting,
         }),
         buildBrowserBundle({entryPoint: browserEntryPoint}),
@@ -361,6 +388,11 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
         sourceManifest,
         sourceFrontend: options.sourceFrontend,
         maxSourceBytes,
+        featureFlags,
+        ...graphOptions,
+        maxAssetFileBytes,
+        maxAssetFiles,
+        maxTotalAssetBytes,
         runtimeOwner: 'browser',
         port,
         projectBytes,

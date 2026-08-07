@@ -74,6 +74,8 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 
 `--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
 
+local previewでも同じflagとgraph上限を指定できます。ON時はincluded sourceとlocal assetを含む全体を二回取得し、同じgeneration keyになった場合だけruntimeへstageします。新規sourceは任意のbasename／directoryで`.k4.yml` suffixを使用できます（entry sourceだけはmanifestのroot-level basenameです）。途中保存や一部assetだけが新しい状態は公開しません。詳細は[DSL 4.0 Source Graph Preview](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-source-include-preview.md)を参照してください。
+
 台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
 
 ```bash
@@ -87,6 +89,15 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
   --max-total-asset-bytes 67108864
+```
+
+Source Graphを監視する場合は、上のcommandへ次を追加します。
+
+```bash
+  --enable-source-includes \
+  --max-source-files 64 \
+  --max-total-source-bytes 4194304 \
+  --max-include-depth 32
 ```
 
 buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに検証できます。上限は省略できません。`pretty`は`filename:line:column`形式を、`json`はversion付き診断envelopeだけを出力し、source本文や絶対pathを含めません。終了statusは正常`0`、source／validation error `1`、CLI usage／internal failure `2`です。

@@ -147,6 +147,7 @@ export {
   Dsl4PreviewSourceGenerationWireError,
   encodeDsl4PreviewSourceGenerationWire,
 } from './preview-source-generation-wire.js';
+export {createDsl4PreviewSourceGraphGeneration} from './preview-source-graph-generation.js';
 export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';

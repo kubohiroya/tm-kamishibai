@@ -15,6 +15,9 @@ const optionKeys = new Set([
   'environment',
   'featureFlags',
   'maxSourceBytes',
+  'maxSourceFiles',
+  'maxTotalSourceBytes',
+  'maxIncludeDepth',
   'mount',
   'onError',
   'protocolSession',
@@ -60,6 +63,7 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
   module: 'src/builder/dsl4-web-preview-shell.js',
   featureFlags: [
     'dsl4Runtime',
+    'dsl4SourceIncludes',
     'dsl4AppShell',
     'dsl4WebPreviewAdapter',
     'dsl4WebPreviewAssetLiveReload',
@@ -420,7 +424,9 @@ export function createDsl4WebPreviewShell(input = {}) {
 
   /** @param {Readonly<Record<string, any>>} result */
   function queueAssetSource(result) {
-    if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) return;
+    if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) {
+      return Promise.resolve();
+    }
     const context = {
       sourceResult: result,
       structuralFingerprint: assetPipelineOptions.structuralFingerprint,
@@ -434,6 +440,23 @@ export function createDsl4WebPreviewShell(input = {}) {
       }
     });
     observe(assetSourceQueue);
+    return assetSourceQueue;
+  }
+
+  /** @param {Readonly<Record<string, any>>} result */
+  async function prepareIncludedSourceAssets(result) {
+    if (
+      result.ok !== true ||
+      !featureFlags.dsl4SourceIncludes ||
+      !featureFlags.dsl4WebPreviewAssetLiveReload
+    ) {
+      return;
+    }
+    await queueAssetSource(result);
+    const transaction = assetPipeline?.getState()?.transaction;
+    if (!transaction || !['ready', 'active'].includes(transaction.status)) {
+      throw new TypeError('Source Graph assets must be stable before source candidate staging');
+    }
   }
 
   /** @param {Readonly<Record<string, any>>} projectRoot */
@@ -666,15 +689,20 @@ export function createDsl4WebPreviewShell(input = {}) {
         sessionId: input.sessionId,
         sourceFrontend: input.sourceFrontend,
         maxSourceBytes: input.maxSourceBytes,
+        featureFlags,
+        maxSourceFiles: input.maxSourceFiles,
+        maxTotalSourceBytes: input.maxTotalSourceBytes,
+        maxIncludeDepth: input.maxIncludeDepth,
         capabilities: input.capabilities,
         sourceOptions: input.sourceOptions,
         onProjectRoot: setProjectRoot,
+        beforeSourceStage: prepareIncludedSourceAssets,
         onSourceResult(/** @type {Readonly<Record<string, unknown>>} */ result) {
           const details = sourceDetails(result);
           if (details) detailsByIntegrity.set(details.integrity, details);
           if (result.ok === true) {
             latestValidSourceResult = /** @type {Readonly<Record<string, any>>} */ (result);
-            queueAssetSource(latestValidSourceResult);
+            if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
           }
         },
         onProtocolEvent,

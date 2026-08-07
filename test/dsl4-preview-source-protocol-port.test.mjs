@@ -485,6 +485,52 @@ test('composes browser polling with handshake, stage, commit, and disconnect', a
   );
 });
 
+test('waits for the generation preparation gate before staging a browser source', async () => {
+  const fixture = createProtocol();
+  const project = createBrowserProject();
+  const entered = deferred();
+  const release = deferred();
+  const coordinator = createDsl4BrowserPreviewCoordinator({
+    protocolSession: fixture.protocol,
+    sessionId: 'browser-generation-gate',
+    sourceFrontend: {
+      parse(source) {
+        return {
+          ok: true,
+          canonicalSource: source,
+          diagnostics: [],
+          storyDocument: {kind: 'StoryDocument', version: '4.0'},
+        };
+      },
+    },
+    maxSourceBytes: 4096,
+    sourceOptions: {
+      clock: createClock(),
+      document: createDocument(),
+      subtleCrypto: webcrypto.subtle,
+    },
+    async beforeSourceStage() {
+      entered.resolve();
+      await release.promise;
+    },
+  });
+
+  const starting = coordinator.start(project.root);
+  await entered.promise;
+  assert.deepEqual(
+    fixture.calls.map(({type}) => type),
+    ['preview.handshake'],
+  );
+  release.resolve();
+  const started = await starting;
+  assert.equal(started.protocol.latestRevision, 1);
+  assert.deepEqual(
+    fixture.calls.map(({type}) => type),
+    ['preview.handshake', 'preview.source.stage'],
+  );
+  await coordinator.dispose();
+});
+
 test('rejects malformed ports and operations before protocol mutation', async () => {
   const fixture = createProtocol();
   for (const overrides of [
