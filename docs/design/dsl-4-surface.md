@@ -326,11 +326,10 @@ stateを0〜100へ投影します。`scratchMirror`はScratch側の書換えを�
 `scratchBinding`は各pose計算tickの開始時に1回だけ両変数をatomicにsampleし、そのtickの
 confidence積分前に反映します。Scratch VMがnumeric inputをstringで保持する場合に限り、十進数と
 等価なstringも数値化します。空文字、非数文字列、NaN、Infinity、0〜100範囲外、hex等は
-pair全体を取り込まず、直前のJavaScript投影値へ戻します。同tick内に同じ変数へ複数回書かれた場合は
-最終値を選ばずpair全体を競合として取り込みません。binding session中はScratch variableのconfigurableな
-`value` setterをplatform境界でwrapし、JavaScript投影を除く成功したsetごとの単調revisionで競合を
-検出します。wrapできないvariableではbindingを開始しません。completed／cancelledのterminal eventでは
-bindingを無効にして両変数を直ちに0へ戻し、platform sessionのdisposeでも0 resetとsetter復元を行います。
+pair全体を取り込まず、直前のJavaScript投影値へ戻します。同tick内に同じ変数へ複数回書かれた場合は、
+Scratch runtimeの決定済み実行順による最終値をtick境界でsampleします。variable setterのwrapやwrite回数の
+追跡は行わないため、通常のScratch last-write-wins semanticsを変更しません。completed／cancelledの
+terminal eventではbindingを無効にして両変数を直ちに0へ戻し、platform sessionのdisposeでも0 resetします。
 
 省略時は`scratchMirror`です。runtime内部のsemantic eventは`phase`、`target`、`pose`、`stepIndex`、
 0〜1の`confidence`／`progress`だけを持ち、Scratch variable ID、DOM、TurboWarp monitorを持ちません。

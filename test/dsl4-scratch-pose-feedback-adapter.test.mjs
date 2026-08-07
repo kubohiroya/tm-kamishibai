@@ -90,7 +90,7 @@ test('scratchBinding accepts one valid write per variable at each tick boundary'
   assert.deepEqual(adapter.readPoseStateBinding(), {progress: 0.7});
 });
 
-test('scratchBinding rejects repeated writes in one projected tick instead of choosing a winner', () => {
+test('scratchBinding samples the final ordered writes at one projected tick boundary', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
     runtime: setup.runtime,
@@ -101,17 +101,13 @@ test('scratchBinding rejects repeated writes in one projected tick instead of ch
   setup.confidence.value = 25;
   setup.confidence.value = 75;
   setup.progress.value = 50;
-  assert.equal(adapter.readPoseStateBinding(), null);
-  assert.equal(setup.confidence.value, 40);
-  assert.equal(setup.progress.value, 20);
+  assert.deepEqual(adapter.readPoseStateBinding(), {confidence: 0.75, progress: 0.5});
 
   adapter.onPoseState(event({phase: 'charging', confidence: 0.5, progress: 0.3}));
   setup.confidence.value = 80;
   setup.progress.value = 60;
   setup.progress.value = 70;
-  assert.equal(adapter.readPoseStateBinding(), null);
-  assert.equal(setup.confidence.value, 50);
-  assert.equal(setup.progress.value, 30);
+  assert.deepEqual(adapter.readPoseStateBinding(), {confidence: 0.8, progress: 0.7});
 });
 
 test('scratchBinding rejects an invalid pair atomically and restores the last projection', () => {
@@ -148,7 +144,7 @@ test('completed and cancelled terminal states disable binding and reset both var
     runtime: setup.runtime,
     mode: 'scratchBinding',
   });
-  assert.equal(typeof Object.getOwnPropertyDescriptor(setup.confidence, 'value').set, 'function');
+  assert.deepEqual(Object.getOwnPropertyDescriptor(setup.confidence, 'value'), originalDescriptor);
   adapter.onPoseState(event({phase: 'charging', confidence: 0.7, progress: 0.6}));
   adapter.onPoseState(event({phase: 'completed', confidence: 1, progress: 1}));
   assert.equal(setup.confidence.value, 0);
@@ -245,8 +241,13 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
     writable: true,
     configurable: false,
   });
-  assert.throws(
-    () => createDsl4ScratchPoseFeedbackAdapter({runtime: fixed.runtime, mode: 'scratchBinding'}),
-    (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
-  );
+  const fixedAdapter = createDsl4ScratchPoseFeedbackAdapter({
+    runtime: fixed.runtime,
+    mode: 'scratchBinding',
+  });
+  fixedAdapter.onPoseState(event({phase: 'waiting', confidence: 0.2, progress: 0.1}));
+  fixed.confidence.value = 75;
+  assert.deepEqual(fixedAdapter.readPoseStateBinding(), {confidence: 0.75});
+  fixedAdapter.dispose();
+  assert.equal(fixed.confidence.value, 0);
 });

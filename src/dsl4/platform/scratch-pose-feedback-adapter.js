@@ -64,8 +64,8 @@ function resolveVariable(stage, name) {
   return variable;
 }
 
-/** @param {Record<string, unknown>} variable @param {boolean} observeWrites @param {string} name */
-function createVariableChannel(variable, observeWrites, name) {
+/** @param {Record<string, unknown>} variable @param {string} name */
+function createVariableChannel(variable, name) {
   const descriptor = Object.getOwnPropertyDescriptor(variable, 'value');
   if (!descriptor) {
     throw adapterError('K4-TW-POSE-FEEDBACK-001', `Scratch variable has no value: ${name}`);
@@ -83,59 +83,20 @@ function createVariableChannel(variable, observeWrites, name) {
       `Scratch variable is not readable/writable: ${name}`,
     );
   }
-  if (observeWrites && descriptor.configurable !== true) {
-    throw adapterError(
-      'K4-TW-POSE-FEEDBACK-001',
-      `Scratch variable cannot expose binding revisions: ${name}`,
-    );
-  }
-
-  let dataValue = descriptor.value;
-  let revision = 0;
-  let observing = false;
   const readUnderlying = dataProperty
-    ? observeWrites
-      ? () => dataValue
-      : () => variable.value
+    ? () => variable.value
     : () => /** @type {Function} */ (descriptor.get).call(variable);
   const writeUnderlying = dataProperty
-    ? observeWrites
-      ? (/** @type {unknown} */ value) => {
-          dataValue = value;
-        }
-      : (/** @type {unknown} */ value) => {
-          variable.value = value;
-        }
+    ? (/** @type {unknown} */ value) => {
+        variable.value = value;
+      }
     : (/** @type {unknown} */ value) => {
         /** @type {Function} */ (descriptor.set).call(variable, value);
       };
 
-  if (observeWrites) {
-    Object.defineProperty(variable, 'value', {
-      configurable: true,
-      enumerable: descriptor.enumerable ?? true,
-      get: readUnderlying,
-      set(value) {
-        writeUnderlying(value);
-        revision += 1;
-      },
-    });
-    observing = true;
-  }
-
   return {
     read: readUnderlying,
     writeAuthoritative: writeUnderlying,
-    getRevision: () => revision,
-    detach() {
-      if (!observing) return;
-      observing = false;
-      if (dataProperty) {
-        Object.defineProperty(variable, 'value', {...descriptor, value: dataValue});
-      } else {
-        Object.defineProperty(variable, 'value', descriptor);
-      }
-    },
   };
 }
 
@@ -149,9 +110,9 @@ function throwCollected(errors, message) {
 /**
  * Create one platform-only consumer for the renderer-independent pose state contract.
  *
- * In binding mode, configurable Scratch value properties are wrapped for the session lifetime.
- * Every successful external set increments a monotonic revision; authoritative projections bypass
- * that revision so the adapter can reject more than one write to either variable in one pose tick.
+ * In binding mode, Scratch keeps its normal ordered-write semantics. The adapter samples the final
+ * variable pair once at the pose tick boundary, so multiple writes deterministically use the last
+ * values produced by the Scratch runtime. Invalid final pairs are restored atomically.
  *
  * @param {object} options
  * @param {unknown} options.runtime
@@ -182,29 +143,19 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
   if (confidenceVariable === progressVariable) {
     throw adapterError('K4-TW-POSE-FEEDBACK-001', 'Scratch pose feedback variables are ambiguous');
   }
-  const observeWrites = options.mode === 'scratchBinding';
-  const confidenceChannel = createVariableChannel(
-    confidenceVariable,
-    observeWrites,
-    variableNames.confidence,
-  );
+  const confidenceChannel = createVariableChannel(confidenceVariable, variableNames.confidence);
   /** @type {ReturnType<typeof createVariableChannel>} */
   let progressChannel;
   try {
-    progressChannel = createVariableChannel(
-      progressVariable,
-      observeWrites,
-      variableNames.progress,
-    );
+    progressChannel = createVariableChannel(progressVariable, variableNames.progress);
   } catch (error) {
-    confidenceChannel.detach();
     throw error;
   }
 
   let disposed = false;
   let active = false;
   let sampled = true;
-  /** @type {{confidence: number, progress: number, confidenceRevision: number, progressRevision: number} | null} */
+  /** @type {{confidence: number, progress: number} | null} */
   let projection = null;
 
   /** @param {{confidence: number, progress: number}} value */
@@ -259,11 +210,7 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
         progress: event.progress * 100,
       };
       writePair(nextProjection);
-      projection = {
-        ...nextProjection,
-        confidenceRevision: confidenceChannel.getRevision(),
-        progressRevision: progressChannel.getRevision(),
-      };
+      projection = nextProjection;
       active = true;
       sampled = false;
     },
@@ -273,12 +220,6 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
         return null;
       }
       sampled = true;
-      const confidenceWriteCount = confidenceChannel.getRevision() - projection.confidenceRevision;
-      const progressWriteCount = progressChannel.getRevision() - projection.progressRevision;
-      if (confidenceWriteCount > 1 || progressWriteCount > 1) {
-        restoreProjection();
-        return null;
-      }
       const confidence = parseScratchPercentage(confidenceChannel.read());
       const progress = parseScratchPercentage(progressChannel.read());
       if (confidence === null || progress === null) {
@@ -305,13 +246,6 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
         writePair({confidence: 0, progress: 0});
       } catch (error) {
         errors.push(error);
-      }
-      for (const channel of [progressChannel, confidenceChannel]) {
-        try {
-          channel.detach();
-        } catch (error) {
-          errors.push(error);
-        }
       }
       throwCollected(errors, 'Scratch pose feedback cleanup failed');
     },
