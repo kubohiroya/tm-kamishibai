@@ -106,9 +106,9 @@ test('assigns unique machine-readable diagnostics and finite recovery states', (
   }
 });
 
-test('does not advertise a nonexistent live preview command', () => {
-  assert.equal(contract.fallback.livePreviewCommandImplemented, false);
-  assert.equal(contract.fallback.livePreviewCommand, null);
+test('advertises only the implemented bounded live preview command', () => {
+  assert.equal(contract.fallback.livePreviewCommandImplemented, true);
+  assert.equal(contract.fallback.livePreviewCommand, 'tmpose-kamishibai preview-dsl4 --watch');
   assert.equal(contract.fallback.trackingIssue, 258);
   assert.equal(contract.fallback.validateCommand, 'tmpose-kamishibai validate-dsl4');
   assert.equal(contract.fallback.buildCommand, 'tmpose-kamishibai build-dsl4');

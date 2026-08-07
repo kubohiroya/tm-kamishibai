@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #423の段階実装（browser-owned runtime bootstrap）
+文書状態: Issue #423実装済み（browser-owned runtimeとpublic CLI）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#423](https://github.com/kubohiroya/tmpose-kamishibai/issues/423)
@@ -13,8 +13,10 @@ local preview browser pageで作品を実際に表示するruntimeはbrowser側�
 TurboWarp target、audio contextを必要とするため、Node内のheadless VMを作者previewの正本にはしません。Node側は
 loopback server、project root内のsource read／watch、production source frontend、認証済みtransportを所有します。
 
-公開CLI argument、signal、browser openは、browser runtime surfaceが初回sourceを実行できる段階まで公開しません。
-reload statusだけを表示して作品を実行しないcommandを`preview`として提供しないためです。
+`preview-dsl4 --watch`はこのbrowser-owned runtime surfaceをpublic CLIへ接続します。Nodeはbase runtimeと
+self-contained browser bundleをmemory上でbuildし、system browserが作品stageと初回generationを起動した
+後の認証済みready ackだけを成功境界とします。reload statusだけを表示し、作品を実行しない
+commandは提供しません。
 
 ## 2. source generation wire
 
@@ -55,8 +57,8 @@ browser内の共有preview protocolでcandidate化し、commit／defer／manual 
 現在のruntimeを維持し、manual restart用の最新valid generationを置換しません。bridgeの公開snapshotとobserverには
 StoryDocumentを含めません。disposeはprotocol接続を切断した後、current runtime sessionを一度だけ停止・解放します。
 
-このbridgeはtransportとUIを所有せず、具体的なTurboWarp VM／renderer session factoryを次段から注入します。実VMが
-接続されるまでlocal preview clientおよび公開CLIから有効化しません。
+このbridgeはtransportとUIを所有せず、browser clientが具体的なTurboWarp VM／renderer session factoryと
+共通reload overlayを合成します。public CLIはこの実VM compositionだけをbrowser ownerとして起動します。
 
 ## 5. TurboWarp stage ownership
 
@@ -101,8 +103,8 @@ preview接続のexact Originとbearer tokenを再検証した後だけ配信し�
 fail-closedにし、source／generation APIのJSON payloadへSB3 byteを混在させません。
 
 artifact pairはhost disposeまたはbase SB3、asset、app shell、extension、builder設定のfull rebuild要求で参照を破棄します。
-同じNode processで新しいartifactへ暗黙差し替えせず、新host／browser sessionを要求します。この段階では配信境界だけを
-追加し、既存のfake runtime clientとpublic CLIからは有効化しません。
+同じNode processで新しいartifactへ暗黙差し替えせず、新host／browser sessionを要求します。public CLIは
+この配信境界にbase SB3とproduction browser bundleの両方を渡し、fake runtime clientを使いません。
 
 ### 5.2 runtime session factory
 
@@ -125,8 +127,8 @@ camera／asset／input ownerが重複する時間を作りません。
 `resetManagedPresentation`を呼びます。現在actionからの再開だけは同じVM target上のmanaged presentationを保持し、resetを
 呼びません。factoryはこのcallbackを必須とするため、reset境界を実装していないstageを実runtimeへ誤接続できません。
 
-この段階でもlocal preview clientは従来のfake runtime protocolを使用し、public CLIは未公開です。次段でbase SB3からの
-component読込、stage reset、generation stream、runtime bridgeを単一browser bootstrapへ接続します。
+production local preview clientはbase SB3からのcomponent読込、stage reset、generation stream、runtime bridgeを
+単一browser bootstrapへ接続します。fake runtime protocolは境界test用に限定し、public CLIは使用しません。
 
 ### 5.3 base runtime component loader
 
@@ -150,7 +152,8 @@ targetとしてsession lifetimeへattachします。generation bridgeはwireで�
 
 startup failure、startup中のpage close、通常disposeではgeneration bridge／runtime environmentを先に、TurboWarp VM／stageを
 後に解放します。base componentがinvalidな場合はplatformをinspectせず、stage／camera／rendererを確保しません。このownerは
-browser bundle entryが認証済みhost transportと共通reload overlayを合成するまでpublic CLIから起動しません。
+browser bundle entryは認証済みhost transport、実TurboWarp runtime、共通reload overlayを合成し、
+public CLIのready契約に接続します。
 
 ### 5.5 browser-owned host transport
 

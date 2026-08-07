@@ -237,7 +237,11 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'dsl4WebPreviewAssetLiveReload',
       'dsl4PreviewReloadOverlay',
     ],
-    fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
+    fallbackCommands: [
+      'tmpose-kamishibai preview-dsl4 --watch',
+      'tmpose-kamishibai validate-dsl4',
+      'tmpose-kamishibai build-dsl4',
+    ],
   });
 });
 
@@ -499,6 +503,7 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
   });
   const fallback = findById(shell.element, 'dsl4-web-preview-fallback');
   assert.equal(fallback.hidden, false);
+  assert.match(fallback.textContent, /preview-dsl4 --watch/u);
   assert.match(fallback.textContent, /validate-dsl4/u);
   assert.equal(shell.getSnapshot().diagnosticCode, 'K4-WEB-PREVIEW-UNSUPPORTED');
 

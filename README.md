@@ -37,7 +37,8 @@ pnpm exec tmpose-kamishibai build-sb3 \
 {
   "formatVersion": 1,
   "mode": "external",
-  "sourceId": "main"
+  "sourceId": "main",
+  "path": "story.k4.yml"
 }
 ```
 
@@ -46,7 +47,7 @@ pnpm exec tmpose-kamishibai build-sb3 \
 ```text
 project-root/
 ├── project.source.json
-├── story.kamishibai.yaml
+├── story.k4.yml
 ├── hero.svg
 ├── opening.mp3
 └── rescue-pose/
@@ -69,13 +70,28 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
-`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込み、`delivery: remote`を明示したassetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。`preview --watch`はこのcommandには含まれません。
+`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込み、`delivery: remote`を明示したassetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
 
-buildや将来のpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに検証できます。上限は省略できません。`pretty`は`filename:line:column`形式を、`json`はversion付き診断envelopeだけを出力し、source本文や絶対pathを含めません。終了statusは正常`0`、source／validation error `1`、CLI usage／internal failure `2`です。
+台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
+
+```bash
+pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+  --base kamishibai-4-base.sb3 \
+  --project-root . \
+  --source-manifest project.source.json \
+  --control-profile production \
+  --channel bundled \
+  --max-source-bytes 65536 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 64 \
+  --max-total-asset-bytes 67108864
+```
+
+buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに検証できます。上限は省略できません。`pretty`は`filename:line:column`形式を、`json`はversion付き診断envelopeだけを出力し、source本文や絶対pathを含めません。終了statusは正常`0`、source／validation error `1`、CLI usage／internal failure `2`です。
 
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.kamishibai.yaml \
+  --input story.k4.yml \
   --max-source-bytes 1048576 \
   --format pretty
 ```
