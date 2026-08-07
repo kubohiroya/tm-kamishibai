@@ -1,10 +1,13 @@
+import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4DevelopmentPreviewShell} from './dsl4-preview-shell.js';
 
 const optionKeys = new Set([
+  'assetPipelineOptions',
   'capabilities',
+  'createAssetPipeline',
   'createCoordinator',
   'document',
   'environment',
@@ -43,7 +46,12 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
   formatVersion: 1,
   production: false,
   module: 'src/builder/dsl4-web-preview-shell.js',
-  featureFlags: ['dsl4Runtime', 'dsl4AppShell', 'dsl4WebPreviewAdapter'],
+  featureFlags: [
+    'dsl4Runtime',
+    'dsl4AppShell',
+    'dsl4WebPreviewAdapter',
+    'dsl4WebPreviewAssetLiveReload',
+  ],
   fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
 });
 
@@ -141,6 +149,37 @@ function validateCoordinator(value) {
   return /** @type {Record<string, Function>} */ (value);
 }
 
+/** @param {unknown} value */
+function validateAssetPipeline(value) {
+  if (
+    !isRecord(value) ||
+    typeof value.start !== 'function' ||
+    typeof value.updateSource !== 'function' ||
+    typeof value.pollNow !== 'function' ||
+    typeof value.dispose !== 'function' ||
+    typeof value.getState !== 'function' ||
+    typeof value.whenIdle !== 'function'
+  ) {
+    throw new TypeError('browser asset pipeline does not implement the required contract');
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
+/** @param {unknown} value */
+function validateAssetPipelineOptions(value) {
+  if (!isRecord(value)) throw new TypeError('assetPipelineOptions must be an object');
+  if (
+    typeof value.structuralFingerprint !== 'string' ||
+    !/^sha256-[A-Za-z0-9+/]{43}=$/u.test(value.structuralFingerprint)
+  ) {
+    throw new TypeError('assetPipelineOptions.structuralFingerprint must be canonical SHA-256 SRI');
+  }
+  if (!isRecord(value.adapterOptions) || typeof value.prepareGeneration !== 'function') {
+    throw new TypeError('assetPipelineOptions must provide adapterOptions and prepareGeneration');
+  }
+  return /** @type {Record<string, any>} */ (value);
+}
+
 /**
  * Mount the development-only browser project picker and connect it to the reload shell.
  *
@@ -180,6 +219,15 @@ export function createDsl4WebPreviewShell(input = {}) {
   const createCoordinator = input.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
   if (typeof createCoordinator !== 'function') {
     throw new TypeError('createCoordinator must be a function');
+  }
+  const assetPipelineOptions = featureFlags.dsl4WebPreviewAssetLiveReload
+    ? validateAssetPipelineOptions(input.assetPipelineOptions)
+    : null;
+  const createAssetPipeline = featureFlags.dsl4WebPreviewAssetLiveReload
+    ? (input.createAssetPipeline ?? createDsl4BrowserAssetReloadPipeline)
+    : null;
+  if (createAssetPipeline !== null && typeof createAssetPipeline !== 'function') {
+    throw new TypeError('createAssetPipeline must be a function');
   }
 
   const host = element(document, 'section');
@@ -233,6 +281,14 @@ export function createDsl4WebPreviewShell(input = {}) {
   /** @type {Promise<unknown> | null} */
   let disposePromise = null;
   const detailsByIntegrity = new Map();
+  /** @type {Record<string, any> | null} */
+  let selectedProjectRoot = null;
+  /** @type {Readonly<Record<string, any>> | null} */
+  let latestValidSourceResult = null;
+  /** @type {Record<string, Function> | null} */
+  let assetPipeline = null;
+  let assetPipelineStarted = false;
+  let assetSourceQueue = Promise.resolve();
 
   /** @param {unknown} error */
   function reportError(error) {
@@ -249,6 +305,41 @@ export function createDsl4WebPreviewShell(input = {}) {
   /** @param {Promise<unknown> | unknown} operation */
   function observe(operation) {
     Promise.resolve(operation).catch(reportError);
+  }
+
+  /** @param {string} name @param {...unknown} values */
+  async function notifyAssetObserver(name, ...values) {
+    const observer = assetPipelineOptions?.[name];
+    if (typeof observer !== 'function') return;
+    try {
+      await observer(...values);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  /** @param {Readonly<Record<string, any>>} result */
+  function queueAssetSource(result) {
+    if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) return;
+    const context = {
+      sourceResult: result,
+      structuralFingerprint: assetPipelineOptions.structuralFingerprint,
+    };
+    assetSourceQueue = assetSourceQueue.then(async () => {
+      if (disposed || !assetPipeline) return;
+      if (assetPipelineStarted) await assetPipeline.updateSource(context);
+      else {
+        assetPipelineStarted = true;
+        await assetPipeline.start(selectedProjectRoot, context);
+      }
+    });
+    observe(assetSourceQueue);
+  }
+
+  /** @param {Readonly<Record<string, any>>} projectRoot */
+  function setProjectRoot(projectRoot) {
+    selectedProjectRoot = projectRoot;
+    if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
   }
 
   /** @param {Readonly<Record<string, any>>} view */
@@ -428,6 +519,43 @@ export function createDsl4WebPreviewShell(input = {}) {
     onError: reportError,
   });
 
+  if (createAssetPipeline && assetPipelineOptions) {
+    try {
+      assetPipeline = validateAssetPipeline(
+        createAssetPipeline({
+          ...assetPipelineOptions,
+          sessionId: input.sessionId,
+          onEvent: (/** @type {Readonly<Record<string, unknown>>} */ event) =>
+            notifyAssetObserver('onEvent', event),
+          onDiagnostic: async (
+            /** @type {Readonly<Record<string, unknown>> | null} */ diagnostic,
+          ) => {
+            await notifyAssetObserver('onDiagnostic', diagnostic);
+            if (disposed) return;
+            if (diagnostic === null) {
+              if (diagnosticCode?.startsWith('K4-ASSET-')) {
+                diagnosticCode = null;
+                diagnosticStatus.textContent = '';
+              }
+              return;
+            }
+            renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic));
+          },
+          onWatchStatus: (/** @type {Readonly<Record<string, unknown>>} */ state) =>
+            notifyAssetObserver('onWatchStatus', state),
+          onError: (/** @type {unknown} */ error) => {
+            void notifyAssetObserver('onError', error);
+            reportError(error);
+          },
+        }),
+      );
+    } catch (error) {
+      previewShell.dispose();
+      if (typeof host.remove === 'function') host.remove();
+      throw error;
+    }
+  }
+
   /** @type {Record<string, Function>} */
   let coordinator;
   try {
@@ -439,9 +567,14 @@ export function createDsl4WebPreviewShell(input = {}) {
         maxSourceBytes: input.maxSourceBytes,
         capabilities: input.capabilities,
         sourceOptions: input.sourceOptions,
+        onProjectRoot: setProjectRoot,
         onSourceResult(/** @type {Readonly<Record<string, unknown>>} */ result) {
           const details = sourceDetails(result);
           if (details) detailsByIntegrity.set(details.integrity, details);
+          if (result.ok === true) {
+            latestValidSourceResult = /** @type {Readonly<Record<string, any>>} */ (result);
+            queueAssetSource(latestValidSourceResult);
+          }
         },
         onProtocolEvent,
         onSourceStatus,
@@ -496,6 +629,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       diagnosticCode,
       sourceDisplayName,
       preview: previewShell.getSnapshot(),
+      assetPipeline: assetPipeline?.getState() ?? null,
       coordinator: coordinator.getState(),
     });
   }
@@ -512,7 +646,9 @@ export function createDsl4WebPreviewShell(input = {}) {
     detailsByIntegrity.clear();
     activeDetails = null;
     candidateDetails = null;
-    disposePromise = Promise.resolve(coordinator.dispose()).then(snapshot);
+    selectedProjectRoot = null;
+    latestValidSourceResult = null;
+    disposePromise = Promise.all([coordinator.dispose(), assetPipeline?.dispose()]).then(snapshot);
     return disposePromise;
   }
 
@@ -525,10 +661,21 @@ export function createDsl4WebPreviewShell(input = {}) {
     start(projectRoot) {
       if (disposed) throw new TypeError('Web Preview shell is disposed');
       openButton.disabled = true;
+      if (assetPipeline) setProjectRoot(/** @type {Record<string, any>} */ (projectRoot));
       return coordinator.start(projectRoot);
     },
-    pollNow: () => coordinator.pollNow(),
-    whenIdle: () => coordinator.whenIdle(),
+    async pollNow() {
+      await coordinator.pollNow();
+      await assetSourceQueue;
+      if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
+      return snapshot();
+    },
+    async whenIdle() {
+      await coordinator.whenIdle();
+      await assetSourceQueue;
+      if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
+      return snapshot();
+    },
     getSnapshot: snapshot,
     dispose,
   });

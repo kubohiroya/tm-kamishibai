@@ -496,6 +496,16 @@ test('invalidates pending reads and removes timers and listeners exactly once on
   assert.deepEqual(setup.adapter.dispose(), setup.adapter.getState());
 });
 
+test('hands the selected root to an in-process asset adapter without serializing it into state', async () => {
+  const project = createProject();
+  const selected = [];
+  const setup = createAdapter(project, {onProjectRoot: (root) => selected.push(root)});
+  await setup.adapter.start(project.root);
+  assert.deepEqual(selected, [project.root]);
+  assert.equal(JSON.stringify(setup.adapter.getState()).includes('getFileHandle'), false);
+  setup.adapter.dispose();
+});
+
 test('rejects unsafe limits and malformed injected platform contracts before side effects', () => {
   const project = createProject();
   const base = {
