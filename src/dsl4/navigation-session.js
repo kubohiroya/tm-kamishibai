@@ -71,6 +71,7 @@ function historyFailure(result) {
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
  * @param {number} [options.quiesceTimeoutMs]
@@ -92,6 +93,7 @@ export function createDsl4NavigationSession({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
+  inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
   quiesceTimeoutMs,
@@ -112,6 +114,24 @@ export function createDsl4NavigationSession({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
+  if (
+    inputArbitration !== undefined &&
+    (typeof inputArbitration !== 'object' ||
+      inputArbitration === null ||
+      typeof (
+        /** @type {Record<string, unknown>} */ (inputArbitration).shouldDeferNavigationKey
+      ) !== 'function' ||
+      typeof (
+        /** @type {Record<string, unknown>} */ (inputArbitration).arbitrateNavigationPointer
+      ) !== 'function' ||
+      typeof (/** @type {Record<string, unknown>} */ (inputArbitration).cancelNavigationPointer) !==
+        'function')
+  ) {
+    throw new TypeError(
+      'inputArbitration must provide key, pointer, and pointer cancellation arbitration',
+    );
+  }
+  const arbitration = /** @type {Record<string, Function> | undefined} */ (inputArbitration);
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
   }
@@ -317,6 +337,16 @@ export function createDsl4NavigationSession({
   const inputAdapter = createDsl4KeymapInputAdapter({
     keymap: profile.keymap,
     dispatchCommand,
+    ...(arbitration
+      ? {
+          shouldDeferKey({code}) {
+            return arbitration.shouldDeferNavigationKey({
+              code,
+              historyPaused: historyState?.mode === 'history',
+            });
+          },
+        }
+      : {}),
     ...(speechAdvanceTypewriterEnabled
       ? {
           consumeAnyKey({code}) {
@@ -325,6 +355,19 @@ export function createDsl4NavigationSession({
           consumePointer({pointerType}) {
             return controller.consumeAdvanceInput({kind: 'pointer', pointerType});
           },
+          ...(arbitration
+            ? {
+                arbitratePointer({pointerType}) {
+                  return arbitration.arbitrateNavigationPointer({
+                    pointerType,
+                    historyPaused: historyState?.mode === 'history',
+                  });
+                },
+                cancelPointer({pointerType}) {
+                  arbitration.cancelNavigationPointer({pointerType});
+                },
+              }
+            : {}),
         }
       : {}),
     ...(poseNavigationPolicyEnabled
@@ -373,6 +416,7 @@ export function createDsl4NavigationSession({
     detachStagePointer: inputAdapter.detachPointer,
     handleKeyDown: inputAdapter.handleKeyDown,
     handlePointerUp: inputAdapter.handlePointerUp,
+    handlePointerCancel: inputAdapter.handlePointerCancel,
     whenInputIdle: inputAdapter.whenIdle,
     getState: snapshot,
     getRunPromise: controller.getRunPromise,

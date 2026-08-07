@@ -120,6 +120,7 @@ export {
   createDsl4RemoteAssetLifecycle,
 } from './embedded-asset-lifecycle.js';
 export {createDsl4HistoryReducer} from './history-reducer.js';
+export {createDsl4InputArbitration} from './input-arbitration.js';
 export {createDsl4KeymapInputAdapter} from './keymap-input-adapter.js';
 export {createDsl4JsonPathEngine, dsl4JsonPathDefaultLimits} from './jsonpath.js';
 export {

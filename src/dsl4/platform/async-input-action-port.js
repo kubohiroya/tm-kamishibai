@@ -19,6 +19,19 @@ function validateComposition(value) {
   return /** @type {Record<string, Function>} */ (value);
 }
 
+/** @param {unknown} value */
+function validateArbitration(value) {
+  if (value === undefined) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.beginStoryInput !== 'function' ||
+    typeof value.finishStoryInput !== 'function'
+  ) {
+    throw new TypeError('inputArbitration must provide beginStoryInput and finishStoryInput');
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
 /** @param {unknown} value @param {'codes' | 'actors'} property */
 function validateCandidates(value, property) {
   if (!isRecord(value) || Object.keys(value).length !== 1 || !Array.isArray(value[property])) {
@@ -57,26 +70,57 @@ function validateSignal(value) {
  *
  * @param {object} options
  * @param {unknown} options.composition
+ * @param {unknown} [options.inputArbitration]
  */
 export function createDsl4AsyncInputActionPort(options) {
   if (!isRecord(options)) throw new TypeError('Async input action port options must be an object');
   const composition = validateComposition(options.composition);
+  const inputArbitration = validateArbitration(options.inputArbitration);
+
+  /**
+   * @param {'key' | 'touch'} kind
+   * @param {string[]} inputCandidates
+   * @param {() => unknown} wait
+   */
+  function runWait(kind, inputCandidates, wait) {
+    if (!inputArbitration) return wait();
+    const token = inputArbitration.beginStoryInput(kind, inputCandidates);
+    let operation;
+    try {
+      operation = wait();
+    } catch (error) {
+      inputArbitration.finishStoryInput(token);
+      throw error;
+    }
+    return Promise.resolve(operation).then(
+      (candidate) => {
+        inputArbitration.finishStoryInput(token, {accepted: true});
+        return candidate;
+      },
+      (error) => {
+        inputArbitration.finishStoryInput(token);
+        throw error;
+      },
+    );
+  }
 
   return Object.freeze({
     /** @param {unknown} payload @param {unknown} context */
     keyInputToChangeScene(payload, context) {
-      return composition.waitForKeyCandidate({
-        candidates: validateCandidates(payload, 'codes'),
-        signal: validateSignal(context),
-      });
+      const inputCandidates = validateCandidates(payload, 'codes');
+      const signal = validateSignal(context);
+      return runWait('key', inputCandidates, () =>
+        composition.waitForKeyCandidate({candidates: inputCandidates, signal}),
+      );
     },
 
     /** @param {unknown} payload @param {unknown} context */
     touchInputToChangeScene(payload, context) {
-      return composition.waitForActorTouchCandidate({
-        candidates: validateCandidates(payload, 'actors'),
-        signal: validateSignal(context),
-      });
+      const inputCandidates = validateCandidates(payload, 'actors');
+      const signal = validateSignal(context);
+      return runWait('touch', inputCandidates, () =>
+        composition.waitForActorTouchCandidate({candidates: inputCandidates, signal}),
+      );
     },
   });
 }

@@ -12,7 +12,7 @@ export {dsl4DefaultFeatureFlags, resolveDsl4FeatureFlags} from './feature-flags.
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
  * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
- * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
+ * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, inputArbitration?: Record<string, Function>, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -226,6 +226,18 @@ export async function createDsl4RuntimeStartup(options = {}) {
         'runtime environment evaluateCondition must be a function',
       );
     }
+    if (
+      candidate.inputArbitration !== undefined &&
+      (!isRecord(candidate.inputArbitration) ||
+        typeof candidate.inputArbitration.shouldDeferNavigationKey !== 'function' ||
+        typeof candidate.inputArbitration.arbitrateNavigationPointer !== 'function' ||
+        typeof candidate.inputArbitration.cancelNavigationPointer !== 'function')
+    ) {
+      await rejectInvalidRuntimeEnvironment(
+        candidate,
+        'runtime environment input arbitration must provide key and pointer decisions',
+      );
+    }
     runtimeEnvironment = /** @type {RuntimeEnvironment} */ (/** @type {unknown} */ (candidate));
   }
 
@@ -257,6 +269,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
         featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,
       cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
       speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
+      inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {
     if (!runtimeEnvironment) throw error;

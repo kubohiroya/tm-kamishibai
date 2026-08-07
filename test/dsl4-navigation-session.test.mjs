@@ -4,7 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {createDsl4NavigationSession, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  createDsl4InputArbitration,
+  createDsl4NavigationSession,
+  createDsl4SourceFrontend,
+} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -34,6 +38,25 @@ function keyEvent(code) {
     code,
     defaultPrevented: false,
     repeat: false,
+    preventDefault() {
+      counters.preventDefault += 1;
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      counters.stopPropagation += 1;
+    },
+    counters,
+  };
+}
+
+function pointerEvent(pointerType = 'touch') {
+  const counters = {preventDefault: 0, stopPropagation: 0};
+  return {
+    pointerType,
+    isPrimary: true,
+    button: 0,
+    defaultPrevented: false,
+    target: null,
     preventDefault() {
       counters.preventDefault += 1;
       this.defaultPrevented = true;
@@ -107,6 +130,119 @@ scenes:
   assert.equal(session.getState().history, null);
   pending.resolve();
   await staleRun;
+});
+
+test('wires story key priority and pointer suppression through one navigation adapter', async () => {
+  const pending = deferred();
+  const calls = [];
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+scenes:
+  opening:
+    - wait: 1
+`);
+  const inputArbitration = {
+    shouldDeferNavigationKey(context) {
+      calls.push(['key', context]);
+      return context.code === 'Space' && !context.historyPaused;
+    },
+    arbitrateNavigationPointer(context) {
+      calls.push(['pointer', context]);
+      return 'suppress';
+    },
+    cancelNavigationPointer(context) {
+      calls.push(['cancel', context]);
+    },
+  };
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    port: {wait: () => pending.promise},
+    speechAdvanceTypewriterEnabled: true,
+    inputArbitration,
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  const run = created.session.start();
+
+  const key = keyEvent('Space');
+  assert.equal(created.session.handleKeyDown(key), false);
+  assert.deepEqual(key.counters, {preventDefault: 0, stopPropagation: 0});
+  const pointer = pointerEvent();
+  assert.equal(created.session.handlePointerUp(pointer), true);
+  assert.deepEqual(pointer.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal(created.session.handlePointerCancel({pointerType: 'touch', isPrimary: true}), false);
+  assert.deepEqual(calls, [
+    ['key', {code: 'Space', historyPaused: false}],
+    ['pointer', {pointerType: 'touch', historyPaused: false}],
+    ['cancel', {pointerType: 'touch'}],
+  ]);
+
+  created.session.stop('test-cleanup');
+  pending.resolve();
+  await run;
+  created.session.dispose();
+});
+
+test('lets a different navigation key cancel an active story key action exactly once', async () => {
+  const arbitration = createDsl4InputArbitration();
+  let cancellations = 0;
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+scenes:
+  opening:
+    - keyInputToChangeScene:
+        ArrowRight: chosen
+    - wait: 0
+  chosen: []
+`);
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    inputArbitration: arbitration,
+    port: {
+      keyInputToChangeScene(payload, context) {
+        const token = arbitration.beginStoryInput('key', payload.codes);
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              cancellations += 1;
+              arbitration.finishStoryInput(token);
+              const error = new Error('story key wait cancelled');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            {once: true},
+          );
+        });
+      },
+      wait: async () => {},
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  const run = created.session.start();
+  await waitFor(
+    () => arbitration.getState().activeStoryInputKind === 'key',
+    'story key wait did not start',
+  );
+
+  const storyKey = keyEvent('ArrowRight');
+  assert.equal(created.session.handleKeyDown(storyKey), false);
+  assert.deepEqual(storyKey.counters, {preventDefault: 0, stopPropagation: 0});
+  const navigationKey = keyEvent('Space');
+  assert.equal(created.session.handleKeyDown(navigationKey), true);
+  assert.deepEqual(navigationKey.counters, {preventDefault: 1, stopPropagation: 1});
+  await created.session.whenInputIdle();
+  assert.equal(cancellations, 1);
+  await run;
+  await created.session.getRunPromise();
+  assert.equal(created.session.getState().runtime.status, 'finished');
+  assert.equal(cancellations, 1);
+  assert.equal(arbitration.getState().activeStoryInputKind, null);
+  created.session.dispose();
+  arbitration.dispose();
 });
 
 test('reports an unchanged command when pose policy refuses nextAction', async () => {

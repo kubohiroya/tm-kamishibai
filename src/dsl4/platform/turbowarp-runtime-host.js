@@ -1,6 +1,7 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
+import {createDsl4InputArbitration} from '../input-arbitration.js';
 import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
@@ -271,6 +272,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let runtimeExpressionComposition = null;
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
   let cameraPreviewControls = null;
+  const inputArbitration = createDsl4InputArbitration();
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
   const preview = isRecord(component.storyDocument.poseRecognition)
@@ -441,6 +443,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     });
     const asyncInputPort = createDsl4AsyncInputActionPort({
       composition: assetSession.asyncInputComposition,
+      inputArbitration,
     });
     svgTextPlatform = createDsl4SvgTextPlatform({
       enabled: true,
@@ -648,6 +651,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       port,
       assetLifecycle,
       evaluateCondition,
+      inputArbitration,
       /** @param {string} [reason] */
       dispose(reason = 'dispose') {
         if (disposePromise) return disposePromise;
@@ -662,6 +666,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
+            () => inputArbitration.dispose(),
             () => assetSession?.dispose(reason),
           ]) {
             try {
@@ -689,6 +694,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
+      () => inputArbitration.dispose(),
       () => assetSession?.dispose('partial-creation-failed'),
     ]) {
       try {

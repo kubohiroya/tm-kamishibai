@@ -95,7 +95,13 @@ test('validates the resolved keymap and event target contract', () => {
       }),
     /requires immediate command dispatch/u,
   );
-  for (const option of ['consumeAnyKey', 'consumePointer']) {
+  for (const option of [
+    'consumeAnyKey',
+    'consumePointer',
+    'shouldDeferKey',
+    'arbitratePointer',
+    'cancelPointer',
+  ]) {
     assert.throws(
       () =>
         createDsl4KeymapInputAdapter({
@@ -106,6 +112,15 @@ test('validates the resolved keymap and event target contract', () => {
       new RegExp(option, 'u'),
     );
   }
+  assert.throws(
+    () =>
+      createDsl4KeymapInputAdapter({
+        keymap: {},
+        dispatchCommand() {},
+        arbitratePointer: () => 'allow',
+      }),
+    /requires consumePointer/u,
+  );
 });
 
 test('uses code only and never falls back to locale-dependent key', async () => {
@@ -276,6 +291,57 @@ test('attaches pointer advance only to the explicitly scoped stage target', () =
   assert.equal(stageListeners.has('pointerup'), false);
   adapter.dispose();
   assert.equal(keyListeners.has('keydown'), false);
+});
+
+test('defers exact story keys and arbitrates one physical pointer sequence', async () => {
+  const listeners = new Map();
+  const target = {
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+  };
+  const commands = [];
+  const cancellations = [];
+  let pointerDecision = 'defer';
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {Enter: 'navigation.nextAction'},
+    dispatchCommand: async (command) => commands.push(command),
+    shouldDeferKey: ({code}) => code === 'Enter',
+    consumePointer: () => true,
+    arbitratePointer: () => pointerDecision,
+    cancelPointer: ({pointerType}) => cancellations.push(pointerType),
+  });
+  adapter.attach(target);
+  adapter.attachPointer(target);
+
+  const storyKey = keyEvent('Enter');
+  assert.equal(listeners.get('keydown')(storyKey), false);
+  assert.deepEqual(storyKey.counters, {preventDefault: 0, stopPropagation: 0});
+  await adapter.whenIdle();
+  assert.deepEqual(commands, []);
+
+  const deferredPointer = pointerEvent({pointerType: 'touch'});
+  assert.equal(listeners.get('pointerup')(deferredPointer), false);
+  assert.deepEqual(deferredPointer.counters, {preventDefault: 0, stopPropagation: 0});
+
+  pointerDecision = 'suppress';
+  const suppressedPointer = pointerEvent({pointerType: 'touch'});
+  assert.equal(listeners.get('pointerup')(suppressedPointer), true);
+  assert.deepEqual(suppressedPointer.counters, {preventDefault: 1, stopPropagation: 1});
+
+  pointerDecision = 'allow';
+  const navigationPointer = pointerEvent({pointerType: 'mouse'});
+  assert.equal(listeners.get('pointerup')(navigationPointer), true);
+  assert.deepEqual(navigationPointer.counters, {preventDefault: 1, stopPropagation: 1});
+
+  assert.equal(listeners.get('pointercancel')({pointerType: 'touch', isPrimary: true}), false);
+  assert.deepEqual(cancellations, ['touch']);
+  adapter.dispose();
+  assert.equal(listeners.has('pointerup'), false);
+  assert.equal(listeners.has('pointercancel'), false);
 });
 
 test('consumes one bound initial keydown and suppresses repeat dispatch', async () => {
