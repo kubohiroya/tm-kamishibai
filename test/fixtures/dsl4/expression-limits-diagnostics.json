@@ -1,0 +1,171 @@
+{
+  "formatVersion": 1,
+  "runtimeExpression": {
+    "package": "@kubohiroya/turbowarp-runtime-expression",
+    "version": "0.3.0",
+    "entrypoint": "./composition",
+    "limits": {
+      "maxExpressionCodeUnits": 4096,
+      "maxTokensIncludingEof": 512,
+      "maxParseDepth": 64,
+      "maxCacheEntries": 128
+    },
+    "allowed": [
+      "score >= 10 && state === \"ready\"",
+      "vars[\"得点\"] + 1 > 10",
+      "!(finished || cancelled)",
+      "undefined === undefined",
+      "null == undefined"
+    ],
+    "rejected": [
+      "score = 10",
+      "Math.max(score, 10)",
+      "player.name",
+      "new Date()",
+      "[score]",
+      "{score: score}",
+      "player?.name",
+      "`score=${score}`"
+    ]
+  },
+  "implementedLimits": {
+    "objectStore": {
+      "source": "src/dsl4/object-store/store.js",
+      "values": {
+        "maxDepth": 64,
+        "maxEntries": 1024,
+        "maxHandles": 4096,
+        "maxNodes": 32768,
+        "maxNonceAttempts": 8,
+        "maxOperationSteps": 100000,
+        "maxScopes": 1024,
+        "maxStringLength": 1048576
+      }
+    },
+    "jsonPath": {
+      "source": "src/dsl4/jsonpath.js",
+      "values": {
+        "maxAstNodes": 128,
+        "maxNormalizedPathScalars": 4096,
+        "maxQueryScalars": 1024,
+        "maxResults": 1000,
+        "maxSegments": 32,
+        "maxSelectorsPerSegment": 16,
+        "maxVisits": 10000
+      }
+    },
+    "structuredData": {
+      "source": "src/dsl4/structured-data.js",
+      "values": {"maxActiveIterators": 1024}
+    },
+    "actionDiscovery": {
+      "source": "src/dsl4/action-hat-detector.js",
+      "values": {
+        "maxOriginalTargets": 256,
+        "maxTopLevelBlocksPerTarget": 4096,
+        "maxCustomActions": 64,
+        "maxParametersPerAction": 16,
+        "maxNameScalars": 64,
+        "maxMutationCodeUnits": 8192
+      }
+    },
+    "customAction": {
+      "source": "src/dsl4/action-invocation-adapter.js",
+      "values": {
+        "customActionTimeoutMs": 30000,
+        "minimumCustomActionTimeoutMs": 100,
+        "maximumCustomActionTimeoutMs": 300000,
+        "maximumFailureMessageScalars": 256
+      }
+    },
+    "runtimeQuiesce": {
+      "source": "src/dsl4/runtime-controller.js",
+      "values": {
+        "quiesceTimeoutMs": 5000,
+        "minimumQuiesceTimeoutMs": 100,
+        "maximumQuiesceTimeoutMs": 30000
+      }
+    },
+    "previewWatch": {
+      "source": "src/builder/dsl4-preview-watch.js",
+      "values": {
+        "quietWindowMs": 100,
+        "retryIntervalMs": 50,
+        "stabilityTimeoutMs": 2000
+      }
+    }
+  },
+  "requiredExplicitLimits": [
+    "maxSourceBytes",
+    "maxAssetFileBytes",
+    "maxAssetFiles",
+    "maxTotalAssetBytes",
+    "maxActionEntries",
+    "maxSceneVisits",
+    "poseArchiveLimits"
+  ],
+  "proposedSourcePolicy": {
+    "status": "proposed-not-implemented",
+    "values": {
+      "maxCanonicalSourceBytes": 262144,
+      "maxYamlNodes": 20000,
+      "maxYamlDepth": 64,
+      "maxScalarScalars": 16384,
+      "maxScenes": 512,
+      "maxActionsPerScene": 1024,
+      "maxTotalActions": 4096,
+      "maxAssets": 1024
+    }
+  },
+  "proposedDiagnosticPolicy": {
+    "status": "proposed-not-implemented",
+    "values": {
+      "maxDiagnostics": 100,
+      "maxUiDiagnostics": 20,
+      "maxExcerptScalars": 240,
+      "maxMessageScalars": 500,
+      "maxRelatedLocations": 8
+    },
+    "truncationCode": "K4-DIAGNOSTICS-TRUNCATED",
+    "sortKeys": ["range.start.offset", "code", "message"],
+    "sortStringOrder": "unicode-code-unit"
+  },
+  "diagnosticMappings": [
+    {
+      "generic": "CONDITION_SYNTAX_ERROR",
+      "kamishibai": "K4-EXPRESSION-SYNTAX-001",
+      "severity": "error"
+    },
+    {
+      "generic": "RUNTIME_EXPRESSION_UNKNOWN_VARIABLE",
+      "kamishibai": "K4-EXPRESSION-VARIABLE-UNKNOWN",
+      "severity": "error"
+    },
+    {
+      "generic": "RUNTIME_EXPRESSION_INVALID_VARIABLE_*",
+      "kamishibai": "K4-EXPRESSION-VARIABLE-001",
+      "severity": "error"
+    },
+    {
+      "generic": "unexpected-expression-failure",
+      "kamishibai": "K4-EXPRESSION-INTERNAL-001",
+      "severity": "error"
+    }
+  ],
+  "redactedTelemetryFields": [
+    "version",
+    "code",
+    "severity",
+    "sourceId",
+    "range",
+    "storyPath",
+    "path"
+  ],
+  "forbiddenTelemetryFields": [
+    "canonicalSource",
+    "excerpt",
+    "runtimeValues",
+    "absolutePath",
+    "sessionToken"
+  ]
+}
