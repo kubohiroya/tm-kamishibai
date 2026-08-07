@@ -75,7 +75,7 @@ function fakeAdapter() {
   };
 }
 
-function prepared(revision, log, {activationError, rollbackError} = {}) {
+function prepared(revision, log, {activationError, rollbackError, releaseError} = {}) {
   return {
     activate() {
       log.push(`activate:${revision}`);
@@ -88,6 +88,7 @@ function prepared(revision, log, {activationError, rollbackError} = {}) {
     },
     release(reason) {
       log.push(`release:${revision}:${reason}`);
+      if (releaseError) throw releaseError;
     },
   };
 }
@@ -125,6 +126,32 @@ test('prepares complete generations and releases the previous one only after com
   await transaction.dispose();
   assert.equal(adapter.disposed, 1);
   assert.equal(log.includes('release:2:transaction-disposed'), true);
+});
+
+test('keeps a committed generation active when releasing its predecessor fails', async () => {
+  const adapter = fakeAdapter();
+  const events = [];
+  const transaction = createDsl4AssetReloadTransaction({
+    assetAdapter: adapter,
+    prepareGeneration({summary: candidate}) {
+      return prepared(candidate.revision, [], {
+        ...(candidate.revision === 1 ? {releaseError: new Error('release failed')} : {}),
+      });
+    },
+    onEvent: (event) => events.push(event),
+  });
+  adapter.add(1);
+  await transaction.stage(summary(1, 'initial'));
+  await transaction.commit(1);
+  adapter.add(2);
+  await transaction.stage(summary(2));
+  const committed = await transaction.commit(2);
+  assert.equal(committed.status, 'diagnostic');
+  assert.equal(committed.active.revision, 2);
+  assert.equal(committed.diagnostic.code, 'K4-ASSET-RELEASE-001');
+  assert.equal(committed.pendingReleaseCount, 1);
+  assert.equal(events.at(-1).type, 'preview.asset.committed');
+  await assert.rejects(transaction.dispose(), /disposal failed/u);
 });
 
 test('keeps the active generation when activation fails and rolls back the candidate once', async () => {

@@ -17,6 +17,7 @@ function isRecord(value) {
  * @param {number} options.maxSourceBytes
  * @param {ReadonlyArray<string>} [options.capabilities]
  * @param {Record<string, unknown>} [options.sourceOptions]
+ * @param {(projectRoot: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onProjectRoot]
  * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceResult]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onProtocolEvent]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceStatus]
@@ -33,6 +34,7 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     'sourceFrontend',
     'maxSourceBytes',
     'onResult',
+    'onProjectRoot',
     'onStatus',
     'onDiagnostic',
     'onError',
@@ -68,6 +70,7 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     ...sourceOptions,
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
+    onProjectRoot: options.onProjectRoot,
     onResult(result) {
       try {
         Promise.resolve(options.onSourceResult?.(result)).catch(reportError);

@@ -92,6 +92,38 @@ test('serializes negotiated asset stage and commit messages for one preview sess
   assert.equal(protocol.getState().candidateRevision, null);
 });
 
+test('reports a committed revision even when post-acknowledgement cleanup raises a diagnostic', async () => {
+  const reload = transaction();
+  reload.commit = (revision, request) => {
+    reload.calls.push(['commit', revision, request]);
+    return {
+      latestRevision: revision,
+      status: 'diagnostic',
+      candidate: null,
+      active: {revision, generation: 2},
+      diagnostic: {code: 'K4-ASSET-RELEASE-001'},
+    };
+  };
+  const protocol = createDsl4AssetReloadProtocolSession({
+    transaction: reload,
+    sessionId: 'preview-cleanup',
+    negotiatedCapabilities: dsl4AssetReloadProtocolCapabilities,
+  });
+  await protocol.stage({
+    type: 'preview.asset.stage',
+    sessionId: 'preview-cleanup',
+    summary: candidate(2),
+  });
+  const committed = await protocol.commit({
+    type: 'preview.asset.commit',
+    sessionId: 'preview-cleanup',
+    revision: 2,
+  });
+  assert.equal(committed.type, 'preview.asset.committed');
+  assert.equal(committed.status, 'diagnostic');
+  assert.equal(committed.diagnostic.code, 'K4-ASSET-RELEASE-001');
+});
+
 test('fails closed when any optional asset capability is absent', async () => {
   const reload = transaction();
   const protocol = createDsl4AssetReloadProtocolSession({

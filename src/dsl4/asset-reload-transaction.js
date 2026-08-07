@@ -205,6 +205,7 @@ export function createDsl4AssetReloadTransaction(options) {
   let candidate = null;
   /** @type {{summary: Readonly<Record<string, any>>, prepared: Record<string, Function>, generation: number, acknowledgement: Readonly<Record<string, unknown>>} | null} */
   let active = null;
+  const pendingReleases = new Set();
   /** @type {Readonly<Record<string, unknown>> | null} */
   let currentDiagnostic = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -227,6 +228,7 @@ export function createDsl4AssetReloadTransaction(options) {
       disposed,
       latestRevision,
       generation,
+      pendingReleaseCount: pendingReleases.size,
       active: active
         ? {
             revision: active.summary.revision,
@@ -504,6 +506,7 @@ export function createDsl4AssetReloadTransaction(options) {
         try {
           await releasePrepared(previous, 'generation-replaced-after-ack');
         } catch {
+          pendingReleases.add(previous);
           status = 'diagnostic';
           await setDiagnostic(
             diagnostic('K4-ASSET-RELEASE-001', 'Previous asset generation release failed'),
@@ -546,6 +549,14 @@ export function createDsl4AssetReloadTransaction(options) {
         await releasePrepared(active, 'transaction-disposed');
       } catch (error) {
         errors.push(error);
+      }
+      for (const pending of pendingReleases) {
+        try {
+          await releasePrepared(pending, 'transaction-disposed-retry');
+          pendingReleases.delete(pending);
+        } catch (error) {
+          errors.push(error);
+        }
       }
       candidate = null;
       active = null;

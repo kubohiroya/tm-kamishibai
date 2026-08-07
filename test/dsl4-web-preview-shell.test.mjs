@@ -10,6 +10,10 @@ const enabledFlags = Object.freeze({
   dsl4AppShell: true,
   dsl4WebPreviewAdapter: true,
 });
+const assetEnabledFlags = Object.freeze({
+  ...enabledFlags,
+  dsl4WebPreviewAssetLiveReload: true,
+});
 
 function sri(value) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
@@ -114,6 +118,50 @@ function createCoordinatorFixture() {
   };
 }
 
+function createAssetPipelineFixture() {
+  let options;
+  let started = false;
+  let disposed = false;
+  const calls = [];
+  const state = () => ({version: 1, started, disposed});
+  const pipeline = {
+    start(root, context) {
+      started = true;
+      calls.push(['start', root, context]);
+      return Promise.resolve(state());
+    },
+    updateSource(context) {
+      calls.push(['updateSource', context]);
+      return Promise.resolve(state());
+    },
+    pollNow() {
+      calls.push(['pollNow']);
+      return Promise.resolve(state());
+    },
+    dispose() {
+      disposed = true;
+      calls.push(['dispose']);
+      return Promise.resolve(state());
+    },
+    getState: state,
+    whenIdle() {
+      calls.push(['whenIdle']);
+      return Promise.resolve(state());
+    },
+  };
+  return {
+    calls,
+    pipeline,
+    get options() {
+      return options;
+    },
+    createAssetPipeline(input) {
+      options = input;
+      return pipeline;
+    },
+  };
+}
+
 function createShell() {
   const document = createFakeDocument();
   const fixture = createCoordinatorFixture();
@@ -142,6 +190,9 @@ test('keeps Web Preview unregistered and unread when its startup flag is OFF', (
     createCoordinator() {
       factoryCalls += 1;
       assert.fail('coordinator must not be created');
+    },
+    createAssetPipeline() {
+      assert.fail('asset pipeline must not be created');
     },
   });
   assert.equal(shell.enabled, false);
@@ -175,9 +226,78 @@ test('requires the runtime and App Shell flags and remains development-only', ()
     formatVersion: 1,
     production: false,
     module: 'src/builder/dsl4-web-preview-shell.js',
-    featureFlags: ['dsl4Runtime', 'dsl4AppShell', 'dsl4WebPreviewAdapter'],
+    featureFlags: [
+      'dsl4Runtime',
+      'dsl4AppShell',
+      'dsl4WebPreviewAdapter',
+      'dsl4WebPreviewAssetLiveReload',
+    ],
     fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
   });
+});
+
+test('requires and owns the browser asset pipeline only behind its startup flag', async () => {
+  assert.throws(
+    () =>
+      createDsl4WebPreviewShell({
+        featureFlags: assetEnabledFlags,
+        environment: 'development',
+        document: createFakeDocument(),
+        mount: createFakeDocument().body,
+        protocolSession: {},
+        sessionId: 'missing-asset-options',
+        sourceFrontend: {parse() {}},
+        maxSourceBytes: 8192,
+      }),
+    /assetPipelineOptions/u,
+  );
+
+  const document = createFakeDocument();
+  const source = createCoordinatorFixture();
+  const assets = createAssetPipelineFixture();
+  const structuralFingerprint = sri('structure');
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: assetEnabledFlags,
+    environment: 'development',
+    document,
+    mount: document.body,
+    protocolSession: {},
+    sessionId: 'asset-shell-test',
+    sourceFrontend: {parse() {}},
+    maxSourceBytes: 8192,
+    createCoordinator: source.createCoordinator,
+    createAssetPipeline: assets.createAssetPipeline,
+    assetPipelineOptions: {
+      structuralFingerprint,
+      adapterOptions: {},
+      prepareGeneration() {},
+    },
+  });
+  const root = {kind: 'directory'};
+  await shell.start(root);
+  const result = sourceResult(sri('asset-source'));
+  source.options.onSourceResult(result);
+  await shell.whenIdle();
+  assert.equal(assets.options.sessionId, 'asset-shell-test');
+  assert.equal(assets.calls[0][0], 'start');
+  assert.equal(assets.calls[0][1], root);
+  assert.equal(assets.calls[0][2].sourceResult, result);
+  assert.equal(assets.calls[0][2].structuralFingerprint, structuralFingerprint);
+  assert.deepEqual(shell.getSnapshot().assetPipeline, {
+    version: 1,
+    started: true,
+    disposed: false,
+  });
+  await shell.pollNow();
+  assert.equal(
+    assets.calls.some(([name]) => name === 'pollNow'),
+    true,
+  );
+  await shell.dispose();
+  assert.equal(
+    assets.calls.some(([name]) => name === 'dispose'),
+    true,
+  );
 });
 
 test('opens the picker directly from a button activation and renders watch status', async () => {

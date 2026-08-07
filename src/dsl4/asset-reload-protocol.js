@@ -158,8 +158,9 @@ export function createDsl4AssetReloadProtocolSession({
       }
       const state = await transaction.commit(request.revision, request.request ?? {});
       candidateRevision = null;
+      const committed = state.active?.revision === request.revision;
       return deepFreeze({
-        type: state.status === 'active' ? 'preview.asset.committed' : 'preview.asset.failed',
+        type: committed ? 'preview.asset.committed' : 'preview.asset.failed',
         sessionId: expectedSessionId,
         revision: request.revision,
         status: state.status,

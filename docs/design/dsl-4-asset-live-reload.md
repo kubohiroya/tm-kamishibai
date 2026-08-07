@@ -12,6 +12,11 @@ The startup-fixed `dsl4WebPreviewAssetLiveReload` flag defaults to `false` and r
 source-only behavior from #390 and treats asset changes as a CLI full-rebuild boundary. The adapter,
 poll timers, decoders, providers, and protocol capabilities are not initialized.
 
+When enabled, `createDsl4WebPreviewShell` owns one `createDsl4BrowserAssetReloadPipeline`. The source
+adapter passes the selected root handle only through an in-process callback, and each valid source
+result starts or updates the asset pipeline with the startup-fixed structural fingerprint. Shell
+polling, idle settlement, diagnostics, and disposal include both source and asset paths.
+
 The feature is part of the development preview shell. A production SB3, ordinary TurboWarp editor,
 Web player, or Packager output must not contain a directory handle, file/blob/array-buffer, candidate,
 revision, preview token, decoded resource, reload UI state, preference, or reload timestamp.
@@ -82,6 +87,10 @@ provider. The transaction prepares the complete candidate before a runtime safe 
 candidate/revision/session again, activates the new runtime and asset generation atomically, and releases
 the old generation only after acknowledgement. Prepare or activation failure rolls back the candidate,
 resumes the old generation, and cannot leave a mixture of old and new assets.
+
+Failure to release the previous generation after the commit acknowledgement is a cleanup diagnostic,
+not a failed commit: the protocol still reports the newly active revision as committed. The failed
+release remains owned by the transaction and is retried during disposal.
 
 The protocol summary may include asset ID, kind, file count, abbreviated before/after integrity,
 affected scene IDs, validation outcome, and diagnostic IDs. It cannot include bytes or paths.
