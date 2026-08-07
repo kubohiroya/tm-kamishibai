@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "ownerIssue": 394,
+  "consumerIssue": "kubohiroya/tmpose-kamishibai-docs#31",
+  "surface": "web-and-cli-shared",
+  "environment": "development",
+  "featureFlags": {
+    "dsl4Runtime": true,
+    "dsl4AppShell": true,
+    "dsl4PreviewReloadOverlay": true
+  },
+  "capture": {
+    "viewport": {"width": 1280, "height": 720},
+    "deviceScaleFactor": 1,
+    "locale": "ja-JP",
+    "reducedMotion": true,
+    "acknowledgedAt": "2026-08-07T03:04:05.000Z",
+    "sourcePathsVisible": false
+  },
+  "frames": [
+    {
+      "id": "watching-top-right",
+      "state": "watching",
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "top-right",
+      "dialogStep": null
+    },
+    {
+      "id": "reloaded-action",
+      "state": "reloaded",
+      "requestedPreference": "action",
+      "actualAnchor": "action",
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "top-right",
+      "dialogStep": null
+    },
+    {
+      "id": "diagnostic-last-known-good",
+      "state": "diagnostic",
+      "diagnosticCode": "K4-ASSET-MISSING",
+      "lastKnownGoodVisible": true,
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "top-right",
+      "dialogStep": null
+    },
+    {
+      "id": "dialog-position-selector",
+      "state": "reloaded",
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "top-right",
+      "dialogStep": "position",
+      "selectedPosition": null
+    },
+    {
+      "id": "dialog-scope-selector",
+      "state": "reloaded",
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "top-right",
+      "dialogStep": "scope",
+      "selectedPosition": "scene"
+    },
+    {
+      "id": "camera-control-collision",
+      "state": "watching",
+      "preferredAnchor": "top-right",
+      "resolvedAnchor": "right-center",
+      "reservedRectangles": [
+        {"owner": "camera-controls", "x": 1228, "y": 8, "width": 44, "height": 44}
+      ],
+      "dialogStep": null
+    }
+  ],
+  "requiredAnchorsInDialog": [
+    "top-left",
+    "top-center",
+    "top-right",
+    "right-center",
+    "bottom-right",
+    "bottom-center",
+    "bottom-left",
+    "left-center"
+  ]
+}

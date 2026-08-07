@@ -349,6 +349,12 @@ test('is development-only and scans production projects for preview persistence'
   invalid.browserPreviewPendingRead = {revision: 2};
   invalid.browserPreviewCandidate = {revision: 2};
   invalid.browserPreviewModalState = {choice: null};
+  invalid.previewReloadOverlay = {status: 'reloaded'};
+  invalid.reloadPreference = 'action';
+  invalid.reloadTimestamp = 1;
+  invalid.reloadDialogState = {open: false};
+  invalid.reloadLayoutState = {resolvedAnchor: 'top-right'};
+  invalid.reloadCandidateRevision = 3;
   const result = inspectDsl4ProductionPreviewExclusion(invalid);
   assert.equal(result.ok, false);
   assert.ok(result.violations.some((violation) => violation.includes('extensions')));
@@ -364,6 +370,12 @@ test('is development-only and scans production projects for preview persistence'
     'browserPreviewPendingRead',
     'browserPreviewCandidate',
     'browserPreviewModalState',
+    'previewReloadOverlay',
+    'reloadPreference',
+    'reloadTimestamp',
+    'reloadDialogState',
+    'reloadLayoutState',
+    'reloadCandidateRevision',
   ]) {
     assert.ok(
       result.violations.some((violation) => violation.includes(field)),

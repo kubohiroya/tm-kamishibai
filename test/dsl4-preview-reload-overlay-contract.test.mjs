@@ -8,6 +8,12 @@ const contract = JSON.parse(
     'utf8',
   ),
 );
+const screenshotContract = JSON.parse(
+  await readFile(
+    new URL('fixtures/dsl4/preview-reload-overlay-screenshot.json', import.meta.url),
+    'utf8',
+  ),
+);
 const design = await readFile(
   new URL('../docs/design/dsl-4-preview-reload-overlay.md', import.meta.url),
   'utf8',
@@ -76,4 +82,23 @@ test('keeps every transient overlay field out of production artifacts', () => {
     'reloadCandidateRevision',
   ]);
   for (const field of contract.productionExclusions) assert.match(design, new RegExp(field, 'u'));
+});
+
+test('provides a deterministic reduced-motion screenshot contract to docs #31', () => {
+  assert.equal(screenshotContract.consumerIssue, 'kubohiroya/tmpose-kamishibai-docs#31');
+  assert.deepEqual(screenshotContract.capture.viewport, {width: 1280, height: 720});
+  assert.equal(screenshotContract.capture.reducedMotion, true);
+  assert.equal(screenshotContract.capture.sourcePathsVisible, false);
+  assert.deepEqual(screenshotContract.requiredAnchorsInDialog, contract.anchors);
+  assert.deepEqual(
+    screenshotContract.frames.map(({id}) => id),
+    [
+      'watching-top-right',
+      'reloaded-action',
+      'diagnostic-last-known-good',
+      'dialog-position-selector',
+      'dialog-scope-selector',
+      'camera-control-collision',
+    ],
+  );
 });

@@ -57,6 +57,12 @@ export const dsl4DevelopmentPreviewShellManifest = deepFreeze({
     'browserPreviewPendingRead',
     'browserPreviewCandidate',
     'browserPreviewModalState',
+    'previewReloadOverlay',
+    'reloadPreference',
+    'reloadTimestamp',
+    'reloadDialogState',
+    'reloadLayoutState',
+    'reloadCandidateRevision',
   ],
 });
 
