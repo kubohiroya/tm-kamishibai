@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 
 import {
   buildDsl4RuntimeComponent,
+  createDsl4PreviewSourceWatcher,
   createDsl4ProductionSourceFrontend,
   Dsl4BuildError,
   formatDsl4Diagnostic,
@@ -16,10 +17,12 @@ import {
 } from '../src/builder/index.js';
 import {
   createDsl4DiagnosticUiProjection,
+  createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeController,
   dsl4DiagnosticProjectionDefaults,
   dsl4SourceFrontendDefaultLimits,
   formatDsl4DiagnosticClipboard,
+  loadDsl4RuntimeArtifact,
   mapDsl4RuntimeExpressionError,
   redactDsl4DiagnosticTelemetry,
   renderDsl4DiagnosticFallbackSvg,
@@ -281,7 +284,7 @@ scenes:
   }
 });
 
-test('preserves one diagnostic identity across editor UI, CLI, and Packager failures', async (t) => {
+test('preserves one diagnostic identity across preview, validate, build, and runtime', async (t) => {
   const source = `
 kamishibai: '4.0'
 branches:
@@ -305,6 +308,32 @@ scenes:
     displayName: 'story.kamishibai.yaml',
   });
   assert.deepEqual(identity(editor.diagnostics[0]), identity(expected));
+
+  const previewResults = [];
+  const watcher = createDsl4PreviewSourceWatcher({
+    projectRoot: '/project',
+    manifest: {
+      formatVersion: 1,
+      mode: 'external',
+      sourceId: 'main',
+      path: 'story.k4.yml',
+    },
+    sourceFrontend,
+    maxSourceBytes: 4096,
+    onResult: (result) => previewResults.push(result),
+    loadSource: async () => ({
+      descriptor: {sourceId: 'main', text: source, integrity: 'sha256-preview'},
+    }),
+    watchFactory: () => ({
+      close() {},
+      on() {
+        return this;
+      },
+    }),
+  });
+  await watcher.start();
+  assert.deepEqual(identity(previewResults[0].diagnostics[0]), identity(expected));
+  await watcher.dispose();
 
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-diagnostic-surfaces-'));
   t.after(() => rm(directory, {recursive: true, force: true}));
@@ -348,4 +377,22 @@ scenes:
       return true;
     },
   );
+
+  const embeddedSource = await createDsl4EmbeddedSourceDescriptor(source, {
+    sourceId: 'main',
+    displayName: 'story.k4.yml',
+    maxSourceBytes: 4096,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const runtimeResult = await loadDsl4RuntimeArtifact(
+    {
+      extensionStorage: {
+        kubohiroyakamishibairuntime4: {source: embeddedSource},
+      },
+    },
+    sourceFrontend,
+    {maxSourceBytes: 4096, subtleCrypto: webcrypto.subtle},
+  );
+  assert.equal(runtimeResult.ok, false);
+  assert.deepEqual(identity(runtimeResult.diagnostics[0]), identity(expected));
 });
