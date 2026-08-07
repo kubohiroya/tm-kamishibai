@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   createDsl4BrowserPreviewSourceAdapter,
+  dsl4DefaultExternalSourcePath,
   Dsl4ExternalSourceManifestError,
   inspectDsl4BrowserPreviewSupport,
   validateDsl4ExternalSourceManifestContract,
@@ -233,6 +234,22 @@ function createAdapter(project, overrides = {}) {
 
 test('shares strict browser-safe manifest and POSIX path validation with the Node boundary', () => {
   assert.deepEqual(validateDsl4ExternalSourceManifestContract(validManifest), validManifest);
+  assert.equal(dsl4DefaultExternalSourcePath, 'story.kamishibai.yaml');
+  assert.deepEqual(
+    validateDsl4ExternalSourceManifestContract({
+      formatVersion: 1,
+      mode: 'external',
+      sourceId: 'main',
+    }),
+    validManifest,
+  );
+  assert.equal(
+    validateDsl4ExternalSourceManifestContract({
+      ...validManifest,
+      path: 'scripts/story.kamishibai.yaml',
+    }).path,
+    'scripts/story.kamishibai.yaml',
+  );
   for (const path of [
     '/story.kamishibai.yaml',
     'C:/story.kamishibai.yaml',
@@ -250,6 +267,18 @@ test('shares strict browser-safe manifest and POSIX path validation with the Nod
       path,
     );
   }
+});
+
+test('loads the root-level default source when manifest path is omitted', async () => {
+  const project = createProject({
+    manifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+  });
+  const setup = createAdapter(project);
+  const state = await setup.adapter.start(project.root);
+  assert.equal(state.sourceDisplayName, 'story.kamishibai.yaml');
+  assert.equal(setup.results.length, 1);
+  assert.equal(setup.results[0].ok, true);
+  setup.adapter.dispose();
 });
 
 test('detects only a secure top-level directory picker without browser sniffing', () => {
@@ -285,13 +314,16 @@ test('opens read-only from a user action and reports cancel or unsupported witho
   globalObject.self = globalObject;
   globalObject.top = globalObject;
   const pickerCalls = [];
+  let directActivation = true;
   globalObject.showDirectoryPicker = async (options) => {
-    pickerCalls.push(options);
+    pickerCalls.push({options, directActivation});
     return project.root;
   };
   const opened = createAdapter(project, {globalObject});
-  await opened.adapter.openProject();
-  assert.deepEqual(pickerCalls, [{mode: 'read'}]);
+  const opening = opened.adapter.openProject();
+  directActivation = false;
+  await opening;
+  assert.deepEqual(pickerCalls, [{options: {mode: 'read'}, directActivation: true}]);
   assert.equal(opened.results.length, 1);
   assert.equal(opened.results[0].ok, true);
   opened.adapter.dispose();

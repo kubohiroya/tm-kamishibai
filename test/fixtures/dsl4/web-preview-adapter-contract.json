@@ -14,14 +14,14 @@
       "name": "dsl4AppShell",
       "defaultEnabled": false,
       "startupFixed": true,
-      "implemented": false,
+      "implemented": true,
       "requires": ["dsl4Runtime"]
     },
     "webPreviewAdapter": {
       "name": "dsl4WebPreviewAdapter",
       "defaultEnabled": false,
       "startupFixed": true,
-      "implemented": false,
+      "implemented": true,
       "requires": ["dsl4Runtime", "dsl4AppShell"]
     },
     "fileSystemObserver": {
@@ -39,6 +39,11 @@
     "pickerMethod": "showDirectoryPicker",
     "pickerOptions": {"mode": "read"},
     "manifestFilename": "project.source.json",
+    "defaultSourceFilename": "story.kamishibai.yaml",
+    "sourcePathOptional": true,
+    "sourcePathScope": "normalized-project-root-relative",
+    "sourceDiscovery": "manifest-or-default-only",
+    "assetDirectoryLayout": "optional",
     "manifestMaximumBytes": 32768,
     "persistHandles": false
   },

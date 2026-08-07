@@ -20,11 +20,13 @@ test('freezes the #390 startup flags and rollout dependencies', () => {
     requires: [],
   });
   assert.deepEqual(contract.featureFlags.appShell.requires, ['dsl4Runtime']);
+  assert.equal(contract.featureFlags.appShell.implemented, true);
   assert.deepEqual(contract.featureFlags.webPreviewAdapter.requires, [
     'dsl4Runtime',
     'dsl4AppShell',
   ]);
   assert.equal(contract.featureFlags.webPreviewAdapter.defaultEnabled, false);
+  assert.equal(contract.featureFlags.webPreviewAdapter.implemented, true);
   assert.equal(contract.featureFlags.fileSystemObserver.requiredForRelease, false);
 });
 
@@ -35,6 +37,11 @@ test('uses a read-only, session-only project root selection boundary', () => {
   assert.equal(contract.selection.pickerMethod, 'showDirectoryPicker');
   assert.deepEqual(contract.selection.pickerOptions, {mode: 'read'});
   assert.equal(contract.selection.manifestFilename, 'project.source.json');
+  assert.equal(contract.selection.defaultSourceFilename, 'story.kamishibai.yaml');
+  assert.equal(contract.selection.sourcePathOptional, true);
+  assert.equal(contract.selection.sourcePathScope, 'normalized-project-root-relative');
+  assert.equal(contract.selection.sourceDiscovery, 'manifest-or-default-only');
+  assert.equal(contract.selection.assetDirectoryLayout, 'optional');
   assert.equal(contract.selection.manifestMaximumBytes, 32 * 1024);
   assert.equal(contract.selection.persistHandles, false);
 });

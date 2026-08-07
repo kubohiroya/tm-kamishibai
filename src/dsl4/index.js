@@ -1,4 +1,5 @@
-export {canonicalizeDsl4Source, createDsl4SourceFrontend} from './source-frontend.js';
+export {canonicalizeDsl4Source} from './source-canonicalizer.js';
+export {createDsl4SourceFrontend} from './source-frontend.js';
 export {
   createDsl4ActionRegistrySnapshot,
   dsl4ActorCoreActionNames,
@@ -55,6 +56,7 @@ export {
   normalizeDsl4DiagnosticSequence,
 } from './diagnostic-sequence-policy.js';
 export {
+  dsl4DefaultExternalSourcePath,
   Dsl4ExternalSourceManifestError,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';

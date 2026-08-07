@@ -79,10 +79,24 @@ test('strictly validates the external manifest and returns an immutable copy', (
   assert.equal(Object.isFrozen(validated), true);
   assert.deepEqual(input, validManifest);
 
+  const defaulted = validateDsl4ExternalSourceManifest({
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+  });
+  assert.deepEqual(defaulted, {...validManifest, path: 'story.kamishibai.yaml'});
+  assert.equal(
+    validateDsl4ExternalSourceManifest({
+      ...validManifest,
+      path: 'scripts/story.kamishibai.yaml',
+    }).path,
+    'scripts/story.kamishibai.yaml',
+  );
+
   for (const invalid of [
     {...validManifest, mode: 'embedded'},
     {...validManifest, extra: true},
-    {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    {formatVersion: 1, mode: 'external'},
     {...validManifest, cacheId: 'story000000000001'},
     {...validManifest, cacheDatabaseName: 'tw-kamishibai-assets-v1--story--story000000000001'},
   ]) {
