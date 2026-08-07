@@ -28,7 +28,7 @@ kamishibai: '4.0'
 assets:
   OpeningImage:
     kind: backdrop
-    file: assets/opening.svg
+    file: opening.svg
     loading: lazy
 controls:
   keymaps:
@@ -69,21 +69,19 @@ async function withFixture(callback) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-build-cli-'));
   try {
     const outputDirectory = path.join(directory, 'dist');
-    await mkdir(path.join(directory, 'assets'));
     await mkdir(outputDirectory);
     const baseSb3Path = path.join(directory, 'base.sb3');
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     const sourceManifestPath = path.join(directory, 'project.source.json');
     await writeFile(baseSb3Path, baseSb3());
     await writeFile(sourcePath, validSource);
-    await writeFile(path.join(directory, 'assets', 'opening.svg'), '<svg/>');
+    await writeFile(path.join(directory, 'opening.svg'), '<svg/>');
     await writeFile(
       sourceManifestPath,
       `${JSON.stringify({
         formatVersion: 1,
         mode: 'external',
         sourceId: 'main',
-        path: 'story.kamishibai.yaml',
       })}\n`,
     );
     return await callback({
@@ -186,6 +184,7 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
     assert.equal(loaded.channel, 'bundled');
     const persistedManifest = JSON.parse(await readFile(fixture.sourceManifestPath, 'utf8'));
+    assert.equal(persistedManifest.path, 'story.kamishibai.yaml');
     assert.match(persistedManifest.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
     assert.equal(
       persistedManifest.cacheDatabaseName,

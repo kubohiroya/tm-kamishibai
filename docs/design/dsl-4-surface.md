@@ -87,7 +87,7 @@ assets:
 
 ### 3.2 名前付き形式
 
-名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`、builder入力内のローカル相対pathを示す
+名前付き形式は`kind`に加え、既存の埋め込み名を示す`name`、project root基準のローカル相対pathを示す
 `file`、または検証情報付きの`source`のいずれか一つを持ちます。`name`と`file`は
 `delivery: embedded`、`source`は明示的な`delivery: remote`で使用します。
 
@@ -95,7 +95,7 @@ assets:
 assets:
   Ocean:
     kind: backdrop
-    file: assets/ocean.svg
+    file: ocean.svg
     loading: lazy
     retention: story
   HeroHappy:
@@ -109,7 +109,7 @@ assets:
     retention: story
   救助Pose:
     kind: poseModel
-    file: pose-models/rescue
+    file: rescue-pose
     loading: lazy
     retention: scene
   RemoteOcean:

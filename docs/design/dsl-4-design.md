@@ -455,7 +455,7 @@ assets:
     retention: story
   救助Pose:
     kind: poseModel
-    file: pose-models/rescue
+    file: rescue-pose
     loading: lazy
     retention: scene
 ```
@@ -1539,7 +1539,7 @@ runtimeの保証範囲とします。厳密なheap分離が必要なprofileで�
 assets:
   救助Pose:
     kind: poseModel
-    file: pose-models/rescue
+    file: rescue-pose
     loading: lazy
     retention: scene
 ```
@@ -1702,7 +1702,8 @@ base64url文字列とし、raw tokenを発行結果以外へ保持せず、polic
 合計64件までです。TTLとrecord上限はhostが有限値を明示し、永続設定、source manifest、SB3、YAMLへ
 tokenを保存しません。
 
-source readは検証済みexternal source manifestの相対pathとの完全一致だけを許可し、project rootと実fileの
+source readは検証済みexternal source manifestのroot-level `.kamishibai.yaml` basenameとの完全一致だけを許可します。
+`path`の省略時は`story.kamishibai.yaml`へ正規化します。project rootと実fileの
 realpath／symlink検証は既存external source loaderで重ねて行います。graceful stop、host crash、
 transport closeは同じcallbackを一度だけ実行し、その完了前の再接続を拒否します。callback失敗後は同じpolicyで
 接続を再開せず、hostがpolicyを破棄して新sessionを作り直します。このpolicy自体はsocketを開かず、
