@@ -354,6 +354,9 @@ test(
         'dialog cancellation',
       );
 
+      const initialViewport = await client.evaluate(
+        'globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport',
+      );
       await client.send('Emulation.setDeviceMetricsOverride', {
         width: 520,
         height: 360,
@@ -361,10 +364,19 @@ test(
         mobile: false,
       });
       await waitForEvaluation(client, 'innerWidth === 520', 'Chromium viewport override');
+      const resizedViewport = await client.evaluate(`({
+        width: document.documentElement.clientWidth,
+        height: document.documentElement.clientHeight
+      })`);
+      assert.ok(resizedViewport.width < initialViewport.width);
+      assert.ok(resizedViewport.height < initialViewport.height);
       await client.evaluate("window.dispatchEvent(new Event('resize'))");
       await waitForEvaluation(
         client,
-        'globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport.width === 520',
+        `(() => {
+          const viewport = globalThis.webPreviewFixture.shell.getSnapshot().reloadOverlay.overlay.layout.viewport;
+          return viewport.width === ${resizedViewport.width} && viewport.height === ${resizedViewport.height};
+        })()`,
         'viewport resize layout',
       );
 
