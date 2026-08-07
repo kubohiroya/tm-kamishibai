@@ -39,19 +39,17 @@ function sourcePath(value) {
   if (typeof source !== 'string' || source.length === 0 || source.includes('\0')) {
     fail('K4-SOURCE-PATH-001', 'path must be a non-empty string without NUL');
   }
-  const segments = source.split('/');
   if (
+    source.includes('/') ||
     source.includes('\\') ||
     source.startsWith('/') ||
     /^[A-Za-z]:/u.test(source) ||
     /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
+    source === '.' ||
+    source === '..' ||
     !source.endsWith('.kamishibai.yaml')
   ) {
-    fail(
-      'K4-SOURCE-PATH-001',
-      'path must be a normalized POSIX-relative .kamishibai.yaml path without dot segments',
-    );
+    fail('K4-SOURCE-PATH-001', 'path must be one project-root .kamishibai.yaml basename');
   }
   return source;
 }

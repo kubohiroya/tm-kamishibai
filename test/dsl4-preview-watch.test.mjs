@@ -18,7 +18,7 @@ const manifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
-  path: 'scripts/story.kamishibai.yaml',
+  path: 'story.kamishibai.yaml',
 });
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
 
@@ -145,7 +145,7 @@ test('defines finite development defaults and has no side effects before start',
   const state = await watcher.start();
   assert.equal(state.status, 'watching');
   assert.equal(state.published, 1);
-  assert.equal(setup.watched.directory, path.join('/project', 'scripts'));
+  assert.equal(setup.watched.directory, '/project');
   assert.equal(setup.results[0].ok, true);
   assert.equal(setup.results[0].sourceSnapshot.integrity, 'sha256-initial');
   assert.equal(Object.isFrozen(setup.results[0]), true);
@@ -341,9 +341,7 @@ test('contains watcher observer failures and validates the lifecycle boundary', 
 test('uses the authorized stable loader and shared frontend for real disk updates', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-preview-watch-'));
   try {
-    const scripts = path.join(directory, 'scripts');
-    const sourcePath = path.join(scripts, 'story.kamishibai.yaml');
-    await mkdir(scripts);
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     await writeFile(sourcePath, validSource);
     const clock = createFakeClock();
     const watched = createFakeWatchFactory();

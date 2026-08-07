@@ -39,7 +39,7 @@ test('uses a read-only, session-only project root selection boundary', () => {
   assert.equal(contract.selection.manifestFilename, 'project.source.json');
   assert.equal(contract.selection.defaultSourceFilename, 'story.kamishibai.yaml');
   assert.equal(contract.selection.sourcePathOptional, true);
-  assert.equal(contract.selection.sourcePathScope, 'normalized-project-root-relative');
+  assert.equal(contract.selection.sourcePathScope, 'project-root-basename');
   assert.equal(contract.selection.sourceDiscovery, 'manifest-or-default-only');
   assert.equal(contract.selection.assetDirectoryLayout, 'optional');
   assert.equal(contract.selection.manifestMaximumBytes, 32 * 1024);

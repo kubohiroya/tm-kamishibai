@@ -243,14 +243,8 @@ test('shares strict browser-safe manifest and POSIX path validation with the Nod
     }),
     validManifest,
   );
-  assert.equal(
-    validateDsl4ExternalSourceManifestContract({
-      ...validManifest,
-      path: 'scripts/story.kamishibai.yaml',
-    }).path,
-    'scripts/story.kamishibai.yaml',
-  );
   for (const path of [
+    'scripts/story.kamishibai.yaml',
     '/story.kamishibai.yaml',
     'C:/story.kamishibai.yaml',
     'https://example.com/story.kamishibai.yaml',

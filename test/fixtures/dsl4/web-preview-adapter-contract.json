@@ -41,7 +41,7 @@
     "manifestFilename": "project.source.json",
     "defaultSourceFilename": "story.kamishibai.yaml",
     "sourcePathOptional": true,
-    "sourcePathScope": "normalized-project-root-relative",
+    "sourcePathScope": "project-root-basename",
     "sourceDiscovery": "manifest-or-default-only",
     "assetDirectoryLayout": "optional",
     "manifestMaximumBytes": 32768,

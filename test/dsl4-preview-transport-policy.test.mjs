@@ -17,7 +17,7 @@ const manifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
-  path: 'scripts/story.kamishibai.yaml',
+  path: 'story.kamishibai.yaml',
 });
 
 function deterministicRandomBytes() {
@@ -255,9 +255,9 @@ test('authorizes only the manifest path while a connection is active', async () 
   assert.equal(Object.isFrozen(authorization), true);
 
   for (const sourcePath of [
-    'scripts/other.kamishibai.yaml',
+    'other.kamishibai.yaml',
     '../story.kamishibai.yaml',
-    '/project/scripts/story.kamishibai.yaml',
+    '/project/story.kamishibai.yaml',
     'https://example.com/story.kamishibai.yaml',
   ]) {
     throwsCode(() => connection.authorizeSourceRead(sourcePath), 'K4-PREVIEW-TRANSPORT-PATH');

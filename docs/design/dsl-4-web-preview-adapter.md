@@ -92,12 +92,12 @@ adapterは選択されたroot直下の`project.source.json`だけを最初に読
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
 - 省略時は`story.kamishibai.yaml`へ正規化する
-- normalized POSIX-relative `.kamishibai.yaml` pathである
-- 空、`.`、`..` segment、backslash、absolute path、drive prefix、URL scheme、NULを含まない
+- project root直下の`.kamishibai.yaml` basenameである
+- `/`、backslash、空、`.`、`..`、absolute path、drive prefix、URL scheme、NULを含まない
 - directoryを走査または推測して別のYAMLへfallbackしない
 
-選択済みroot handleからpath segmentごとに`getDirectoryHandle()`で辿り、最後に`getFileHandle()`でYAMLだけを取得
-します。文字列pathをOS pathへ変換せず、root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
+選択済みroot handleからbasenameを`getFileHandle()`へ直接渡してYAMLだけを取得します。文字列pathをOS pathへ変換せず、
+root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
 
 一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。pose modelはbundle自体を
 directoryにしますが、`assets/`、`images/`、`sounds/`、`pose-models/`等の分類directoryは任意です。
