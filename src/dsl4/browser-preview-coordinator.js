@@ -13,12 +13,17 @@ function isRecord(value) {
  * @param {object} options
  * @param {Record<string, Function>} options.protocolSession
  * @param {string} options.sessionId
- * @param {{parse: Function}} options.sourceFrontend
+ * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} options.sourceFrontend
  * @param {number} options.maxSourceBytes
+ * @param {unknown} [options.featureFlags]
+ * @param {number} [options.maxSourceFiles]
+ * @param {number} [options.maxTotalSourceBytes]
+ * @param {number} [options.maxIncludeDepth]
  * @param {ReadonlyArray<string>} [options.capabilities]
  * @param {Record<string, unknown>} [options.sourceOptions]
  * @param {(projectRoot: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onProjectRoot]
  * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceResult]
+ * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.beforeSourceStage]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onProtocolEvent]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onSourceStatus]
  * @param {(diagnostic: Readonly<Record<string, unknown>> | null) => unknown | Promise<unknown>} [options.onSourceDiagnostic]
@@ -33,6 +38,10 @@ export function createDsl4BrowserPreviewCoordinator(options) {
   for (const reserved of [
     'sourceFrontend',
     'maxSourceBytes',
+    'featureFlags',
+    'maxSourceFiles',
+    'maxTotalSourceBytes',
+    'maxIncludeDepth',
     'onResult',
     'onProjectRoot',
     'onStatus',
@@ -48,6 +57,9 @@ export function createDsl4BrowserPreviewCoordinator(options) {
   }
   if (options.onSourceResult !== undefined && typeof options.onSourceResult !== 'function') {
     throw new TypeError('onSourceResult must be a function');
+  }
+  if (options.beforeSourceStage !== undefined && typeof options.beforeSourceStage !== 'function') {
+    throw new TypeError('beforeSourceStage must be a function');
   }
   /** @param {unknown} error */
   const reportError = (error) => {
@@ -72,19 +84,21 @@ export function createDsl4BrowserPreviewCoordinator(options) {
     ...sourceOptions,
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
+    featureFlags: options.featureFlags,
+    maxSourceFiles: options.maxSourceFiles,
+    maxTotalSourceBytes: options.maxTotalSourceBytes,
+    maxIncludeDepth: options.maxIncludeDepth,
     onProjectRoot: options.onProjectRoot,
-    onResult(result) {
-      if (result.ok === true) latestValidSourceResult = result;
+    async onResult(result) {
+      await options.beforeSourceStage?.(result);
       try {
         Promise.resolve(options.onSourceResult?.(result)).catch(reportError);
       } catch (error) {
         reportError(error);
       }
-      try {
-        protocolReady.then(() => protocol.stage(result)).catch(reportError);
-      } catch (error) {
-        reportError(error);
-      }
+      await protocolReady;
+      await protocol.stage(result);
+      if (result.ok === true) latestValidSourceResult = result;
     },
     onStatus: options.onSourceStatus,
     onDiagnostic: options.onSourceDiagnostic,

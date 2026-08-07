@@ -44,9 +44,9 @@ function previewArguments(extra = []) {
   ];
 }
 
-function commandOptions() {
+function commandOptions(extra = []) {
   return {
-    ...parseCliArguments(previewArguments()).options,
+    ...parseCliArguments(previewArguments(extra)).options,
     sourceFrontend: {parse() {}},
   };
 }
@@ -73,6 +73,7 @@ function createCommandFixture({onOpen, start} = {}) {
   const origin = 'http://127.0.0.1:45123';
   const token = 'A'.repeat(43);
   let hostOptions;
+  let runtimeOptions;
   let browserRuntimeReady = false;
   let disposeCount = 0;
   let openCount = 0;
@@ -91,7 +92,8 @@ function createCommandFixture({onOpen, start} = {}) {
           )
         : Buffer.from('base');
     },
-    async buildRuntime() {
+    async buildRuntime(options) {
+      runtimeOptions = options;
       return {bytes: Uint8Array.of(1, 2, 3)};
     },
     async buildBrowserBundle() {
@@ -137,6 +139,12 @@ function createCommandFixture({onOpen, start} = {}) {
     get openCount() {
       return openCount;
     },
+    get hostOptions() {
+      return hostOptions;
+    },
+    get runtimeOptions() {
+      return runtimeOptions;
+    },
   };
 }
 
@@ -165,6 +173,30 @@ test('parses the bounded preview-dsl4 --watch contract and rejects unsafe argume
   assert.throws(
     () => parseCliArguments(excessiveFile),
     /max-asset-file-bytes must be <= --max-total-asset-bytes/u,
+  );
+
+  const included = parseCliArguments(
+    previewArguments([
+      '--enable-source-includes',
+      '--max-source-files',
+      '8',
+      '--max-total-source-bytes',
+      '32768',
+      '--max-include-depth',
+      '4',
+    ]),
+  );
+  assert.equal(included.options.featureFlags.dsl4SourceIncludes, true);
+  assert.equal(included.options.maxSourceFiles, 8);
+  assert.equal(included.options.maxTotalSourceBytes, 32768);
+  assert.equal(included.options.maxIncludeDepth, 4);
+  assert.throws(
+    () => parseCliArguments(previewArguments(['--enable-source-includes'])),
+    /Missing required option: --max-source-files/u,
+  );
+  assert.throws(
+    () => parseCliArguments(previewArguments(['--max-source-files', '8'])),
+    /requires --enable-source-includes/u,
   );
 });
 
@@ -205,6 +237,39 @@ test('waits for runtime-ready, redacts the token, and cleans up on SIGINT', asyn
   assert.equal(fixture.disposeCount, 1);
   assert.equal(fixture.signalTarget.listenerCount('SIGINT'), 0);
   assert.equal(fixture.signalTarget.listenerCount('SIGTERM'), 0);
+});
+
+test('forwards explicit Source Graph limits to both the initial build and live host', async () => {
+  const captured = captureIo();
+  const fixture = createCommandFixture({
+    async onOpen({emit, signalTarget}) {
+      queueMicrotask(() => emit({type: 'local-preview.runtime-ready'}));
+      setImmediate(() => signalTarget.emit('SIGINT'));
+    },
+  });
+  const graphArguments = [
+    '--enable-source-includes',
+    '--max-source-files',
+    '8',
+    '--max-total-source-bytes',
+    '32768',
+    '--max-include-depth',
+    '4',
+  ];
+  await runDsl4LocalPreviewCommand(commandOptions(graphArguments), {
+    ...fixture.dependencies,
+    ...captured.io,
+  });
+
+  for (const forwarded of [fixture.runtimeOptions, fixture.hostOptions]) {
+    assert.equal(forwarded.featureFlags.dsl4SourceIncludes, true);
+    assert.equal(forwarded.maxSourceFiles, 8);
+    assert.equal(forwarded.maxTotalSourceBytes, 32768);
+    assert.equal(forwarded.maxIncludeDepth, 4);
+    assert.equal(forwarded.maxAssetFileBytes, limits.maxAssetFileBytes);
+    assert.equal(forwarded.maxAssetFiles, limits.maxAssetFiles);
+    assert.equal(forwarded.maxTotalAssetBytes, limits.maxTotalAssetBytes);
+  }
 });
 
 test('fails closed when the browser never acknowledges runtime readiness', async () => {

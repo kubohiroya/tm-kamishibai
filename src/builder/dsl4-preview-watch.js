@@ -1,11 +1,17 @@
 import {watch} from 'node:fs';
 import path from 'node:path';
 
+import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {createDsl4PreviewSourceGraphGeneration} from '../dsl4/preview-source-graph-generation.js';
+import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
+import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
+import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
+import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 
 export const dsl4PreviewWatchDefaults = Object.freeze({
   quietWindowMs: 100,
@@ -48,6 +54,14 @@ function finiteMilliseconds(value, name, minimum) {
   return Number(value);
 }
 
+/** @param {unknown} value @param {string} name */
+function positiveSafeInteger(value, name) {
+  if (!Number.isSafeInteger(value) || Number(value) < 1) {
+    throw new TypeError(`${name} must be a positive safe integer`);
+  }
+  return Number(value);
+}
+
 /** @param {unknown} value */
 function validateClock(value) {
   if (
@@ -81,6 +95,12 @@ function diagnosticMessage(code) {
       'K4-SOURCE-FILE-001': 'DSL 4.0 source is not a regular file',
       'K4-SOURCE-SIZE-001': 'DSL 4.0 source exceeds the configured byte limit',
       'K4-SOURCE-UTF8-001': 'DSL 4.0 source is not valid UTF-8',
+      'K4-INCLUDE-CYCLE': 'DSL 4.0 source includes contain a cycle',
+      'K4-INCLUDE-LIMIT-001': 'DSL 4.0 source includes exceed a configured limit',
+      'K4-INCLUDE-READ-001': 'An included DSL 4.0 source could not be read',
+      'K4-DECLARATION-DUPLICATE': 'A DSL 4.0 declaration is duplicated across sources',
+      'K4-ASSET-MISSING': 'A project-local asset is missing',
+      'K4-ASSET-UNSTABLE-001': 'Project-local assets did not form a stable generation',
     }[code] ?? 'DSL 4.0 source could not be prepared for preview'
   );
 }
@@ -120,6 +140,13 @@ function sourceFailure(code, severity, sourceId) {
  * @param {unknown} options.manifest
  * @param {{parse(source: string, options?: {sourceId?: string}): any}} options.sourceFrontend
  * @param {number} options.maxSourceBytes
+ * @param {unknown} [options.featureFlags]
+ * @param {number} [options.maxSourceFiles]
+ * @param {number} [options.maxTotalSourceBytes]
+ * @param {number} [options.maxIncludeDepth]
+ * @param {number} [options.maxAssetFileBytes]
+ * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxTotalAssetBytes]
  * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.onResult
  * @param {(error: unknown) => void} [options.onError]
  * @param {number} [options.quietWindowMs]
@@ -127,7 +154,9 @@ function sourceFailure(code, severity, sourceId) {
  * @param {number} [options.stabilityTimeoutMs]
  * @param {{digest: Function}} [options.subtleCrypto]
  * @param {(projectRoot: string, manifest: unknown, options: {maxSourceBytes: number, subtleCrypto?: {digest: Function}}) => Promise<Record<string, any>>} [options.loadSource]
- * @param {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} [options.watchFactory]
+ * @param {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void, options?: {recursive?: boolean}) => {close: Function, on: Function}} [options.watchFactory]
+ * @param {typeof loadDsl4BuildSourceGraph} [options.loadSourceGraph]
+ * @param {typeof loadDsl4LocalAssetSnapshot} [options.loadAssets]
  * @param {{now: Function, setTimeout: Function, clearTimeout: Function, sleep: Function}} [options.clock]
  */
 export function createDsl4PreviewSourceWatcher({
@@ -135,6 +164,13 @@ export function createDsl4PreviewSourceWatcher({
   manifest: inputManifest,
   sourceFrontend,
   maxSourceBytes,
+  featureFlags: inputFeatureFlags = {},
+  maxSourceFiles,
+  maxTotalSourceBytes,
+  maxIncludeDepth,
+  maxAssetFileBytes,
+  maxAssetFiles,
+  maxTotalAssetBytes,
   onResult,
   onError,
   quietWindowMs = dsl4PreviewWatchDefaults.quietWindowMs,
@@ -142,7 +178,10 @@ export function createDsl4PreviewSourceWatcher({
   stabilityTimeoutMs = dsl4PreviewWatchDefaults.stabilityTimeoutMs,
   subtleCrypto = globalThis.crypto?.subtle,
   loadSource = loadDsl4ExternalSource,
-  watchFactory = (directory, listener) => watch(directory, {persistent: true}, listener),
+  watchFactory = (directory, listener, options = {}) =>
+    watch(directory, {persistent: true, recursive: options.recursive === true}, listener),
+  loadSourceGraph = loadDsl4BuildSourceGraph,
+  loadAssets = loadDsl4LocalAssetSnapshot,
   clock: inputClock = defaultClock,
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
@@ -152,15 +191,42 @@ export function createDsl4PreviewSourceWatcher({
   if (!isRecord(sourceFrontend) || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  if (!Number.isSafeInteger(maxSourceBytes) || Number(maxSourceBytes) < 1) {
-    throw new TypeError('maxSourceBytes must be a positive safe integer');
-  }
+  const featureFlags = resolveDsl4FeatureFlags(inputFeatureFlags);
+  const sourceLimits = resolveDsl4BuildSourceLimits({
+    sourceIncludesEnabled: featureFlags.dsl4SourceIncludes,
+    maxSourceBytes,
+    maxTotalSourceBytes,
+  });
   if (typeof onResult !== 'function') throw new TypeError('onResult must be a function');
   if (onError !== undefined && typeof onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
   if (typeof loadSource !== 'function') throw new TypeError('loadSource must be a function');
   if (typeof watchFactory !== 'function') throw new TypeError('watchFactory must be a function');
+  if (featureFlags.dsl4SourceIncludes && typeof loadSourceGraph !== 'function') {
+    throw new TypeError('loadSourceGraph must be a function');
+  }
+  if (featureFlags.dsl4SourceIncludes && typeof loadAssets !== 'function') {
+    throw new TypeError('loadAssets must be a function');
+  }
+  const graphLimits = featureFlags.dsl4SourceIncludes
+    ? {
+        maxSourceFiles: positiveSafeInteger(maxSourceFiles, 'maxSourceFiles'),
+        maxSourceBytes: sourceLimits.maxSourceFileBytes,
+        maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
+        maxIncludeDepth: positiveSafeInteger(maxIncludeDepth, 'maxIncludeDepth'),
+      }
+    : null;
+  const assetLimits = featureFlags.dsl4SourceIncludes
+    ? {
+        maxFileBytes: positiveSafeInteger(maxAssetFileBytes, 'maxAssetFileBytes'),
+        maxFiles: positiveSafeInteger(maxAssetFiles, 'maxAssetFiles'),
+        maxTotalBytes: positiveSafeInteger(maxTotalAssetBytes, 'maxTotalAssetBytes'),
+      }
+    : null;
+  if (assetLimits && assetLimits.maxFileBytes > assetLimits.maxTotalBytes) {
+    throw new TypeError('maxAssetFileBytes must be less than or equal to maxTotalAssetBytes');
+  }
   const quiet = finiteMilliseconds(quietWindowMs, 'quietWindowMs', 0);
   const retry = finiteMilliseconds(retryIntervalMs, 'retryIntervalMs', 1);
   const timeout = finiteMilliseconds(stabilityTimeoutMs, 'stabilityTimeoutMs', retry);
@@ -169,6 +235,7 @@ export function createDsl4PreviewSourceWatcher({
   const sourcePath = path.resolve(projectRoot, ...manifest.path.split('/'));
   const sourceDirectory = path.dirname(sourcePath);
   const sourceBasename = path.basename(sourcePath);
+  const textEncoder = new TextEncoder();
 
   let started = false;
   let disposed = false;
@@ -247,6 +314,64 @@ export function createDsl4PreviewSourceWatcher({
     );
   }
 
+  async function loadIncludedGeneration() {
+    if (!graphLimits || !assetLimits) {
+      throw new TypeError('Source Graph preview limits are unavailable');
+    }
+    const entrySource = await loadSource(projectRoot, manifest, {
+      maxSourceBytes: sourceLimits.maxSourceFileBytes,
+      subtleCrypto,
+    });
+    const sourceGraph = await loadSourceGraph(projectRoot, entrySource, {
+      limits: graphLimits,
+    });
+    const generation = /** @type {Readonly<Record<string, any>>} */ (
+      await createDsl4PreviewSourceGraphGeneration(sourceGraph, {
+        sourceFrontend,
+        sourceId: manifest.sourceId,
+        displayName: path.basename(manifest.path),
+        maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
+        subtleCrypto,
+      })
+    );
+    let assetIntegrity = 'invalid-source';
+    if (generation.result.ok) {
+      const assets = await loadAssets(projectRoot, generation.result.storyDocument, {
+        ...assetLimits,
+        subtleCrypto,
+      });
+      assetIntegrity = await computeDsl4Sha256Integrity(
+        textEncoder.encode(JSON.stringify(assets.manifest)),
+        subtleCrypto,
+      );
+    }
+    const key = await computeDsl4Sha256Integrity(
+      textEncoder.encode(
+        JSON.stringify({
+          formatVersion: 1,
+          sourceIntegrity: generation.key,
+          assetIntegrity,
+        }),
+      ),
+      subtleCrypto,
+    );
+    return {key, result: generation.result};
+  }
+
+  /** @param {number} requestedRevision */
+  async function loadStableIncludedGeneration(requestedRevision) {
+    const first = await loadIncludedGeneration();
+    await clock.sleep(quiet);
+    if (disposed || requestedRevision !== revision) return null;
+    const second = await loadIncludedGeneration();
+    if (first.key !== second.key) {
+      const error = new Error('Source Graph or local assets changed during generation capture');
+      Object.defineProperty(error, 'code', {value: 'K4-PREVIEW-SOURCE-UNSTABLE'});
+      throw error;
+    }
+    return second;
+  }
+
   /** @param {number} requestedRevision */
   async function stabilize(requestedRevision) {
     if (disposed || requestedRevision !== revision) return snapshot();
@@ -258,8 +383,15 @@ export function createDsl4PreviewSourceWatcher({
     while (!disposed && requestedRevision === revision) {
       attempts += 1;
       try {
+        if (featureFlags.dsl4SourceIncludes) {
+          const generation = await loadStableIncludedGeneration(requestedRevision);
+          if (!generation || disposed || requestedRevision !== revision) return snapshot();
+          await publish(generation.result, `generation:${generation.key}`);
+          if (!disposed && requestedRevision === revision) status = 'watching';
+          return snapshot();
+        }
         const loaded = await loadSource(projectRoot, manifest, {
-          maxSourceBytes,
+          maxSourceBytes: sourceLimits.maxSourceFileBytes,
           subtleCrypto,
         });
         if (disposed || requestedRevision !== revision) return snapshot();
@@ -288,8 +420,21 @@ export function createDsl4PreviewSourceWatcher({
         return snapshot();
       } catch (error) {
         const code = errorCode(error);
-        if (code !== 'K4-SOURCE-MISSING' && code !== 'K4-PREVIEW-SOURCE-UNSTABLE') {
-          if (!code.startsWith('K4-SOURCE-')) throw error;
+        const transient = new Set([
+          'K4-SOURCE-MISSING',
+          'K4-PREVIEW-SOURCE-UNSTABLE',
+          'K4-ASSET-MISSING',
+          'K4-ASSET-UNSTABLE-001',
+        ]);
+        if (!transient.has(code)) {
+          if (
+            !code.startsWith('K4-SOURCE-') &&
+            !code.startsWith('K4-INCLUDE-') &&
+            !code.startsWith('K4-DECLARATION-') &&
+            !code.startsWith('K4-ASSET-')
+          ) {
+            throw error;
+          }
           const result = sourceFailure(code, 'error', manifest.sourceId);
           await publish(result, `diagnostic:${code}`);
           if (!disposed && requestedRevision === revision) status = 'watching';
@@ -300,11 +445,10 @@ export function createDsl4PreviewSourceWatcher({
 
       const elapsed = Number(clock.now()) - startedAt;
       if (elapsed >= timeout || attempts >= maximumAttempts) {
-        const code =
-          lastTransientCode === 'K4-SOURCE-MISSING'
-            ? 'K4-SOURCE-MISSING'
-            : 'K4-PREVIEW-SOURCE-UNSTABLE';
-        const severity = code === 'K4-SOURCE-MISSING' ? 'error' : 'warning';
+        const code = lastTransientCode.endsWith('-MISSING')
+          ? lastTransientCode
+          : 'K4-PREVIEW-SOURCE-UNSTABLE';
+        const severity = code.endsWith('-MISSING') ? 'error' : 'warning';
         await publish(sourceFailure(code, severity, manifest.sourceId), `diagnostic:${code}`);
         if (!disposed && requestedRevision === revision) status = 'watching';
         return snapshot();
@@ -334,11 +478,21 @@ export function createDsl4PreviewSourceWatcher({
 
   function start() {
     if (started || disposed) throw new TypeError('preview source watcher can only start once');
-    const watcher = watchFactory(sourceDirectory, (eventType, filename) => {
-      if (disposed) return;
-      const changedName = filename === null ? null : String(filename);
-      if (changedName === null || changedName === sourceBasename) notifyChange();
-    });
+    const watcher = watchFactory(
+      featureFlags.dsl4SourceIncludes ? path.resolve(projectRoot) : sourceDirectory,
+      (eventType, filename) => {
+        if (disposed) return;
+        const changedName = filename === null ? null : String(filename);
+        if (
+          featureFlags.dsl4SourceIncludes ||
+          changedName === null ||
+          changedName === sourceBasename
+        ) {
+          notifyChange();
+        }
+      },
+      {recursive: featureFlags.dsl4SourceIncludes},
+    );
     if (
       !isRecord(watcher) ||
       typeof watcher.close !== 'function' ||

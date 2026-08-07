@@ -14,6 +14,10 @@ const assetEnabledFlags = Object.freeze({
   ...enabledFlags,
   dsl4WebPreviewAssetLiveReload: true,
 });
+const includedAssetEnabledFlags = Object.freeze({
+  ...assetEnabledFlags,
+  dsl4SourceIncludes: true,
+});
 
 function sri(value) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;
@@ -122,12 +126,17 @@ function createCoordinatorFixture() {
   };
 }
 
-function createAssetPipelineFixture() {
+function createAssetPipelineFixture({transactionStatus} = {}) {
   let options;
   let started = false;
   let disposed = false;
   const calls = [];
-  const state = () => ({version: 1, started, disposed});
+  const state = () => ({
+    version: 1,
+    started,
+    disposed,
+    ...(transactionStatus === undefined ? {} : {transaction: {status: transactionStatus}}),
+  });
   const pipeline = {
     start(root, context) {
       started = true;
@@ -232,6 +241,7 @@ test('requires the runtime and App Shell flags and remains development-only', ()
     module: 'src/builder/dsl4-web-preview-shell.js',
     featureFlags: [
       'dsl4Runtime',
+      'dsl4SourceIncludes',
       'dsl4AppShell',
       'dsl4WebPreviewAdapter',
       'dsl4WebPreviewAssetLiveReload',
@@ -243,6 +253,48 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'tmpose-kamishibai build-dsl4',
     ],
   });
+});
+
+test('stabilizes included assets before allowing a Source Graph candidate to stage', async () => {
+  const document = createFakeDocument();
+  const source = createCoordinatorFixture();
+  const assets = createAssetPipelineFixture({transactionStatus: 'ready'});
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: includedAssetEnabledFlags,
+    environment: 'development',
+    document,
+    mount: document.body,
+    protocolSession: {},
+    sessionId: 'included-asset-shell-test',
+    sourceFrontend: {parse() {}},
+    maxSourceBytes: 8192,
+    maxSourceFiles: 8,
+    maxTotalSourceBytes: 32 * 1024,
+    maxIncludeDepth: 4,
+    createCoordinator: source.createCoordinator,
+    createAssetPipeline: assets.createAssetPipeline,
+    assetPipelineOptions: {
+      structuralFingerprint: sri('included-structure'),
+      adapterOptions: {},
+      prepareGeneration() {},
+    },
+  });
+  const root = {kind: 'directory'};
+  await source.options.onProjectRoot(root);
+  const result = sourceResult(sri('included-source'));
+  await source.options.beforeSourceStage(result);
+
+  assert.deepEqual(
+    assets.calls.map(([name]) => name),
+    ['start'],
+  );
+  assert.equal(assets.calls[0][1], root);
+  assert.equal(assets.calls[0][2].sourceResult, result);
+  assert.equal(
+    assets.calls.some(([name]) => name === 'updateSource'),
+    false,
+  );
+  await shell.dispose();
 });
 
 test('requires and owns the browser asset pipeline only behind its startup flag', async () => {

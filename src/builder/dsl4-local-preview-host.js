@@ -16,6 +16,7 @@ import {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from '../dsl4/browser-turbowarp-stage.js';
+import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {Sb3BuilderError} from './errors.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {createDsl4PreviewTransportPolicy} from './dsl4-preview-transport-policy.js';
@@ -275,6 +276,13 @@ function previewHtml(sourceDisplayName, runtimeOwner) {
  * @param {unknown} options.sourceManifest
  * @param {{parse: Function}} options.sourceFrontend
  * @param {number} options.maxSourceBytes
+ * @param {unknown} [options.featureFlags]
+ * @param {number} [options.maxSourceFiles]
+ * @param {number} [options.maxTotalSourceBytes]
+ * @param {number} [options.maxIncludeDepth]
+ * @param {number} [options.maxAssetFileBytes]
+ * @param {number} [options.maxAssetFiles]
+ * @param {number} [options.maxTotalAssetBytes]
  * @param {Record<string, Function>} [options.protocolSession]
  * @param {'protocol' | 'browser'} [options.runtimeOwner]
  * @param {'127.0.0.1' | '::1'} [options.bindHost]
@@ -309,6 +317,27 @@ export function createDsl4LocalPreviewHost(options) {
   const sourceManifest = validateDsl4ExternalSourceManifest(options.sourceManifest);
   const sourceFrontend = validateFrontend(options.sourceFrontend);
   const maxSourceBytes = safeInteger(options.maxSourceBytes, 'maxSourceBytes', 1);
+  const featureFlags = resolveDsl4FeatureFlags(options.featureFlags ?? {});
+  const graphOptions = featureFlags.dsl4SourceIncludes
+    ? {
+        maxSourceFiles: safeInteger(options.maxSourceFiles, 'maxSourceFiles', 1),
+        maxTotalSourceBytes: safeInteger(
+          options.maxTotalSourceBytes,
+          'maxTotalSourceBytes',
+          maxSourceBytes,
+        ),
+        maxIncludeDepth: safeInteger(options.maxIncludeDepth, 'maxIncludeDepth', 1),
+        maxAssetFileBytes: safeInteger(options.maxAssetFileBytes, 'maxAssetFileBytes', 1),
+        maxAssetFiles: safeInteger(options.maxAssetFiles, 'maxAssetFiles', 1),
+        maxTotalAssetBytes: safeInteger(options.maxTotalAssetBytes, 'maxTotalAssetBytes', 1),
+      }
+    : {};
+  if (
+    featureFlags.dsl4SourceIncludes &&
+    Number(graphOptions.maxAssetFileBytes) > Number(graphOptions.maxTotalAssetBytes)
+  ) {
+    throw new TypeError('maxAssetFileBytes must be less than or equal to maxTotalAssetBytes');
+  }
   const runtimeOwner = options.runtimeOwner ?? 'protocol';
   if (typeof runtimeOwner !== 'string' || !runtimeOwners.has(runtimeOwner)) {
     throw new TypeError('runtimeOwner must be protocol or browser');
@@ -677,6 +706,8 @@ export function createDsl4LocalPreviewHost(options) {
         manifest: sourceManifest,
         sourceFrontend,
         maxSourceBytes,
+        featureFlags,
+        ...graphOptions,
         async onResult(result) {
           if (
             transportConnection !== connection ||

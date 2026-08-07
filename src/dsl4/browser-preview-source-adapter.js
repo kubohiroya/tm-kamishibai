@@ -2,11 +2,33 @@ import {
   Dsl4ExternalSourceManifestError,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';
+import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
+
+const browserSourceGraphDefaultLimits = Object.freeze({
+  maxSourceFiles: 64,
+  maxTotalSourceBytes: 4 * 1024 * 1024,
+  maxIncludeDepth: 32,
+});
+
+/** @type {Promise<{createSourceGraph: typeof import('./source-graph.js').createDsl4SourceGraph, SourceGraphError: typeof import('./source-graph.js').Dsl4SourceGraphError, createGeneration: typeof import('./preview-source-graph-generation.js').createDsl4PreviewSourceGraphGeneration}> | null} */
+let sourceGraphModulesPromise = null;
+
+function loadSourceGraphModules() {
+  sourceGraphModulesPromise ??= Promise.all([
+    import('./source-graph.js'),
+    import('./preview-source-graph-generation.js'),
+  ]).then(([sourceGraph, previewGeneration]) => ({
+    createSourceGraph: sourceGraph.createDsl4SourceGraph,
+    SourceGraphError: sourceGraph.Dsl4SourceGraphError,
+    createGeneration: previewGeneration.createDsl4PreviewSourceGraphGeneration,
+  }));
+  return sourceGraphModulesPromise;
+}
 
 export const dsl4BrowserPreviewSourceDefaults = deepFreeze({
   manifestFilename: 'project.source.json',
@@ -41,6 +63,12 @@ const diagnosticMessages = Object.freeze({
   'K4-SOURCE-UTF8-001': 'The DSL 4.0 source is not valid UTF-8',
   'K4-PREVIEW-SOURCE-UNSTABLE':
     'The DSL 4.0 source did not become stable before the preview retry limit',
+  'K4-INCLUDE-CYCLE': 'The DSL 4.0 source includes contain a cycle',
+  'K4-INCLUDE-LIMIT-001': 'The DSL 4.0 source includes exceed a configured limit',
+  'K4-INCLUDE-READ-001': 'An included DSL 4.0 source could not be read',
+  'K4-INCLUDE-YAML-001': 'An included DSL 4.0 source is not valid YAML',
+  'K4-INCLUDE-SOURCE-001': 'An included DSL 4.0 source must be a mapping',
+  'K4-DECLARATION-DUPLICATE': 'A DSL 4.0 declaration is duplicated across sources',
 });
 
 export class Dsl4BrowserPreviewSourceError extends Error {
@@ -222,8 +250,25 @@ function decodeUtf8(bytes, code) {
 
 /** @param {Record<string, any>} root @param {string} sourcePath */
 async function resolveSourceHandle(root, sourcePath) {
+  const segments = sourcePath.split('/');
+  if (
+    sourcePath.length === 0 ||
+    sourcePath.startsWith('/') ||
+    sourcePath.includes('\\') ||
+    sourcePath.includes('\0') ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(sourcePath) ||
+    segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  ) {
+    fail('K4-SOURCE-PATH-001');
+  }
   try {
-    return requireFileHandle(await root.getFileHandle(sourcePath));
+    let parent = root;
+    for (const segment of segments.slice(0, -1)) {
+      if (typeof parent.getDirectoryHandle !== 'function') fail('K4-SOURCE-PATH-001');
+      parent = await parent.getDirectoryHandle(segment);
+      if (!isRecord(parent) || parent.kind !== 'directory') fail('K4-SOURCE-PATH-001');
+    }
+    return requireFileHandle(await parent.getFileHandle(segments.at(-1)));
   } catch (error) {
     if (expectedError(error)) throw error;
     if (errorName(error) === 'TypeMismatchError') fail('K4-SOURCE-FILE-001', error);
@@ -237,7 +282,9 @@ function validateSourceFrontend(value) {
   if (!isRecord(value) || typeof value.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  return /** @type {{parse: Function}} */ (value);
+  return /** @type {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} */ (
+    value
+  );
 }
 
 /** @param {unknown} value */
@@ -291,8 +338,12 @@ export function inspectDsl4BrowserPreviewSupport({globalObject = globalThis} = {
  * Watch one user-selected project root without retaining it outside this adapter instance.
  *
  * @param {object} options
- * @param {{parse: Function}} options.sourceFrontend
+ * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} options.sourceFrontend
  * @param {number} options.maxSourceBytes
+ * @param {unknown} [options.featureFlags]
+ * @param {number} [options.maxSourceFiles]
+ * @param {number} [options.maxTotalSourceBytes]
+ * @param {number} [options.maxIncludeDepth]
  * @param {(result: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.onResult
  * @param {(diagnostic: Readonly<Record<string, unknown>> | null) => unknown | Promise<unknown>} [options.onDiagnostic]
  * @param {(state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.onStatus]
@@ -311,11 +362,37 @@ export function inspectDsl4BrowserPreviewSupport({globalObject = globalThis} = {
  * @param {{now: Function, setTimeout: Function, clearTimeout: Function, sleep: Function}} [options.clock]
  * @param {(input: unknown) => Readonly<Record<string, any>>} [options.validateManifest]
  * @param {(source: string, options: Record<string, unknown>) => Promise<Readonly<Record<string, any>>>} [options.createSourceDescriptor]
+ * @param {typeof import('./source-graph.js').createDsl4SourceGraph} [options.createSourceGraph]
+ * @param {typeof import('./preview-source-graph-generation.js').createDsl4PreviewSourceGraphGeneration} [options.createSourceGraphGeneration]
  */
 export function createDsl4BrowserPreviewSourceAdapter(options) {
   if (!isRecord(options)) throw new TypeError('browser preview source options must be an object');
   const sourceFrontend = validateSourceFrontend(options.sourceFrontend);
   const maxSourceBytes = positiveInteger(options.maxSourceBytes, 'maxSourceBytes');
+  const featureFlags = resolveDsl4FeatureFlags(options.featureFlags ?? {});
+  const sourceGraphLimits = featureFlags.dsl4SourceIncludes
+    ? {
+        maxSourceFiles: positiveInteger(
+          options.maxSourceFiles ?? browserSourceGraphDefaultLimits.maxSourceFiles,
+          'maxSourceFiles',
+        ),
+        maxSourceBytes,
+        maxTotalSourceBytes: positiveInteger(
+          options.maxTotalSourceBytes ?? browserSourceGraphDefaultLimits.maxTotalSourceBytes,
+          'maxTotalSourceBytes',
+        ),
+        maxIncludeDepth: positiveInteger(
+          options.maxIncludeDepth ?? browserSourceGraphDefaultLimits.maxIncludeDepth,
+          'maxIncludeDepth',
+        ),
+      }
+    : null;
+  if (
+    sourceGraphLimits &&
+    Number(sourceGraphLimits.maxTotalSourceBytes) < Number(sourceGraphLimits.maxSourceBytes)
+  ) {
+    throw new TypeError('maxTotalSourceBytes must be greater than or equal to maxSourceBytes');
+  }
   if (typeof options.onResult !== 'function') throw new TypeError('onResult must be a function');
   const onResult = options.onResult;
   const onDiagnostic = optionalCallback(options.onDiagnostic, 'onDiagnostic');
@@ -366,11 +443,29 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
   const validateManifest = options.validateManifest ?? validateDsl4ExternalSourceManifestContract;
   const createSourceDescriptor =
     options.createSourceDescriptor ?? createDsl4EmbeddedSourceDescriptor;
+  const createSourceGraph = featureFlags.dsl4SourceIncludes ? options.createSourceGraph : null;
+  const createSourceGraphGeneration = featureFlags.dsl4SourceIncludes
+    ? options.createSourceGraphGeneration
+    : null;
   if (typeof validateManifest !== 'function') {
     throw new TypeError('validateManifest must be a function');
   }
   if (typeof createSourceDescriptor !== 'function') {
     throw new TypeError('createSourceDescriptor must be a function');
+  }
+  if (
+    featureFlags.dsl4SourceIncludes &&
+    createSourceGraph !== undefined &&
+    typeof createSourceGraph !== 'function'
+  ) {
+    throw new TypeError('createSourceGraph must be a function');
+  }
+  if (
+    featureFlags.dsl4SourceIncludes &&
+    createSourceGraphGeneration !== undefined &&
+    typeof createSourceGraphGeneration !== 'function'
+  ) {
+    throw new TypeError('createSourceGraphGeneration must be a function');
   }
 
   let started = false;
@@ -617,6 +712,85 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     }
   }
 
+  /** @param {Record<string, any>} error */
+  function graphFailure(error) {
+    const range = error.range ?? {
+      start: {line: 1, column: 1, offset: 0},
+      end: {line: 1, column: 1, offset: 0},
+    };
+    return deepFreeze({
+      ok: false,
+      canonicalSource: '',
+      diagnostics: [
+        {
+          version: 1,
+          code: error.code,
+          severity: 'error',
+          message: diagnosticMessages[error.code] ?? 'The Source Graph is invalid',
+          sourceId: error.sourceId ?? manifest?.sourceId ?? 'main',
+          range,
+          path: '$',
+          related: (Array.isArray(error.related) ? error.related : []).map((related) => ({
+            message: 'Related Source Graph declaration',
+            sourceId: related.sourceId,
+            range: related.range,
+          })),
+        },
+      ],
+      sourceSnapshot: null,
+    });
+  }
+
+  async function readSourceGraphGeneration() {
+    if (!rootHandle || !manifest || !sourceGraphLimits) {
+      throw new TypeError('browser preview Source Graph is not configured');
+    }
+    const projectRoot = rootHandle;
+    const graphModules = await loadSourceGraphModules();
+    const graphFactory = createSourceGraph ?? graphModules.createSourceGraph;
+    const generationFactory = createSourceGraphGeneration ?? graphModules.createGeneration;
+    let graph;
+    try {
+      graph = await graphFactory(manifest.path, {
+        limits: sourceGraphLimits,
+        async readSource(sourcePath, maximumBytes) {
+          try {
+            const handle = await resolveSourceHandle(projectRoot, sourcePath);
+            return await readBoundedFile(
+              handle,
+              Math.min(Number.MAX_SAFE_INTEGER, maximumBytes * 2 + 3),
+              'K4-SOURCE-SIZE-001',
+              'K4-SOURCE-READ-001',
+            );
+          } catch (error) {
+            if (!(error instanceof Dsl4BrowserPreviewSourceError)) throw error;
+            throw new graphModules.SourceGraphError(error.code, error.message, {
+              sourceId: sourcePath,
+              sourcePath,
+              cause: error,
+            });
+          }
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof graphModules.SourceGraphError)) throw error;
+      if (['K4-SOURCE-MISSING', 'K4-PREVIEW-SOURCE-UNSTABLE'].includes(error.code)) {
+        fail(error.code, error);
+      }
+      return {
+        key: `diagnostic:${error.code}:${error.sourceId ?? 'main'}`,
+        result: graphFailure(error),
+      };
+    }
+    return generationFactory(graph, {
+      sourceFrontend,
+      sourceId: manifest.sourceId,
+      displayName: manifest.path.split('/').at(-1),
+      maxComposedSourceBytes: sourceGraphLimits.maxTotalSourceBytes,
+      subtleCrypto,
+    });
+  }
+
   /** @param {number} requestedGeneration */
   async function readStableSource(requestedGeneration) {
     const first = await readSourceDescriptor();
@@ -624,6 +798,16 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     if (disposed || requestedGeneration !== generation) return null;
     const second = await readSourceDescriptor();
     if (first.integrity !== second.integrity) fail('K4-PREVIEW-SOURCE-UNSTABLE');
+    return second;
+  }
+
+  /** @param {number} requestedGeneration */
+  async function readStableSourceGraph(requestedGeneration) {
+    const first = await readSourceGraphGeneration();
+    await clock.sleep(quietWindowMs);
+    if (disposed || requestedGeneration !== generation) return null;
+    const second = await readSourceGraphGeneration();
+    if (first.key !== second.key) fail('K4-PREVIEW-SOURCE-UNSTABLE');
     return second;
   }
 
@@ -645,11 +829,16 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
       /** @type {unknown} */
       let lastTransient = null;
       /** @type {Readonly<Record<string, any>> | null} */
-      let descriptor = null;
+      let prepared = null;
       while (!disposed && requestedGeneration === generation) {
         attempts += 1;
         try {
-          descriptor = await readStableSource(requestedGeneration);
+          if (featureFlags.dsl4SourceIncludes) {
+            prepared = await readStableSourceGraph(requestedGeneration);
+          } else {
+            const descriptor = await readStableSource(requestedGeneration);
+            if (descriptor) prepared = {key: descriptor.integrity, descriptor};
+          }
           break;
         } catch (error) {
           if (
@@ -664,17 +853,23 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
         if (elapsed >= stabilityTimeoutMs || attempts >= maximumAttempts) throw lastTransient;
         await clock.sleep(Math.min(retryIntervalMs, stabilityTimeoutMs - elapsed));
       }
-      if (!descriptor || disposed || requestedGeneration !== generation) return snapshot();
-      const parsed = sourceFrontend.parse(descriptor.text, {sourceId: manifest.sourceId});
-      if (
-        !isRecord(parsed) ||
-        typeof parsed.ok !== 'boolean' ||
-        !Array.isArray(parsed.diagnostics)
-      ) {
-        throw new TypeError('sourceFrontend returned an invalid result');
+      if (!prepared || disposed || requestedGeneration !== generation) return snapshot();
+      let result;
+      if (featureFlags.dsl4SourceIncludes) {
+        result = prepared.result;
+      } else {
+        const descriptor = prepared.descriptor;
+        const parsed = sourceFrontend.parse(descriptor.text, {sourceId: manifest.sourceId});
+        if (
+          !isRecord(parsed) ||
+          typeof parsed.ok !== 'boolean' ||
+          !Array.isArray(parsed.diagnostics)
+        ) {
+          throw new TypeError('sourceFrontend returned an invalid result');
+        }
+        result = deepFreeze({...parsed, sourceSnapshot: descriptor});
       }
-      const result = deepFreeze({...parsed, sourceSnapshot: descriptor});
-      await publish(result, `source:${descriptor.integrity}`);
+      await publish(result, `source:${prepared.key}`);
       if (hidden) {
         await publishDiagnostic('K4-WEB-PREVIEW-BACKGROUND-THROTTLED', 'warning', false);
       } else {
