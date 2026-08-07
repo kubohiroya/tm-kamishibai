@@ -1,0 +1,159 @@
+{
+  "formatVersion": 1,
+  "issue": 390,
+  "status": "fixed-for-implementation",
+  "featureFlags": {
+    "runtime": {
+      "name": "dsl4Runtime",
+      "defaultEnabled": false,
+      "startupFixed": true,
+      "implemented": true,
+      "requires": []
+    },
+    "appShell": {
+      "name": "dsl4AppShell",
+      "defaultEnabled": false,
+      "startupFixed": true,
+      "implemented": true,
+      "requires": ["dsl4Runtime"]
+    },
+    "webPreviewAdapter": {
+      "name": "dsl4WebPreviewAdapter",
+      "defaultEnabled": false,
+      "startupFixed": true,
+      "implemented": true,
+      "requires": ["dsl4Runtime", "dsl4AppShell"]
+    },
+    "fileSystemObserver": {
+      "name": "dsl4WebPreviewFileSystemObserver",
+      "defaultEnabled": false,
+      "startupFixed": true,
+      "implemented": false,
+      "requiredForRelease": false
+    }
+  },
+  "selection": {
+    "secureContextRequired": true,
+    "topLevelContextRequired": true,
+    "userActivationRequired": true,
+    "pickerMethod": "showDirectoryPicker",
+    "pickerOptions": {"mode": "read"},
+    "manifestFilename": "project.source.json",
+    "defaultSourceFilename": "story.kamishibai.yaml",
+    "sourcePathOptional": true,
+    "sourcePathScope": "normalized-project-root-relative",
+    "sourceDiscovery": "manifest-or-default-only",
+    "assetDirectoryLayout": "optional",
+    "manifestMaximumBytes": 32768,
+    "persistHandles": false
+  },
+  "polling": {
+    "foregroundIntervalMs": 500,
+    "backgroundIntervalMs": 5000,
+    "quietWindowMs": 100,
+    "retryIntervalMs": 50,
+    "stabilityTimeoutMs": 2000,
+    "stableReadCount": 2,
+    "scheduleAfterCompletion": true,
+    "maximumConcurrentReads": 1,
+    "reacquireHandlePerRead": true,
+    "canonicalIntegrityRequired": true,
+    "lastModifiedOrSizeIsSufficient": false,
+    "immediatePollWhenVisible": true,
+    "fileSystemObserverRequired": false
+  },
+  "browserSupport": [
+    {"surface": "Chrome desktop", "minimumVersion": 86, "tier": 1, "supported": true},
+    {"surface": "Edge desktop", "minimumVersion": 86, "tier": 1, "supported": true},
+    {"surface": "ChromeOS desktop", "minimumVersion": 86, "tier": 1, "supported": true},
+    {"surface": "other Chromium", "minimumVersion": null, "tier": 2, "supported": false},
+    {"surface": "Brave default", "minimumVersion": null, "tier": 0, "supported": false},
+    {"surface": "Firefox desktop", "minimumVersion": null, "tier": 0, "supported": false},
+    {"surface": "Safari desktop and iOS", "minimumVersion": null, "tier": 0, "supported": false},
+    {
+      "surface": "Android and embedded WebView",
+      "minimumVersion": null,
+      "tier": 0,
+      "supported": false
+    },
+    {"surface": "cross-origin iframe", "minimumVersion": null, "tier": 0, "supported": false}
+  ],
+  "states": [
+    "disabled",
+    "idle",
+    "selecting",
+    "loading-manifest",
+    "stabilizing",
+    "watching-visible",
+    "background-throttled",
+    "diagnostic",
+    "disposed"
+  ],
+  "diagnostics": [
+    {"code": "K4-WEB-PREVIEW-UNSUPPORTED", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-INSECURE-CONTEXT", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-PICKER-CANCELLED", "severity": "warning"},
+    {"code": "K4-WEB-PREVIEW-PERMISSION-DENIED", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-PERMISSION-REVOKED", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-BACKGROUND-THROTTLED", "severity": "warning"},
+    {"code": "K4-WEB-PREVIEW-MANIFEST-MISSING", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-MANIFEST-READ-001", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-MANIFEST-JSON-001", "severity": "error"},
+    {"code": "K4-SOURCE-MANIFEST-001", "severity": "error"},
+    {"code": "K4-SOURCE-PATH-001", "severity": "error"},
+    {"code": "K4-SOURCE-MISSING", "severity": "error"},
+    {"code": "K4-SOURCE-READ-001", "severity": "error"},
+    {"code": "K4-SOURCE-FILE-001", "severity": "error"},
+    {"code": "K4-SOURCE-SIZE-001", "severity": "error"},
+    {"code": "K4-SOURCE-UTF8-001", "severity": "error"},
+    {"code": "K4-PREVIEW-SOURCE-UNSTABLE", "severity": "warning"},
+    {"code": "K4-WEB-PREVIEW-FULL-REBUILD-REQUIRED", "severity": "warning"},
+    {"code": "K4-WEB-PREVIEW-PROTOCOL-001", "severity": "error"}
+  ],
+  "fallback": {
+    "livePreviewCommand": null,
+    "livePreviewCommandImplemented": false,
+    "trackingIssue": 258,
+    "validateCommand": "tmpose-kamishibai validate-dsl4",
+    "buildCommand": "tmpose-kamishibai build-dsl4",
+    "polyfillAllowed": false,
+    "webkitDirectoryFallbackAllowed": false
+  },
+  "latencyReleaseGate": {
+    "foregroundMedianMaximumMs": 1000,
+    "foregroundP95MaximumMs": 2500,
+    "samplesPerSaveMode": 10,
+    "saveModes": ["normal", "atomic-replace"],
+    "backgroundMaximumGuaranteed": false,
+    "recordBrowserOsVersion": true
+  },
+  "testCases": [
+    "unsupported-insecure",
+    "picker-cancel-deny",
+    "initial-valid",
+    "initial-invalid",
+    "valid-reload-1-2-3",
+    "invalid-candidate",
+    "missing-restore",
+    "rapid-save",
+    "overlapping-poll",
+    "atomic-replace",
+    "partial-unstable-read",
+    "background-foreground",
+    "permission-revoke",
+    "stop-reselect-pagehide",
+    "flag-off",
+    "production-artifact",
+    "non-yaml-fingerprint"
+  ],
+  "sessionOnlyFields": [
+    "browserPreviewHandle",
+    "browserPreviewTimer",
+    "browserPreviewObserver",
+    "browserPreviewPendingRead",
+    "browserPreviewCandidate",
+    "browserPreviewModalState"
+  ],
+  "productionSurfaces": ["production SB3", "TurboWarp editor", "Web player", "Packager"],
+  "rollbackFlag": "dsl4WebPreviewAdapter"
+}

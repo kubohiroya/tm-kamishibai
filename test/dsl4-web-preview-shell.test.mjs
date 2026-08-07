@@ -1,0 +1,272 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import test from 'node:test';
+
+import {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from '../src/builder/index.js';
+import {createFakeDocument, findById} from './helpers/fake-dom.mjs';
+
+const enabledFlags = Object.freeze({
+  dsl4Runtime: true,
+  dsl4AppShell: true,
+  dsl4WebPreviewAdapter: true,
+});
+
+function sri(value) {
+  return `sha256-${createHash('sha256').update(value).digest('base64')}`;
+}
+
+function sourceResult(integrity, {warnings = 0} = {}) {
+  return Object.freeze({
+    ok: true,
+    canonicalSource: 'canonical source',
+    diagnostics: Array.from({length: warnings}, (_, index) => ({
+      version: 1,
+      code: `K4-TEST-WARNING-${index}`,
+      severity: 'warning',
+      message: 'Fixture warning',
+      sourceId: 'main',
+      range: {
+        start: {line: 1, column: 1, offset: 0},
+        end: {line: 1, column: 1, offset: 0},
+      },
+      path: '$',
+      related: [],
+    })),
+    storyDocument: {
+      kind: 'StoryDocument',
+      version: '4.0',
+      scenes: [
+        {id: 'opening', actions: [{id: 'one'}, {id: 'two'}]},
+        {id: 'ending', actions: []},
+      ],
+      assetReferences: [{id: 'backdrop'}],
+    },
+    sourceSnapshot: {
+      integrity,
+      displayName: 'story.kamishibai.yaml',
+      text: 'must not escape the source callback',
+    },
+  });
+}
+
+function createCoordinatorFixture() {
+  let options;
+  const calls = [];
+  let disposed = false;
+  let sourceStarted = false;
+  let current = null;
+  const state = () => ({
+    version: 1,
+    disposed,
+    source: {started: sourceStarted, status: 'idle'},
+    protocol: {current},
+  });
+  const coordinator = {
+    openProject() {
+      calls.push(['openProject']);
+      return Promise.resolve(state());
+    },
+    start(root) {
+      calls.push(['start', root]);
+      sourceStarted = true;
+      return Promise.resolve(state());
+    },
+    pollNow() {
+      calls.push(['pollNow']);
+      return Promise.resolve(state());
+    },
+    commit(choice) {
+      calls.push(['commit', choice]);
+      return Promise.resolve(state());
+    },
+    defer() {
+      calls.push(['defer']);
+      return Promise.resolve(state());
+    },
+    dispose() {
+      calls.push(['dispose']);
+      disposed = true;
+      return Promise.resolve(state());
+    },
+    getState() {
+      return state();
+    },
+    whenIdle() {
+      return Promise.resolve(state());
+    },
+  };
+  return {
+    calls,
+    coordinator,
+    get options() {
+      return options;
+    },
+    get disposed() {
+      return disposed;
+    },
+    setCurrent(value) {
+      current = value;
+    },
+    createCoordinator(input) {
+      options = input;
+      return coordinator;
+    },
+  };
+}
+
+function createShell() {
+  const document = createFakeDocument();
+  const fixture = createCoordinatorFixture();
+  const errors = [];
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: enabledFlags,
+    environment: 'development',
+    document,
+    mount: document.body,
+    protocolSession: {},
+    sessionId: 'web-preview-test',
+    sourceFrontend: {parse() {}},
+    maxSourceBytes: 8192,
+    createCoordinator: fixture.createCoordinator,
+    onError: (error) => errors.push(error),
+  });
+  return {document, errors, fixture, shell};
+}
+
+test('keeps Web Preview unregistered and unread when its startup flag is OFF', () => {
+  let factoryCalls = 0;
+  const shell = createDsl4WebPreviewShell({
+    featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+    document: new Proxy({}, {get: () => assert.fail('document must not be read')}),
+    mount: new Proxy({}, {get: () => assert.fail('mount must not be read')}),
+    createCoordinator() {
+      factoryCalls += 1;
+      assert.fail('coordinator must not be created');
+    },
+  });
+  assert.equal(shell.enabled, false);
+  assert.equal(shell.element, null);
+  assert.equal(factoryCalls, 0);
+  assert.equal(shell.getSnapshot().enabled, false);
+  assert.equal(Object.isFrozen(shell.featureFlags), true);
+  assert.deepEqual(shell.dispose(), shell.getSnapshot());
+});
+
+test('requires the runtime and App Shell flags and remains development-only', () => {
+  assert.throws(
+    () => createDsl4WebPreviewShell({featureFlags: {dsl4WebPreviewAdapter: true}}),
+    /requires dsl4Runtime and dsl4AppShell/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4WebPreviewShell({
+        featureFlags: enabledFlags,
+        environment: 'production',
+        document: {},
+        mount: {},
+        protocolSession: {},
+        sessionId: 'test',
+        sourceFrontend: {},
+        maxSourceBytes: 1,
+      }),
+    /development/u,
+  );
+  assert.deepEqual(dsl4WebPreviewShellManifest, {
+    formatVersion: 1,
+    production: false,
+    module: 'src/builder/dsl4-web-preview-shell.js',
+    featureFlags: ['dsl4Runtime', 'dsl4AppShell', 'dsl4WebPreviewAdapter'],
+    fallbackCommands: ['tmpose-kamishibai validate-dsl4', 'tmpose-kamishibai build-dsl4'],
+  });
+});
+
+test('opens the picker directly from a button activation and renders watch status', async () => {
+  const {document, fixture, shell} = createShell();
+  const button = findById(shell.element, 'dsl4-web-preview-open-project');
+  const status = findById(shell.element, 'dsl4-web-preview-watch-status');
+  assert.equal(shell.element.parentNode, document.body);
+  button.click();
+  assert.deepEqual(fixture.calls, [['openProject']]);
+  fixture.options.onSourceStatus({
+    status: 'watching-visible',
+    started: true,
+    sourceDisplayName: 'story.kamishibai.yaml',
+  });
+  assert.equal(button.disabled, true);
+  assert.match(status.textContent, /Watching/u);
+  await shell.whenIdle();
+});
+
+test('maps staged sources and reload choices onto the existing accessible shell', async () => {
+  const {fixture, shell} = createShell();
+  const initialIntegrity = sri('initial');
+  fixture.options.onSourceResult(sourceResult(initialIntegrity));
+  fixture.setCurrent({integrity: initialIntegrity});
+  fixture.options.onProtocolEvent({
+    type: 'preview.source.staged',
+    sourceIntegrity: initialIntegrity,
+    status: 'active',
+    candidate: null,
+    current: {integrity: initialIntegrity},
+    diagnostics: [],
+  });
+  assert.equal(shell.getSnapshot().preview.phase, 'running');
+  assert.deepEqual(shell.getSnapshot().preview.counts, {scenes: 2, actions: 2, assets: 1});
+
+  const candidateIntegrity = sri('candidate');
+  fixture.options.onSourceResult(sourceResult(candidateIntegrity, {warnings: 1}));
+  fixture.options.onProtocolEvent({
+    type: 'preview.source.staged',
+    sourceIntegrity: candidateIntegrity,
+    status: 'pending',
+    candidate: {
+      id: 2,
+      options: {
+        storyStart: {enabled: true, reason: null},
+        currentScene: {enabled: true, reason: null},
+        currentAction: {enabled: false, reason: 'The current action changed.'},
+      },
+    },
+    current: {integrity: initialIntegrity},
+    diagnostics: [],
+  });
+  assert.equal(shell.getSnapshot().preview.phase, 'candidate');
+  assert.equal(shell.getSnapshot().preview.warningCount, 1);
+  findById(shell.element, 'dsl4-preview-reload-2').click();
+  assert.deepEqual(fixture.calls.at(-1), ['commit', 'currentScene']);
+
+  fixture.setCurrent({integrity: candidateIntegrity});
+  fixture.options.onProtocolEvent({
+    type: 'preview.source.committed',
+    current: {integrity: candidateIntegrity},
+  });
+  assert.equal(shell.getSnapshot().preview.phase, 'running');
+  assert.equal(shell.getSnapshot().preview.currentIntegrity, candidateIntegrity);
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+test('shows recoverable diagnostics and explicit CLI fallback without retaining source text', async () => {
+  const {fixture, shell} = createShell();
+  fixture.options.onSourceDiagnostic({
+    code: 'K4-WEB-PREVIEW-UNSUPPORTED',
+    severity: 'error',
+    message: 'Folder access is unsupported.',
+  });
+  const fallback = findById(shell.element, 'dsl4-web-preview-fallback');
+  assert.equal(fallback.hidden, false);
+  assert.match(fallback.textContent, /validate-dsl4/u);
+  assert.equal(shell.getSnapshot().diagnosticCode, 'K4-WEB-PREVIEW-UNSUPPORTED');
+
+  fixture.options.onSourceDiagnostic(null);
+  assert.equal(fallback.hidden, true);
+  fixture.options.onSourceDiagnostic({
+    code: 'K4-SOURCE-MISSING',
+    severity: 'error',
+    message: 'Source is temporarily missing.',
+  });
+  assert.equal(shell.getSnapshot().preview.validationStatus, 'missing');
+  assert.equal(JSON.stringify(shell.getSnapshot()).includes('must not escape'), false);
+  await shell.dispose();
+  assert.equal(fixture.disposed, true);
+  assert.equal(shell.element.parentNode, null);
+});

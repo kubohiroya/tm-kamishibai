@@ -42,6 +42,7 @@ export {
   inspectDsl4ProductionPreviewExclusion,
   validateDsl4PreviewShellView,
 } from './dsl4-preview-shell.js';
+export {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from './dsl4-web-preview-shell.js';
 export {
   createDsl4PreviewTransportPolicy,
   dsl4PreviewTransportLimits,

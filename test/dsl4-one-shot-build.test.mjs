@@ -21,7 +21,6 @@ const sourceManifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
-  path: 'scripts/story.kamishibai.yaml',
   cacheId: 'story000000000001',
   cacheDatabaseName: 'tw-kamishibai-assets-v1--story--story000000000001',
 });
@@ -107,10 +106,9 @@ function baseSb3(project = baseProject()) {
 async function withProject(source, callback) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-one-shot-build-'));
   try {
-    await mkdir(path.join(directory, 'scripts'));
     await mkdir(path.join(directory, 'assets'));
     await mkdir(path.join(directory, 'pose-models', 'rescue'), {recursive: true});
-    await writeFile(path.join(directory, 'scripts', 'story.kamishibai.yaml'), source);
+    await writeFile(path.join(directory, 'story.kamishibai.yaml'), source);
     await writeFile(path.join(directory, 'assets', 'opening.svg'), '<svg/>');
     await writeFile(
       path.join(directory, 'pose-models', 'rescue', 'metadata.json'),
@@ -140,7 +138,7 @@ const buildOptions = (directory, channel, extra = {}) => ({
 
 test('builds and startup-validates one deterministic self-contained component per channel', async () => {
   await withProject(validSource, async (directory) => {
-    const sourcePath = path.join(directory, 'scripts', 'story.kamishibai.yaml');
+    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
     const assetPath = path.join(directory, 'assets', 'opening.svg');
     const sourceBefore = await readFile(sourcePath);
     const assetBefore = await readFile(assetPath);

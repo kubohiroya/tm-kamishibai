@@ -93,7 +93,7 @@
     {
       "name": "source path",
       "path": "project.sourceManifest.path",
-      "value": "scripts/story.kamishibai.yaml",
+      "value": "alternate.kamishibai.yaml",
       "sourceChanged": false,
       "expected": "full-rebuild"
     },

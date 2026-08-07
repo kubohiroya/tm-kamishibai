@@ -1708,6 +1708,12 @@ transport closeは同じcallbackを一度だけ実行し、その完了前の再
 接続を再開せず、hostがpolicyを破棄して新sessionを作り直します。このpolicy自体はsocketを開かず、
 HTTP／WebSocketの選択、CLI、remote preview、production artifactには接続しません。
 
+browserだけで外部editorの保存を検出するWeb Preview adapterは、このprotocolを直接呼ぶ新しいlive reload
+実装ではありません。File System Access API、polling、permission、background throttling、diagnostic、
+unsupported browser fallbackの正本は
+[`dsl-4-web-preview-adapter.md`](./dsl-4-web-preview-adapter.md)とします。browser adapterとNode watcherは
+同じsource frontend結果をこのversion 1 protocolへ渡し、runtimeへfilesystem handleやpathを渡しません。
+
 ## 11. 独立capability projectとKamishibai Bundle
 
 ### 11.0 現行Bundle契約 `[現行事実]`

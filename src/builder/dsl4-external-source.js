@@ -6,14 +6,16 @@ import {createVerifiedRemoteCacheDatabaseName} from '@kubohiroya/turbowarp-asset
 
 import {validateDsl4CacheIdentity} from '../dsl4/cache-identity.js';
 import {
+  Dsl4ExternalSourceManifestError,
+  validateDsl4ExternalSourceManifestContract,
+} from '../dsl4/external-source-manifest.js';
+import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {Sb3BuilderError} from './errors.js';
 
-const requiredManifestKeys = new Set(['formatVersion', 'mode', 'path', 'sourceId']);
-const manifestKeys = new Set([...requiredManifestKeys, 'cacheId', 'cacheDatabaseName']);
 const defaultFileSystem = Object.freeze({lstat, open, realpath});
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -40,14 +42,6 @@ function isWithin(ancestor, candidate) {
   );
 }
 
-/** @param {unknown} value @param {string} name */
-function nonEmptyString(value, name) {
-  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
-    fail(`${name} must be a non-empty string without NUL`, 'K4-SOURCE-MANIFEST-001');
-  }
-  return /** @type {string} */ (value);
-}
-
 /** @param {unknown} value */
 function cacheIdentity(value) {
   try {
@@ -59,30 +53,6 @@ function cacheIdentity(value) {
       error,
     );
   }
-}
-
-/** @param {unknown} value */
-function sourcePath(value) {
-  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
-    fail('path must be a non-empty string without NUL', 'K4-SOURCE-PATH-001');
-  }
-  const source = value;
-  const segments = source.split('/');
-  if (
-    source.includes('\\') ||
-    source.startsWith('/') ||
-    /^[A-Za-z]:/u.test(source) ||
-    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-    !source.endsWith('.kamishibai.yaml') ||
-    path.posix.normalize(source) !== source
-  ) {
-    fail(
-      'path must be a normalized POSIX-relative .kamishibai.yaml path without dot segments',
-      'K4-SOURCE-PATH-001',
-    );
-  }
-  return source;
 }
 
 /** @param {unknown} value */
@@ -148,44 +118,14 @@ function sameFileState(left, right) {
  * @param {unknown} input
  */
 export function validateDsl4ExternalSourceManifest(input) {
-  if (!isRecord(input)) {
-    fail('External source manifest must be an object', 'K4-SOURCE-MANIFEST-001');
+  try {
+    return validateDsl4ExternalSourceManifestContract(input);
+  } catch (error) {
+    if (error instanceof Dsl4ExternalSourceManifestError) {
+      fail(error.message, error.code, error);
+    }
+    throw error;
   }
-  const keys = Object.keys(input);
-  const unknown = keys.filter((key) => !manifestKeys.has(key));
-  const missing = [...requiredManifestKeys].filter((key) => !Object.hasOwn(input, key));
-  if (unknown.length > 0 || missing.length > 0) {
-    fail(
-      `External source manifest keys are invalid (unknown: ${unknown.sort().join(', ') || 'none'}; missing: ${missing.sort().join(', ') || 'none'})`,
-      'K4-SOURCE-MANIFEST-001',
-    );
-  }
-  if (input.formatVersion !== 1 || input.mode !== 'external') {
-    fail('External source manifest formatVersion or mode is invalid', 'K4-SOURCE-MANIFEST-001');
-  }
-  const source = sourcePath(input.path);
-  const hasCacheId = Object.hasOwn(input, 'cacheId');
-  const hasCacheDatabaseName = Object.hasOwn(input, 'cacheDatabaseName');
-  if (hasCacheId !== hasCacheDatabaseName) {
-    fail(
-      'cacheId and cacheDatabaseName must either both be present or both be absent',
-      'K4-SOURCE-MANIFEST-001',
-    );
-  }
-  const cache = hasCacheId
-    ? cacheIdentity({
-        id: input.cacheId,
-        label: path.posix.basename(source),
-        databaseName: input.cacheDatabaseName,
-      })
-    : null;
-  return deepFreeze({
-    formatVersion: 1,
-    mode: 'external',
-    sourceId: nonEmptyString(input.sourceId, 'sourceId'),
-    path: source,
-    ...(cache ? {cacheId: cache.id, cacheDatabaseName: cache.databaseName} : {}),
-  });
 }
 
 /**
