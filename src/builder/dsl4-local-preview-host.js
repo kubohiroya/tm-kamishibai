@@ -12,10 +12,18 @@ import {
   dsl4PreviewSourceGenerationWireMaximumMessageBytes,
 } from '../dsl4/preview-source-generation-wire.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {
+  dsl4BrowserTurboWarpStageDefaults,
+  dsl4BrowserTurboWarpStageMaximumProjectBytes,
+} from '../dsl4/browser-turbowarp-stage.js';
 import {Sb3BuilderError} from './errors.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {createDsl4PreviewTransportPolicy} from './dsl4-preview-transport-policy.js';
 import {createDsl4PreviewSourceWatcher} from './dsl4-preview-watch.js';
+import {
+  dsl4TurboWarpBrowserBundleDefaults,
+  dsl4TurboWarpBrowserBundleMaximumBytes,
+} from './dsl4-turbowarp-browser-bundle.js';
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = new Set(['builder', 'dsl4']);
@@ -29,6 +37,8 @@ export const dsl4LocalPreviewHostDefaults = deepFreeze({
   tokenTtlMs: 2 * 60 * 1_000,
   maxTokenRecords: 4,
   maxGenerationMessageBytes: dsl4PreviewSourceGenerationWireDefaults.maxMessageBytes,
+  maxProjectBytes: dsl4BrowserTurboWarpStageDefaults.maxProjectBytes,
+  maxBrowserBundleBytes: dsl4TurboWarpBrowserBundleDefaults.maxBundleBytes,
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -61,6 +71,15 @@ function safeInteger(value, name, minimum) {
     throw new TypeError(`${name} must be a safe integer >= ${minimum}`);
   }
   return Number(value);
+}
+
+/** @param {unknown} value @param {string} name @param {number} maximum */
+function boundedBytes(value, name, maximum) {
+  if (!(value instanceof Uint8Array)) throw new TypeError(`${name} must be a Uint8Array`);
+  if (value.byteLength < 1 || value.byteLength > maximum) {
+    throw new TypeError(`${name} must contain 1-${maximum} bytes`);
+  }
+  return Buffer.from(value);
 }
 
 /** @param {unknown} value */
@@ -253,6 +272,10 @@ function previewHtml(sourceDisplayName) {
  * @param {number} [options.tokenTtlMs]
  * @param {number} [options.maxTokenRecords]
  * @param {number} [options.maxGenerationMessageBytes]
+ * @param {Uint8Array} [options.projectBytes]
+ * @param {Uint8Array} [options.browserBundleBytes]
+ * @param {number} [options.maxProjectBytes]
+ * @param {number} [options.maxBrowserBundleBytes]
  * @param {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} [options.structureWatchFactory]
  * @param {Record<string, unknown>} [options.watcherOptions]
  * @param {(event: Readonly<Record<string, unknown>>) => unknown} [options.onEvent]
@@ -300,6 +323,39 @@ export function createDsl4LocalPreviewHost(options) {
       `maxGenerationMessageBytes must be <= ${dsl4PreviewSourceGenerationWireMaximumMessageBytes}`,
     );
   }
+  const maxProjectBytes = safeInteger(
+    options.maxProjectBytes ?? dsl4LocalPreviewHostDefaults.maxProjectBytes,
+    'maxProjectBytes',
+    1,
+  );
+  if (maxProjectBytes > dsl4BrowserTurboWarpStageMaximumProjectBytes) {
+    throw new TypeError(
+      `maxProjectBytes must be <= ${dsl4BrowserTurboWarpStageMaximumProjectBytes}`,
+    );
+  }
+  const maxBrowserBundleBytes = safeInteger(
+    options.maxBrowserBundleBytes ?? dsl4LocalPreviewHostDefaults.maxBrowserBundleBytes,
+    'maxBrowserBundleBytes',
+    1,
+  );
+  if (maxBrowserBundleBytes > dsl4TurboWarpBrowserBundleMaximumBytes) {
+    throw new TypeError(
+      `maxBrowserBundleBytes must be <= ${dsl4TurboWarpBrowserBundleMaximumBytes}`,
+    );
+  }
+  if ((options.projectBytes === undefined) !== (options.browserBundleBytes === undefined)) {
+    throw new TypeError('projectBytes and browserBundleBytes must be provided together');
+  }
+  /** @type {Buffer | null} */
+  let projectArtifactBytes =
+    options.projectBytes === undefined
+      ? null
+      : boundedBytes(options.projectBytes, 'projectBytes', maxProjectBytes);
+  /** @type {Buffer | null} */
+  let browserRuntimeBundleBytes =
+    options.browserBundleBytes === undefined
+      ? null
+      : boundedBytes(options.browserBundleBytes, 'browserBundleBytes', maxBrowserBundleBytes);
   const structureWatchFactory =
     /** @type {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} */ (
       options.structureWatchFactory ??
@@ -374,6 +430,14 @@ export function createDsl4LocalPreviewHost(options) {
       latestSequence: sequence,
       retainedEvents: events.length + (latestGenerationRecord ? 1 : 0),
       source: currentSourceSummary,
+      runtimeArtifacts:
+        projectArtifactBytes && browserRuntimeBundleBytes
+          ? {
+              available: true,
+              projectBytes: projectArtifactBytes.byteLength,
+              browserBundleBytes: browserRuntimeBundleBytes.byteLength,
+            }
+          : null,
     });
   }
 
@@ -471,6 +535,8 @@ export function createDsl4LocalPreviewHost(options) {
     await stopWatcher();
     await disconnectProtocol();
     latestGenerationRecord = null;
+    projectArtifactBytes = null;
+    browserRuntimeBundleBytes = null;
     publish({
       type: 'local-preview.full-rebuild-required',
       diagnostic: {version: 1, code, severity: 'error', message},
@@ -681,6 +747,25 @@ export function createDsl4LocalPreviewHost(options) {
       });
       return;
     }
+    if (requestUrl.pathname === '/api/runtime-project') {
+      const body = await readJsonBody(request);
+      if (Object.keys(body).length !== 0) {
+        fail('Runtime project request body must be empty', 'K4-PREVIEW-HOST-REQUEST');
+      }
+      if (!projectArtifactBytes) {
+        writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
+        return;
+      }
+      response.writeHead(200, {
+        'cache-control': 'no-store',
+        'content-length': projectArtifactBytes.byteLength,
+        'content-type': 'application/octet-stream',
+        'cross-origin-resource-policy': 'same-origin',
+        'x-content-type-options': 'nosniff',
+      });
+      response.end(projectArtifactBytes);
+      return;
+    }
     if (requestUrl.pathname === '/api/commit') {
       const body = await readJsonBody(request);
       if (typeof body.choice !== 'string' || !restartChoices.has(body.choice)) {
@@ -761,6 +846,22 @@ export function createDsl4LocalPreviewHost(options) {
         });
         if (request.method === 'HEAD') response.end();
         else response.end(body);
+        return;
+      }
+      if (requestUrl.pathname === '/runtime/browser.js') {
+        if (!browserRuntimeBundleBytes) {
+          writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
+          return;
+        }
+        response.writeHead(200, {
+          'cache-control': 'no-store',
+          'content-length': browserRuntimeBundleBytes.byteLength,
+          'content-type': 'text/javascript; charset=utf-8',
+          'cross-origin-resource-policy': 'same-origin',
+          'x-content-type-options': 'nosniff',
+        });
+        if (request.method === 'HEAD') response.end();
+        else response.end(browserRuntimeBundleBytes);
         return;
       }
       const requestedModule = modulePath(requestUrl.pathname);
@@ -893,6 +994,8 @@ export function createDsl4LocalPreviewHost(options) {
       transportPolicy = null;
       activeTokenDigest = null;
       launchToken = null;
+      projectArtifactBytes = null;
+      browserRuntimeBundleBytes = null;
       try {
         await new Promise((resolve, reject) => {
           if (!server.listening) {
