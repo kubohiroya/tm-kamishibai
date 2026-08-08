@@ -262,6 +262,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4TurboWarpActorPlatform> | null} */
   let actorPlatform = null;
+  /** @type {ReturnType<typeof createDsl4MediaActionPort> | null} */
+  let mediaPort = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
@@ -431,14 +433,20 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
         : {}),
     });
-    const mediaPort = createDsl4MediaActionPort({
+    mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
+      setActorScale: actorPlatform.host.setActorScale,
+      ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+      ...(options.onBackgroundActionError === undefined
+        ? {}
+        : {onBackgroundError: options.onBackgroundActionError}),
     });
     const actorPort = createDsl4ActorActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
+      stopActorLoop: mediaPort.stopActorLoop,
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
     });
     const asyncInputPort = createDsl4AsyncInputActionPort({
@@ -481,12 +489,19 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
 
     const port = /** @type {Record<string, Function>} */ ({});
-    addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
+    addPortMethods(
+      port,
+      mediaPort,
+      ['stage', 'bgm', 'sound', 'setSkin', 'loop'],
+      'media action port',
+    );
     addPortMethods(
       port,
       actorPort,
       [
         'show',
+        'hide',
+        'setLayer',
         'setTransparency',
         'moveTo',
         'say',
@@ -627,23 +642,23 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         })
       : baseAssetLifecycle;
 
-    publishRuntimeLifecycleObserver(
-      hasConfiguredPreviewControls
-        ? (event) => {
-            if (
-              event.type === 'runtime.finish' ||
-              event.type === 'runtime.fail' ||
-              event.type === 'runtime.stop'
-            ) {
-              cameraPreviewControls?.stop();
-              return;
-            }
-            if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
-              cameraPreviewControls?.start();
-            }
-          }
-        : null,
-    );
+    publishRuntimeLifecycleObserver((event) => {
+      if (
+        event.type === 'runtime.finish' ||
+        event.type === 'runtime.fail' ||
+        event.type === 'runtime.stop'
+      ) {
+        mediaPort?.stopAllLoops();
+        cameraPreviewControls?.stop();
+        return;
+      }
+      if (
+        hasConfiguredPreviewControls &&
+        (event.type === 'navigation.reposition' || event.type === 'runtime.resume')
+      ) {
+        cameraPreviewControls?.start();
+      }
+    });
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
@@ -659,6 +674,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => mediaPort?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
             () => poseFeedbackPresenter?.dispose(),
@@ -687,6 +703,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => mediaPort?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
       () => poseFeedbackPresenter?.dispose(),
@@ -751,6 +768,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {Function} [options.createRuntimeExpressionComposition]
  * @param {Function} [options.createSvgTextComposition]
  * @param {unknown} [options.actorScheduler]
+ * @param {(error: unknown) => unknown} [options.onBackgroundActionError]
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]

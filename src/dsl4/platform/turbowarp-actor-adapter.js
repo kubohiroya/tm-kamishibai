@@ -517,6 +517,48 @@ export function createDsl4TurboWarpActorPlatform(options) {
       actor.setVisible(true);
     },
 
+    /** @param {unknown} target */
+    hideActor(target) {
+      ensureActive();
+      validateActor(target).setVisible(false);
+    },
+
+    /** @param {unknown} target @param {unknown} scale */
+    setActorScale(target, scale) {
+      ensureActive();
+      const value = finiteNumber(scale, 'setActorScale.scale');
+      if (value <= 0) {
+        throw adapterError('K4-TW-ACTOR-002', 'setActorScale.scale must be positive');
+      }
+      validateActor(target).setSize(value);
+    },
+
+    /** @param {unknown} target @param {unknown} layer */
+    setActorLayer(target, layer) {
+      ensureActive();
+      const actor = validateActor(target);
+      if (layer === 'front') {
+        if (typeof actor.goToFront !== 'function') {
+          throw adapterError('K4-TW-ACTOR-002', 'TurboWarp actor must provide goToFront');
+        }
+        actor.goToFront();
+        return;
+      }
+      if (layer === 'back') {
+        if (typeof actor.goToBack !== 'function') {
+          throw adapterError('K4-TW-ACTOR-002', 'TurboWarp actor must provide goToBack');
+        }
+        actor.goToBack();
+        return;
+      }
+      const count = finiteNumber(layer, 'setActorLayer.layer');
+      const method = count >= 0 ? 'goForwardLayers' : 'goBackwardLayers';
+      if (typeof actor[method] !== 'function') {
+        throw adapterError('K4-TW-ACTOR-002', `TurboWarp actor must provide ${method}`);
+      }
+      actor[method](Math.abs(count));
+    },
+
     /** @param {unknown} target @param {unknown} effect */
     setTransparency(target, effect) {
       ensureActive();

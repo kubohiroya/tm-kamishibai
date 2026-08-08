@@ -50,11 +50,16 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
 | `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
+| 3.2標準の次action操作                     | `controls.keymaps.production.Space`        | 自動            | build可能な完全profileとして`navigation.nextAction`へ固定         |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
 `TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
 必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
 embedded化します。converter自身はnetwork取得やcache lookupを行いません。
+
+3.2には4.0の名前付きcontrol profile宣言がないため、converterは`production` profileを生成し、`Space`を
+`navigation.nextAction`へ割り当てます。生成物はそのまま`build-dsl4 --control-profile production`へ渡せます。
+別のkeymapが必要な作品は、変換後に完全profileとして置き換えます。
 
 `asset`のID、project asset名、`sceneLabel`は別名へ置換せず、その文字列を4.0へ保持します。空白、`.`、`/`、
 制御文字を含む場合、生成YAMLは必要なquoted scalar escapeを自動で使用します。actor名などaction構文の
@@ -73,8 +78,11 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 | `wait`                         | `wait`                             | 自動                                                      |
 | `transition`                   | `transition: {effect, seconds}`    | warning付き自動。時間を0秒へ明示化                        |
 | Actor `show`                   | `Actor.show: {skin, x, y, scale}`  | 自動。costume target補正時はwarning                       |
-| Actor `setSkin`                | `Actor.setSkin`                    | 自動                                                      |
-| Actor `say`／`think`           | `Actor.say/think: {text, seconds}` | 時間指定は自動。永続／style付きは手動                     |
+| Actor `setSkin`                | `Actor.setSkin`                    | 自動。3.2のscale指定も`{skin, scale}`として保持            |
+| Actor `hide`                   | `Actor.hide: {}`                   | 自動                                                      |
+| Actor `setLayer`               | `Actor.setLayer`                   | 自動。`front`／`back`／相対layer数を保持                   |
+| Actor `loop`                   | `Actor.loop.steps[]`               | 自動。skinと各表示秒数をbackground loopとして保持          |
+| Actor `say`／`think`           | `Actor.say/think: {text, seconds}` | 時間指定は自動。空文字の永続speechは0秒のclearへ変換       |
 | Actor `moveTo`                 | `Actor.moveTo: {x, y, seconds}`    | 自動                                                      |
 | SVG Text `setText`             | `Actor.setText: {text, style}`     | 自動                                                      |
 | Actor `pose`                   | `Actor.pose.steps[]`               | 自動＋手動model mapping。各stepを順序どおり保持           |
@@ -83,6 +91,10 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 | `touchInputToChangeScene`      | actor→scene mapping                | 自動                                                      |
 | 旧Text Asset `show`／`setSkin` | なし                               | 手動。SVG Text actorの`setText`／通常actor actionへ再設計 |
 | 独自action／不正arity          | なし                               | 変換不能。`K4-CONVERT-ACTION-UNSUPPORTED`等               |
+
+空でない永続speechとstyle付きspeechは、終了条件やpresentationを推測せず引き続き手動移行とします。
+空文字の`Actor.say:`／`Actor.think:`だけは3.2で吹き出しを消去する操作なので、`text: ""`、`seconds: 0`へ
+決定的に変換します。
 
 custom Scratch block、Scratch variable／broadcastへ直接依存する作品固有code、block順に依存する副作用は台本
 sourceだけから検出できません。converter成功後も作品固有blockをレビューし、必要ならDSL4 custom actionとして

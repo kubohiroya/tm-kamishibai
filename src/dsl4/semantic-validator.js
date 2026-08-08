@@ -386,6 +386,30 @@ export function validateDsl4Semantics(
               message: `Costume ${diagnosticValue(skin)} must target actor ${diagnosticValue(actor)}`,
             });
           }
+        } else if (opcode === 'loop') {
+          const steps = /** @type {{skin: string, seconds: number}[]} */ (
+            /** @type {Record<string, unknown>} */ (value).steps
+          );
+          steps.forEach((step, stepIndex) => {
+            addReferenceIssue(
+              issues,
+              assets,
+              step.skin,
+              'costume',
+              `${actionPath}.steps[${stepIndex}].skin`,
+            );
+            if (
+              typeof step.skin === 'string' &&
+              Object.hasOwn(assets, step.skin) &&
+              assetKind(assets[step.skin]).target !== actor
+            ) {
+              issues.push({
+                code: 'K4-REF-003',
+                path: `${actionPath}.steps[${stepIndex}].skin`,
+                message: `Costume ${diagnosticValue(step.skin)} must target actor ${diagnosticValue(actor)}`,
+              });
+            }
+          });
         } else if (opcode === 'setText') {
           const style = /** @type {Record<string, unknown>} */ (value).style;
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);

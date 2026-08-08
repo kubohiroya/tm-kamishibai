@@ -91,6 +91,14 @@ scenes:
           x: 0
           y: 0
           scale: 100
+      - Hero.hide: {}
+      - Hero.setLayer: back
+      - Hero.loop:
+          steps:
+            - skin: HeroIdle
+              seconds: 0.3
+            - skin: HeroHappy
+              seconds: 0.3
       - Hero.setTransparency: 50
       - Hero.moveTo:
           x: 10
@@ -100,7 +108,9 @@ scenes:
       - Hero.say:
           text: hello
           seconds: 0
-      - Hero.setSkin: HeroIdle
+      - Hero.setSkin:
+          skin: HeroIdle
+          scale: 45
       - Caption.setText:
           text: title
           style: title
@@ -138,6 +148,9 @@ test('dispatches every core action and keeps transition separate from scene move
       'wait',
       'transition',
       'show',
+      'hide',
+      'setLayer',
+      'loop',
       'setTransparency',
       'moveTo',
       'say',
@@ -187,6 +200,9 @@ test('dispatches every core action and keeps transition separate from scene move
       'wait',
       'transition',
       'show',
+      'hide',
+      'setLayer',
+      'loop',
       'setTransparency',
       'moveTo',
       'say',
@@ -203,6 +219,11 @@ test('dispatches every core action and keeps transition separate from scene move
   assert.deepEqual(calls.find(({method}) => method === 'setTransparency').payload, {
     target: 'Hero',
     transparency: 50,
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'setSkin').payload, {
+    target: 'Hero',
+    skin: 'HeroIdle',
+    scale: 45,
   });
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
@@ -246,8 +267,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 17);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 17);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 20);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 20);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')

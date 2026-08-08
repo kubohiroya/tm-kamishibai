@@ -21,11 +21,14 @@ export const dsl4GlobalCoreActionNames = Object.freeze([
 
 export const dsl4ActorCoreActionNames = Object.freeze([
   'show',
+  'hide',
   'setTransparency',
   'moveTo',
   'say',
   'think',
   'setSkin',
+  'setLayer',
+  'loop',
   'setText',
   'pose',
 ]);

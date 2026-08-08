@@ -32,6 +32,18 @@ function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) 
       setEffect(effect, value) {
         calls.push(['setEffect', effect, value]);
       },
+      goToFront() {
+        calls.push(['goToFront']);
+      },
+      goToBack() {
+        calls.push(['goToBack']);
+      },
+      goForwardLayers(count) {
+        calls.push(['goForwardLayers', count]);
+      },
+      goBackwardLayers(count) {
+        calls.push(['goBackwardLayers', count]);
+      },
     },
   };
 }
@@ -114,6 +126,27 @@ test('resolves one actorName target and applies show transform and visibility', 
     ['setXY', 10, -20],
     ['setSize', 30],
     ['setVisible', true],
+  ]);
+});
+
+test('applies hide, scale, and absolute or relative layer changes to one actor', () => {
+  const hero = fakeActor();
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  platform.host.hideActor(hero.target);
+  platform.host.setActorScale(hero.target, 45);
+  for (const layer of ['front', 'back', 2, -3]) {
+    platform.host.setActorLayer(hero.target, layer);
+  }
+
+  assert.deepEqual(hero.calls, [
+    ['setVisible', false],
+    ['setSize', 45],
+    ['goToFront'],
+    ['goToBack'],
+    ['goForwardLayers', 2],
+    ['goBackwardLayers', 3],
   ]);
 });
 

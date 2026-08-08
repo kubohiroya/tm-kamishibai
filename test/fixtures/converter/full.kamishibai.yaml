@@ -1,4 +1,8 @@
 kamishibai: "4.0"
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
 assets:
   Beach: backdrop
   LoadingBackground:

@@ -31,6 +31,13 @@ function addActionDependencies(action, dependencies, speechStyles) {
     addDependency(style?.characterSound, dependencies);
   }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
+  if (command === 'loop' && Array.isArray(args.steps)) {
+    for (const step of args.steps) {
+      if (typeof step === 'object' && step !== null && !Array.isArray(step)) {
+        addDependency(/** @type {Readonly<Record<string, unknown>>} */ (step).skin, dependencies);
+      }
+    }
+  }
   if (command !== 'pose') return false;
 
   const steps = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (args.steps ?? []);

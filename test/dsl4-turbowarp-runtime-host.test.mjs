@@ -402,6 +402,18 @@ function platformFixture(log) {
     setEffect(effect, value) {
       log.push(['actor.effect', effect, value]);
     },
+    goToFront() {
+      log.push(['actor.layer', 'front']);
+    },
+    goToBack() {
+      log.push(['actor.layer', 'back']);
+    },
+    goForwardLayers(count) {
+      log.push(['actor.layer', count]);
+    },
+    goBackwardLayers(count) {
+      log.push(['actor.layer', -count]);
+    },
   };
   const assetManagerComposition = {
     async registerProjectAsset(input) {
@@ -2192,6 +2204,7 @@ kamishibai: '4.0'
 assets:
   Beach: backdrop
   HeroSkin: costume:Hero
+  HeroSkin2: costume:Hero
   Bell: sound
 actors:
   Hero: HeroSkin
@@ -2211,6 +2224,19 @@ scenes:
         x: 10
         y: 20
         scale: 30
+    - Hero.hide: {}
+    - Hero.show:
+        skin: HeroSkin
+        x: 10
+        y: 20
+        scale: 30
+    - Hero.setLayer: back
+    - Hero.loop:
+        steps:
+          - skin: HeroSkin
+            seconds: 0.3
+          - skin: HeroSkin2
+            seconds: 0.3
     - Hero.setTransparency: 50
     - Hero.moveTo:
         x: 40
@@ -2219,7 +2245,9 @@ scenes:
     - Hero.say:
         text: hello
         seconds: 0
-    - Hero.setSkin: HeroSkin
+    - Hero.setSkin:
+        skin: HeroSkin
+        scale: 45
     - Hero.setText:
         text: title
         style: title
@@ -2227,17 +2255,22 @@ scenes:
     - wait: 0
 `);
   const log = [];
+  const clock = manualScheduler();
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, platformFixture(log)),
+    enabledOptions(project, platformFixture(log), {actorScheduler: clock.scheduler}),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const finished = await result.host.start();
   assert.equal(finished.status, 'finished');
+  assert.equal(clock.pendingCount(), 0);
   for (const event of [
     ['media.stage', 'Beach'],
     ['media.play', 'Bell'],
     ['actor.size', 30],
     ['actor.visible', true],
+    ['actor.visible', false],
+    ['actor.layer', 'back'],
+    ['actor.size', 45],
     ['actor.effect', 'ghost', 50],
     ['actor.xy', 40, 50],
     ['actor.say', 'hello'],

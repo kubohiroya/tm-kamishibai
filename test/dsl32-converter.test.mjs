@@ -376,7 +376,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
       'asset=Narration,text',
       'actor=Hero,Narration',
       'sceneLabel=opening',
-      'action=Hero:hide',
+      'action=Hero:setScale:100',
     ].join('\n'),
     {sourceId: 'legacy.txt'},
   );
@@ -429,6 +429,44 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === code));
   }
+});
+
+test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal style semantics', () => {
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Fish1,costume:Fish:fish-1',
+      'asset=Fish2,costume:Fish:fish-2',
+      'svgTextStyle=default:#ffffff:#575e75:Helvetica:100:left:up-right',
+      'actor=Fish,Fish1',
+      'sceneLabel=dragon castle',
+      'action=Fish:say:',
+      'action=Fish:setSkin:Fish2:45',
+      'action=Fish:setLayer:back',
+      'action=Fish:loop:Fish1,Fish2:0.3,0.3',
+      'action=Fish:hide',
+    ].join('\n'),
+    {sourceId: 'urashima-actions.txt'},
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.document?.textStyles.default.direction, 'up-right');
+  assert.deepEqual(result.document?.scenes['dragon castle'], [
+    {'Fish.say': {text: '', seconds: 0}},
+    {'Fish.setSkin': {skin: 'Fish2', scale: 45}},
+    {'Fish.setLayer': 'back'},
+    {
+      'Fish.loop': {
+        steps: [
+          {skin: 'Fish1', seconds: 0.3},
+          {skin: 'Fish2', seconds: 0.3},
+        ],
+      },
+    },
+    {'Fish.hide': {}},
+  ]);
+  const validated = frontend.parse(result.yaml, {sourceId: 'urashima-actions.k4.yml'});
+  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
 });
 
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {

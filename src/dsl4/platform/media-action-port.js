@@ -18,6 +18,31 @@ function abortError(cause) {
   return error;
 }
 
+function createDefaultScheduler() {
+  /** @param {() => void} callback @param {number} milliseconds */
+  const schedule = (callback, milliseconds) => setTimeout(callback, milliseconds);
+  /** @param {unknown} handle */
+  const cancel = (handle) => clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (handle));
+  return Object.freeze({
+    setTimeout: schedule,
+    clearTimeout: cancel,
+  });
+}
+
+/** @param {unknown} value */
+function validateScheduler(value) {
+  if (
+    !isRecord(value) ||
+    typeof value.setTimeout !== 'function' ||
+    typeof value.clearTimeout !== 'function'
+  ) {
+    throw new TypeError('Media action scheduler must provide setTimeout and clearTimeout');
+  }
+  return /** @type {{setTimeout: (callback: () => void, milliseconds: number) => unknown, clearTimeout: (handle: unknown) => void}} */ (
+    /** @type {unknown} */ (value)
+  );
+}
+
 /** @param {unknown} value */
 function validateComposition(value) {
   const methods = [
@@ -124,6 +149,9 @@ async function runCancellable(start, signal, cancel) {
  * @param {object} options
  * @param {unknown} options.composition
  * @param {(actorId: string, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.resolveActor
+ * @param {(actor: unknown, scale: number, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.setActorScale]
+ * @param {unknown} [options.scheduler]
+ * @param {(error: unknown) => unknown} [options.onBackgroundError]
  */
 export function createDsl4MediaActionPort(options) {
   if (!isRecord(options)) throw new TypeError('media action port options must be an object');
@@ -132,6 +160,30 @@ export function createDsl4MediaActionPort(options) {
     throw new TypeError('resolveActor must be a function');
   }
   const resolveActor = options.resolveActor;
+  if (options.setActorScale !== undefined && typeof options.setActorScale !== 'function') {
+    throw new TypeError('setActorScale must be a function');
+  }
+  const setActorScale = options.setActorScale;
+  if (options.onBackgroundError !== undefined && typeof options.onBackgroundError !== 'function') {
+    throw new TypeError('onBackgroundError must be a function');
+  }
+  const onBackgroundError = options.onBackgroundError ?? (() => {});
+  const scheduler = validateScheduler(options.scheduler ?? createDefaultScheduler());
+  /** @type {Map<string, {timer?: unknown, active: boolean}>} */
+  const actorLoops = new Map();
+
+  /** @param {string} target */
+  function stopLoop(target) {
+    const loop = actorLoops.get(target);
+    if (!loop) return;
+    loop.active = false;
+    if (loop.timer !== undefined) scheduler.clearTimeout(loop.timer);
+    actorLoops.delete(target);
+  }
+
+  function stopAllLoops() {
+    for (const target of [...actorLoops.keys()]) stopLoop(target);
+  }
 
   /** @param {string} assetId @param {'image' | 'audio'} kind */
   function requireAsset(assetId, kind) {
@@ -195,22 +247,134 @@ export function createDsl4MediaActionPort(options) {
 
     /** @param {unknown} payload @param {unknown} context */
     async setSkin(payload, context) {
-      const {target, skin} = validatePayload(payload, ['target', 'skin'], 'setSkin');
+      if (
+        !isRecord(payload) ||
+        Object.keys(payload).some((key) => !['target', 'skin', 'scale'].includes(key)) ||
+        !Object.hasOwn(payload, 'target') ||
+        !Object.hasOwn(payload, 'skin')
+      ) {
+        throw portError(
+          'K4-MEDIA-PORT-001',
+          'setSkin payload must provide target, skin, and only optional scale',
+        );
+      }
+      const target = payload.target;
+      const skin = payload.skin;
+      if (typeof target !== 'string' || !target || typeof skin !== 'string' || !skin) {
+        throw portError('K4-MEDIA-PORT-001', 'setSkin target and skin must be non-empty strings');
+      }
+      const scale = payload.scale;
+      if (
+        scale !== undefined &&
+        (typeof scale !== 'number' || !Number.isFinite(scale) || scale <= 0)
+      ) {
+        throw portError('K4-MEDIA-PORT-001', 'setSkin.scale must be a positive finite number');
+      }
+      if (scale !== undefined && !setActorScale) {
+        throw portError('K4-MEDIA-PORT-001', 'setSkin.scale requires an actor scale adapter');
+      }
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
       requireAsset(skin, 'image');
+      stopLoop(target);
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
       const actor = validateActor(
-        await runCancellable(
-          () =>
-            resolveActor(
-              target,
-              /** @type {Readonly<Record<string, unknown>>} */ (/** @type {unknown} */ (context)),
-            ),
-          signal,
-        ),
+        await runCancellable(() => resolveActor(target, actionContext), signal),
         target,
       );
-      return runCancellable(() => composition.applyToTarget(skin, actor), signal);
+      await runCancellable(() => composition.applyToTarget(skin, actor), signal);
+      if (scale !== undefined) {
+        await runCancellable(
+          () => /** @type {Function} */ (setActorScale)(actor, scale, actionContext),
+          signal,
+        );
+      }
     },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async loop(payload, context) {
+      if (
+        !isRecord(payload) ||
+        Object.keys(payload).length !== 2 ||
+        !Object.hasOwn(payload, 'target') ||
+        !Object.hasOwn(payload, 'steps') ||
+        typeof payload.target !== 'string' ||
+        payload.target.length === 0 ||
+        !Array.isArray(payload.steps) ||
+        payload.steps.length === 0
+      ) {
+        throw portError(
+          'K4-MEDIA-PORT-001',
+          'loop payload must provide target and non-empty steps',
+        );
+      }
+      const target = payload.target;
+      const steps = payload.steps.map((step) => {
+        if (
+          !isRecord(step) ||
+          Object.keys(step).length !== 2 ||
+          typeof step.skin !== 'string' ||
+          step.skin.length === 0 ||
+          typeof step.seconds !== 'number' ||
+          !Number.isFinite(step.seconds) ||
+          step.seconds < 0
+        ) {
+          throw portError(
+            'K4-MEDIA-PORT-001',
+            'loop steps must provide a non-empty skin and non-negative finite seconds',
+          );
+        }
+        requireAsset(step.skin, 'image');
+        return Object.freeze({skin: step.skin, seconds: step.seconds});
+      });
+      if (!steps.some(({seconds}) => seconds > 0)) {
+        throw portError('K4-MEDIA-PORT-001', 'loop requires at least one positive duration');
+      }
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = validateActor(
+        await runCancellable(() => resolveActor(target, actionContext), signal),
+        target,
+      );
+      stopLoop(target);
+      /** @type {{timer?: unknown, active: boolean}} */
+      const state = {active: true};
+      actorLoops.set(target, state);
+
+      /** @param {number} index */
+      async function applyStep(index) {
+        if (!state.active) return;
+        const step = steps[index];
+        await composition.applyToTarget(step.skin, actor);
+        if (!state.active) return;
+        state.timer = scheduler.setTimeout(() => {
+          state.timer = undefined;
+          void applyStep((index + 1) % steps.length).catch((error) => {
+            stopLoop(target);
+            onBackgroundError(error);
+          });
+        }, step.seconds * 1000);
+      }
+
+      try {
+        await runCancellable(
+          () => applyStep(0),
+          signal,
+          () => stopLoop(target),
+        );
+      } catch (error) {
+        stopLoop(target);
+        throw error;
+      }
+    },
+
+    stopActorLoop: stopLoop,
+    stopAllLoops,
+    dispose: stopAllLoops,
   });
 }
