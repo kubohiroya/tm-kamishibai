@@ -4,7 +4,7 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 
-const identifierSections = ['actors', 'textStyles', 'speechStyles', 'variables', 'branches'];
+const identifierSections = ['actors', 'textStyles', 'bubbleStyles', 'variables', 'branches'];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
 /** @param {string} value */
@@ -146,8 +146,8 @@ export function validateDsl4Semantics(
   const scenes = /** @type {Record<string, unknown>} */ (story.scenes ?? {});
   const branches = /** @type {Record<string, Record<string, string>[]>} */ (story.branches ?? {});
   const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
-  const speechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const bubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
   const stableIds = new Map();
   const storyInputCodes = new Map();
@@ -217,13 +217,13 @@ export function validateDsl4Semantics(
     }
   }
 
-  for (const [styleId, style] of Object.entries(speechStyles)) {
+  for (const [styleId, style] of Object.entries(bubbleStyles)) {
     addReferenceIssue(
       issues,
       assets,
       style.characterSound,
       'sound',
-      `$.speechStyles.${styleId}.characterSound`,
+      `$.bubbleStyles.${styleId}.characterSound`,
     );
   }
 
@@ -391,7 +391,7 @@ export function validateDsl4Semantics(
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
-          addReferenceIssue(issues, speechStyles, speech.style, undefined, `${actionPath}.style`);
+          addReferenceIssue(issues, bubbleStyles, speech.style, undefined, `${actionPath}.style`);
           for (const field of ['startSound', 'characterSound']) {
             addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
           }

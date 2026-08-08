@@ -45,7 +45,7 @@ assets:
   Voice: sound
 actors:
   Hero: HeroIdle
-speechStyles:
+bubbleStyles:
   novel:
     characterIntervalSeconds: 60
 controls:

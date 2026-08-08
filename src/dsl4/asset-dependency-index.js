@@ -13,10 +13,10 @@ function addDependency(value, dependencies) {
 /**
  * @param {Readonly<Record<string, unknown>>} action
  * @param {Set<string>} dependencies
- * @param {Readonly<Record<string, Readonly<Record<string, unknown>>>>} speechStyles
+ * @param {Readonly<Record<string, Readonly<Record<string, unknown>>>>} bubbleStyles
  * @returns {boolean}
  */
-function addActionDependencies(action, dependencies, speechStyles) {
+function addActionDependencies(action, dependencies, bubbleStyles) {
   const command = String(action.command);
   const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
   if (command === 'stage') addDependency(args.backdrop, dependencies);
@@ -26,7 +26,7 @@ function addActionDependencies(action, dependencies, speechStyles) {
     addDependency(args.characterSound, dependencies);
     const style =
       typeof args.style === 'string'
-        ? /** @type {Readonly<Record<string, unknown>> | undefined} */ (speechStyles[args.style])
+        ? /** @type {Readonly<Record<string, unknown>> | undefined} */ (bubbleStyles[args.style])
         : undefined;
     addDependency(style?.characterSound, dependencies);
   }
@@ -57,8 +57,8 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
   const assets = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     storyDocument.assets ?? {}
   );
-  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
-    storyDocument.speechStyles ?? {}
+  const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    storyDocument.bubbleStyles ?? {}
   );
   const sceneRetainedAssets = new Set(
     Object.entries(assets)
@@ -135,7 +135,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
       scene.actions ?? []
     )) {
       usesPoseRecognition =
-        addActionDependencies(action, dependencies, speechStyles) || usesPoseRecognition;
+        addActionDependencies(action, dependencies, bubbleStyles) || usesPoseRecognition;
     }
     if (usesPoseRecognition) {
       for (const assetId of poseRecognitionDependencies) dependencies.add(assetId);

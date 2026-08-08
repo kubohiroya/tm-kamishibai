@@ -116,7 +116,7 @@ test('keeps legacy timed say available and rejects extended speech while the fla
         seconds: 1
         style: novel
 `,
-          `speechStyles:
+          `bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
 `,

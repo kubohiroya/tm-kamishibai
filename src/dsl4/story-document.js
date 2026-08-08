@@ -379,20 +379,20 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     }),
   );
 
-  const sourceSpeechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const sourceBubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
-  const speechStyles = cloneValue(sourceSpeechStyles);
-  const speechStylesNode = document.getIn(['speechStyles'], true);
-  if (speechStylesNode) {
-    sourceMap['/speechStyles'] = sourceRangeForNode(speechStylesNode, lineCounter);
-    for (const [styleId, style] of Object.entries(sourceSpeechStyles)) {
-      const stylePath = `/speechStyles/${encodeDsl4StoryPathSegment(styleId)}`;
-      const styleNode = document.getIn(['speechStyles', styleId], true);
+  const bubbleStyles = cloneValue(sourceBubbleStyles);
+  const bubbleStylesNode = document.getIn(['bubbleStyles'], true);
+  if (bubbleStylesNode) {
+    sourceMap['/bubbleStyles'] = sourceRangeForNode(bubbleStylesNode, lineCounter);
+    for (const [styleId, style] of Object.entries(sourceBubbleStyles)) {
+      const stylePath = `/bubbleStyles/${encodeDsl4StoryPathSegment(styleId)}`;
+      const styleNode = document.getIn(['bubbleStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
       for (const field of Object.keys(style)) {
         sourceMap[`${stylePath}/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
-          document.getIn(['speechStyles', styleId, field], true),
+          document.getIn(['bubbleStyles', styleId, field], true),
           lineCounter,
         );
       }
@@ -450,7 +450,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     actors: cloneValue(story.actors ?? {}),
     cover: cloneValue(story.cover ?? null),
     textStyles: cloneValue(story.textStyles ?? {}),
-    speechStyles,
+    bubbleStyles,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),
