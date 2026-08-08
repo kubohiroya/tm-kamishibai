@@ -375,6 +375,12 @@ export function createDsl4TurboWarpActorPlatform(options) {
     /** @type {((error: unknown) => void) | undefined} */
     let rejectOperation;
     const playedSounds = new Set();
+    let textCompleteNotified = false;
+    let terminalNotified = false;
+    /** @type {() => void} */
+    let onTextComplete = () => {};
+    /** @type {() => void} */
+    let onTerminal = () => {};
 
     const cancelTimers = () => {
       if (deadlineTimer !== undefined) scheduler.clearTimeout(deadlineTimer);
@@ -422,6 +428,16 @@ export function createDsl4TurboWarpActorPlatform(options) {
       visibleCount > 0 && restSegments.has(segments[visibleCount - 1])
         ? /** @type {number} */ (restCharacterInterval)
         : /** @type {number} */ (characterInterval);
+    const notifyTextComplete = () => {
+      if (textCompleteNotified) return;
+      textCompleteNotified = true;
+      onTextComplete();
+    };
+    const notifyTerminal = () => {
+      if (terminalNotified) return;
+      terminalNotified = true;
+      onTerminal();
+    };
     /** @param {'advance' | 'timeout' | 'cancel'} reason */
     const complete = (reason) => {
       if (state === 'completed' || state === 'failed') return;
@@ -431,6 +447,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
           reveal(segments.length, false);
         }
         stopSounds();
+        notifyTerminal();
         showBubble('', actor);
         state = 'completed';
         resolveOperation?.();
@@ -443,6 +460,11 @@ export function createDsl4TurboWarpActorPlatform(options) {
       if (state !== 'running') return;
       cancelTimers();
       stopSounds();
+      try {
+        notifyTerminal();
+      } catch {
+        // The original presentation error remains authoritative.
+      }
       try {
         showBubble('', actor);
       } catch {
@@ -467,12 +489,20 @@ export function createDsl4TurboWarpActorPlatform(options) {
               playSound(startSound);
               if (state !== 'running') return;
               playCharacterSound(segments[0]);
+              if (segments.length === 1) notifyTextComplete();
               const tick = () => {
                 characterTimer = undefined;
                 if (state !== 'running' || visibleCount >= segments.length) return;
-                reveal(visibleCount + 1, true);
-                if (state === 'running' && visibleCount < segments.length) {
-                  characterTimer = scheduler.setTimeout(tick, nextCharacterInterval());
+                try {
+                  reveal(visibleCount + 1, true);
+                  if (state === 'running' && visibleCount >= segments.length) {
+                    notifyTextComplete();
+                  }
+                  if (state === 'running' && visibleCount < segments.length) {
+                    characterTimer = scheduler.setTimeout(tick, nextCharacterInterval());
+                  }
+                } catch (error) {
+                  fail(error);
                 }
               };
               if (state === 'running' && visibleCount < segments.length) {
@@ -481,6 +511,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
             } else {
               reveal(segments.length, false);
               playSound(startSound);
+              if (state === 'running') notifyTextComplete();
             }
             if (state !== 'running') return;
             if (duration === 0) {
@@ -499,6 +530,23 @@ export function createDsl4TurboWarpActorPlatform(options) {
       /** @param {string} [reason] */
       finish(reason) {
         complete(reason === 'advance' ? 'advance' : 'cancel');
+      },
+      /** @param {unknown} lifecycle */
+      setSpeechLifecycle(lifecycle) {
+        if (
+          state !== 'idle' ||
+          !isRecord(lifecycle) ||
+          typeof lifecycle.onTextComplete !== 'function' ||
+          typeof lifecycle.onTerminal !== 'function' ||
+          Object.keys(lifecycle).some((key) => key !== 'onTextComplete' && key !== 'onTerminal')
+        ) {
+          throw adapterError(
+            'K4-TW-ACTOR-003',
+            `${kind} speech lifecycle must be installed before start`,
+          );
+        }
+        onTextComplete = /** @type {() => void} */ (lifecycle.onTextComplete);
+        onTerminal = /** @type {() => void} */ (lifecycle.onTerminal);
       },
     });
   }

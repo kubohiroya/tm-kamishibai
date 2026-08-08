@@ -149,6 +149,12 @@ assets:
   HeroIdle: costume:Hero
   TalkTick: sound
   WrongTick: backdrop
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 actors:
   Hero: HeroIdle
 bubbleStyles:
@@ -159,6 +165,9 @@ bubbleStyles:
     characterSound: TalkTick
     restCharacters: "、。…"
     restCharacterIntervalSeconds: 0.5
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
   Hero style:
     styles:
       - Novel base
@@ -182,6 +191,10 @@ scenes:
       characterSound: 'TalkTick',
       restCharacters: '、。…',
       restCharacterIntervalSeconds: 0.5,
+      advanceIndicator: {
+        frames: ['Next1', 'Next2'],
+        frameIntervalSeconds: 0.12,
+      },
     },
     'Hero style': {
       styles: ['Novel base', '日本語 効果音'],
@@ -194,7 +207,10 @@ scenes:
   });
   for (const [style, fields] of [
     ['Novel base', ['characterIntervalSeconds', 'noSoundCharacters']],
-    ['日本語 効果音', ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds']],
+    [
+      '日本語 効果音',
+      ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds', 'advanceIndicator'],
+    ],
   ]) {
     for (const field of fields) {
       assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/${style}/${field}`], field);
@@ -205,6 +221,17 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/1']);
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles']);
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles/0']);
+  assert.ok(
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/advanceIndicator/frames/0'],
+  );
+  assert.ok(
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/advanceIndicator/frames/1'],
+  );
+  assert.ok(
+    result.storyDocument.sourceMap[
+      '/bubbleStyles/日本語 効果音/advanceIndicator/frameIntervalSeconds'
+    ],
+  );
 
   for (const [needle, replacement] of [
     ['      - 日本語 効果音', '      - missing'],
@@ -213,6 +240,8 @@ scenes:
     ['    characterSound: TalkTick\n', ''],
     ['    characterSound: TalkTick', '    characterSound: WrongTick'],
     ['    restCharacterIntervalSeconds: 0.5\n', ''],
+    ['      frames: [Next1, Next2]', '      frames: [Next1]'],
+    ['      frameIntervalSeconds: 0.12', '      frameIntervalSeconds: 0'],
   ]) {
     const invalid = frontend.parse(source.replace(needle, replacement));
     assert.equal(invalid.ok, false, replacement);

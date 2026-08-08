@@ -1,6 +1,7 @@
 export {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 export {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 export {createDsl4ActorActionPort} from './actor-action-port.js';
+export {createDsl4BubbleAdvanceIndicatorPresenter} from './bubble-advance-indicator.js';
 export {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 export {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 export {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';

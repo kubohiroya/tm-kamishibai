@@ -286,6 +286,48 @@ scenes:
   });
 });
 
+test('indexes every lazy frame of a referenced bubble advance indicator', () => {
+  const storyDocument = parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Next1:
+    kind: image
+    file: ui/next-1.png
+    loading: lazy
+  Next2:
+    kind: image
+    file: ui/next-2.png
+    loading: lazy
+actors:
+  Hero: HeroIdle
+bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+scenes:
+  first:
+    - Hero.say:
+        text: hello
+        waitFor: advance
+        styles:
+          - novel
+  second:
+    - wait: 0
+`);
+  const index = createDsl4AssetDependencyIndex(storyDocument);
+
+  assert.deepEqual(index.scenes.first, {
+    all: ['Next1', 'Next2'],
+    eager: [],
+    lazy: ['Next1', 'Next2'],
+    sceneRetained: [],
+  });
+  assert.deepEqual(index.scenes.second.all, []);
+});
+
 test('returns a deeply immutable index and rejects non-StoryDocument input', () => {
   const index = createDsl4AssetDependencyIndex(
     parse(`

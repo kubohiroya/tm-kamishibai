@@ -271,6 +271,17 @@ export function validateDsl4Semantics(
       'sound',
       `$.bubbleStyles.${styleId}.characterSound`,
     );
+    const advanceIndicator = /** @type {Record<string, unknown>} */ (style.advanceIndicator ?? {});
+    const frames = /** @type {unknown[]} */ (advanceIndicator.frames ?? []);
+    frames.forEach((frame, frameIndex) =>
+      addReferenceIssue(
+        issues,
+        assets,
+        frame,
+        'image',
+        `$.bubbleStyles.${styleId}.advanceIndicator.frames[${frameIndex}]`,
+      ),
+    );
   }
 
   const reportedStyleCycles = new Set();

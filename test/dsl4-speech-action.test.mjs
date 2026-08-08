@@ -92,6 +92,12 @@ assets:
   HeroIdle: costume:Hero
   Tick: sound
   Voice: sound
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 ${bubbleStyles}
 actors:
   Hero: HeroIdle
@@ -107,7 +113,7 @@ ${Object.entries(args)
   return parsed.storyDocument;
 }
 
-function createSpeechExecution(command, args, bubbleStyles = '') {
+function createSpeechExecution(command, args, bubbleStyles = '', advanceIndicatorPresenter) {
   const fake = speechRuntime();
   const clock = manualScheduler();
   const sounds = [];
@@ -124,13 +130,16 @@ function createSpeechExecution(command, args, bubbleStyles = '') {
   });
   const actorPort = createDsl4ActorActionPort({
     composition: {
-      isRegistered: (name) => name === 'Tick' || name === 'Voice',
-      getMimeType: (name) => (name === 'Tick' || name === 'Voice' ? 'audio/wav' : ''),
+      isRegistered: (name) => ['Tick', 'Voice', 'Next1', 'Next2'].includes(name),
+      getMimeType: (name) => (name === 'Next1' || name === 'Next2' ? 'image/png' : 'audio/wav'),
       applyToTarget() {},
     },
     resolveActor: platform.resolveActor,
     host: platform.host,
     speechAdvanceTypewriterEnabled: true,
+    ...(advanceIndicatorPresenter
+      ? {bubbleAdvanceIndicatorEnabled: true, advanceIndicatorPresenter}
+      : {}),
   });
   let followingActions = 0;
   const controller = createDsl4RuntimeController({
@@ -143,9 +152,113 @@ function createSpeechExecution(command, args, bubbleStyles = '') {
       },
     },
     speechAdvanceTypewriterEnabled: true,
+    ...(advanceIndicatorPresenter ? {bubbleAdvanceIndicatorEnabled: true} : {}),
   });
   return {clock, controller, fake, sounds, followingActions: () => followingActions};
 }
+
+test('shows a style advance indicator only after typewriter completion and stops it on advance', async () => {
+  const indicatorEvents = [];
+  const presenter = {
+    create(_actor, specification) {
+      indicatorEvents.push(['create', specification]);
+      return {
+        start() {
+          indicatorEvents.push(['start']);
+        },
+        stop() {
+          indicatorEvents.push(['stop']);
+        },
+      };
+    },
+  };
+  const execution = createSpeechExecution(
+    'say',
+    {text: 'AB', waitFor: 'advance', styles: ['novel']},
+    `bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12`,
+    presenter,
+  );
+  const run = execution.controller.start();
+  await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');
+  assert.deepEqual(indicatorEvents, [
+    ['create', {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.12}],
+  ]);
+
+  execution.clock.advance(100);
+  assert.deepEqual(indicatorEvents.at(-1), ['start']);
+  await Promise.resolve();
+  assert.equal(execution.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(indicatorEvents.slice(-2), [['start'], ['stop']]);
+});
+
+test('rejects advance indicator styles while their startup-fixed feature flag is OFF', () => {
+  const storyDocument = parseSpeech(
+    'say',
+    {text: 'hello', waitFor: 'advance', styles: ['novel']},
+    `bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12`,
+  );
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {say() {}, wait() {}},
+        speechAdvanceTypewriterEnabled: true,
+      }),
+    /dsl4BubbleAdvanceIndicator/u,
+  );
+});
+
+test('does not show the advance indicator for early advance or seconds-only speech', async () => {
+  const events = [];
+  const presenter = {
+    create() {
+      events.push('create');
+      return {
+        start: () => events.push('start'),
+        stop: () => events.push('stop'),
+      };
+    },
+  };
+  const style = `bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12`;
+  const early = createSpeechExecution(
+    'say',
+    {text: 'AB', waitFor: 'advance', styles: ['novel']},
+    style,
+    presenter,
+  );
+  const earlyRun = early.controller.start();
+  await waitFor(() => early.fake.bubbles.length === 1, 'the first character was not shown');
+  await Promise.resolve();
+  assert.equal(early.controller.acceptAdvanceInput({kind: 'key', code: 'Space'}), true);
+  await earlyRun;
+  assert.deepEqual(events, ['create', 'stop']);
+
+  events.length = 0;
+  const timed = createSpeechExecution(
+    'say',
+    {text: 'AB', seconds: 0, styles: ['novel']},
+    style,
+    presenter,
+  );
+  await timed.controller.start();
+  assert.deepEqual(events, []);
+});
 
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 100; attempt += 1) {

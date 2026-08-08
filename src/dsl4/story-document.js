@@ -413,6 +413,34 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
           });
         }
       }
+      const advanceIndicator = /** @type {Record<string, unknown>} */ (
+        style.advanceIndicator ?? {}
+      );
+      if (Array.isArray(advanceIndicator.frames)) {
+        const framesPath = `${stylePath}/advanceIndicator/frames`;
+        sourceMap[framesPath] = sourceRangeForNode(
+          document.getIn(['bubbleStyles', styleId, 'advanceIndicator', 'frames'], true),
+          lineCounter,
+        );
+        advanceIndicator.frames.forEach((_frame, frameIndex) => {
+          sourceMap[`${framesPath}/${frameIndex}`] = sourceRangeForNode(
+            document.getIn(
+              ['bubbleStyles', styleId, 'advanceIndicator', 'frames', frameIndex],
+              true,
+            ),
+            lineCounter,
+          );
+        });
+      }
+      if (Object.hasOwn(advanceIndicator, 'frameIntervalSeconds')) {
+        sourceMap[`${stylePath}/advanceIndicator/frameIntervalSeconds`] = sourceRangeForNode(
+          document.getIn(
+            ['bubbleStyles', styleId, 'advanceIndicator', 'frameIntervalSeconds'],
+            true,
+          ),
+          lineCounter,
+        );
+      }
     }
   }
 
