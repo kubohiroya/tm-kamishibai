@@ -71,6 +71,9 @@ include:
 kamishibai: '4.0'
 actors:
   Hero: Hero
+bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
 scenes:
   opening: []
 `,
@@ -123,6 +126,7 @@ assets:
     graph.declarations.map(({namespace, name}) => [namespace, name]),
     [
       ['actors', 'Hero'],
+      ['bubbleStyles', 'novel'],
       ['scenes', 'opening'],
       ['assets', 'Hero'],
       ['scenes', 'chapter1'],

@@ -47,7 +47,7 @@ Copyright © 2026 Hiroya Kubo.
 | `actors`          | 任意 | actorと初期costumeの対応          |
 | `cover`           | 任意 | 表紙の背景とBGM                   |
 | `textStyles`      | 任意 | SVG Textの名前付きstyle           |
-| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle |
+| `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
 | `poseRecognition` | 任意 | 待機中と認識成功時の音            |
@@ -329,7 +329,7 @@ textStyles:
     align: center
     direction: up
 
-speechStyles:
+bubbleStyles:
   novel:
     characterIntervalSeconds: 0.05
     characterSound: Typewriter
@@ -340,7 +340,7 @@ speechStyles:
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
-`speechStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
+`bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
 各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
 `restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
 セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
@@ -575,7 +575,7 @@ iconへ反映します。
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
 
-`style`にはトップレベルの`speechStyles`で宣言したIDを指定します。styleを指定したactionでは、
+`style`にはトップレベルの`bubbleStyles`で宣言したIDを指定します。styleを指定したactionでは、
 `characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
 `restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
 引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、

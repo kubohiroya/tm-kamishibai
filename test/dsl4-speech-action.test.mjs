@@ -85,14 +85,14 @@ function speechRuntime() {
   };
 }
 
-function parseSpeech(command, args, speechStyles = '') {
+function parseSpeech(command, args, bubbleStyles = '') {
   const parsed = frontend.parse(`
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   Tick: sound
   Voice: sound
-${speechStyles}
+${bubbleStyles}
 actors:
   Hero: HeroIdle
 scenes:
@@ -107,7 +107,7 @@ ${Object.entries(args)
   return parsed.storyDocument;
 }
 
-function createSpeechExecution(command, args, speechStyles = '') {
+function createSpeechExecution(command, args, bubbleStyles = '') {
   const fake = speechRuntime();
   const clock = manualScheduler();
   const sounds = [];
@@ -134,7 +134,7 @@ function createSpeechExecution(command, args, speechStyles = '') {
   });
   let followingActions = 0;
   const controller = createDsl4RuntimeController({
-    storyDocument: parseSpeech(command, args, speechStyles),
+    storyDocument: parseSpeech(command, args, bubbleStyles),
     port: {
       say: actorPort.say.bind(actorPort),
       think: actorPort.think.bind(actorPort),
@@ -307,7 +307,7 @@ test('applies grapheme-based silent characters and post-character rest intervals
       waitFor: 'advance',
       style: 'novel',
     },
-    `speechStyles:
+    `bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
     characterSound: Tick

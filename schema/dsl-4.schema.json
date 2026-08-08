@@ -11,7 +11,7 @@
     "actors": {"$ref": "#/$defs/actors"},
     "cover": {"$ref": "#/$defs/cover"},
     "textStyles": {"$ref": "#/$defs/textStyles"},
-    "speechStyles": {"$ref": "#/$defs/speechStyles"},
+    "bubbleStyles": {"$ref": "#/$defs/bubbleStyles"},
     "variables": {"$ref": "#/$defs/variables"},
     "loading": {"$ref": "#/$defs/loadingScreen"},
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
@@ -333,7 +333,7 @@
       "propertyNames": {"$ref": "#/$defs/id"},
       "additionalProperties": {"$ref": "#/$defs/textStyle"}
     },
-    "speechStyle": {
+    "bubbleStyle": {
       "type": "object",
       "additionalProperties": false,
       "required": ["characterIntervalSeconds"],
@@ -350,10 +350,10 @@
         "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
       }
     },
-    "speechStyles": {
+    "bubbleStyles": {
       "type": "object",
       "propertyNames": {"$ref": "#/$defs/id"},
-      "additionalProperties": {"$ref": "#/$defs/speechStyle"}
+      "additionalProperties": {"$ref": "#/$defs/bubbleStyle"}
     },
     "variableValue": {
       "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}]

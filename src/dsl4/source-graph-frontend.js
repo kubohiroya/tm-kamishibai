@@ -16,7 +16,7 @@ const namedDeclarationNamespaces = new Set([
   'assets',
   'actors',
   'textStyles',
-  'speechStyles',
+  'bubbleStyles',
   'variables',
   'branches',
   'scenes',

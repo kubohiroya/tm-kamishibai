@@ -142,7 +142,7 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
-test('normalizes reusable speech styles and validates style references and dependencies', () => {
+test('normalizes reusable bubble styles and validates style references and dependencies', () => {
   const source = `
 kamishibai: '4.0'
 assets:
@@ -151,7 +151,7 @@ assets:
   WrongTick: backdrop
 actors:
   Hero: HeroIdle
-speechStyles:
+bubbleStyles:
   novel:
     characterIntervalSeconds: 0.08
     characterSound: TalkTick
@@ -165,9 +165,9 @@ scenes:
         waitFor: advance
         style: novel
 `;
-  const result = frontend.parse(source, {sourceId: 'speech-style.kamishibai.yaml'});
+  const result = frontend.parse(source, {sourceId: 'bubble-style.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.speechStyles, {
+  assert.deepEqual(result.storyDocument.bubbleStyles, {
     novel: {
       characterIntervalSeconds: 0.08,
       characterSound: 'TalkTick',
@@ -188,7 +188,7 @@ scenes:
     'restCharacters',
     'restCharacterIntervalSeconds',
   ]) {
-    assert.ok(result.storyDocument.sourceMap[`/speechStyles/novel/${field}`], field);
+    assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/novel/${field}`], field);
   }
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/style']);
 
@@ -209,9 +209,27 @@ scenes:
   assert.equal(missingSound.ok, false);
   assert.ok(
     missingSound.diagnostics.some(
-      ({code, path}) => code === 'K4-REF-001' && path === '$.speechStyles.novel.characterSound',
+      ({code, path}) => code === 'K4-REF-001' && path === '$.bubbleStyles.novel.characterSound',
     ),
     JSON.stringify(missingSound.diagnostics),
+  );
+});
+
+test('rejects the legacy speechStyles top-level key', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.08
+scenes:
+  opening:
+    - wait: 0
+`);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(({code, path}) => code === 'K4-SCHEMA-UNKNOWN-KEY' && path === '$'),
+    JSON.stringify(result.diagnostics),
   );
 });
 

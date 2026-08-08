@@ -225,7 +225,7 @@ scenes:
   });
 });
 
-test('indexes a lazy character sound from each referenced speech style', () => {
+test('indexes a lazy character sound from each referenced bubble style', () => {
   const storyDocument = parse(`
 kamishibai: '4.0'
 assets:
@@ -236,7 +236,7 @@ assets:
     loading: lazy
 actors:
   Hero: HeroIdle
-speechStyles:
+bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
     characterSound: TalkTick

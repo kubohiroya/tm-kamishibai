@@ -218,12 +218,12 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
-  const speechStylesValue = storyDocument.speechStyles ?? {};
-  if (!isRecord(speechStylesValue)) {
-    throw new TypeError('DSL 4.0 StoryDocument speechStyles must be an object');
+  const bubbleStylesValue = storyDocument.bubbleStyles ?? {};
+  if (!isRecord(bubbleStylesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument bubbleStyles must be an object');
   }
-  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
-    speechStylesValue
+  const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    bubbleStylesValue
   );
   if (!speechAdvanceTypewriterEnabled) {
     const extendedSpeechAction = scenes
@@ -923,9 +923,9 @@ export function createDsl4RuntimeController({
       throw error;
     }
     const styleId = args.style;
-    const style = typeof styleId === 'string' ? speechStyles[styleId] : undefined;
+    const style = typeof styleId === 'string' ? bubbleStyles[styleId] : undefined;
     if (!isRecord(style)) {
-      const error = new Error(`Speech style is unavailable: ${String(styleId)}`);
+      const error = new Error(`Bubble style is unavailable: ${String(styleId)}`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
       throw error;
     }
