@@ -452,6 +452,70 @@ test('shows and clears say on timeout or synchronous finish', async () => {
   assert.deepEqual(fake.bubbleCalls.at(-1), ['', 'hero-target']);
 });
 
+test('renders typewriter speech through one Bubble handle and closes it on advance', async () => {
+  const hero = fakeActor();
+  const clock = manualScheduler();
+  const calls = [];
+  const handle = {
+    async setText(text) {
+      calls.push(['setText', text]);
+    },
+    async setAnimationMode(mode) {
+      calls.push(['setAnimationMode', mode]);
+    },
+    async close() {
+      calls.push(['close']);
+    },
+  };
+  const bubbleComposition = {
+    async show(input) {
+      calls.push(['show', input]);
+      return handle;
+    },
+    async releaseAll() {},
+  };
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: {targets: [hero.target]},
+    scheduler: clock.scheduler,
+    speechAdvanceTypewriterEnabled: true,
+    bubbleComposition,
+  });
+  const operation = platform.host.createThink(hero.target, {
+    text: '浦島',
+    waitFor: 'advance',
+    bubbleStyle: 'dialogue',
+    characterIntervalSeconds: 0.1,
+  });
+  const pending = operation.start();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(calls[0], [
+    'show',
+    {
+      actor: hero.target,
+      actorKey: 'hero-target',
+      kind: 'think',
+      text: '浦',
+      styleName: 'dialogue',
+      animationMode: 'talking',
+    },
+  ]);
+  clock.advance(100);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(calls.slice(1), [
+    ['setText', '浦島'],
+    ['setAnimationMode', 'awaiting-advance'],
+  ]);
+
+  operation.finish('advance');
+  await pending;
+  assert.deepEqual(calls.at(-1), ['close']);
+  assert.equal(clock.pendingCount(), 0);
+});
+
 test('handles zero-second operations without retaining a timer', async () => {
   const hero = fakeActor({x: 1, y: 2});
   const fake = fakeRuntime([hero.target]);

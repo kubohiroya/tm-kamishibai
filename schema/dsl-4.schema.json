@@ -348,6 +348,90 @@
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/bubbleStyleName"}
         },
+        "textStyle": {"$ref": "#/$defs/styleId"},
+        "placement": {
+          "oneOf": [
+            {
+              "enum": [
+                "up",
+                "up-up-right",
+                "up-right",
+                "right-up-right",
+                "right",
+                "right-down-right",
+                "down-right",
+                "down-down-right",
+                "down",
+                "down-down-left",
+                "down-left",
+                "left-down-left",
+                "left",
+                "left-up-left",
+                "up-left",
+                "up-up-left",
+                "north",
+                "north-northeast",
+                "northeast",
+                "east-northeast",
+                "east",
+                "east-southeast",
+                "southeast",
+                "south-southeast",
+                "south",
+                "south-southwest",
+                "southwest",
+                "west-southwest",
+                "west",
+                "west-northwest",
+                "northwest",
+                "north-northwest",
+                "HEADER_LIKE",
+                "CENTER",
+                "FOOTER_LIKE"
+              ]
+            },
+            {"type": "number", "minimum": 0, "maximum": 360}
+          ]
+        },
+        "distance": {"type": "number", "minimum": 0},
+        "tailLength": {"type": "number", "exclusiveMinimum": 0},
+        "offset": {
+          "oneOf": [
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [{"type": "number"}, {"type": "number"}],
+              "items": false
+            },
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "prefixItems": [
+                {"type": "number"},
+                {"type": "number"},
+                {"type": "number", "exclusiveMinimum": 0}
+              ],
+              "items": false
+            }
+          ]
+        },
+        "visualStyle": {
+          "enum": [
+            "NORMAL",
+            "THINKING",
+            "DREAMING",
+            "YELLING",
+            "OFF_PANEL",
+            "WAVY",
+            "WHISPERING",
+            "ANNOUNCEMENT",
+            "NARRATION",
+            "NO_BUBBLE"
+          ]
+        },
+        "portrait": {"$ref": "#/$defs/bubblePortrait"},
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "characterSound": {"$ref": "#/$defs/assetId"},
         "noSoundCharacters": {"type": "string", "minLength": 1},
@@ -367,6 +451,29 @@
           "items": {"$ref": "#/$defs/assetId"}
         },
         "frameIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "bubbleFrameAnimation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames", "frameIntervalSeconds"],
+      "properties": {
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assetId"}
+        },
+        "frameIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "bubblePortrait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": {"$ref": "#/$defs/assetId"},
+        "blink": {"$ref": "#/$defs/bubbleFrameAnimation"},
+        "talk": {"$ref": "#/$defs/bubbleFrameAnimation"}
       }
     },
     "bubbleStyles": {

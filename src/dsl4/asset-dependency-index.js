@@ -11,6 +11,14 @@ function addDependency(value, dependencies) {
   if (typeof value === 'string') dependencies.add(value);
 }
 
+/** @param {unknown} value @param {Set<string>} dependencies */
+function addFrameDependencies(value, dependencies) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const frames = /** @type {Readonly<Record<string, unknown>>} */ (value).frames;
+  if (!Array.isArray(frames)) return;
+  for (const frame of frames) addDependency(frame, dependencies);
+}
+
 /**
  * @param {Readonly<Record<string, unknown>>} action
  * @param {Set<string>} dependencies
@@ -32,11 +40,17 @@ function addActionDependencies(action, dependencies, bubbleStyles) {
       Object.hasOwn(args, 'characterSound') ? args.characterSound : style?.characterSound,
       dependencies,
     );
-    const advanceIndicator = /** @type {Readonly<Record<string, unknown>>} */ (
-      style?.advanceIndicator ?? {}
-    );
-    for (const frame of /** @type {ReadonlyArray<unknown>} */ (advanceIndicator.frames ?? [])) {
-      addDependency(frame, dependencies);
+    const portrait = /** @type {Readonly<Record<string, unknown>>} */ (style?.portrait ?? {});
+    addDependency(portrait.base, dependencies);
+    addFrameDependencies(portrait.blink, dependencies);
+    addFrameDependencies(portrait.talk, dependencies);
+    addFrameDependencies(style?.advanceIndicator, dependencies);
+  }
+  if (command === 'loop' && Array.isArray(args.steps)) {
+    for (const step of args.steps) {
+      if (typeof step === 'object' && step !== null && !Array.isArray(step)) {
+        addDependency(/** @type {Readonly<Record<string, unknown>>} */ (step).skin, dependencies);
+      }
     }
   }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);

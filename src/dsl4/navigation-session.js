@@ -72,6 +72,7 @@ function historyFailure(result) {
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -95,6 +96,7 @@ export function createDsl4NavigationSession({
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
   bubbleAdvanceIndicatorEnabled = false,
+  turboWarpBubbleEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -121,6 +123,12 @@ export function createDsl4NavigationSession({
   }
   if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleEnabled must be boolean');
+  }
+  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
   }
   if (
     inputArbitration !== undefined &&
@@ -251,6 +259,7 @@ export function createDsl4NavigationSession({
       poseNavigationPolicyEnabled,
       speechAdvanceTypewriterEnabled,
       bubbleAdvanceIndicatorEnabled,
+      turboWarpBubbleEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });

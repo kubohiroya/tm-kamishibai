@@ -1878,6 +1878,104 @@ test('wires flagged think advance through the standard TurboWarp runtime host', 
   assert.equal(stageListeners.has('pointerup'), false);
 });
 
+test('routes flagged speech through Bubble and releases the owned composition', async () => {
+  const project = await packagedProject(speechStory);
+  const log = [];
+  const fixture = platformFixture(log);
+  const bubbleLog = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4AppShell: true,
+        dsl4SpeechAdvanceTypewriter: true,
+        dsl4TurboWarpBubble: true,
+      },
+      createBubbleComposition(runtime, options) {
+        assert.strictEqual(runtime, fixture.runtime);
+        assert.ok(options.assetManager);
+        assert.ok(options.svgText);
+        return {
+          defineStyle(style) {
+            bubbleLog.push(['define', style.name, style.visualStyle]);
+          },
+          async show(input) {
+            bubbleLog.push(['show', input.kind, input.text, input.styleName, input.animationMode]);
+            return {
+              async setText(text) {
+                bubbleLog.push(['text', text]);
+              },
+              async setAnimationMode(mode) {
+                bubbleLog.push(['animation-mode', mode]);
+              },
+              async close() {
+                bubbleLog.push(['close']);
+              },
+            };
+          },
+          releaseAll() {
+            bubbleLog.push(['release-all']);
+          },
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(bubbleLog.slice(0, 3), [
+    ['define', '__dsl4_default__', 'NORMAL'],
+    ['define', '__dsl4_default_think__', 'THINKING'],
+    ['define', 'novel', undefined],
+  ]);
+
+  const stageListeners = new Map();
+  result.host.attachStagePointer({
+    addEventListener(type, listener) {
+      stageListeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (stageListeners.get(type) === listener) stageListeners.delete(type);
+    },
+  });
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (bubbleLog.some(([name]) => name === 'show')) break;
+    await Promise.resolve();
+  }
+  assert.deepEqual(
+    bubbleLog.find(([name]) => name === 'show'),
+    ['show', 'think', 'ど', '\u0000dsl4:["novel"]', 'talking'],
+  );
+  assert.equal(
+    log.some(([name]) => name === 'actor.think'),
+    false,
+    JSON.stringify(log),
+  );
+  assert.equal(
+    stageListeners.get('pointerup')({
+      pointerType: 'mouse',
+      button: 0,
+      preventDefault() {},
+      stopPropagation() {},
+    }),
+    true,
+  );
+  assert.equal((await run).status, 'finished');
+  assert.equal(
+    bubbleLog.some(([name, text]) => name === 'text' && text === 'どうしよう'),
+    true,
+    JSON.stringify(bubbleLog),
+  );
+  assert.equal(
+    bubbleLog.some(([name, mode]) => name === 'animation-mode' && mode === 'awaiting-advance'),
+    true,
+    JSON.stringify(bubbleLog),
+  );
+  assert.equal(bubbleLog.filter(([name]) => name === 'close').length, 1);
+
+  await result.host.dispose('test-complete');
+  assert.equal(bubbleLog.filter(([name]) => name === 'release-all').length, 1);
+});
+
 test('creates an idle host, attaches explicitly, runs, and disposes every owned resource once', async () => {
   const project = await packagedProject();
   const log = [];

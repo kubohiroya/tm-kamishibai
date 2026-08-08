@@ -153,6 +153,8 @@ bubbleStyles:
     styles:
       - Typing base
       - 日本語 効果音
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
 scenes:
   opening:
     - Hero.say:
@@ -169,9 +171,15 @@ scenes:
 文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
 sceneのasset依存へ含まれます。
 
-この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`と`dsl4BubbleAdvanceIndicator` feature flagが
-既定OFFです。後者は`dsl4Runtime`、`dsl4AppShell`、`dsl4SpeechAdvanceTypewriter`を必要とします。
-問題時は`dsl4BubbleAdvanceIndicator`をOFFに戻すと、既存の吹き出し表示へ切り戻せます。入力対象や
+DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble` Compositionが所有します。
+`textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
+`HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
+portraitのbase／blink／talkと`advanceIndicator`のframe assetもstyleへ宣言でき、参照sceneの
+lazy dependencyとして読み込まれます。SVG Textは`Actor.setText`とBubble内部の本文レイヤーに限って
+使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
+
+これらの拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`、`dsl4BubbleAdvanceIndicator`、
+`dsl4TurboWarpBubble` feature flagが既定OFFです。Bubble経路ではportraitとindicatorもBubbleが所有します。入力対象や
 `seconds`／`waitFor`の組み合わせを含む完全な仕様は
 [DSL 4.0 surface仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#72-actor-action)を参照してください。
 

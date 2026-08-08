@@ -19,6 +19,9 @@ importers:
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.3.0
         version: 0.3.0
+      '@kubohiroya/turbowarp-bubble':
+        specifier: link:/Users/hiroya/Dev/turbowarp-bubble-worktrees/export-turbowarp-adapter
+        version: link:../../turbowarp-bubble-worktrees/export-turbowarp-adapter
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.3.0
         version: 0.3.0

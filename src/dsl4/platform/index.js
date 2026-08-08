@@ -19,6 +19,7 @@ export {
   DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT,
 } from './pose-archive-extractor.js';
 export {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
+export {createDsl4BubblePlatform} from './bubble-platform.js';
 export {createDsl4TMPoseModelAdapter, createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';

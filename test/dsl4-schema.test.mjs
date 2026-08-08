@@ -298,6 +298,48 @@ scenes:
   );
 });
 
+test('accepts one-frame portrait animation but requires two advance indicator frames', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Face:
+    kind: image
+    file: face.svg
+  Blink:
+    kind: image
+    file: blink.svg
+  Next1:
+    kind: image
+    file: next-1.svg
+  Next2:
+    kind: image
+    file: next-2.svg
+bubbleStyles:
+  novel:
+    portrait:
+      base: Face
+      blink:
+        frames: [Blink]
+        frameIntervalSeconds: 0.4
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.2
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source, {sourceId: 'bubble-animation.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const invalid = frontend.parse(source.replace('[Next1, Next2]', '[Next1]'));
+  assert.equal(invalid.ok, false);
+  assert.ok(
+    invalid.diagnostics.some(
+      ({code, path}) => code === 'K4-SCHEMA-001' && path.includes('advanceIndicator/frames'),
+    ),
+    JSON.stringify(invalid.diagnostics),
+  );
+});
+
 test('rejects the legacy speechStyles top-level key', () => {
   const result = frontend.parse(`
 kamishibai: '4.0'

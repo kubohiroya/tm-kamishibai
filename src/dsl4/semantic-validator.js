@@ -264,6 +264,15 @@ export function validateDsl4Semantics(
         `$.bubbleStyles.${styleId}.styles[${styleIndex}]`,
       ),
     );
+    if (style.textStyle !== 'default') {
+      addReferenceIssue(
+        issues,
+        textStyles,
+        style.textStyle,
+        undefined,
+        `$.bubbleStyles.${styleId}.textStyle`,
+      );
+    }
     addReferenceIssue(
       issues,
       assets,
@@ -271,17 +280,36 @@ export function validateDsl4Semantics(
       'sound',
       `$.bubbleStyles.${styleId}.characterSound`,
     );
-    const advanceIndicator = /** @type {Record<string, unknown>} */ (style.advanceIndicator ?? {});
-    const frames = /** @type {unknown[]} */ (advanceIndicator.frames ?? []);
-    frames.forEach((frame, frameIndex) =>
+    const portrait = /** @type {Record<string, unknown>} */ (style.portrait ?? {});
+    addReferenceIssue(
+      issues,
+      assets,
+      portrait.base,
+      'image',
+      `$.bubbleStyles.${styleId}.portrait.base`,
+    );
+    for (const animationName of ['blink', 'talk']) {
+      const animation = /** @type {Record<string, unknown>} */ (portrait[animationName] ?? {});
+      for (const [index, frame] of /** @type {unknown[]} */ (animation.frames ?? []).entries()) {
+        addReferenceIssue(
+          issues,
+          assets,
+          frame,
+          'image',
+          `$.bubbleStyles.${styleId}.portrait.${animationName}.frames[${index}]`,
+        );
+      }
+    }
+    const indicator = /** @type {Record<string, unknown>} */ (style.advanceIndicator ?? {});
+    for (const [index, frame] of /** @type {unknown[]} */ (indicator.frames ?? []).entries()) {
       addReferenceIssue(
         issues,
         assets,
         frame,
         'image',
-        `$.bubbleStyles.${styleId}.advanceIndicator.frames[${frameIndex}]`,
-      ),
-    );
+        `$.bubbleStyles.${styleId}.advanceIndicator.frames[${index}]`,
+      );
+    }
   }
 
   const reportedStyleCycles = new Set();

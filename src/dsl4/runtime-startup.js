@@ -270,6 +270,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
       speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
       bubbleAdvanceIndicatorEnabled: featureFlags.dsl4BubbleAdvanceIndicator,
+      turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {

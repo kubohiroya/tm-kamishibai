@@ -1,6 +1,6 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
-import {composeBubbleStyles} from './bubble-style.js';
+import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
@@ -142,6 +142,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -157,6 +158,7 @@ export function createDsl4RuntimeController({
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
   bubbleAdvanceIndicatorEnabled = false,
+  turboWarpBubbleEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -207,6 +209,12 @@ export function createDsl4RuntimeController({
   if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
   }
+  if (typeof turboWarpBubbleEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleEnabled must be boolean');
+  }
+  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -236,6 +244,7 @@ export function createDsl4RuntimeController({
   );
   if (
     !bubbleAdvanceIndicatorEnabled &&
+    !turboWarpBubbleEnabled &&
     Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'advanceIndicator'))
   ) {
     throw new TypeError(
@@ -945,7 +954,11 @@ export function createDsl4RuntimeController({
     }
     const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
     const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
-    return {...resolvedStyle, ...actionArgs};
+    return {
+      ...resolvedStyle,
+      ...actionArgs,
+      ...(turboWarpBubbleEnabled ? {bubbleStyle: bubbleStyleNameForStyleIds(styleIds)} : {}),
+    };
   }
 
   /**

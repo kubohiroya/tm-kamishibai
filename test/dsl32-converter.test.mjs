@@ -396,7 +396,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
   );
 });
 
-test('converts timed think and rejects persistent or styled legacy speech', () => {
+test('converts timed and styled legacy speech while rejecting persistent speech', () => {
   const timed = convertDsl32ToDsl4(
     [
       'kamishibai=3.2',
@@ -414,7 +414,6 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
 
   for (const [sourceId, action, code] of [
     ['persistent-think.txt', 'action=Hero:think:待って', 'K4-CONVERT-PERSISTENT-SPEECH'],
-    ['styled-think.txt', 'action=Hero:think:待って:2:balloonStyle', 'K4-CONVERT-SPEECH-STYLE'],
   ]) {
     const result = convertDsl32ToDsl4(
       [
@@ -429,6 +428,33 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === code));
   }
+
+  const styled = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=HeroIdle,costume:Actor:hero-idle',
+      'svgTextStyle=balloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right',
+      'actor=Hero,HeroIdle',
+      'sceneLabel=opening',
+      'action=Hero:think:待って:2:balloonStyle',
+    ].join('\n'),
+    {sourceId: 'styled-think.txt'},
+  );
+  assert.equal(styled.ok, true, JSON.stringify(styled.diagnostics));
+  assert.deepEqual(styled.document?.bubbleStyles['legacy-think-balloonStyle'], {
+    textStyle: 'balloonStyle',
+    placement: 'up-right',
+    visualStyle: 'THINKING',
+  });
+  assert.deepEqual(styled.document?.scenes.opening, [
+    {
+      'Hero.think': {
+        text: '待って',
+        seconds: 2,
+        styles: ['legacy-think-balloonStyle'],
+      },
+    },
+  ]);
 });
 
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {

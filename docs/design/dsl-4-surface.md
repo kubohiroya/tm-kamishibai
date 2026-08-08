@@ -347,6 +347,9 @@ bubbleStyles:
     styles:
       - Typing base
       - 日本語 効果音
+    textStyle: title
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
@@ -365,6 +368,13 @@ style定義自身の`styles`配列から既存styleを参照し、名前付き�
 `advanceIndicator.frames`は2件以上のtarget-independent `image` asset ID、
 `frameIntervalSeconds`は正の秒数です。同じframe IDを複数回指定して表示時間を調整できます。
 actionが参照するeffective styleに含まれる全frameを、sceneのasset依存としてprepareします。
+
+Bubble Compositionでは
+`textStyle`は本文レイヤーの`textStyles` IDで、省略時は`default`です。`placement`、`distance`、
+`tailLength`、`offset`、`visualStyle`、`portrait`、`advanceIndicator`で吹き出しsurfaceを構成し、
+`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
+`restCharacterIntervalSeconds`で文字送りを指定できます。本文、完了条件、吹き出し開始時の音声は
+セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -610,6 +620,10 @@ registryを参照しません。asset依存も合成後のeffective styleから�
 残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
 terminal cleanupで同期的に解除します。
 
+`dsl4TurboWarpBubble`がONのとき、runtime controllerは合成後のeffective styleをBubble platformへ定義します。
+Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-advance`、完了／cancelを
+`close`へ写像し、sound、portrait、blink、talk、indicator frameのasset依存もeffective styleから収集します。
+
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
 `startSound`は最初の吹き出し内容を表示した直後に1回再生するsound asset IDです。セリフを読んだ音声を
@@ -629,6 +643,8 @@ sound停止はAsset Managerのasset ID単位です。speechに指定したsound 
 speechが実際に再生を開始したasset IDだけを停止します。
 `dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
+`dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
+`dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。
 
 ```yaml
 - Hero.show:

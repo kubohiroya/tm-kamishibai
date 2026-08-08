@@ -63,6 +63,7 @@ function validateSpeechPayload(value, command, extended) {
     'restCharacters',
     'restCharacterIntervalSeconds',
     'advanceIndicator',
+    'bubbleStyle',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
@@ -498,8 +499,11 @@ export function createDsl4ActorActionPort(options) {
         );
       }
     }
+    const bubbleStyle = Object.hasOwn(value, 'bubbleStyle')
+      ? requireNonEmptyString(value.bubbleStyle, 'bubbleStyle', command)
+      : undefined;
     let advanceIndicator;
-    if (Object.hasOwn(value, 'advanceIndicator')) {
+    if (Object.hasOwn(value, 'advanceIndicator') && bubbleStyle === undefined) {
       if (!bubbleAdvanceIndicatorEnabled) {
         throw portError('K4-ACTOR-PORT-001', 'bubble advance indicator is disabled');
       }
@@ -556,6 +560,8 @@ export function createDsl4ActorActionPort(options) {
           ...(noSoundCharacters === undefined ? {} : {noSoundCharacters}),
           ...(restCharacters === undefined ? {} : {restCharacters}),
           ...(restCharacterIntervalSeconds === undefined ? {} : {restCharacterIntervalSeconds}),
+          ...(bubbleStyle === undefined ? {} : {bubbleStyle}),
+          ...(waitFor === undefined ? {} : {waitFor}),
         }),
         actionContext,
       ),
