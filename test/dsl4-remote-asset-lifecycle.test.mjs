@@ -67,6 +67,46 @@ ${scene}
   };
 }
 
+function barePoseComponent() {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  Remote:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/pose/
+scenes:
+  opening:
+    poseModel: Remote
+    actions: []
+`,
+    {sourceId: 'bare-remote-pose-lifecycle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  return {
+    storyDocument: parsed.storyDocument,
+    assetBundle: {
+      manifest: {
+        formatVersion: 1,
+        assets: [
+          {
+            id: 'Remote',
+            kind: 'poseModel',
+            loading: 'lazy',
+            source: {type: 'remote', url: 'https://cdn.example.com/pose/'},
+          },
+        ],
+      },
+    },
+    getAssetFile() {
+      assert.fail('remote assets must not read an embedded payload');
+    },
+  };
+}
+
 function context(controller = new AbortController(), generation = 1) {
   return Object.freeze({signal: controller.signal, generation, sceneId: 'opening'});
 }
@@ -132,6 +172,44 @@ test('loads, verifies, registers, caches, and releases an explicitly enabled rem
   assert.deepEqual(loading, [{visible: true}]);
   await lifecycle.release({reason: 'stop'});
   assert.deepEqual(released, [['Remote', 'stop']]);
+});
+
+test('loads an unpinned TMPose directory lazily without requiring integrity metadata', async () => {
+  const encoder = new TextEncoder();
+  const files = new Map([
+    [
+      'https://cdn.example.com/pose/model.json',
+      encoder.encode('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+    ],
+    ['https://cdn.example.com/pose/metadata.json', encoder.encode('{"labels":["rescue"]}')],
+    ['https://cdn.example.com/pose/weights.bin', new Uint8Array([1, 2, 3])],
+  ]);
+  const loads = [];
+  const prepared = [];
+  const lifecycle = createDsl4RemoteAssetLifecycle({
+    runtimeComponent: barePoseComponent(),
+    async loadRemoteAsset(payload) {
+      loads.push(payload);
+      return {bytes: files.get(payload.url), contentType: 'application/octet-stream'};
+    },
+    adapter: {
+      prepare(payload) {
+        prepared.push(payload);
+        return {id: payload.asset.id};
+      },
+      release() {},
+    },
+    setLoading() {},
+  });
+
+  await lifecycle.prepare({assetIds: ['Remote']}, context());
+  assert.deepEqual(loads.map(({url}) => url).sort(), [...files.keys()].sort());
+  assert.deepEqual(
+    prepared[0].files.map(({path: filePath}) => filePath),
+    ['model.json', 'metadata.json', 'weights.bin'],
+  );
+  assert.equal(Object.hasOwn(loads[0], 'integrity'), false);
+  await lifecycle.release({reason: 'stop'});
 });
 
 test('keeps remote loading disabled unless the host injects a loader', async () => {

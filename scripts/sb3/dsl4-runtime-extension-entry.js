@@ -1,6 +1,7 @@
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
+import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
@@ -112,6 +113,7 @@ class KamishibaiDsl4RuntimeExtension {
 
     const Scratch = this.Scratch;
     const project = JSON.parse(Scratch.vm.toJSON());
+    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     const shell = await createDsl4StandardAppShell({
       featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
       surface: 'regularEditor',
@@ -122,6 +124,7 @@ class KamishibaiDsl4RuntimeExtension {
         runtime: Scratch.vm.runtime,
         tmPoseRuntime: globalThis.tmPose ?? fallbackTMPoseRuntime(),
         setLoading() {},
+        loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,
       },
     });

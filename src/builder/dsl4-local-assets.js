@@ -282,13 +282,7 @@ export async function loadDsl4LocalAssetSnapshot(
       const source = /** @type {Readonly<Record<string, unknown>>} */ (asset.source);
       manifestAssets.push({
         ...common,
-        source: {
-          type: 'remote',
-          url: source.url,
-          integrity: source.integrity,
-          contentType: source.contentType,
-          size: source.size,
-        },
+        source: {type: 'remote', ...source},
       });
       continue;
     }

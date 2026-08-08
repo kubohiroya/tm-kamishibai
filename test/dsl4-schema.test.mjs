@@ -630,7 +630,7 @@ test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separ
   assert.equal(result.storyDocument.scenes[0].actions[1].stableId, '開始表示');
 });
 
-test('remote delivery requires verified metadata and stays independent from loading policy', async () => {
+test('verified remote delivery preserves metadata and stays independent from loading policy', async () => {
   const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.storyDocument.assets.OpeningMusic, {
@@ -703,6 +703,30 @@ test('remote delivery rejects malformed or credential-bearing HTTPS URLs semanti
       url,
     );
   }
+});
+
+test('accepts an unpinned TMPose directory URL while keeping partial verification metadata invalid', async () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  LivePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://teachablemachine.withgoogle.com/models/example/
+scenes:
+  opening:
+    poseModel: LivePose
+    actions: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.assets.LivePose.source, {
+    url: 'https://teachablemachine.withgoogle.com/models/example/',
+  });
+
+  const partial = await validateFixture('invalid', 'remote-missing-integrity.kamishibai.yaml');
+  assert.equal(partial.ok, false);
 });
 
 test('compact and named actions plus short and long scenes normalize identically', async () => {

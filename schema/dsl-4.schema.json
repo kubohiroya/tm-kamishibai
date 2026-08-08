@@ -63,6 +63,31 @@
         "size": {"type": "integer", "minimum": 1}
       }
     },
+    "remotePoseModelSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$"
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-[0-9a-f]{64}$"
+        },
+        "contentType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "size": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "integrity": ["contentType", "size"],
+        "contentType": ["integrity", "size"],
+        "size": ["integrity", "contentType"]
+      }
+    },
     "assetId": {"$ref": "#/$defs/id"},
     "sceneId": {"$ref": "#/$defs/id"},
     "actorId": {"$ref": "#/$defs/id"},
@@ -218,7 +243,7 @@
       "properties": {
         "kind": {"const": "poseModel"},
         "file": {"$ref": "#/$defs/filePath"},
-        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "source": {"$ref": "#/$defs/remotePoseModelSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}

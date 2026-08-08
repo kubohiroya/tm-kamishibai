@@ -298,17 +298,17 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
   );
 });
 
-test('requires an explicit local replacement for each scene TMPoseURL', async () => {
+test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
   const source = await readFile(path.join(fixtureRoot, 'full.dsl32.txt'));
-  const missing = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
-  assert.equal(missing.ok, false);
-  assert.equal(missing.yaml, null);
-  assert.ok(
-    missing.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === 'K4-CONVERT-POSE-MODEL' && diagnostic.range.start.line === 36,
-    ),
-  );
+  const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
+  assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
+  assert.deepEqual(remote.document?.assets.PoseModel1, {
+    kind: 'poseModel',
+    delivery: 'remote',
+    source: {url: 'https://example.com/models/rescue/'},
+    loading: 'lazy',
+  });
+  assert.equal(remote.document?.scenes.rescue.poseModel, 'PoseModel1');
 
   const malformed = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',

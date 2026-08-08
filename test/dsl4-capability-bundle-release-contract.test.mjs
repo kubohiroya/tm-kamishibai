@@ -129,7 +129,11 @@ test('separates Standard source composition from the reversible 3.2 bundle path'
     provenance: ['app/project.source.json', 'app/embedded-extensions.json'],
   });
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');
-  assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-verified-opt-in');
+  assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-opt-in');
+  assert.deepEqual(contract.assetPolicy.remoteAssetRequirements, [
+    'https',
+    'bare-pose-directory-or-complete-verification-metadata',
+  ]);
   assert.equal(contract.previewPolicy.remotePreview, 'forbidden');
   assert.equal(contract.previewPolicy.localPreviewHost, 'tracked-by-issue-258');
 });

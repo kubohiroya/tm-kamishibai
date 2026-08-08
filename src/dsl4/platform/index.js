@@ -22,3 +22,4 @@ export {createDsl4TMPoseModelAdapter, createDsl4TMPosePlatform} from './tmpose-m
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';
 export {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
+export {createDsl4BrowserRemoteAssetLoader} from './browser-remote-asset-loader.js';

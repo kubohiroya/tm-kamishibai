@@ -126,8 +126,11 @@
   "assetPolicy": {
     "remoteExtensionCode": "forbidden",
     "embeddedAssetBytes": "self-contained",
-    "remoteAssetBytes": "explicit-verified-opt-in",
-    "remoteAssetRequirements": ["https", "sha256-integrity", "declared-media-type"]
+    "remoteAssetBytes": "explicit-opt-in",
+    "remoteAssetRequirements": [
+      "https",
+      "bare-pose-directory-or-complete-verification-metadata"
+    ]
   },
   "previewPolicy": {
     "remotePreview": "forbidden",

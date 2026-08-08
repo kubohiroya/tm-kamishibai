@@ -73,9 +73,10 @@ reload preferenceなどのtransient stateも保存しません。
 
 ## 5. asset、preview、security境界
 
-remote **extension code**とremote previewは常に禁止します。asset bytesは別の境界で、作者が
-`delivery: remote`を明示し、HTTPS、SHA-256 integrity、media typeを固定した場合だけ利用できます。
-verified remote cacheは取得後のbytesを再検証し、失敗時に未検証bytesへfallbackしません。
+remote **extension code**とremote previewは常に禁止します。asset bytesは別の境界です。作者が
+`delivery: remote`を明示したposeModelは通常のHTTPS TMPoseディレクトリURLを利用できます。内容固定が
+必要ならembeddedへ変換します。integrity、media type、sizeを宣言したverified remoteは取得後のbytesを
+再検証し、失敗時に未検証bytesへfallbackしません。
 
 local preview transportはloopback address、許可origin、session token、project root confinementをすべて
 満たす接続だけを受け入れます。protocol、fingerprint、candidate session、reload transaction、transport

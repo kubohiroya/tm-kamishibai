@@ -122,6 +122,13 @@ assets:
       integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
       contentType: image/webp
       size: 654321
+  LivePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    retention: scene
+    source:
+      url: https://teachablemachine.withgoogle.com/models/example/
 ```
 
 `kind`は`backdrop`、`costume`、`sound`、`poseModel`のいずれかです。`costume`は`target`を
@@ -130,9 +137,14 @@ assets:
 成果物へ埋め込み、ネットワークなしで動作するself-containedなSB3を生成します。
 
 `delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
-`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。期待するbyte列を固定する`integrity`、MIME typeを固定する
-`contentType`、上限検査に使う`size`をすべて必須とします。`integrity`は
-`sha256-`に続けて64桁の小文字16進SHA-256を記述します。HTTP、検証情報の省略、`name`または`file`との
+`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。poseModelは
+TMPose 3.2と同じdirectory URLを`url`だけで指定できます。この通常モードは取得時点のmodel内容を正本とし、
+`model.json`、`metadata.json`、model manifestが宣言するweights fileをlazy取得します。
+
+内容を固定する場合はmodel directoryをlocalへ取得して`file`で指定し、SB3へembedded化します。remoteの
+ままbyte列を検証する場合は、期待するbyte列を固定する`integrity`、MIME typeを固定する`contentType`、
+上限検査に使う`size`を三つとも指定します。`integrity`は`sha256-`に続けて64桁の小文字16進SHA-256を
+記述します。三項目の一部だけの指定、poseModel以外での検証情報省略、HTTP、`name`または`file`との
 併記はschema errorです。
 
 ### 3.3 読み込みとメモリ保持方針
@@ -167,21 +179,26 @@ nextの最大二つが一時共存し得ますが、訪問済みmodelをすべ�
 
 ### 3.4 runtime境界と失敗
 
-builderはremote assetの検証情報だけをasset bundle manifestへ格納し、byte列をSB3へ格納しません。
+builderはremote assetのURLと、指定されていれば検証情報だけをasset bundle manifestへ格納し、byte列を
+SB3へ格納しません。
 controller coreは`fetch`、filesystem、VMへ直接依存せず、既存のasset preload coordinatorを通して
 asset lifecycleを呼びます。通常のembedded lifecycleではremote取得を拒否し、hostが
 `createDsl4RemoteAssetLifecycle`へ`loadRemoteAsset`を明示的に注入した場合だけremote modeを有効に
 できます。
 
-loaderは宣言されたURLと期待値、`AbortSignal`を受け取り、byte列と実際のContent-Typeを返します。
+loaderは宣言されたURL、指定されていれば期待値、および`AbortSignal`を受け取り、byte列と実際の
+Content-Typeを返します。
 hostは接続先hostのallowlist、timeout、redirect数、stream受信中の最大byte数を制限します。lifecycleは
-loaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform adapterへ登録します。
+verified remoteではloaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform
+adapterへ登録します。
 URL credentialはsource frontendで拒否するため、認証情報を作品へ埋め込む用途には使用できません。
-remote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive byte列に加え、
-実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
+検証情報付きremote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive
+byte列に加え、実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
 extractorが`model.json`、`metadata.json`、weights fileを展開します。path traversal、duplicate entry、
 file数、圧縮前後と展開後の合計byte数へ上限を適用し、各fileをarchive integrityとextractor format versionへ
 bindingしてからTMPose adapterへ登録します。loaderが別経路で渡した未検証の展開fileは受理しません。
+通常の裸URL poseModelはarchiveを要求せず、同じdirectory配下の三fileをhost loader経由で取得します。
+この経路は内容同一性を主張しないため、verified remote cacheへ保存しません。
 
 materialize済みresourceは`retention`に従ってadapterからasset単位でreleaseし、停止・再起動・dispose時は
 retentionにかかわらず全件releaseします。
@@ -196,8 +213,10 @@ offlineへ切り戻す場合は`delivery: embedded`とローカル`file`へ戻�
 IndexedDBへ保存した検証済みbyte列の寿命は`retention`とは別に管理します。memory resourceをreleaseしても
 永続cacheは削除せず、cacheをclearしても既にmaterialize済みのresourceは直ちに無効化しません。cacheは
 最終利用からのTTL、LRU、byte budget、format versionによりboundedに掃除し、保存失敗時は機械可読warningを
-返します。remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
+返します。verified remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
 再検証を行います。
+裸URL poseModelはsession内のmaterialize済みresourceだけを再利用し、解放後の再materializeではURLから
+現在のmodelを取得します。
 
 DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にstable story IDと台本ファイルのbasenameから
 次のようなdatabase名を生成し、story manifestへ保存します。

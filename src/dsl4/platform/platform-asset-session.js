@@ -151,24 +151,41 @@ export function createDsl4PlatformAssetSession(options) {
   if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
     throw new TypeError('loadRemoteAsset must be a function');
   }
-  const remoteEnabled = typeof options.loadRemoteAsset === 'function';
-  const remoteLoader = remoteEnabled ? /** @type {Function} */ (options.loadRemoteAsset) : null;
+  const componentAssetBundle = /** @type {Record<string, any>} */ (runtimeComponent.assetBundle);
+  const remoteRequired = componentAssetBundle.manifest.assets.some(
+    /** @param {unknown} asset */ (asset) =>
+      isRecord(asset) && isRecord(asset.source) && asset.source.type === 'remote',
+  );
+  const verifiedRemoteRequired = componentAssetBundle.manifest.assets.some(
+    /** @param {unknown} asset */ (asset) =>
+      isRecord(asset) &&
+      isRecord(asset.source) &&
+      asset.source.type === 'remote' &&
+      typeof asset.source.integrity === 'string',
+  );
+  const remoteEnabled = remoteRequired && typeof options.loadRemoteAsset === 'function';
+  const verifiedRemoteEnabled = remoteEnabled && verifiedRemoteRequired;
+  const remoteLoader = remoteEnabled
+    ? /** @type {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} */ (
+        options.loadRemoteAsset
+      )
+    : null;
   let cacheIdentity = null;
-  if (remoteEnabled || binaryEntryEnabled) {
+  if (verifiedRemoteEnabled || binaryEntryEnabled) {
     if (options.cacheIdentity === undefined) {
       throw new TypeError(
-        'cacheIdentity must be an object when remote or binary-entry loading is enabled',
+        'cacheIdentity must be an object when verified remote or binary-entry loading is enabled',
       );
     }
     cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
   }
-  const componentAssetBundle = /** @type {Record<string, any>} */ (runtimeComponent.assetBundle);
-  const remotePoseRequired = componentAssetBundle.manifest.assets.some(
+  const verifiedRemotePoseRequired = componentAssetBundle.manifest.assets.some(
     /** @param {unknown} asset */ (asset) =>
       isRecord(asset) &&
       asset.kind === 'poseModel' &&
       isRecord(asset.source) &&
-      asset.source.type === 'remote',
+      asset.source.type === 'remote' &&
+      typeof asset.source.integrity === 'string',
   );
   if (
     options.verifiedRemoteCacheOptions !== undefined &&
@@ -186,7 +203,7 @@ export function createDsl4PlatformAssetSession(options) {
     throw new TypeError('createFile must be a function');
   }
   const poseArchiveExtractor =
-    remoteEnabled && remotePoseRequired
+    remoteEnabled && verifiedRemotePoseRequired
       ? createDsl4PoseArchiveExtractor({
           limits: options.poseArchiveLimits,
           subtleCrypto: options.subtleCrypto,
@@ -257,7 +274,7 @@ export function createDsl4PlatformAssetSession(options) {
   const created = [];
   try {
     const compositionOptions = {
-      ...(remoteEnabled
+      ...(verifiedRemoteEnabled
         ? {
             verifiedRemoteCache: {
               ...options.verifiedRemoteCacheOptions,
@@ -276,7 +293,7 @@ export function createDsl4PlatformAssetSession(options) {
         : {}),
     };
     const assetManagerCandidate =
-      remoteEnabled || binaryEntryEnabled
+      verifiedRemoteEnabled || binaryEntryEnabled
         ? createAssetManager(undefined, compositionOptions)
         : createAssetManager();
     created.push(assetManagerCandidate);
@@ -292,7 +309,7 @@ export function createDsl4PlatformAssetSession(options) {
       'playSound',
       'stopSound',
       'stopAllSounds',
-      ...(remoteEnabled
+      ...(verifiedRemoteEnabled
         ? [
             'resolveVerifiedRemoteBinary',
             'getVerifiedRemoteCacheStats',
@@ -471,7 +488,15 @@ export function createDsl4PlatformAssetSession(options) {
             },
           }
         : {}),
-      ...(remoteEnabled ? {resolveVerifiedRemoteAsset} : {}),
+      ...(verifiedRemoteEnabled ? {resolveVerifiedRemoteAsset} : {}),
+      ...(remoteEnabled
+        ? {
+            loadRemoteAsset:
+              /** @type {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} */ (
+                remoteLoader
+              ),
+          }
+        : {}),
       ...(poseArchiveExtractor ? {extractRemotePoseArchive: poseArchiveExtractor} : {}),
     };
     const assetLifecycle = remoteEnabled
@@ -538,7 +563,7 @@ export function createDsl4PlatformAssetSession(options) {
           },
         })
       : null;
-    const verifiedRemoteCache = remoteEnabled
+    const verifiedRemoteCache = verifiedRemoteEnabled
       ? Object.freeze({
           identity: cacheIdentity,
           getWarnings() {
@@ -621,7 +646,7 @@ export function createDsl4PlatformAssetSession(options) {
           () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
           () => tmposeComposition.releaseAll(),
-          ...(remoteEnabled
+          ...(verifiedRemoteEnabled
             ? [() => assetManagerComposition.releaseVerifiedRemoteStoryCacheLease()]
             : []),
           () => assetManagerComposition.releaseAll(),

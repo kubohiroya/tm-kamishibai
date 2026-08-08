@@ -842,7 +842,12 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
     /Webcam and loadFromFiles/u,
   );
   assert.throws(
-    () => createDsl4PlatformAssetSession({...base, loadRemoteAsset() {}}),
+    () =>
+      createDsl4PlatformAssetSession({
+        ...base,
+        runtimeComponent: remoteRuntimeComponent(new Uint8Array([1])),
+        loadRemoteAsset() {},
+      }),
     /cacheIdentity must be an object/u,
   );
   assert.throws(

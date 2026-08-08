@@ -1612,7 +1612,7 @@ JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは
 別tabから遅れて到着した古いsnapshotでentries／bytesを上書きしません。memory releaseでcache recordを削除せず、
 cache clearでmaterialize済みresourceを直ちに無効化しません。
 
-remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
+verified remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
 size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は
 検証済みbytesによるmemory-only実行を許可して機械可読warningを返し、networkとvalid cacheの両方がない場合は
 fail closedとします。
@@ -1640,7 +1640,7 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
 
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
-同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
+同時materialize poseModel数、IndexedDB budgetを制限します。verified remote pose archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 

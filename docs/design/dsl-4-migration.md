@@ -49,11 +49,12 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行 |
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                          |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                              |
-| `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 手動併用        | `--pose-models`のexact local replacementが必須                    |
+| `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                  |
 
-remote／cache assetは、変換前にlocal／embedded project assetへ置き換えます。converter自身はnetwork取得や
-cache lookupを行いません。
+`TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
+必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
+embedded化します。converter自身はnetwork取得やcache lookupを行いません。
 
 `setRuntimeVariable=startSceneIndex`の非default値、scene内variable宣言、互換runtimeで偶然受理された不正な
 arityや曖昧なcolon区切りは、意味を推測せずerrorにします。

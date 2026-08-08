@@ -284,3 +284,47 @@ scenes:
     (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
 });
+
+test('stores an unpinned remote pose URL without inventing verification metadata', async () => {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  RemotePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/pose/
+scenes:
+  opening:
+    poseModel: RemotePose
+    actions: []
+`,
+    {sourceId: 'bare-remote-pose-bundle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const snapshot = {
+    manifest: {
+      formatVersion: 1,
+      assets: [
+        {
+          id: 'RemotePose',
+          kind: 'poseModel',
+          loading: 'lazy',
+          source: {type: 'remote', url: 'https://cdn.example.com/pose/'},
+        },
+      ],
+    },
+    getFile() {
+      assert.fail('remote assets must not request local bytes');
+    },
+  };
+  const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
+  assert.deepEqual(descriptor.files, []);
+  assert.deepEqual(descriptor.manifest.assets[0].source, {
+    type: 'remote',
+    url: 'https://cdn.example.com/pose/',
+  });
+  await validateDsl4EmbeddedAssetBundle(parsed.storyDocument, descriptor, options);
+});
