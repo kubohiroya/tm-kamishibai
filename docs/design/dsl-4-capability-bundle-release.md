@@ -26,7 +26,7 @@ Structured Dataはこのrepositoryのfirst-party sourceとして組み込みま�
 
 | capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界 |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | -------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.7.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`      |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`      |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`      |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`      |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.3.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`      |
@@ -39,18 +39,17 @@ package versionはrangeを使わず、lockfileのnpm integrityと一致させま
 公開面であり、4.0 Standardへ登録しません。packageの`./composition`は自動registerせず、Standard Runtimeの
 composition rootだけが`Scratch.extensions.register()`を一度呼びます。
 
-Asset Manager 0.7.0にはstructured project locatorを追加する一時`pnpm` patchを適用します。patchのpathと
-hashもworkspace／lockfileで固定し、上流
-[`turbowarp-asset-manager#88`](https://github.com/kubohiroya/turbowarp-asset-manager/pull/88)を含む完全固定releaseへ
-更新した時点でpatchを削除します。rollbackはpatch適用前のadapterとlockfileへ戻すか、DSL 4 runtime flagを
-OFFにして3.2成果物を使用します。
+Asset Manager 0.8.0はstructured project locatorを正規のcomposition APIとして公開しています。
+Standard Runtimeはnpmの完全固定releaseを直接利用し、`patchedDependencies`やrepository-local patchを
+介しません。rollbackは0.7.0のexact pin、直前の`patchedDependencies`／patch、lockfileを復元するか、
+DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 
 ## 3. API、integrity、license、SBOM
 
 source compositionの互換契約は次の4点です。
 
 1. `package.json`の完全固定version
-2. `pnpm-lock.yaml`の同一version、SHA-512 integrity、適用中patchのhash
+2. `pnpm-lock.yaml`の同一versionとSHA-512 integrity
 3. packageが公開する`./composition` export
 4. Kamishibai adapterを通す統合test
 

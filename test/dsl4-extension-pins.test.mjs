@@ -9,7 +9,7 @@ import {parse} from 'yaml';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-async-input': '0.3.0',
-  '@kubohiroya/turbowarp-asset-manager': '0.7.0',
+  '@kubohiroya/turbowarp-asset-manager': '0.8.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.3.0',
   '@kubohiroya/turbowarp-svg-text': '0.3.0',
   '@kubohiroya/turbowarp-tmpose': '1.6.1',
@@ -45,8 +45,6 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
     );
     assert.equal(ageExclusions.has(`${name}@${version}`), true, `${name} exact age exception`);
   }
-  assert.deepEqual(workspace.patchedDependencies, {
-    '@kubohiroya/turbowarp-asset-manager@0.7.0':
-      'patches/@kubohiroya__turbowarp-asset-manager@0.7.0.patch',
-  });
+  assert.deepEqual(workspace.patchedDependencies ?? {}, {});
+  assert.deepEqual(lockfile.patchedDependencies ?? {}, {});
 });

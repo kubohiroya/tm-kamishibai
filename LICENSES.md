@@ -23,7 +23,7 @@ license表示とsource repositoryを正本とします。
 
 | package                                  | version／revision | license      | source repository                         |
 | ---------------------------------------- | ----------------- | ------------ | ----------------------------------------- |
-| @kubohiroya/turbowarp-asset-manager      | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`      |
+| @kubohiroya/turbowarp-asset-manager      | 0.8.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`      |
 | @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`        |
 | @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression` |
 | @kubohiroya/turbowarp-svg-text           | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`           |

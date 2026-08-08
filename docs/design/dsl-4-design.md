@@ -1651,7 +1651,7 @@ extractorで展開し、派生fileをarchive integrityとextractor format versio
 別経路で渡された展開fileを同じmodelとして登録しません。
 
 Issue #327の製品接続では、`assetBundleFormat: binary-entry`を明示したruntime startupだけが
-deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.7.0のtransactional binary storeへ
+deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.8.0のtransactional binary storeへ
 順番にingestし、最後の`IDBTransaction.oncomplete`まで検証済みsource byte参照を保持します。全commit後にproviderと
 SB3 readerへの到達可能参照を破棄し、scene materializationとhistory再訪はstoreの`getBinaryBundle()`から供給します。
 keyはstable story ID、asset ID、descriptor全体のintegrityへbindingし、story別database名には

@@ -18,7 +18,7 @@
     {
       "id": "asset-manager",
       "package": "@kubohiroya/turbowarp-asset-manager",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
       "compositionExport": "./composition",
