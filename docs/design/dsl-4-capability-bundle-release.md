@@ -26,7 +26,7 @@ Structured Dataはこのrepositoryのfirst-party sourceとして組み込みま�
 
 | capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界 |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | -------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.7.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`      |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`      |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`      |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`      |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.3.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`      |
@@ -38,6 +38,11 @@ Structured Dataはこのrepositoryのfirst-party sourceとして組み込みま�
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Standalone成果物はcapability単独利用の
 公開面であり、4.0 Standardへ登録しません。packageの`./composition`は自動registerせず、Standard Runtimeの
 composition rootだけが`Scratch.extensions.register()`を一度呼びます。
+
+Asset Manager 0.8.0はstructured project locatorを正規のcomposition APIとして公開しています。
+Standard Runtimeはnpmの完全固定releaseを直接利用し、`patchedDependencies`やrepository-local patchを
+介しません。rollbackは0.7.0のexact pin、直前の`patchedDependencies`／patch、lockfileを復元するか、
+DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 
 ## 3. API、integrity、license、SBOM
 

@@ -9,7 +9,7 @@ import {parse} from 'yaml';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-async-input': '0.3.0',
-  '@kubohiroya/turbowarp-asset-manager': '0.7.0',
+  '@kubohiroya/turbowarp-asset-manager': '0.8.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.3.0',
   '@kubohiroya/turbowarp-svg-text': '0.3.0',
   '@kubohiroya/turbowarp-tmpose': '1.6.1',
@@ -29,7 +29,12 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
 
   for (const [name, version] of Object.entries(expectedVersions)) {
     assert.equal(packageJson.dependencies[name], version, `${name} package pin`);
-    assert.deepEqual(lockfile.importers['.'].dependencies[name], {specifier: version, version});
+    const patchHash = lockfile.patchedDependencies?.[`${name}@${version}`];
+    const lockedVersion = patchHash ? `${version}(patch_hash=${patchHash})` : version;
+    assert.deepEqual(lockfile.importers['.'].dependencies[name], {
+      specifier: version,
+      version: lockedVersion,
+    });
     const packageEntry = lockfile.packages[`${name}@${version}`];
     assert.equal(typeof packageEntry?.resolution?.integrity, 'string', `${name} lock integrity`);
     assert.match(packageEntry.resolution.integrity, /^sha512-/u);
@@ -40,4 +45,6 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
     );
     assert.equal(ageExclusions.has(`${name}@${version}`), true, `${name} exact age exception`);
   }
+  assert.deepEqual(workspace.patchedDependencies ?? {}, {});
+  assert.deepEqual(lockfile.patchedDependencies ?? {}, {});
 });

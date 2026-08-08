@@ -1,4 +1,5 @@
 import {deepFreeze} from './story-document.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const historyCommands = new Set([
   'history.previousAction',
@@ -97,10 +98,6 @@ function actionIndexFromPath(actionPath) {
  * @param {string} value
  * @returns {string}
  */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
 /**
  * @param {Readonly<HistoryState>} state
  * @param {number} visitId
@@ -256,7 +253,7 @@ export function createDsl4HistoryReducer({maxActionEntries, maxSceneVisits}) {
         typeof event.sceneId !== 'string' ||
         !event.sceneId ||
         typeof event.storyPath !== 'string' ||
-        event.storyPath !== `/scenes/${storyPathSegment(event.sceneId)}`
+        event.storyPath !== `/scenes/${encodeDsl4StoryPathSegment(event.sceneId)}`
       ) {
         return failure(state, 'K4-HISTORY-EVENT-001', 'Scene entry requires sceneId and storyPath');
       }
@@ -292,7 +289,9 @@ export function createDsl4HistoryReducer({maxActionEntries, maxSceneVisits}) {
       state.currentVisitId === null ||
       typeof event.sceneId !== 'string' ||
       typeof event.actionPath !== 'string' ||
-      !event.actionPath.startsWith(`/scenes/${storyPathSegment(String(event.sceneId))}/actions/`) ||
+      !event.actionPath.startsWith(
+        `/scenes/${encodeDsl4StoryPathSegment(String(event.sceneId))}/actions/`,
+      ) ||
       actionIndexFromPath(event.actionPath) === null
     ) {
       return failure(

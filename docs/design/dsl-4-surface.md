@@ -55,8 +55,14 @@ Copyright © 2026 Hiroya Kubo.
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
 
-識別子にはUnicodeの文字、数字、`_`、`-`を使用できます。先頭は文字または`_`とし、
-`.`はactor actionの区切りとして予約します。すべての識別子はUnicode NFCでなければなりません。
+actor、style、variable、branch、action、parameterなど、DSL構文上の識別子にはUnicodeの文字、数字、
+`_`、`-`を使用できます。先頭は文字または`_`とし、`.`はactor actionの区切りとして予約します。
+これらの構文識別子はUnicode NFCでなければなりません。
+
+asset IDとscene IDはScratch上の名前をそのまま保持できる、空でない文字列です。空白、`.`、`/`、
+Unicodeの正規化形式、C0制御文字、DELを含められます。YAML sourceでは必要に応じてdouble-quoted scalarの
+escapeを使います。parser、converter、runtimeは値をtrim、NFC変換、alias化しません。`__proto__`など
+object pollutionを生じるmapping keyは、文字種とは別の安全境界として引き続き拒否します。
 
 YAMLのduplicate key、anchor、alias、merge key、custom tag、複数文書を認めません。実装は
 YAMLの構文位置を保持し、schema検証に成功するまでアセット読込などの副作用を開始しません。
@@ -725,7 +731,7 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 - branchの`else`が一件だけ存在して末尾にあること
 - `stableId`が文書全体で一意であること
 - `file`が安全なローカル相対pathであること
-- 識別子がUnicode NFCであること
+- 構文識別子がUnicode NFCであり、asset／scene IDが空でないこと
 - keymapと作品内入力に衝突がないこと
 - custom actionが登録済みで、引数がRegistry parameter宣言と一致すること
 
@@ -735,22 +741,22 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 
 初期実装で固定する診断codeは次です。Source Mapによる行・列・関連位置はparser実装時に加えます。
 
-| code                     | 意味                                        |
-| ------------------------ | ------------------------------------------- |
-| `K4-YAML-*`              | YAML構文または禁止機能                      |
-| `K4-VERSION-001`         | versionが文字列`4.0`ではない                |
-| `K4-SCHEMA-001`          | 引数型、必須field、構造がschemaと一致しない |
-| `K4-SCHEMA-UNKNOWN-KEY`  | schemaにないkey                             |
-| `K4-ID-INVALID`          | 識別子の文字規則違反                        |
-| `K4-KEY-UNSUPPORTED`     | 未対応keyまたはmodifier combination         |
-| `K4-REF-001`             | 参照先が未定義                              |
-| `K4-REF-002`             | asset kindが利用箇所と一致しない            |
-| `K4-REF-003`             | costume targetがactorと一致しない           |
-| `K4-ASSET-001`           | `file`が安全なローカル相対pathではない      |
-| `K4-BRANCH-001`          | branchの末尾が`else`ではない                |
-| `K4-STABLE-ID-001`       | `stableId`が文書内で重複                    |
-| `K4-KEY-001`             | navigation keymapと作品内key inputが衝突    |
-| `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action          |
+| code                     | 意味                                           |
+| ------------------------ | ---------------------------------------------- |
+| `K4-YAML-*`              | YAML構文または禁止機能                         |
+| `K4-VERSION-001`         | versionが文字列`4.0`ではない                   |
+| `K4-SCHEMA-001`          | 引数型、必須field、構造がschemaと一致しない    |
+| `K4-SCHEMA-UNKNOWN-KEY`  | schemaにないkey                                |
+| `K4-ID-INVALID`          | 構文識別子の文字規則違反、または空のliteral ID |
+| `K4-KEY-UNSUPPORTED`     | 未対応keyまたはmodifier combination            |
+| `K4-REF-001`             | 参照先が未定義                                 |
+| `K4-REF-002`             | asset kindが利用箇所と一致しない               |
+| `K4-REF-003`             | costume targetがactorと一致しない              |
+| `K4-ASSET-001`           | `file`が安全なローカル相対pathではない         |
+| `K4-BRANCH-001`          | branchの末尾が`else`ではない                   |
+| `K4-STABLE-ID-001`       | `stableId`が文書内で重複                       |
+| `K4-KEY-001`             | navigation keymapと作品内key inputが衝突       |
+| `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action             |
 
 入力byte数、YAML node数、nesting深度、scalar長、scene数、sceneごとのaction数、asset数、診断数には
 資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。実装済み上限、必須explicit上限、benchmarkに

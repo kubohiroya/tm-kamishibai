@@ -73,7 +73,7 @@
   "author": "Hiroya Kubo",
   "license": "MPL-2.0",
   "dependencies": {
-    "@kubohiroya/turbowarp-asset-manager": "0.7.0",
+    "@kubohiroya/turbowarp-asset-manager": "0.8.0",
     "@kubohiroya/turbowarp-async-input": "0.3.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
     "@kubohiroya/turbowarp-svg-text": "0.3.0",

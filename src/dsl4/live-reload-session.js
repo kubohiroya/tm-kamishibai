@@ -1,5 +1,6 @@
 import {createDsl4ReloadPlan} from './reload-planner.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -144,7 +145,7 @@ function validateQuiesceToken(value, candidateId, currentStoryDocument) {
     token.resumeMode !== 'finished' ||
     !scene ||
     token.actionIndex !== actions.length ||
-    token.storyPath !== `/scenes/${String(scene.id).replaceAll('~', '~0').replaceAll('/', '~1')}`
+    token.storyPath !== `/scenes/${encodeDsl4StoryPathSegment(String(scene.id))}`
   ) {
     throw new TypeError('live reload QuiesceToken terminal anchor is inconsistent');
   }

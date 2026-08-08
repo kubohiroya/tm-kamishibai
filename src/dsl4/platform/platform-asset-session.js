@@ -12,6 +12,7 @@ import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
 import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
+import {encodeDsl4StoryPathSegment} from '../story-path.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -464,9 +465,7 @@ export function createDsl4PlatformAssetSession(options) {
           cacheWarnings.push(
             Object.freeze({
               assetId: payload.assetId,
-              storyPath: `/assets/${String(payload.assetId)
-                .replaceAll('~', '~0')
-                .replaceAll('/', '~1')}`,
+              storyPath: `/assets/${encodeDsl4StoryPathSegment(String(payload.assetId))}`,
               operation: warning.operation,
               code: warning.code,
             }),

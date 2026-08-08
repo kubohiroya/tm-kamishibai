@@ -630,6 +630,55 @@ test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separ
   assert.equal(result.storyDocument.scenes[0].actions[1].stableId, '開始表示');
 });
 
+test('preserves literal asset and scene IDs with whitespace, punctuation, controls, and Unicode form', () => {
+  const assetId = ' Asset.e\u0301%/~\u0001\u007f ';
+  const sceneId = ' Scene.e\u0301%/~\n\u007f ';
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  " Asset.e\\u0301%/~\\x01\\x7F ": backdrop
+scenes:
+  " Scene.e\\u0301%/~\\n\\x7F ":
+    - stage: " Asset.e\\u0301%/~\\x01\\x7F "
+    - goto: " Scene.e\\u0301%/~\\n\\x7F "
+`);
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(Object.hasOwn(result.storyDocument.assets, assetId), true);
+  assert.equal(result.storyDocument.assets[assetId].name, assetId);
+  assert.equal(result.storyDocument.scenes[0].id, sceneId);
+  assert.equal(
+    result.storyDocument.scenes[0].actions[0].id,
+    '/scenes/ Scene.é%25~1~0%0A%7F /actions/0',
+  );
+  assert.equal(
+    Object.hasOwn(result.storyDocument.sourceMap, '/assets/ Asset.é%25~1~0%01%7F '),
+    true,
+  );
+  assert.equal(
+    Object.keys(result.storyDocument.sourceMap).some((path) => /[\u0000-\u001f\u007f]/u.test(path)),
+    false,
+  );
+});
+
+test('escapes literal scene controls in schema diagnostics and StoryPaths', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+scenes:
+  "broken\\x01\\x7F scene":
+    - wait: invalid
+`);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.diagnostics.length > 0, true);
+  for (const diagnostic of result.diagnostics) {
+    assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.path), false);
+    assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.storyPath ?? ''), false);
+  }
+  assert.equal(result.diagnostics[0].path.includes('\\u0001\\u007f'), true);
+  assert.equal(result.diagnostics[0].storyPath.includes('%01%7F'), true);
+});
+
 test('verified remote delivery preserves metadata and stays independent from loading policy', async () => {
   const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
@@ -762,7 +811,6 @@ for (const name of [
   'remote-missing-integrity.kamishibai.yaml',
   'remote-invalid-integrity.kamishibai.yaml',
   'remote-invalid-metadata.kamishibai.yaml',
-  'non-nfc-id.kamishibai.yaml',
   'duplicate-id.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
   'custom-action-unknown-key.kamishibai.yaml',
@@ -777,15 +825,20 @@ for (const name of [
 
 for (const [name, code] of [
   ['version-number.kamishibai.yaml', 'K4-VERSION-001'],
-  ['invalid-id.kamishibai.yaml', 'K4-ID-INVALID'],
   ['unknown-top-level-key.kamishibai.yaml', 'K4-SCHEMA-UNKNOWN-KEY'],
   ['modifier-key.kamishibai.yaml', 'K4-KEY-UNSUPPORTED'],
-  ['non-nfc-id.kamishibai.yaml', 'K4-ID-001'],
   ['duplicate-id.kamishibai.yaml', 'K4-YAML-001'],
 ]) {
   test(`${name} reports ${code}`, async () => {
     const result = await validateFixture('invalid', name);
     assert.ok(result.diagnostics.some((error) => error.code === code));
+  });
+}
+
+for (const name of ['invalid-id.kamishibai.yaml', 'non-nfc-id.kamishibai.yaml']) {
+  test(`${name} is accepted as a literal scene ID`, async () => {
+    const result = await validateFixture('invalid', name);
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   });
 }
 

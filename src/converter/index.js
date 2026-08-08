@@ -131,12 +131,8 @@ function normalizePoseModels(input) {
     if (typeof replacement.id !== 'string' || typeof replacement.file !== 'string') {
       throw new TypeError(`poseModels[${sourceUrl}] requires string id and file fields.`);
     }
-    if (
-      replacement.id !== replacement.id.normalize('NFC') ||
-      !identifierPattern.test(replacement.id) ||
-      dangerousIdentifiers.has(replacement.id)
-    ) {
-      throw new TypeError(`poseModels[${sourceUrl}].id is not a valid DSL 4.0 identifier.`);
+    if (replacement.id.length === 0 || dangerousIdentifiers.has(replacement.id)) {
+      throw new TypeError(`poseModels[${sourceUrl}].id must be a non-empty safe string.`);
     }
     if (!isSafePoseModelFile(replacement.file)) {
       throw new TypeError(`poseModels[${sourceUrl}].file must be a safe project-relative path.`);
@@ -268,6 +264,15 @@ class Converter {
     return true;
   }
 
+  /** @param {string} id @param {string} label @param {Dsl32Command} command */
+  validateLiteralId(id, label, command) {
+    if (id.length === 0 || dangerousIdentifiers.has(id)) {
+      this.error('K4-CONVERT-ID-INVALID', `${label} must be a non-empty safe string.`, command);
+      return false;
+    }
+    return true;
+  }
+
   /** @param {Map<string, any>} collection @param {string} id @param {string} label @param {Dsl32Command} command */
   rejectDuplicate(collection, id, label, command) {
     if (!collection.has(id)) return false;
@@ -307,7 +312,7 @@ class Converter {
     }
     const id = command.value.slice(0, separator).trim();
     const address = command.value.slice(separator + 1).trim();
-    if (!this.validateIdentifier(id, 'Asset ID', command)) return;
+    if (!this.validateLiteralId(id, 'Asset ID', command)) return;
     if (this.rejectDuplicate(this.assets, id, 'Asset', command)) return;
     const asset = this.parseAssetAddress(id, address, command);
     if (asset) this.assets.set(id, asset);
@@ -374,7 +379,7 @@ class Converter {
     }
     const [actor, costume] = parts;
     if (!this.validateIdentifier(actor, 'Actor ID', command)) return;
-    if (!this.validateIdentifier(costume, 'Costume asset ID', command)) return;
+    if (!this.validateLiteralId(costume, 'Costume asset ID', command)) return;
     if (this.rejectDuplicate(this.actors, actor, 'Actor', command)) return;
     this.actors.set(actor, costume);
     this.addReference('asset', costume, command, {expectedKind: 'costume', actor});
@@ -683,7 +688,7 @@ class Converter {
   /** @param {Dsl32Command} command */
   parseScene(command) {
     const id = command.value.trim();
-    if (!this.validateIdentifier(id, 'Scene ID', command)) {
+    if (!this.validateLiteralId(id, 'Scene ID', command)) {
       this.currentScene = null;
       return;
     }
@@ -762,7 +767,7 @@ class Converter {
       this.scenePoseModels.set(this.currentScene, assetId);
       return;
     }
-    if (!this.validateIdentifier(replacement.id, 'Pose model asset ID', command)) return;
+    if (!this.validateLiteralId(replacement.id, 'Pose model asset ID', command)) return;
     if (!this.validatePoseModelFile(replacement.file, command)) return;
     if (replacement.loading !== undefined && !['eager', 'lazy'].includes(replacement.loading)) {
       this.error(

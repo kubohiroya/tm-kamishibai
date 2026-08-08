@@ -9,6 +9,7 @@ import {validateDsl4Semantics} from './semantic-validator.js';
 import {canonicalizeDsl4Source} from './source-canonicalizer.js';
 import {normalizeDsl4DiagnosticSequence} from './diagnostic-sequence-policy.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 export {canonicalizeDsl4Source} from './source-canonicalizer.js';
 
@@ -82,6 +83,17 @@ function jsonPathSegments(path) {
   return segments;
 }
 
+/** @param {readonly (string | number)[]} segments */
+function escapedJsonPath(segments) {
+  return segments.reduce(
+    (path, segment) =>
+      typeof segment === 'number'
+        ? `${path}[${segment}]`
+        : `${path}[${JSON.stringify(segment).replace(/\u007f/gu, '\\u007f')}]`,
+    '$',
+  );
+}
+
 /**
  * @param {(string | number)[]} segments
  * @returns {string | undefined}
@@ -91,8 +103,10 @@ function storyPathFromSourceSegments(segments) {
   const sceneId = segments[1];
   const actionOffset = segments[2] === 'actions' ? 3 : 2;
   const actionIndex = segments[actionOffset];
-  if (typeof actionIndex !== 'number') return `/scenes/${sceneId}`;
-  const actionPath = `/scenes/${sceneId}/actions/${actionIndex}`;
+  if (typeof actionIndex !== 'number') {
+    return `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`;
+  }
+  const actionPath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}/actions/${actionIndex}`;
   const commandOffset = actionOffset + 1;
   const argumentSegments = segments.slice(commandOffset + 1);
   if (argumentSegments.length === 0) return actionPath;
@@ -101,7 +115,11 @@ function storyPathFromSourceSegments(segments) {
     argumentSegments[0] === 'arguments' ? argumentSegments.slice(1) : argumentSegments;
   return normalizedArguments.length === 0
     ? `${actionPath}/args`
-    : `${actionPath}/args/${normalizedArguments.join('/')}`;
+    : `${actionPath}/args/${normalizedArguments
+        .map((segment) =>
+          typeof segment === 'string' ? encodeDsl4StoryPathSegment(segment) : String(segment),
+        )
+        .join('/')}`;
 }
 
 /**
@@ -145,11 +163,6 @@ function diagnostic({code, message, sourceId, path, node, lineCounter, storyPath
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** @param {string} value */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
 }
 
 /** @param {unknown} input */
@@ -312,7 +325,7 @@ function validateStoryResourceLimits(story, document, lineCounter, sourceId, lim
             : `$.scenes[${JSON.stringify(sceneId)}].actions`,
           node: document.getIn(actionsPath, true),
           lineCounter,
-          storyPath: `/scenes/${storyPathSegment(sceneId)}`,
+          storyPath: `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`,
         }),
       );
     }
@@ -391,7 +404,7 @@ function validateBranchExpressions(
           path: `$.branches[${JSON.stringify(branchId)}][${index}].if`,
           node: document.getIn(['branches', branchId, index, 'if'], true),
           lineCounter,
-          storyPath: `/branches/${storyPathSegment(branchId)}/${index}/if`,
+          storyPath: `/branches/${encodeDsl4StoryPathSegment(branchId)}/${index}/if`,
         }),
       );
     }
@@ -652,11 +665,12 @@ export function createDsl4SourceFrontend(
       if (!validateSchema(rawStory)) {
         const diagnostics = /** @type {any[]} */ (validateSchema.errors ?? []).map((error) => {
           const segments = schemaErrorSegments(error);
+          const rawPath = error.instancePath || '$';
           return diagnostic({
             code: schemaDiagnosticCode(error),
             message: error.message ?? 'Schema validation failed',
             sourceId,
-            path: error.instancePath || '$',
+            path: /[\u0000-\u001f\u007f]/u.test(rawPath) ? escapedJsonPath(segments) : rawPath,
             node: nodeAtPath(parsed.document, segments),
             lineCounter: parsed.lineCounter,
             storyPath: storyPathFromSourceSegments(segments),

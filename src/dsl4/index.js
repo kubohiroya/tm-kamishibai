@@ -191,6 +191,11 @@ export {
 } from './source-graph.js';
 export {createDsl4SourceGraphFrontend} from './source-graph-frontend.js';
 export {
+  decodeDsl4StoryPathSegment,
+  encodeDsl4StoryPathSegment,
+  isCanonicalDsl4StoryPath,
+} from './story-path.js';
+export {
   createDsl4StructuredDataComposition,
   dsl4StructuredDataDefaultLimits,
 } from './structured-data.js';

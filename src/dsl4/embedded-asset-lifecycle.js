@@ -1,3 +1,5 @@
+import {encodeDsl4StoryPathSegment} from './story-path.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,7 +21,7 @@ function assetError(assetId, code, message, cause) {
   const error = new Error(message, cause === undefined ? undefined : {cause});
   Object.defineProperties(error, {
     code: {value: code},
-    storyPath: {value: `/assets/${assetId.replaceAll('~', '~0').replaceAll('/', '~1')}`},
+    storyPath: {value: `/assets/${encodeDsl4StoryPathSegment(assetId)}`},
   });
   return error;
 }

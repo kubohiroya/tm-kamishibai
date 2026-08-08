@@ -1,4 +1,5 @@
 import {dsl4ActorCoreActionNames} from './action-registry.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
@@ -101,10 +102,6 @@ export function sourceOriginForStoryPath(storyDocument, storyPath = '/') {
  * @param {string} value
  * @returns {string}
  */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
 /**
  * @param {unknown} asset
  * @param {string} id
@@ -241,7 +238,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
 function mapBranchSources(sourceMap, branches, document, lineCounter) {
   for (const [branchId, value] of Object.entries(branches)) {
     if (!Array.isArray(value)) continue;
-    const branchPath = `/branches/${storyPathSegment(branchId)}`;
+    const branchPath = `/branches/${encodeDsl4StoryPathSegment(branchId)}`;
     sourceMap[branchPath] = sourceRangeForNode(
       document.getIn(['branches', branchId], true),
       lineCounter,
@@ -278,7 +275,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   const command = separator === -1 ? sourceCommand : sourceCommand.slice(separator + 1);
   const sourceArguments = sourceAction[sourceCommand];
   const customAction = separator !== -1 && !actorCoreActionNames.has(command);
-  const actionPath = `/scenes/${storyPathSegment(sceneId)}/actions/${actionIndex}`;
+  const actionPath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}/actions/${actionIndex}`;
   const actionRange = sourceRangeForNode(actionNode, lineCounter);
   const argumentNode = actionNode?.get?.(sourceCommand, true);
   const argumentRecord =
@@ -334,7 +331,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
         field === 'routes' && !Object.hasOwn(argumentRecord, 'routes') ? undefined : field;
       if (sourceField) fieldNode = argumentNode.get(sourceField, true);
     }
-    sourceMap[`${actionPath}/args/${storyPathSegment(field)}`] = sourceRangeForNode(
+    sourceMap[`${actionPath}/args/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
       fieldNode,
       lineCounter,
     );
@@ -374,7 +371,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
-      sourceMap[`/assets/${storyPathSegment(id)}`] = sourceRangeForNode(
+      sourceMap[`/assets/${encodeDsl4StoryPathSegment(id)}`] = sourceRangeForNode(
         document.getIn(['assets', id], true),
         lineCounter,
       );
@@ -390,11 +387,11 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   if (speechStylesNode) {
     sourceMap['/speechStyles'] = sourceRangeForNode(speechStylesNode, lineCounter);
     for (const [styleId, style] of Object.entries(sourceSpeechStyles)) {
-      const stylePath = `/speechStyles/${storyPathSegment(styleId)}`;
+      const stylePath = `/speechStyles/${encodeDsl4StoryPathSegment(styleId)}`;
       const styleNode = document.getIn(['speechStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
       for (const field of Object.keys(style)) {
-        sourceMap[`${stylePath}/${storyPathSegment(field)}`] = sourceRangeForNode(
+        sourceMap[`${stylePath}/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
           document.getIn(['speechStyles', styleId, field], true),
           lineCounter,
         );
@@ -410,7 +407,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     const sourceActions = /** @type {Record<string, unknown>[]} */ (
       isShortScene ? sourceScene : /** @type {Record<string, unknown>} */ (sourceScene).actions
     );
-    const scenePath = `/scenes/${storyPathSegment(sceneId)}`;
+    const scenePath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`;
     sourceMap[scenePath] = sourceRangeForNode(sceneNode, lineCounter);
     const actions = sourceActions.map((action, actionIndex) => {
       const actionSourcePath = isShortScene
