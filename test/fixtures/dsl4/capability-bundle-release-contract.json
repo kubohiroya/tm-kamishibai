@@ -38,6 +38,17 @@
       "role": "scene transition and skip input"
     },
     {
+      "id": "bubble",
+      "package": "@kubohiroya/turbowarp-bubble",
+      "version": "0.1.1",
+      "provider": "npm",
+      "repository": "https://github.com/kubohiroya/turbowarp-bubble",
+      "compositionExport": "./turbowarp-adapter",
+      "standaloneExtensionId": "kubohiroyabubble",
+      "license": "MPL-2.0",
+      "role": "say and think surface, portrait, and advance indicator lifecycle"
+    },
+    {
       "id": "runtime-expression",
       "package": "@kubohiroya/turbowarp-runtime-expression",
       "version": "0.3.0",
@@ -57,7 +68,7 @@
       "compositionExport": "./composition",
       "standaloneExtensionId": "kubohiroyasvgtext",
       "license": "MPL-2.0",
-      "role": "text actor and speech bubble rendering"
+      "role": "text actor rendering and Bubble internal text layer"
     },
     {
       "id": "tmpose",
@@ -96,6 +107,7 @@
     "@kubohiroya/turbowarp-async-input/composition": [
       "src/dsl4/platform/platform-asset-session.js"
     ],
+    "@kubohiroya/turbowarp-bubble/turbowarp-adapter": ["src/dsl4/platform/bubble-platform.js"],
     "@kubohiroya/turbowarp-runtime-expression/composition": [
       "src/dsl4/platform/turbowarp-runtime-host.js"
     ],
@@ -127,10 +139,7 @@
     "remoteExtensionCode": "forbidden",
     "embeddedAssetBytes": "self-contained",
     "remoteAssetBytes": "explicit-opt-in",
-    "remoteAssetRequirements": [
-      "https",
-      "bare-pose-directory-or-complete-verification-metadata"
-    ]
+    "remoteAssetRequirements": ["https", "bare-pose-directory-or-complete-verification-metadata"]
   },
   "previewPolicy": {
     "remotePreview": "forbidden",

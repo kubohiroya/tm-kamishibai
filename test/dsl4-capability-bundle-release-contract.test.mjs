@@ -49,10 +49,14 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     const lockedVersion = patchHash
       ? `${capability.version}(patch_hash=${patchHash})`
       : capability.version;
-    assert.deepEqual(lockfile.importers['.'].dependencies[capability.package], {
-      specifier: capability.version,
-      version: lockedVersion,
-    });
+    const importerDependency = lockfile.importers['.'].dependencies[capability.package];
+    assert.equal(importerDependency.specifier, capability.version);
+    assert.equal(
+      importerDependency.version === lockedVersion ||
+        importerDependency.version.startsWith(`${lockedVersion}(`),
+      true,
+      `${capability.package} lock version`,
+    );
     assert.match(
       lockfile.packages[`${capability.package}@${capability.version}`].resolution.integrity,
       /^sha512-/u,

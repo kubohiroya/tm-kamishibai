@@ -15,7 +15,7 @@ Copyright © 2026 Hiroya Kubo.
 
 4.0.0-devのStandard成果物は、`kubohiroyakamishibairuntime4`を一度だけ登録する
 **source-composed Standard Runtime**です。旧案の生成Composite ID `kubohiroyakamishibai4`は4.0の
-Standard成果物へ使用しません。5つの外部capabilityは完全固定npm packageの`./composition`から組み込み、
+Standard成果物へ使用しません。6つの外部capabilityは完全固定npm packageの公開composition subpathから組み込み、
 Structured Dataはこのrepositoryのfirst-party sourceとして組み込みます。
 
 `extensionBundles`は3.2の個別拡張を生成Compositeへ変換し、recovery capsuleからunbundleする境界として
@@ -24,16 +24,17 @@ Structured Dataはこのrepositoryのfirst-party sourceとして組み込みま�
 
 ## 2. capability inventory
 
-| capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界 |
-| ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | -------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`      |
-| Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`      |
-| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`      |
-| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.3.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`      |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.6.1`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`      |
-| Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition |
-| Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外     |
-| Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外     |
+| capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界  |
+| ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | --------------------- |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`       |
+| Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`       |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.1.1`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./turbowarp-adapter` |
+| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`       |
+| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.3.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`       |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.6.1`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`       |
+| Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition  |
+| Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外      |
+| Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外      |
 
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Standalone成果物はcapability単独利用の
 公開面であり、4.0 Standardへ登録しません。packageの`./composition`は自動registerせず、Standard Runtimeの

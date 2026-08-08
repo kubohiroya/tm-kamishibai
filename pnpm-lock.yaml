@@ -20,8 +20,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0
       '@kubohiroya/turbowarp-bubble':
-        specifier: link:/Users/hiroya/Dev/turbowarp-bubble-worktrees/export-turbowarp-adapter
-        version: link:../../turbowarp-bubble-worktrees/export-turbowarp-adapter
+        specifier: 0.1.1
+        version: 0.1.1(@kubohiroya/turbowarp-asset-manager@0.8.0)(@kubohiroya/turbowarp-async-input@0.3.0)(@kubohiroya/turbowarp-runtime-expression@0.3.0)(@kubohiroya/turbowarp-svg-text@0.3.0)
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.3.0
         version: 0.3.0
@@ -101,6 +101,14 @@ packages:
   '@babel/runtime@7.21.0':
     resolution: {integrity: sha512-xwII0//EObnq89Ji5AKYQaRYiW/nZ3llSv29d49IuxPhKbtJoLP+9QUUZ4nVragQVtaVGeZrpB+ZtG/Pdy/POw==}
     engines: {node: '>=6.9.0'}
+
+  '@cto.af/linebreak@4.0.3':
+    resolution: {integrity: sha512-GiyepYtGQMo4LDynuhyFr0/hBGv0SFNVKnPjHuhFMnkseCBCIMecaCkKL8V3cu9mRas1djpSWznxigw/irV5Lw==}
+    engines: {node: '>=20'}
+
+  '@cto.af/unicode-trie-runtime@3.2.9':
+    resolution: {integrity: sha512-H4FHtvIef/8NlU+NsQolcL9SKu+fYIPMZI++h6rQcM1IN7C/AwiCs9L8WRff+O4hDMamksAEuwBjet2S9uPt4w==}
+    engines: {node: '>=20'}
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -319,6 +327,14 @@ packages:
 
   '@kubohiroya/turbowarp-async-input@0.3.0':
     resolution: {integrity: sha512-GbQ8lmZDS388TvFGa8C3EMKzdfUuq/vrzlfRD8jNtbWpI9/Rv5KZZNzvxr67t6Y++0obABFjuxpxxrTN1kqqHg==}
+
+  '@kubohiroya/turbowarp-bubble@0.1.1':
+    resolution: {integrity: sha512-QbVBgfgk2JyjlNM4iLvcA1WehgScsLJqujieXNe03zbf0Xju9cLoL18/kXzDxPZQG+tbtzAwaqxFT+w/InXmYA==}
+    peerDependencies:
+      '@kubohiroya/turbowarp-asset-manager': '>=0.7.0 <1'
+      '@kubohiroya/turbowarp-async-input': '>=0.3.0 <1'
+      '@kubohiroya/turbowarp-runtime-expression': '>=0.3.0 <1'
+      '@kubohiroya/turbowarp-svg-text': '>=0.3.0 <1'
 
   '@kubohiroya/turbowarp-runtime-expression@0.3.0':
     resolution: {integrity: sha512-6GCzLqwKxQW0h65tuszZxVzRueNrizktQeL6zw2e+QpPeE3Xjy2ux0z/UGjUvqz1l4V3YChiIcMqP1z3FxDg6Q==}
@@ -2464,6 +2480,14 @@ snapshots:
     dependencies:
       regenerator-runtime: 0.13.11
 
+  '@cto.af/linebreak@4.0.3':
+    dependencies:
+      '@cto.af/unicode-trie-runtime': 3.2.9
+
+  '@cto.af/unicode-trie-runtime@3.2.9':
+    dependencies:
+      fflate: 0.8.3
+
   '@esbuild/aix-ppc64@0.28.1':
     optional: true
 
@@ -2595,6 +2619,14 @@ snapshots:
   '@kubohiroya/turbowarp-asset-manager@0.8.0': {}
 
   '@kubohiroya/turbowarp-async-input@0.3.0': {}
+
+  '@kubohiroya/turbowarp-bubble@0.1.1(@kubohiroya/turbowarp-asset-manager@0.8.0)(@kubohiroya/turbowarp-async-input@0.3.0)(@kubohiroya/turbowarp-runtime-expression@0.3.0)(@kubohiroya/turbowarp-svg-text@0.3.0)':
+    dependencies:
+      '@cto.af/linebreak': 4.0.3
+      '@kubohiroya/turbowarp-asset-manager': 0.8.0
+      '@kubohiroya/turbowarp-async-input': 0.3.0
+      '@kubohiroya/turbowarp-runtime-expression': 0.3.0
+      '@kubohiroya/turbowarp-svg-text': 0.3.0
 
   '@kubohiroya/turbowarp-runtime-expression@0.3.0': {}
 
