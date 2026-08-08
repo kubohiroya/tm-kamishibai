@@ -39,12 +39,18 @@ package versionはrangeを使わず、lockfileのnpm integrityと一致させま
 公開面であり、4.0 Standardへ登録しません。packageの`./composition`は自動registerせず、Standard Runtimeの
 composition rootだけが`Scratch.extensions.register()`を一度呼びます。
 
+Asset Manager 0.7.0にはstructured project locatorを追加する一時`pnpm` patchを適用します。patchのpathと
+hashもworkspace／lockfileで固定し、上流
+[`turbowarp-asset-manager#88`](https://github.com/kubohiroya/turbowarp-asset-manager/pull/88)を含む完全固定releaseへ
+更新した時点でpatchを削除します。rollbackはpatch適用前のadapterとlockfileへ戻すか、DSL 4 runtime flagを
+OFFにして3.2成果物を使用します。
+
 ## 3. API、integrity、license、SBOM
 
 source compositionの互換契約は次の4点です。
 
 1. `package.json`の完全固定version
-2. `pnpm-lock.yaml`の同一versionとSHA-512 integrity
+2. `pnpm-lock.yaml`の同一version、SHA-512 integrity、適用中patchのhash
 3. packageが公開する`./composition` export
 4. Kamishibai adapterを通す統合test
 

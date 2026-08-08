@@ -408,7 +408,7 @@ function platformFixture(log) {
       log.push(['media.register', input.name]);
       return {
         name: input.name,
-        mimeType: input.resourceId.startsWith('sound:') ? 'audio/wav' : 'image/svg+xml',
+        mimeType: input.locator.kind === 'sound' ? 'audio/wav' : 'image/svg+xml',
       };
     },
     async registerEmbeddedAsset(input) {

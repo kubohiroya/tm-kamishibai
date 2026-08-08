@@ -9,13 +9,16 @@ overrides:
   scratch-vm>uuid: 11.1.1
   scratch-vm>worker-loader: '-'
 
+patchedDependencies:
+  '@kubohiroya/turbowarp-asset-manager@0.7.0': 750021b4e7c06760c4ff5d0c0743b165c8bff0a912c1812b209291e50f8a4214
+
 importers:
 
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
         specifier: 0.7.0
-        version: 0.7.0
+        version: 0.7.0(patch_hash=750021b4e7c06760c4ff5d0c0743b165c8bff0a912c1812b209291e50f8a4214)
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.3.0
         version: 0.3.0
@@ -2589,7 +2592,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@kubohiroya/turbowarp-asset-manager@0.7.0': {}
+  '@kubohiroya/turbowarp-asset-manager@0.7.0(patch_hash=750021b4e7c06760c4ff5d0c0743b165c8bff0a912c1812b209291e50f8a4214)': {}
 
   '@kubohiroya/turbowarp-async-input@0.3.0': {}
 

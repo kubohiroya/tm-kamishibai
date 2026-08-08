@@ -88,8 +88,9 @@
         "size": ["integrity", "contentType"]
       }
     },
-    "assetId": {"$ref": "#/$defs/id"},
-    "sceneId": {"$ref": "#/$defs/id"},
+    "literalId": {"type": "string", "minLength": 1},
+    "assetId": {"$ref": "#/$defs/literalId"},
+    "sceneId": {"$ref": "#/$defs/literalId"},
     "actorId": {"$ref": "#/$defs/id"},
     "styleId": {"$ref": "#/$defs/id"},
     "stableId": {"$ref": "#/$defs/id"},
@@ -298,12 +299,12 @@
     },
     "assets": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/assetId"},
       "additionalProperties": {"$ref": "#/$defs/asset"}
     },
     "actors": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/actorId"},
       "additionalProperties": {"$ref": "#/$defs/assetId"}
     },
     "cover": {
@@ -1061,7 +1062,7 @@
     "scenes": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/sceneId"},
       "additionalProperties": {"$ref": "#/$defs/scene"}
     }
   }

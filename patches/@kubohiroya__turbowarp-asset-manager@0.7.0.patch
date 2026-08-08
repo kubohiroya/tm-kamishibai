@@ -1,0 +1,366 @@
+diff --git a/dist/composition.js b/dist/composition.js
+index f7a4a61e73002b91002bac3cdf724c63ea3aef54..2c36b7fe6b97181ee1a1f76241b81efbcac36025 100644
+--- a/dist/composition.js
++++ b/dist/composition.js
+@@ -261,6 +261,45 @@ blockDefinitions.unshift(
+ function normalizeName(value) {
+   return String(value ?? "").trim();
+ }
++function literalProjectName(value, label) {
++  if (typeof value !== "string" || value.length === 0) {
++    throw new Error(`${label} must be a non-empty literal string.`);
++  }
++  return value;
++}
++function parseProjectAssetLocator(value) {
++  if (!value || typeof value !== "object" || Array.isArray(value)) {
++    throw new Error("Project asset locator must be an object.");
++  }
++  const input = value;
++  const kind = input.kind;
++  const allowed = kind === "costume" ? /* @__PURE__ */ new Set(["kind", "name", "target"]) : kind === "sound" ? /* @__PURE__ */ new Set(["kind", "name", "target"]) : /* @__PURE__ */ new Set(["kind", "name"]);
++  if (Object.keys(input).some((key) => !allowed.has(key))) {
++    throw new Error("Project asset locator contains an unknown field.");
++  }
++  const name = literalProjectName(input.name, "Project asset source name");
++  if (kind === "backdrop") {
++    if (Object.hasOwn(input, "target")) {
++      throw new Error("Backdrop locator must not provide target.");
++    }
++    return Object.freeze({ kind, name });
++  }
++  if (kind === "costume") {
++    return Object.freeze({
++      kind,
++      name,
++      target: literalProjectName(input.target, "Costume target name")
++    });
++  }
++  if (kind === "sound") {
++    return Object.freeze({
++      kind,
++      name,
++      ...Object.hasOwn(input, "target") ? { target: literalProjectName(input.target, "Sound target name") } : {}
++    });
++  }
++  throw new Error("Project asset locator kind must be backdrop, costume, or sound.");
++}
+ function guessMimeType(value) {
+   const name = String(value ?? "").toLowerCase().split("?")[0]?.split("#")[0] ?? "";
+   const types = [
+@@ -531,6 +570,44 @@ function resolveSoundAddress(runtime, spriteName, soundName, assetName = soundNa
+   }
+   return { target, sound, isStage };
+ }
++function resolveLiteralSoundAddress(runtime, targetName, soundName, assetName) {
++  const isStage = targetName === void 0;
++  const target = isStage ? findStageTarget(runtime) : findProjectTargetByName(runtime, targetName);
++  if (!target) {
++    const candidates = suggestNames(
++      targetName ?? STAGE_RESOURCE_NAME,
++      runtime.targets.flatMap(
++        (candidate) => !candidate.isStage && candidate.sprite?.name ? [candidate.sprite.name] : []
++      )
++    );
++    throw new AssetManagerError("SPRITE_NOT_FOUND", "Structured sound target was not found.", {
++      operation: "registerProjectAsset",
++      assetName,
++      actorName: targetName,
++      candidates,
++      hint: suggestionHint(candidates)
++    });
++  }
++  const sound = findProjectSound(target, soundName, null);
++  if (!sound) {
++    const candidates = suggestNames(
++      soundName,
++      (target.sprite?.sounds ?? []).map((candidate) => candidate.name)
++    );
++    throw new AssetManagerError(
++      "SOURCE_ASSET_NOT_FOUND",
++      "Structured project sound was not found.",
++      {
++        operation: "registerProjectAsset",
++        assetName,
++        actorName: targetName,
++        candidates,
++        hint: suggestionHint(candidates)
++      }
++    );
++  }
++  return { target, sound, isStage, targetName: targetName ?? STAGE_RESOURCE_NAME };
++}
+ function validateProjectAssetAddress(runtime, assetName, resourceIdentifier) {
+   let fallbackType = "asset-name";
+   let fallbackLabel = normalizeName(assetName);
+@@ -677,6 +754,31 @@ class AssetManagerExtension {
+       validateProjectAssetAddress(this.runtime, args.NAME, args.RESOURCE_ID)
+     );
+   }
++  async registerProjectAssetLiteral(assetName, locatorInput) {
++    const name = requireAssetNameValue(assetName, "registerProjectAsset");
++    let locator;
++    try {
++      locator = parseProjectAssetLocator(locatorInput);
++    } catch (error) {
++      throw new AssetManagerError("RESOURCE_ID_INVALID", errorMessage(error), {
++        operation: "registerProjectAsset",
++        assetName: name,
++        hint: "Pass a structured backdrop, costume, or sound locator.",
++        cause: error
++      });
++    }
++    switch (locator.kind) {
++      case "backdrop":
++        await this.registerBackdropReference(name, locator.name);
++        return;
++      case "costume":
++        await this.registerCostumeReference(name, locator.target, locator.name);
++        return;
++      case "sound":
++        await this.registerLiteralSoundReference(name, locator.target, locator.name);
++        return;
++    }
++  }
+   async registerAsset(args) {
+     const errorVersion = ++this.assetErrorVersion;
+     this.clearAssetError();
+@@ -1122,6 +1224,20 @@ class AssetManagerExtension {
+       assetId: sound.assetId ?? null
+     }, token);
+   }
++  async registerLiteralSoundReference(name, targetName, soundName) {
++    const token = this.beginRegistration(name);
++    const resolved = resolveLiteralSoundAddress(this.runtime, targetName, soundName, name);
++    if (!this.isRegistrationCancellationCurrent(name, token)) return;
++    await this.commitPreparedAsset(name, "sound", {
++      kind: "sound",
++      name,
++      targetId: resolved.target.id,
++      targetName: resolved.targetName,
++      isStage: resolved.isStage,
++      soundName,
++      assetId: resolved.sound.assetId ?? null
++    }, token);
++  }
+   async registerTextReference(name, runtimeVariableName) {
+     const token = this.beginRegistration(name);
+     this.requireTextAssetName(name);
+@@ -4557,7 +4673,8 @@ function createAssetManagerComposition(featureFlags, options = {}) {
+     throw new TypeError("Asset Manager composition options must be an object.");
+   }
+   const extension = featureFlags ? new AssetManagerExtension(featureFlags) : new AssetManagerExtension();
+-  const ownedNames = /* @__PURE__ */ new Set();
++  const ownedNames = /* @__PURE__ */ new Map();
++  let literalNameSequence = 0;
+   let verifiedRemoteCache = null;
+   let binaryBundleStore = null;
+   function remoteCache() {
+@@ -4569,60 +4686,104 @@ function createAssetManagerComposition(featureFlags, options = {}) {
+     return binaryBundleStore;
+   }
+   function cancelledRegistration(name) {
+-    const error = new Error(`Asset registration was cancelled: ${name}`);
++    const error = new Error(`Asset registration was cancelled: ${JSON.stringify(name)}`);
+     error.name = "AbortError";
+     return error;
+   }
+-  async function trackRegistration(name, operation) {
+-    const normalizedName = normalizeName(name);
+-    const previouslyOwned = ownedNames.has(normalizedName);
+-    ownedNames.add(normalizedName);
++  function externalName(value, mode) {
++    if (mode === "trimmed") return normalizeName(value);
++    if (mode !== "literal") throw new TypeError("Asset nameMode must be trimmed or literal.");
++    if (typeof value !== "string" || value.length === 0) {
++      throw new TypeError("A literal asset name must be a non-empty string.");
++    }
++    return value;
++  }
++  function claimName(value, mode) {
++    const external = externalName(value, mode);
++    const existing = ownedNames.get(external);
++    if (existing !== void 0) {
++      return { external, internal: existing, previouslyOwned: true };
++    }
++    const internal = mode === "literal" ? `\0asset-manager-composition:${++literalNameSequence}` : external;
++    ownedNames.set(external, internal);
++    return { external, internal, previouslyOwned: false };
++  }
++  function ownedName(value) {
++    if (typeof value === "string") {
++      const exact = ownedNames.get(value);
++      if (exact !== void 0) return { external: value, internal: exact };
++    }
++    const normalized = normalizeName(value);
++    const legacy = ownedNames.get(normalized);
++    return legacy === void 0 ? null : { external: normalized, internal: legacy };
++  }
++  async function trackRegistration(claimed, operation) {
+     try {
+-      const result = await operation;
+-      if (!ownedNames.has(normalizedName) || !extension.isLoaded({ NAME: normalizedName })) {
+-        throw cancelledRegistration(normalizedName);
++      await operation;
++      if (ownedNames.get(claimed.external) !== claimed.internal || !extension.isLoaded({ NAME: claimed.internal })) {
++        throw cancelledRegistration(claimed.external);
+       }
+-      return result;
++      return registration(claimed.external, claimed.internal);
+     } catch (error) {
+-      if (!previouslyOwned && !extension.isLoaded({ NAME: normalizedName })) {
+-        ownedNames.delete(normalizedName);
++      if (!claimed.previouslyOwned && !extension.isLoaded({ NAME: claimed.internal })) {
++        ownedNames.delete(claimed.external);
+       }
+       throw error;
+     }
+   }
+-  function registration(name) {
+-    const normalizedName = normalizeName(name);
++  function registration(external, internal) {
+     return Object.freeze({
+-      name: normalizedName,
+-      mimeType: extension.getAssetMimeType({ NAME: normalizedName })
++      name: external,
++      mimeType: extension.getAssetMimeType({ NAME: internal })
+     });
+   }
+   function releaseAsset(name) {
+-    const normalizedName = normalizeName(name);
+-    if (!ownedNames.delete(normalizedName)) return;
++    const owned = ownedName(name);
++    if (!owned) return;
++    ownedNames.delete(owned.external);
+     let stopError;
+-    if (extension.getAssetMimeType({ NAME: normalizedName }).startsWith("audio/")) {
++    if (extension.getAssetMimeType({ NAME: owned.internal }).startsWith("audio/")) {
+       try {
+-        extension.stopSound({ NAME: normalizedName });
++        extension.stopSound({ NAME: owned.internal });
+       } catch (error) {
+         stopError = error;
+       }
+     }
+-    extension.deleteMemoryAsset({ NAME: normalizedName });
++    extension.deleteMemoryAsset({ NAME: owned.internal });
+     if (stopError) throw stopError;
+   }
+   const composition = {
+     async registerProjectAsset(input) {
+-      const operation = extension.registerAsset({ NAME: input.name, RESOURCE_ID: input.resourceId }).then(() => registration(input.name));
+-      return trackRegistration(input.name, operation);
++      if (!input || typeof input !== "object" || Array.isArray(input)) {
++        throw new TypeError("Project asset registration input must be an object.");
++      }
++      const hasLocator = Object.hasOwn(input, "locator");
++      if (hasLocator === Object.hasOwn(input, "resourceId")) {
++        throw new TypeError("Provide exactly one project asset locator or resourceId.");
++      }
++      const claimed = claimName(input.name, input.nameMode ?? (hasLocator ? "literal" : "trimmed"));
++      const operation = hasLocator ? extension.registerProjectAssetLiteral(claimed.internal, input.locator) : extension.registerAsset({ NAME: claimed.internal, RESOURCE_ID: input.resourceId });
++      return trackRegistration(claimed, operation);
+     },
+     async registerEmbeddedAsset(input) {
+-      return trackRegistration(input.name, extension.registerEmbeddedAsset(input));
++      if (!input || typeof input !== "object" || Array.isArray(input)) {
++        throw new TypeError("Embedded asset registration input must be an object.");
++      }
++      const claimed = claimName(input.name, input.nameMode ?? "trimmed");
++      return trackRegistration(
++        claimed,
++        extension.registerEmbeddedAsset({
++          name: claimed.internal,
++          bytes: input.bytes,
++          mimeType: input.mimeType,
++          ...input.sourceName === void 0 ? {} : { sourceName: input.sourceName }
++        })
++      );
+     },
+     releaseAsset,
+     releaseAll() {
+       const errors = [];
+-      for (const name of [...ownedNames].reverse()) {
++      for (const name of [...ownedNames.keys()].reverse()) {
+         try {
+           releaseAsset(name);
+         } catch (error) {
+@@ -4632,25 +4793,27 @@ function createAssetManagerComposition(featureFlags, options = {}) {
+       if (errors.length > 0) throw new AggregateError(errors, "Failed to release assets");
+     },
+     isRegistered(name) {
+-      return ownedNames.has(normalizeName(name)) && extension.isLoaded({ NAME: name });
++      const owned = ownedName(name);
++      return owned !== null && extension.isLoaded({ NAME: owned.internal });
+     },
+     getMimeType(name) {
+-      return ownedNames.has(normalizeName(name)) ? extension.getAssetMimeType({ NAME: name }) : "";
++      const owned = ownedName(name);
++      return owned ? extension.getAssetMimeType({ NAME: owned.internal }) : "";
+     },
+     applyToStage(name) {
+-      return extension.setStageSkin({ NAME: name });
++      return extension.setStageSkin({ NAME: ownedName(name)?.internal ?? name });
+     },
+     applyToTarget(name, target) {
+       return extension.setThisSpriteSkin(
+-        { NAME: name },
++        { NAME: ownedName(name)?.internal ?? name },
+         { target, runtime: Scratch.vm.runtime }
+       );
+     },
+     playSound(name, options2 = {}) {
+-      return options2.untilDone ? extension.playSoundUntilDone({ NAME: name }) : extension.playSound({ NAME: name });
++      return options2.untilDone ? extension.playSoundUntilDone({ NAME: ownedName(name)?.internal ?? name }) : extension.playSound({ NAME: ownedName(name)?.internal ?? name });
+     },
+     stopSound(name) {
+-      extension.stopSound({ NAME: name });
++      extension.stopSound({ NAME: ownedName(name)?.internal ?? name });
+     },
+     stopAllSounds() {
+       extension.stopAllSounds();
+diff --git a/dist/types/composition.d.ts b/dist/types/composition.d.ts
+index 61d21c98aeebb055847abc00e68eb2deb3ced2f3..63666757e9c09f4286b71e81321bc2f98b511454 100644
+--- a/dist/types/composition.d.ts
++++ b/dist/types/composition.d.ts
+@@ -5,6 +5,7 @@ export { createBinaryBundleStore, type BinaryBundleFileInput, type BinaryBundleF
+ export { createVerifiedRemoteBinaryCache, createVerifiedRemoteCacheDatabaseName, type NormalizedVerifiedRemoteBinaryInput, type VerifiedRemoteBinaryCache, type VerifiedRemoteBinaryCacheOptions, type VerifiedRemoteBinaryInput, type VerifiedRemoteBinaryLoadResult, type VerifiedRemoteBinaryResolveOptions, type VerifiedRemoteBinaryResult, type VerifiedRemoteCacheWarning, type VerifiedRemoteCacheIdentity, type VerifiedRemoteCacheIdentityInput, type VerifiedRemoteCachePruneResult, type VerifiedRemoteCacheStats, type VerifiedRemoteStoryCacheDeleteResult, type VerifiedRemoteStoryCacheInfo, type VerifiedRemoteStoryCachePruneResult } from './verified-remote-cache.js';
+ export interface EmbeddedAssetBytesInput {
+     name: unknown;
++    nameMode?: AssetNameMode;
+     bytes: ArrayBuffer | Uint8Array;
+     mimeType: unknown;
+     sourceName?: unknown;
+@@ -13,10 +14,30 @@ export interface EmbeddedAssetRegistration {
+     readonly name: string;
+     readonly mimeType: string;
+ }
+-export interface ProjectAssetRegistrationInput {
++export type AssetNameMode = 'trimmed' | 'literal';
++export type ProjectAssetLocator = Readonly<{
++    kind: 'backdrop';
++    name: string;
++}> | Readonly<{
++    kind: 'costume';
++    target: string;
++    name: string;
++}> | Readonly<{
++    kind: 'sound';
++    name: string;
++    target?: string;
++}>;
++export type ProjectAssetRegistrationInput = Readonly<{
+     name: unknown;
++    nameMode?: AssetNameMode;
+     resourceId: unknown;
+-}
++    locator?: never;
++}> | Readonly<{
++    name: unknown;
++    nameMode?: AssetNameMode;
++    locator: ProjectAssetLocator;
++    resourceId?: never;
++}>;
+ export interface AssetManagerCompositionTarget {
+     readonly id: string;
+     readonly isStage: boolean;

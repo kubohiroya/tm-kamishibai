@@ -4,16 +4,26 @@ import {
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
 
-const identifierSections = [
-  'assets',
-  'actors',
-  'textStyles',
-  'speechStyles',
-  'variables',
-  'branches',
-  'scenes',
-];
+const identifierSections = ['actors', 'textStyles', 'speechStyles', 'variables', 'branches'];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
+
+/** @param {string} value */
+function escapedJsonString(value) {
+  return JSON.stringify(value).replace(
+    /[\u0000-\u001f\u007f]/gu,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/** @param {string} base @param {string} property */
+function propertyPath(base, property) {
+  return `${base}[${escapedJsonString(property)}]`;
+}
+
+/** @param {unknown} value */
+function diagnosticValue(value) {
+  return escapedJsonString(String(value));
+}
 
 /**
  * @typedef {object} SemanticIssue
@@ -100,14 +110,18 @@ function sceneActions(scene) {
 function addReferenceIssue(issues, collection, id, expectedKind, path) {
   if (typeof id !== 'string') return;
   if (!Object.hasOwn(collection, id)) {
-    issues.push({code: 'K4-REF-001', path, message: `Unknown reference: ${id}`});
+    issues.push({
+      code: 'K4-REF-001',
+      path,
+      message: `Unknown reference: ${diagnosticValue(id)}`,
+    });
     return;
   }
   if (expectedKind && assetKind(collection[id]).kind !== expectedKind) {
     issues.push({
       code: 'K4-REF-002',
       path,
-      message: `Reference ${id} must have asset kind ${expectedKind}`,
+      message: `Reference ${diagnosticValue(id)} must have asset kind ${expectedKind}`,
     });
   }
 }
@@ -160,7 +174,7 @@ export function validateDsl4Semantics(
       if (!isCanonicalRemoteHttpsUrl(source.url)) {
         issues.push({
           code: 'K4-ASSET-REMOTE-URL-001',
-          path: `$.assets.${id}.source.url`,
+          path: `${propertyPath('$.assets', id)}.source.url`,
           message: 'Remote asset URL must be an absolute HTTPS URL without credentials or fragment',
         });
       }
@@ -170,7 +184,7 @@ export function validateDsl4Semantics(
       ) {
         issues.push({
           code: 'K4-ASSET-IMAGE-MIME-001',
-          path: `$.assets.${id}.source.contentType`,
+          path: `${propertyPath('$.assets', id)}.source.contentType`,
           message: 'Target-independent image assets require an image Content-Type',
         });
       }
@@ -183,7 +197,7 @@ export function validateDsl4Semantics(
     ) {
       issues.push({
         code: 'K4-ASSET-001',
-        path: `$.assets.${id}.file`,
+        path: `${propertyPath('$.assets', id)}.file`,
         message: 'Asset file must be a local relative path without dot segments',
       });
     }
@@ -198,7 +212,7 @@ export function validateDsl4Semantics(
       issues.push({
         code: 'K4-REF-003',
         path: `$.actors.${actor}`,
-        message: `Initial costume ${initialCostume} must target actor ${actor}`,
+        message: `Initial costume ${diagnosticValue(initialCostume)} must target actor ${diagnosticValue(actor)}`,
       });
     }
   }
@@ -263,7 +277,7 @@ export function validateDsl4Semantics(
         issues.push({
           code: 'K4-PREVIEW-CONTROL-ASSET-001',
           path,
-          message: `Camera preview control asset ${id} must use eager loading`,
+          message: `Camera preview control asset ${diagnosticValue(id)} must use eager loading`,
         });
       }
     }
@@ -300,15 +314,14 @@ export function validateDsl4Semantics(
           assets,
           scenePoseModel,
           'poseModel',
-          `$.scenes.${sceneId}.poseModel`,
+          `${propertyPath('$.scenes', sceneId)}.poseModel`,
         );
       }
     }
 
     let usesPoseRecognition = false;
-    const actionBasePath = Array.isArray(scene)
-      ? `$.scenes.${sceneId}`
-      : `$.scenes.${sceneId}.actions`;
+    const scenePath = propertyPath('$.scenes', sceneId);
+    const actionBasePath = Array.isArray(scene) ? scenePath : `${scenePath}.actions`;
     sceneActions(scene).forEach((action, actionIndex) => {
       const [key] = Object.keys(action);
       const value = action[key];
@@ -370,7 +383,7 @@ export function validateDsl4Semantics(
             issues.push({
               code: 'K4-REF-003',
               path: `${actionPath}.skin`,
-              message: `Costume ${skin} must target actor ${actor}`,
+              message: `Costume ${diagnosticValue(skin)} must target actor ${diagnosticValue(actor)}`,
             });
           }
         } else if (opcode === 'setText') {
@@ -403,7 +416,7 @@ export function validateDsl4Semantics(
               issues.push({
                 code: 'K4-REF-003',
                 path: `${actionPath}.steps[${stepIndex}].skin`,
-                message: `Costume ${step.skin} must target actor ${actor}`,
+                message: `Costume ${diagnosticValue(step.skin)} must target actor ${diagnosticValue(actor)}`,
               });
             }
             addReferenceIssue(
@@ -462,7 +475,7 @@ export function validateDsl4Semantics(
     if (usesPoseRecognition && typeof scenePoseModel !== 'string') {
       issues.push({
         code: 'K4-POSE-MODEL-001',
-        path: `$.scenes.${sceneId}`,
+        path: scenePath,
         message: 'A scene with pose actions must use the long form and declare poseModel',
       });
     }

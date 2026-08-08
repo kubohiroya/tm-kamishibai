@@ -73,9 +73,13 @@ test('maps project backdrop, costume, and stage sound references deterministical
   const sound = await adapter.prepare(projectAsset('Opening', 'sound', 'Opening'));
 
   assert.deepEqual(fake.calls.project, [
-    {name: 'Beach', resourceId: 'backdrop:Beach'},
-    {name: 'HeroHappy', resourceId: 'costume:Hero:happy'},
-    {name: 'Opening', resourceId: 'sound:@stage:Opening'},
+    {name: 'Beach', nameMode: 'literal', locator: {kind: 'backdrop', name: 'Beach'}},
+    {
+      name: 'HeroHappy',
+      nameMode: 'literal',
+      locator: {kind: 'costume', target: 'Hero', name: 'happy'},
+    },
+    {name: 'Opening', nameMode: 'literal', locator: {kind: 'sound', name: 'Opening'}},
   ]);
   assert.deepEqual(
     [backdrop, costume, sound].map(({assetId, kind, name}) => [assetId, kind, name]),
@@ -103,12 +107,35 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   const audio = await adapter.prepare(embeddedAsset('OpeningSound', 'sound', 'sounds/opening.wav'));
 
   assert.equal(fake.calls.embedded[0].name, 'OpeningImage');
+  assert.equal(fake.calls.embedded[0].nameMode, 'literal');
   assert.equal(fake.calls.embedded[0].sourceName, 'assets/opening.svg');
   assert.equal(fake.calls.embedded[0].mimeType, '');
   assert.strictEqual(fake.calls.embedded[0].bytes, svgBytes);
   assert.equal(svg.mimeType, 'image/svg+xml');
   assert.equal(bitmap.mimeType, 'image/png');
   assert.equal(audio.mimeType, 'audio/wav');
+});
+
+test('preserves literal DSL and Scratch names through structured project locators', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const assetId = ' costume./%\u0001\u007f ';
+  const target = 'Actor';
+  const costumeName = ' look./:\u0002\u007f ';
+
+  const resource = await adapter.prepare(projectAsset(assetId, 'costume', costumeName, target));
+
+  assert.deepEqual(fake.calls.project, [
+    {
+      name: assetId,
+      nameMode: 'literal',
+      locator: {kind: 'costume', target, name: costumeName},
+    },
+  ]);
+  assert.equal(resource.assetId, assetId);
+  assert.equal(resource.name, assetId);
+  adapter.release(resource);
+  assert.deepEqual(fake.calls.release, [assetId]);
 });
 
 test('materializes a target-independent image Object URL and revokes it with the asset lease', async () => {
@@ -299,6 +326,7 @@ test('registers verified remote bytes with their declared Content-Type', async (
   await adapter.prepare(payload);
   assert.deepEqual(fake.calls.embedded[0], {
     name: 'RemoteImage',
+    nameMode: 'literal',
     sourceName: 'https://cdn.example.com/image.svg',
     mimeType: 'image/svg+xml',
     bytes: payload.files[0].bytes,

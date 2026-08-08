@@ -18,6 +18,9 @@ overrides:
   'scratch-vm>uuid': 11.1.1
   'scratch-vm>worker-loader': '-'
 
+patchedDependencies:
+  '@kubohiroya/turbowarp-asset-manager@0.7.0': patches/@kubohiroya__turbowarp-asset-manager@0.7.0.patch
+
 peerDependencyRules:
   allowedVersions:
     scratch-render-fonts: 1.0.0

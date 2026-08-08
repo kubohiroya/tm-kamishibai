@@ -955,6 +955,12 @@ sceneは配列位置ではなくscene IDで識別し、actionはscene内の0始�
 /scenes/opening/actions/2/args/skin
 ```
 
+StoryPathのsegmentはRFC 6901の`~0`／`~1`に加え、literal `%`を`%25`、C0制御文字とDELを
+uppercaseの`%HH`で表します。たとえばscene ID `chapter/1%`は`chapter~11%25`となります。
+percent escapeは一回だけdecodeするため、literal文字列`%00`の`%2500`とNULの`%00`は衝突しません。
+source、diagnostic、永続descriptorへraw control characterを出さず、decode後のscene／asset IDは元の
+文字列と完全に一致します。
+
 内容や空白だけを変更してもpathは変わりません。scene名の変更、actionの移動、前方へのaction
 挿入ではpathが変わります。このIDは同じ文書構造内の診断・実行トレース・Source Map対応を
 目的とし、編集をまたいで永続する外部IDとはみなしません。

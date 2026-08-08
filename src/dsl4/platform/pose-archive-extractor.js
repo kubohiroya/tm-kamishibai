@@ -1,5 +1,7 @@
 import {unzipSync} from 'fflate';
 
+import {encodeDsl4StoryPathSegment} from '../story-path.js';
+
 export const DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT = 'tmpose-zip-v1';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -12,7 +14,7 @@ function archiveError(assetId, code, message, cause) {
   const error = new Error(message, cause === undefined ? undefined : {cause});
   Object.defineProperties(error, {
     code: {value: code},
-    storyPath: {value: `/assets/${assetId.replaceAll('~', '~0').replaceAll('/', '~1')}`},
+    storyPath: {value: `/assets/${encodeDsl4StoryPathSegment(assetId)}`},
   });
   return error;
 }

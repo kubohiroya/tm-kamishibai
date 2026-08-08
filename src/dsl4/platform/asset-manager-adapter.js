@@ -29,10 +29,10 @@ function requireNonEmptyString(value, label) {
 }
 
 /** @param {Record<string, unknown>} asset @param {Record<string, unknown>} source */
-function projectResourceId(asset, source) {
+function projectAssetLocator(asset, source) {
   const name = requireNonEmptyString(source.name, 'project asset name');
-  if (asset.kind === 'backdrop') return `backdrop:${name}`;
-  if (asset.kind === 'sound') return `sound:@stage:${name}`;
+  if (asset.kind === 'backdrop') return Object.freeze({kind: 'backdrop', name});
+  if (asset.kind === 'sound') return Object.freeze({kind: 'sound', name});
   if (asset.kind === 'image') {
     throw adapterError(
       'K4-ASSET-ADAPTER-002',
@@ -40,7 +40,7 @@ function projectResourceId(asset, source) {
     );
   }
   const target = requireNonEmptyString(asset.target, 'costume target');
-  return `costume:${target}:${name}`;
+  return Object.freeze({kind: 'costume', target, name});
 }
 
 /** @param {unknown} value */
@@ -157,7 +157,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
       const signal = validateSignal(context.signal);
       if (signal?.aborted) throw abortError();
 
-      /** @type {Readonly<Record<string, string>> | null} */
+      /** @type {Readonly<Record<string, unknown>> | null} */
       let projectRegistration = null;
       /** @type {Readonly<Record<string, unknown>> | null} */
       let embeddedRegistration = null;
@@ -172,7 +172,8 @@ export function createDsl4AssetManagerAdapter(options = {}) {
         }
         projectRegistration = Object.freeze({
           name: assetId,
-          resourceId: projectResourceId(asset, source),
+          nameMode: 'literal',
+          locator: projectAssetLocator(asset, source),
         });
       } else if (source.type === 'file' || source.type === 'remote') {
         if (payload.files.length !== 1 || !isRecord(payload.files[0])) {
@@ -191,6 +192,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
         }
         embeddedRegistration = Object.freeze({
           name: assetId,
+          nameMode: 'literal',
           sourceName,
           mimeType:
             source.type === 'remote'
