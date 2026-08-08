@@ -305,15 +305,19 @@ test('applies grapheme-based silent characters and post-character rest intervals
     {
       text: '「A、B👨‍👩‍👧‍👦C',
       waitFor: 'advance',
-      style: 'novel',
+      characterIntervalSeconds: 0.1,
+      styles: ['Typing base', '日本語 効果音', 'fast'],
     },
     `bubbleStyles:
-  novel:
-    characterIntervalSeconds: 0.1
-    characterSound: Tick
+  Typing base:
+    characterIntervalSeconds: 0.2
     noSoundCharacters: "「👨‍👩‍👧‍👦"
+  日本語 効果音:
+    characterSound: Tick
     restCharacters: "、。…"
-    restCharacterIntervalSeconds: 0.5`,
+    restCharacterIntervalSeconds: 0.5
+  fast:
+    characterIntervalSeconds: 0.15`,
   );
   const run = execution.controller.start();
   await waitFor(() => execution.fake.bubbles.length === 1, 'the first character was not shown');

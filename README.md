@@ -119,9 +119,11 @@ speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り
 `noSoundCharacters`には文字音を鳴らさない文字、`restCharacters`には文字音を鳴らさず長めに休止する
 文字を連結して指定します。休止時間は`restCharacterIntervalSeconds`で指定します。文字集合の判定は
 本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`bubbleStyles`へ
-名前付きでまとめ、`say`／`think`の`style`から再利用できます。`text`、`seconds`、`waitFor`、
-`startSound`はactionごとに指定します。styleを使うactionに文字送り設定を重ねて指定することはできません。
-既存のインライン指定も引き続き使用できます。
+名前付きの部分styleとしてまとめ、`say`／`think`の`styles`配列から複数を再利用できます。styleは記載順に
+deep mergeされ、後のstyleを優先し、最後にaction内指定を適用します。配列値は連結せず全体を置換します。
+style名には内部空白や日本語を使用できますが、前後空白、改行、tab、制御文字は使用できません。
+style定義内の`styles`配列から既存styleを合成して、新しい名前付きstyleを定義することもできます。参照先を
+順に合成してから定義自身のpropertyを適用し、循環参照、未知参照、重複参照はエラーにします。
 
 ```yaml
 assets:
@@ -131,19 +133,25 @@ assets:
 actors:
   Hero: HeroIdle
 bubbleStyles:
-  novel:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
 scenes:
   opening:
     - Hero.say:
         text: こんにちは！
         seconds: 10
         waitFor: advance
-        style: novel
+        styles:
+          - Hero style
         startSound: HeroGreetingVoice
 ```
 

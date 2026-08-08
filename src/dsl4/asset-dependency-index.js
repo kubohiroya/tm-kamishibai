@@ -1,4 +1,5 @@
 import {deepFreeze} from './story-document.js';
+import {composeBubbleStyles} from './bubble-style.js';
 
 /** @param {Iterable<string>} values */
 function sortedUnique(values) {
@@ -23,12 +24,14 @@ function addActionDependencies(action, dependencies, bubbleStyles) {
   if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
   if (command === 'say' || command === 'think') {
     addDependency(args.startSound, dependencies);
-    addDependency(args.characterSound, dependencies);
-    const style =
-      typeof args.style === 'string'
-        ? /** @type {Readonly<Record<string, unknown>> | undefined} */ (bubbleStyles[args.style])
-        : undefined;
-    addDependency(style?.characterSound, dependencies);
+    const styleIds = Array.isArray(args.styles)
+      ? /** @type {string[]} */ (args.styles.filter((styleId) => typeof styleId === 'string'))
+      : [];
+    const style = styleIds.length > 0 ? composeBubbleStyles(styleIds, bubbleStyles) : undefined;
+    addDependency(
+      Object.hasOwn(args, 'characterSound') ? args.characterSound : style?.characterSound,
+      dependencies,
+    );
   }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
   if (command !== 'pose') return false;

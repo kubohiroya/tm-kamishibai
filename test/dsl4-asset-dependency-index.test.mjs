@@ -225,7 +225,7 @@ scenes:
   });
 });
 
-test('indexes a lazy character sound from each referenced bubble style', () => {
+test('indexes the effective lazy character sound after composing bubble styles', () => {
   const storyDocument = parse(`
 kamishibai: '4.0'
 assets:
@@ -234,21 +234,41 @@ assets:
     kind: sound
     name: TalkTick
     loading: lazy
+  OldTick:
+    kind: sound
+    name: OldTick
+    loading: lazy
+  ActionTick:
+    kind: sound
+    name: ActionTick
+    loading: lazy
 actors:
   Hero: HeroIdle
 bubbleStyles:
+  old:
+    characterSound: OldTick
   novel:
     characterIntervalSeconds: 0.1
     characterSound: TalkTick
     noSoundCharacters: "「」"
+  hero:
+    styles:
+      - old
+      - novel
 scenes:
   first:
     - Hero.say:
         text: hello
         waitFor: advance
-        style: novel
+        styles:
+          - hero
   second:
-    - wait: 0
+    - Hero.say:
+        text: override
+        waitFor: advance
+        styles:
+          - hero
+        characterSound: ActionTick
 `);
   const index = createDsl4AssetDependencyIndex(storyDocument);
 
@@ -258,7 +278,12 @@ scenes:
     lazy: ['TalkTick'],
     sceneRetained: [],
   });
-  assert.deepEqual(index.scenes.second.all, []);
+  assert.deepEqual(index.scenes.second, {
+    all: ['ActionTick'],
+    eager: [],
+    lazy: ['ActionTick'],
+    sceneRetained: [],
+  });
 });
 
 test('returns a deeply immutable index and rejects non-StoryDocument input', () => {

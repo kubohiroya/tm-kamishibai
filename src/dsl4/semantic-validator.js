@@ -3,9 +3,43 @@ import {
   dsl4EmptyActionRegistrySnapshot,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+import {composeBubbleStyles} from './bubble-style.js';
 
 const identifierSections = ['actors', 'textStyles', 'bubbleStyles', 'variables', 'branches'];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
+const speechPresentationFields = [
+  'characterIntervalSeconds',
+  'characterSound',
+  'noSoundCharacters',
+  'restCharacters',
+  'restCharacterIntervalSeconds',
+];
+
+/**
+ * @param {SemanticIssue[]} issues
+ * @param {Record<string, unknown>} presentation
+ * @param {string} path
+ */
+function validateSpeechPresentation(issues, presentation, path) {
+  /** @type {Array<[string, string[]]>} */
+  const requirements = [
+    ['characterSound', ['characterIntervalSeconds']],
+    ['noSoundCharacters', ['characterIntervalSeconds', 'characterSound']],
+    ['restCharacters', ['characterIntervalSeconds', 'restCharacterIntervalSeconds']],
+    ['restCharacterIntervalSeconds', ['characterIntervalSeconds', 'restCharacters']],
+  ];
+  for (const [field, dependencies] of requirements) {
+    if (!Object.hasOwn(presentation, field)) continue;
+    for (const dependency of dependencies) {
+      if (Object.hasOwn(presentation, dependency)) continue;
+      issues.push({
+        code: 'K4-SPEECH-STYLE-001',
+        path: `${path}.${field}`,
+        message: `${field} requires ${dependency} after bubble styles are composed`,
+      });
+    }
+  }
+}
 
 /** @param {string} value */
 function escapedJsonString(value) {
@@ -218,6 +252,18 @@ export function validateDsl4Semantics(
   }
 
   for (const [styleId, style] of Object.entries(bubbleStyles)) {
+    const inheritedStyleIds = Array.isArray(style.styles)
+      ? /** @type {string[]} */ (style.styles)
+      : [];
+    inheritedStyleIds.forEach((inheritedStyleId, styleIndex) =>
+      addReferenceIssue(
+        issues,
+        bubbleStyles,
+        inheritedStyleId,
+        undefined,
+        `$.bubbleStyles.${styleId}.styles[${styleIndex}]`,
+      ),
+    );
     addReferenceIssue(
       issues,
       assets,
@@ -225,6 +271,29 @@ export function validateDsl4Semantics(
       'sound',
       `$.bubbleStyles.${styleId}.characterSound`,
     );
+  }
+
+  const reportedStyleCycles = new Set();
+  for (const styleId of Object.keys(bubbleStyles)) {
+    try {
+      composeBubbleStyles([styleId], bubbleStyles);
+    } catch (error) {
+      if (!(error instanceof Error)) continue;
+      const styleError = /** @type {Error & {reason?: string, cycle?: unknown}} */ (error);
+      if (styleError.reason !== 'cycle' || !Array.isArray(styleError.cycle)) {
+        continue;
+      }
+      const cycle = /** @type {string[]} */ (styleError.cycle);
+      const cycleMembers = cycle.slice(0, -1);
+      const cycleKey = [...new Set(cycleMembers)].sort().join('\u0000');
+      if (reportedStyleCycles.has(cycleKey)) continue;
+      reportedStyleCycles.add(cycleKey);
+      issues.push({
+        code: 'K4-BUBBLE-STYLE-CYCLE-001',
+        path: `$.bubbleStyles.${styleId}.styles`,
+        message: `Bubble styles must not form a cycle: ${cycle.join(' -> ')}`,
+      });
+    }
   }
 
   const cover = /** @type {Record<string, unknown> | undefined} */ (story.cover);
@@ -391,7 +460,32 @@ export function validateDsl4Semantics(
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
-          addReferenceIssue(issues, bubbleStyles, speech.style, undefined, `${actionPath}.style`);
+          const styleIds = Array.isArray(speech.styles)
+            ? /** @type {string[]} */ (speech.styles)
+            : [];
+          styleIds.forEach((styleId, styleIndex) =>
+            addReferenceIssue(
+              issues,
+              bubbleStyles,
+              styleId,
+              undefined,
+              `${actionPath}.styles[${styleIndex}]`,
+            ),
+          );
+          if (styleIds.every((styleId) => Object.hasOwn(bubbleStyles, styleId))) {
+            let effectivePresentation;
+            try {
+              effectivePresentation = composeBubbleStyles(styleIds, bubbleStyles);
+            } catch {
+              effectivePresentation = null;
+            }
+            if (effectivePresentation) {
+              for (const field of speechPresentationFields) {
+                if (Object.hasOwn(speech, field)) effectivePresentation[field] = speech[field];
+              }
+              validateSpeechPresentation(issues, effectivePresentation, actionPath);
+            }
+          }
           for (const field of ['startSound', 'characterSound']) {
             addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
           }

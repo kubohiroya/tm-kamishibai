@@ -57,7 +57,8 @@ scenes:
     - Hero.think:
         text: どうしよう
         waitFor: advance
-        style: novel
+        styles:
+          - novel
         startSound: Voice
     - wait: 0
 `;

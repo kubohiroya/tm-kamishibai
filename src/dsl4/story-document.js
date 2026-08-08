@@ -335,6 +335,14 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       fieldNode,
       lineCounter,
     );
+    if (field === 'styles' && Array.isArray(args[field])) {
+      args[field].forEach((_, styleIndex) => {
+        sourceMap[`${actionPath}/args/styles/${styleIndex}`] = sourceRangeForNode(
+          fieldNode?.get?.(styleIndex, true) ?? fieldNode,
+          lineCounter,
+        );
+      });
+    }
   }
   if (stableId) {
     sourceMap[`${actionPath}/stableId`] = sourceRangeForNode(
@@ -391,10 +399,19 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
       const styleNode = document.getIn(['bubbleStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
       for (const field of Object.keys(style)) {
+        const fieldNode = document.getIn(['bubbleStyles', styleId, field], true);
         sourceMap[`${stylePath}/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
-          document.getIn(['bubbleStyles', styleId, field], true),
+          fieldNode,
           lineCounter,
         );
+        if (field === 'styles' && Array.isArray(style[field])) {
+          style[field].forEach((_, styleIndex) => {
+            sourceMap[`${stylePath}/styles/${styleIndex}`] = sourceRangeForNode(
+              fieldNode?.get?.(styleIndex, true) ?? fieldNode,
+              lineCounter,
+            );
+          });
+        }
       }
     }
   }
