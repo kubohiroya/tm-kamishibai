@@ -64,7 +64,7 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --output dist/story-4.sb3 \
   --control-profile production \
   --channel bundled \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 256 \
   --max-total-asset-bytes 134217728
@@ -105,7 +105,7 @@ buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに�
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --format pretty
 ```
 
