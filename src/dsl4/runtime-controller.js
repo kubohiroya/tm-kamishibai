@@ -1,5 +1,6 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+import {composeBubbleStyles} from './bubble-style.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
@@ -22,7 +23,6 @@ const speechPresentationArgumentNames = Object.freeze([
   'restCharacters',
   'restCharacterIntervalSeconds',
 ]);
-
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
   minimumQuiesceTimeoutMs: 100,
@@ -235,7 +235,7 @@ export function createDsl4RuntimeController({
         if (action.command === 'think') return true;
         if (action.command !== 'say') return false;
         const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
-        return ['waitFor', 'startSound', 'style', ...speechPresentationArgumentNames].some((key) =>
+        return ['waitFor', 'startSound', 'styles', ...speechPresentationArgumentNames].some((key) =>
           Object.hasOwn(args, key),
         );
       });
@@ -914,23 +914,20 @@ export function createDsl4RuntimeController({
    * @param {Record<string, unknown>} args
    */
   function resolveSpeechStyle(command, args) {
-    if (!Object.hasOwn(args, 'style')) return args;
-    if (speechPresentationArgumentNames.some((key) => Object.hasOwn(args, key))) {
-      const error = new Error(
-        `${command}.style cannot be combined with inline speech presentation`,
-      );
+    if (!Object.hasOwn(args, 'styles')) return args;
+    const styleIds = args.styles;
+    if (
+      !Array.isArray(styleIds) ||
+      styleIds.length === 0 ||
+      styleIds.some((styleId) => typeof styleId !== 'string') ||
+      new Set(styleIds).size !== styleIds.length
+    ) {
+      const error = new Error(`${command}.styles must be an array of bubble style names`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
       throw error;
     }
-    const styleId = args.style;
-    const style = typeof styleId === 'string' ? bubbleStyles[styleId] : undefined;
-    if (!isRecord(style)) {
-      const error = new Error(`Bubble style is unavailable: ${String(styleId)}`);
-      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
-      throw error;
-    }
-    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'style'));
-    const resolvedStyle = /** @type {Record<string, unknown>} */ (cloneValue(style));
+    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
+    const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
     return {...resolvedStyle, ...actionArgs};
   }
 

@@ -50,7 +50,8 @@ scenes:
     - Hero.say:
         text: chapter one
         seconds: 1
-        style: novel
+        styles:
+          - novel
     - goto: chapter1
 `,
     'chapters/chapter1/scenario.kamishibai.yml': `

@@ -114,7 +114,8 @@ test('keeps legacy timed say available and rejects extended speech while the fla
     - Hero.say:
         text: hello
         seconds: 1
-        style: novel
+        styles:
+          - novel
 `,
           `bubbleStyles:
   novel:

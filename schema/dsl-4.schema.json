@@ -93,6 +93,11 @@
     "sceneId": {"$ref": "#/$defs/literalId"},
     "actorId": {"$ref": "#/$defs/id"},
     "styleId": {"$ref": "#/$defs/id"},
+    "bubbleStyleName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?!.*\\s$)[^\\p{Cc}\\p{Cs}\\p{Zl}\\p{Zp}]+$"
+    },
     "stableId": {"$ref": "#/$defs/id"},
     "compactAsset": {
       "type": "string",
@@ -336,13 +341,13 @@
     "bubbleStyle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["characterIntervalSeconds"],
-      "dependentRequired": {
-        "noSoundCharacters": ["characterSound"],
-        "restCharacters": ["restCharacterIntervalSeconds"],
-        "restCharacterIntervalSeconds": ["restCharacters"]
-      },
       "properties": {
+        "styles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/bubbleStyleName"}
+        },
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "characterSound": {"$ref": "#/$defs/assetId"},
         "noSoundCharacters": {"type": "string", "minLength": 1},
@@ -352,7 +357,7 @@
     },
     "bubbleStyles": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/bubbleStyleName"},
       "additionalProperties": {"$ref": "#/$defs/bubbleStyle"}
     },
     "variableValue": {
@@ -754,52 +759,17 @@
         {"required": ["seconds"], "properties": {"seconds": true}},
         {"required": ["waitFor"], "properties": {"waitFor": true}}
       ],
-      "dependentRequired": {
-        "characterSound": ["characterIntervalSeconds"],
-        "noSoundCharacters": ["characterIntervalSeconds", "characterSound"],
-        "restCharacters": ["characterIntervalSeconds", "restCharacterIntervalSeconds"],
-        "restCharacterIntervalSeconds": ["characterIntervalSeconds", "restCharacters"]
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {"style": true},
-            "required": ["style"]
-          },
-          "then": {
-            "not": {
-              "anyOf": [
-                {
-                  "properties": {"characterIntervalSeconds": true},
-                  "required": ["characterIntervalSeconds"]
-                },
-                {
-                  "properties": {"characterSound": true},
-                  "required": ["characterSound"]
-                },
-                {
-                  "properties": {"noSoundCharacters": true},
-                  "required": ["noSoundCharacters"]
-                },
-                {
-                  "properties": {"restCharacters": true},
-                  "required": ["restCharacters"]
-                },
-                {
-                  "properties": {"restCharacterIntervalSeconds": true},
-                  "required": ["restCharacterIntervalSeconds"]
-                }
-              ]
-            }
-          }
-        }
-      ],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
         "seconds": {"type": "number", "minimum": 0},
         "waitFor": {"const": "advance"},
-        "style": {"$ref": "#/$defs/styleId"},
+        "styles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/bubbleStyleName"}
+        },
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "startSound": {"$ref": "#/$defs/assetId"},
         "characterSound": {"$ref": "#/$defs/assetId"},

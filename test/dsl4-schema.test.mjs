@@ -142,7 +142,7 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
-test('normalizes reusable bubble styles and validates style references and dependencies', () => {
+test('normalizes and composes reusable bubble styles with human-readable names', () => {
   const source = `
 kamishibai: '4.0'
 assets:
@@ -152,49 +152,64 @@ assets:
 actors:
   Hero: HeroIdle
 bubbleStyles:
-  novel:
+  Novel base:
     characterIntervalSeconds: 0.08
-    characterSound: TalkTick
     noSoundCharacters: "「」"
+  日本語 効果音:
+    characterSound: TalkTick
     restCharacters: "、。…"
     restCharacterIntervalSeconds: 0.5
+  Hero style:
+    styles:
+      - Novel base
+      - 日本語 効果音
 scenes:
   opening:
     - Hero.say:
         text: スタイルで進む。
         waitFor: advance
-        style: novel
+        styles:
+          - Hero style
 `;
   const result = frontend.parse(source, {sourceId: 'bubble-style.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.storyDocument.bubbleStyles, {
-    novel: {
+    'Novel base': {
       characterIntervalSeconds: 0.08,
-      characterSound: 'TalkTick',
       noSoundCharacters: '「」',
+    },
+    '日本語 効果音': {
+      characterSound: 'TalkTick',
       restCharacters: '、。…',
       restCharacterIntervalSeconds: 0.5,
+    },
+    'Hero style': {
+      styles: ['Novel base', '日本語 効果音'],
     },
   });
   assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {
     text: 'スタイルで進む。',
     waitFor: 'advance',
-    style: 'novel',
+    styles: ['Hero style'],
   });
-  for (const field of [
-    'characterIntervalSeconds',
-    'characterSound',
-    'noSoundCharacters',
-    'restCharacters',
-    'restCharacterIntervalSeconds',
+  for (const [style, fields] of [
+    ['Novel base', ['characterIntervalSeconds', 'noSoundCharacters']],
+    ['日本語 効果音', ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds']],
   ]) {
-    assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/novel/${field}`], field);
+    for (const field of fields) {
+      assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/${style}/${field}`], field);
+    }
   }
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/style']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/0']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/1']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles/0']);
 
   for (const [needle, replacement] of [
-    ['        style: novel', '        style: missing'],
-    ['        style: novel', '        style: novel\n        characterIntervalSeconds: 0.1'],
+    ['      - 日本語 効果音', '      - missing'],
+    ['      - 日本語 効果音', '      - Novel base'],
+    ['          - Hero style', '          - missing'],
     ['    characterSound: TalkTick\n', ''],
     ['    characterSound: TalkTick', '    characterSound: WrongTick'],
     ['    restCharacterIntervalSeconds: 0.5\n', ''],
@@ -203,15 +218,54 @@ scenes:
     assert.equal(invalid.ok, false, replacement);
   }
 
+  for (const replacement of [
+    '        style: Novel base',
+    '        styles: Novel base',
+    '        styles: []',
+  ]) {
+    const invalid = frontend.parse(
+      source.replace('        styles:\n          - Hero style', replacement),
+    );
+    assert.equal(invalid.ok, false, replacement);
+  }
+
+  for (const invalidName of ['" Novel base"', '"Novel base "']) {
+    const invalid = frontend.parse(source.replace('  Novel base:', `  ${invalidName}:`));
+    assert.equal(invalid.ok, false, invalidName);
+  }
+
   const missingSound = frontend.parse(
     source.replace('    characterSound: TalkTick', '    characterSound: MissingTick'),
   );
   assert.equal(missingSound.ok, false);
   assert.ok(
     missingSound.diagnostics.some(
-      ({code, path}) => code === 'K4-REF-001' && path === '$.bubbleStyles.novel.characterSound',
+      ({code, path}) =>
+        code === 'K4-REF-001' && path === '$.bubbleStyles.日本語 効果音.characterSound',
     ),
     JSON.stringify(missingSound.diagnostics),
+  );
+});
+
+test('rejects recursive bubble style composition', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+bubbleStyles:
+  style-a:
+    styles:
+      - style-b
+  style-b:
+    styles:
+      - style-a
+scenes:
+  opening:
+    - wait: 0
+`);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(({code}) => code === 'K4-BUBBLE-STYLE-CYCLE-001'),
+    JSON.stringify(result.diagnostics),
   );
 });
 
@@ -280,7 +334,9 @@ scenes:
     const result = frontend.parse(source.replace(needle, replacement));
     assert.equal(result.ok, false, replacement);
     assert.ok(
-      result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')),
+      result.diagnostics.some(
+        ({code}) => code.startsWith('K4-SCHEMA') || code === 'K4-SPEECH-STYLE-001',
+      ),
       replacement,
     );
   }

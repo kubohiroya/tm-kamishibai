@@ -64,6 +64,9 @@ Unicodeの正規化形式、C0制御文字、DELを含められます。YAML sou
 escapeを使います。parser、converter、runtimeは値をtrim、NFC変換、alias化しません。`__proto__`など
 object pollutionを生じるmapping keyは、文字種とは別の安全境界として引き続き拒否します。
 
+`bubbleStyles`の名前だけは人が読むclass名として扱い、内部の空白と日本語を使用できます。空文字、
+先頭・末尾の空白、改行、tab、制御文字は使用できず、Unicode NFCでなければなりません。
+
 YAMLのduplicate key、anchor、alias、merge key、custom tag、複数文書を認めません。実装は
 YAMLの構文位置を保持し、schema検証に成功するまでアセット読込などの副作用を開始しません。
 
@@ -330,20 +333,31 @@ textStyles:
     direction: up
 
 bubbleStyles:
-  novel:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
-`bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
-各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
-`restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
-セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
+`bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationを、再利用可能な部分styleとして
+宣言します。各styleは単独で完結している必要はありません。`styles`から参照した全styleとaction内指定を
+合成したeffective styleに対して、`characterSound`には`characterIntervalSeconds`が必要、などの相互依存を
+検証します。本文、完了条件、吹き出し開始時の音声はセリフごとに異なるため、`text`、`seconds`、
+`waitFor`、`startSound`をstyleへ含めません。
+
+style定義自身の`styles`配列から既存styleを参照し、名前付き合成styleを定義できます。参照先を配列順に
+合成した後、その定義自身に記述したpropertyを適用します。名前付き合成は再帰的に使用できますが、直接・
+間接を問わず循環参照は`K4-BUBBLE-STYLE-CYCLE-001`で拒否します。参照先が存在しない場合と同じstyleの
+重複指定もエラーです。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -559,15 +573,15 @@ iconへ反映します。
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
-| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                     |
-| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
-| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                           |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                   |
-| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                         |
+| action                     | 引数                                                                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                            |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
 `Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
 `seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
@@ -575,12 +589,13 @@ iconへ反映します。
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
 
-`style`にはトップレベルの`bubbleStyles`で宣言したIDを指定します。styleを指定したactionでは、
-`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
-`restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
-引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、
-platform adapterはstyle registryを参照しません。style内の`characterSound`は、そのstyleを参照したsceneの
-asset依存として扱います。
+`styles`にはトップレベルの`bubbleStyles`で宣言した名前を1件以上のYAML配列として指定します。1件でも
+配列が必要であり、スペース区切り文字列は受理しません。記載順にdeep mergeし、同じpropertyは後のstyleを
+優先します。objectは再帰的にmergeし、配列とscalarは連結せず後の値で全体を置換します。同じstyle名の
+重複指定はエラーです。最後にaction内の文字送り指定を適用するため、action固有値が最優先になります。
+合成後のeffective styleを共通speech引数へ解決してからActor portへ渡すため、platform adapterはstyle
+registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
+残さず未知keyとして拒否します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -623,7 +638,8 @@ speechが実際に再生を開始したasset IDだけを停止します。
     text: 助けに行こう
     seconds: 8
     waitFor: advance
-    style: novel
+    styles:
+      - Hero style
     startSound: HeroGreetingVoice
 - Hero.think:
     text: どうしよう……
