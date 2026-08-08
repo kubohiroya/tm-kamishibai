@@ -9,11 +9,14 @@ import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js'
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
 const destinations = {
-  top: siteRoot,
-  docs: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/',
-  workshops: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/',
-  samples: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/',
-  downloads: `${siteRoot}downloads/`,
+  top: {label: 'トップ', href: siteRoot},
+  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/'},
+  workshops: {
+    label: 'ワークショップ',
+    href: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/',
+  },
+  samples: {label: '作品', href: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/'},
+  downloads: {label: 'ダウンロード', href: `${siteRoot}downloads/`},
 };
 const pages = [
   {
@@ -68,14 +71,14 @@ test('uses one accessible site header across the published entry pages', async (
     );
     assert.match(html, /<main id="main-content">/u);
 
-    for (const [section, href] of Object.entries(destinations)) {
+    for (const [section, {href, label}] of Object.entries(destinations)) {
       const currentAttribute = section === page.current ? ' aria-current="page"' : '';
       assert.match(
         html,
         new RegExp(
           `<a\\b(?=[^>]*class="site-nav__link")(?=[^>]*href="${href.replaceAll('.', '\\.')}")${
             currentAttribute ? '(?=[^>]*aria-current="page")' : '(?![^>]*aria-current="page")'
-          }[^>]*>`,
+          }[^>]*>\\s*${label}\\s*<\\/a\\s*>`,
           'u',
         ),
       );
