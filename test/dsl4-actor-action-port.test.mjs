@@ -101,10 +101,11 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
 }
 
-function actorPort({composition, host, resolveActor} = {}) {
+function actorPort({composition, host, resolveActor, stopActorLoop} = {}) {
   return createDsl4ActorActionPort({
     composition: composition ?? fakeComposition().composition,
     host: host ?? fakeHost().host,
+    ...(stopActorLoop === undefined ? {} : {stopActorLoop}),
     resolveActor:
       resolveActor ??
       (() => {
@@ -161,6 +162,46 @@ test('maps show, hide, layer, transparency, move, and speech through one present
     ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
+  ]);
+});
+
+test('waits for an in-flight loop skin before applying a show skin', async () => {
+  const loopStopped = deferred();
+  const loopStopStarted = deferred();
+  const calls = [];
+  const fake = fakeComposition({
+    applyToTarget(name, target) {
+      calls.push(['applyToTarget', name, target.id]);
+    },
+  });
+  const presentation = fakeHost({
+    showActor(actor) {
+      calls.push(['showActor', actor.id]);
+    },
+  });
+  const port = actorPort({
+    composition: fake.composition,
+    host: presentation.host,
+    stopActorLoop(target) {
+      calls.push(['stopActorLoop', target]);
+      loopStopStarted.resolve();
+      return loopStopped.promise;
+    },
+  });
+
+  const show = port.show(
+    {target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30},
+    actionContext(),
+  );
+  await loopStopStarted.promise;
+  assert.deepEqual(calls, [['stopActorLoop', 'Hero']]);
+
+  loopStopped.resolve();
+  await show;
+  assert.deepEqual(calls, [
+    ['stopActorLoop', 'Hero'],
+    ['applyToTarget', 'HeroHappy', 'hero-target'],
+    ['showActor', 'hero-target'],
   ]);
 });
 

@@ -171,18 +171,49 @@ export function createDsl4MediaActionPort(options) {
   const scheduler = validateScheduler(options.scheduler ?? createDefaultScheduler());
   /** @type {Map<string, {timer?: unknown, active: boolean}>} */
   const actorLoops = new Map();
+  /** @type {Map<string, Promise<unknown>>} */
+  const actorSkinQueues = new Map();
+
+  /** @param {string} target @param {() => unknown | Promise<unknown>} apply */
+  function enqueueActorSkin(target, apply) {
+    const previous = actorSkinQueues.get(target) ?? Promise.resolve();
+    const operation = previous.catch(() => {}).then(apply);
+    actorSkinQueues.set(target, operation);
+    void operation.then(
+      () => {
+        if (actorSkinQueues.get(target) === operation) actorSkinQueues.delete(target);
+      },
+      () => {
+        if (actorSkinQueues.get(target) === operation) actorSkinQueues.delete(target);
+      },
+    );
+    return operation;
+  }
 
   /** @param {string} target */
-  function stopLoop(target) {
+  function waitForActorSkin(target) {
+    const operation = actorSkinQueues.get(target);
+    return operation === undefined
+      ? Promise.resolve()
+      : operation.then(
+          () => {},
+          () => {},
+        );
+  }
+
+  /** @param {string} target @param {{timer?: unknown, active: boolean}} [expectedLoop] */
+  function stopLoop(target, expectedLoop) {
     const loop = actorLoops.get(target);
-    if (!loop) return;
+    if (expectedLoop !== undefined && loop !== expectedLoop) return waitForActorSkin(target);
+    if (!loop) return waitForActorSkin(target);
     loop.active = false;
     if (loop.timer !== undefined) scheduler.clearTimeout(loop.timer);
-    actorLoops.delete(target);
+    if (actorLoops.get(target) === loop) actorLoops.delete(target);
+    return waitForActorSkin(target);
   }
 
   function stopAllLoops() {
-    for (const target of [...actorLoops.keys()]) stopLoop(target);
+    return Promise.all([...actorLoops.keys()].map((target) => stopLoop(target))).then(() => {});
   }
 
   /** @param {string} assetId @param {'image' | 'audio'} kind */
@@ -276,7 +307,6 @@ export function createDsl4MediaActionPort(options) {
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
       requireAsset(skin, 'image');
-      stopLoop(target);
       const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
         /** @type {unknown} */ (context)
       );
@@ -284,7 +314,11 @@ export function createDsl4MediaActionPort(options) {
         await runCancellable(() => resolveActor(target, actionContext), signal),
         target,
       );
-      await runCancellable(() => composition.applyToTarget(skin, actor), signal);
+      await runCancellable(() => stopLoop(target), signal);
+      await runCancellable(
+        () => enqueueActorSkin(target, () => composition.applyToTarget(skin, actor)),
+        signal,
+      );
       if (scale !== undefined) {
         await runCancellable(
           () => /** @type {Function} */ (setActorScale)(actor, scale, actionContext),
@@ -341,7 +375,7 @@ export function createDsl4MediaActionPort(options) {
         await runCancellable(() => resolveActor(target, actionContext), signal),
         target,
       );
-      stopLoop(target);
+      await runCancellable(() => stopLoop(target), signal);
       /** @type {{timer?: unknown, active: boolean}} */
       const state = {active: true};
       actorLoops.set(target, state);
@@ -350,12 +384,12 @@ export function createDsl4MediaActionPort(options) {
       async function applyStep(index) {
         if (!state.active) return;
         const step = steps[index];
-        await composition.applyToTarget(step.skin, actor);
+        await enqueueActorSkin(target, () => composition.applyToTarget(step.skin, actor));
         if (!state.active) return;
         state.timer = scheduler.setTimeout(() => {
           state.timer = undefined;
           void applyStep((index + 1) % steps.length).catch((error) => {
-            stopLoop(target);
+            void stopLoop(target, state);
             onBackgroundError(error);
           });
         }, step.seconds * 1000);
@@ -365,10 +399,10 @@ export function createDsl4MediaActionPort(options) {
         await runCancellable(
           () => applyStep(0),
           signal,
-          () => stopLoop(target),
+          () => void stopLoop(target, state),
         );
       } catch (error) {
-        stopLoop(target);
+        await stopLoop(target, state);
         throw error;
       }
     },

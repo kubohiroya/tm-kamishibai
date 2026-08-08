@@ -367,7 +367,7 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
  * @param {(actorId: string, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.resolveActor
  * @param {unknown} options.host
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
- * @param {(actorId: string) => unknown} [options.stopActorLoop]
+ * @param {(actorId: string) => unknown | Promise<unknown>} [options.stopActorLoop]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -528,7 +528,7 @@ export function createDsl4ActorActionPort(options) {
         /** @type {unknown} */ (context)
       );
       const actor = await resolveTarget(target, actionContext, signal);
-      stopActorLoop?.(target);
+      await runCancellable(() => stopActorLoop?.(target), signal);
       await runCancellable(() => composition.applyToTarget(skin, actor), signal);
       await runCancellable(
         () => host.showActor(actor, Object.freeze({x, y, scale}), actionContext),
