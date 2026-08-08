@@ -47,6 +47,12 @@ function fakeHost(overrides = {}) {
       showActor(actor, transform, context) {
         calls.push(['showActor', actor.id, transform, context.sceneId]);
       },
+      hideActor(actor, context) {
+        calls.push(['hideActor', actor.id, context.sceneId]);
+      },
+      setActorLayer(actor, layer, context) {
+        calls.push(['setActorLayer', actor.id, layer, context.sceneId]);
+      },
       setTransparency(actor, effect, context) {
         calls.push(['setTransparency', actor.id, effect, context.sceneId]);
       },
@@ -107,7 +113,7 @@ function actorPort({composition, host, resolveActor} = {}) {
   });
 }
 
-test('maps show, setTransparency, moveTo, and say through one shared presentation host', async () => {
+test('maps show, hide, layer, transparency, move, and speech through one presentation host', async () => {
   const fake = fakeComposition();
   const presentation = fakeHost();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
@@ -123,6 +129,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
+  await port.hide({target: 'Hero'}, actionContext());
+  await port.setLayer({target: 'Hero', layer: 'back'}, actionContext());
   await port.setTransparency({target: 'Hero', transparency: 50}, actionContext());
   await port.moveTo(
     {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
@@ -138,6 +146,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
+    ['hideActor', 'hero-target', 'opening'],
+    ['setActorLayer', 'hero-target', 'back', 'opening'],
     ['setTransparency', 'hero-target', {transparency: 50}, 'opening'],
     ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
@@ -145,6 +155,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
     ['startSay'],
   ]);
   assert.deepEqual(resolved, [
+    ['Hero', 'opening'],
+    ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],

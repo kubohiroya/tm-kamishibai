@@ -641,10 +641,13 @@ iconへ反映します。
 | action                     | 引数                                                                                                                                                                          |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
 | `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
 | `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                            |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
 | `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
 | `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
@@ -755,6 +758,14 @@ foreground・backgroundのどちらも、途中でスキップ、停止、再開
 同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
 先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
 進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
+
+`Actor.hide`はScratch／TurboWarpのvisible stateを`false`にし、透明度effectとは混同しません。次の
+`Actor.show`は同じactorを再表示します。`Actor.setSkin.scale`はskin適用後に正のサイズ百分率を設定します。
+`Actor.setLayer`の`front`／`back`は絶対位置、数値は正なら前方、負なら後方への相対移動です。
+
+`Actor.loop.steps`は先頭skinを直ちに適用し、各`seconds`後に次のskinへ進むbackground loopです。step数と
+duration数を同じ構造に固定し、少なくとも一つのdurationを正数にします。同じactorの`setSkin`、runtime停止、
+またはenvironment破棄でloop timerを回収します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

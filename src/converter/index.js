@@ -1016,6 +1016,9 @@ class Converter {
     }
     if (actionName === 'say' || actionName === 'think') {
       if (parts.length === 3) {
+        if (parts[2] === '') {
+          return {[key]: {text: '', seconds: 0}};
+        }
         this.error(
           'K4-CONVERT-PERSISTENT-SPEECH',
           `A DSL 3.1/3.2 ${actionName} action without seconds is persistent and has no equivalent DSL 4.0 core action.`,
@@ -1055,13 +1058,86 @@ class Converter {
       return seconds === null ? null : {[key]: {text: parts[2].replaceAll('\\n', '\n'), seconds}};
     }
     if (actionName === 'setSkin') {
-      if (parts.length !== 3 || !parts[2]) {
-        this.error('K4-CONVERT-ACTION-ARGS', 'setSkin requires one costume asset ID.', command);
+      if ((parts.length !== 3 && parts.length !== 4) || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setSkin requires SKIN with an optional positive SCALE.',
+          command,
+        );
         return null;
       }
+      const scale =
+        parts.length === 4
+          ? this.parseNumber(parts[3], 'setSkin scale', command, {exclusiveMinimum: 0})
+          : null;
+      if (parts.length === 4 && scale === null) return null;
       this.addReference('asset', parts[2], command, {expectedKind: 'costume', actor: target});
       this.addCostumeUse(parts[2], target);
-      return {[key]: parts[2]};
+      return {[key]: scale === null ? parts[2] : {skin: parts[2], scale}};
+    }
+    if (actionName === 'hide') {
+      if (parts.length !== 2) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'hide does not accept arguments.', command);
+        return null;
+      }
+      return {[key]: {}};
+    }
+    if (actionName === 'setLayer') {
+      if (parts.length !== 3 || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setLayer requires front, back, or a finite relative layer count.',
+          command,
+        );
+        return null;
+      }
+      if (parts[2] === 'front' || parts[2] === 'back') return {[key]: parts[2]};
+      const layer = this.parseNumber(parts[2], 'setLayer count', command);
+      return layer === null ? null : {[key]: layer};
+    }
+    if (actionName === 'loop') {
+      if (parts.length !== 4) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'loop requires SKINS:DURATIONS.', command);
+        return null;
+      }
+      const skins = splitList(parts[2]);
+      const rawDurations = splitList(parts[3]);
+      if (
+        skins.length === 0 ||
+        skins.length !== rawDurations.length ||
+        skins.some((skin) => !skin)
+      ) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop skin and duration lists must have the same non-zero length.',
+          command,
+        );
+        return null;
+      }
+      const durations = rawDurations.map((raw) =>
+        this.parseNumber(raw, 'loop duration', command, {minimum: 0}),
+      );
+      if (durations.some((duration) => duration === null)) return null;
+      if (!durations.some((duration) => /** @type {number} */ (duration) > 0)) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop requires at least one positive duration.',
+          command,
+        );
+        return null;
+      }
+      for (const skin of skins) {
+        this.addReference('asset', skin, command, {expectedKind: 'costume', actor: target});
+        this.addCostumeUse(skin, target);
+      }
+      return {
+        [key]: {
+          steps: skins.map((skin, index) => ({
+            skin,
+            seconds: /** @type {number} */ (durations[index]),
+          })),
+        },
+      };
     }
     if (actionName === 'setText') {
       if (parts.length !== 4 || !parts[3]) {
@@ -1300,7 +1376,10 @@ class Converter {
 
   buildDocument() {
     /** @type {Record<string, any>} */
-    const document = {kamishibai: '4.0'};
+    const document = {
+      kamishibai: '4.0',
+      controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+    };
     if (this.assets.size > 0) document.assets = this.renderAssets();
     if (this.actors.size > 0) document.actors = ownObject(this.actors);
     if (this.cover) document.cover = this.cover;
