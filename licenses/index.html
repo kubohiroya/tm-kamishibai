@@ -4,13 +4,11 @@
   <link rel="icon" type="image/png" sizes="256x256" href="../favicon.png">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="TMPose紙芝居のドキュメント移転案内" />
     <meta
-      http-equiv="refresh"
-      content="0; url=https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+      name="description"
+      content="TMPose紙芝居のサイト、文書、作品、素材に適用されるライセンスと権利表示を案内します"
     />
-    <link rel="canonical" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/" />
-    <title>ドキュメントを移動しました | TMPose紙芝居</title>
+    <title>ライセンス・権利表示 | TMPose紙芝居</title>
     <link rel="stylesheet" href="../site-shell.css" />
     <script type="module" src="../site-shell.js"></script>
     <style>
@@ -18,6 +16,7 @@
         color-scheme: light;
         font-family: system-ui, sans-serif;
         --ink: #3f302b;
+        --muted: #756960;
         --paper: #fffdf8;
         --canvas: #fff8ee;
         --accent: #963f2f;
@@ -32,25 +31,44 @@
         color: var(--ink);
       }
       main {
-        max-width: 760px;
+        max-width: 880px;
         margin: auto;
-        padding: 72px 24px;
+        padding: 48px 24px 72px;
       }
-      .notice {
-        padding: 32px;
+      h1 {
+        margin-bottom: 0.35rem;
+        font-size: clamp(2rem, 5vw, 3.4rem);
+      }
+      .lead {
+        margin-top: 0;
+        color: var(--muted);
+        font-size: 1.2rem;
+        line-height: 1.7;
+      }
+      section {
+        margin-top: 28px;
+        padding: 22px;
         border: 1px solid var(--line);
         border-radius: 12px;
         background: var(--paper);
       }
-      .button {
-        display: inline-block;
-        margin-top: 12px;
-        padding: 10px 16px;
-        border-radius: 7px;
-        background: var(--accent);
-        color: white;
-        text-decoration: none;
-        font-weight: 700;
+      section h2 {
+        margin-top: 0;
+      }
+      p,
+      li,
+      dd {
+        line-height: 1.75;
+      }
+      dt {
+        margin-top: 0.8rem;
+        font-weight: 800;
+      }
+      dd {
+        margin-left: 0;
+      }
+      a {
+        color: var(--accent);
       }
     </style>
   </head>
@@ -63,13 +81,13 @@
           <span>TMPose紙芝居</span>
         </a>
         <nav class="site-nav" aria-label="サイトナビゲーション">
-          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/"
-            >トップ</a
-          >
           <a
             class="site-nav__link"
-            href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+            href="https://kubohiroya.github.io/tmpose-kamishibai/"
             aria-current="page"
+            >トップ</a
+          >
+          <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
             >ドキュメント</a
           >
           <a
@@ -101,12 +119,64 @@
       </div>
     </header>
     <main id="main-content">
-      <section class="notice">
-        <h1>ドキュメントを移動しました</h1>
-        <p>TMPose紙芝居のドキュメントは、専用のドキュメントサイトへ移設しました。</p>
-        <a class="button" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/"
-          >新しいドキュメントサイトを開く</a
-        >
+      <h1>ライセンス・権利表示</h1>
+      <p class="lead">
+        TMPose紙芝居には、ソフトウェア、文書、紙芝居作品、画像・音声など、条件の異なる素材が含まれます。個別表示がある場合は、その条件を優先してください。
+      </p>
+
+      <section aria-labelledby="software-license">
+        <h2 id="software-license">ソフトウェアと公式サイト</h2>
+        <p>
+          個別の表示がない、本プロジェクトが著作権を持つソフトウェア、サイトの実装、素材はMozilla
+          Public License 2.0（MPL-2.0）で提供します。
+        </p>
+        <p>
+          適用範囲と第三者依存の詳細は<a
+            href="https://github.com/kubohiroya/tmpose-kamishibai/blob/main/LICENSES.md"
+            >本体リポジトリのライセンス区分</a
+          >を参照してください。
+        </p>
+      </section>
+
+      <section aria-labelledby="related-rights">
+        <h2 id="related-rights">文書、体験会資料、作品</h2>
+        <p>
+          ドキュメントにはCC BY-SA
+          4.0、体験会資料には個別の著作権表示、作品には作品・素材ごとのライセンスが適用されます。
+        </p>
+        <ul>
+          <li>
+            <a href="https://kubohiroya.github.io/tmpose-kamishibai-docs/licenses/"
+              >ドキュメントのライセンス・権利表示</a
+            >
+          </li>
+          <li>
+            <a href="https://kubohiroya.github.io/tmpose-kamishibai-samples/licenses/"
+              >作品ライブラリのライセンス・権利表示</a
+            >
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="symbol-rights">
+        <h2 id="symbol-rights">サイトアイコン</h2>
+        <dl>
+          <dt>元画像</dt>
+          <dd>公式サンプル「浦島太郎」の<code>Urashima-walk-1</code>（権利者: Hiroya Kubo）</dd>
+          <dt>派生方法</dt>
+          <dd>頭部と上半身を中心とする、背景を透明にした256×256ピクセルの切り抜き</dd>
+          <dt>ライセンス</dt>
+          <dd>
+            <a href="https://www.mozilla.org/MPL/2.0/">Mozilla Public License 2.0</a>
+          </dd>
+          <dt>出典</dt>
+          <dd>
+            <a
+              href="https://github.com/kubohiroya/tmpose-kamishibai-samples/blob/main/stories/urashima/assets/images/963e926995791fde1b335fd4ba60d6d7.png"
+              >tmpose-kamishibai-samples内の元画像</a
+            >
+          </dd>
+        </dl>
       </section>
     </main>
     <footer class="site-footer" data-site-footer-version="1">
