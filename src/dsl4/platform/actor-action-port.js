@@ -62,6 +62,7 @@ function validateSpeechPayload(value, command, extended) {
     'noSoundCharacters',
     'restCharacters',
     'restCharacterIntervalSeconds',
+    'advanceIndicator',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
@@ -229,7 +230,7 @@ function validatePresentationOperation(value, command) {
       `${command} presentation operation must provide start and finish`,
     );
   }
-  return /** @type {{start: () => unknown, startBackground?: () => void, finish: (reason?: string) => unknown}} */ (
+  return /** @type {{start: () => unknown, startBackground?: () => void, finish: (reason?: string) => unknown, setSpeechLifecycle?: (lifecycle: Readonly<{onTextComplete: () => void, onTerminal: () => void}>) => void}} */ (
     /** @type {unknown} */ (value)
   );
 }
@@ -365,6 +366,8 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
  * @param {(actorId: string, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.resolveActor
  * @param {unknown} options.host
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {unknown} [options.advanceIndicatorPresenter]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -376,6 +379,28 @@ export function createDsl4ActorActionPort(options) {
   const speechAdvanceTypewriterEnabled = options.speechAdvanceTypewriterEnabled ?? false;
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
+  }
+  const bubbleAdvanceIndicatorEnabled = options.bubbleAdvanceIndicatorEnabled ?? false;
+  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
+  }
+  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  /** @type {Record<string, Function> | undefined} */
+  let advanceIndicatorPresenter;
+  if (bubbleAdvanceIndicatorEnabled) {
+    if (
+      !isRecord(options.advanceIndicatorPresenter) ||
+      typeof options.advanceIndicatorPresenter.create !== 'function'
+    ) {
+      throw new TypeError(
+        'advanceIndicatorPresenter.create is required when bubble advance indicators are enabled',
+      );
+    }
+    advanceIndicatorPresenter = /** @type {Record<string, Function>} */ (
+      options.advanceIndicatorPresenter
+    );
   }
   const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
 
@@ -473,10 +498,47 @@ export function createDsl4ActorActionPort(options) {
         );
       }
     }
+    let advanceIndicator;
+    if (Object.hasOwn(value, 'advanceIndicator')) {
+      if (!bubbleAdvanceIndicatorEnabled) {
+        throw portError('K4-ACTOR-PORT-001', 'bubble advance indicator is disabled');
+      }
+      const candidate = value.advanceIndicator;
+      if (
+        !isRecord(candidate) ||
+        Object.keys(candidate).some((key) => key !== 'frames' && key !== 'frameIntervalSeconds') ||
+        !Array.isArray(candidate.frames) ||
+        candidate.frames.length < 2 ||
+        candidate.frames.some((frame) => typeof frame !== 'string' || frame.length === 0)
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.advanceIndicator must provide at least two frame asset names`,
+        );
+      }
+      const frameIntervalSeconds = requireFiniteNumber(
+        candidate.frameIntervalSeconds,
+        'advanceIndicator.frameIntervalSeconds',
+        command,
+      );
+      if (frameIntervalSeconds <= 0 || !Number.isFinite(frameIntervalSeconds * 1000)) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.advanceIndicator.frameIntervalSeconds must be greater than zero`,
+        );
+      }
+      advanceIndicator = Object.freeze({
+        frames: Object.freeze([...candidate.frames]),
+        frameIntervalSeconds,
+      });
+    }
     const signal = validateContext(context);
     if (signal.aborted) throw abortError();
     for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
       requireAudioAsset(/** @type {string} */ (sound));
+    }
+    if (advanceIndicator) {
+      for (const frame of advanceIndicator.frames) requireImageAsset(frame);
     }
     const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
       /** @type {unknown} */ (context)
@@ -499,7 +561,54 @@ export function createDsl4ActorActionPort(options) {
       ),
       command,
     );
-    return runSpeechPresentationOperation(operation, signal, context, waitFor === 'advance');
+    /** @type {{start: Function, stop: Function} | undefined} */
+    let indicatorOperation;
+    let indicatorStopped = false;
+    const stopIndicator = () => {
+      if (indicatorStopped || !indicatorOperation) return;
+      indicatorStopped = true;
+      indicatorOperation.stop();
+    };
+    if (advanceIndicator && waitFor === 'advance') {
+      indicatorOperation = advanceIndicatorPresenter?.create(
+        actor,
+        advanceIndicator,
+        actionContext,
+      );
+      if (
+        !isRecord(indicatorOperation) ||
+        typeof indicatorOperation.start !== 'function' ||
+        typeof indicatorOperation.stop !== 'function'
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-004',
+          `${command} advance indicator operation must provide start and stop`,
+        );
+      }
+      if (typeof operation.setSpeechLifecycle !== 'function') {
+        throw portError(
+          'K4-ACTOR-PORT-004',
+          `${command} presentation operation must provide setSpeechLifecycle`,
+        );
+      }
+      const activeIndicator = indicatorOperation;
+      operation.setSpeechLifecycle(
+        Object.freeze({
+          onTextComplete: () => activeIndicator.start(),
+          onTerminal: stopIndicator,
+        }),
+      );
+    }
+    try {
+      return await runSpeechPresentationOperation(
+        operation,
+        signal,
+        context,
+        waitFor === 'advance',
+      );
+    } finally {
+      stopIndicator();
+    }
   }
 
   return Object.freeze({

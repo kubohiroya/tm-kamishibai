@@ -6,6 +6,7 @@ import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-star
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
+import {createDsl4BubbleAdvanceIndicatorPresenter} from './bubble-advance-indicator.js';
 import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
@@ -243,6 +244,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} posePreviewMirroringEnabled
  * @param {boolean} cameraPreviewControlsEnabled
  * @param {boolean} speechAdvanceTypewriterEnabled
+ * @param {boolean} bubbleAdvanceIndicatorEnabled
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -253,6 +255,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   posePreviewMirroringEnabled,
   cameraPreviewControlsEnabled,
   speechAdvanceTypewriterEnabled,
+  bubbleAdvanceIndicatorEnabled,
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -262,6 +265,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4TurboWarpActorPlatform> | null} */
   let actorPlatform = null;
+  /** @type {ReturnType<typeof createDsl4BubbleAdvanceIndicatorPresenter> | null} */
+  let bubbleAdvanceIndicatorPresenter = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
@@ -435,11 +440,30 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
     });
+    if (bubbleAdvanceIndicatorEnabled) {
+      const activeAssetSession = assetSession;
+      bubbleAdvanceIndicatorPresenter = createDsl4BubbleAdvanceIndicatorPresenter({
+        runtime: options.runtime,
+        getAssetResource: (assetId) => activeAssetSession.getAssetResource(assetId),
+        ...(options.createAdvanceIndicatorImage === undefined
+          ? {}
+          : {createImage: options.createAdvanceIndicatorImage}),
+        ...(options.advanceIndicatorScheduler === undefined
+          ? {}
+          : {scheduler: options.advanceIndicatorScheduler}),
+      });
+    }
     const actorPort = createDsl4ActorActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
+      ...(bubbleAdvanceIndicatorEnabled
+        ? {
+            bubbleAdvanceIndicatorEnabled: true,
+            advanceIndicatorPresenter: bubbleAdvanceIndicatorPresenter,
+          }
+        : {}),
     });
     const asyncInputPort = createDsl4AsyncInputActionPort({
       composition: assetSession.asyncInputComposition,
@@ -659,6 +683,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => bubbleAdvanceIndicatorPresenter?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
             () => poseFeedbackPresenter?.dispose(),
@@ -687,6 +712,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => bubbleAdvanceIndicatorPresenter?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
       () => poseFeedbackPresenter?.dispose(),
@@ -752,6 +778,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {Function} [options.createSvgTextComposition]
  * @param {unknown} [options.actorScheduler]
  * @param {number} [options.actorFrameMilliseconds]
+ * @param {Function} [options.createAdvanceIndicatorImage]
+ * @param {unknown} [options.advanceIndicatorScheduler]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
  * @param {Readonly<Record<string, unknown>>} [options.poseFeedbackPresenter] Standard app-shell presenter options
@@ -855,13 +883,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         startupContext.featureFlags.dsl4PosePreviewMirroring,
         startupContext.featureFlags.dsl4CameraPreviewControls,
         startupContext.featureFlags.dsl4SpeechAdvanceTypewriter,
+        startupContext.featureFlags.dsl4BubbleAdvanceIndicator,
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;

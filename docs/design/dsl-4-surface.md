@@ -340,6 +340,9 @@ bubbleStyles:
     characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
   Hero style:
     styles:
       - Typing base
@@ -358,6 +361,10 @@ style定義自身の`styles`配列から既存styleを参照し、名前付き�
 合成した後、その定義自身に記述したpropertyを適用します。名前付き合成は再帰的に使用できますが、直接・
 間接を問わず循環参照は`K4-BUBBLE-STYLE-CYCLE-001`で拒否します。参照先が存在しない場合と同じstyleの
 重複指定もエラーです。
+
+`advanceIndicator.frames`は2件以上のtarget-independent `image` asset ID、
+`frameIntervalSeconds`は正の秒数です。同じframe IDを複数回指定して表示時間を調整できます。
+actionが参照するeffective styleに含まれる全frameを、sceneのasset依存としてprepareします。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -596,6 +603,12 @@ iconへ反映します。
 合成後のeffective styleを共通speech引数へ解決してからActor portへ渡すため、platform adapterはstyle
 registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
 残さず未知keyとして拒否します。
+
+`advanceIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
+表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
+入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
+残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
+terminal cleanupで同期的に解除します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。

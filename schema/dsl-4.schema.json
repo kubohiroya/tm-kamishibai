@@ -352,7 +352,21 @@
         "characterSound": {"$ref": "#/$defs/assetId"},
         "noSoundCharacters": {"type": "string", "minLength": 1},
         "restCharacters": {"type": "string", "minLength": 1},
-        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "advanceIndicator": {"$ref": "#/$defs/bubbleAdvanceIndicator"}
+      }
+    },
+    "bubbleAdvanceIndicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames", "frameIntervalSeconds"],
+      "properties": {
+        "frames": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/assetId"}
+        },
+        "frameIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "bubbleStyles": {

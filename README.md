@@ -130,6 +130,12 @@ assets:
   HeroIdle: costume:Hero
   HeroGreetingVoice: sound
   Typewriter: sound
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 actors:
   Hero: HeroIdle
 bubbleStyles:
@@ -140,6 +146,9 @@ bubbleStyles:
     characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    advanceIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
   Hero style:
     styles:
       - Typing base
@@ -155,7 +164,14 @@ scenes:
         startSound: HeroGreetingVoice
 ```
 
-この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter` feature flagが既定OFFです。入力対象や
+`advanceIndicator`は`waitFor: advance`で全文の表示が終わってから入力を待つ間だけ、本文末尾に
+`frames`のimage assetを順番にループ表示します。`frames`は2枚以上、`frameIntervalSeconds`は正の秒数です。
+文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
+sceneのasset依存へ含まれます。
+
+この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`と`dsl4BubbleAdvanceIndicator` feature flagが
+既定OFFです。後者は`dsl4Runtime`、`dsl4AppShell`、`dsl4SpeechAdvanceTypewriter`を必要とします。
+問題時は`dsl4BubbleAdvanceIndicator`をOFFに戻すと、既存の吹き出し表示へ切り戻せます。入力対象や
 `seconds`／`waitFor`の組み合わせを含む完全な仕様は
 [DSL 4.0 surface仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#72-actor-action)を参照してください。
 

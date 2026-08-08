@@ -22,6 +22,7 @@ const speechPresentationArgumentNames = Object.freeze([
   'noSoundCharacters',
   'restCharacters',
   'restCharacterIntervalSeconds',
+  'advanceIndicator',
 ]);
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
@@ -140,6 +141,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -154,6 +156,7 @@ export function createDsl4RuntimeController({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
+  bubbleAdvanceIndicatorEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -198,6 +201,12 @@ export function createDsl4RuntimeController({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
+  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
+  }
+  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -225,6 +234,14 @@ export function createDsl4RuntimeController({
   const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     bubbleStylesValue
   );
+  if (
+    !bubbleAdvanceIndicatorEnabled &&
+    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'advanceIndicator'))
+  ) {
+    throw new TypeError(
+      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.advanceIndicator',
+    );
+  }
   if (!speechAdvanceTypewriterEnabled) {
     const extendedSpeechAction = scenes
       .flatMap(

@@ -32,6 +32,12 @@ function addActionDependencies(action, dependencies, bubbleStyles) {
       Object.hasOwn(args, 'characterSound') ? args.characterSound : style?.characterSound,
       dependencies,
     );
+    const advanceIndicator = /** @type {Readonly<Record<string, unknown>>} */ (
+      style?.advanceIndicator ?? {}
+    );
+    for (const frame of /** @type {ReadonlyArray<unknown>} */ (advanceIndicator.frames ?? [])) {
+      addDependency(frame, dependencies);
+    }
   }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
   if (command !== 'pose') return false;
