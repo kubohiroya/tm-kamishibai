@@ -777,11 +777,25 @@ test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separ
 
 test('preserves literal asset and scene IDs with whitespace, punctuation, controls, and Unicode form', () => {
   const assetId = ' Asset.e\u0301%/~\u0001\u007f ';
+  const bubbleAssetId = ' Bubble.e\u0301./\u0002 ';
   const sceneId = ' Scene.e\u0301%/~\n\u007f ';
   const result = frontend.parse(`
 kamishibai: '4.0'
 assets:
   " Asset.e\\u0301%/~\\x01\\x7F ": backdrop
+  " Bubble.e\\u0301./\\x02 ":
+    kind: image
+    file: bubble.svg
+bubbleStyles:
+  literal:
+    portrait:
+      base: " Bubble.e\\u0301./\\x02 "
+      blink:
+        frames: [" Bubble.e\\u0301./\\x02 "]
+        frameIntervalSeconds: 0.4
+    advanceIndicator:
+      frames: [" Bubble.e\\u0301./\\x02 ", " Bubble.e\\u0301./\\x02 "]
+      frameIntervalSeconds: 0.2
 scenes:
   " Scene.e\\u0301%/~\\n\\x7F ":
     - stage: " Asset.e\\u0301%/~\\x01\\x7F "
@@ -791,6 +805,15 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.equal(Object.hasOwn(result.storyDocument.assets, assetId), true);
   assert.equal(result.storyDocument.assets[assetId].name, assetId);
+  assert.equal(Object.hasOwn(result.storyDocument.assets, bubbleAssetId), true);
+  assert.deepEqual(result.storyDocument.bubbleStyles.literal.portrait, {
+    base: bubbleAssetId,
+    blink: {frames: [bubbleAssetId], frameIntervalSeconds: 0.4},
+  });
+  assert.deepEqual(result.storyDocument.bubbleStyles.literal.advanceIndicator, {
+    frames: [bubbleAssetId, bubbleAssetId],
+    frameIntervalSeconds: 0.2,
+  });
   assert.equal(result.storyDocument.scenes[0].id, sceneId);
   assert.equal(
     result.storyDocument.scenes[0].actions[0].id,
