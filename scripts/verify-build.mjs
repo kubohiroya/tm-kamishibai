@@ -21,6 +21,7 @@ const heroImagePath = path.join(outputDirectory, 'images/image01.png');
 const downloadSourceDirectory = path.join(projectRoot, 'site/downloads');
 const downloadDirectory = path.join(outputDirectory, 'downloads');
 const downloadIndexPath = path.join(downloadDirectory, 'index.html');
+const licensesIndexPath = path.join(outputDirectory, 'licenses', 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const docsSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-docs/';
@@ -109,6 +110,22 @@ async function verifySiteAppBars() {
       (html.match(/<header class="site-header">/gu) ?? []).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must contain exactly one site AppBar.`,
     );
+    assert(
+      (html.match(/<footer class="site-footer" data-site-footer-version="1">/gu) ?? []).length ===
+        1,
+      `${path.relative(outputDirectory, htmlFile)} must contain exactly one site footer.`,
+    );
+    const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] ?? '';
+    assert(footer.includes('© 2026 Hiroya Kubo'), 'The site footer is missing its copyright.');
+    assert(
+      footer.includes('各文書・作品・素材には個別の利用条件が適用されます。'),
+      'The site footer is missing its individual-rights notice.',
+    );
+    assert(
+      footer.includes('href="https://kubohiroya.github.io/tmpose-kamishibai/licenses/"'),
+      'The site footer is missing its rights page.',
+    );
+    assert(!footer.includes('github.com'), 'The site footer must not duplicate the GitHub link.');
     assert(
       stylesheets.filter((href) => href === relativeCss).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must load the site stylesheet once.`,
@@ -337,6 +354,9 @@ export async function verifyBuild({releaseBuilds} = {}) {
     `The legacy documentation path must contain only its redirect page: ${docsEntries.join(', ')}`,
   );
   await access(path.join(outputDirectory, 'docs/index.html'));
+  await access(licensesIndexPath);
+  await verifyLocalReferences(licensesIndexPath, 'img', 'src');
+  await verifyLocalReferences(licensesIndexPath, 'a', 'href');
   await access(path.join(outputDirectory, 'images/image01.png'));
 
   console.log(
