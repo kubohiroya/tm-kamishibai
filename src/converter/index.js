@@ -16,7 +16,7 @@ const numberPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
  * @typedef {{start: SourcePosition, end: SourcePosition}} SourceRange
  * @typedef {{key: string, value: string, lineNumber: number, columnNumber: number, sourceLine: string}} Dsl32Command
  * @typedef {{code: string, severity: 'error' | 'warning', message: string, sourceId: string, range: SourceRange, command: string | null}} ConversionDiagnostic
- * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'poseModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command}} ConvertedAsset
+ * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'poseModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command} | {kind: 'poseModel', delivery: 'remote', source: {url: string}, loading: 'lazy', command: Dsl32Command}} ConvertedAsset
  * @typedef {{kind: 'asset' | 'actor' | 'branch' | 'scene' | 'style', id: string, expectedKind?: 'backdrop' | 'costume' | 'sound' | 'poseModel', actor?: string, command: Dsl32Command}} ConversionReference
  * @typedef {{ok: boolean, source: string, document: Record<string, any> | null, yaml: string | null, diagnostics: ConversionDiagnostic[]}} ConversionResult
  * @typedef {{id: string, file: string, loading?: 'eager' | 'lazy'}} PoseModelReplacement
@@ -131,12 +131,8 @@ function normalizePoseModels(input) {
     if (typeof replacement.id !== 'string' || typeof replacement.file !== 'string') {
       throw new TypeError(`poseModels[${sourceUrl}] requires string id and file fields.`);
     }
-    if (
-      replacement.id !== replacement.id.normalize('NFC') ||
-      !identifierPattern.test(replacement.id) ||
-      dangerousIdentifiers.has(replacement.id)
-    ) {
-      throw new TypeError(`poseModels[${sourceUrl}].id is not a valid DSL 4.0 identifier.`);
+    if (replacement.id.length === 0 || dangerousIdentifiers.has(replacement.id)) {
+      throw new TypeError(`poseModels[${sourceUrl}].id must be a non-empty safe string.`);
     }
     if (!isSafePoseModelFile(replacement.file)) {
       throw new TypeError(`poseModels[${sourceUrl}].file must be a safe project-relative path.`);
@@ -178,6 +174,9 @@ class Converter {
     this.scenes = new Map();
     /** @type {Map<string, string>} */
     this.scenePoseModels = new Map();
+    /** @type {Map<string, string>} */
+    this.remotePoseModels = new Map();
+    this.nextRemotePoseModelId = 1;
     /** @type {Map<string, Dsl32Command>} */
     this.scenesUsingPose = new Map();
     /** @type {Map<string, Record<string, any>[]>} */
@@ -265,6 +264,15 @@ class Converter {
     return true;
   }
 
+  /** @param {string} id @param {string} label @param {Dsl32Command} command */
+  validateLiteralId(id, label, command) {
+    if (id.length === 0 || dangerousIdentifiers.has(id)) {
+      this.error('K4-CONVERT-ID-INVALID', `${label} must be a non-empty safe string.`, command);
+      return false;
+    }
+    return true;
+  }
+
   /** @param {Map<string, any>} collection @param {string} id @param {string} label @param {Dsl32Command} command */
   rejectDuplicate(collection, id, label, command) {
     if (!collection.has(id)) return false;
@@ -304,7 +312,7 @@ class Converter {
     }
     const id = command.value.slice(0, separator).trim();
     const address = command.value.slice(separator + 1).trim();
-    if (!this.validateIdentifier(id, 'Asset ID', command)) return;
+    if (!this.validateLiteralId(id, 'Asset ID', command)) return;
     if (this.rejectDuplicate(this.assets, id, 'Asset', command)) return;
     const asset = this.parseAssetAddress(id, address, command);
     if (asset) this.assets.set(id, asset);
@@ -371,7 +379,7 @@ class Converter {
     }
     const [actor, costume] = parts;
     if (!this.validateIdentifier(actor, 'Actor ID', command)) return;
-    if (!this.validateIdentifier(costume, 'Costume asset ID', command)) return;
+    if (!this.validateLiteralId(costume, 'Costume asset ID', command)) return;
     if (this.rejectDuplicate(this.actors, actor, 'Actor', command)) return;
     this.actors.set(actor, costume);
     this.addReference('asset', costume, command, {expectedKind: 'costume', actor});
@@ -680,7 +688,7 @@ class Converter {
   /** @param {Dsl32Command} command */
   parseScene(command) {
     const id = command.value.trim();
-    if (!this.validateIdentifier(id, 'Scene ID', command)) {
+    if (!this.validateLiteralId(id, 'Scene ID', command)) {
       this.currentScene = null;
       return;
     }
@@ -715,14 +723,51 @@ class Converter {
       ? this.poseModels[sourceUrl]
       : undefined;
     if (!replacement) {
-      this.error(
-        'K4-CONVERT-POSE-MODEL',
-        `TMPoseURL cannot remain remote in DSL 4.0. Add an exact replacement for ${sourceUrl || '(empty)'} to --pose-models.`,
-        command,
-      );
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(sourceUrl);
+      } catch {
+        this.error(
+          'K4-CONVERT-POSE-MODEL',
+          `TMPoseURL must be an absolute HTTPS URL or have an exact --pose-models replacement: ${sourceUrl || '(empty)'}`,
+          command,
+        );
+        return;
+      }
+      if (
+        parsedUrl.protocol !== 'https:' ||
+        !parsedUrl.hostname ||
+        parsedUrl.username ||
+        parsedUrl.password ||
+        parsedUrl.hash
+      ) {
+        this.error(
+          'K4-CONVERT-POSE-MODEL',
+          `TMPoseURL must be an absolute HTTPS URL without credentials or fragment, or have an exact --pose-models replacement: ${sourceUrl}`,
+          command,
+        );
+        return;
+      }
+      const normalizedUrl = sourceUrl.endsWith('/') ? sourceUrl : `${sourceUrl}/`;
+      let assetId = this.remotePoseModels.get(normalizedUrl);
+      if (!assetId) {
+        do {
+          assetId = `PoseModel${this.nextRemotePoseModelId}`;
+          this.nextRemotePoseModelId += 1;
+        } while (this.assets.has(assetId));
+        this.assets.set(assetId, {
+          kind: 'poseModel',
+          delivery: 'remote',
+          source: {url: normalizedUrl},
+          loading: 'lazy',
+          command,
+        });
+        this.remotePoseModels.set(normalizedUrl, assetId);
+      }
+      this.scenePoseModels.set(this.currentScene, assetId);
       return;
     }
-    if (!this.validateIdentifier(replacement.id, 'Pose model asset ID', command)) return;
+    if (!this.validateLiteralId(replacement.id, 'Pose model asset ID', command)) return;
     if (!this.validatePoseModelFile(replacement.file, command)) return;
     if (replacement.loading !== undefined && !['eager', 'lazy'].includes(replacement.loading)) {
       this.error(
@@ -736,6 +781,7 @@ class Converter {
     if (existing) {
       if (
         existing.kind !== 'poseModel' ||
+        !('file' in existing) ||
         existing.file !== replacement.file ||
         (existing.loading ?? 'eager') !== (replacement.loading ?? 'eager')
       ) {
@@ -1153,11 +1199,20 @@ class Converter {
     const rendered = new Map();
     for (const [id, asset] of this.assets) {
       if (asset.kind === 'poseModel') {
-        rendered.set(id, {
-          kind: 'poseModel',
-          file: asset.file,
-          ...(asset.loading ? {loading: asset.loading} : {}),
-        });
+        if ('delivery' in asset && asset.delivery === 'remote') {
+          rendered.set(id, {
+            kind: 'poseModel',
+            delivery: 'remote',
+            source: asset.source,
+            loading: asset.loading,
+          });
+        } else if ('file' in asset) {
+          rendered.set(id, {
+            kind: 'poseModel',
+            file: asset.file,
+            ...(asset.loading ? {loading: asset.loading} : {}),
+          });
+        }
       } else if (asset.kind === 'backdrop') {
         rendered.set(id, asset.name === id ? 'backdrop' : {kind: 'backdrop', name: asset.name});
       } else if (asset.kind === 'sound') {
@@ -1294,7 +1349,7 @@ class Converter {
       if (!this.scenePoseModels.has(sceneId)) {
         this.error(
           'K4-CONVERT-POSE-MODEL',
-          `Scene ${sceneId} uses Actor.pose but has no convertible TMPoseURL. Add TMPoseURL and an exact --pose-models replacement.`,
+          `Scene ${sceneId} uses Actor.pose but has no convertible TMPoseURL. Add a TMPoseURL or an exact --pose-models replacement.`,
           command,
         );
       }

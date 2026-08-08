@@ -1,3 +1,5 @@
+import {encodeDsl4StoryPathSegment} from './story-path.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,7 +21,7 @@ function assetError(assetId, code, message, cause) {
   const error = new Error(message, cause === undefined ? undefined : {cause});
   Object.defineProperties(error, {
     code: {value: code},
-    storyPath: {value: `/assets/${assetId.replaceAll('~', '~0').replaceAll('/', '~1')}`},
+    storyPath: {value: `/assets/${encodeDsl4StoryPathSegment(assetId)}`},
   });
   return error;
 }
@@ -27,6 +29,30 @@ function assetError(assetId, code, message, cause) {
 /** @param {unknown} value */
 function mediaType(value) {
   return typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : '';
+}
+
+/** @param {Record<string, any>} source */
+function isVerifiedRemoteSource(source) {
+  return (
+    typeof source.integrity === 'string' &&
+    typeof source.contentType === 'string' &&
+    Number.isSafeInteger(source.size)
+  );
+}
+
+/** @param {string} baseUrl @param {string} fileName */
+function remotePoseFileUrl(baseUrl, fileName) {
+  const directoryUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return new URL(fileName, directoryUrl).href;
+}
+
+/** @param {Uint8Array} bytes @param {string} name */
+function parseRemotePoseJson(bytes, name) {
+  try {
+    return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+  } catch (error) {
+    throw new Error(`Remote pose model ${name} is not valid UTF-8 JSON`, {cause: error});
+  }
 }
 
 /** @param {Uint8Array} bytes @param {{digest: Function}} subtleCrypto */
@@ -131,7 +157,8 @@ export function createDsl4EmbeddedAssetLifecycle({
     const source = /** @type {Record<string, any>} */ (asset.source);
     if (source.type === 'remote') {
       return (async () => {
-        const usesVerifiedResolver = verifiedRemoteResolver !== null;
+        const verified = isVerifiedRemoteSource(source);
+        const usesVerifiedResolver = verified && verifiedRemoteResolver !== null;
         if (!usesVerifiedResolver && remoteLoader === null) {
           throw assetError(
             asset.id,
@@ -139,12 +166,89 @@ export function createDsl4EmbeddedAssetLifecycle({
             `Remote asset loading is not enabled: ${asset.id}`,
           );
         }
-        if (!usesVerifiedResolver && (!subtleCrypto || typeof subtleCrypto.digest !== 'function')) {
+        if (
+          verified &&
+          !usesVerifiedResolver &&
+          (!subtleCrypto || typeof subtleCrypto.digest !== 'function')
+        ) {
           throw assetError(
             asset.id,
             'K4-ASSET-REMOTE-CRYPTO-001',
             'Web Crypto digest is required for remote asset verification',
           );
+        }
+        if (!verified) {
+          if (asset.kind !== 'poseModel') {
+            throw assetError(
+              asset.id,
+              'K4-ASSET-REMOTE-METADATA-001',
+              `Only pose models may use an unverified remote URL: ${asset.id}`,
+            );
+          }
+          const unverifiedRemoteLoader = /** @type {Function} */ (remoteLoader);
+          try {
+            /** @param {string} path */
+            const loadFile = async (path) => {
+              const url = remotePoseFileUrl(source.url, path);
+              const loaded = await unverifiedRemoteLoader(
+                Object.freeze({assetId: asset.id, url}),
+                context,
+              );
+              if (!isRecord(loaded) || !(loaded.bytes instanceof Uint8Array)) {
+                throw new TypeError(`Remote pose model file is invalid: ${path}`);
+              }
+              return Object.freeze({
+                path,
+                size: loaded.bytes.byteLength,
+                contentType: mediaType(loaded.contentType),
+                bytes: new Uint8Array(loaded.bytes),
+              });
+            };
+            const [modelFile, metadataFile] = await Promise.all([
+              loadFile('model.json'),
+              loadFile('metadata.json'),
+            ]);
+            if (context.signal?.aborted) throw abortError();
+            const model = parseRemotePoseJson(modelFile.bytes, 'model.json');
+            const declaredWeights =
+              isRecord(model) && Array.isArray(model.weightsManifest)
+                ? model.weightsManifest.flatMap((entry) =>
+                    isRecord(entry) && Array.isArray(entry.paths) ? entry.paths : [],
+                  )
+                : [];
+            if (
+              declaredWeights.length !== 1 ||
+              typeof declaredWeights[0] !== 'string' ||
+              !/^[A-Za-z0-9._-]+\.bin$/u.test(declaredWeights[0])
+            ) {
+              throw new TypeError(
+                'Remote pose model.json must declare exactly one root-level .bin weights file',
+              );
+            }
+            parseRemotePoseJson(metadataFile.bytes, 'metadata.json');
+            const weightsFile = await loadFile(declaredWeights[0]);
+            if (context.signal?.aborted) throw abortError();
+            return Object.freeze({
+              asset,
+              files: Object.freeze([modelFile, metadataFile, weightsFile]),
+            });
+          } catch (error) {
+            if (
+              context.signal?.aborted ||
+              (error instanceof Error && error.name === 'AbortError')
+            ) {
+              throw abortError();
+            }
+            const errorRecord = isRecord(error) ? error : {};
+            throw assetError(
+              asset.id,
+              typeof errorRecord.code === 'string' ? errorRecord.code : 'K4-ASSET-REMOTE-LOAD-001',
+              error instanceof Error && error.message
+                ? error.message
+                : `Remote pose model loading failed: ${asset.id}`,
+              error,
+            );
+          }
         }
         let loaded;
         try {
@@ -552,7 +656,7 @@ export function createDsl4EmbeddedAssetLifecycle({
 }
 
 /**
- * Enable verified remote delivery through an explicitly injected loader.
+ * Enable remote delivery through an explicitly injected loader.
  *
  * @param {Parameters<typeof createDsl4EmbeddedAssetLifecycle>[0]} options
  */

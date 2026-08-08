@@ -63,6 +63,35 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
   assert.equal(first.yaml.includes('poseInputToChangeScene'), false);
 });
 
+test('preserves literal asset, Scratch source, and scene names without generated aliases', () => {
+  const assetId = 'Backdrop ./%\u0001 x';
+  const sourceName = 'Scratch.name/\u0002 x';
+  const sceneId = 'Opening ./%\u0003 x';
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      `asset=${assetId},backdrop:${sourceName}`,
+      `sceneLabel=${sceneId}`,
+      `action=stage:${assetId}`,
+    ].join('\n'),
+    {sourceId: 'literal-names.txt'},
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(Object.keys(result.document.assets), [assetId]);
+  assert.deepEqual(result.document.assets[assetId], {kind: 'backdrop', name: sourceName});
+  assert.deepEqual(Object.keys(result.document.scenes), [sceneId]);
+  assert.equal(result.document.scenes[sceneId][0].stage, assetId);
+  assert.match(result.yaml, /\\x01|\\u0001/u);
+  assert.match(result.yaml, /\\x02|\\u0002/u);
+  assert.match(result.yaml, /\\x03|\\u0003/u);
+
+  const validated = frontend.parse(result.yaml, {sourceId: 'literal-names.k4.yml'});
+  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
+  assert.equal(validated.storyDocument.assets[assetId].name, sourceName);
+  assert.equal(validated.storyDocument.scenes[0].id, sceneId);
+});
+
 test('converts DSL 3.1 through the maintained compatibility grammar with an explicit warning', async () => {
   const [source, expected] = await Promise.all([
     readFile(path.join(fixtureRoot, 'full.dsl32.txt'), 'utf8'),
@@ -298,17 +327,31 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
   );
 });
 
-test('requires an explicit local replacement for each scene TMPoseURL', async () => {
+test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
   const source = await readFile(path.join(fixtureRoot, 'full.dsl32.txt'));
-  const missing = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
-  assert.equal(missing.ok, false);
-  assert.equal(missing.yaml, null);
-  assert.ok(
-    missing.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === 'K4-CONVERT-POSE-MODEL' && diagnostic.range.start.line === 36,
-    ),
-  );
+  const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
+  assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
+  assert.deepEqual(remote.document?.assets.PoseModel1, {
+    kind: 'poseModel',
+    delivery: 'remote',
+    source: {url: 'https://example.com/models/rescue/'},
+    loading: 'lazy',
+  });
+  assert.equal(remote.document?.scenes.rescue.poseModel, 'PoseModel1');
+
+  const literalId = ' Rescue.pose/\u0001 model ';
+  const embedded = convertDsl32ToDsl4(source, {
+    sourceId: 'full.dsl32.txt',
+    poseModels: {
+      'https://example.com/models/rescue/': {
+        id: literalId,
+        file: 'pose-models/rescue',
+      },
+    },
+  });
+  assert.equal(embedded.ok, true, JSON.stringify(embedded.diagnostics));
+  assert.equal(embedded.document?.scenes.rescue.poseModel, literalId);
+  assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue');
 
   const malformed = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',
@@ -507,7 +550,7 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
   await writeFile(
     invalidManifestPath,
     JSON.stringify({
-      'https://example.com/models/rescue/': {id: 'invalid id', file: 'pose-models/rescue'},
+      'https://example.com/models/rescue/': {id: '', file: 'pose-models/rescue'},
     }),
   );
   manifestStderr = '';

@@ -1,5 +1,6 @@
 import {createDsl4ObjectStore} from './object-store/index.js';
 import {deepFreeze} from './story-document.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const storyTypeTag = 'kamishibai.storyDocument';
 const actionViewTypeTag = 'kamishibai.actionView';
@@ -291,7 +292,10 @@ export function createDsl4KamishibaiStructuredDataSession({
   function releaseScene(_reason = 'scene-exit') {
     requireUsable();
     if (!sceneScopeRef) return false;
-    const scenePath = typeof activeScene?.id === 'string' ? `/scenes/${activeScene.id}` : '/';
+    const scenePath =
+      typeof activeScene?.id === 'string'
+        ? `/scenes/${encodeDsl4StoryPathSegment(activeScene.id)}`
+        : '/';
     requireCleanupResult(store.releaseScope(sceneScopeRef), 'releaseScene', scenePath);
     sceneIterator?.release();
     sceneScopeRef = null;
@@ -397,7 +401,7 @@ export function createDsl4KamishibaiStructuredDataSession({
       nextScopeRef = requireStoreResult(
         store.createScope(activeStoryScopeRef, 'kamishibai.scene'),
         'enterScene',
-        `/scenes/${selected.scene.id}`,
+        `/scenes/${encodeDsl4StoryPathSegment(selected.scene.id)}`,
       );
     } catch (error) {
       nextIterator.release();

@@ -408,7 +408,7 @@ function platformFixture(log) {
       log.push(['media.register', input.name]);
       return {
         name: input.name,
-        mimeType: input.resourceId.startsWith('sound:') ? 'audio/wav' : 'image/svg+xml',
+        mimeType: input.locator.kind === 'sound' ? 'audio/wav' : 'image/svg+xml',
       };
     },
     async registerEmbeddedAsset(input) {
@@ -1377,7 +1377,20 @@ test('resets Scratch pose feedback before awaiting a pending remote cache lease 
     label: 'story.kamishibai.yaml',
     databaseName: 'tw-kamishibai-assets-v1--story--resetlease000001',
   };
-  const project = await packagedProject(waitStory, {cacheIdentity});
+  const verifiedRemoteWaitStory = waitStory.replace(
+    'controls:',
+    `assets:
+  CacheLeaseProbe:
+    kind: sound
+    delivery: remote
+    source:
+      url: https://cdn.example.com/cache-lease-probe.ogg
+      integrity: sha256-0000000000000000000000000000000000000000000000000000000000000000
+      contentType: audio/ogg
+      size: 1
+controls:`,
+  );
+  const project = await packagedProject(verifiedRemoteWaitStory, {cacheIdentity});
   const fixture = platformFixture([]);
   fixture.poseConfidence.value = 75;
   fixture.poseProgress.value = 50;

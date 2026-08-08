@@ -68,7 +68,7 @@ DSL 4.0 preview-dsl4 options:
   --replace-existing              Replace a same-channel component in the base SB3
 
 convert-dsl4 options:
-  --pose-models FILE      Map exact TMPoseURL values to local poseModel assets
+  --pose-models FILE      Optionally embed exact TMPoseURL values as local poseModel assets
 
 validate-dsl4 options:
   --format FORMAT         Diagnostic output: pretty (default) or json

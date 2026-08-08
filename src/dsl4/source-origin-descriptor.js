@@ -1,5 +1,6 @@
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {deepFreeze} from './story-document.js';
+import {isCanonicalDsl4StoryPath} from './story-path.js';
 
 const descriptorKeys = new Set(['entries', 'formatVersion']);
 const entryKeys = new Set(['range', 'sourceId', 'storyPath']);
@@ -124,13 +125,8 @@ function sourceId(value, limits) {
 /** @param {unknown} value @param {ReturnType<typeof resolveLimits>} limits */
 function storyPath(value, limits) {
   const result = boundedString(value, 'storyPath', limits.maxStoryPathScalars);
-  if (
-    result !== '/' &&
-    !/^\/(?:[^~/\u0000-\u001f\u007f]|~[01])+(?:\/(?:[^~/\u0000-\u001f\u007f]|~[01])+)*$/u.test(
-      result,
-    )
-  ) {
-    fail('K4-SOURCE-ORIGIN-STORY-PATH-001', 'storyPath must be a canonical JSON Pointer');
+  if (!isCanonicalDsl4StoryPath(result)) {
+    fail('K4-SOURCE-ORIGIN-STORY-PATH-001', 'storyPath must use canonical DSL 4.0 escaping');
   }
   return result;
 }

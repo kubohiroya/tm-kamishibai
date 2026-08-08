@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
-        specifier: 0.7.0
-        version: 0.7.0
+        specifier: 0.8.0
+        version: 0.8.0
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.3.0
         version: 0.3.0
@@ -311,8 +311,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-asset-manager@0.7.0':
-    resolution: {integrity: sha512-2SuxOyPsu3IFVVoR/H//1i2rcsbKpYzFeSCWg5juAMbo950sFgUIlMBln9bfpnG1YKPIC8m70oXF3wscfW8+YQ==}
+  '@kubohiroya/turbowarp-asset-manager@0.8.0':
+    resolution: {integrity: sha512-RtFxSvA+RjrAv6A45beZhT84m14bCgbaeWj07bQmZ6WARimTjaBmJc4etS3eSu42E3bgekU4m7HcWZbv1XgwJw==}
 
   '@kubohiroya/turbowarp-async-input@0.3.0':
     resolution: {integrity: sha512-GbQ8lmZDS388TvFGa8C3EMKzdfUuq/vrzlfRD8jNtbWpI9/Rv5KZZNzvxr67t6Y++0obABFjuxpxxrTN1kqqHg==}
@@ -2589,7 +2589,7 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
-  '@kubohiroya/turbowarp-asset-manager@0.7.0': {}
+  '@kubohiroya/turbowarp-asset-manager@0.8.0': {}
 
   '@kubohiroya/turbowarp-async-input@0.3.0': {}
 

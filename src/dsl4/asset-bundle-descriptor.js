@@ -7,6 +7,7 @@ const assetKeys = new Set(['id', 'kind', 'loading', 'source', 'target']);
 const projectSourceKeys = new Set(['name', 'type']);
 const fileSourceKeys = new Set(['files', 'inputPath', 'mode', 'type']);
 const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'url']);
+const bareRemoteSourceKeys = new Set(['type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
 const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
@@ -62,6 +63,18 @@ function exactOptionalTargetKeys(value, keys, name) {
   const expected = new Set(keys);
   if (!Object.hasOwn(value, 'target')) expected.delete('target');
   exactKeys(value, expected, name);
+}
+
+/** @param {Record<string, unknown>} value @param {string} name @param {boolean} allowBare */
+function exactRemoteSourceKeys(value, name, allowBare) {
+  const hasVerificationMetadata = ['contentType', 'integrity', 'size'].some((key) =>
+    Object.hasOwn(value, key),
+  );
+  exactKeys(
+    value,
+    hasVerificationMetadata || !allowBare ? remoteSourceKeys : bareRemoteSourceKeys,
+    name,
+  );
 }
 
 /** @param {unknown} value @param {string} name */
@@ -201,7 +214,11 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
         return deepFreeze({...candidate, source: {...candidate.source}});
       }
       if (candidate.source.type === 'remote') {
-        exactKeys(candidate.source, remoteSourceKeys, `Asset ${id} remote source`);
+        exactRemoteSourceKeys(
+          candidate.source,
+          `Asset ${id} remote source`,
+          storyAsset.kind === 'poseModel',
+        );
         const storySource = isRecord(storyAsset.source) ? storyAsset.source : {};
         if (
           storyAsset.delivery !== 'remote' ||

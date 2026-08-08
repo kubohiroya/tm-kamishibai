@@ -57,6 +57,27 @@ test('creates a canonical versioned descriptor and restores immutable source ori
   assert.equal(Object.isFrozen(restored), true);
 });
 
+test('accepts canonical percent escapes for literal controls and percent signs', () => {
+  const literalOrigins = {
+    '/assets/ name.%25~1~0%00%1F%7F ': {
+      sourceId: 'story.k4.yml',
+      range: rootRange,
+    },
+  };
+  const descriptor = createDsl4SourceOriginDescriptor(literalOrigins);
+
+  assert.deepEqual(validateDsl4SourceOriginDescriptor(structuredClone(descriptor)), descriptor);
+  for (const invalid of ['/assets/raw%', '/assets/%2F', '/assets/%0a']) {
+    rejectsCode(
+      () =>
+        createDsl4SourceOriginDescriptor({
+          [invalid]: {sourceId: 'story.k4.yml', range: rootRange},
+        }),
+      'K4-SOURCE-ORIGIN-STORY-PATH-001',
+    );
+  }
+});
+
 test('rejects unsafe source IDs and non-canonical story paths', () => {
   for (const invalidSourceId of [
     '/absolute/story.k4.yml',

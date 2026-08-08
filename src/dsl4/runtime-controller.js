@@ -2,6 +2,7 @@ import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js'
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -104,10 +105,6 @@ function safeErrorMessage(error) {
  * @param {string} value
  * @returns {string}
  */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
  * @param {string | null} storyPath
@@ -402,7 +399,7 @@ export function createDsl4RuntimeController({
       typeof action?.id === 'string'
         ? action.id
         : sceneId
-          ? `/scenes/${storyPathSegment(sceneId)}`
+          ? `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`
           : '/';
     const token = deepFreeze({
       kind: 'Dsl4QuiesceToken',
@@ -565,7 +562,7 @@ export function createDsl4RuntimeController({
     const action = actions[actionPosition];
     return typeof action?.id === 'string'
       ? action.id
-      : `/scenes/${storyPathSegment(String(scene.id))}`;
+      : `/scenes/${encodeDsl4StoryPathSegment(String(scene.id))}`;
   }
 
   /**
@@ -629,7 +626,8 @@ export function createDsl4RuntimeController({
   function emit(type, details = {}) {
     const scene = currentScene();
     const action = currentAction();
-    const scenePath = typeof scene?.id === 'string' ? `/scenes/${storyPathSegment(scene.id)}` : '/';
+    const scenePath =
+      typeof scene?.id === 'string' ? `/scenes/${encodeDsl4StoryPathSegment(scene.id)}` : '/';
     const event = /** @type {RuntimeEvent} */ (
       deepFreeze({
         sequence: sequence++,
@@ -899,7 +897,7 @@ export function createDsl4RuntimeController({
         matches = await evaluateCondition(rule.if, context.variables, context);
       } catch (error) {
         throw mapDsl4RuntimeExpressionError(error, {
-          storyPath: `/branches/${storyPathSegment(branchId)}/${ruleIndex}/if`,
+          storyPath: `/branches/${encodeDsl4StoryPathSegment(branchId)}/${ruleIndex}/if`,
           sourcePath: `$.branches[${JSON.stringify(branchId)}][${ruleIndex}].if`,
         });
       }

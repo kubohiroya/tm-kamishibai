@@ -33,27 +33,32 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 
 ## 3. top-level command対応表
 
-| 3.1／3.2 command                          | 4.0 node                                   | 分類            | 主な診断／条件                                                    |
-| ----------------------------------------- | ------------------------------------------ | --------------- | ----------------------------------------------------------------- |
-| `kamishibai=3.2`                          | `kamishibai: "4.0"`                        | 自動            | 重複／unknown versionは`K4-CONVERT-VERSION-*`                     |
-| `kamishibai=3.1`                          | `kamishibai: "4.0"`                        | warning付き自動 | `K4-CONVERT-VERSION-31-COMPAT`                                    |
-| `asset` backdrop／costume／sound          | `assets.<id>`                              | 自動            | SB3内project asset名へ変換                                        |
-| remote／cache `asset`                     | なし                                       | 手動            | `K4-CONVERT-ASSET-REMOTE`／`K4-CONVERT-ASSET-ADDRESS`             |
-| Text Asset `asset`                        | なし                                       | 手動            | `K4-CONVERT-LEGACY-TEXT`。4章に従いSVG Textへ移行                 |
-| `actor`                                   | `actors.<id>`                              | 自動            | actorと初期skin参照を検証                                         |
-| `cover`                                   | `cover.backdrop`／`cover.bgm`              | 自動            | positional listを名前付きfieldへ変換                              |
-| `setRuntimeVariable`                      | `variables.<id>`                           | warning付き自動 | scalar型推論を`K4-CONVERT-VARIABLE-TYPE`で通知                    |
-| `setLoadingBackdrop`／`setLoadingCostume` | `loading`                                  | 自動            | 両方が必要。片方だけなら手動修正                                  |
-| `setPoseRecognitionSound`                 | `poseRecognition.idleSound`／`chargeSound` | 自動            | 2 sound必須。単一soundは手動修正                                  |
-| `svgTextStyle`                            | `textStyles.<id>`                          | 自動            | 4.0のfont／align／direction制約を検証                             |
-| `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行 |
-| `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                          |
-| `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                              |
-| `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 手動併用        | `--pose-models`のexact local replacementが必須                    |
-| unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                  |
+| 3.1／3.2 command                          | 4.0 node                                   | 分類            | 主な診断／条件                                                     |
+| ----------------------------------------- | ------------------------------------------ | --------------- | ------------------------------------------------------------------ |
+| `kamishibai=3.2`                          | `kamishibai: "4.0"`                        | 自動            | 重複／unknown versionは`K4-CONVERT-VERSION-*`                      |
+| `kamishibai=3.1`                          | `kamishibai: "4.0"`                        | warning付き自動 | `K4-CONVERT-VERSION-31-COMPAT`                                     |
+| `asset` backdrop／costume／sound          | `assets.<id>`                              | 自動            | SB3内project asset名へ変換                                         |
+| remote／cache `asset`                     | なし                                       | 手動            | `K4-CONVERT-ASSET-REMOTE`／`K4-CONVERT-ASSET-ADDRESS`              |
+| Text Asset `asset`                        | なし                                       | 手動            | `K4-CONVERT-LEGACY-TEXT`。4章に従いSVG Textへ移行                  |
+| `actor`                                   | `actors.<id>`                              | 自動            | actorと初期skin参照を検証                                          |
+| `cover`                                   | `cover.backdrop`／`cover.bgm`              | 自動            | positional listを名前付きfieldへ変換                               |
+| `setRuntimeVariable`                      | `variables.<id>`                           | warning付き自動 | scalar型推論を`K4-CONVERT-VARIABLE-TYPE`で通知                     |
+| `setLoadingBackdrop`／`setLoadingCostume` | `loading`                                  | 自動            | 両方が必要。片方だけなら手動修正                                   |
+| `setPoseRecognitionSound`                 | `poseRecognition.idleSound`／`chargeSound` | 自動            | 2 sound必須。単一soundは手動修正                                   |
+| `svgTextStyle`                            | `textStyles.<id>`                          | 自動            | 4.0のfont／align／direction制約を検証                              |
+| `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行  |
+| `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
+| `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
+| `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
+| unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
-remote／cache assetは、変換前にlocal／embedded project assetへ置き換えます。converter自身はnetwork取得や
-cache lookupを行いません。
+`TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
+必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
+embedded化します。converter自身はnetwork取得やcache lookupを行いません。
+
+`asset`のID、project asset名、`sceneLabel`は別名へ置換せず、その文字列を4.0へ保持します。空白、`.`、`/`、
+制御文字を含む場合、生成YAMLは必要なquoted scalar escapeを自動で使用します。actor名などaction構文の
+一部になるIDは、`.`区切りを曖昧にしないため従来のDSL ID規則を維持します。
 
 `setRuntimeVariable=startSceneIndex`の非default値、scene内variable宣言、互換runtimeで偶然受理された不正な
 arityや曖昧なcolon区切りは、意味を推測せずerrorにします。

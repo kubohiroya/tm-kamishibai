@@ -63,8 +63,34 @@
         "size": {"type": "integer", "minimum": 1}
       }
     },
-    "assetId": {"$ref": "#/$defs/id"},
-    "sceneId": {"$ref": "#/$defs/id"},
+    "remotePoseModelSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$"
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-[0-9a-f]{64}$"
+        },
+        "contentType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "size": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "integrity": ["contentType", "size"],
+        "contentType": ["integrity", "size"],
+        "size": ["integrity", "contentType"]
+      }
+    },
+    "literalId": {"type": "string", "minLength": 1},
+    "assetId": {"$ref": "#/$defs/literalId"},
+    "sceneId": {"$ref": "#/$defs/literalId"},
     "actorId": {"$ref": "#/$defs/id"},
     "styleId": {"$ref": "#/$defs/id"},
     "stableId": {"$ref": "#/$defs/id"},
@@ -218,7 +244,7 @@
       "properties": {
         "kind": {"const": "poseModel"},
         "file": {"$ref": "#/$defs/filePath"},
-        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "source": {"$ref": "#/$defs/remotePoseModelSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}
@@ -273,12 +299,12 @@
     },
     "assets": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/assetId"},
       "additionalProperties": {"$ref": "#/$defs/asset"}
     },
     "actors": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/actorId"},
       "additionalProperties": {"$ref": "#/$defs/assetId"}
     },
     "cover": {
@@ -1036,7 +1062,7 @@
     "scenes": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/sceneId"},
       "additionalProperties": {"$ref": "#/$defs/scene"}
     }
   }

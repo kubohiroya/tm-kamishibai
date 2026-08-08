@@ -45,9 +45,13 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
 
     if (capability.provider !== 'npm') continue;
     assert.equal(packageJson.dependencies[capability.package], capability.version);
+    const patchHash = lockfile.patchedDependencies?.[`${capability.package}@${capability.version}`];
+    const lockedVersion = patchHash
+      ? `${capability.version}(patch_hash=${patchHash})`
+      : capability.version;
     assert.deepEqual(lockfile.importers['.'].dependencies[capability.package], {
       specifier: capability.version,
-      version: capability.version,
+      version: lockedVersion,
     });
     assert.match(
       lockfile.packages[`${capability.package}@${capability.version}`].resolution.integrity,
@@ -129,7 +133,11 @@ test('separates Standard source composition from the reversible 3.2 bundle path'
     provenance: ['app/project.source.json', 'app/embedded-extensions.json'],
   });
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');
-  assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-verified-opt-in');
+  assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-opt-in');
+  assert.deepEqual(contract.assetPolicy.remoteAssetRequirements, [
+    'https',
+    'bare-pose-directory-or-complete-verification-metadata',
+  ]);
   assert.equal(contract.previewPolicy.remotePreview, 'forbidden');
   assert.equal(contract.previewPolicy.localPreviewHost, 'tracked-by-issue-258');
 });

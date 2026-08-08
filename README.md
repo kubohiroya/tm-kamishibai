@@ -64,13 +64,13 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --output dist/story-4.sb3 \
   --control-profile production \
   --channel bundled \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 256 \
   --max-total-asset-bytes 134217728
 ```
 
-`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込み、`delivery: remote`を明示したassetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
+`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込みます。`delivery: remote`のpose modelは通常のTMPoseディレクトリURLだけでも指定でき、内容を固定したい場合は`file`へローカル化して埋め込みます。integrity／Content-Type／sizeをすべて指定したremote assetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
 
 `--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
 
@@ -105,7 +105,7 @@ buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに�
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --format pretty
 ```
 
@@ -155,67 +155,10 @@ API、アセットマニフェスト、安全設定、出力形式について�
 
 ### DSL 3.1／3.2から4.0への変換
 
-外部テキストのDSL 3.1／3.2台本を、DSL 4.0 YAMLへ明示的に変換できます。DSL 3.1は、3.2.3が
-維持する互換grammarとしてwarning付きで解釈します。入力ファイルは変更せず、変換に成功した場合だけ
-出力をatomicに作成または置換します。
-
-```bash
-pnpm exec tmpose-kamishibai convert-dsl4 \
-  --input source.txt \
-  --output story.kamishibai.yaml \
-  --pose-models pose-models.json
-```
-
-3.1／3.2の`TMPoseURL`はremote URLのまま4.0へ移せません。ポーズを使う台本では、URLとlocal
-`poseModel` assetの対応をJSONで明示します。converterはURLを取得せず、指定したproject-relative
-pathだけを台本へ記録します。
-
-```json
-{
-  "https://example.com/models/rescue/": {
-    "id": "RescuePose",
-    "file": "rescue-pose",
-    "loading": "lazy"
-  }
-}
-```
-
-asset、actor、cover、runtime variable、loading、pose recognition sound、SVG Text style、branch、
-scene、およびDSL 4.0 coreに対応するactionを変換します。3.1互換解釈、型推論、costumeのlogical actorへの
-付け替え、旧DSLに秒数指定がないtransitionには、元ファイルの行・列を含むwarningを標準エラー出力へ表示します。
-
-意味を保てない次の入力は、変換結果を部分出力せずerrorにします。
-
-- 旧Text Asset、remote／cache asset
-- 秒数なしの永続`say`／`think`、style付き`say`／`think`、`hide`など意味を保って自動変換できないaction
-- 4.0で必須のcharge soundがないpose recognition設定
-- local model置換がない`TMPoseURL`、空のpose名、要素数が異なるbranch／key／touch inputのparallel list
-- 最後の無条件遷移がないbranch
-
-3.1／3.2の`Actor:pose`は候補選択ではなく、pose名の順にすべて成立させる4.0
-`Actor.pose.steps`へ変換します。skin／soundの不足要素は旧runtimeと同じく省略扱い、pose数を超える余分な
-要素はwarning付きで除外します。Async Inputによる候補1件選択は3.1／3.2テキストDSLのactionではなく
-SB3 block graph側の機能であるため、このconverterは`poseInputToChangeScene`を推測生成しません。
-
-headerの`poseRecog`は`sequence.confidenceThreshold`へ変換します。旧runtimeが0.1秒ごとに100を目標として
-`confidence × poseCharge`を加えるため、`poseCharge`は
-`sequence.fullConfidenceHoldSeconds = 10 / poseCharge`へ変換します。`poseIdle=0`はそのまま変換
-できますが、非zero値は旧runtimeだけがconfidenceを乗算するため、意味を変えず自動変換できません。
-scene内の`setRuntimeVariable`と、1以外の`startSceneIndex`も4.0 coreに同等の実行位置がないため
-errorにします。
-
-対応表、判定分類、旧Text AssetのSVG Text移行例は
-[DSL 4.0移行仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md)を
+外部テキストのDSL 3.1／3.2台本を、入力を変更せずDSL 4.0 YAMLへ変換できます。コマンド、pose model
+置換、診断、自動変換できない入力、変換後の検証、JavaScript APIは、独立した
+[紙芝居DSL 3.2から4.0への変換ガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/dsl-author-guides/dsl-3.2-to-4.0-conversion-guide/)を
 参照してください。
-
-JavaScriptから副作用なしで変換する場合は、package exportを利用できます。
-
-```js
-import {convertDsl32ToDsl4} from '@kubohiroya/tmpose-kamishibai/converter';
-
-const result = convertDsl32ToDsl4(sourceText, {sourceId: 'source.txt'});
-if (result.ok) console.log(result.yaml);
-```
 
 ## DSL 3.2の互換性
 

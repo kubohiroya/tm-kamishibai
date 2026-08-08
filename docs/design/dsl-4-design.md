@@ -955,6 +955,12 @@ sceneは配列位置ではなくscene IDで識別し、actionはscene内の0始�
 /scenes/opening/actions/2/args/skin
 ```
 
+StoryPathのsegmentはRFC 6901の`~0`／`~1`に加え、literal `%`を`%25`、C0制御文字とDELを
+uppercaseの`%HH`で表します。たとえばscene ID `chapter/1%`は`chapter~11%25`となります。
+percent escapeは一回だけdecodeするため、literal文字列`%00`の`%2500`とNULの`%00`は衝突しません。
+source、diagnostic、永続descriptorへraw control characterを出さず、decode後のscene／asset IDは元の
+文字列と完全に一致します。
+
 内容や空白だけを変更してもpathは変わりません。scene名の変更、actionの移動、前方へのaction
 挿入ではpathが変わります。このIDは同じ文書構造内の診断・実行トレース・Source Map対応を
 目的とし、編集をまたいで永続する外部IDとはみなしません。
@@ -1612,7 +1618,7 @@ JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは
 別tabから遅れて到着した古いsnapshotでentries／bytesを上書きしません。memory releaseでcache recordを削除せず、
 cache clearでmaterialize済みresourceを直ちに無効化しません。
 
-remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
+verified remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
 size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は
 検証済みbytesによるmemory-only実行を許可して機械可読warningを返し、networkとvalid cacheの両方がない場合は
 fail closedとします。
@@ -1640,12 +1646,12 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
 
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
-同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
+同時materialize poseModel数、IndexedDB budgetを制限します。verified remote pose archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
 Issue #327の製品接続では、`assetBundleFormat: binary-entry`を明示したruntime startupだけが
-deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.7.0のtransactional binary storeへ
+deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.8.0のtransactional binary storeへ
 順番にingestし、最後の`IDBTransaction.oncomplete`まで検証済みsource byte参照を保持します。全commit後にproviderと
 SB3 readerへの到達可能参照を破棄し、scene materializationとhistory再訪はstoreの`getBinaryBundle()`から供給します。
 keyはstable story ID、asset ID、descriptor全体のintegrityへbindingし、story別database名には
