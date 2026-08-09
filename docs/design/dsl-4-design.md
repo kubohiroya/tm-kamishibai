@@ -561,8 +561,13 @@ compositionへ束ね、`dsl4AppShell`が有効なsessionだけruntime hostとpre
 containerはpresenter modeで初めて遅延生成し、surface固有の暗黙modeを追加しません。flag OFFまたは別modeでは
 presenter optionのDOM設定を検査しません。
 `allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
-消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
+消費しません。`allowSkip: true`ではaction全体のsignalから分離したstep signalだけをcancelし、pose portの
+cleanup後に次stepへ進みます。skipしたstepのsoundは再生せず、最終step後は通常のaction commitを行います。
+policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
 `navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。
+
+3.1／3.2 converterは従来のSpaceによるpose step skipを保つため、pose actionを一件以上変換したとき
+`poseRecognition.navigation.allowSkip: true`を明示します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに

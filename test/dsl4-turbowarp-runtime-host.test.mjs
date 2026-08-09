@@ -1064,6 +1064,91 @@ scenes:
   assert.equal(document.body.children.length, 0);
 });
 
+test('shows Scratch pose monitors and skips one pose step per navigation command', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: scratchMirror
+  navigation:
+    allowSkip: true
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+            - pose: help
+`);
+  const log = [];
+  const events = [];
+  const fixture = platformFixture(log);
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      onEvent: (event) => events.push(event),
+      poseSchedule() {
+        return () => {};
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  for (
+    let attempts = 0;
+    attempts < 50 && !fixture.monitorRecords.get(fixture.poseConfidence.id).visible;
+    attempts += 1
+  ) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+
+  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  for (
+    let attempts = 0;
+    attempts < 50 && events.filter(({type}) => type === 'pose.step.skip').length < 1;
+    attempts += 1
+  ) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(result.host.getState().runtime.actionIndex, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+
+  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(
+    events.filter(({type}) => type === 'pose.step.skip').map(({details}) => details.stepIndex),
+    [0, 1],
+  );
+  assert.equal(events.filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+
+  await result.host.dispose('pose-step-skip');
+});
+
 test('keeps the Standard app shell inert when its startup flag is disabled', async () => {
   let runtimeHostCalls = 0;
   const options = {

@@ -1325,7 +1325,12 @@ class Converter {
     if (this.loading?.backdrop && this.loading.costumes) {
       document.loading = {backdrop: this.loading.backdrop, costumes: this.loading.costumes};
     }
-    if (this.poseRecognition) document.poseRecognition = this.poseRecognition;
+    if (this.poseRecognition || this.scenesUsingPose.size > 0) {
+      document.poseRecognition = {
+        ...(this.poseRecognition ?? {}),
+        ...(this.scenesUsingPose.size > 0 ? {navigation: {allowSkip: true}} : {}),
+      };
+    }
     if (this.branches.size > 0) document.branches = ownObject(this.branches);
     document.scenes = this.renderScenes();
     return document;

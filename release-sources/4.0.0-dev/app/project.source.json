@@ -3,7 +3,16 @@
     {
       "isStage": true,
       "name": "Stage",
-      "variables": {},
+      "variables": {
+        "dsl4-pose-confidence": [
+          "ポーズ認識",
+          0
+        ],
+        "dsl4-pose-progress": [
+          "チャージ",
+          0
+        ]
+      },
       "lists": {},
       "broadcasts": {},
       "blocks": {
@@ -105,7 +114,44 @@
       "rotationStyle": "all around"
     }
   ],
-  "monitors": [],
+  "monitors": [
+    {
+      "id": "dsl4-pose-confidence",
+      "mode": "slider",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "ポーズ認識"
+      },
+      "spriteName": null,
+      "value": 0,
+      "width": 0,
+      "height": 0,
+      "x": 0,
+      "y": 0,
+      "visible": false,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    },
+    {
+      "id": "dsl4-pose-progress",
+      "mode": "slider",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "チャージ"
+      },
+      "spriteName": null,
+      "value": 0,
+      "width": 0,
+      "height": 0,
+      "x": 343,
+      "y": 0,
+      "visible": false,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    }
+  ],
   "extensions": [
     "kubohiroyakamishibairuntime4"
   ],

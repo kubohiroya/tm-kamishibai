@@ -115,7 +115,11 @@ class KamishibaiDsl4RuntimeExtension {
     const project = JSON.parse(Scratch.vm.toJSON());
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     const shell = await createDsl4StandardAppShell({
-      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4AppShell: true,
+        dsl4PoseFeedbackModes: true,
+      },
       surface: 'regularEditor',
       runtimeHostOptions: {
         project,
