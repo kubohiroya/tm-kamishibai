@@ -112,6 +112,7 @@
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "bitmapResolution": {"type": "integer", "enum": [1, 2], "default": 1},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}
@@ -205,6 +206,7 @@
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "bitmapResolution": {"type": "integer", "enum": [1, 2], "default": 1},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}

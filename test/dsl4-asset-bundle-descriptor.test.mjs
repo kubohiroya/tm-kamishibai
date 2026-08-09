@@ -109,6 +109,56 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
   };
 }
 
+function bitmapStory() {
+  const result = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  Hero:
+    kind: costume
+    target: Actor
+    file: costumes/hero.png
+    bitmapResolution: 2
+actors:
+  Actor: Hero
+scenes:
+  opening: []
+`,
+    {sourceId: 'bitmap-costume-test'},
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  return result.storyDocument;
+}
+
+function bitmapSnapshot() {
+  const bytes = new Uint8Array([1, 2, 3]);
+  return {
+    manifest: {
+      formatVersion: 1,
+      assets: [
+        {
+          id: 'Hero',
+          kind: 'costume',
+          target: 'Actor',
+          loading: 'eager',
+          bitmapResolution: 2,
+          source: {
+            type: 'file',
+            inputPath: 'costumes/hero.png',
+            mode: 'file',
+            files: [{path: 'hero.png', size: bytes.length, integrity: sri(bytes)}],
+          },
+        },
+      ],
+    },
+    getFile(assetId, filePath) {
+      assert.equal(assetId, 'Hero');
+      assert.equal(filePath, 'hero.png');
+      return bytes;
+    },
+  };
+}
+
 async function rejectsCode(input, code) {
   await assert.rejects(validateDsl4EmbeddedAssetBundle(story(), input, options), (error) => {
     assert.equal(error instanceof Dsl4AssetBundleError, true);
@@ -221,6 +271,26 @@ test('rejects a payload for a project reference and enforces finite limits', asy
   await assert.rejects(
     validateDsl4EmbeddedAssetBundle(story(), descriptor, {...options, maxTotalBytes: 2}),
     (error) => error.code === 'K4-ASSET-BUNDLE-LIMIT-001',
+  );
+});
+
+test('binds bitmapResolution through the asset manifest and rejects tampering', async () => {
+  const storyDocument = bitmapStory();
+  const snapshot = bitmapSnapshot();
+  const descriptor = await createDsl4EmbeddedAssetBundle(storyDocument, snapshot, options);
+  assert.equal(descriptor.manifest.assets[0].bitmapResolution, 2);
+
+  const missing = structuredClone(descriptor);
+  delete missing.manifest.assets[0].bitmapResolution;
+  await assert.rejects(
+    validateDsl4EmbeddedAssetBundle(storyDocument, missing, options),
+    (error) => error.code === 'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+  );
+  const wrong = structuredClone(descriptor);
+  wrong.manifest.assets[0].bitmapResolution = 1;
+  await assert.rejects(
+    validateDsl4EmbeddedAssetBundle(storyDocument, wrong, options),
+    (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
 });
 

@@ -139,6 +139,7 @@ function normalizeAsset(asset, id) {
       id,
       kind,
       name: id,
+      ...(kind === 'backdrop' || kind === 'costume' ? {bitmapResolution: 1} : {}),
       delivery: 'embedded',
       loading: 'eager',
       retention: kind === 'poseModel' ? 'scene' : 'story',
@@ -151,6 +152,9 @@ function normalizeAsset(asset, id) {
     delivery: 'embedded',
     loading: 'eager',
     retention: sourceAsset.kind === 'poseModel' ? 'scene' : 'story',
+    ...(sourceAsset.kind === 'backdrop' || sourceAsset.kind === 'costume'
+      ? {bitmapResolution: sourceAsset.bitmapResolution ?? 1}
+      : {}),
     ...sourceAsset,
   };
 }

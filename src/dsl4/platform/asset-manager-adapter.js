@@ -1,6 +1,7 @@
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
 const supportedKinds = new Set(['backdrop', 'costume', 'image', 'sound']);
+const bitmapFilePattern = /\.(?:png|jpe?g|webp)(?:[?#].*)?$/iu;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -26,6 +27,42 @@ function requireNonEmptyString(value, label) {
     throw adapterError('K4-ASSET-ADAPTER-001', `${label} must be a non-empty string`);
   }
   return value;
+}
+
+/** @param {Record<string, unknown>} asset @param {string} label */
+function declaredBitmapResolution(asset, label) {
+  if (asset.kind !== 'backdrop' && asset.kind !== 'costume') {
+    if (Object.hasOwn(asset, 'bitmapResolution')) {
+      throw adapterError(
+        'K4-ASSET-ADAPTER-001',
+        `${label} bitmapResolution is only valid for backdrop and costume assets`,
+      );
+    }
+    return undefined;
+  }
+  const value = asset.bitmapResolution ?? 1;
+  if (value !== 1 && value !== 2) {
+    throw adapterError('K4-ASSET-ADAPTER-001', `${label} bitmapResolution must be 1 or 2`);
+  }
+  return /** @type {1 | 2} */ (value);
+}
+
+/**
+ * Keep SVG and project assets on their existing registration path. The upstream composition
+ * accepts bitmapResolution only for raster MIME types; file-backed assets expose their MIME
+ * through the source filename, while verified remote assets provide Content-Type directly.
+ *
+ * @param {Record<string, unknown>} asset
+ * @param {string} sourceName
+ * @param {string} mimeType
+ */
+function embeddedBitmapResolution(asset, sourceName, mimeType) {
+  const resolution = declaredBitmapResolution(asset, `Asset ${String(asset.id)}`);
+  if (resolution === undefined) return undefined;
+  const mediaType = mimeType.split(';', 1)[0].trim().toLowerCase();
+  const isRasterMime = mediaType.startsWith('image/') && mediaType !== 'image/svg+xml';
+  const isRasterPath = mediaType.length === 0 && bitmapFilePattern.test(sourceName);
+  return isRasterMime || isRasterPath ? resolution : undefined;
 }
 
 /** @param {Record<string, unknown>} asset @param {Record<string, unknown>} source */
@@ -144,6 +181,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
       const asset = payload.asset;
       const assetId = requireNonEmptyString(asset.id, 'asset id');
       const assetKind = requireNonEmptyString(asset.kind, 'asset kind');
+      declaredBitmapResolution(asset, `Asset ${assetId}`);
       if (!supportedKinds.has(assetKind)) {
         throw adapterError(
           'K4-ASSET-ADAPTER-002',
@@ -190,6 +228,11 @@ export function createDsl4AssetManagerAdapter(options = {}) {
             `Embedded asset ${assetId} bytes must be a non-empty Uint8Array`,
           );
         }
+        const bitmapResolution = embeddedBitmapResolution(
+          asset,
+          sourceName,
+          source.type === 'remote' ? String(file.contentType ?? '') : '',
+        );
         embeddedRegistration = Object.freeze({
           name: assetId,
           nameMode: 'literal',
@@ -199,6 +242,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
               ? requireNonEmptyString(file.contentType, 'remote asset Content-Type')
               : '',
           bytes: file.bytes,
+          ...(bitmapResolution === undefined ? {} : {bitmapResolution}),
         });
         if (assetKind === 'image') imageBytes = new Uint8Array(file.bytes);
       } else {
