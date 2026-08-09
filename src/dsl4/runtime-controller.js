@@ -22,7 +22,13 @@ const speechPresentationArgumentNames = Object.freeze([
   'noSoundCharacters',
   'restCharacters',
   'restCharacterIntervalSeconds',
-  'advanceIndicator',
+]);
+const advancedBubbleStyleNames = Object.freeze([
+  'reveal',
+  'audio',
+  'showAnimation',
+  'hideAnimation',
+  'visibleAnimations',
 ]);
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
@@ -143,6 +149,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
+ * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -159,6 +166,7 @@ export function createDsl4RuntimeController({
   speechAdvanceTypewriterEnabled = false,
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
+  turboWarpBubbleAdvancedPresentationEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -215,6 +223,14 @@ export function createDsl4RuntimeController({
   if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
   }
+  if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
+  }
+  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+    throw new TypeError(
+      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+    );
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -245,10 +261,20 @@ export function createDsl4RuntimeController({
   if (
     !bubbleAdvanceIndicatorEnabled &&
     !turboWarpBubbleEnabled &&
-    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'advanceIndicator'))
+    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'continueIndicator'))
   ) {
     throw new TypeError(
-      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.advanceIndicator',
+      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.continueIndicator',
+    );
+  }
+  if (
+    !turboWarpBubbleAdvancedPresentationEnabled &&
+    Object.values(bubbleStyles).some((style) =>
+      advancedBubbleStyleNames.some((field) => Object.hasOwn(style, field)),
+    )
+  ) {
+    throw new TypeError(
+      'dsl4TurboWarpBubbleAdvancedPresentation must be enabled for reveal, audio, or Bubble motion',
     );
   }
   if (!speechAdvanceTypewriterEnabled) {
@@ -954,8 +980,23 @@ export function createDsl4RuntimeController({
     }
     const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
     const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
+    const presentation = Object.fromEntries(
+      speechPresentationArgumentNames
+        .filter((field) => Object.hasOwn(resolvedStyle, field))
+        .map((field) => [field, resolvedStyle[field]]),
+    );
     return {
-      ...resolvedStyle,
+      ...presentation,
+      ...(!turboWarpBubbleEnabled && Object.hasOwn(resolvedStyle, 'continueIndicator')
+        ? {advanceIndicator: resolvedStyle.continueIndicator}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled && Object.hasOwn(resolvedStyle, 'reveal')
+        ? {bubbleReveal: resolvedStyle.reveal}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled &&
+      Object.hasOwn(resolvedStyle, 'visibleAnimations')
+        ? {bubbleMotions: resolvedStyle.visibleAnimations}
+        : {}),
       ...actionArgs,
       ...(turboWarpBubbleEnabled ? {bubbleStyle: bubbleStyleNameForStyleIds(styleIds)} : {}),
     };

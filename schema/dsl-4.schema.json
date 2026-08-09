@@ -329,8 +329,7 @@
         "color": {"type": "string"},
         "font": {"type": "string", "minLength": 1},
         "size": {"type": "number", "exclusiveMinimum": 0},
-        "align": {"type": "string", "enum": ["left", "center", "right"]},
-        "direction": {"type": "string", "enum": ["up", "down", "left", "right"]}
+        "align": {"type": "string", "enum": ["left", "center", "right"]}
       }
     },
     "textStyles": {
@@ -349,6 +348,8 @@
           "items": {"$ref": "#/$defs/bubbleStyleName"}
         },
         "textStyle": {"$ref": "#/$defs/styleId"},
+        "maxWidth": {"type": "number", "exclusiveMinimum": 0},
+        "textLocale": {"type": "string", "minLength": 1},
         "placement": {
           "oneOf": [
             {
@@ -437,10 +438,19 @@
         "noSoundCharacters": {"type": "string", "minLength": 1},
         "restCharacters": {"type": "string", "minLength": 1},
         "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
-        "advanceIndicator": {"$ref": "#/$defs/bubbleAdvanceIndicator"}
+        "continueIndicator": {"$ref": "#/$defs/bubbleContinueIndicator"},
+        "reveal": {"$ref": "#/$defs/bubbleReveal"},
+        "audio": {"$ref": "#/$defs/bubbleAudio"},
+        "showAnimation": {"$ref": "#/$defs/bubbleMotion"},
+        "hideAnimation": {"$ref": "#/$defs/bubbleMotion"},
+        "visibleAnimations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/bubbleMotion"}
+        }
       }
     },
-    "bubbleAdvanceIndicator": {
+    "bubbleContinueIndicator": {
       "type": "object",
       "additionalProperties": false,
       "required": ["frames", "frameIntervalSeconds"],
@@ -473,7 +483,73 @@
       "properties": {
         "base": {"$ref": "#/$defs/assetId"},
         "blink": {"$ref": "#/$defs/bubbleFrameAnimation"},
-        "talk": {"$ref": "#/$defs/bubbleFrameAnimation"}
+        "lipSync": {"$ref": "#/$defs/bubbleFrameAnimation"}
+      }
+    },
+    "bubbleReveal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit"],
+      "properties": {
+        "unit": {"enum": ["CHARACTER", "WORD", "LINE", "BLOCK"]},
+        "delimiters": {"type": "string", "minLength": 1},
+        "showDelimiters": {"type": "boolean"},
+        "layout": {"enum": ["DYNAMIC", "RESERVED"]},
+        "intervalSeconds": {"type": "number", "minimum": 0},
+        "sound": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "bubbleAudio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voice": {"$ref": "#/$defs/assetId"},
+        "reveal": {"$ref": "#/$defs/assetId"},
+        "finish": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "bubbleMotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "enum": [
+            "fadeIn",
+            "fadeOut",
+            "floatIn",
+            "floatOut",
+            "zoomIn",
+            "zoomOut",
+            "riseUp",
+            "sink",
+            "shake",
+            "explode",
+            "animateBubbleShape"
+          ]
+        },
+        "durationSeconds": {"type": "number", "minimum": 0},
+        "ease": {"enum": ["linear", "easeIn", "easeOut", "easeInOut"]},
+        "direction": {
+          "oneOf": [{"type": "number"}, {"type": "string", "minLength": 1}]
+        },
+        "count": {"type": "integer", "minimum": 1},
+        "relativeScale": {"type": "number", "minimum": 0},
+        "speed": {"type": "number", "minimum": 0},
+        "visualStyle": {
+          "enum": [
+            "NORMAL",
+            "THINKING",
+            "DREAMING",
+            "YELLING",
+            "OFF_PANEL",
+            "WAVY",
+            "WHISPERING",
+            "ANNOUNCEMENT",
+            "NARRATION",
+            "NO_BUBBLE"
+          ]
+        }
       }
     },
     "bubbleStyles": {

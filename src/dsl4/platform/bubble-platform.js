@@ -8,13 +8,19 @@ function isRecord(value) {
 
 const bubbleStyleFields = Object.freeze([
   'textStyle',
+  'maxWidth',
+  'textLocale',
   'placement',
   'distance',
   'tailLength',
   'offset',
   'visualStyle',
   'portrait',
-  'advanceIndicator',
+  'continueIndicator',
+  'reveal',
+  'audio',
+  'showAnimation',
+  'hideAnimation',
 ]);
 
 /** @param {Record<string, Function>} composition @param {string} name @param {Record<string, unknown>} style */
@@ -52,7 +58,8 @@ export function createDsl4BubblePlatform(options) {
   }
   const composition = /** @type {Record<string, Function>} */ (
     createComposition(options.runtime, {
-      assetManager: options.assetManager,
+      imageResolver: options.assetManager,
+      audio: options.assetManager,
       svgText: options.svgText,
       ...(options.scheduler === undefined ? {} : {scheduler: options.scheduler}),
     })

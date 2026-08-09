@@ -1893,7 +1893,8 @@ test('routes flagged speech through Bubble and releases the owned composition', 
       },
       createBubbleComposition(runtime, options) {
         assert.strictEqual(runtime, fixture.runtime);
-        assert.ok(options.assetManager);
+        assert.ok(options.imageResolver);
+        assert.strictEqual(options.audio, options.imageResolver);
         assert.ok(options.svgText);
         return {
           defineStyle(style) {
@@ -1966,7 +1967,7 @@ test('routes flagged speech through Bubble and releases the owned composition', 
     JSON.stringify(bubbleLog),
   );
   assert.equal(
-    bubbleLog.some(([name, mode]) => name === 'animation-mode' && mode === 'awaiting-advance'),
+    bubbleLog.some(([name, mode]) => name === 'animation-mode' && mode === 'awaiting-continue'),
     true,
     JSON.stringify(bubbleLog),
   );

@@ -640,7 +640,6 @@ class Converter {
       font,
       size,
       align,
-      ...(['up', 'down', 'left', 'right'].includes(direction) ? {direction} : {}),
     });
   }
 

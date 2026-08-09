@@ -43,8 +43,14 @@ function addActionDependencies(action, dependencies, bubbleStyles) {
     const portrait = /** @type {Readonly<Record<string, unknown>>} */ (style?.portrait ?? {});
     addDependency(portrait.base, dependencies);
     addFrameDependencies(portrait.blink, dependencies);
-    addFrameDependencies(portrait.talk, dependencies);
-    addFrameDependencies(style?.advanceIndicator, dependencies);
+    addFrameDependencies(portrait.lipSync, dependencies);
+    addFrameDependencies(style?.continueIndicator, dependencies);
+    const reveal = /** @type {Readonly<Record<string, unknown>>} */ (style?.reveal ?? {});
+    addDependency(reveal.sound, dependencies);
+    const audio = /** @type {Readonly<Record<string, unknown>>} */ (style?.audio ?? {});
+    addDependency(audio.voice, dependencies);
+    addDependency(audio.reveal, dependencies);
+    addDependency(audio.finish, dependencies);
   }
   if (command === 'loop' && Array.isArray(args.steps)) {
     for (const step of args.steps) {

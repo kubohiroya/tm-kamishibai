@@ -40,13 +40,13 @@
     {
       "id": "bubble",
       "package": "@kubohiroya/turbowarp-bubble",
-      "version": "0.1.1",
+      "version": "0.3.1",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-bubble",
       "compositionExport": "./turbowarp-adapter",
       "standaloneExtensionId": "kubohiroyabubble",
       "license": "MPL-2.0",
-      "role": "say and think surface, portrait, and advance indicator lifecycle"
+      "role": "say and think surface, wrapping, native reveal, audio, portrait, indicator, and motion lifecycle"
     },
     {
       "id": "runtime-expression",
@@ -62,7 +62,7 @@
     {
       "id": "svg-text",
       "package": "@kubohiroya/turbowarp-svg-text",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-svg-text",
       "compositionExport": "./composition",
@@ -107,6 +107,7 @@
     "@kubohiroya/turbowarp-async-input/composition": [
       "src/dsl4/platform/platform-asset-session.js"
     ],
+    "@kubohiroya/turbowarp-bubble": ["src/dsl4/platform/turbowarp-actor-adapter.js"],
     "@kubohiroya/turbowarp-bubble/turbowarp-adapter": ["src/dsl4/platform/bubble-platform.js"],
     "@kubohiroya/turbowarp-runtime-expression/composition": [
       "src/dsl4/platform/turbowarp-runtime-host.js"
@@ -171,6 +172,8 @@
     "test/dsl4-preview-protocol.test.mjs",
     "test/dsl4-live-reload-session.test.mjs",
     "test/dsl4-embedded-asset-lifecycle.test.mjs",
-    "test/dsl4-pose-action-port.test.mjs"
+    "test/dsl4-pose-action-port.test.mjs",
+    "test/dsl4-bubble-platform.test.mjs",
+    "test/dsl4-turbowarp-actor-adapter.test.mjs"
   ]
 }

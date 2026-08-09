@@ -25,9 +25,9 @@ license表示とsource repositoryを正本とします。
 | ---------------------------------------- | ----------------- | ------------ | ----------------------------------------- |
 | @kubohiroya/turbowarp-asset-manager      | 0.8.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`      |
 | @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`        |
-| @kubohiroya/turbowarp-bubble             | 0.1.1             | MPL-2.0      | `kubohiroya/turbowarp-bubble`             |
+| @kubohiroya/turbowarp-bubble             | 0.3.1             | MPL-2.0      | `kubohiroya/turbowarp-bubble`             |
 | @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression` |
-| @kubohiroya/turbowarp-svg-text           | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`           |
+| @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`           |
 | @kubohiroya/turbowarp-tmpose             | 1.6.1             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`             |
 | @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`               |
 | @turbowarp/scratch-svg-renderer          | 1.1.0             | MPL-2.0      | `TurboWarp/scratch-svg-renderer`          |

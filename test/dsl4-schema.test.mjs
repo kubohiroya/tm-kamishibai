@@ -165,7 +165,7 @@ bubbleStyles:
     characterSound: TalkTick
     restCharacters: "、。…"
     restCharacterIntervalSeconds: 0.5
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12
   Hero style:
@@ -191,7 +191,7 @@ scenes:
       characterSound: 'TalkTick',
       restCharacters: '、。…',
       restCharacterIntervalSeconds: 0.5,
-      advanceIndicator: {
+      continueIndicator: {
         frames: ['Next1', 'Next2'],
         frameIntervalSeconds: 0.12,
       },
@@ -209,7 +209,7 @@ scenes:
     ['Novel base', ['characterIntervalSeconds', 'noSoundCharacters']],
     [
       '日本語 効果音',
-      ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds', 'advanceIndicator'],
+      ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds', 'continueIndicator'],
     ],
   ]) {
     for (const field of fields) {
@@ -222,14 +222,14 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles']);
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles/0']);
   assert.ok(
-    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/advanceIndicator/frames/0'],
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/0'],
   );
   assert.ok(
-    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/advanceIndicator/frames/1'],
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/1'],
   );
   assert.ok(
     result.storyDocument.sourceMap[
-      '/bubbleStyles/日本語 効果音/advanceIndicator/frameIntervalSeconds'
+      '/bubbleStyles/日本語 効果音/continueIndicator/frameIntervalSeconds'
     ],
   );
 
@@ -298,7 +298,123 @@ scenes:
   );
 });
 
-test('accepts one-frame portrait animation but requires two advance indicator frames', () => {
+test('accepts Bubble 0.3 wrapping, lip-sync, reveal, audio, and motion styles', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png}
+  Blink: {kind: image, file: blink.png}
+  Lip1: {kind: image, file: lip1.png}
+  Lip2: {kind: image, file: lip2.png}
+  Next1: {kind: image, file: next1.png}
+  Next2: {kind: image, file: next2.png}
+  Voice: sound
+  RevealTick: sound
+  Finish: sound
+actors:
+  Hero: HeroIdle
+textStyles:
+  dialogue: {font: sans-serif}
+bubbleStyles:
+  cinematic:
+    textStyle: dialogue
+    maxWidth: 240
+    textLocale: ja
+    portrait:
+      base: Face
+      blink: {frames: [Blink], frameIntervalSeconds: 0.4}
+      lipSync: {frames: [Lip1, Lip2], frameIntervalSeconds: 0.1}
+    continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.2}
+    reveal:
+      unit: CHARACTER
+      delimiters: " /"
+      showDelimiters: true
+      layout: RESERVED
+      intervalSeconds: 0.05
+      sound: RevealTick
+    audio: {voice: Voice, reveal: RevealTick, finish: Finish}
+    showAnimation: {name: fadeIn, durationSeconds: 0.2, ease: easeOut}
+    visibleAnimations:
+      - {name: shake, direction: right, count: 2, ease: easeInOut}
+      - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
+    hideAnimation: {name: floatOut, direction: down, speed: 1}
+scenes:
+  opening:
+    - Hero.say: {text: hello, waitFor: advance, styles: [cinematic]}
+`;
+  const result = frontend.parse(source, {sourceId: 'bubble-advanced.kamishibai.yaml'});
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.audio, {
+    voice: 'Voice',
+    reveal: 'RevealTick',
+    finish: 'Finish',
+  });
+  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.portrait.lipSync.frames, [
+    'Lip1',
+    'Lip2',
+  ]);
+  for (const path of [
+    '/bubbleStyles/cinematic/maxWidth',
+    '/bubbleStyles/cinematic/portrait/lipSync/frames/1',
+    '/bubbleStyles/cinematic/reveal/sound',
+    '/bubbleStyles/cinematic/audio/finish',
+    '/bubbleStyles/cinematic/showAnimation/durationSeconds',
+    '/bubbleStyles/cinematic/visibleAnimations/1/visualStyle',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+
+  const conflict = frontend.parse(
+    source.replace('    reveal:\n', '    characterIntervalSeconds: 0.1\n    reveal:\n'),
+  );
+  assert.equal(conflict.ok, false);
+  assert.ok(conflict.diagnostics.some(({code}) => code === 'K4-SPEECH-STYLE-002'));
+
+  const duplicateVoice = frontend.parse(
+    source.replace('waitFor: advance, styles:', 'waitFor: advance, startSound: Voice, styles:'),
+  );
+  assert.equal(duplicateVoice.ok, false);
+  assert.ok(
+    duplicateVoice.diagnostics.some(
+      ({code, path}) => code === 'K4-SPEECH-STYLE-002' && path.endsWith('.startSound'),
+    ),
+  );
+
+  const wrongAudioKind = frontend.parse(source.replace('finish: Finish', 'finish: Face'));
+  assert.equal(wrongAudioKind.ok, false);
+  assert.ok(
+    wrongAudioKind.diagnostics.some(
+      ({code, path}) => code === 'K4-REF-002' && path.endsWith('.audio.finish'),
+    ),
+  );
+});
+
+test('rejects pre-0.2 Bubble portrait and indicator field names', () => {
+  for (const field of [
+    '      talk: {frames: [Face], frameIntervalSeconds: 0.1}',
+    '    advanceIndicator: {frames: [Face, Face], frameIntervalSeconds: 0.1}',
+  ]) {
+    const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png}
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  old:
+    portrait:
+      base: Face
+${field}
+scenes: {opening: [{Hero.say: {text: hello, seconds: 1, styles: [old]}}]}
+`);
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(({code}) => code === 'K4-SCHEMA-UNKNOWN-KEY'));
+  }
+});
+
+test('accepts one-frame portrait animation but requires two continue indicator frames', () => {
   const source = `
 kamishibai: '4.0'
 assets:
@@ -321,7 +437,7 @@ bubbleStyles:
       blink:
         frames: [Blink]
         frameIntervalSeconds: 0.4
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.2
 scenes:
@@ -334,7 +450,7 @@ scenes:
   assert.equal(invalid.ok, false);
   assert.ok(
     invalid.diagnostics.some(
-      ({code, path}) => code === 'K4-SCHEMA-001' && path.includes('advanceIndicator/frames'),
+      ({code, path}) => code === 'K4-SCHEMA-001' && path.includes('continueIndicator/frames'),
     ),
     JSON.stringify(invalid.diagnostics),
   );
@@ -793,7 +909,7 @@ bubbleStyles:
       blink:
         frames: [" Bubble.e\\u0301./\\x02 "]
         frameIntervalSeconds: 0.4
-    advanceIndicator:
+    continueIndicator:
       frames: [" Bubble.e\\u0301./\\x02 ", " Bubble.e\\u0301./\\x02 "]
       frameIntervalSeconds: 0.2
 scenes:
@@ -810,7 +926,7 @@ scenes:
     base: bubbleAssetId,
     blink: {frames: [bubbleAssetId], frameIntervalSeconds: 0.4},
   });
-  assert.deepEqual(result.storyDocument.bubbleStyles.literal.advanceIndicator, {
+  assert.deepEqual(result.storyDocument.bubbleStyles.literal.continueIndicator, {
     frames: [bubbleAssetId, bubbleAssetId],
     frameIntervalSeconds: 0.2,
   });

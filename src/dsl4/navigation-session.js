@@ -73,6 +73,7 @@ function historyFailure(result) {
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
+ * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -97,6 +98,7 @@ export function createDsl4NavigationSession({
   speechAdvanceTypewriterEnabled = false,
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
+  turboWarpBubbleAdvancedPresentationEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -129,6 +131,14 @@ export function createDsl4NavigationSession({
   }
   if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
+  }
+  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+    throw new TypeError(
+      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+    );
   }
   if (
     inputArbitration !== undefined &&
@@ -260,6 +270,7 @@ export function createDsl4NavigationSession({
       speechAdvanceTypewriterEnabled,
       bubbleAdvanceIndicatorEnabled,
       turboWarpBubbleEnabled,
+      turboWarpBubbleAdvancedPresentationEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });

@@ -1,3 +1,5 @@
+import {normalizeBubbleReveal, splitBubbleText} from '@kubohiroya/turbowarp-bubble';
+import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {applyDsl4MoveEasing, dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
 
 const defaultFrameMilliseconds = 1000 / 60;
@@ -85,6 +87,8 @@ function validateSpeechSpec(value, operation, extended) {
     'restCharacters',
     'restCharacterIntervalSeconds',
     'bubbleStyle',
+    'bubbleReveal',
+    'bubbleMotions',
     'waitFor',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
@@ -329,6 +333,33 @@ export function createDsl4TurboWarpActorPlatform(options) {
     const bubbleStyle = Object.hasOwn(value, 'bubbleStyle')
       ? requireNonEmptyString(value.bubbleStyle, `${kind}.bubbleStyle`)
       : '__dsl4_default__';
+    let bubbleReveal = null;
+    if (Object.hasOwn(value, 'bubbleReveal')) {
+      if (!bubbleEnabled) {
+        throw adapterError('K4-TW-ACTOR-002', `${kind}.bubbleReveal requires TurboWarp Bubble`);
+      }
+      try {
+        bubbleReveal = normalizeBubbleReveal(value.bubbleReveal);
+      } catch (error) {
+        const normalizedError = adapterError('K4-TW-ACTOR-002', `${kind}.bubbleReveal is invalid`);
+        Object.defineProperty(normalizedError, 'cause', {value: error});
+        throw normalizedError;
+      }
+    }
+    /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */
+    let bubbleMotions = Object.freeze([]);
+    if (Object.hasOwn(value, 'bubbleMotions')) {
+      try {
+        bubbleMotions = normalizeDsl4BubbleMotions(value.bubbleMotions);
+      } catch (error) {
+        const normalizedError = adapterError('K4-TW-ACTOR-002', `${kind}.bubbleMotions is invalid`);
+        Object.defineProperty(normalizedError, 'cause', {value: error});
+        throw normalizedError;
+      }
+    }
+    if (bubbleMotions.length > 0 && !bubbleEnabled) {
+      throw adapterError('K4-TW-ACTOR-002', `${kind}.bubbleMotions requires TurboWarp Bubble`);
+    }
     const waitForAdvance = value.waitFor === 'advance';
     const duration = Object.hasOwn(value, 'seconds')
       ? durationMilliseconds(/** @type {number} */ (value.seconds), kind)
@@ -392,6 +423,7 @@ export function createDsl4TurboWarpActorPlatform(options) {
       return result;
     };
     const segments = text.length === 0 ? [] : segmentGraphemes(text, 'text');
+    const bubbleRevealChunks = bubbleReveal ? splitBubbleText(text, bubbleReveal) : [];
     const noSoundSegments = new Set(
       Object.hasOwn(value, 'noSoundCharacters')
         ? segmentGraphemes(value.noSoundCharacters, 'noSoundCharacters')
@@ -409,6 +441,8 @@ export function createDsl4TurboWarpActorPlatform(options) {
     /** @type {unknown} */
     let characterTimer;
     let visibleCount = 0;
+    let bubbleRevealedCount = bubbleReveal ? Math.min(1, bubbleRevealChunks.length) : 0;
+    let bubbleMotionsStarted = false;
     /** @type {(() => void) | undefined} */
     let resolveOperation;
     /** @type {((error: unknown) => void) | undefined} */
@@ -468,7 +502,9 @@ export function createDsl4TurboWarpActorPlatform(options) {
       }
       presentationTail = presentationTail.then(async () => {
         if (!bubbleHandle) {
-          bubbleHandle = await /** @type {Record<string, Function>} */ (bubbleComposition).show({
+          const createdHandle = await /** @type {Record<string, Function>} */ (
+            bubbleComposition
+          ).show({
             actor,
             actorKey: actor.id,
             kind,
@@ -477,12 +513,18 @@ export function createDsl4TurboWarpActorPlatform(options) {
               bubbleStyle === '__dsl4_default__' && kind === 'think'
                 ? '__dsl4_default_think__'
                 : bubbleStyle,
-            animationMode: fullyRevealed && waitForAdvance ? 'awaiting-advance' : 'talking',
+            animationMode: fullyRevealed && waitForAdvance ? 'awaiting-continue' : 'talking',
+            ...(bubbleReveal === null ? {} : {reveal: {...bubbleReveal, intervalSeconds: 0}}),
           });
+          bubbleHandle = createdHandle;
+          if (!bubbleMotionsStarted && bubbleMotions.length > 0) {
+            bubbleMotionsStarted = true;
+            for (const motion of bubbleMotions) await createdHandle.animate(motion);
+          }
         } else {
           await bubbleHandle.setText(visibleText);
           if (fullyRevealed && waitForAdvance) {
-            await bubbleHandle.setAnimationMode('awaiting-advance');
+            await bubbleHandle.setAnimationMode('awaiting-continue');
           }
         }
       });
@@ -508,12 +550,63 @@ export function createDsl4TurboWarpActorPlatform(options) {
       terminalNotified = true;
       onTerminal();
     };
+    const cancelCharacterTimer = () => {
+      if (characterTimer !== undefined) scheduler.clearTimeout(characterTimer);
+      characterTimer = undefined;
+    };
+    const markBubbleRevealComplete = async () => {
+      if (bubbleReveal === null || bubbleRevealedCount < bubbleRevealChunks.length) return;
+      if (waitForAdvance) await bubbleHandle?.setAnimationMode('awaiting-continue');
+      notifyTextComplete();
+    };
+    const scheduleBubbleReveal = () => {
+      if (
+        bubbleReveal === null ||
+        bubbleReveal.intervalSeconds <= 0 ||
+        bubbleRevealedCount >= bubbleRevealChunks.length
+      ) {
+        return;
+      }
+      characterTimer = scheduler.setTimeout(() => {
+        characterTimer = undefined;
+        if (state !== 'running') return;
+        presentationTail = presentationTail.then(async () => {
+          if (!bubbleHandle || state !== 'running') return;
+          const advanced = await bubbleHandle.revealNext();
+          if (advanced) bubbleRevealedCount += 1;
+          if (bubbleRevealedCount >= bubbleRevealChunks.length) {
+            await markBubbleRevealComplete();
+          } else {
+            scheduleBubbleReveal();
+          }
+        });
+        void presentationTail.catch((error) => fail(error));
+      }, bubbleReveal.intervalSeconds * 1000);
+    };
+    /** @param {'next' | 'all'} mode */
+    const revealBubbleFromAdvance = (mode) => {
+      cancelCharacterTimer();
+      presentationTail = presentationTail.then(async () => {
+        if (!bubbleHandle || bubbleReveal === null) return;
+        if (mode === 'all') {
+          await bubbleHandle.revealAll();
+          bubbleRevealedCount = bubbleRevealChunks.length;
+        } else {
+          const advanced = await bubbleHandle.revealNext();
+          if (advanced) bubbleRevealedCount += 1;
+        }
+        if (bubbleRevealedCount >= bubbleRevealChunks.length) {
+          await markBubbleRevealComplete();
+        }
+      });
+      void presentationTail.catch((error) => fail(error));
+    };
     /** @param {'advance' | 'timeout' | 'cancel'} reason */
     const complete = (reason) => {
       if (state === 'completed' || state === 'completing' || state === 'failed') return;
       cancelTimers();
       try {
-        if (reason !== 'cancel' && visibleCount < segments.length) {
+        if (bubbleReveal === null && reason !== 'cancel' && visibleCount < segments.length) {
           reveal(segments.length, false);
         }
         stopSounds();
@@ -526,6 +619,9 @@ export function createDsl4TurboWarpActorPlatform(options) {
         }
         state = 'completing';
         presentationTail = presentationTail.then(async () => {
+          if (reason !== 'cancel' && typeof bubbleHandle?.finish === 'function') {
+            await bubbleHandle.finish();
+          }
           await bubbleHandle?.close();
           bubbleHandle = null;
         });
@@ -579,7 +675,19 @@ export function createDsl4TurboWarpActorPlatform(options) {
           resolveOperation = () => resolve(undefined);
           rejectOperation = (error) => reject(error);
           try {
-            if (characterInterval !== null && segments.length > 0) {
+            if (bubbleReveal !== null) {
+              queueBubbleText(text, false);
+              playSound(startSound);
+              presentationTail = presentationTail.then(async () => {
+                if (state !== 'running') return;
+                if (bubbleRevealedCount >= bubbleRevealChunks.length) {
+                  await markBubbleRevealComplete();
+                } else {
+                  scheduleBubbleReveal();
+                }
+              });
+              void presentationTail.catch((error) => fail(error));
+            } else if (characterInterval !== null && segments.length > 0) {
               reveal(1, false);
               playSound(startSound);
               if (state !== 'running') return;
@@ -624,7 +732,17 @@ export function createDsl4TurboWarpActorPlatform(options) {
       },
       /** @param {string} [reason] */
       finish(reason) {
+        if (
+          reason === 'advance' &&
+          state === 'running' &&
+          bubbleReveal !== null &&
+          bubbleRevealedCount < bubbleRevealChunks.length
+        ) {
+          revealBubbleFromAdvance(bubbleReveal.intervalSeconds === 0 ? 'next' : 'all');
+          return Object.freeze({consumed: true});
+        }
         complete(reason === 'advance' ? 'advance' : 'cancel');
+        return Object.freeze({consumed: false});
       },
       /** @param {unknown} lifecycle */
       setSpeechLifecycle(lifecycle) {

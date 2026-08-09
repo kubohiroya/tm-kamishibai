@@ -24,8 +24,18 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
           placement: 'up-right',
           visualStyle: 'WAVY',
           characterIntervalSeconds: 0.05,
-          portrait: {base: 'Face'},
-          advanceIndicator: {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.1},
+          portrait: {
+            base: 'Face',
+            lipSync: {frames: ['Lip1', 'Lip2'], frameIntervalSeconds: 0.08},
+          },
+          maxWidth: 320,
+          textLocale: 'ja',
+          continueIndicator: {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.1},
+          reveal: {unit: 'CHARACTER', intervalSeconds: 0.04, sound: 'Tick'},
+          audio: {voice: 'Voice', finish: 'Finish'},
+          showAnimation: {name: 'fadeIn', durationSeconds: 0.2},
+          hideAnimation: {name: 'fadeOut', durationSeconds: 0.15},
+          visibleAnimations: [{name: 'shake', count: 2}],
         },
       },
     },
@@ -46,13 +56,26 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
       textStyle: 'dialogue-text',
       placement: 'up-right',
       visualStyle: 'WAVY',
-      portrait: {base: 'Face'},
-      advanceIndicator: {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.1},
+      portrait: {
+        base: 'Face',
+        lipSync: {frames: ['Lip1', 'Lip2'], frameIntervalSeconds: 0.08},
+      },
+      maxWidth: 320,
+      textLocale: 'ja',
+      continueIndicator: {frames: ['Next1', 'Next2'], frameIntervalSeconds: 0.1},
+      reveal: {unit: 'CHARACTER', intervalSeconds: 0.04, sound: 'Tick'},
+      audio: {voice: 'Voice', finish: 'Finish'},
+      showAnimation: {name: 'fadeIn', durationSeconds: 0.2},
+      hideAnimation: {name: 'fadeOut', durationSeconds: 0.15},
     },
   ]);
   assert.deepEqual(calls[0], [
     {renderer: {}},
-    {assetManager: {id: 'assets'}, svgText: {id: 'text'}},
+    {
+      imageResolver: {id: 'assets'},
+      audio: {id: 'assets'},
+      svgText: {id: 'text'},
+    },
   ]);
   await platform.releaseAll();
 });

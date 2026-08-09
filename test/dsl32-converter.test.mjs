@@ -446,6 +446,7 @@ test('converts timed and styled legacy speech while rejecting persistent speech'
     placement: 'up-right',
     visualStyle: 'THINKING',
   });
+  assert.equal(Object.hasOwn(styled.document?.textStyles.balloonStyle, 'direction'), false);
   assert.deepEqual(styled.document?.scenes.opening, [
     {
       'Hero.think': {

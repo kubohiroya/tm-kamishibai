@@ -10,7 +10,7 @@ export {dsl4DefaultFeatureFlags, resolveDsl4FeatureFlags} from './feature-flags.
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, inputArbitration?: Record<string, Function>, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
@@ -271,6 +271,8 @@ export async function createDsl4RuntimeStartup(options = {}) {
       speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
       bubbleAdvanceIndicatorEnabled: featureFlags.dsl4BubbleAdvanceIndicator,
       turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
+      turboWarpBubbleAdvancedPresentationEnabled:
+        featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {

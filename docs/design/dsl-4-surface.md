@@ -330,7 +330,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
 bubbleStyles:
   Typing base:
@@ -340,7 +339,7 @@ bubbleStyles:
     characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12
   Hero style:
@@ -350,6 +349,26 @@ bubbleStyles:
     textStyle: title
     placement: FOOTER_LIKE
     visualStyle: NARRATION
+  Native reveal:
+    textStyle: title
+    maxWidth: 320
+    textLocale: ja
+    portrait:
+      base: HeroFace
+      blink: {frames: [EyesOpen, EyesClosed], frameIntervalSeconds: 0.4}
+      lipSync: {frames: [MouthClosed, MouthOpen], frameIntervalSeconds: 0.08}
+    continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.12}
+    reveal:
+      unit: CHARACTER
+      layout: RESERVED
+      intervalSeconds: 0.05
+      sound: Typewriter
+    audio: {voice: HeroVoice, finish: ContinueSound}
+    showAnimation: {name: fadeIn, durationSeconds: 0.2, ease: easeOut}
+    visibleAnimations:
+      - {name: shake, direction: right, count: 2, ease: easeInOut}
+      - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
+    hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
@@ -365,16 +384,40 @@ style定義自身の`styles`配列から既存styleを参照し、名前付き�
 間接を問わず循環参照は`K4-BUBBLE-STYLE-CYCLE-001`で拒否します。参照先が存在しない場合と同じstyleの
 重複指定もエラーです。
 
-`advanceIndicator.frames`は2件以上のtarget-independent `image` asset ID、
+`continueIndicator.frames`は2件以上のtarget-independent `image` asset ID、
 `frameIntervalSeconds`は正の秒数です。同じframe IDを複数回指定して表示時間を調整できます。
 actionが参照するeffective styleに含まれる全frameを、sceneのasset依存としてprepareします。
 
 Bubble Compositionでは
 `textStyle`は本文レイヤーの`textStyles` IDで、省略時は`default`です。`placement`、`distance`、
-`tailLength`、`offset`、`visualStyle`、`portrait`、`advanceIndicator`で吹き出しsurfaceを構成し、
+`tailLength`、`offset`、`visualStyle`、`portrait`、`continueIndicator`で吹き出しsurfaceを構成し、
 `characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
 `restCharacterIntervalSeconds`で文字送りを指定できます。本文、完了条件、吹き出し開始時の音声は
 セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
+
+SVG Text 0.4では`textStyles`は文字レイヤーだけを担当し、吹き出しの方向は持ちません。3.2の
+`svgTextStyle`に含まれる`DIRECTION`は、converterがそのstyleを使うsay／think用`bubbleStyles`の
+`placement`へ移します。DSL4を直接記述する場合も、吹き出し位置は`bubbleStyles.placement`で指定します。
+
+Bubble 0.2以降では`maxWidth`と`textLocale`を指定すると、SVG Text 0.4の`measureText`を使って
+locale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
+`continueIndicator`は入力待機中だけ表示するframeです。旧`portrait.talk`と`advanceIndicator`は
+0.2 APIとの名称不一致を残さないため受理しません。
+
+Bubble native presentationでは`reveal.unit`に`CHARACTER`、`WORD`、`LINE`、`BLOCK`を指定できます。
+`WORD`は既定でspace、tab、CR、LFを区切りにし、`delimiters`で置換できます。`layout: DYNAMIC`は
+表示済み本文に合わせてlayoutし、`RESERVED`は全文の領域を先に確保します。`intervalSeconds: 0`は
+自動送りを止め、`waitFor: advance`の入力1回につき1 unitを表示します。正の値では時間で進み、表示途中の
+advance入力は残り全文を表示し、次の入力でspeechを完了します。
+
+`audio.voice`、`audio.reveal`、`audio.finish`と`reveal.sound`はsound asset IDです。
+`reveal.sound`がある場合は`audio.reveal`より優先します。`audio.voice`とactionの`startSound`は
+二重再生を避けるため併用できません。`showAnimation`／`hideAnimation`は
+`fadeIn`／`fadeOut`、`floatIn`／`floatOut`、`zoomIn`／`zoomOut`、`riseUp`、`sink`、`shake`、
+`explode`、`animateBubbleShape`とeasing・duration等をBubble surfaceへ渡します。`visibleAnimations`は
+吹き出し表示後に`handle.animate()`へ配列順で渡し、表示中のshake、explode、外形変形を実行します。
+native `reveal`と旧`characterIntervalSeconds`系を同じeffective styleへ混在させると意味が二重になるため
+`K4-SPEECH-STYLE-002`で拒否します。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -614,15 +657,15 @@ iconへ反映します。
 registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
 残さず未知keyとして拒否します。
 
-`advanceIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
+`continueIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
 表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
 入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
 残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
 terminal cleanupで同期的に解除します。
 
 `dsl4TurboWarpBubble`がONのとき、runtime controllerは合成後のeffective styleをBubble platformへ定義します。
-Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-advance`、完了／cancelを
-`close`へ写像し、sound、portrait、blink、talk、indicator frameのasset依存もeffective styleから収集します。
+Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-continue`、完了／cancelを
+`close`へ写像し、sound、portrait、blink、lip-sync、indicator frameのasset依存もeffective styleから収集します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -645,6 +688,9 @@ speechが実際に再生を開始したasset IDだけを停止します。
 `Actor.say: {text, seconds}`だけを受理します。
 `dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
 `dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。
+`dsl4TurboWarpBubbleAdvancedPresentation`も起動時固定・既定OFFで、`dsl4TurboWarpBubble`を必要とします。
+OFFでは`reveal`、`audio`、`showAnimation`、`hideAnimation`、`visibleAnimations`を含むstyleを起動時に明示拒否し、
+未対応runtimeで黙って無視しません。
 
 ```yaml
 - Hero.show:

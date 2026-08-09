@@ -486,7 +486,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
 scenes:
   opening:
@@ -494,7 +493,8 @@ scenes:
 ```
 
 3.2の`svgTextStyle=STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`を名前付きmappingへ
-正規化します。`size: 100`は480×360ステージの標準14px相当、`direction`は吹き出しにだけ適用、
+正規化します。`size: 100`は480×360ステージの標準14px相当です。SVG Text 0.4では方向を文字
+styleから分離し、`DIRECTION`はそのstyleを使うsay／thinkの`bubbleStyles.placement`へ移します。
 文字列中の`\n`は改行という3.2契約を維持します。アニメーションを4.0初版へ含めるかは未決です。
 
 ### 3.9 アクター、表紙、初期変数 `[提案]`
@@ -688,7 +688,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
 actors:
   Hero: HeroIdle
