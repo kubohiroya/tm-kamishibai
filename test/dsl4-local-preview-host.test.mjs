@@ -190,9 +190,10 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     assert.equal(page.status, 200);
     const contentSecurityPolicy = page.headers.get('content-security-policy');
     assert.match(contentSecurityPolicy, /connect-src 'self'/u);
+    assert.match(contentSecurityPolicy, /media-src 'self';/u);
     assert.doesNotMatch(
       contentSecurityPolicy,
-      /(?:'unsafe-eval'|worker-src[^;]*blob:|font-src[^;]*data:)/u,
+      /(?:'unsafe-eval'|worker-src[^;]*blob:|font-src[^;]*data:|media-src[^;]*blob:)/u,
     );
     const pageBody = await page.text();
     assert.match(pageBody, /dsl4-local-preview-client\.js/u);
@@ -545,6 +546,7 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     assert.match(contentSecurityPolicy, /script-src 'self' 'unsafe-eval'/u);
     assert.match(contentSecurityPolicy, /worker-src 'self' blob:/u);
     assert.match(contentSecurityPolicy, /font-src 'self' data:/u);
+    assert.match(contentSecurityPolicy, /media-src 'self' blob:/u);
     assert.match(contentSecurityPolicy, /connect-src 'self'/u);
 
     const connected = await request(launchUrl.origin, '/api/connect', {body: {token}});

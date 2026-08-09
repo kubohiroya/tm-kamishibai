@@ -183,7 +183,8 @@ valid generationで復旧できます。raw YAML、絶対path、token、StoryDoc
 pagehide／startup failure／明示disposeではevent streamをabortし、generation bridge／runtime session、stage、共有overlayの順に解放します。
 
 browser-owned pageに限り、固定Ajv validatorとTurboWarp runtimeが生成コードを使うためCSP `script-src`へ`'unsafe-eval'`、
-同梱runtimeが生成するworker用に`worker-src 'self' blob:`、同梱font用に`font-src 'self' data:`を追加します。
+同梱runtimeが生成するworker用に`worker-src 'self' blob:`、同梱font用に`font-src 'self' data:`、認証済みpageが
+埋め込み音声から生成するmedia URL用に`media-src 'self' blob:`を追加します。
 script自体は引き続き`'self'`だけから取得し、connect、frame、base、form、外部default sourceの制限は維持します。protocol-owned pageは
 これらの追加sourceを許可しません。実Chromium E2Eは初回stage表示、valid YAML auto reload、invalid時のcurrent保持、recovery、page離脱時の
 transport／runtime cleanupをloopback hostと実TurboWarp bundleの組み合わせで確認します。
