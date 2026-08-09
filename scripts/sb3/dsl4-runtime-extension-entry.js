@@ -121,6 +121,8 @@ class KamishibaiDsl4RuntimeExtension {
         dsl4PoseFeedbackModes: true,
       },
       surface: 'regularEditor',
+      document: globalThis.document,
+      mount: globalThis.document?.body,
       runtimeHostOptions: {
         project,
         sourceFrontend: this.frontend,

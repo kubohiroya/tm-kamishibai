@@ -223,6 +223,8 @@ function defaultSchedule(callback, delayMilliseconds) {
  * @param {(poseModel: string) => ReadonlyArray<string> | null} options.getPoseModelLabels
  * @param {(sound: string) => unknown | Promise<unknown>} [options.playSound]
  * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSound]
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  * @param {(event: Readonly<{phase: 'waiting' | 'charging' | 'completed' | 'cancelled', target: string, pose: string, stepIndex: number, confidence: number, progress: number}>) => unknown} [options.onPoseState]
  * @param {() => Readonly<{confidence?: number, progress?: number}> | null} [options.readPoseStateBinding]
  * @param {(callback: () => void, delayMilliseconds: number) => () => void} [options.schedule]
@@ -238,6 +240,8 @@ export function createDsl4PoseActionPort(options) {
   const getPoseModelLabels = options.getPoseModelLabels;
   const playSound = options.playSound ?? (() => undefined);
   const stopSound = options.stopSound ?? (() => undefined);
+  const setBusy = options.setBusy;
+  const setCursor = options.setCursor;
   const onPoseState = options.onPoseState;
   const readPoseStateBinding = options.readPoseStateBinding;
   const schedule = options.schedule ?? defaultSchedule;
@@ -252,6 +256,13 @@ export function createDsl4PoseActionPort(options) {
     throw new TypeError('readPoseStateBinding must be a function');
   }
 
+  if (setBusy !== undefined && typeof setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (setCursor !== undefined && typeof setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
+  }
+
   let released = false;
   /** @type {null | {controller: AbortController, done: Promise<void>, finish: () => void}} */
   let activeSequence = null;
@@ -261,6 +272,7 @@ export function createDsl4PoseActionPort(options) {
   let disposePromise = null;
   /** @type {Promise<void>} */
   let recognitionQueue = Promise.resolve();
+  let poseCursorId = 0;
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
@@ -296,6 +308,53 @@ export function createDsl4PoseActionPort(options) {
     } catch {
       // Invalid or failed bindings are ignored at the authoritative tick boundary.
       return null;
+    }
+  }
+
+  /** @param {boolean} visible */
+  function notifyCameraBusy(visible) {
+    if (!setBusy) return;
+    try {
+      void Promise.resolve(
+        setBusy(
+          Object.freeze({
+            visible,
+            source: 'camera',
+            label: 'Starting camera',
+            cursor: 'wait',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Busy indicators are non-authoritative and cannot change pose execution semantics.
+    }
+  }
+
+  /** @param {boolean} visible @param {string} [source] */
+  function notifyPoseCursor(visible, source = 'pose') {
+    if (!setCursor) return;
+    try {
+      void Promise.resolve(
+        setCursor(
+          Object.freeze({
+            visible,
+            source,
+            cursor: 'progress',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Cursor styling is non-authoritative and cannot change pose execution semantics.
+    }
+  }
+
+  /** @template T @param {() => Promise<T>} operation */
+  async function withCameraBusy(operation) {
+    notifyCameraBusy(true);
+    try {
+      return await operation();
+    } finally {
+      notifyCameraBusy(false);
     }
   }
 
@@ -377,7 +436,7 @@ export function createDsl4PoseActionPort(options) {
         }
         configure();
         if (signal.aborted) throw abortError(cancelMessage);
-        if (!tmpose.isRecognizing()) await tmpose.startRecognition();
+        if (!tmpose.isRecognizing()) await withCameraBusy(() => tmpose.startRecognition());
         if (signal.aborted) throw abortError(cancelMessage);
       });
     recognitionQueue = operation;
@@ -489,6 +548,7 @@ export function createDsl4PoseActionPort(options) {
       try {
         publishPoseState(input, 'waiting', confidence, progress);
         statePublished = true;
+        notifyPoseCursor(true, 'pose-sequence');
         if (displacedSelection) await displacedSelection.done;
         await ensureRecognition(input.poseModel, operation.controller.signal);
         if (input.idleSound) await playSound(input.idleSound);
@@ -531,6 +591,7 @@ export function createDsl4PoseActionPort(options) {
         if (statePublished) {
           statePublished = false;
           publishPoseState(input, terminalPhase, confidence, progress);
+          notifyPoseCursor(false, 'pose-sequence');
         }
         try {
           if (input.idleSound) await stopSound(input.idleSound);
@@ -558,6 +619,9 @@ export function createDsl4PoseActionPort(options) {
       const previousSelection = currentSelection;
       previousSelection?.controller.abort('newer-pose-candidate-wait');
       currentSelection = operation;
+      poseCursorId += 1;
+      const cursorSource = `pose-selection-${poseCursorId}`;
+      notifyPoseCursor(true, cursorSource);
       try {
         if (previousSelection) await previousSelection.done;
         await waitForSequenceEnd(operation);
@@ -577,6 +641,7 @@ export function createDsl4PoseActionPort(options) {
         }
         return selected;
       } finally {
+        notifyPoseCursor(false, cursorSource);
         operation.detach();
         operation.wake = null;
         if (currentSelection === operation) currentSelection = null;
