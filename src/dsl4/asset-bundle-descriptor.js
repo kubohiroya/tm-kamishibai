@@ -1,3 +1,5 @@
+import {fromByteArray, toByteArray} from 'base64-js';
+
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 
@@ -11,7 +13,6 @@ const bareRemoteSourceKeys = new Set(['type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
 const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
-const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export const dsl4AssetBundleStoragePaths = deepFreeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets',
@@ -118,40 +119,16 @@ function canonicalJson(value) {
 
 /** @param {Uint8Array} bytes */
 function encodeBase64(bytes) {
-  let result = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    const value = (first << 16) | ((second ?? 0) << 8) | (third ?? 0);
-    result += base64Alphabet[(value >>> 18) & 63];
-    result += base64Alphabet[(value >>> 12) & 63];
-    result += second === undefined ? '=' : base64Alphabet[(value >>> 6) & 63];
-    result += third === undefined ? '=' : base64Alphabet[value & 63];
-  }
-  return result;
+  return fromByteArray(bytes);
 }
 
 /** @param {string} value */
 function decodeBase64(value) {
-  if (
-    value.length % 4 !== 0 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
-  ) {
+  let bytes;
+  try {
+    bytes = toByteArray(value);
+  } catch {
     fail('K4-ASSET-BUNDLE-BASE64-001', 'Asset payload is not canonical base64');
-  }
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
-  const bytes = new Uint8Array((value.length / 4) * 3 - padding);
-  let output = 0;
-  for (let index = 0; index < value.length; index += 4) {
-    const first = base64Alphabet.indexOf(value[index]);
-    const second = base64Alphabet.indexOf(value[index + 1]);
-    const third = value[index + 2] === '=' ? 0 : base64Alphabet.indexOf(value[index + 2]);
-    const fourth = value[index + 3] === '=' ? 0 : base64Alphabet.indexOf(value[index + 3]);
-    const combined = (first << 18) | (second << 12) | (third << 6) | fourth;
-    if (output < bytes.length) bytes[output++] = (combined >>> 16) & 0xff;
-    if (output < bytes.length) bytes[output++] = (combined >>> 8) & 0xff;
-    if (output < bytes.length) bytes[output++] = combined & 0xff;
   }
   if (encodeBase64(bytes) !== value) {
     fail('K4-ASSET-BUNDLE-BASE64-001', 'Asset payload is not canonical base64');

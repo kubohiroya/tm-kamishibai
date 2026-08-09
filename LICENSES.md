@@ -31,6 +31,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-tmpose             | 1.6.1             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`             |
 | @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`               |
 | @turbowarp/scratch-svg-renderer          | 1.1.0             | MPL-2.0      | `TurboWarp/scratch-svg-renderer`          |
+| base64-js                                | 1.5.1             | MIT          | `beatgammit/base64-js`                    |
 | brfs                                     | 1.6.1             | MIT          | `browserify/brfs`                         |
 | esbuild                                  | 0.28.1            | MIT          | `evanw/esbuild`                           |
 | fflate                                   | 0.8.3             | MIT          | `101arrowz/fflate`                        |
