@@ -426,7 +426,22 @@ test(
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-chromium-'));
-    const {server, url} = await startFixtureServer();
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-bundle-'));
+    const fixtureHtml = await readFile(
+      path.join(repositoryRoot, 'test/fixtures/dsl4/web-preview-browser.html'),
+      'utf8',
+    );
+    const bundle = await buildDsl4TurboWarpBrowserBundle({
+      entryPoint: path.join(repositoryRoot, 'test/fixtures/dsl4/web-preview-browser.mjs'),
+    });
+    await Promise.all([
+      writeFile(
+        path.join(fixtureDirectory, 'index.html'),
+        fixtureHtml.replace('./web-preview-browser.mjs', './bundle.js'),
+      ),
+      writeFile(path.join(fixtureDirectory, 'bundle.js'), bundle),
+    ]);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
     const chrome = spawn(
       chromeExecutable,
       [
@@ -596,12 +611,20 @@ test(
       client?.close();
       await stopChrome(chrome);
       await new Promise((resolve) => server.close(resolve));
-      await rm(profileDirectory, {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 100,
-      });
+      await Promise.all([
+        rm(profileDirectory, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 100,
+        }),
+        rm(fixtureDirectory, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 100,
+        }),
+      ]);
     }
   },
 );
