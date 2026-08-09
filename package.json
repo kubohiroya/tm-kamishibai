@@ -75,8 +75,9 @@
   "dependencies": {
     "@kubohiroya/turbowarp-asset-manager": "0.8.0",
     "@kubohiroya/turbowarp-async-input": "0.3.0",
+    "@kubohiroya/turbowarp-bubble": "0.4.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
-    "@kubohiroya/turbowarp-svg-text": "0.3.0",
+    "@kubohiroya/turbowarp-svg-text": "0.4.0",
     "@kubohiroya/turbowarp-tmpose": "1.6.1",
     "@turbowarp/scratch-storage": "2.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",

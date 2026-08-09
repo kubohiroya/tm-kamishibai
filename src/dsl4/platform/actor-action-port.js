@@ -1,3 +1,4 @@
+import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -63,6 +64,9 @@ function validateSpeechPayload(value, command, extended) {
     'restCharacters',
     'restCharacterIntervalSeconds',
     'advanceIndicator',
+    'bubbleStyle',
+    'bubbleReveal',
+    'bubbleMotions',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
@@ -312,35 +316,53 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
   if (!isRecord(context) || typeof context.createAdvanceWait !== 'function') {
     throw portError('K4-ACTOR-PORT-001', 'speech advance context must provide createAdvanceWait');
   }
-  const advanceWait = context.createAdvanceWait();
-  if (
-    !isRecord(advanceWait) ||
-    !isRecord(advanceWait.promise) ||
-    typeof advanceWait.promise.then !== 'function' ||
-    typeof advanceWait.cancel !== 'function'
-  ) {
-    if (isRecord(advanceWait) && typeof advanceWait.cancel === 'function') {
-      advanceWait.cancel();
+  const createAdvanceWaitForContext = /** @type {Function} */ (context.createAdvanceWait);
+  const createAdvanceWait = () => {
+    const advanceWait = createAdvanceWaitForContext.call(context);
+    if (
+      !isRecord(advanceWait) ||
+      !isRecord(advanceWait.promise) ||
+      typeof advanceWait.promise.then !== 'function' ||
+      typeof advanceWait.cancel !== 'function'
+    ) {
+      if (isRecord(advanceWait) && typeof advanceWait.cancel === 'function') {
+        advanceWait.cancel();
+      }
+      throw portError('K4-ACTOR-PORT-001', 'createAdvanceWait returned an invalid handle');
     }
-    throw portError('K4-ACTOR-PORT-001', 'createAdvanceWait returned an invalid handle');
-  }
+    return /** @type {{promise: Promise<unknown>, cancel: () => void}} */ (
+      /** @type {unknown} */ (advanceWait)
+    );
+  };
+  let advanceWait = createAdvanceWait();
   const presentation = runPresentationOperation(operation, signal);
   try {
-    const outcome = await Promise.race([
-      presentation.then(() => 'presentation'),
-      advanceWait.promise.then((/** @type {unknown} */ result) => {
-        if (isRecord(result) && result.outcome === 'advance') return 'advance';
-        if (isRecord(result) && result.outcome === 'cancelled') return 'cancelled';
-        throw portError('K4-ACTOR-PORT-001', 'speech advance wait returned an invalid outcome');
-      }),
-    ]);
-    if (outcome === 'advance') operation.finish('advance');
-    if (outcome === 'cancelled') {
-      operation.finish('cancel');
-      if (signal.aborted) throw abortError();
-      throw portError('K4-ACTOR-PORT-001', 'speech advance wait was cancelled unexpectedly');
+    while (true) {
+      let outcome;
+      try {
+        outcome = await Promise.race([
+          presentation.then(() => 'presentation'),
+          advanceWait.promise.then((/** @type {unknown} */ result) => {
+            if (isRecord(result) && result.outcome === 'advance') return 'advance';
+            if (isRecord(result) && result.outcome === 'cancelled') return 'cancelled';
+            throw portError('K4-ACTOR-PORT-001', 'speech advance wait returned an invalid outcome');
+          }),
+        ]);
+      } finally {
+        advanceWait.cancel();
+      }
+      if (outcome === 'presentation') return await presentation;
+      if (outcome === 'cancelled') {
+        operation.finish('cancel');
+        if (signal.aborted) throw abortError();
+        throw portError('K4-ACTOR-PORT-001', 'speech advance wait was cancelled unexpectedly');
+      }
+      const finishResult = operation.finish('advance');
+      if (!isRecord(finishResult) || finishResult.consumed !== true) {
+        return await presentation;
+      }
+      advanceWait = createAdvanceWait();
     }
-    return await presentation;
   } catch (error) {
     try {
       operation.finish('cancel');
@@ -350,8 +372,6 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
       }
     }
     throw error;
-  } finally {
-    advanceWait.cancel();
   }
 }
 
@@ -498,8 +518,50 @@ export function createDsl4ActorActionPort(options) {
         );
       }
     }
+    const bubbleStyle = Object.hasOwn(value, 'bubbleStyle')
+      ? requireNonEmptyString(value.bubbleStyle, 'bubbleStyle', command)
+      : undefined;
+    let bubbleReveal;
+    if (Object.hasOwn(value, 'bubbleReveal')) {
+      if (bubbleStyle === undefined) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleReveal requires bubbleStyle`);
+      }
+      const candidate = value.bubbleReveal;
+      const allowedRevealKeys = new Set([
+        'unit',
+        'delimiters',
+        'showDelimiters',
+        'layout',
+        'intervalSeconds',
+        'sound',
+      ]);
+      if (
+        !isRecord(candidate) ||
+        Object.keys(candidate).some((key) => !allowedRevealKeys.has(key)) ||
+        !['CHARACTER', 'WORD', 'LINE', 'BLOCK'].includes(String(candidate.unit))
+      ) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleReveal is invalid`);
+      }
+      bubbleReveal = candidate;
+    }
+    let bubbleMotions;
+    if (Object.hasOwn(value, 'bubbleMotions')) {
+      if (bubbleStyle === undefined) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleMotions requires bubbleStyle`);
+      }
+      try {
+        bubbleMotions = normalizeDsl4BubbleMotions(value.bubbleMotions);
+      } catch (error) {
+        const normalizedError = portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.bubbleMotions is invalid`,
+        );
+        Object.defineProperty(normalizedError, 'cause', {value: error});
+        throw normalizedError;
+      }
+    }
     let advanceIndicator;
-    if (Object.hasOwn(value, 'advanceIndicator')) {
+    if (Object.hasOwn(value, 'advanceIndicator') && bubbleStyle === undefined) {
       if (!bubbleAdvanceIndicatorEnabled) {
         throw portError('K4-ACTOR-PORT-001', 'bubble advance indicator is disabled');
       }
@@ -537,6 +599,9 @@ export function createDsl4ActorActionPort(options) {
     for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
       requireAudioAsset(/** @type {string} */ (sound));
     }
+    if (isRecord(bubbleReveal) && typeof bubbleReveal.sound === 'string') {
+      requireAudioAsset(bubbleReveal.sound);
+    }
     if (advanceIndicator) {
       for (const frame of advanceIndicator.frames) requireImageAsset(frame);
     }
@@ -556,6 +621,10 @@ export function createDsl4ActorActionPort(options) {
           ...(noSoundCharacters === undefined ? {} : {noSoundCharacters}),
           ...(restCharacters === undefined ? {} : {restCharacters}),
           ...(restCharacterIntervalSeconds === undefined ? {} : {restCharacterIntervalSeconds}),
+          ...(bubbleStyle === undefined ? {} : {bubbleStyle}),
+          ...(bubbleReveal === undefined ? {} : {bubbleReveal}),
+          ...(bubbleMotions === undefined ? {} : {bubbleMotions}),
+          ...(waitFor === undefined ? {} : {waitFor}),
         }),
         actionContext,
       ),

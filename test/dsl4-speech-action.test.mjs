@@ -178,7 +178,7 @@ test('shows a style advance indicator only after typewriter completion and stops
     `bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12`,
     presenter,
@@ -204,7 +204,7 @@ test('rejects advance indicator styles while their startup-fixed feature flag is
     `bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12`,
   );
@@ -233,7 +233,7 @@ test('does not show the advance indicator for early advance or seconds-only spee
   const style = `bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12`;
   const early = createSpeechExecution(

@@ -1,4 +1,5 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
+import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -7,6 +8,7 @@ import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4BubbleAdvanceIndicatorPresenter} from './bubble-advance-indicator.js';
+import {createDsl4BubblePlatform} from './bubble-platform.js';
 import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
@@ -245,6 +247,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} cameraPreviewControlsEnabled
  * @param {boolean} speechAdvanceTypewriterEnabled
  * @param {boolean} bubbleAdvanceIndicatorEnabled
+ * @param {boolean} turboWarpBubbleEnabled
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -256,6 +259,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   cameraPreviewControlsEnabled,
   speechAdvanceTypewriterEnabled,
   bubbleAdvanceIndicatorEnabled,
+  turboWarpBubbleEnabled,
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -269,6 +273,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let bubbleAdvanceIndicatorPresenter = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
+  /** @type {ReturnType<typeof createDsl4BubblePlatform> | null} */
+  let bubblePlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
   let scratchPoseFeedbackAdapter = null;
   /** @type {ReturnType<typeof createDsl4PoseFeedbackPresenter> | null} */
@@ -278,8 +284,22 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
   let cameraPreviewControls = null;
   const inputArbitration = createDsl4InputArbitration();
+  const standaloneAdvanceIndicatorEnabled =
+    bubbleAdvanceIndicatorEnabled && !turboWarpBubbleEnabled;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
+  const bubbleCompositionProxy = turboWarpBubbleEnabled
+    ? Object.freeze({
+        /** @param {unknown} input */
+        show(input) {
+          if (!bubblePlatform) throw new TypeError('Bubble platform is not ready');
+          return bubblePlatform.composition.show(input);
+        },
+        releaseAll() {
+          return bubblePlatform?.releaseAll();
+        },
+      })
+    : null;
   const preview = isRecord(component.storyDocument.poseRecognition)
     ? /** @type {Record<string, any>} */ (component.storyDocument.poseRecognition).preview
     : null;
@@ -315,6 +335,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   try {
     actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
+      ...(bubbleCompositionProxy === null ? {} : {bubbleComposition: bubbleCompositionProxy}),
       ...(speechAdvanceTypewriterEnabled
         ? {
             speechAdvanceTypewriterEnabled: true,
@@ -440,7 +461,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
     });
-    if (bubbleAdvanceIndicatorEnabled) {
+    if (standaloneAdvanceIndicatorEnabled) {
       const activeAssetSession = assetSession;
       bubbleAdvanceIndicatorPresenter = createDsl4BubbleAdvanceIndicatorPresenter({
         runtime: options.runtime,
@@ -458,7 +479,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
-      ...(bubbleAdvanceIndicatorEnabled
+      ...(standaloneAdvanceIndicatorEnabled
         ? {
             bubbleAdvanceIndicatorEnabled: true,
             advanceIndicatorPresenter: bubbleAdvanceIndicatorPresenter,
@@ -478,6 +499,18 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         ? {}
         : {createComposition: options.createSvgTextComposition}),
     });
+    if (turboWarpBubbleEnabled) {
+      bubblePlatform = createDsl4BubblePlatform({
+        runtime: options.runtime,
+        storyDocument: component.storyDocument,
+        assetManager: assetSession.assetManagerComposition,
+        textCapability: createSvgTextCompositionCapability(svgTextPlatform.composition),
+        ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+        ...(options.createBubbleComposition === undefined
+          ? {}
+          : {createComposition: options.createBubbleComposition}),
+      });
+    }
     hostPort = validateHostPort(
       typeof options.createHostPort === 'function'
         ? await options.createHostPort(
@@ -690,6 +723,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             () => cameraPreviewControls?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
+            () => bubblePlatform?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
             () => inputArbitration.dispose(),
             () => assetSession?.dispose(reason),
@@ -719,6 +753,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       () => cameraPreviewControls?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
+      () => bubblePlatform?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
       () => inputArbitration.dispose(),
       () => assetSession?.dispose('partial-creation-failed'),
@@ -776,6 +811,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {unknown} [options.actorTouchSource]
  * @param {Function} [options.createRuntimeExpressionComposition]
  * @param {Function} [options.createSvgTextComposition]
+ * @param {Function} [options.createBubbleComposition]
  * @param {unknown} [options.actorScheduler]
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.createAdvanceIndicatorImage]
@@ -884,13 +920,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         startupContext.featureFlags.dsl4CameraPreviewControls,
         startupContext.featureFlags.dsl4SpeechAdvanceTypewriter,
         startupContext.featureFlags.dsl4BubbleAdvanceIndicator,
+        startupContext.featureFlags.dsl4TurboWarpBubble,
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
