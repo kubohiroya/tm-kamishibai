@@ -1,4 +1,5 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
+import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -503,7 +504,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         runtime: options.runtime,
         storyDocument: component.storyDocument,
         assetManager: assetSession.assetManagerComposition,
-        svgText: svgTextPlatform.composition,
+        textCapability: createSvgTextCompositionCapability(svgTextPlatform.composition),
         ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
         ...(options.createBubbleComposition === undefined
           ? {}

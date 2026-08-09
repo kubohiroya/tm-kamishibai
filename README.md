@@ -175,10 +175,11 @@ DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble` Compositionが所�
 `textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
 `HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
 portraitのbase／blink／lip-syncと`continueIndicator`のframe assetもstyleへ宣言でき、参照sceneの
-lazy dependencyとして読み込まれます。SVG Textは`Actor.setText`とBubble内部の本文レイヤーに限って
-使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
+lazy dependencyとして読み込まれます。Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
+TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
+本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
 
-Bubble 0.3では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
+Bubble 0.4では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
 `LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
 animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
 外形animationを同じsurface上で実行します。native revealと旧`characterIntervalSeconds`系は同じ

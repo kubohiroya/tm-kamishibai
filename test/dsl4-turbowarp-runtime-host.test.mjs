@@ -1895,7 +1895,8 @@ test('routes flagged speech through Bubble and releases the owned composition', 
         assert.strictEqual(runtime, fixture.runtime);
         assert.ok(options.imageResolver);
         assert.strictEqual(options.audio, options.imageResolver);
-        assert.ok(options.svgText);
+        assert.equal(typeof options.textCapability?.setText, 'function');
+        assert.equal(typeof options.textCapability?.releaseTarget, 'function');
         return {
           defineStyle(style) {
             bubbleLog.push(['define', style.name, style.visualStyle]);

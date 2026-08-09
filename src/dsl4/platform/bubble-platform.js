@@ -43,7 +43,7 @@ function defineStyle(composition, name, style) {
  * @param {unknown} options.runtime
  * @param {unknown} options.storyDocument
  * @param {unknown} options.assetManager
- * @param {unknown} options.svgText
+ * @param {unknown} options.textCapability
  * @param {unknown} [options.scheduler]
  * @param {Function} [options.createComposition]
  */
@@ -60,7 +60,7 @@ export function createDsl4BubblePlatform(options) {
     createComposition(options.runtime, {
       imageResolver: options.assetManager,
       audio: options.assetManager,
-      svgText: options.svgText,
+      textCapability: options.textCapability,
       ...(options.scheduler === undefined ? {} : {scheduler: options.scheduler}),
     })
   );

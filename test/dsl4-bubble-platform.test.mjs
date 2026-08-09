@@ -40,7 +40,7 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
       },
     },
     assetManager: {id: 'assets'},
-    svgText: {id: 'text'},
+    textCapability: {id: 'text'},
     createComposition(runtime, options) {
       calls.push([runtime, options]);
       return composition;
@@ -74,7 +74,7 @@ test('maps DSL 4.0 bubble styles into one host-owned Bubble composition', async 
     {
       imageResolver: {id: 'assets'},
       audio: {id: 'assets'},
-      svgText: {id: 'text'},
+      textCapability: {id: 'text'},
     },
   ]);
   await platform.releaseAll();

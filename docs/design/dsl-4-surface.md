@@ -399,8 +399,9 @@ SVG Text 0.4では`textStyles`は文字レイヤーだけを担当し、吹き�
 `svgTextStyle`に含まれる`DIRECTION`は、converterがそのstyleを使うsay／think用`bubbleStyles`の
 `placement`へ移します。DSL4を直接記述する場合も、吹き出し位置は`bubbleStyles.placement`で指定します。
 
-Bubble 0.2以降では`maxWidth`と`textLocale`を指定すると、SVG Text 0.4の`measureText`を使って
-locale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
+Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`を使用し、TurboWarp Runtime HostがSVG Text 0.4の
+compositionを公式adapterで接続します。`maxWidth`と`textLocale`を指定すると、このcapabilityの
+`measureText`を使ってlocale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
 `continueIndicator`は入力待機中だけ表示するframeです。旧`portrait.talk`と`advanceIndicator`は
 0.2 APIとの名称不一致を残さないため受理しません。
 

@@ -40,7 +40,7 @@
     {
       "id": "bubble",
       "package": "@kubohiroya/turbowarp-bubble",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-bubble",
       "compositionExport": "./turbowarp-adapter",
@@ -108,7 +108,10 @@
       "src/dsl4/platform/platform-asset-session.js"
     ],
     "@kubohiroya/turbowarp-bubble": ["src/dsl4/platform/turbowarp-actor-adapter.js"],
-    "@kubohiroya/turbowarp-bubble/turbowarp-adapter": ["src/dsl4/platform/bubble-platform.js"],
+    "@kubohiroya/turbowarp-bubble/turbowarp-adapter": [
+      "src/dsl4/platform/bubble-platform.js",
+      "src/dsl4/platform/turbowarp-runtime-host.js"
+    ],
     "@kubohiroya/turbowarp-runtime-expression/composition": [
       "src/dsl4/platform/turbowarp-runtime-host.js"
     ],

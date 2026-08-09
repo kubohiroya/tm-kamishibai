@@ -298,7 +298,7 @@ scenes:
   );
 });
 
-test('accepts Bubble 0.3 wrapping, lip-sync, reveal, audio, and motion styles', () => {
+test('accepts Bubble 0.4 wrapping, lip-sync, reveal, audio, and motion styles', () => {
   const source = `
 kamishibai: '4.0'
 assets:

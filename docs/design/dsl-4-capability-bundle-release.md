@@ -28,7 +28,7 @@ Structured Dataはこのrepositoryのfirst-party sourceとして組み込みま�
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
 | Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.3.1`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.4.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.4.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
 | TMPose             | `@kubohiroya/turbowarp-tmpose@1.6.1`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
