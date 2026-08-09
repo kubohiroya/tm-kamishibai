@@ -162,6 +162,14 @@ test('rejects structure, order, duplicate, base64, size, hash, and bundle mutati
   missing.files.pop();
   const invalidBase64 = structuredClone(descriptor);
   invalidBase64.files[0].data = '*invalid*';
+  const invalidBase64Alphabet = structuredClone(descriptor);
+  invalidBase64Alphabet.files[0].data = 'AA*A';
+  const urlSafeBase64Alphabet = structuredClone(descriptor);
+  urlSafeBase64Alphabet.files[0].data = '____';
+  const misplacedBase64Padding = structuredClone(descriptor);
+  misplacedBase64Padding.files[0].data = 'AA=A';
+  const nonCanonicalBase64PaddingBits = structuredClone(descriptor);
+  nonCanonicalBase64PaddingBits.files[0].data = 'AB==';
   const wrongSize = structuredClone(descriptor);
   wrongSize.files[0].size += 1;
   const wrongHash = structuredClone(descriptor);
@@ -181,6 +189,10 @@ test('rejects structure, order, duplicate, base64, size, hash, and bundle mutati
     [duplicate, 'K4-ASSET-BUNDLE-DUPLICATE-001'],
     [missing, 'K4-ASSET-BUNDLE-MANIFEST-001'],
     [invalidBase64, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [invalidBase64Alphabet, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [urlSafeBase64Alphabet, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [misplacedBase64Padding, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [nonCanonicalBase64PaddingBits, 'K4-ASSET-BUNDLE-BASE64-001'],
     [wrongSize, 'K4-ASSET-BUNDLE-DESCRIPTOR-001'],
     [wrongHash, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
     [wrongBundle, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
@@ -222,6 +234,30 @@ test('supports a canonical empty file payload', async () => {
   assert.equal(descriptor.files[0].data, '');
   const validated = await validateDsl4EmbeddedAssetBundle(story(), descriptor, options);
   assert.deepEqual(validated.getFile('Image', 'image.svg'), new Uint8Array());
+});
+
+test('validates a model-sized base64 payload without overflowing the regexp stack', async () => {
+  const modelBytes = new Uint8Array(5_897_600);
+  for (let index = 0; index < modelBytes.length; index += 1) {
+    modelBytes[index] = index % 251;
+  }
+  const largeOptions = {...options, maxTotalBytes: 8 * 1024 * 1024};
+  const descriptor = await createDsl4EmbeddedAssetBundle(
+    story(),
+    snapshot(modelBytes),
+    largeOptions,
+  );
+  const validated = await validateDsl4EmbeddedAssetBundle(
+    story(),
+    structuredClone(descriptor),
+    largeOptions,
+  );
+  const recovered = validated.getFile('Image', 'image.svg');
+  assert.equal(recovered.length, modelBytes.length);
+  assert.equal(recovered[0], 0);
+  assert.equal(recovered[250], 250);
+  assert.equal(recovered[251], 0);
+  assert.equal(recovered.at(-1), modelBytes.at(-1));
 });
 
 test('stores verified remote metadata without an embedded payload', async () => {
