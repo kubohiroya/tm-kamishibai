@@ -1159,7 +1159,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
   await soundRun;
 });
 
-test('pose navigation policy waits for cleanup and advances a skippable pose once', async () => {
+test('pose navigation policy waits for cleanup and skips the final pose step once', async () => {
   const cleanup = deferred();
   const events = [];
   let stageCalls = 0;
@@ -1181,19 +1181,131 @@ test('pose navigation policy waits for cleanup and advances a skippable pose onc
   assert.equal(controller.canAdvance('navigation.nextAction'), false);
   const duplicateAdvance = controller.advance('navigation.nextAction');
   assert.strictEqual(duplicateAdvance, firstAdvance);
-  assert.strictEqual(controller.getRunPromise(), firstAdvance);
+  assert.strictEqual(controller.getRunPromise(), staleRun);
   assert.deepEqual(events, ['abort']);
   assert.equal(stageCalls, 0);
 
   cleanup.resolve();
-  const state = await firstAdvance;
+  await firstAdvance;
   await duplicateAdvance;
   await staleRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(stageCalls, 1);
   assert.deepEqual(events, ['abort', 'cleanup', 'stage']);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
   assert.equal(controller.getRunPromise(), null);
+});
+
+test('Space skips only the current pose wait and starts each later step once', async () => {
+  const cleanups = [deferred(), deferred()];
+  const events = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  StepSound: sound
+  HeroIdle: costume:Hero
+  HeroReady: costume:Hero
+  Beach: backdrop
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+              skin: HeroReady
+              sound: StepSound
+            - pose: jump
+              sound: StepSound
+      - stage: Beach
+`),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: async ({skin}) => events.push(['skin', skin]),
+      waitForPose: ({stepIndex}, context) =>
+        new Promise((_resolve, reject) => {
+          events.push(['pose', stepIndex]);
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              events.push(['abort', stepIndex]);
+              void cleanups[stepIndex].promise.then(() => {
+                events.push(['cleanup', stepIndex]);
+                const error = new Error('pose wait cancelled');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            },
+            {once: true},
+          );
+        }),
+      sound: async ({sound}) => events.push(['sound', sound]),
+      stage: async ({backdrop}) => events.push(['stage', backdrop]),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 0),
+    'first pose step did not start',
+  );
+  assert.deepEqual(events, [
+    ['skin', 'HeroReady'],
+    ['pose', 0],
+  ]);
+
+  const firstSkip = controller.advance('navigation.nextAction');
+  const duplicateFirstSkip = controller.advance('navigation.nextAction');
+  assert.strictEqual(duplicateFirstSkip, firstSkip);
+  cleanups[0].resolve();
+  await firstSkip;
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    'second pose step did not start',
+  );
+  assert.equal(controller.getState().actionIndex, 0);
+
+  const secondSkip = controller.advance('navigation.nextAction');
+  cleanups[1].resolve();
+  await secondSkip;
+  await run;
+
+  assert.deepEqual(events, [
+    ['skin', 'HeroReady'],
+    ['pose', 0],
+    ['abort', 0],
+    ['cleanup', 0],
+    ['pose', 1],
+    ['abort', 1],
+    ['cleanup', 1],
+    ['stage', 'Beach'],
+  ]);
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'pose.step.skip')
+      .map(({details}) => details.stepIndex),
+    [0, 1],
+  );
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.commit').length, 2);
+  assert.equal(controller.getState().status, 'finished');
 });
 
 test('stop wins while a skippable pose is waiting for cancellation cleanup', async () => {
@@ -1362,8 +1474,9 @@ scenes:
   assert.deepEqual(events, ['pose-start', 'abort']);
   cleanup.resolve();
 
-  const state = await advance;
+  await advance;
   await initialRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(state.sceneId, 'ending');
   assert.ok(events.indexOf('cleanup') < events.indexOf('stage'));
@@ -1374,7 +1487,8 @@ scenes:
     ),
     true,
   );
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
 });
 
 test('restart invalidates an old pose cleanup lock without waiting for it', async () => {
@@ -1407,15 +1521,17 @@ test('restart invalidates an old pose cleanup lock without waiting for it', asyn
 
   const newAdvance = controller.advance('navigation.nextAction');
   newCleanup.resolve();
-  const state = await newAdvance;
+  await newAdvance;
+  await restartedRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(stageCalls, 1);
 
   oldCleanup.resolve();
-  await Promise.all([firstRun, oldAdvance, restartedRun]);
+  await Promise.all([firstRun, oldAdvance]);
   assert.equal(controller.getState().status, 'finished');
   assert.equal(stageCalls, 1);
-  assert.deepEqual(cancelReasons, ['navigation.nextAction', 'navigation.nextAction']);
+  assert.deepEqual(cancelReasons, ['restart']);
 });
 
 test('pose navigation policy remains inert while its startup gate is disabled', async () => {

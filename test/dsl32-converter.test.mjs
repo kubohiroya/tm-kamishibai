@@ -277,6 +277,7 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
     {pose: 'help', skin: 'Hero', sound: 'Success'},
     {pose: 'jump'},
   ]);
+  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
 });
 
 test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', () => {
@@ -304,6 +305,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     fullConfidenceHoldSeconds: 0.5,
     idleChargePerSecond: 0,
   });
+  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
   assert.equal(result.document?.variables.poseCharge, 20);
 
   const incompatible = convertDsl32ToDsl4(

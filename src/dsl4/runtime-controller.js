@@ -357,9 +357,9 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
-  /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  /** @type {{generation: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
   let poseAdvanceLock = null;
-  /** @type {{generation: number} | null} */
+  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, skipRequested: boolean} | null} */
   let activePoseWait = null;
   /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void} | null} */
   let activeAdvanceWait = null;
@@ -1099,8 +1099,20 @@ export function createDsl4RuntimeController({
           await invokePort('setSkin', {target, skin: step.skin}, context);
           ensureActive(context);
         }
-        const poseWait = {generation: context.generation};
+        const stepController = new AbortController();
+        const handleActionAbort = () => stepController.abort(context.signal.reason);
+        if (context.signal.aborted) handleActionAbort();
+        else context.signal.addEventListener('abort', handleActionAbort, {once: true});
+        const poseWait = {
+          generation: context.generation,
+          stepIndex,
+          controller: stepController,
+          completion: deferred(),
+          cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
+          skipRequested: false,
+        };
         activePoseWait = poseWait;
+        let skipped = false;
         try {
           await invokePort(
             'waitForPose',
@@ -1111,10 +1123,30 @@ export function createDsl4RuntimeController({
               poseModel,
               recognition: cloneValue(poseSequenceRecognition),
             },
-            context,
+            {...context, signal: stepController.signal},
           );
+          if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
+            skipped = true;
+          }
+        } catch (error) {
+          const errorRecord = isRecord(error) ? error : {};
+          if (
+            !poseWait.skipRequested ||
+            context.signal.aborted ||
+            !isCurrent(context.generation) ||
+            errorRecord.name !== 'AbortError'
+          ) {
+            throw error;
+          }
+          skipped = true;
         } finally {
+          poseWait.cleanup();
           if (activePoseWait === poseWait) activePoseWait = null;
+          poseWait.completion.resolve(undefined);
+        }
+        if (skipped) {
+          emit('pose.step.skip', {stepIndex, reason: 'navigation.nextAction'});
+          continue;
         }
         ensureActive(context);
         if (typeof step.sound === 'string') {
@@ -1398,10 +1430,9 @@ export function createDsl4RuntimeController({
     }
     const action = currentAction();
     const wasRunning = status === 'running';
-    const poseCancellationPending = poseAdvanceLock?.runId === runId;
-    if (wasRunning && !poseCancellationPending) actionAbortController?.abort(reason);
+    if (wasRunning) actionAbortController?.abort(reason);
     generation += 1;
-    if (wasRunning && action && !poseCancellationPending) emit('action.cancel', {reason});
+    if (wasRunning && action) emit('action.cancel', {reason});
     try {
       endStructuredStory(reason);
     } catch (error) {
@@ -1430,7 +1461,7 @@ export function createDsl4RuntimeController({
   /** @param {string} [reason] */
   function canAdvance(reason = 'navigation.nextAction') {
     if (status !== 'running') return false;
-    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock) return false;
     if (!isPoseNavigationAdvance(reason)) return true;
     return poseSequenceRecognition.navigation.allowSkip;
@@ -1504,55 +1535,35 @@ export function createDsl4RuntimeController({
   }
 
   /**
-   * @param {string} reason
-   * @param {string} fromStoryPath
-   * @param {Promise<Readonly<Record<string, unknown>>> | null} activeRun
-   * @param {{runId: number, operation: Promise<Readonly<Record<string, unknown>>> | null}} lock
-   */
-  async function advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock) {
-    try {
-      if (activeRun) await activeRun;
-    } finally {
-      if (poseAdvanceLock === lock) poseAdvanceLock = null;
-    }
-    const activeRunId = lock.runId;
-    if (status !== 'running' || runId !== activeRunId) return snapshot();
-    return continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId);
-  }
-
-  /**
-   * Cancel the current action and continue at the next normal execution boundary.
+   * Skip the active pose step or cancel the current action at the next execution boundary.
    *
    * @param {string} [reason]
    * @returns {Promise<Readonly<Record<string, unknown>>>}
    */
   function advance(reason = 'navigation.nextAction') {
     if (status !== 'running') return Promise.resolve(snapshot());
-    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock) return poseAdvanceLock.operation;
     if (!canAdvance(reason)) return Promise.resolve(snapshot());
-    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
-    finishPresentationTransitions(reason);
     if (isPoseNavigationAdvance(reason)) {
-      const activeRun = runPromise;
-      actionAbortController?.abort(reason);
-      generation += 1;
-      emit('action.cancel', {reason});
-      runId += 1;
-      /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
-      const lock = {runId, operation: Promise.resolve(snapshot())};
-      const operation = advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock);
+      const poseWait = activePoseWait;
+      if (!poseWait) return Promise.resolve(snapshot());
+      /** @type {{generation: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
+      const lock = {generation, operation: Promise.resolve(snapshot())};
+      poseWait.skipRequested = true;
+      poseWait.controller.abort(reason);
+      const operation = poseWait.completion.promise.then(() => snapshot());
       lock.operation = operation;
       poseAdvanceLock = lock;
-      runPromise = operation;
       void operation
         .finally(() => {
           if (poseAdvanceLock === lock) poseAdvanceLock = null;
-          if (runPromise === operation) runPromise = null;
         })
         .catch(() => {});
       return operation;
     }
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    finishPresentationTransitions(reason);
     const action = currentAction();
     actionAbortController?.abort(reason);
     generation += 1;
