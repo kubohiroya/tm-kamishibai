@@ -1,0 +1,35 @@
+name: Navigation contract
+
+on:
+  push:
+    paths:
+      - 'site/contracts/navigation-contract.json'
+      - 'scripts/site-navigation.mjs'
+      - '.github/workflows/navigation-contract.yml'
+  pull_request:
+    paths:
+      - 'site/contracts/navigation-contract.json'
+      - 'scripts/site-navigation.mjs'
+      - '.github/workflows/navigation-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check application repository
+        uses: actions/checkout@v4
+      - name: Check canonical docs contract
+        uses: actions/checkout@v4
+        with:
+          repository: kubohiroya/tmpose-kamishibai-docs
+          ref: 12f0b7989534d98fe12654ecea756b664d75398b
+          path: .navigation-contract-source
+          fetch-depth: 1
+      - name: Compare generated contract and renderer
+        run: |
+          cmp .navigation-contract-source/docs/tutorials/navigation-contract.json site/contracts/navigation-contract.json
+          cmp .navigation-contract-source/scripts/site-navigation.mjs scripts/site-navigation.mjs
+          cmp .navigation-contract-source/site/site-shell.css site/site-shell.css
