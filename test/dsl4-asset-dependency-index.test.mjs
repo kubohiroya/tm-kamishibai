@@ -304,7 +304,7 @@ actors:
 bubbleStyles:
   novel:
     characterIntervalSeconds: 0.1
-    advanceIndicator:
+    continueIndicator:
       frames: [Next1, Next2]
       frameIntervalSeconds: 0.12
 scenes:
@@ -326,6 +326,38 @@ scenes:
     sceneRetained: [],
   });
   assert.deepEqual(index.scenes.second.all, []);
+});
+
+test('indexes Bubble portrait lip-sync plus native reveal and audio assets', () => {
+  const storyDocument = parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png, loading: lazy}
+  Lip: {kind: image, file: lip.png, loading: lazy}
+  Voice: {kind: sound, name: Voice, loading: lazy}
+  Tick: {kind: sound, name: Tick, loading: lazy}
+  Finish: {kind: sound, name: Finish, loading: lazy}
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  novel:
+    portrait:
+      base: Face
+      lipSync: {frames: [Lip], frameIntervalSeconds: 0.1}
+    reveal: {unit: CHARACTER, intervalSeconds: 0.05, sound: Tick}
+    audio: {voice: Voice, reveal: Tick, finish: Finish}
+scenes:
+  first:
+    - Hero.say: {text: hello, seconds: 1, styles: [novel]}
+`);
+  const index = createDsl4AssetDependencyIndex(storyDocument);
+
+  assert.deepEqual(index.scenes.first, {
+    all: ['Face', 'Finish', 'Lip', 'Tick', 'Voice'],
+    eager: [],
+    lazy: ['Face', 'Finish', 'Lip', 'Tick', 'Voice'],
+    sceneRetained: [],
+  });
 });
 
 test('returns a deeply immutable index and rejects non-StoryDocument input', () => {

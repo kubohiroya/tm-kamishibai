@@ -30,6 +30,31 @@ function cloneValue(value) {
 }
 
 /**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {unknown} value
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {Array<string | number>} yamlPath
+ * @param {string} storyPath
+ */
+function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, storyPath) {
+  if (typeof value !== 'object' || value === null) return;
+  const entries = Array.isArray(value)
+    ? value.map((child, index) => [index, child])
+    : Object.entries(/** @type {Record<string, unknown>} */ (value));
+  for (const [key, child] of entries) {
+    const segment = encodeDsl4StoryPathSegment(String(key));
+    const childStoryPath = `${storyPath}/${segment}`;
+    const childYamlPath = [...yamlPath, key];
+    sourceMap[childStoryPath] = sourceRangeForNode(
+      document.getIn(childYamlPath, true),
+      lineCounter,
+    );
+    mapNestedSource(sourceMap, child, document, lineCounter, childYamlPath, childStoryPath);
+  }
+}
+
+/**
  * @template T
  * @param {T} value
  * @returns {Readonly<T>}
@@ -398,49 +423,14 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
       const stylePath = `/bubbleStyles/${encodeDsl4StoryPathSegment(styleId)}`;
       const styleNode = document.getIn(['bubbleStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
-      for (const field of Object.keys(style)) {
-        const fieldNode = document.getIn(['bubbleStyles', styleId, field], true);
-        sourceMap[`${stylePath}/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
-          fieldNode,
-          lineCounter,
-        );
-        if (field === 'styles' && Array.isArray(style[field])) {
-          style[field].forEach((_, styleIndex) => {
-            sourceMap[`${stylePath}/styles/${styleIndex}`] = sourceRangeForNode(
-              fieldNode?.get?.(styleIndex, true) ?? fieldNode,
-              lineCounter,
-            );
-          });
-        }
-      }
-      const advanceIndicator = /** @type {Record<string, unknown>} */ (
-        style.advanceIndicator ?? {}
+      mapNestedSource(
+        sourceMap,
+        style,
+        document,
+        lineCounter,
+        ['bubbleStyles', styleId],
+        stylePath,
       );
-      if (Array.isArray(advanceIndicator.frames)) {
-        const framesPath = `${stylePath}/advanceIndicator/frames`;
-        sourceMap[framesPath] = sourceRangeForNode(
-          document.getIn(['bubbleStyles', styleId, 'advanceIndicator', 'frames'], true),
-          lineCounter,
-        );
-        advanceIndicator.frames.forEach((_frame, frameIndex) => {
-          sourceMap[`${framesPath}/${frameIndex}`] = sourceRangeForNode(
-            document.getIn(
-              ['bubbleStyles', styleId, 'advanceIndicator', 'frames', frameIndex],
-              true,
-            ),
-            lineCounter,
-          );
-        });
-      }
-      if (Object.hasOwn(advanceIndicator, 'frameIntervalSeconds')) {
-        sourceMap[`${stylePath}/advanceIndicator/frameIntervalSeconds`] = sourceRangeForNode(
-          document.getIn(
-            ['bubbleStyles', styleId, 'advanceIndicator', 'frameIntervalSeconds'],
-            true,
-          ),
-          lineCounter,
-        );
-      }
     }
   }
 

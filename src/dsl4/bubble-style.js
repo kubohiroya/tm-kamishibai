@@ -102,3 +102,8 @@ export function composeBubbleStyles(styleIds, bubbleStyles) {
   }
   return effectiveStyle;
 }
+
+/** @param {ReadonlyArray<string>} styleIds */
+export function bubbleStyleNameForStyleIds(styleIds) {
+  return `\u0000dsl4:${JSON.stringify(styleIds)}`;
+}

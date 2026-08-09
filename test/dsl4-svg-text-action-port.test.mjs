@@ -83,7 +83,6 @@ test('maps StoryDocument styles and renders text through the direct composition 
         font: 'Noto Sans JP',
         size: 150,
         align: 'center',
-        direction: 'up',
       },
     }),
     resolveActor(actorId, actionContext) {
