@@ -627,6 +627,78 @@ scenes:
   );
 });
 
+test('hides every story actor before publishing each scene entry', async () => {
+  const order = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+  GuideSkin: costume:Guide
+actors:
+  Hero: HeroSkin
+  Guide: GuideSkin
+scenes:
+  first: []
+  final: []
+`),
+    port: {
+      hideSceneActors(transition) {
+        order.push(['hide', transition]);
+      },
+    },
+    onEvent(event) {
+      if (event.type === 'scene.enter') order.push(['enter', event.sceneId]);
+    },
+  });
+
+  const state = await controller.start();
+
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(order, [
+    ['hide', {actors: ['Hero', 'Guide'], from: null, to: 'first', reason: 'start'}],
+    ['enter', 'first'],
+    ['hide', {actors: ['Hero', 'Guide'], from: 'first', to: 'final', reason: 'sequential'}],
+    ['enter', 'final'],
+  ]);
+  assert.equal(Object.isFrozen(order[0][1]), true);
+  assert.equal(Object.isFrozen(order[0][1].actors), true);
+});
+
+test('fails before publishing a destination scene when actor hiding fails', async () => {
+  let resetCount = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+scenes:
+  first: []
+  final: []
+`),
+    port: {
+      hideSceneActors() {
+        resetCount += 1;
+        if (resetCount === 2) throw new Error('actor hide failed');
+      },
+    },
+  });
+
+  const state = await controller.start();
+
+  assert.equal(state.status, 'failed');
+  assert.equal(state.sceneId, 'first');
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'scene.enter')
+      .map(({sceneId}) => sceneId),
+    ['first'],
+  );
+});
+
 for (const [label, truthyExpression, destination, evaluated] of [
   ['first matching rule', 'first', 'firstScene', ['first']],
   ['later matching rule', 'second', 'secondScene', ['first', 'second']],

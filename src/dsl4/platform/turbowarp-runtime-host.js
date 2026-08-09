@@ -553,6 +553,34 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ],
       'actor action port',
     );
+    const activeActorPlatform = actorPlatform;
+    const storyActors = isRecord(component.storyDocument.actors)
+      ? component.storyDocument.actors
+      : {};
+    port.hideSceneActors = () => {
+      const actors = Object.keys(storyActors).map((actorId) => {
+        const actor = activeActorPlatform.resolveActor(actorId);
+        if (actor === null) {
+          throw hostError(
+            'K4-HOST-ACTOR-RESET-001',
+            `TurboWarp actor is unavailable at the scene boundary: ${actorId}`,
+          );
+        }
+        return {actorId, actor};
+      });
+      for (const {actorId, actor} of actors) {
+        try {
+          activeActorPlatform.host.hideActor(actor);
+        } catch (cause) {
+          const error = hostError(
+            'K4-HOST-ACTOR-RESET-002',
+            `TurboWarp actor could not be hidden at the scene boundary: ${actorId}`,
+          );
+          Object.defineProperty(error, 'cause', {value: cause});
+          throw error;
+        }
+      }
+    };
     port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(

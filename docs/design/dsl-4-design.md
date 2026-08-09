@@ -1578,6 +1578,11 @@ media assetはscene間で表示や再生が継続することがあるため、�
 6. commit時に、`retention: scene`でTが不要とするresourceだけをasset単位でreleaseする
 7. historyで再訪したsceneの解放済みresourceは、IndexedDBまたはembedded sourceから再materializeする
 
+sceneの初回entryとすべてのscene遷移では、Tのactionを開始する前に`StoryDocument.actors`の全actorを
+非表示にします。actor targetは一件も変更する前にすべて解決し、missingまたはambiguousなtargetがあれば
+scene stateと`scene.transition`／`scene.enter` eventをcommitしません。stage、backdrop、effect、BGM、app shellの
+UI targetはこの可視性resetの対象外です。
+
 poseModelはpreload中にcurrentとselected nextの最大二つが一時共存し得ます。通常状態で訪問済みmodel数に比例して
 完全初期化済みPoseNet／TensorFlow resourceを残しません。Abort、superseded navigation、live reload、disposeが
 競合してもstale resourceを公開せず、releaseをidempotentにします。
