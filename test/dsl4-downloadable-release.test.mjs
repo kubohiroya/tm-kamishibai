@@ -86,10 +86,16 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   const archive = unzipSync(result.archive);
   const project = JSON.parse(strFromU8(archive['project.json']));
   const extensionUrl = project.extensionURLs[extensionId];
+  const extensionSource = Buffer.from(
+    extensionUrl.slice('data:text/javascript;base64,'.length),
+    'base64',
+  ).toString('utf8');
+  const stage = project.targets.find(({isStage}) => isStage);
 
   assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
   assert.deepEqual(Object.keys(project.extensionURLs), [extensionId]);
   assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
+  assert.equal(extensionSource.includes('dsl4PoseFeedbackModes:!0'), true);
   assert(project.extensions.includes(extensionId));
   assert.equal(
     project.extensionStorage[extensionId].source.text.includes("kamishibai: '4.0'"),
@@ -97,6 +103,38 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   );
   assert.equal(project.extensionStorage[extensionId].artifact.controlProfile, 'production');
   assert.deepEqual(project.extensionStorage[extensionId].assets.manifest.assets, []);
+  assert.deepEqual(Object.values(stage.variables), [
+    ['ポーズ認識', 0],
+    ['チャージ', 0],
+  ]);
+  assert.deepEqual(
+    project.monitors.map(({opcode, params, mode, sliderMin, sliderMax, visible}) => ({
+      opcode,
+      params,
+      mode,
+      sliderMin,
+      sliderMax,
+      visible,
+    })),
+    [
+      {
+        opcode: 'data_variable',
+        params: {VARIABLE: 'ポーズ認識'},
+        mode: 'slider',
+        sliderMin: 0,
+        sliderMax: 100,
+        visible: false,
+      },
+      {
+        opcode: 'data_variable',
+        params: {VARIABLE: 'チャージ'},
+        mode: 'slider',
+        sliderMin: 0,
+        sliderMax: 100,
+        visible: false,
+      },
+    ],
+  );
   assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
 });
 

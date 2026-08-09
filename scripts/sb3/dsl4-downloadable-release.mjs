@@ -17,6 +17,8 @@ const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
 const extensionId = 'kubohiroyakamishibairuntime4';
 const extensionPath = `extensions/${extensionId}.js`;
+const poseConfidenceVariableId = 'dsl4-pose-confidence';
+const poseProgressVariableId = 'dsl4-pose-progress';
 const sourceText = `kamishibai: '4.0'
 controls:
   keymaps:
@@ -108,7 +110,10 @@ function stageTarget(title, titleRuntime) {
   return {
     isStage: true,
     name: 'Stage',
-    variables: {},
+    variables: {
+      [poseConfidenceVariableId]: ['ポーズ認識', 0],
+      [poseProgressVariableId]: ['チャージ', 0],
+    },
     lists: {},
     broadcasts: {},
     blocks: {
@@ -140,6 +145,43 @@ function stageTarget(title, titleRuntime) {
   };
 }
 
+function poseFeedbackMonitors() {
+  return [
+    {
+      id: poseConfidenceVariableId,
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'ポーズ認識'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+    {
+      id: poseProgressVariableId,
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'チャージ'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 343,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+  ];
+}
+
 function websiteTarget(websiteFallback, websiteRuntime) {
   return {
     isStage: false,
@@ -168,7 +210,7 @@ async function createProject(assets) {
   const [title, titleRuntime, websiteFallback, websiteRuntime] = assets;
   const project = {
     targets: [stageTarget(title, titleRuntime), websiteTarget(websiteFallback, websiteRuntime)],
-    monitors: [],
+    monitors: poseFeedbackMonitors(),
     extensions: [extensionId],
     extensionURLs: {[extensionId]: `embedded-extension:${extensionPath}`},
     extensionStorage: {},
