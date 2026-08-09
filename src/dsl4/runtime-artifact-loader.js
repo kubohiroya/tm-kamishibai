@@ -4,6 +4,7 @@ import {
   validateDsl4EmbeddedAssetBundle,
 } from './asset-bundle-descriptor.js';
 import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary-entry-provider.js';
+import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
@@ -13,6 +14,12 @@ export const dsl4RuntimeArtifactStoragePaths = deepFreeze({
   bundled:
     'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.artifact',
   unbundled: 'extensionStorage.kubohiroyakamishibairuntime4.artifact',
+});
+
+export const dsl4AssetDistributionStoragePaths = deepFreeze({
+  bundled:
+    'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assetDistribution',
+  unbundled: 'extensionStorage.kubohiroyakamishibairuntime4.assetDistribution',
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -119,6 +126,34 @@ function storedAssetBundles(project) {
   ].filter(({assets}) => assets !== undefined);
 }
 
+/** @param {unknown} project */
+function storedAssetDistributions(project) {
+  if (!isRecord(project)) return [];
+  const extensionStorage = isRecord(project.extensionStorage) ? project.extensionStorage : {};
+  const runtimeStorage = isRecord(extensionStorage.kubohiroyakamishibairuntime4)
+    ? extensionStorage.kubohiroyakamishibairuntime4
+    : {};
+  const bundleStorage = isRecord(extensionStorage.kubohiroyakamishibai4)
+    ? extensionStorage.kubohiroyakamishibai4
+    : {};
+  const components = isRecord(bundleStorage.components) ? bundleStorage.components : {};
+  const bundledRuntime = isRecord(components.kubohiroyakamishibairuntime4)
+    ? components.kubohiroyakamishibairuntime4
+    : {};
+  return [
+    {
+      channel: 'unbundled',
+      distribution: runtimeStorage.assetDistribution,
+      path: dsl4AssetDistributionStoragePaths.unbundled,
+    },
+    {
+      channel: 'bundled',
+      distribution: bundledRuntime.assetDistribution,
+      path: dsl4AssetDistributionStoragePaths.bundled,
+    },
+  ].filter(({distribution}) => distribution !== undefined);
+}
+
 /**
  * Resolve, parse, and validate one immutable runtime component snapshot.
  *
@@ -208,8 +243,49 @@ export async function loadDsl4RuntimeArtifact(
       'DSL 4.0 source and runtime artifact must use the same storage channel',
     );
   }
+  const distributions = storedAssetDistributions(project);
+  if (distributions.length > 1) {
+    return failure(
+      storyDocument,
+      source.descriptor.sourceId,
+      'K4-ASSET-DISTRIBUTION-CHANNEL-AMBIGUOUS',
+      'DSL 4.0 asset distribution exists in both bundled and unbundled storage',
+      '$.assetDistribution',
+    );
+  }
+  if (distributions.length === 1 && distributions[0].channel !== source.channel) {
+    return failure(
+      storyDocument,
+      source.descriptor.sourceId,
+      'K4-ASSET-DISTRIBUTION-CHANNEL-MISMATCH',
+      'DSL 4.0 source, runtime artifact, and asset distribution must use the same storage channel',
+      '$.assetDistribution',
+    );
+  }
+  let effectiveStoryDocument = storyDocument;
+  if (distributions.length === 1) {
+    try {
+      effectiveStoryDocument = validateDsl4AssetDistributionResolution(
+        storyDocument,
+        distributions[0].distribution,
+      ).storyDocument;
+    } catch (error) {
+      const diagnosticError = error && typeof error === 'object' ? error : {};
+      return failure(
+        storyDocument,
+        source.descriptor.sourceId,
+        'code' in diagnosticError && typeof diagnosticError.code === 'string'
+          ? diagnosticError.code
+          : 'K4-ASSET-DISTRIBUTION-001',
+        'message' in diagnosticError && typeof diagnosticError.message === 'string'
+          ? diagnosticError.message
+          : 'DSL 4.0 asset distribution is invalid',
+        '$.assetDistribution',
+      );
+    }
+  }
   const validated = await validateDsl4RuntimeArtifactDescriptor(
-    storyDocument,
+    effectiveStoryDocument,
     source.descriptor,
     stored.artifact,
     {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
@@ -259,7 +335,7 @@ export async function loadDsl4RuntimeArtifact(
     try {
       if (assetBundleFormat === 'embedded-base64') {
         const validatedBundle = await validateDsl4EmbeddedAssetBundle(
-          storyDocument,
+          effectiveStoryDocument,
           storedBundle.assets,
           {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
         );
@@ -269,12 +345,16 @@ export async function loadDsl4RuntimeArtifact(
         if (maxAssetFileBytes === undefined) {
           throw new TypeError('maxAssetFileBytes is required for binary-entry component loading');
         }
-        assetBundle = await validateDsl4BinaryEntryAssetBundle(storyDocument, storedBundle.assets, {
-          maxFiles: maxAssetFiles,
-          maxFileBytes: maxAssetFileBytes,
-          maxTotalBytes: maxAssetBytes,
-          subtleCrypto,
-        });
+        assetBundle = await validateDsl4BinaryEntryAssetBundle(
+          effectiveStoryDocument,
+          storedBundle.assets,
+          {
+            maxFiles: maxAssetFiles,
+            maxFileBytes: maxAssetFileBytes,
+            maxTotalBytes: maxAssetBytes,
+            subtleCrypto,
+          },
+        );
       } else {
         throw new TypeError('assetBundleFormat must be embedded-base64 or binary-entry');
       }
@@ -282,7 +362,7 @@ export async function loadDsl4RuntimeArtifact(
     } catch (error) {
       if (error instanceof Dsl4AssetBundleError || error instanceof Dsl4BinaryEntryError) {
         return failure(
-          storyDocument,
+          effectiveStoryDocument,
           source.descriptor.sourceId,
           error.code,
           error.message,
@@ -299,7 +379,7 @@ export async function loadDsl4RuntimeArtifact(
     artifactPath: stored.path,
     sourceDescriptor: source.descriptor,
     runtimeArtifact: validatedSuccess.artifact,
-    storyDocument,
+    storyDocument: effectiveStoryDocument,
     diagnostics: [],
   };
   if (assetBundle && assetBundlePath) {

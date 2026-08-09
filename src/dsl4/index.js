@@ -28,6 +28,15 @@ export {
 export {createDsl4ActionQuiesceResolver, dsl4CoreActionQuiesceModes} from './action-quiesce.js';
 export {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 export {
+  dsl4AssetDistributionFormatVersion,
+  Dsl4AssetDistributionError,
+  resolveDsl4AssetDistributionProfile,
+  serializeDsl4AssetDistributionLock,
+  validateDsl4AssetDistributionResolution,
+  validateDsl4AssetDistributionConfig,
+  validateDsl4AssetDistributionLock,
+} from './asset-distribution-profile.js';
+export {
   Dsl4AssetCandidateValidationError,
   validateDsl4AssetCandidate,
 } from './asset-candidate-validator.js';
@@ -162,6 +171,7 @@ export {
   validateDsl4RuntimeArtifactDescriptor,
 } from './runtime-artifact-descriptor.js';
 export {
+  dsl4AssetDistributionStoragePaths,
   dsl4RuntimeArtifactStoragePaths,
   loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeArtifact,

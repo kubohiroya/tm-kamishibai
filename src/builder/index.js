@@ -38,6 +38,19 @@ export {
 } from './dsl4-external-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {
+  auditDsl4AssetDistribution,
+  createDsl4AssetDistributionAudit,
+  formatDsl4AssetDistributionAudit,
+  loadDsl4AssetAuditInputs,
+  loadDsl4ProjectJson,
+  serializeDsl4AssetDistributionAudit,
+} from './dsl4-asset-audit.js';
+export {
+  generateDsl4AssetDistributionLock,
+  generateDsl4AssetDistributionLockFile,
+} from './dsl4-asset-lock.js';
+export {vendorDsl4AssetDistribution} from './dsl4-asset-vendor.js';
+export {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';

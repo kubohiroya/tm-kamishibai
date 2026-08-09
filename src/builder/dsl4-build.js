@@ -11,6 +11,13 @@ import {
 } from '../dsl4/source-descriptor.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {
+  Dsl4AssetDistributionError,
+  resolveDsl4AssetDistributionProfile,
+  validateDsl4AssetDistributionConfig,
+  validateDsl4AssetDistributionLock,
+} from '../dsl4/asset-distribution-profile.js';
+import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {loadDsl4ExternalSource} from './dsl4-external-source.js';
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
@@ -77,6 +84,11 @@ function failDiagnostics(diagnostics, stage) {
  * @param {{realpath: Function, lstat: Function, open: Function, readdir: Function}} [options.fileSystem]
  * @param {(filePath: string, limit: number) => Promise<Buffer | Uint8Array>} [options.readSource]
  * @param {(filePath: string, limit: number) => Promise<Buffer | Uint8Array>} [options.readAssetFile]
+ * @param {string} [options.assetConfig]
+ * @param {string} [options.assetLock]
+ * @param {string} [options.assetProfile]
+ * @param {number} [options.maxAssetConfigBytes]
+ * @param {number} [options.maxAssetLockBytes]
  */
 export async function buildDsl4RuntimeComponent(options) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
@@ -101,6 +113,11 @@ export async function buildDsl4RuntimeComponent(options) {
     fileSystem,
     readSource,
     readAssetFile,
+    assetConfig,
+    assetLock,
+    assetProfile,
+    maxAssetConfigBytes,
+    maxAssetLockBytes,
   } = options;
   if (!(baseSb3Bytes instanceof Uint8Array)) {
     throw new TypeError('baseSb3Bytes must be a Buffer or Uint8Array');
@@ -176,7 +193,56 @@ export async function buildDsl4RuntimeComponent(options) {
     });
   }
   if (!parsed.ok) failDiagnostics(parsed.diagnostics, 'dsl4-parse');
-  const storyDocument = /** @type {Readonly<Record<string, unknown>>} */ (parsed.storyDocument);
+  let storyDocument = /** @type {Readonly<Record<string, unknown>>} */ (parsed.storyDocument);
+  let assetDistribution;
+  if (assetConfig !== undefined || assetLock !== undefined || assetProfile !== undefined) {
+    if (
+      typeof assetConfig !== 'string' ||
+      typeof assetLock !== 'string' ||
+      typeof assetProfile !== 'string'
+    ) {
+      throw new TypeError('assetConfig, assetLock, and assetProfile must be provided together');
+    }
+    if (maxAssetConfigBytes === undefined || maxAssetLockBytes === undefined) {
+      throw new TypeError(
+        'maxAssetConfigBytes and maxAssetLockBytes are required with asset distribution',
+      );
+    }
+    try {
+      const [configInput, lockInput] = await Promise.all([
+        loadDsl4ProjectJson({
+          projectRoot,
+          inputPath: assetConfig,
+          maxBytes: maxAssetConfigBytes,
+          label: 'asset distribution config',
+          code: 'K4-ASSET-PROFILE-001',
+        }),
+        loadDsl4ProjectJson({
+          projectRoot,
+          inputPath: assetLock,
+          maxBytes: maxAssetLockBytes,
+          label: 'asset distribution lock',
+          code: 'K4-ASSET-LOCK-001',
+        }),
+      ]);
+      assetDistribution = resolveDsl4AssetDistributionProfile(
+        storyDocument,
+        validateDsl4AssetDistributionConfig(configInput),
+        validateDsl4AssetDistributionLock(lockInput),
+        assetProfile,
+      );
+      storyDocument = assetDistribution.storyDocument;
+    } catch (error) {
+      if (error instanceof Dsl4AssetDistributionError) {
+        throw new Dsl4BuildError(error.message, {
+          stage: 'dsl4-asset-distribution',
+          code: error.code,
+          cause: error,
+        });
+      }
+      throw error;
+    }
+  }
 
   const snapshot = await loadDsl4LocalAssetSnapshot(projectRoot, storyDocument, {
     maxFileBytes: maxAssetFileBytes,
@@ -233,6 +299,7 @@ export async function buildDsl4RuntimeComponent(options) {
       historyNavigationAvailable,
       replaceExisting,
       subtleCrypto,
+      ...(assetDistribution === undefined ? {} : {assetDistribution}),
     },
   );
 

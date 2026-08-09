@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kubohiroya/tmpose-kamishibai/schema/dsl-4-asset-lock.schema.json",
+  "title": "TMPose Kamishibai DSL 4.0 asset distribution lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "assets"],
+  "properties": {
+    "formatVersion": {"const": 1},
+    "assets": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/assetId"},
+      "additionalProperties": {"$ref": "#/$defs/asset"}
+    }
+  },
+  "$defs": {
+    "assetId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "assetKind": {
+      "type": "string",
+      "enum": ["backdrop", "costume", "image", "poseModel", "sound"]
+    },
+    "integrity": {"type": "string", "pattern": "^sha256-[0-9a-f]{64}$"},
+    "contentType": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+    },
+    "filePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?![A-Za-z][A-Za-z0-9+.-]*:)[^\\\\\\u0000-\\u001f\\u007f]+$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "pattern": "^https://(?![^/@\\s]+@)[^\\s#]+$"
+    },
+    "embeddedProvider": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {"file": {"$ref": "#/$defs/filePath"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {"name": {"$ref": "#/$defs/assetId"}}
+        }
+      ]
+    },
+    "remoteProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "transportIntegrity", "contentType", "size"],
+      "properties": {
+        "url": {"$ref": "#/$defs/httpsUrl"},
+        "transportIntegrity": {"$ref": "#/$defs/integrity"},
+        "contentType": {"$ref": "#/$defs/contentType"},
+        "size": {"type": "integer", "minimum": 1}
+      }
+    },
+    "providerSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "embedded": {"$ref": "#/$defs/embeddedProvider"},
+        "remote": {"$ref": "#/$defs/remoteProvider"}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "contentIntegrity", "contentType", "size", "providers"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/assetKind"},
+        "contentIntegrity": {"$ref": "#/$defs/integrity"},
+        "contentType": {"$ref": "#/$defs/contentType"},
+        "size": {"type": "integer", "minimum": 0},
+        "providers": {"$ref": "#/$defs/providerSet"}
+      }
+    }
+  }
+}

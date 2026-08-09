@@ -180,6 +180,7 @@ export async function embedDsl4SourceInSb3(baseSb3Bytes, descriptor, options) {
  * @param {number} [options.maxAssetFiles]
  * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
+ * @param {unknown} [options.assetDistribution]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function installDsl4RuntimeComponent(
@@ -194,6 +195,7 @@ export async function installDsl4RuntimeComponent(
     replaceExisting = false,
     assetBundle,
     assetBundleFormat = 'embedded-base64',
+    assetDistribution,
     maxAssetFiles,
     maxAssetFileBytes,
     maxAssetBytes,
@@ -294,7 +296,8 @@ export async function installDsl4RuntimeComponent(
     opposite &&
     (opposite.source !== undefined ||
       opposite.artifact !== undefined ||
-      opposite.assets !== undefined)
+      opposite.assets !== undefined ||
+      opposite.assetDistribution !== undefined)
   ) {
     fail(
       'DSL 4.0 runtime component already exists in the opposite storage channel',
@@ -304,8 +307,13 @@ export async function installDsl4RuntimeComponent(
   const hasSource = selected.source !== undefined;
   const hasArtifact = selected.artifact !== undefined;
   const hasAssets = selected.assets !== undefined;
+  const hasDistribution = selected.assetDistribution !== undefined;
   const packaged = validatedAssets !== null;
-  if (hasSource !== hasArtifact || (packaged && hasSource !== hasAssets)) {
+  if (
+    hasSource !== hasArtifact ||
+    (packaged && hasSource !== hasAssets) ||
+    (hasDistribution && (!hasSource || !hasArtifact || (packaged && !hasAssets)))
+  ) {
     fail(
       'Existing DSL 4.0 runtime component has only some of source, artifact, and assets',
       'K4-RUNTIME-COMPONENT-PARTIAL',
@@ -314,6 +322,12 @@ export async function installDsl4RuntimeComponent(
   if (!packaged && hasAssets) {
     fail(
       'Existing packaged DSL 4.0 component cannot be replaced without an asset bundle',
+      'K4-RUNTIME-COMPONENT-ASSET-MODE-001',
+    );
+  }
+  if (!packaged && hasDistribution) {
+    fail(
+      'Existing packaged DSL 4.0 component cannot be replaced without an asset distribution',
       'K4-RUNTIME-COMPONENT-ASSET-MODE-001',
     );
   }
@@ -326,6 +340,9 @@ export async function installDsl4RuntimeComponent(
   selected.source = structuredClone(source);
   selected.artifact = structuredClone(validatedArtifactSuccess.artifact);
   if (validatedAssets) selected.assets = structuredClone(validatedAssets.descriptor);
+  if (assetDistribution !== undefined)
+    selected.assetDistribution = structuredClone(assetDistribution);
+  else delete selected.assetDistribution;
   return output;
 }
 

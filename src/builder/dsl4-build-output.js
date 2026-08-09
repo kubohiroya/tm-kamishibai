@@ -91,6 +91,11 @@ async function persistSourceManifest(manifestPath, manifest) {
  * @param {number} options.maxAssetFileBytes
  * @param {number} options.maxAssetFiles
  * @param {number} options.maxTotalAssetBytes
+ * @param {string} [options.assetConfig]
+ * @param {string} [options.assetLock]
+ * @param {string} [options.assetProfile]
+ * @param {number} [options.maxAssetConfigBytes]
+ * @param {number} [options.maxAssetLockBytes]
  * @param {unknown} [options.featureFlags]
  * @param {number} [options.maxSourceFiles]
  * @param {number} [options.maxTotalSourceBytes]
@@ -150,6 +155,15 @@ export async function buildDsl4RuntimeComponentFile(options) {
     maxAssetFileBytes: options.maxAssetFileBytes,
     maxAssetFiles: options.maxAssetFiles,
     maxTotalAssetBytes: options.maxTotalAssetBytes,
+    ...(options.assetConfig === undefined ? {} : {assetConfig: options.assetConfig}),
+    ...(options.assetLock === undefined ? {} : {assetLock: options.assetLock}),
+    ...(options.assetProfile === undefined ? {} : {assetProfile: options.assetProfile}),
+    ...(options.maxAssetConfigBytes === undefined
+      ? {}
+      : {maxAssetConfigBytes: options.maxAssetConfigBytes}),
+    ...(options.maxAssetLockBytes === undefined
+      ? {}
+      : {maxAssetLockBytes: options.maxAssetLockBytes}),
     ...(options.featureFlags === undefined ? {} : {featureFlags: options.featureFlags}),
     ...(options.maxSourceFiles === undefined ? {} : {maxSourceFiles: options.maxSourceFiles}),
     ...(options.maxTotalSourceBytes === undefined

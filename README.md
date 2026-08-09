@@ -109,6 +109,86 @@ pnpm exec tmpose-kamishibai validate-dsl4 \
   --format pretty
 ```
 
+配布profileを使うprojectでは、既存の`project.assets.json`と`project.assets.lock.json`から、
+embedded／remote容量、startup／scene別のpreload集合、重複容量、offline readinessを副作用なしに
+監査できます。このcommandはremote assetを取得せず、cacheを参照せず、fileを書き換えません。
+
+lockを新規生成または更新する場合は、remote取得を明示的に許可するhostと有限上限を指定します。
+redirect先もHTTPS／allowlistを再検証し、既存lockは検証済みcandidateのatomic置換まで変更しません。
+
+```bash
+pnpm exec tmpose-kamishibai lock-dsl4-assets \
+  --project-root . \
+  --source-manifest project.source.json \
+  --asset-config project.assets.json \
+  --output project.assets.lock.json \
+  --allow-host cdn.example.com \
+  --max-source-bytes 262144 \
+  --max-source-manifest-bytes 16384 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 \
+  --max-total-asset-bytes 134217728 \
+  --timeout-ms 10000 \
+  --max-redirects 3
+```
+
+```bash
+pnpm exec tmpose-kamishibai audit-dsl4-assets \
+  --project-root . \
+  --source-manifest project.source.json \
+  --asset-config project.assets.json \
+  --asset-lock project.assets.lock.json \
+  --asset-profile online \
+  --max-source-bytes 262144 \
+  --max-source-manifest-bytes 16384 \
+  --max-asset-config-bytes 65536 \
+  --max-asset-lock-bytes 262144 \
+  --format pretty
+```
+
+remote assetをネットワークなしで配布する場合は、lockのremote providerを再取得・再検証して
+content-addressed mirrorへ固定し、embedded providerを追加したoffline用config／lockを生成します。
+入力config／lockは変更されず、mirrorとJSONは検証済みcandidateだけがatomicに置換されます。
+
+```bash
+pnpm exec tmpose-kamishibai vendor-dsl4-assets \
+  --project-root . \
+  --asset-config project.assets.json \
+  --asset-lock project.assets.lock.json \
+  --output-config project.assets.offline.json \
+  --output-lock project.assets.offline.lock.json \
+  --vendor-dir .kamishibai/vendor/dsl4-assets \
+  --allow-host cdn.example.com \
+  --max-asset-config-bytes 65536 \
+  --max-asset-lock-bytes 262144 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 \
+  --max-total-asset-bytes 134217728 \
+  --timeout-ms 10000 \
+  --max-redirects 3
+```
+
+profile設定、lock形式、解決順序、audit出力の詳細は
+[DSL 4.0アセット配布プロファイル](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md)を
+参照してください。
+
+生成したconfig／lockは、`build-dsl4`で明示的にprofileを選んで接続します。`offline`では
+`network: forbidden`とcontent-addressed embedded mirrorが検証され、runtime componentにも同じ
+resolved StoryDocumentが保存されます。
+
+```bash
+pnpm exec tmpose-kamishibai build-dsl4 \
+  --base BASE.sb3 --project-root . \
+  --source-manifest project.source.json --output dist/story.sb3 \
+  --control-profile production --channel bundled \
+  --max-source-bytes 262144 --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 --max-total-asset-bytes 134217728 \
+  --asset-config project.assets.offline.json \
+  --asset-lock project.assets.offline.lock.json \
+  --asset-profile offline \
+  --max-asset-config-bytes 65536 --max-asset-lock-bytes 262144
+```
+
 DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記すると、入力または指定秒数の経過の
 早い方で吹き出しを終了できます。`characterIntervalSeconds`はgrapheme単位の文字送り、
 `startSound`は吹き出し表示開始時に1回再生するsound asset、`characterSound`は1文字ごとのsound assetを
