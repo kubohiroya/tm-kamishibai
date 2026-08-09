@@ -1091,7 +1091,7 @@ test(
 );
 
 test(
-  'runs the public preview command through runtime-ready and browser disconnect in real Chromium',
+  'runs the bundled public preview command through runtime-ready and browser disconnect in real Chromium',
   {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
@@ -1171,7 +1171,7 @@ test(
         sourceManifest: sourceManifestPath,
         sourceFrontend: createDsl4ProductionSourceFrontend(schema),
         controlProfile: 'production',
-        channel: 'unbundled',
+        channel: 'bundled',
         maxSourceBytes: 64 * 1024,
         maxAssetFileBytes: 1024 * 1024,
         maxAssetFiles: 64,
