@@ -193,6 +193,7 @@ test('builds a remote manifest without embedding the remote payload', async () =
         id: 'RemoteOpening',
         kind: 'backdrop',
         loading: 'lazy',
+        bitmapResolution: 1,
         source: {
           type: 'remote',
           url: 'https://cdn.example.com/remote-opening.svg',
