@@ -259,6 +259,8 @@ export function createDsl4PoseActionPort(options) {
   let currentSelection = null;
   /** @type {Promise<void> | null} */
   let disposePromise = null;
+  /** @type {Promise<void>} */
+  let recognitionQueue = Promise.resolve();
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
@@ -313,31 +315,93 @@ export function createDsl4PoseActionPort(options) {
     }
   }
 
+  /**
+   * @param {Promise<void>} operation
+   * @param {AbortSignal} signal
+   * @param {string} message
+   */
+  function waitForAbortableOperation(operation, signal, message) {
+    if (signal.aborted) return Promise.reject(abortError(message));
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => signal.removeEventListener('abort', handleAbort);
+      const handleAbort = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(abortError(message));
+      };
+      signal.addEventListener('abort', handleAbort, {once: true});
+      operation.then(
+        () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(undefined);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        },
+      );
+      if (signal.aborted) handleAbort();
+    });
+  }
+
+  /**
+   * Serialize camera/model startup because TMPose does not accept an AbortSignal. Each caller may
+   * stop waiting immediately while an already-started camera request remains shared by later steps.
+   *
+   * @param {string} poseModel
+   * @param {AbortSignal} signal
+   * @param {object} options
+   * @param {boolean} [options.restart]
+   * @param {() => void} [options.configure]
+   * @param {string} options.cancelMessage
+   */
+  function queueRecognition(
+    poseModel,
+    signal,
+    {restart = false, configure = () => {}, cancelMessage},
+  ) {
+    const operation = recognitionQueue
+      .catch(() => {})
+      .then(async () => {
+        if (signal.aborted) throw abortError(cancelMessage);
+        if (restart && tmpose.isRecognizing()) tmpose.stopRecognition();
+        if (tmpose.getActivePoseModelName() !== poseModel) {
+          if (tmpose.isRecognizing()) tmpose.stopRecognition();
+          tmpose.activatePoseModel(poseModel);
+        }
+        configure();
+        if (signal.aborted) throw abortError(cancelMessage);
+        if (!tmpose.isRecognizing()) await tmpose.startRecognition();
+        if (signal.aborted) throw abortError(cancelMessage);
+      });
+    recognitionQueue = operation;
+    return waitForAbortableOperation(operation, signal, cancelMessage);
+  }
+
   /** @param {string} poseModel @param {AbortSignal} signal */
-  async function ensureRecognition(poseModel, signal) {
-    if (signal.aborted) throw abortError('pose action was cancelled');
-    if (tmpose.getActivePoseModelName() !== poseModel) {
-      if (tmpose.isRecognizing()) tmpose.stopRecognition();
-      tmpose.activatePoseModel(poseModel);
-    }
-    if (!tmpose.isRecognizing()) await tmpose.startRecognition();
-    if (signal.aborted) throw abortError('pose action was cancelled');
+  function ensureRecognition(poseModel, signal) {
+    return queueRecognition(poseModel, signal, {cancelMessage: 'pose action was cancelled'});
   }
 
   /** @param {ReturnType<typeof validateSelectionPayload>} input @param {AbortSignal} signal */
-  async function startSelectionRecognition(input, signal) {
-    if (signal.aborted) throw abortError('pose candidate wait was cancelled');
-    if (tmpose.isRecognizing()) tmpose.stopRecognition();
-    if (tmpose.getActivePoseModelName() !== input.poseModel) {
-      tmpose.activatePoseModel(input.poseModel);
-    }
-    tmpose.configureAccumulatedPose({
-      accumulationPerSecond: input.accumulationPerSecond,
-      decayPerSecond: input.decayPerSecond,
-      scoreThreshold: input.scoreThreshold,
+  function startSelectionRecognition(input, signal) {
+    return queueRecognition(input.poseModel, signal, {
+      restart: true,
+      cancelMessage: 'pose candidate wait was cancelled',
+      configure() {
+        tmpose.configureAccumulatedPose({
+          accumulationPerSecond: input.accumulationPerSecond,
+          decayPerSecond: input.decayPerSecond,
+          scoreThreshold: input.scoreThreshold,
+        });
+      },
     });
-    await tmpose.startRecognition();
-    if (signal.aborted) throw abortError('pose candidate wait was cancelled');
   }
 
   /** @param {AbortSignal} signal */
