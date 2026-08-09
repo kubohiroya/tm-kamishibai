@@ -118,36 +118,76 @@ DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記する�
 speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り当ててください。
 `noSoundCharacters`には文字音を鳴らさない文字、`restCharacters`には文字音を鳴らさず長めに休止する
 文字を連結して指定します。休止時間は`restCharacterIntervalSeconds`で指定します。文字集合の判定は
-本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`speechStyles`へ
-名前付きでまとめ、`say`／`think`の`style`から再利用できます。`text`、`seconds`、`waitFor`、
-`startSound`はactionごとに指定します。styleを使うactionに文字送り設定を重ねて指定することはできません。
-既存のインライン指定も引き続き使用できます。
+本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`bubbleStyles`へ
+名前付きの部分styleとしてまとめ、`say`／`think`の`styles`配列から複数を再利用できます。styleは記載順に
+deep mergeされ、後のstyleを優先し、最後にaction内指定を適用します。配列値は連結せず全体を置換します。
+style名には内部空白や日本語を使用できますが、前後空白、改行、tab、制御文字は使用できません。
+style定義内の`styles`配列から既存styleを合成して、新しい名前付きstyleを定義することもできます。参照先を
+順に合成してから定義自身のpropertyを適用し、循環参照、未知参照、重複参照はエラーにします。
 
 ```yaml
 assets:
   HeroIdle: costume:Hero
   HeroGreetingVoice: sound
   Typewriter: sound
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 actors:
   Hero: HeroIdle
-speechStyles:
-  novel:
+bubbleStyles:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
 scenes:
   opening:
     - Hero.say:
         text: こんにちは！
         seconds: 10
         waitFor: advance
-        style: novel
+        styles:
+          - Hero style
         startSound: HeroGreetingVoice
 ```
 
-この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter` feature flagが既定OFFです。入力対象や
+`continueIndicator`は`waitFor: advance`で全文の表示が終わってから入力を待つ間だけ、本文末尾に
+`frames`のimage assetを順番にループ表示します。`frames`は2枚以上、`frameIntervalSeconds`は正の秒数です。
+文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
+sceneのasset依存へ含まれます。
+
+DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble` Compositionが所有します。
+`textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
+`HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
+portraitのbase／blink／lip-syncと`continueIndicator`のframe assetもstyleへ宣言でき、参照sceneの
+lazy dependencyとして読み込まれます。Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
+TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
+本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
+
+Bubble 0.4では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
+`LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
+animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
+外形animationを同じsurface上で実行します。native revealと旧`characterIntervalSeconds`系は同じ
+effective styleへ混在させず、用途に応じてどちらか一方を選びます。
+
+これらの拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`、`dsl4BubbleAdvanceIndicator`、
+`dsl4TurboWarpBubble`、`dsl4TurboWarpBubbleAdvancedPresentation` feature flagが既定OFFです。
+Bubble経路ではportraitとindicatorもBubbleが所有します。入力対象や
 `seconds`／`waitFor`の組み合わせを含む完全な仕様は
 [DSL 4.0 surface仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#72-actor-action)を参照してください。
 

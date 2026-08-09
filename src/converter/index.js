@@ -10,7 +10,7 @@ const dangerousIdentifiers = new Set(['__proto__', 'constructor', 'prototype']);
 const supportedKeyCodePattern =
   /^(?:Space|Enter|Escape|Tab|Backspace|Delete|Home|End|PageUp|PageDown|Arrow(?:Up|Down|Left|Right)|Digit[0-9]|Key[A-Z]|Numpad[0-9]|F(?:[1-9]|1[0-2]))$/u;
 const numberPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
-const textDirections = new Set([
+const bubbleDirections = new Set([
   'up',
   'up-up-right',
   'up-right',
@@ -184,6 +184,10 @@ class Converter {
     this.actors = new Map();
     /** @type {Map<string, Record<string, any>>} */
     this.textStyles = new Map();
+    /** @type {Map<string, string>} */
+    this.textStyleBubbleDirections = new Map();
+    /** @type {Map<string, {textStyle: string, kind: 'say' | 'think'}>} */
+    this.bubbleStyles = new Map();
     /** @type {Map<string, string | number | boolean>} */
     this.variables = new Map();
     /** @type {Map<string, Dsl32Command>} */
@@ -621,15 +625,22 @@ class Converter {
     if (!font) {
       this.error('K4-CONVERT-STYLE-FONT', 'SVG Text style font must not be empty.', command);
     }
-    if (!textDirections.has(direction)) {
+    if (!bubbleDirections.has(direction)) {
       this.error(
         'K4-CONVERT-STYLE-DIRECTION',
-        `Unsupported DSL 4.0 text direction: ${direction}.`,
+        `Unsupported Bubble direction: ${direction}.`,
         command,
       );
     }
     if (size === null || !font) return;
-    this.textStyles.set(id, {background, color, font, size, align, direction});
+    this.textStyleBubbleDirections.set(id, direction);
+    this.textStyles.set(id, {
+      background,
+      color,
+      font,
+      size,
+      align,
+    });
   }
 
   /** @param {Dsl32Command} command */
@@ -1016,12 +1027,28 @@ class Converter {
         return null;
       }
       if (parts.length === 5) {
-        this.error(
-          'K4-CONVERT-SPEECH-STYLE',
-          `Styled ${actionName} is not part of the DSL 4.0 core schema and requires manual migration.`,
-          command,
-        );
-        return null;
+        if (!parts[4]) {
+          this.error('K4-CONVERT-ACTION-ARGS', `${actionName} style must not be empty.`, command);
+          return null;
+        }
+        const seconds = this.parseNumber(parts[3], `${actionName} seconds`, command, {
+          minimum: 0,
+        });
+        if (seconds === null) return null;
+        const textStyle = parts[4];
+        this.addReference('style', textStyle, command);
+        const bubbleStyle = `legacy-${actionName}-${textStyle}`;
+        this.bubbleStyles.set(bubbleStyle, {
+          textStyle,
+          kind: /** @type {'say' | 'think'} */ (actionName),
+        });
+        return {
+          [key]: {
+            text: parts[2].replaceAll('\\n', '\n'),
+            seconds,
+            styles: [bubbleStyle],
+          },
+        };
       }
       if (parts.length !== 4) {
         this.error('K4-CONVERT-ACTION-ARGS', `${actionName} requires TEXT:SECONDS.`, command);
@@ -1357,6 +1384,22 @@ class Converter {
     if (this.actors.size > 0) document.actors = ownObject(this.actors);
     if (this.cover) document.cover = this.cover;
     if (this.textStyles.size > 0) document.textStyles = ownObject(this.textStyles);
+    if (this.bubbleStyles.size > 0) {
+      document.bubbleStyles = ownObject(
+        [...this.bubbleStyles].map(([id, definition]) => {
+          return [
+            id,
+            {
+              textStyle: definition.textStyle,
+              ...(this.textStyleBubbleDirections.has(definition.textStyle)
+                ? {placement: this.textStyleBubbleDirections.get(definition.textStyle)}
+                : {}),
+              visualStyle: definition.kind === 'think' ? 'THINKING' : 'NORMAL',
+            },
+          ];
+        }),
+      );
+    }
     if (this.variables.size > 0) document.variables = ownObject(this.variables);
     if (this.loading?.backdrop && this.loading.costumes) {
       document.loading = {backdrop: this.loading.backdrop, costumes: this.loading.costumes};

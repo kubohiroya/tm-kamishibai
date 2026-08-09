@@ -3,9 +3,43 @@ import {
   dsl4EmptyActionRegistrySnapshot,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+import {composeBubbleStyles} from './bubble-style.js';
 
-const identifierSections = ['actors', 'textStyles', 'speechStyles', 'variables', 'branches'];
+const identifierSections = ['actors', 'textStyles', 'bubbleStyles', 'variables', 'branches'];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
+const speechPresentationFields = [
+  'characterIntervalSeconds',
+  'characterSound',
+  'noSoundCharacters',
+  'restCharacters',
+  'restCharacterIntervalSeconds',
+];
+
+/**
+ * @param {SemanticIssue[]} issues
+ * @param {Record<string, unknown>} presentation
+ * @param {string} path
+ */
+function validateSpeechPresentation(issues, presentation, path) {
+  /** @type {Array<[string, string[]]>} */
+  const requirements = [
+    ['characterSound', ['characterIntervalSeconds']],
+    ['noSoundCharacters', ['characterIntervalSeconds', 'characterSound']],
+    ['restCharacters', ['characterIntervalSeconds', 'restCharacterIntervalSeconds']],
+    ['restCharacterIntervalSeconds', ['characterIntervalSeconds', 'restCharacters']],
+  ];
+  for (const [field, dependencies] of requirements) {
+    if (!Object.hasOwn(presentation, field)) continue;
+    for (const dependency of dependencies) {
+      if (Object.hasOwn(presentation, dependency)) continue;
+      issues.push({
+        code: 'K4-SPEECH-STYLE-001',
+        path: `${path}.${field}`,
+        message: `${field} requires ${dependency} after bubble styles are composed`,
+      });
+    }
+  }
+}
 
 /** @param {string} value */
 function escapedJsonString(value) {
@@ -146,8 +180,8 @@ export function validateDsl4Semantics(
   const scenes = /** @type {Record<string, unknown>} */ (story.scenes ?? {});
   const branches = /** @type {Record<string, Record<string, string>[]>} */ (story.branches ?? {});
   const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
-  const speechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const bubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
   const stableIds = new Map();
   const storyInputCodes = new Map();
@@ -217,14 +251,116 @@ export function validateDsl4Semantics(
     }
   }
 
-  for (const [styleId, style] of Object.entries(speechStyles)) {
+  for (const [styleId, style] of Object.entries(bubbleStyles)) {
+    const inheritedStyleIds = Array.isArray(style.styles)
+      ? /** @type {string[]} */ (style.styles)
+      : [];
+    inheritedStyleIds.forEach((inheritedStyleId, styleIndex) =>
+      addReferenceIssue(
+        issues,
+        bubbleStyles,
+        inheritedStyleId,
+        undefined,
+        `$.bubbleStyles.${styleId}.styles[${styleIndex}]`,
+      ),
+    );
+    if (style.textStyle !== 'default') {
+      addReferenceIssue(
+        issues,
+        textStyles,
+        style.textStyle,
+        undefined,
+        `$.bubbleStyles.${styleId}.textStyle`,
+      );
+    }
     addReferenceIssue(
       issues,
       assets,
       style.characterSound,
       'sound',
-      `$.speechStyles.${styleId}.characterSound`,
+      `$.bubbleStyles.${styleId}.characterSound`,
     );
+    const portrait = /** @type {Record<string, unknown>} */ (style.portrait ?? {});
+    addReferenceIssue(
+      issues,
+      assets,
+      portrait.base,
+      'image',
+      `$.bubbleStyles.${styleId}.portrait.base`,
+    );
+    for (const animationName of ['blink', 'lipSync']) {
+      const animation = /** @type {Record<string, unknown>} */ (portrait[animationName] ?? {});
+      for (const [index, frame] of /** @type {unknown[]} */ (animation.frames ?? []).entries()) {
+        addReferenceIssue(
+          issues,
+          assets,
+          frame,
+          'image',
+          `$.bubbleStyles.${styleId}.portrait.${animationName}.frames[${index}]`,
+        );
+      }
+    }
+    const indicator = /** @type {Record<string, unknown>} */ (style.continueIndicator ?? {});
+    for (const [index, frame] of /** @type {unknown[]} */ (indicator.frames ?? []).entries()) {
+      addReferenceIssue(
+        issues,
+        assets,
+        frame,
+        'image',
+        `$.bubbleStyles.${styleId}.continueIndicator.frames[${index}]`,
+      );
+    }
+    const reveal = /** @type {Record<string, unknown>} */ (style.reveal ?? {});
+    addReferenceIssue(
+      issues,
+      assets,
+      reveal.sound,
+      'sound',
+      `$.bubbleStyles.${styleId}.reveal.sound`,
+    );
+    const audio = /** @type {Record<string, unknown>} */ (style.audio ?? {});
+    for (const audioName of ['voice', 'reveal', 'finish']) {
+      addReferenceIssue(
+        issues,
+        assets,
+        audio[audioName],
+        'sound',
+        `$.bubbleStyles.${styleId}.audio.${audioName}`,
+      );
+    }
+  }
+
+  const reportedStyleCycles = new Set();
+  for (const styleId of Object.keys(bubbleStyles)) {
+    try {
+      const effectiveStyle = composeBubbleStyles([styleId], bubbleStyles);
+      if (
+        Object.hasOwn(effectiveStyle, 'reveal') &&
+        speechPresentationFields.some((field) => Object.hasOwn(effectiveStyle, field))
+      ) {
+        issues.push({
+          code: 'K4-SPEECH-STYLE-002',
+          path: `$.bubbleStyles.${styleId}.reveal`,
+          message: 'Bubble reveal cannot be combined with legacy character presentation fields',
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof Error)) continue;
+      const styleError = /** @type {Error & {reason?: string, cycle?: unknown}} */ (error);
+      if (styleError.reason !== 'cycle' || !Array.isArray(styleError.cycle)) {
+        continue;
+      }
+      const cycle = /** @type {string[]} */ (styleError.cycle);
+      const cycleMembers = cycle.slice(0, -1);
+      const cycleKey = [...new Set(cycleMembers)].sort().join('\u0000');
+      if (reportedStyleCycles.has(cycleKey)) continue;
+      reportedStyleCycles.add(cycleKey);
+      issues.push({
+        code: 'K4-BUBBLE-STYLE-CYCLE-001',
+        path: `$.bubbleStyles.${styleId}.styles`,
+        message: `Bubble styles must not form a cycle: ${cycle.join(' -> ')}`,
+      });
+    }
   }
 
   const cover = /** @type {Record<string, unknown> | undefined} */ (story.cover);
@@ -415,7 +551,57 @@ export function validateDsl4Semantics(
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
-          addReferenceIssue(issues, speechStyles, speech.style, undefined, `${actionPath}.style`);
+          const styleIds = Array.isArray(speech.styles)
+            ? /** @type {string[]} */ (speech.styles)
+            : [];
+          styleIds.forEach((styleId, styleIndex) =>
+            addReferenceIssue(
+              issues,
+              bubbleStyles,
+              styleId,
+              undefined,
+              `${actionPath}.styles[${styleIndex}]`,
+            ),
+          );
+          if (styleIds.every((styleId) => Object.hasOwn(bubbleStyles, styleId))) {
+            let effectivePresentation;
+            try {
+              effectivePresentation = composeBubbleStyles(styleIds, bubbleStyles);
+            } catch {
+              effectivePresentation = null;
+            }
+            if (effectivePresentation) {
+              for (const field of speechPresentationFields) {
+                if (Object.hasOwn(speech, field)) effectivePresentation[field] = speech[field];
+              }
+              validateSpeechPresentation(issues, effectivePresentation, actionPath);
+              if (
+                Object.hasOwn(effectivePresentation, 'reveal') &&
+                speechPresentationFields.some((field) =>
+                  Object.hasOwn(effectivePresentation, field),
+                )
+              ) {
+                issues.push({
+                  code: 'K4-SPEECH-STYLE-002',
+                  path: `${actionPath}.styles`,
+                  message:
+                    'Bubble reveal cannot be combined with legacy character presentation fields',
+                });
+              }
+              if (
+                Object.hasOwn(speech, 'startSound') &&
+                typeof effectivePresentation.audio === 'object' &&
+                effectivePresentation.audio !== null &&
+                Object.hasOwn(effectivePresentation.audio, 'voice')
+              ) {
+                issues.push({
+                  code: 'K4-SPEECH-STYLE-002',
+                  path: `${actionPath}.startSound`,
+                  message: 'startSound cannot be combined with Bubble audio.voice',
+                });
+              }
+            }
+          }
           for (const field of ['startSound', 'characterSound']) {
             addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
           }

@@ -1,5 +1,6 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
@@ -22,7 +23,13 @@ const speechPresentationArgumentNames = Object.freeze([
   'restCharacters',
   'restCharacterIntervalSeconds',
 ]);
-
+const advancedBubbleStyleNames = Object.freeze([
+  'reveal',
+  'audio',
+  'showAnimation',
+  'hideAnimation',
+  'visibleAnimations',
+]);
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
   minimumQuiesceTimeoutMs: 100,
@@ -140,6 +147,9 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {boolean} [options.turboWarpBubbleEnabled]
+ * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -154,6 +164,9 @@ export function createDsl4RuntimeController({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
+  bubbleAdvanceIndicatorEnabled = false,
+  turboWarpBubbleEnabled = false,
+  turboWarpBubbleAdvancedPresentationEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -198,6 +211,26 @@ export function createDsl4RuntimeController({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
+  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
+  }
+  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleEnabled must be boolean');
+  }
+  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
+  }
+  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+    throw new TypeError(
+      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+    );
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -218,13 +251,32 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
-  const speechStylesValue = storyDocument.speechStyles ?? {};
-  if (!isRecord(speechStylesValue)) {
-    throw new TypeError('DSL 4.0 StoryDocument speechStyles must be an object');
+  const bubbleStylesValue = storyDocument.bubbleStyles ?? {};
+  if (!isRecord(bubbleStylesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument bubbleStyles must be an object');
   }
-  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
-    speechStylesValue
+  const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    bubbleStylesValue
   );
+  if (
+    !bubbleAdvanceIndicatorEnabled &&
+    !turboWarpBubbleEnabled &&
+    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'continueIndicator'))
+  ) {
+    throw new TypeError(
+      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.continueIndicator',
+    );
+  }
+  if (
+    !turboWarpBubbleAdvancedPresentationEnabled &&
+    Object.values(bubbleStyles).some((style) =>
+      advancedBubbleStyleNames.some((field) => Object.hasOwn(style, field)),
+    )
+  ) {
+    throw new TypeError(
+      'dsl4TurboWarpBubbleAdvancedPresentation must be enabled for reveal, audio, or Bubble motion',
+    );
+  }
   if (!speechAdvanceTypewriterEnabled) {
     const extendedSpeechAction = scenes
       .flatMap(
@@ -235,7 +287,7 @@ export function createDsl4RuntimeController({
         if (action.command === 'think') return true;
         if (action.command !== 'say') return false;
         const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
-        return ['waitFor', 'startSound', 'style', ...speechPresentationArgumentNames].some((key) =>
+        return ['waitFor', 'startSound', 'styles', ...speechPresentationArgumentNames].some((key) =>
           Object.hasOwn(args, key),
         );
       });
@@ -914,24 +966,40 @@ export function createDsl4RuntimeController({
    * @param {Record<string, unknown>} args
    */
   function resolveSpeechStyle(command, args) {
-    if (!Object.hasOwn(args, 'style')) return args;
-    if (speechPresentationArgumentNames.some((key) => Object.hasOwn(args, key))) {
-      const error = new Error(
-        `${command}.style cannot be combined with inline speech presentation`,
-      );
+    if (!Object.hasOwn(args, 'styles')) return args;
+    const styleIds = args.styles;
+    if (
+      !Array.isArray(styleIds) ||
+      styleIds.length === 0 ||
+      styleIds.some((styleId) => typeof styleId !== 'string') ||
+      new Set(styleIds).size !== styleIds.length
+    ) {
+      const error = new Error(`${command}.styles must be an array of bubble style names`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
       throw error;
     }
-    const styleId = args.style;
-    const style = typeof styleId === 'string' ? speechStyles[styleId] : undefined;
-    if (!isRecord(style)) {
-      const error = new Error(`Speech style is unavailable: ${String(styleId)}`);
-      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
-      throw error;
-    }
-    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'style'));
-    const resolvedStyle = /** @type {Record<string, unknown>} */ (cloneValue(style));
-    return {...resolvedStyle, ...actionArgs};
+    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
+    const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
+    const presentation = Object.fromEntries(
+      speechPresentationArgumentNames
+        .filter((field) => Object.hasOwn(resolvedStyle, field))
+        .map((field) => [field, resolvedStyle[field]]),
+    );
+    return {
+      ...presentation,
+      ...(!turboWarpBubbleEnabled && Object.hasOwn(resolvedStyle, 'continueIndicator')
+        ? {advanceIndicator: resolvedStyle.continueIndicator}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled && Object.hasOwn(resolvedStyle, 'reveal')
+        ? {bubbleReveal: resolvedStyle.reveal}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled &&
+      Object.hasOwn(resolvedStyle, 'visibleAnimations')
+        ? {bubbleMotions: resolvedStyle.visibleAnimations}
+        : {}),
+      ...actionArgs,
+      ...(turboWarpBubbleEnabled ? {bubbleStyle: bubbleStyleNameForStyleIds(styleIds)} : {}),
+    };
   }
 
   /**

@@ -55,7 +55,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 variables:
   score: 1
   takeSeaRoute: false

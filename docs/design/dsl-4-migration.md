@@ -46,6 +46,7 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `setLoadingBackdrop`／`setLoadingCostume` | `loading`                                  | 自動            | 両方が必要。片方だけなら手動修正                                   |
 | `setPoseRecognitionSound`                 | `poseRecognition.idleSound`／`chargeSound` | 自動            | 2 sound必須。単一soundは手動修正                                   |
 | `svgTextStyle`                            | `textStyles.<id>`                          | 自動            | 4.0のfont／align／direction制約を検証                              |
+| style付き`Actor.say`／`think`             | `bubbleStyles`＋`Actor.say/think.style`    | 自動            | 元styleを本文styleと配置へ写像し、say／think外形を保持             |
 | `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行  |
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
@@ -70,29 +71,31 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 
 ## 4. action対応表
 
-| 3.1／3.2 action                | 4.0 action                         | 分類／補足                                                |
-| ------------------------------ | ---------------------------------- | --------------------------------------------------------- |
-| `stage`                        | `stage`                            | 自動                                                      |
-| `bgm`                          | `bgm`                              | 自動                                                      |
-| `sound`                        | `sound`                            | 自動                                                      |
-| `wait`                         | `wait`                             | 自動                                                      |
-| `transition`                   | `transition: {effect, seconds}`    | warning付き自動。時間を0秒へ明示化                        |
-| Actor `show`                   | `Actor.show: {skin, x, y, scale}`  | 自動。costume target補正時はwarning                       |
-| Actor `setSkin`                | `Actor.setSkin`                    | 自動。3.2のscale指定も`{skin, scale}`として保持            |
-| Actor `hide`                   | `Actor.hide: {}`                   | 自動                                                      |
-| Actor `setLayer`               | `Actor.setLayer`                   | 自動。`front`／`back`／相対layer数を保持                   |
-| Actor `loop`                   | `Actor.loop.steps[]`               | 自動。skinと各表示秒数をbackground loopとして保持          |
-| Actor `say`／`think`           | `Actor.say/think: {text, seconds}` | 時間指定は自動。空文字の永続speechは0秒のclearへ変換       |
-| Actor `moveTo`                 | `Actor.moveTo: {x, y, seconds}`    | 自動                                                      |
-| SVG Text `setText`             | `Actor.setText: {text, style}`     | 自動                                                      |
-| Actor `pose`                   | `Actor.pose.steps[]`               | 自動＋手動model mapping。各stepを順序どおり保持           |
-| `branch`                       | `branch`                           | 自動                                                      |
-| `keyInputToChangeScene`        | code→scene mapping                 | 自動。`KeyboardEvent.code`相当だけを受理                  |
-| `touchInputToChangeScene`      | actor→scene mapping                | 自動                                                      |
-| 旧Text Asset `show`／`setSkin` | なし                               | 手動。SVG Text actorの`setText`／通常actor actionへ再設計 |
-| 独自action／不正arity          | なし                               | 変換不能。`K4-CONVERT-ACTION-UNSUPPORTED`等               |
+| 3.1／3.2 action                | 4.0 action                                  | 分類／補足                                                            |
+| ------------------------------ | ------------------------------------------- | --------------------------------------------------------------------- |
+| `stage`                        | `stage`                                     | 自動                                                                  |
+| `bgm`                          | `bgm`                                       | 自動                                                                  |
+| `sound`                        | `sound`                                     | 自動                                                                  |
+| `wait`                         | `wait`                                      | 自動                                                                  |
+| `transition`                   | `transition: {effect, seconds}`             | warning付き自動。時間を0秒へ明示化                                    |
+| Actor `show`                   | `Actor.show: {skin, x, y, scale}`           | 自動。costume target補正時はwarning                                   |
+| Actor `setSkin`                | `Actor.setSkin`                             | 自動。3.2のscale指定も`{skin, scale}`として保持                       |
+| Actor `hide`                   | `Actor.hide: {}`                            | 自動                                                                  |
+| Actor `setLayer`               | `Actor.setLayer`                            | 自動。`front`／`back`／相対layer数を保持                              |
+| Actor `loop`                   | `Actor.loop.steps[]`                        | 自動。skinと各表示秒数をbackground loopとして保持                     |
+| Actor `say`／`think`           | `Actor.say/think: {text, seconds, styles?}` | 時間指定とstyle付きspeechは自動。空文字の永続speechは0秒のclearへ変換 |
+| Actor `moveTo`                 | `Actor.moveTo: {x, y, seconds}`             | 自動                                                                  |
+| SVG Text `setText`             | `Actor.setText: {text, style}`              | 自動                                                                  |
+| Actor `pose`                   | `Actor.pose.steps[]`                        | 自動＋手動model mapping。各stepを順序どおり保持                       |
+| `branch`                       | `branch`                                    | 自動                                                                  |
+| `keyInputToChangeScene`        | code→scene mapping                          | 自動。`KeyboardEvent.code`相当だけを受理                              |
+| `touchInputToChangeScene`      | actor→scene mapping                         | 自動                                                                  |
+| 旧Text Asset `show`／`setSkin` | なし                                        | 手動。SVG Text actorの`setText`／通常actor actionへ再設計             |
+| 独自action／不正arity          | なし                                        | 変換不能。`K4-CONVERT-ACTION-UNSUPPORTED`等                           |
 
-空でない永続speechとstyle付きspeechは、終了条件やpresentationを推測せず引き続き手動移行とします。
+空でない永続speechは終了条件を推測せず引き続き手動移行とします。style付きspeechは3.2の
+`svgTextStyle`を`textStyles`へ変換し、`legacy-say-<style>`または`legacy-think-<style>`の
+`bubbleStyles`を生成します。元のdirectionはBubble placementへ、thinkは`THINKING`外形へ写像します。
 空文字の`Actor.say:`／`Actor.think:`だけは3.2で吹き出しを消去する操作なので、`text: ""`、`seconds: 0`へ
 決定的に変換します。
 
@@ -136,7 +139,6 @@ textStyles:
     font: Noto Sans JP
     size: 120
     align: center
-    direction: up
 
 scenes:
   ending:
@@ -149,6 +151,9 @@ scenes:
         y: 0
         scale: 100
 ```
+
+SVG Text 0.4では`textStyles`は文字レイヤー専用です。3.2の`svgTextStyle`に含まれる
+`DIRECTION`は、同じstyleを使うsay／thinkの`bubbleStyles.placement`へconverterが移します。
 
 変換後に、旧`show`／`hide`／`setSkin`の意図、初期文字列、style、吹き出しとの違いを人が確認します。移行が
 済むまでconverterは旧Text Assetを黙って除去せず、YAMLをcommitしません。

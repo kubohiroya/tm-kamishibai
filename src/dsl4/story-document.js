@@ -30,6 +30,31 @@ function cloneValue(value) {
 }
 
 /**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {unknown} value
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {Array<string | number>} yamlPath
+ * @param {string} storyPath
+ */
+function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, storyPath) {
+  if (typeof value !== 'object' || value === null) return;
+  const entries = Array.isArray(value)
+    ? value.map((child, index) => [index, child])
+    : Object.entries(/** @type {Record<string, unknown>} */ (value));
+  for (const [key, child] of entries) {
+    const segment = encodeDsl4StoryPathSegment(String(key));
+    const childStoryPath = `${storyPath}/${segment}`;
+    const childYamlPath = [...yamlPath, key];
+    sourceMap[childStoryPath] = sourceRangeForNode(
+      document.getIn(childYamlPath, true),
+      lineCounter,
+    );
+    mapNestedSource(sourceMap, child, document, lineCounter, childYamlPath, childStoryPath);
+  }
+}
+
+/**
  * @template T
  * @param {T} value
  * @returns {Readonly<T>}
@@ -336,6 +361,14 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       fieldNode,
       lineCounter,
     );
+    if (field === 'styles' && Array.isArray(args[field])) {
+      args[field].forEach((_, styleIndex) => {
+        sourceMap[`${actionPath}/args/styles/${styleIndex}`] = sourceRangeForNode(
+          fieldNode?.get?.(styleIndex, true) ?? fieldNode,
+          lineCounter,
+        );
+      });
+    }
   }
   if (stableId) {
     sourceMap[`${actionPath}/stableId`] = sourceRangeForNode(
@@ -380,23 +413,25 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     }),
   );
 
-  const sourceSpeechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const sourceBubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
-  const speechStyles = cloneValue(sourceSpeechStyles);
-  const speechStylesNode = document.getIn(['speechStyles'], true);
-  if (speechStylesNode) {
-    sourceMap['/speechStyles'] = sourceRangeForNode(speechStylesNode, lineCounter);
-    for (const [styleId, style] of Object.entries(sourceSpeechStyles)) {
-      const stylePath = `/speechStyles/${encodeDsl4StoryPathSegment(styleId)}`;
-      const styleNode = document.getIn(['speechStyles', styleId], true);
+  const bubbleStyles = cloneValue(sourceBubbleStyles);
+  const bubbleStylesNode = document.getIn(['bubbleStyles'], true);
+  if (bubbleStylesNode) {
+    sourceMap['/bubbleStyles'] = sourceRangeForNode(bubbleStylesNode, lineCounter);
+    for (const [styleId, style] of Object.entries(sourceBubbleStyles)) {
+      const stylePath = `/bubbleStyles/${encodeDsl4StoryPathSegment(styleId)}`;
+      const styleNode = document.getIn(['bubbleStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
-      for (const field of Object.keys(style)) {
-        sourceMap[`${stylePath}/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
-          document.getIn(['speechStyles', styleId, field], true),
-          lineCounter,
-        );
-      }
+      mapNestedSource(
+        sourceMap,
+        style,
+        document,
+        lineCounter,
+        ['bubbleStyles', styleId],
+        stylePath,
+      );
     }
   }
 
@@ -451,7 +486,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     actors: cloneValue(story.actors ?? {}),
     cover: cloneValue(story.cover ?? null),
     textStyles: cloneValue(story.textStyles ?? {}),
-    speechStyles,
+    bubbleStyles,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),

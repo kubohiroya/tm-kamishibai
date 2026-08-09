@@ -47,7 +47,7 @@ Copyright © 2026 Hiroya Kubo.
 | `actors`          | 任意 | actorと初期costumeの対応          |
 | `cover`           | 任意 | 表紙の背景とBGM                   |
 | `textStyles`      | 任意 | SVG Textの名前付きstyle           |
-| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle |
+| `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
 | `poseRecognition` | 任意 | 待機中と認識成功時の音            |
@@ -63,6 +63,9 @@ asset IDとscene IDはScratch上の名前をそのまま保持できる、空で
 Unicodeの正規化形式、C0制御文字、DELを含められます。YAML sourceでは必要に応じてdouble-quoted scalarの
 escapeを使います。parser、converter、runtimeは値をtrim、NFC変換、alias化しません。`__proto__`など
 object pollutionを生じるmapping keyは、文字種とは別の安全境界として引き続き拒否します。
+
+`bubbleStyles`の名前だけは人が読むclass名として扱い、内部の空白と日本語を使用できます。空文字、
+先頭・末尾の空白、改行、tab、制御文字は使用できず、Unicode NFCでなければなりません。
 
 YAMLのduplicate key、anchor、alias、merge key、custom tag、複数文書を認めません。実装は
 YAMLの構文位置を保持し、schema検証に成功するまでアセット読込などの副作用を開始しません。
@@ -327,28 +330,95 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
-speechStyles:
-  novel:
+bubbleStyles:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
+    textStyle: title
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
+  Native reveal:
+    textStyle: title
+    maxWidth: 320
+    textLocale: ja
+    portrait:
+      base: HeroFace
+      blink: {frames: [EyesOpen, EyesClosed], frameIntervalSeconds: 0.4}
+      lipSync: {frames: [MouthClosed, MouthOpen], frameIntervalSeconds: 0.08}
+    continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.12}
+    reveal:
+      unit: CHARACTER
+      layout: RESERVED
+      intervalSeconds: 0.05
+      sound: Typewriter
+    audio: {voice: HeroVoice, finish: ContinueSound}
+    showAnimation: {name: fadeIn, durationSeconds: 0.2, ease: easeOut}
+    visibleAnimations:
+      - {name: shake, direction: right, count: 2, ease: easeInOut}
+      - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
+    hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
-`textStyles.direction`はSVG Text compositionと同じ16方位を受理します。4方位に加えて
-`up-up-right`、`up-right`、`right-up-right`、`right-down-right`、`down-right`、
-`down-down-right`、`down-down-left`、`down-left`、`left-down-left`、`left-up-left`、
-`up-left`、`up-up-left`を使用できます。
+`bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationを、再利用可能な部分styleとして
+宣言します。各styleは単独で完結している必要はありません。`styles`から参照した全styleとaction内指定を
+合成したeffective styleに対して、`characterSound`には`characterIntervalSeconds`が必要、などの相互依存を
+検証します。本文、完了条件、吹き出し開始時の音声はセリフごとに異なるため、`text`、`seconds`、
+`waitFor`、`startSound`をstyleへ含めません。
 
-`speechStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
-各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
-`restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
+style定義自身の`styles`配列から既存styleを参照し、名前付き合成styleを定義できます。参照先を配列順に
+合成した後、その定義自身に記述したpropertyを適用します。名前付き合成は再帰的に使用できますが、直接・
+間接を問わず循環参照は`K4-BUBBLE-STYLE-CYCLE-001`で拒否します。参照先が存在しない場合と同じstyleの
+重複指定もエラーです。
+
+`continueIndicator.frames`は2件以上のtarget-independent `image` asset ID、
+`frameIntervalSeconds`は正の秒数です。同じframe IDを複数回指定して表示時間を調整できます。
+actionが参照するeffective styleに含まれる全frameを、sceneのasset依存としてprepareします。
+
+Bubble Compositionでは
+`textStyle`は本文レイヤーの`textStyles` IDで、省略時は`default`です。`placement`、`distance`、
+`tailLength`、`offset`、`visualStyle`、`portrait`、`continueIndicator`で吹き出しsurfaceを構成し、
+`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
+`restCharacterIntervalSeconds`で文字送りを指定できます。本文、完了条件、吹き出し開始時の音声は
 セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
+
+SVG Text 0.4では`textStyles`は文字レイヤーだけを担当し、吹き出しの方向は持ちません。3.2の
+`svgTextStyle`に含まれる`DIRECTION`は、converterがそのstyleを使うsay／think用`bubbleStyles`の
+`placement`へ移します。DSL4を直接記述する場合も、吹き出し位置は`bubbleStyles.placement`で指定します。
+
+Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`を使用し、TurboWarp Runtime HostがSVG Text 0.4の
+compositionを公式adapterで接続します。`maxWidth`と`textLocale`を指定すると、このcapabilityの
+`measureText`を使ってlocale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
+`continueIndicator`は入力待機中だけ表示するframeです。旧`portrait.talk`と`advanceIndicator`は
+0.2 APIとの名称不一致を残さないため受理しません。
+
+Bubble native presentationでは`reveal.unit`に`CHARACTER`、`WORD`、`LINE`、`BLOCK`を指定できます。
+`WORD`は既定でspace、tab、CR、LFを区切りにし、`delimiters`で置換できます。`layout: DYNAMIC`は
+表示済み本文に合わせてlayoutし、`RESERVED`は全文の領域を先に確保します。`intervalSeconds: 0`は
+自動送りを止め、`waitFor: advance`の入力1回につき1 unitを表示します。正の値では時間で進み、表示途中の
+advance入力は残り全文を表示し、次の入力でspeechを完了します。
+
+`audio.voice`、`audio.reveal`、`audio.finish`と`reveal.sound`はsound asset IDです。
+`reveal.sound`がある場合は`audio.reveal`より優先します。`audio.voice`とactionの`startSound`は
+二重再生を避けるため併用できません。`showAnimation`／`hideAnimation`は
+`fadeIn`／`fadeOut`、`floatIn`／`floatOut`、`zoomIn`／`zoomOut`、`riseUp`、`sink`、`shake`、
+`explode`、`animateBubbleShape`とeasing・duration等をBubble surfaceへ渡します。`visibleAnimations`は
+吹き出し表示後に`handle.animate()`へ配列順で渡し、表示中のshake、explode、外形変形を実行します。
+native `reveal`と旧`characterIntervalSeconds`系を同じeffective styleへ混在させると意味が二重になるため
+`K4-SPEECH-STYLE-002`で拒否します。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -564,18 +634,18 @@ iconへ反映します。
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
-| `Actor.hide`               | `{stableId?}`                                                                                                                                                                |
-| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                     |
-| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
-| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                   |
-| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                     |
-| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                 |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                   |
-| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                         |
+| action                     | 引数                                                                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
+| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
 `Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
 `seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
@@ -583,12 +653,23 @@ iconへ反映します。
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
 
-`style`にはトップレベルの`speechStyles`で宣言したIDを指定します。styleを指定したactionでは、
-`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
-`restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
-引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、
-platform adapterはstyle registryを参照しません。style内の`characterSound`は、そのstyleを参照したsceneの
-asset依存として扱います。
+`styles`にはトップレベルの`bubbleStyles`で宣言した名前を1件以上のYAML配列として指定します。1件でも
+配列が必要であり、スペース区切り文字列は受理しません。記載順にdeep mergeし、同じpropertyは後のstyleを
+優先します。objectは再帰的にmergeし、配列とscalarは連結せず後の値で全体を置換します。同じstyle名の
+重複指定はエラーです。最後にaction内の文字送り指定を適用するため、action固有値が最優先になります。
+合成後のeffective styleを共通speech引数へ解決してからActor portへ渡すため、platform adapterはstyle
+registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
+残さず未知keyとして拒否します。
+
+`continueIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
+表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
+入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
+残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
+terminal cleanupで同期的に解除します。
+
+`dsl4TurboWarpBubble`がONのとき、runtime controllerは合成後のeffective styleをBubble platformへ定義します。
+Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-continue`、完了／cancelを
+`close`へ写像し、sound、portrait、blink、lip-sync、indicator frameのasset依存もeffective styleから収集します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -609,6 +690,11 @@ sound停止はAsset Managerのasset ID単位です。speechに指定したsound 
 speechが実際に再生を開始したasset IDだけを停止します。
 `dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
+`dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
+`dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。
+`dsl4TurboWarpBubbleAdvancedPresentation`も起動時固定・既定OFFで、`dsl4TurboWarpBubble`を必要とします。
+OFFでは`reveal`、`audio`、`showAnimation`、`hideAnimation`、`visibleAnimations`を含むstyleを起動時に明示拒否し、
+未対応runtimeで黙って無視しません。
 
 ```yaml
 - Hero.show:
@@ -631,7 +717,8 @@ speechが実際に再生を開始したasset IDだけを停止します。
     text: 助けに行こう
     seconds: 8
     waitFor: advance
-    style: novel
+    styles:
+      - Hero style
     startSound: HeroGreetingVoice
 - Hero.think:
     text: どうしよう……

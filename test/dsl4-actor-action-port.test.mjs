@@ -469,10 +469,24 @@ test('rejects malformed and unresolved inputs before presentation side effects',
       ),
     () => port.say({target: 'Hero', text: 42, seconds: 1}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1, extra: true}, actionContext()),
+    () =>
+      port.say(
+        {
+          target: 'Hero',
+          text: '',
+          seconds: 1,
+          bubbleStyle: 'native',
+          bubbleMotions: [{name: 'unknown'}],
+        },
+        actionContext(),
+      ),
     () => port.say({target: 'Hero', text: '', seconds: 1}, {}),
   ];
   for (const invoke of invalidPayloads) {
-    await assert.rejects(async () => invoke(), /actor action|payload|must|greater|negative/u);
+    await assert.rejects(
+      async () => invoke(),
+      /actor action|payload|must|greater|negative|invalid/u,
+    );
   }
   assert.deepEqual(fake.calls, []);
   assert.deepEqual(presentation.calls, []);
@@ -592,6 +606,81 @@ test('fails closed and cleans speech presentation for invalid advance handles or
     1,
   );
   assert.equal(outcomeCancelCalls, 1);
+});
+
+test('re-arms advance input while Bubble native reveal consumes it', async () => {
+  const calls = [];
+  const presentation = deferred();
+  let finishCount = 0;
+  const host = fakeHost({
+    createSay(_actor, speech) {
+      calls.push(['createSay', speech]);
+      return {
+        start() {
+          calls.push(['start']);
+          return presentation.promise;
+        },
+        finish(reason) {
+          finishCount += 1;
+          calls.push(['finish', reason, finishCount]);
+          if (finishCount === 1) return {consumed: true};
+          presentation.resolve();
+          return {consumed: false};
+        },
+      };
+    },
+    createThink() {
+      throw new Error('unexpected think');
+    },
+  });
+  const port = createDsl4ActorActionPort({
+    composition: fakeComposition().composition,
+    host: host.host,
+    resolveActor: () => ({id: 'hero-target', isStage: false}),
+    speechAdvanceTypewriterEnabled: true,
+  });
+  let waitCount = 0;
+  let cancelCount = 0;
+
+  await port.say(
+    {
+      target: 'Hero',
+      text: 'AB',
+      waitFor: 'advance',
+      bubbleStyle: 'native',
+      bubbleReveal: {unit: 'CHARACTER', intervalSeconds: 0},
+      bubbleMotions: [{name: 'shake', count: 2}],
+    },
+    {
+      ...actionContext(),
+      createAdvanceWait() {
+        waitCount += 1;
+        return {
+          promise: Promise.resolve({outcome: 'advance'}),
+          cancel() {
+            cancelCount += 1;
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(waitCount, 2);
+  assert.equal(cancelCount, 2);
+  assert.deepEqual(calls[0], [
+    'createSay',
+    {
+      text: 'AB',
+      bubbleStyle: 'native',
+      bubbleReveal: {unit: 'CHARACTER', intervalSeconds: 0},
+      bubbleMotions: [{name: 'shake', count: 2}],
+      waitFor: 'advance',
+    },
+  ]);
+  assert.deepEqual(calls.slice(-2), [
+    ['finish', 'advance', 1],
+    ['finish', 'advance', 2],
+  ]);
 });
 
 test('does not inspect dependencies for a pre-aborted action', async () => {

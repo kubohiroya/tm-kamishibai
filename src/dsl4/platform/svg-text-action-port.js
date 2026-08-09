@@ -130,7 +130,7 @@ function mapTextStyle(value, name) {
   if (!isRecord(value)) {
     throw platformError('K4-SVG-TEXT-002', `SVG text style is invalid: ${name}`);
   }
-  const allowed = new Set(['background', 'color', 'font', 'size', 'align', 'direction']);
+  const allowed = new Set(['background', 'color', 'font', 'size', 'align']);
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     throw platformError('K4-SVG-TEXT-002', `SVG text style is invalid: ${name}`);
   }
@@ -141,7 +141,6 @@ function mapTextStyle(value, name) {
     ...(value.font === undefined ? {} : {font: value.font}),
     ...(value.size === undefined ? {} : {fontPercent: value.size}),
     ...(value.align === undefined ? {} : {alignment: value.align}),
-    ...(value.direction === undefined ? {} : {direction: value.direction}),
   });
 }
 

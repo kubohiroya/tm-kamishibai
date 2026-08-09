@@ -396,7 +396,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
   );
 });
 
-test('converts timed think and rejects persistent or styled legacy speech', () => {
+test('converts timed and styled legacy speech while rejecting persistent speech', () => {
   const timed = convertDsl32ToDsl4(
     [
       'kamishibai=3.2',
@@ -414,7 +414,6 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
 
   for (const [sourceId, action, code] of [
     ['persistent-think.txt', 'action=Hero:think:待って', 'K4-CONVERT-PERSISTENT-SPEECH'],
-    ['styled-think.txt', 'action=Hero:think:待って:2:balloonStyle', 'K4-CONVERT-SPEECH-STYLE'],
   ]) {
     const result = convertDsl32ToDsl4(
       [
@@ -429,6 +428,34 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === code));
   }
+
+  const styled = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=HeroIdle,costume:Actor:hero-idle',
+      'svgTextStyle=balloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right',
+      'actor=Hero,HeroIdle',
+      'sceneLabel=opening',
+      'action=Hero:think:待って:2:balloonStyle',
+    ].join('\n'),
+    {sourceId: 'styled-think.txt'},
+  );
+  assert.equal(styled.ok, true, JSON.stringify(styled.diagnostics));
+  assert.deepEqual(styled.document?.bubbleStyles['legacy-think-balloonStyle'], {
+    textStyle: 'balloonStyle',
+    placement: 'up-right',
+    visualStyle: 'THINKING',
+  });
+  assert.equal(Object.hasOwn(styled.document?.textStyles.balloonStyle, 'direction'), false);
+  assert.deepEqual(styled.document?.scenes.opening, [
+    {
+      'Hero.think': {
+        text: '待って',
+        seconds: 2,
+        styles: ['legacy-think-balloonStyle'],
+      },
+    },
+  ]);
 });
 
 test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal style semantics', () => {
@@ -441,6 +468,7 @@ test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal
       'actor=Fish,Fish1',
       'sceneLabel=dragon castle',
       'action=Fish:say:',
+      'action=Fish:say:泳ぐよ:1:default',
       'action=Fish:setSkin:Fish2:45',
       'action=Fish:setLayer:back',
       'action=Fish:loop:Fish1,Fish2:0.3,0.3',
@@ -450,9 +478,15 @@ test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal
   );
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.document?.textStyles.default.direction, 'up-right');
+  assert.equal(Object.hasOwn(result.document?.textStyles.default, 'direction'), false);
+  assert.deepEqual(result.document?.bubbleStyles['legacy-say-default'], {
+    textStyle: 'default',
+    placement: 'up-right',
+    visualStyle: 'NORMAL',
+  });
   assert.deepEqual(result.document?.scenes['dragon castle'], [
     {'Fish.say': {text: '', seconds: 0}},
+    {'Fish.say': {text: '泳ぐよ', seconds: 1, styles: ['legacy-say-default']}},
     {'Fish.setSkin': {skin: 'Fish2', scale: 45}},
     {'Fish.setLayer': 'back'},
     {

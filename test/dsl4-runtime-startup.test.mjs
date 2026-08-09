@@ -143,6 +143,9 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
@@ -189,6 +192,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   };
   assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
@@ -204,6 +210,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
@@ -217,6 +226,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
@@ -230,6 +242,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: true,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
@@ -243,6 +258,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.throws(
@@ -262,6 +280,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
       dsl4SpeechAdvanceTypewriter: true,
+      dsl4BubbleAdvanceIndicator: false,
+      dsl4TurboWarpBubble: false,
+      dsl4TurboWarpBubbleAdvancedPresentation: false,
       structuredDataIntegrationEnabled: false,
     },
   );
@@ -270,6 +291,52 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4CameraPreviewControls: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4SpeechAdvanceTypewriter: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4BubbleAdvanceIndicator: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4TurboWarpBubble: 1}), TypeError);
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4TurboWarpBubbleAdvancedPresentation: 1}),
+    TypeError,
+  );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4BubbleAdvanceIndicator: true}),
+    /requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter/u,
+  );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4TurboWarpBubble: true}),
+    /requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter/u,
+  );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4TurboWarpBubbleAdvancedPresentation: true}),
+    /requires dsl4TurboWarpBubble/u,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4SpeechAdvanceTypewriter: true,
+      dsl4BubbleAdvanceIndicator: true,
+    }).dsl4BubbleAdvanceIndicator,
+    true,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4SpeechAdvanceTypewriter: true,
+      dsl4TurboWarpBubble: true,
+      dsl4TurboWarpBubbleAdvancedPresentation: true,
+    }).dsl4TurboWarpBubbleAdvancedPresentation,
+    true,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4AppShell: true,
+      dsl4SpeechAdvanceTypewriter: true,
+      dsl4TurboWarpBubble: true,
+    }).dsl4TurboWarpBubble,
+    true,
+  );
   assert.throws(() => resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4AppShell: true}), /requires dsl4Runtime/u);
   assert.throws(
@@ -296,6 +363,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
       dsl4SpeechAdvanceTypewriter: false,
+      dsl4BubbleAdvanceIndicator: false,
+      dsl4TurboWarpBubble: false,
+      dsl4TurboWarpBubbleAdvancedPresentation: false,
       structuredDataIntegrationEnabled: false,
     },
   );
@@ -348,6 +418,9 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
@@ -514,6 +587,9 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4PosePreviewMirroring: false,
     dsl4CameraPreviewControls: false,
     dsl4SpeechAdvanceTypewriter: false,
+    dsl4BubbleAdvanceIndicator: false,
+    dsl4TurboWarpBubble: false,
+    dsl4TurboWarpBubbleAdvancedPresentation: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.equal((await result.session.start()).status, 'finished');
@@ -585,6 +661,9 @@ test('creates a component-aware asset lifecycle after validation and releases it
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
       dsl4SpeechAdvanceTypewriter: false,
+      dsl4BubbleAdvanceIndicator: false,
+      dsl4TurboWarpBubble: false,
+      dsl4TurboWarpBubbleAdvancedPresentation: false,
       structuredDataIntegrationEnabled: false,
     },
   });
@@ -716,6 +795,9 @@ test('creates an atomic runtime environment only after component validation', as
       dsl4PosePreviewMirroring: false,
       dsl4CameraPreviewControls: false,
       dsl4SpeechAdvanceTypewriter: false,
+      dsl4BubbleAdvanceIndicator: false,
+      dsl4TurboWarpBubble: false,
+      dsl4TurboWarpBubbleAdvancedPresentation: false,
       structuredDataIntegrationEnabled: false,
     },
   });

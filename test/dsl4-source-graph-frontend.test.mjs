@@ -42,8 +42,16 @@ assets:
   HeroSkin: costume:Hero
 actors:
   Hero: HeroSkin
+bubbleStyles:
+  novel:
+    characterIntervalSeconds: 0.1
 scenes:
   opening:
+    - Hero.say:
+        text: chapter one
+        seconds: 1
+        styles:
+          - novel
     - goto: chapter1
 `,
     'chapters/chapter1/scenario.kamishibai.yml': `
@@ -60,6 +68,9 @@ scenes:
   const result = graphFrontend.parse(graph, {...enabledOptions, sourceId: 'main'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.equal(result.storyDocument.metadata.sourceId, 'main');
+  assert.deepEqual(result.storyDocument.bubbleStyles, {
+    novel: {characterIntervalSeconds: 0.1},
+  });
   assert.deepEqual(
     result.storyDocument.scenes.map(({id}) => id),
     ['opening', 'chapter1'],

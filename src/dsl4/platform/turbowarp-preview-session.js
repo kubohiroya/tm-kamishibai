@@ -131,6 +131,8 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
       featureFlags.dsl4PosePreviewMirroring,
       featureFlags.dsl4CameraPreviewControls,
       featureFlags.dsl4SpeechAdvanceTypewriter,
+      featureFlags.dsl4BubbleAdvanceIndicator,
+      featureFlags.dsl4TurboWarpBubble,
     );
 
     let created;
@@ -165,6 +167,10 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
           featureFlags.dsl4PosePreviewMirroring || cameraMirroringControlEnabled,
         cameraPreviewControlsEnabled: featureFlags.dsl4CameraPreviewControls,
         speechAdvanceTypewriterEnabled: featureFlags.dsl4SpeechAdvanceTypewriter,
+        bubbleAdvanceIndicatorEnabled: featureFlags.dsl4BubbleAdvanceIndicator,
+        turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
+        turboWarpBubbleAdvancedPresentationEnabled:
+          featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       });
     } catch (error) {
       try {

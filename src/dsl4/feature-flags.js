@@ -11,6 +11,9 @@ const featureFlagKeys = new Set([
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
   'dsl4SpeechAdvanceTypewriter',
+  'dsl4BubbleAdvanceIndicator',
+  'dsl4TurboWarpBubble',
+  'dsl4TurboWarpBubbleAdvancedPresentation',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -25,6 +28,9 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
   dsl4SpeechAdvanceTypewriter: false,
+  dsl4BubbleAdvanceIndicator: false,
+  dsl4TurboWarpBubble: false,
+  dsl4TurboWarpBubbleAdvancedPresentation: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -70,6 +76,25 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4SpeechAdvanceTypewriter && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');
+  }
+  if (
+    resolved.dsl4BubbleAdvanceIndicator &&
+    (!resolved.dsl4Runtime || !resolved.dsl4AppShell || !resolved.dsl4SpeechAdvanceTypewriter)
+  ) {
+    throw new TypeError(
+      'dsl4BubbleAdvanceIndicator requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter',
+    );
+  }
+  if (
+    resolved.dsl4TurboWarpBubble &&
+    (!resolved.dsl4Runtime || !resolved.dsl4AppShell || !resolved.dsl4SpeechAdvanceTypewriter)
+  ) {
+    throw new TypeError(
+      'dsl4TurboWarpBubble requires dsl4Runtime, dsl4AppShell, and dsl4SpeechAdvanceTypewriter',
+    );
+  }
+  if (resolved.dsl4TurboWarpBubbleAdvancedPresentation && !resolved.dsl4TurboWarpBubble) {
+    throw new TypeError('dsl4TurboWarpBubbleAdvancedPresentation requires dsl4TurboWarpBubble');
   }
   return deepFreeze(resolved);
 }

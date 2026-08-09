@@ -28,6 +28,84 @@ function deferred() {
   return {promise, resolve, reject};
 }
 
+test('gates Bubble native reveal and motion behind the startup-fixed advanced flag', () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  native:
+    reveal: {unit: CHARACTER, intervalSeconds: 0.1}
+    showAnimation: {name: fadeIn, durationSeconds: 0.1}
+scenes:
+  opening:
+    - Hero.say: {text: hello, seconds: 1, styles: [native]}
+`);
+
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {},
+        speechAdvanceTypewriterEnabled: true,
+        turboWarpBubbleEnabled: true,
+      }),
+    /dsl4TurboWarpBubbleAdvancedPresentation/u,
+  );
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    port: {},
+    speechAdvanceTypewriterEnabled: true,
+    turboWarpBubbleEnabled: true,
+    turboWarpBubbleAdvancedPresentationEnabled: true,
+  });
+  assert.equal(controller.getState().status, 'idle');
+});
+
+test('passes only runtime presentation fields from a composed Bubble style', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  native:
+    maxWidth: 240
+    placement: up-right
+    reveal: {unit: WORD, delimiters: " /", intervalSeconds: 0.1}
+    showAnimation: {name: fadeIn, durationSeconds: 0.1}
+    visibleAnimations: [{name: shake, count: 2}]
+scenes:
+  opening:
+    - Hero.say: {text: hello, seconds: 0, styles: [native]}
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    port: {
+      async say(payload) {
+        calls.push(payload);
+      },
+    },
+    speechAdvanceTypewriterEnabled: true,
+    turboWarpBubbleEnabled: true,
+    turboWarpBubbleAdvancedPresentationEnabled: true,
+  });
+
+  await controller.start();
+  assert.deepEqual(calls, [
+    {
+      target: 'Hero',
+      text: 'hello',
+      seconds: 0,
+      bubbleReveal: {unit: 'WORD', delimiters: ' /', intervalSeconds: 0.1},
+      bubbleMotions: [{name: 'shake', count: 2}],
+      bubbleStyle: '\u0000dsl4:["native"]',
+    },
+  ]);
+});
+
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;

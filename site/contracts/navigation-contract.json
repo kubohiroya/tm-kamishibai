@@ -1,0 +1,128 @@
+{
+  "formatVersion": 1,
+  "contractVersion": "1.0.0",
+  "status": "active",
+  "siteSettings": {
+    "tmpose-kamishibai": {
+      "repository": "https://github.com/kubohiroya/tmpose-kamishibai",
+      "repositoryLabel": "tmpose-kamishibai"
+    },
+    "tmpose-kamishibai-docs": {
+      "repository": "https://github.com/kubohiroya/tmpose-kamishibai-docs",
+      "repositoryLabel": "tmpose-kamishibai-docs"
+    },
+    "tmpose-kamishibai-samples": {
+      "repository": "https://github.com/kubohiroya/tmpose-kamishibai-samples",
+      "repositoryLabel": "tmpose-kamishibai-samples"
+    }
+  },
+  "items": [
+    {
+      "id": "home",
+      "label": "トップ",
+      "href": "https://kubohiroya.github.io/tmpose-kamishibai/"
+    },
+    {
+      "id": "documents",
+      "label": "ドキュメント",
+      "href": "https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+    },
+    {
+      "id": "workshops",
+      "label": "ワークショップ",
+      "href": "https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/"
+    },
+    {
+      "id": "samples",
+      "label": "作品",
+      "href": "https://kubohiroya.github.io/tmpose-kamishibai-samples/"
+    },
+    {
+      "id": "downloads",
+      "label": "ダウンロード",
+      "href": "https://kubohiroya.github.io/tmpose-kamishibai/downloads/"
+    }
+  ],
+  "currentSectionRules": [
+    {
+      "site": "tmpose-kamishibai",
+      "pathPrefix": "/tmpose-kamishibai/downloads/",
+      "current": "downloads"
+    },
+    {
+      "site": "tmpose-kamishibai",
+      "pathPrefix": "/tmpose-kamishibai/docs/",
+      "current": "documents"
+    },
+    {
+      "site": "tmpose-kamishibai",
+      "pathPrefix": "/tmpose-kamishibai/",
+      "current": "home"
+    },
+    {
+      "site": "tmpose-kamishibai-docs",
+      "pathPrefix": "/tmpose-kamishibai-docs/workshops/",
+      "current": "workshops"
+    },
+    {
+      "site": "tmpose-kamishibai-docs",
+      "pathPrefix": "/tmpose-kamishibai-docs/",
+      "current": "documents"
+    },
+    {
+      "site": "tmpose-kamishibai-samples",
+      "pathPrefix": "/tmpose-kamishibai-samples/",
+      "current": "samples"
+    }
+  ],
+  "changeLocations": [
+    {
+      "repository": "kubohiroya/tmpose-kamishibai",
+      "paths": [
+        "site/index.html",
+        "site/downloads/index.html",
+        "site/docs/index.html",
+        "scripts/site-navigation.mjs",
+        "site/contracts/navigation-contract.json",
+        "site/site-shell.css",
+        "test/site-navigation.test.mjs",
+        ".github/workflows/navigation-contract.yml"
+      ]
+    },
+    {
+      "repository": "kubohiroya/tmpose-kamishibai-docs",
+      "paths": [
+        "site/index.html",
+        "scripts/site-appbar.mjs",
+        "scripts/site-navigation.mjs",
+        "site/site-shell.css",
+        "package.json",
+        "scripts/verify-build.mjs",
+        "test/index.test.mjs"
+      ]
+    },
+    {
+      "repository": "kubohiroya/tmpose-kamishibai-samples",
+      "paths": [
+        "scripts/build-site.mjs",
+        "scripts/site-navigation.mjs",
+        "site/contracts/navigation-contract.json",
+        "site/site-shell.css",
+        "scripts/verify-site.mjs",
+        ".github/workflows/navigation-contract.yml"
+      ]
+    }
+  ],
+  "qualityChecks": [
+    "exactly one aria-current page link per rendered page",
+    "desktop and narrow viewport layout with five links",
+    "horizontal navigation remains keyboard reachable",
+    "focus indication remains visible",
+    "all five destinations resolve before publication"
+  ],
+  "publicationGate": [
+    "all five destinations resolve before publication",
+    "DSL 4.0 release version is fixed",
+    "cross-repository navigation changes are ready to deploy"
+  ]
+}

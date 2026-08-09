@@ -10,6 +10,7 @@ import {
 import {siteVersionPlaceholder} from './site-version.mjs';
 import {createDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
+import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
@@ -111,6 +112,10 @@ async function verifySiteAppBars() {
       `${path.relative(outputDirectory, htmlFile)} must contain exactly one site AppBar.`,
     );
     assert(
+      html.includes(`data-navigation-contract-version="${NAVIGATION_CONTRACT.contractVersion}"`),
+      `${path.relative(outputDirectory, htmlFile)} must use the active navigation contract.`,
+    );
+    assert(
       (html.match(/<footer class="site-footer" data-site-footer-version="1">/gu) ?? []).length ===
         1,
       `${path.relative(outputDirectory, htmlFile)} must contain exactly one site footer.`,
@@ -134,13 +139,7 @@ async function verifySiteAppBars() {
       scripts.filter((src) => src === relativeScript).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must load the AppBar behavior once.`,
     );
-    for (const destination of [
-      'https://kubohiroya.github.io/tmpose-kamishibai/',
-      docsSiteUrl,
-      workshopSiteUrl,
-      sampleSiteUrl,
-      'https://kubohiroya.github.io/tmpose-kamishibai/downloads/',
-    ]) {
+    for (const destination of NAVIGATION_CONTRACT.items.map(({href}) => href)) {
       assert(
         html.includes(`href="${destination}"`),
         `${path.relative(outputDirectory, htmlFile)} is missing ${destination}.`,
