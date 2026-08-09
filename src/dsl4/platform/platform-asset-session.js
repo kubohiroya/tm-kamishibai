@@ -117,6 +117,8 @@ function disposedError() {
  * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
  * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
@@ -148,6 +150,12 @@ export function createDsl4PlatformAssetSession(options) {
   const tmPoseRuntime = validateTMPoseRuntime(options.tmPoseRuntime);
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
+  }
+  if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (options.setCursor !== undefined && typeof options.setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
   }
   if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
     throw new TypeError('loadRemoteAsset must be a function');
@@ -269,6 +277,35 @@ export function createDsl4PlatformAssetSession(options) {
       typeof options.onPreviewMirroringChange !== 'function'
     ) {
       throw new TypeError('onPreviewMirroringChange must be a function');
+    }
+  }
+
+  /** @param {boolean} visible */
+  function notifyCameraBusy(visible) {
+    if (typeof options.setBusy !== 'function') return;
+    try {
+      void Promise.resolve(
+        options.setBusy(
+          Object.freeze({
+            visible,
+            source: 'camera',
+            label: 'Starting camera',
+            cursor: 'wait',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Busy indicators are non-authoritative and cannot change camera selection semantics.
+    }
+  }
+
+  /** @template T @param {() => Promise<T> | T} operation */
+  async function withCameraBusy(operation) {
+    notifyCameraBusy(true);
+    try {
+      return await operation();
+    } finally {
+      notifyCameraBusy(false);
     }
   }
 
@@ -413,6 +450,8 @@ export function createDsl4PlatformAssetSession(options) {
       ...(options.poseNow === undefined
         ? {}
         : {now: /** @type {() => number} */ (options.poseNow)}),
+      ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
       ...(poseFeedbackEnabled ? {onPoseState: options.onPoseState} : {}),
       ...(poseFeedbackEnabled && options.readPoseStateBinding !== undefined
         ? {readPoseStateBinding: options.readPoseStateBinding}
@@ -539,12 +578,12 @@ export function createDsl4PlatformAssetSession(options) {
             ? {
                 listCameraDevices() {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.listCameraDevices();
+                  return withCameraBusy(() => tmposeComposition.listCameraDevices());
                 },
                 /** @param {unknown} selection */
                 selectCamera(selection) {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.selectCamera(selection);
+                  return withCameraBusy(() => tmposeComposition.selectCamera(selection));
                 },
                 getCameraSelection() {
                   if (disposePromise) throw disposedError();

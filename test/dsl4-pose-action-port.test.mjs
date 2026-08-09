@@ -204,6 +204,46 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
   ]);
 });
 
+test('shows a non-authoritative camera busy indicator while recognition starts', async () => {
+  const busy = [];
+  const cursors = [];
+  const {pose, port} = setup({
+    setBusy(event) {
+      busy.push(event);
+    },
+    setCursor(event) {
+      cursors.push(event);
+    },
+  });
+  let releaseRecognition;
+  pose.composition.startRecognition = () =>
+    new Promise((resolve) => {
+      releaseRecognition = resolve;
+    });
+  const controller = new AbortController();
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  await flush();
+
+  assert.deepEqual(busy, [
+    {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+  ]);
+  releaseRecognition();
+  await flush();
+  assert.deepEqual(busy, [
+    {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+    {visible: false, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+  ]);
+  assert.deepEqual(cursors, [{visible: true, source: 'pose-sequence', cursor: 'progress'}]);
+
+  controller.abort();
+  await assert.rejects(pending, /cancelled/u);
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'pose-sequence', cursor: 'progress'},
+    {visible: false, source: 'pose-sequence', cursor: 'progress'},
+  ]);
+  await port.dispose();
+});
+
 test('publishes deterministic immutable state through completion without Scratch or DOM fields', async () => {
   const states = [];
   const {pose, clock, port} = setup({
