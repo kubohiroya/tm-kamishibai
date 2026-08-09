@@ -13,11 +13,11 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
-      buildDate: '2026-08-07',
+      buildDate: '2026-08-09',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
-      sha256: '5caca792b430845fa335f76cfe626d19cdf65096548f571320ca7bd015153004',
-      sourceCommit: 'd115ffdb5e93c23605dffeabbe9ea7e302e23cde',
+      sha256: '6d8901946a872c360a06e9d342176350991c0668aee38240e1eb9c52e9048911',
+      sourceCommit: '6da988b89ce19a3c216613fe5e55afb0a26db4ea',
       sourceDirectory: 'release-sources/4.0.0-dev/app',
     },
     description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
