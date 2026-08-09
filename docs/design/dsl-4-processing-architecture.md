@@ -449,6 +449,8 @@ sequenceDiagram
   Preload->>Lifecycle: prepare selected scene dependencies
   Lifecycle-->>Preload: scene resources ready
   Preload-->>Controller: readiness ok
+  Controller->>Port: hide every StoryDocument actor
+  Port->>Platform: resolve all actors, then setVisible(false)
   Controller->>Controller: transitionTo + emit scene.transition / scene.enter
   Controller->>Preload: commitScene(entry scene)
 
@@ -511,6 +513,7 @@ sequenceDiagram
       else preparation succeeded
         Lifecycle-->>Preload: ready
         Preload-->>Controller: readiness ok
+        Controller->>Port: hide every StoryDocument actor
         Controller->>Controller: commit scene transition
         Controller->>Preload: commitScene(destination)
         Preload->>Lifecycle: release obsolete scene-retained resources
@@ -520,6 +523,7 @@ sequenceDiagram
       Preload->>Lifecycle: prepare next scene dependencies
       Lifecycle-->>Preload: ready or failure
       Preload-->>Controller: readiness
+      Controller->>Port: hide every StoryDocument actor
       Controller->>Controller: commit next scene only when ready
       Controller->>Preload: commitScene(next scene)
       Preload->>Lifecycle: release obsolete scene-retained resources

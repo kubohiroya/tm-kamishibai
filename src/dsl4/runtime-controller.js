@@ -247,10 +247,18 @@ export function createDsl4RuntimeController({
   ) {
     throw new TypeError('finishPresentationTransitions runtime port method must be a function');
   }
+  if (port.hideSceneActors !== undefined && typeof port.hideSceneActors !== 'function') {
+    throw new TypeError('hideSceneActors runtime port method must be a function');
+  }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  const storyActorsValue = storyDocument.actors ?? {};
+  if (!isRecord(storyActorsValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument actors must be an object');
+  }
+  const storyActorIds = Object.freeze(Object.keys(storyActorsValue));
   const bubbleStylesValue = storyDocument.bubbleStyles ?? {};
   if (!isRecord(bubbleStylesValue)) {
     throw new TypeError('DSL 4.0 StoryDocument bubbleStyles must be an object');
@@ -880,6 +888,14 @@ export function createDsl4RuntimeController({
     }
     const nextScene = scenes[nextIndex];
     const from = currentScene()?.id ?? null;
+    port.hideSceneActors?.(
+      deepFreeze({
+        actors: storyActorIds,
+        from,
+        to: sceneId,
+        reason,
+      }),
+    );
     applyPosePreviewMirroring(nextScene);
     bindStructuredScene(sceneId, actionIndex);
     currentSceneIndex = nextIndex;
