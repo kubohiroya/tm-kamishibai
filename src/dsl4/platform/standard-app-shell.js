@@ -1,5 +1,6 @@
 import {resolveDsl4FeatureFlags} from '../feature-flags.js';
 import {deepFreeze} from '../story-document.js';
+import {createDsl4IndeterminateProgressIndicator} from './indeterminate-progress-indicator.js';
 import {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
 
 const optionKeys = new Set([
@@ -7,6 +8,7 @@ const optionKeys = new Set([
   'document',
   'featureFlags',
   'mount',
+  'progressIndicator',
   'poseFeedbackLabels',
   'runtimeHostOptions',
   'surface',
@@ -56,6 +58,12 @@ function requireRuntimeHostOptions(value) {
 }
 
 /** @param {unknown} value */
+function requireProgressIndicatorOptions(value) {
+  if (!isRecord(value)) throw new TypeError('progressIndicator must be an object');
+  return value;
+}
+
+/** @param {unknown} value */
 function isRuntimeHostResult(value) {
   if (
     !isRecord(value) ||
@@ -80,6 +88,7 @@ function isRuntimeHostResult(value) {
  * @param {'webPlayer' | 'regularEditor' | 'packager' | 'developmentPreview'} [options.surface]
  * @param {unknown} [options.document]
  * @param {unknown} [options.mount]
+ * @param {Readonly<Record<string, unknown>>} [options.progressIndicator]
  * @param {Readonly<Record<string, unknown>>} [options.poseFeedbackLabels]
  * @param {Readonly<Record<string, unknown>>} [options.runtimeHostOptions]
  * @param {(options: Record<string, unknown>) => Promise<Readonly<Record<string, any>>>} [options.createRuntimeHost]
@@ -113,6 +122,10 @@ export async function createDsl4StandardAppShell(options = {}) {
   }
 
   const surface = requireSurface(options.surface);
+  const progressIndicatorOptions =
+    options.progressIndicator === undefined
+      ? {}
+      : requireProgressIndicatorOptions(options.progressIndicator);
   const runtimeHostOptions = requireRuntimeHostOptions(options.runtimeHostOptions);
   const createRuntimeHost = options.createRuntimeHost ?? createDsl4TurboWarpRuntimeHost;
   if (typeof createRuntimeHost !== 'function') {
@@ -128,6 +141,8 @@ export async function createDsl4StandardAppShell(options = {}) {
   let runtimeResult = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let disposePromise = null;
+  /** @type {ReturnType<typeof createDsl4IndeterminateProgressIndicator> | null} */
+  let progressIndicator = null;
 
   function ensurePoseFeedbackMount() {
     if (disposed) throw new TypeError('Standard app shell is disposed');
@@ -142,6 +157,78 @@ export async function createDsl4StandardAppShell(options = {}) {
     root.appendChild(poseFeedbackMount);
     mount.appendChild(root);
     return poseFeedbackMount;
+  }
+
+  function ensureProgressIndicator() {
+    if (progressIndicator) return progressIndicator;
+    if (options.document === undefined) return null;
+    const document = requireDocument(options.document);
+    const mount = options.mount ?? document.body;
+    if (mount === undefined || mount === null) return null;
+    progressIndicator = createDsl4IndeterminateProgressIndicator({
+      document,
+      mount,
+      ...progressIndicatorOptions,
+    });
+    return progressIndicator;
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
+  function setLoading(payload, context) {
+    const visible = isRecord(payload) && payload.visible === true;
+    if (!disposed && (visible || progressIndicator)) {
+      ensureProgressIndicator()?.setBusy({
+        visible,
+        source: 'assets',
+        label: 'Loading assets',
+        cursor: 'wait',
+      });
+    }
+    const delegate = runtimeHostOptions.setLoading;
+    if (typeof delegate !== 'function') throw new TypeError('setLoading must be a function');
+    return delegate(payload, context);
+  }
+
+  /** @param {Readonly<{visible: boolean, source: string, label: string, cursor?: string}>} payload */
+  function setBusy(payload) {
+    try {
+      if (!disposed) ensureProgressIndicator()?.setBusy(payload);
+    } catch {
+      // Busy indicators are non-authoritative and cannot change runtime execution.
+    }
+    const delegate = runtimeHostOptions.setBusy;
+    if (typeof delegate !== 'function') return undefined;
+    try {
+      return delegate(payload);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** @param {Readonly<{visible: boolean, source?: string, cursor: string}>} payload */
+  function setCursor(payload) {
+    try {
+      if (!disposed && payload?.visible) ensureProgressIndicator()?.setCursor(payload);
+      else if (!disposed && progressIndicator) progressIndicator.setCursor(payload);
+    } catch {
+      // Cursor styling is non-authoritative and cannot change runtime execution semantics.
+    }
+    const delegate = runtimeHostOptions.setCursor;
+    if (typeof delegate !== 'function') return undefined;
+    try {
+      return delegate(payload);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function disposeProgressIndicator() {
+    const indicator =
+      /** @type {ReturnType<typeof createDsl4IndeterminateProgressIndicator> | null} */ (
+        progressIndicator
+      );
+    progressIndicator = null;
+    indicator?.dispose();
   }
 
   const poseFeedbackPresenter = {};
@@ -159,12 +246,23 @@ export async function createDsl4StandardAppShell(options = {}) {
   }
 
   try {
-    runtimeResult = await createRuntimeHost({
+    const hostOptions = {
       ...runtimeHostOptions,
+      setBusy,
+      setCursor,
+      ...(typeof runtimeHostOptions.setLoading === 'function' ? {setLoading} : {}),
+    };
+    runtimeResult = await createRuntimeHost({
+      ...hostOptions,
       featureFlags,
       poseFeedbackPresenter,
     });
   } catch (error) {
+    try {
+      disposeProgressIndicator();
+    } catch {
+      // Preserve the original runtime-host creation error.
+    }
     if (typeof root?.remove === 'function') root.remove();
     root = null;
     poseFeedbackMount = null;
@@ -188,6 +286,11 @@ export async function createDsl4StandardAppShell(options = {}) {
     }
     try {
       if (typeof root?.remove === 'function') root.remove();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      disposeProgressIndicator();
     } catch (error) {
       errors.push(error);
     }
@@ -220,6 +323,11 @@ export async function createDsl4StandardAppShell(options = {}) {
       const errors = [];
       try {
         await runtimeResult?.host?.dispose(reason);
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        disposeProgressIndicator();
       } catch (error) {
         errors.push(error);
       }
