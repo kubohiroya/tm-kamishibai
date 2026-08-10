@@ -39,3 +39,10 @@ license表示とsource repositoryを正本とします。
 | scratch-render                           | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                |
 | scratch-vm                               | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                    |
 | yaml                                     | 2.8.1             | ISC          | `eemeli/yaml`                             |
+
+## DSL 4.0 bundled PoseNet supply
+
+The DSL 4.0 runtime embeds the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
+`tensorflow/tfjs-models` v2.2.2. The model JSON and weight shards are Apache-2.0 material; the
+manifest records their upstream URL and SHA-256 values in
+[`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js).
