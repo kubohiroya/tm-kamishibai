@@ -8,6 +8,8 @@ import {createDsl4TurboWarpPreviewSessionFactory} from '../dsl4/platform/turbowa
 import {deepFreeze} from '../dsl4/story-document.js';
 import {loadDsl4BrowserRuntimeComponent} from './dsl4-browser-runtime-component.js';
 
+const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,6 +27,24 @@ function optionalFunction(value, name) {
     throw new TypeError(`${name} must be a function`);
   }
   return /** @type {Function | undefined} */ (value);
+}
+
+/** @param {Record<string, any>} vm */
+function installStandardRuntimeMarker(vm) {
+  const extensionManager = vm.extensionManager;
+  if (!isRecord(extensionManager) || typeof extensionManager.addBuiltinExtension !== 'function') {
+    throw new TypeError('TurboWarp VM must provide extensionManager.addBuiltinExtension');
+  }
+  class StandardRuntimeMarker {
+    getInfo() {
+      return {
+        id: standardRuntimeExtensionId,
+        name: 'Kamishibai DSL 4.0 local preview marker',
+        blocks: [],
+      };
+    }
+  }
+  extensionManager.addBuiltinExtension(standardRuntimeExtensionId, StandardRuntimeMarker);
 }
 
 /** @param {unknown} value @param {string} name @param {number} maximum */
@@ -270,7 +290,15 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
           maxProjectBytes,
           stageWidth: options.stageWidth,
           stageHeight: options.stageHeight,
-          prepareVm: options.prepareVm,
+          async prepareVm(vm) {
+            if (
+              /** @type {Readonly<Record<string, any>>} */ (component)
+                .standardRuntimeMarkerRequired === true
+            ) {
+              installStandardRuntimeMarker(vm);
+            }
+            await options.prepareVm?.(vm);
+          },
         });
         stage = activeStage;
         await activeStage.start();

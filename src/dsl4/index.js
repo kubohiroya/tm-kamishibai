@@ -79,6 +79,7 @@ export {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from './browser-turbowarp-stage.js';
+export {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 export {
   createDsl4BrowserTurboWarpPlatform,
   loadDsl4BrowserTurboWarpPlatform,

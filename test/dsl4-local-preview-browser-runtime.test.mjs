@@ -124,6 +124,14 @@ function platformFixture(log, loadGate = Promise.resolve()) {
   const vm = {
     runtime,
     securityManager: runtime.securityManager,
+    extensionManager: {
+      addBuiltinExtension(id, Extension) {
+        const info = new Extension().getInfo();
+        assert.equal(info.id, id);
+        assert.deepEqual(info.blocks, []);
+        log.push(`vm.addBuiltinExtension:${id}`);
+      },
+    },
     attachStorage() {
       log.push('vm.attachStorage');
     },
@@ -211,7 +219,12 @@ function runtimeOptions(projectBytes, extra) {
 }
 
 test('starts one validated stage and bridge, then disposes bridge ownership before the VM', async () => {
-  const bytes = sb3(await packagedProject());
+  const project = structuredClone(await packagedProject());
+  project.extensions = ['kubohiroyakamishibai4'];
+  project.extensionURLs = {
+    kubohiroyakamishibai4: 'data:text/javascript;base64,ZmFrZQ==',
+  };
+  const bytes = sb3(project);
   const log = [];
   let parseCount = 0;
   const previousScratch = {
@@ -246,6 +259,10 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   assert.equal(parseCount, 1);
   assert.equal(options.dom.children.length, 1);
   assert.equal(log.filter((entry) => entry === 'vm.loadProject').length, 1);
+  assert.equal(
+    log.filter((entry) => entry === 'vm.addBuiltinExtension:kubohiroyakamishibai4').length,
+    1,
+  );
   assert.equal(globalObject.Scratch.legacyHost, true);
   assert.deepEqual(globalObject.Scratch.vm.runtime.targets, [{isStage: true}]);
   assert.equal(globalObject.Scratch.Cast.toString('value'), 'cast:value');

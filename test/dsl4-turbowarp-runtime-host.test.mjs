@@ -380,6 +380,9 @@ function platformFixture(log) {
       if (name === 'チャージ') return poseProgress;
       return null;
     },
+    setEffect(effect, value) {
+      log.push(['stage.effect', effect, value]);
+    },
   };
   const actor = {
     id: 'actor-target',
@@ -690,6 +693,49 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   await third.dispose('preview-test');
   assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 3);
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
+});
+
+test('provides the DSL 3.2 transition port to browser preview sessions by default', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const transitionSource = frontend.parse(
+    `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - transition:
+        effect: fadeOut
+        seconds: 0
+`,
+    {sourceId: 'main'},
+  );
+  assert.equal(transitionSource.ok, true, JSON.stringify(transitionSource.diagnostics));
+  const log = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {},
+  });
+  const session = await createSession({
+    storyDocument: transitionSource.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  await session.start();
+  assert.deepEqual(
+    log.filter(([event]) => event === 'stage.effect'),
+    [['stage.effect', 'brightness', -100]],
+  );
+  await session.dispose('preview-transition-test');
 });
 
 test('attaches browser preview key and stage pointer input for the owned session lifetime', async () => {

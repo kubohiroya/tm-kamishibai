@@ -4,9 +4,13 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {buildDsl4RuntimeComponent} from './dsl4-build.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
-import {dsl4LocalPreviewBrowserBootstrapDefaults} from './dsl4-local-preview-browser-bootstrap.js';
+import {
+  dsl4LocalPreviewBrowserBootstrapDefaults,
+  dsl4LocalPreviewBrowserBootstrapMaximums,
+} from './dsl4-local-preview-browser-bootstrap.js';
 import {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
@@ -227,19 +231,19 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     options.maxAssetFileBytes,
     'maxAssetFileBytes',
     1,
-    dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetBytes,
   );
   const maxAssetFiles = boundedInteger(
     options.maxAssetFiles,
     'maxAssetFiles',
     1,
-    dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetFiles,
   );
   const maxTotalAssetBytes = boundedInteger(
     options.maxTotalAssetBytes,
     'maxTotalAssetBytes',
     1,
-    dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetBytes,
   );
   if (maxAssetFileBytes > maxTotalAssetBytes) {
     throw commandError(
@@ -256,7 +260,29 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
       'K4-PREVIEW-CLI-MANIFEST',
     );
   }
-  const maxProjectBytes = dsl4LocalPreviewHostDefaults.maxProjectBytes;
+  const maxProjectBytes = boundedInteger(
+    options.maxProjectBytes ?? dsl4LocalPreviewHostDefaults.maxProjectBytes,
+    'maxProjectBytes',
+    1,
+    dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectBytes,
+  );
+  const maxProjectJsonBytes = boundedInteger(
+    options.maxProjectJsonBytes ?? dsl4BrowserPreviewArtifactLimits.defaults.maxProjectJsonBytes,
+    'maxProjectJsonBytes',
+    1,
+    dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes,
+  );
+  const exceedsRecommendedArtifactLimit =
+    maxAssetFileBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes ||
+    maxTotalAssetBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes ||
+    maxProjectBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectBytes ||
+    maxProjectJsonBytes > dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectJsonBytes;
+  if (exceedsRecommendedArtifactLimit && options.allowLargePreviewArtifacts !== true) {
+    throw commandError(
+      'Artifact limits above the recommended maximum require allowLargePreviewArtifacts',
+      'K4-PREVIEW-CLI-LIMIT-ACK',
+    );
+  }
   const readyTimeoutMs = boundedInteger(
     dependencies.readyTimeoutMs ?? dsl4LocalPreviewCommandDefaults.readyTimeoutMs,
     'readyTimeoutMs',
@@ -289,6 +315,11 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
   }
   if (typeof stdout?.write !== 'function' || typeof stderr?.write !== 'function') {
     throw new TypeError('stdout and stderr must provide write');
+  }
+  if (exceedsRecommendedArtifactLimit) {
+    stderr.write(
+      'Warning: large preview artifact limits were explicitly enabled; browser memory use may be substantial.\n',
+    );
   }
 
   /** @type {PreviewHost | null} */
@@ -393,6 +424,8 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
         maxAssetFileBytes,
         maxAssetFiles,
         maxTotalAssetBytes,
+        maxProjectBytes,
+        maxProjectJsonBytes,
         runtimeOwner: 'browser',
         port,
         projectBytes,

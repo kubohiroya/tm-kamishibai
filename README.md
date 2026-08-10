@@ -88,8 +88,15 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes 65536 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --max-total-asset-bytes 67108864 \
+  --max-project-bytes 201326592 \
+  --max-project-json-bytes 201326592
 ```
+
+`--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
+展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
+`--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
+絶対上限を適用します。
 
 Source Graphを監視する場合は、上のcommandへ次を追加します。
 

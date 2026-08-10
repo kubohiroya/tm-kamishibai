@@ -6,9 +6,10 @@ import {
   Dsl32ConversionError,
   formatConversionDiagnostic,
 } from '../converter/index.js';
+import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {packageVersion} from './constants.js';
 import {runDsl4LocalPreviewCommand} from './dsl4-local-preview-command.js';
-import {dsl4LocalPreviewBrowserBootstrapDefaults} from './dsl4-local-preview-browser-bootstrap.js';
+import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {
   formatDsl4Diagnostic,
@@ -29,7 +30,8 @@ export function usage() {
     --source-manifest project.source.json --output dist/story.sb3 \\
     --control-profile production --channel bundled \\
     --max-source-bytes N --max-asset-file-bytes N \\
-    --max-asset-files N --max-total-asset-bytes N [options]
+    --max-asset-files N --max-total-asset-bytes N \
+    [--max-project-bytes N] [--max-project-json-bytes N] [options]
 
   tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
@@ -64,6 +66,9 @@ DSL 4.0 preview-dsl4 options:
   --max-source-files N            Maximum files in the include graph
   --max-total-source-bytes N      Maximum graph total and composed source bytes
   --max-include-depth N           Maximum include graph depth
+  --max-project-bytes N           Maximum compressed preview SB3 bytes
+  --max-project-json-bytes N      Maximum expanded project.json bytes
+  --allow-large-preview-artifacts Acknowledge memory risk above recommended limits
   --port N                        Loopback port; 0 lets the OS select one (default)
   --replace-existing              Replace a same-channel component in the base SB3
 
@@ -357,7 +362,7 @@ function parseBuildDsl4Arguments(rest) {
 }
 
 /**
- * @typedef {Omit<Dsl4CliOptions, 'output' | 'historyNavigationAvailable'> & {watch: true, port: number}} Dsl4PreviewCliOptions
+ * @typedef {Omit<Dsl4CliOptions, 'output' | 'historyNavigationAvailable'> & {watch: true, port: number, maxProjectBytes: number, maxProjectJsonBytes: number, allowLargePreviewArtifacts: boolean}} Dsl4PreviewCliOptions
  */
 
 /**
@@ -367,7 +372,12 @@ function parseBuildDsl4Arguments(rest) {
 function parsePreviewDsl4Arguments(rest) {
   const values = new Map();
   const flags = new Set();
-  const booleanOptions = new Set(['--watch', '--replace-existing', '--enable-source-includes']);
+  const booleanOptions = new Set([
+    '--watch',
+    '--replace-existing',
+    '--enable-source-includes',
+    '--allow-large-preview-artifacts',
+  ]);
   const requiredValueOptions = new Set([
     '--base',
     '--project-root',
@@ -384,7 +394,13 @@ function parsePreviewDsl4Arguments(rest) {
     '--max-total-source-bytes',
     '--max-include-depth',
   ]);
-  const valueOptions = new Set([...requiredValueOptions, ...graphValueOptions, '--port']);
+  const valueOptions = new Set([
+    ...requiredValueOptions,
+    ...graphValueOptions,
+    '--max-project-bytes',
+    '--max-project-json-bytes',
+    '--port',
+  ]);
   for (let index = 0; index < rest.length; index += 1) {
     const option = rest[index];
     if (booleanOptions.has(option)) {
@@ -463,22 +479,68 @@ function parsePreviewDsl4Arguments(rest) {
     );
   }
   const maxAssetFiles = positiveInteger('--max-asset-files');
+  const maxProjectBytes = values.has('--max-project-bytes')
+    ? positiveInteger('--max-project-bytes')
+    : dsl4BrowserPreviewArtifactLimits.defaults.maxProjectBytes;
+  const maxProjectJsonBytes = values.has('--max-project-json-bytes')
+    ? positiveInteger('--max-project-json-bytes')
+    : dsl4BrowserPreviewArtifactLimits.defaults.maxProjectJsonBytes;
   for (const [option, value, maximum] of [
-    ['--max-source-bytes', maxSourceBytes, dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes],
+    ['--max-source-bytes', maxSourceBytes, dsl4LocalPreviewBrowserBootstrapMaximums.maxSourceBytes],
     [
       '--max-asset-file-bytes',
       maxAssetFileBytes,
-      dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
     ],
-    ['--max-asset-files', maxAssetFiles, dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles],
+    ['--max-asset-files', maxAssetFiles, dsl4LocalPreviewBrowserBootstrapMaximums.maxAssetFiles],
     [
       '--max-total-asset-bytes',
       maxTotalAssetBytes,
-      dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
+    ],
+    [
+      '--max-project-bytes',
+      maxProjectBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectBytes,
+    ],
+    [
+      '--max-project-json-bytes',
+      maxProjectJsonBytes,
+      dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes,
     ],
   ]) {
     if (value > maximum) {
       throw new Sb3BuilderError(`${option} must be <= ${maximum}.`, {stage: 'cli'});
+    }
+  }
+  const allowLargePreviewArtifacts = flags.has('--allow-large-preview-artifacts');
+  for (const [option, value, recommendedMaximum] of [
+    [
+      '--max-asset-file-bytes',
+      maxAssetFileBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+    ],
+    [
+      '--max-total-asset-bytes',
+      maxTotalAssetBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxAssetBytes,
+    ],
+    [
+      '--max-project-bytes',
+      maxProjectBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectBytes,
+    ],
+    [
+      '--max-project-json-bytes',
+      maxProjectJsonBytes,
+      dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectJsonBytes,
+    ],
+  ]) {
+    if (value > recommendedMaximum && !allowLargePreviewArtifacts) {
+      throw new Sb3BuilderError(
+        `${option} above ${recommendedMaximum} requires --allow-large-preview-artifacts.`,
+        {stage: 'cli'},
+      );
     }
   }
   return {
@@ -492,6 +554,9 @@ function parsePreviewDsl4Arguments(rest) {
     maxAssetFileBytes,
     maxAssetFiles,
     maxTotalAssetBytes,
+    maxProjectBytes,
+    maxProjectJsonBytes,
+    allowLargePreviewArtifacts,
     ...(sourceIncludesEnabled
       ? {
           featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
