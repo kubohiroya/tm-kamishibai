@@ -76,6 +76,8 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 
 local previewでも同じflagとgraph上限を指定できます。ON時はincluded sourceとlocal assetを含む全体を二回取得し、同じgeneration keyになった場合だけruntimeへstageします。新規sourceは任意のbasename／directoryで`.k4.yml` suffixを使用できます（entry sourceだけはmanifestのroot-level basenameです）。途中保存や一部assetだけが新しい状態は公開しません。詳細は[DSL 4.0 Source Graph Preview](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-source-include-preview.md)を参照してください。
 
+実カメラを使う最終確認は、[DSL 4.0 実Chrome・実カメラ Smoke 手順](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-physical-camera-smoke.md)に従います。自動E2Eはカメラをスタブ化しているため、実機確認の代替にはなりません。
+
 台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
 
 ```bash
