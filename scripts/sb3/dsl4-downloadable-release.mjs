@@ -133,6 +133,26 @@ function stageTarget(title, titleRuntime) {
       [closeTitleBroadcastId]: closeTitleBroadcastName,
     },
     blocks: {
+      titleFlag: {
+        opcode: 'event_whenflagclicked',
+        next: 'titleFlagShow',
+        parent: null,
+        inputs: {},
+        fields: {},
+        shadow: false,
+        topLevel: true,
+        x: 0,
+        y: 0,
+      },
+      titleFlagShow: {
+        opcode: 'kubohiroyakamishibai4_showTitle',
+        next: null,
+        parent: 'titleFlag',
+        inputs: {},
+        fields: {},
+        shadow: false,
+        topLevel: false,
+      },
       titleSetVersion: {
         opcode: 'kubohiroyakamishibai4_setTextValue',
         next: null,
@@ -144,7 +164,7 @@ function stageTarget(title, titleRuntime) {
         fields: {},
         shadow: false,
         topLevel: true,
-        x: 0,
+        x: 240,
         y: 0,
       },
       titleStageClick: {

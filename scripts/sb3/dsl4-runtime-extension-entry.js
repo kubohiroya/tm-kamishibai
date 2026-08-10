@@ -3,6 +3,7 @@ import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
+import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
@@ -39,6 +40,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.Scratch = Scratch;
     this.frontend = createDsl4ProductionSourceFrontend(schema);
     this.shell = null;
+    this.errorIndicator = null;
     this.pendingStart = null;
     this.operation = Promise.resolve();
     this.status = 'ready';
@@ -46,7 +48,6 @@ class KamishibaiDsl4RuntimeExtension {
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () => this.enqueue(() => this.stop('project-stop-all')));
-    runtime.on('PROJECT_START', () => this.enqueue(() => this.restart()));
   }
 
   getInfo() {
@@ -140,7 +141,7 @@ class KamishibaiDsl4RuntimeExtension {
   setTextValue() {}
 
   showTitle() {
-    this.shell?.showTitle?.();
+    return this.enqueue(() => this.restart());
   }
 
   closeTitle() {
@@ -169,15 +170,41 @@ class KamishibaiDsl4RuntimeExtension {
 
   enqueue(operation) {
     this.operation = this.operation.then(operation, operation).catch((error) => {
-      this.status = 'error';
-      this.lastError = String(error?.message ?? error);
+      this.showFailure(error);
       console.error('Kamishibai DSL 4.0 runtime failed.', error);
     });
     return this.operation;
   }
 
+  showFailure(failure) {
+    const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
+    const code = typeof failure?.code === 'string' ? failure.code : '';
+    this.status = 'error';
+    this.lastError = message;
+    this.shell?.hideTitle?.();
+    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
+      this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
+    }
+    try {
+      this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
+        document: globalThis.document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: {title: appShellLocales.en.ui.invalidScript},
+          ja: {title: appShellLocales.ja.ui.invalidScript},
+        },
+      });
+      this.errorIndicator.show({message, code});
+    } catch (indicatorError) {
+      console.error('Kamishibai DSL 4.0 error indicator failed.', indicatorError);
+    }
+  }
+
   async stop(reason) {
     this.pendingStart = null;
+    const errorIndicator = this.errorIndicator;
+    this.errorIndicator = null;
+    errorIndicator?.dispose();
     const shell = this.shell;
     this.shell = null;
     if (shell) await shell.dispose(reason);
@@ -208,18 +235,13 @@ class KamishibaiDsl4RuntimeExtension {
         const result = await shell.runtimeHost.start();
         if (this.shell !== shell) return;
         if (result.status === 'failed') {
-          this.status = 'error';
-          this.lastError =
-            typeof result.diagnostic?.message === 'string'
-              ? result.diagnostic.message
-              : 'DSL 4.0 story execution failed.';
+          this.showFailure(result.diagnostic ?? 'DSL 4.0 story execution failed.');
           return;
         }
         this.status = result.status;
       } catch (error) {
         if (this.shell !== shell) return;
-        this.status = 'error';
-        this.lastError = String(error?.message ?? error);
+        this.showFailure(error);
       }
     };
     shell = await createDsl4StandardAppShell({
@@ -227,6 +249,7 @@ class KamishibaiDsl4RuntimeExtension {
         dsl4Runtime: true,
         dsl4AppShell: true,
         dsl4PoseFeedbackModes: true,
+        dsl4SpeechAdvanceTypewriter: true,
       },
       surface: 'regularEditor',
       document: globalThis.document,

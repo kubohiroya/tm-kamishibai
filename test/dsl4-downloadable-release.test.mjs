@@ -119,6 +119,9 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
       ?.opcode,
     `${bundleExtensionId}_openOfficialWebsite`,
   );
+  assert.equal(stage.blocks.titleFlag?.opcode, 'event_whenflagclicked');
+  assert.equal(stage.blocks.titleFlag?.next, 'titleFlagShow');
+  assert.equal(stage.blocks.titleFlagShow?.opcode, `${bundleExtensionId}_showTitle`);
   assert.equal(stage.blocks.titleStageClick?.opcode, 'event_whenstageclicked');
   assert.deepEqual(stage.blocks.titleStageClickClose?.inputs?.BROADCAST_INPUT, [
     1,
@@ -144,6 +147,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionSource, /^\/\/ ID: kubohiroyakamishibai4/mu);
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
   assert.equal(extensionSource.includes('dsl4PoseFeedbackModes:!0'), true);
+  assert.equal(extensionSource.includes('dsl4SpeechAdvanceTypewriter:!0'), true);
   assert.match(extensionSource, /display:none/u);
   for (const title of [
     'Asset Manager',
@@ -274,6 +278,7 @@ test('waits at the title and starts the embedded story from Stage and close-butt
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {
+      vm.runtime._step();
       if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
@@ -369,6 +374,7 @@ test('shows the browser-localized title and routes its close button through clos
     const titleDeadline = Date.now() + 5_000;
     let titleRoot;
     while (Date.now() < titleDeadline) {
+      vm.runtime._step();
       titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
       if (titleRoot?.style?.display === 'flex') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
