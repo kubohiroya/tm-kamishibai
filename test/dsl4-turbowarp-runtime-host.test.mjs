@@ -1076,6 +1076,91 @@ scenes:
   assert.equal(document.body.children.length, 0);
 });
 
+test('shows Scratch pose monitors and skips one pose step per navigation command', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  feedback:
+    mode: scratchMirror
+  navigation:
+    allowSkip: true
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+            - pose: help
+`);
+  const log = [];
+  const events = [];
+  const fixture = platformFixture(log);
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
+      onEvent: (event) => events.push(event),
+      poseSchedule() {
+        return () => {};
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  for (
+    let attempts = 0;
+    attempts < 50 && !fixture.monitorRecords.get(fixture.poseConfidence.id).visible;
+    attempts += 1
+  ) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+
+  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  for (
+    let attempts = 0;
+    attempts < 50 && events.filter(({type}) => type === 'pose.step.skip').length < 1;
+    attempts += 1
+  ) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(result.host.getState().runtime.actionIndex, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+
+  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(
+    events.filter(({type}) => type === 'pose.step.skip').map(({details}) => details.stepIndex),
+    [0, 1],
+  );
+  assert.equal(events.filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(fixture.poseConfidence.value, 0);
+  assert.equal(fixture.poseProgress.value, 0);
+  assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, false);
+  assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, false);
+
+  await result.host.dispose('pose-step-skip');
+});
+
 test('keeps the Standard app shell inert when its startup flag is disabled', async () => {
   let runtimeHostCalls = 0;
   const options = {
@@ -2354,11 +2439,23 @@ scenes:
         style: title
     - sound: Bell
     - wait: 0
-`);
+  `);
   const log = [];
   const clock = manualScheduler();
+  const uiVisibility = [];
+  const fixture = platformFixture(log);
+  fixture.runtime.targets.push({
+    id: 'app-shell-target',
+    isStage: false,
+    lookupVariableByNameAndType() {
+      return null;
+    },
+    setVisible(visible) {
+      uiVisibility.push(visible);
+    },
+  });
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(project, platformFixture(log), {actorScheduler: clock.scheduler}),
+    enabledOptions(project, fixture, {actorScheduler: clock.scheduler}),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const finished = await result.host.start();
@@ -2383,6 +2480,159 @@ scenes:
       `${JSON.stringify(event)} not found in ${JSON.stringify(log)}`,
     );
   }
+  assert.deepEqual(uiVisibility, []);
+  await result.host.dispose();
+});
+
+test('hides every story actor on initial and sequential scene entry', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - Hero.show:
+        skin: HeroSkin
+        x: 10
+        y: 20
+        scale: 30
+  closing: []
+`);
+  const log = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log)),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const state = await result.host.start();
+
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(
+    log.filter(([event]) => event === 'actor.visible'),
+    [
+      ['actor.visible', false],
+      ['actor.visible', true],
+      ['actor.visible', false],
+    ],
+  );
+  await result.host.dispose();
+});
+
+test('resolves every story actor before hiding any actor at a scene boundary', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+  MissingSkin: costume:Missing
+actors:
+  Hero: HeroSkin
+  Missing: MissingSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening: []
+`);
+  const log = [];
+  const events = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {onEvent: (event) => events.push(event)}),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const state = await result.host.start();
+
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-HOST-ACTOR-RESET-001');
+  assert.equal(
+    log.some(([event]) => event === 'actor.visible'),
+    false,
+  );
+  assert.equal(
+    events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
+    false,
+  );
+  await result.host.dispose();
+});
+
+test('fails before hiding any actor when a story actor target is ambiguous', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening: []
+`);
+  const log = [];
+  const events = [];
+  const fixture = platformFixture(log);
+  fixture.runtime.targets.push(fixture.runtime.targets[1]);
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {onEvent: (event) => events.push(event)}),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const state = await result.host.start();
+
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-TW-ACTOR-001');
+  assert.equal(
+    log.some(([event]) => event === 'actor.visible'),
+    false,
+  );
+  assert.equal(
+    events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
+    false,
+  );
+  await result.host.dispose();
+});
+
+test('fails before scene publication when a resolved actor cannot be hidden', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening: []
+`);
+  const log = [];
+  const events = [];
+  const fixture = platformFixture(log);
+  fixture.runtime.targets[1].setVisible = () => {
+    throw new Error('visibility unavailable');
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {onEvent: (event) => events.push(event)}),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const state = await result.host.start();
+
+  assert.equal(state.status, 'failed');
+  assert.equal(state.diagnostic.code, 'K4-HOST-ACTOR-RESET-002');
+  assert.equal(
+    events.some(({type}) => type === 'scene.enter' || type === 'scene.transition'),
+    false,
+  );
   await result.host.dispose();
 });
 

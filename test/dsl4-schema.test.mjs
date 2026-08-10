@@ -1016,6 +1016,54 @@ scenes:
   assert.equal(result.storyDocument.assets.DefaultPose.retention, 'scene');
 });
 
+test('normalizes bitmap costume resolution metadata with a safe default', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  ProjectBackdrop: backdrop
+  Hero:
+    kind: costume
+    target: Actor
+    file: costumes/hero.png
+    bitmapResolution: 2
+  Ocean:
+    kind: backdrop
+    file: backdrops/ocean.svg
+  RemoteBitmap:
+    kind: backdrop
+    delivery: remote
+    bitmapResolution: 1
+    source:
+      url: https://cdn.example.com/ocean.png
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/png
+      size: 123
+scenes:
+  opening: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.ProjectBackdrop.bitmapResolution, 1);
+  assert.equal(result.storyDocument.assets.Hero.bitmapResolution, 2);
+  assert.equal(result.storyDocument.assets.Ocean.bitmapResolution, 1);
+  assert.equal(result.storyDocument.assets.RemoteBitmap.bitmapResolution, 1);
+
+  for (const value of [0, 3, 1.5, '2']) {
+    const invalid = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  Hero:
+    kind: costume
+    target: Actor
+    file: hero.png
+    bitmapResolution: ${JSON.stringify(value)}
+scenes:
+  opening: []
+`);
+    assert.equal(invalid.ok, false, JSON.stringify(invalid.diagnostics));
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('remote delivery rejects malformed or credential-bearing HTTPS URLs semantically', async () => {
   const fixture = await readFile(
     path.join(fixtureRoot, 'valid', 'remote-assets.kamishibai.yaml'),

@@ -67,6 +67,8 @@ loading:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  navigation:
+    allowSkip: true
 branches:
   rescueResult:
     - if: score == 1

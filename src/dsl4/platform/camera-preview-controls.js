@@ -193,7 +193,7 @@ export function createDsl4CameraPreviewControls(options) {
     button.type = 'button';
     button.dataset.dsl4PreviewControl = name;
     button.setAttribute('aria-label', String(labels[name]));
-    assignStyles(button, {opacity: String(control.opacity ?? 1)});
+    assignStyles(button, {opacity: String(control.opacity ?? 1), cursor: 'pointer'});
     const image = /** @type {HTMLImageElement} */ (document.createElement('img'));
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
@@ -213,6 +213,7 @@ export function createDsl4CameraPreviewControls(options) {
     cameraSelect = /** @type {HTMLSelectElement} */ (document.createElement('select'));
     cameraSelect.dataset.dsl4PreviewCameraMenu = 'true';
     cameraSelect.setAttribute('aria-label', String(labels.cameraMenu));
+    assignStyles(cameraSelect, {cursor: 'pointer'});
     cameraSelect.hidden = true;
     cameraButton.after(cameraSelect);
   }

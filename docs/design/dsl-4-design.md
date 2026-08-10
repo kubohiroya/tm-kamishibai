@@ -561,8 +561,13 @@ compositionへ束ね、`dsl4AppShell`が有効なsessionだけruntime hostとpre
 containerはpresenter modeで初めて遅延生成し、surface固有の暗黙modeを追加しません。flag OFFまたは別modeでは
 presenter optionのDOM設定を検査しません。
 `allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
-消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
+消費しません。`allowSkip: true`ではaction全体のsignalから分離したstep signalだけをcancelし、pose portの
+cleanup後に次stepへ進みます。skipしたstepのsoundは再生せず、最終step後は通常のaction commitを行います。
+policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
 `navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。
+
+3.1／3.2 converterは従来のSpaceによるpose step skipを保つため、pose actionを一件以上変換したとき
+`poseRecognition.navigation.allowSkip: true`を明示します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
@@ -1572,6 +1577,11 @@ media assetはscene間で表示や再生が継続することがあるため、�
 5. 両方が必要とする同一resourceは再登録も解放もしない
 6. commit時に、`retention: scene`でTが不要とするresourceだけをasset単位でreleaseする
 7. historyで再訪したsceneの解放済みresourceは、IndexedDBまたはembedded sourceから再materializeする
+
+sceneの初回entryとすべてのscene遷移では、Tのactionを開始する前に`StoryDocument.actors`の全actorを
+非表示にします。actor targetは一件も変更する前にすべて解決し、missingまたはambiguousなtargetがあれば
+scene stateと`scene.transition`／`scene.enter` eventをcommitしません。stage、backdrop、effect、BGM、app shellの
+UI targetはこの可視性resetの対象外です。
 
 poseModelはpreload中にcurrentとselected nextの最大二つが一時共存し得ます。通常状態で訪問済みmodel数に比例して
 完全初期化済みPoseNet／TensorFlow resourceを残しません。Abort、superseded navigation、live reload、disposeが

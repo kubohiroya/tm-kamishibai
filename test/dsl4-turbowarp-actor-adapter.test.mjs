@@ -150,6 +150,16 @@ test('applies hide, scale, and absolute or relative layer changes to one actor',
   ]);
 });
 
+test('hides one resolved actor at a scene boundary', () => {
+  const hero = fakeActor();
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  platform.host.hideActor(platform.resolveActor('Hero'));
+
+  assert.deepEqual(hero.calls.at(-1), ['setVisible', false]);
+});
+
 test('maps transparency 0, 50, and 100 directly to the Scratch ghost effect', () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);

@@ -951,10 +951,13 @@ export function createDsl4LocalPreviewHost(options) {
           sourceManifest.path,
           /** @type {'protocol' | 'browser'} */ (runtimeOwner),
         );
+        const browserRuntimeSources =
+          runtimeOwner === 'browser' ? "; worker-src 'self' blob:; font-src 'self' data:" : '';
+        const mediaSources = runtimeOwner === 'browser' ? "'self' blob:" : "'self'";
         response.writeHead(200, {
           'cache-control': 'no-store',
           'content-length': Buffer.byteLength(body),
-          'content-security-policy': `default-src 'none'; script-src 'self'${runtimeOwner === 'browser' ? " 'unsafe-eval'" : ''}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+          'content-security-policy': `default-src 'none'; script-src 'self'${runtimeOwner === 'browser' ? " 'unsafe-eval'" : ''}${browserRuntimeSources}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src ${mediaSources}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
           'content-type': 'text/html; charset=utf-8',
           'referrer-policy': 'no-referrer',
           'x-content-type-options': 'nosniff',

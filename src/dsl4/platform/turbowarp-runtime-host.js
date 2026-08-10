@@ -398,6 +398,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       runtimeComponent,
       tmPoseRuntime: options.tmPoseRuntime,
       setLoading: options.setLoading,
+      ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
       ...(options.loadRemoteAsset === undefined ? {} : {loadRemoteAsset: options.loadRemoteAsset}),
       ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
       ...(options.verifiedRemoteCacheOptions === undefined
@@ -566,6 +568,34 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ],
       'actor action port',
     );
+    const activeActorPlatform = actorPlatform;
+    const storyActors = isRecord(component.storyDocument.actors)
+      ? component.storyDocument.actors
+      : {};
+    port.hideSceneActors = () => {
+      const actors = Object.keys(storyActors).map((actorId) => {
+        const actor = activeActorPlatform.resolveActor(actorId);
+        if (actor === null) {
+          throw hostError(
+            'K4-HOST-ACTOR-RESET-001',
+            `TurboWarp actor is unavailable at the scene boundary: ${actorId}`,
+          );
+        }
+        return {actorId, actor};
+      });
+      for (const {actorId, actor} of actors) {
+        try {
+          activeActorPlatform.host.hideActor(actor);
+        } catch (cause) {
+          const error = hostError(
+            'K4-HOST-ACTOR-RESET-002',
+            `TurboWarp actor could not be hidden at the scene boundary: ${actorId}`,
+          );
+          Object.defineProperty(error, 'cause', {value: cause});
+          throw error;
+        }
+      }
+    };
     port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
@@ -812,6 +842,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {unknown} [options.runtime]
  * @param {unknown} [options.tmPoseRuntime]
  * @param {Function} [options.setLoading]
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  * @param {Function} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
  * @param {number} [options.cacheLeaseHeartbeatMs]
@@ -868,6 +900,12 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   }
   if (options.evaluateCondition !== undefined && typeof options.evaluateCondition !== 'function') {
     throw new TypeError('evaluateCondition must be a function');
+  }
+  if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (options.setCursor !== undefined && typeof options.setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
   }
   const cacheLeaseHeartbeatMs = options.cacheLeaseHeartbeatMs ?? defaultCacheLeaseHeartbeatMs;
   if (!Number.isSafeInteger(cacheLeaseHeartbeatMs) || cacheLeaseHeartbeatMs < 1) {

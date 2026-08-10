@@ -495,12 +495,16 @@ container／localeを検査せず、DOMを生成しません。shell disposeはr
 通知して一時状態を残しません。
 
 `navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
-`navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+`navigation.nextAction`で成立を迂回せず、`true`では現在の`waitForPose`だけをcancelし、cleanup後に同じ
+`Actor.pose` actionの次stepへ進みます。skipしたstepの成立soundは再生せず、最終stepのskipはactionを
+正常完了して次actionへ進みます。step skipでは`action.cancel`を発火しません。
 `false`で拒否されたkeymap入力はDOM eventを消費せず、`setSkin`やstep soundなどpose待機外の処理は
 従来どおりnavigation可能です。policy有効時の受理commandは同じ同期dispatch境界で処理し、historyと
 `navigation.nextAction`の混在連打でも到着順を変更しません。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
-起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
+`dsl4PoseFeedbackModes`のprogrammatic既定値はOFFのまま維持します。配布Standard 4.0 runtimeはこのflagを
+明示的にONにし、起動時にconsumerとmonitor境界を検証・初期化します。OFFの独自compositionでは
+sound-only動作を維持します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`の二値です。
 省略時は`mirrored`として従来の表示を維持します。scene固有の上書きは長形式sceneの

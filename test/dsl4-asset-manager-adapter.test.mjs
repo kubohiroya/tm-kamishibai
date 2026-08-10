@@ -116,6 +116,39 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   assert.equal(audio.mimeType, 'audio/wav');
 });
 
+test('passes bitmapResolution only for raster costume and backdrop registrations', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const costume = embeddedAsset('HighDensityCostume', 'costume', 'assets/hero.png');
+  costume.asset.bitmapResolution = 2;
+  await adapter.prepare(costume);
+  const svg = embeddedAsset('VectorBackdrop', 'backdrop', 'assets/ocean.svg');
+  svg.asset.bitmapResolution = 2;
+  await adapter.prepare(svg);
+  const jpeg = remoteAsset(
+    'RemoteBackdrop',
+    'backdrop',
+    'https://cdn.example.com/backdrop.jpg',
+    'image/jpeg',
+  );
+  jpeg.asset.bitmapResolution = 1;
+  await adapter.prepare(jpeg);
+
+  assert.equal(fake.calls.embedded[0].bitmapResolution, 2);
+  assert.equal(Object.hasOwn(fake.calls.embedded[1], 'bitmapResolution'), false);
+  assert.equal(fake.calls.embedded[2].bitmapResolution, 1);
+
+  const project = projectAsset('ProjectCostume', 'costume', 'hero', 'Hero');
+  project.asset.bitmapResolution = 2;
+  await adapter.prepare(project);
+  assert.equal(Object.hasOwn(fake.calls.project[0].locator, 'bitmapResolution'), false);
+
+  const invalid = embeddedAsset('InvalidResolution', 'costume', 'assets/hero.png');
+  invalid.asset.bitmapResolution = 3;
+  await assert.rejects(adapter.prepare(invalid), (error) => error.code === 'K4-ASSET-ADAPTER-001');
+  assert.equal(fake.calls.embedded.length, 3);
+});
+
 test('preserves literal DSL and Scratch names through structured project locators', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});

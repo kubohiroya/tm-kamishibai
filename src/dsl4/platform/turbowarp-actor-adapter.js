@@ -765,6 +765,13 @@ export function createDsl4TurboWarpActorPlatform(options) {
   }
 
   const host = Object.freeze({
+    /** @param {unknown} target */
+    hideActor(target) {
+      ensureActive();
+      const actor = validateActor(target);
+      actor.setVisible(false);
+    },
+
     /** @param {unknown} target @param {unknown} transform */
     showActor(target, transform) {
       const actor = validateActor(target);
@@ -776,12 +783,6 @@ export function createDsl4TurboWarpActorPlatform(options) {
       actor.setXY(x, y);
       actor.setSize(scale);
       actor.setVisible(true);
-    },
-
-    /** @param {unknown} target */
-    hideActor(target) {
-      ensureActive();
-      validateActor(target).setVisible(false);
     },
 
     /** @param {unknown} target @param {unknown} scale */

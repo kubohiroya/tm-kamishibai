@@ -426,7 +426,22 @@ test(
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-chromium-'));
-    const {server, url} = await startFixtureServer();
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-preview-bundle-'));
+    const fixtureHtml = await readFile(
+      path.join(repositoryRoot, 'test/fixtures/dsl4/web-preview-browser.html'),
+      'utf8',
+    );
+    const bundle = await buildDsl4TurboWarpBrowserBundle({
+      entryPoint: path.join(repositoryRoot, 'test/fixtures/dsl4/web-preview-browser.mjs'),
+    });
+    await Promise.all([
+      writeFile(
+        path.join(fixtureDirectory, 'index.html'),
+        fixtureHtml.replace('./web-preview-browser.mjs', './bundle.js'),
+      ),
+      writeFile(path.join(fixtureDirectory, 'bundle.js'), bundle),
+    ]);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
     const chrome = spawn(
       chromeExecutable,
       [
@@ -596,12 +611,20 @@ test(
       client?.close();
       await stopChrome(chrome);
       await new Promise((resolve) => server.close(resolve));
-      await rm(profileDirectory, {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 100,
-      });
+      await Promise.all([
+        rm(profileDirectory, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 100,
+        }),
+        rm(fixtureDirectory, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 100,
+        }),
+      ]);
     }
   },
 );
@@ -1091,7 +1114,7 @@ test(
 );
 
 test(
-  'runs the public preview command through runtime-ready and browser disconnect in real Chromium',
+  'runs the bundled public preview command through runtime-ready and browser disconnect in real Chromium',
   {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
@@ -1171,7 +1194,7 @@ test(
         sourceManifest: sourceManifestPath,
         sourceFrontend: createDsl4ProductionSourceFrontend(schema),
         controlProfile: 'production',
-        channel: 'unbundled',
+        channel: 'bundled',
         maxSourceBytes: 64 * 1024,
         maxAssetFileBytes: 1024 * 1024,
         maxAssetFiles: 64,

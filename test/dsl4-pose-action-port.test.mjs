@@ -148,7 +148,8 @@ function fakeTMPose(overrides = {}) {
 }
 
 function setup(overrides = {}) {
-  const pose = fakeTMPose();
+  const {tmpose: tmposeOverrides = {}, ...portOverrides} = overrides;
+  const pose = fakeTMPose(tmposeOverrides);
   const asyncInput = createAsyncInputComposition({poseSource: pose.composition});
   const clock = manualClock();
   const sounds = [];
@@ -164,7 +165,7 @@ function setup(overrides = {}) {
     },
     schedule: clock.schedule,
     now: clock.now,
-    ...overrides,
+    ...portOverrides,
   });
   return {pose, asyncInput, clock, sounds, port};
 }
@@ -201,6 +202,46 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
     ['play', 'Charge'],
     ['stop', 'Tick'],
   ]);
+});
+
+test('shows a non-authoritative camera busy indicator while recognition starts', async () => {
+  const busy = [];
+  const cursors = [];
+  const {pose, port} = setup({
+    setBusy(event) {
+      busy.push(event);
+    },
+    setCursor(event) {
+      cursors.push(event);
+    },
+  });
+  let releaseRecognition;
+  pose.composition.startRecognition = () =>
+    new Promise((resolve) => {
+      releaseRecognition = resolve;
+    });
+  const controller = new AbortController();
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  await flush();
+
+  assert.deepEqual(busy, [
+    {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+  ]);
+  releaseRecognition();
+  await flush();
+  assert.deepEqual(busy, [
+    {visible: true, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+    {visible: false, source: 'camera', label: 'Starting camera', cursor: 'wait'},
+  ]);
+  assert.deepEqual(cursors, [{visible: true, source: 'pose-sequence', cursor: 'progress'}]);
+
+  controller.abort();
+  await assert.rejects(pending, /cancelled/u);
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'pose-sequence', cursor: 'progress'},
+    {visible: false, source: 'pose-sequence', cursor: 'progress'},
+  ]);
+  await port.dispose();
 });
 
 test('publishes deterministic immutable state through completion without Scratch or DOM fields', async () => {
@@ -253,6 +294,65 @@ test('publishes a final cancelled state after action abort and releases its time
   assert.deepEqual(
     states.map(({phase}) => phase),
     ['waiting', 'cancelled'],
+  );
+});
+
+test('aborts during recognition startup and reuses the pending startup for the next step', async () => {
+  let finishStartup = () => {};
+  const startup = new Promise((resolve) => {
+    finishStartup = resolve;
+  });
+  const states = [];
+  let recognizing = false;
+  let startCalls = 0;
+  const {pose, clock, port} = setup({
+    tmpose: {
+      isRecognizing: () => recognizing,
+      async startRecognition() {
+        startCalls += 1;
+        await startup;
+        recognizing = true;
+      },
+    },
+    onPoseState: (event) => states.push(event),
+  });
+  pose.confidence.set('help', 1);
+
+  const firstController = new AbortController();
+  const first = port.waitForPose(sequencePayload(), actionContext(firstController));
+  await flush();
+  assert.equal(startCalls, 1);
+
+  firstController.abort('navigation.nextAction');
+  await assert.rejects(first, (error) => error.name === 'AbortError');
+  assert.deepEqual(
+    states.map(({phase, stepIndex}) => [phase, stepIndex]),
+    [
+      ['waiting', 0],
+      ['cancelled', 0],
+    ],
+  );
+
+  const second = port.waitForPose(sequencePayload({stepIndex: 1}), actionContext());
+  await flush();
+  assert.equal(startCalls, 1);
+  assert.equal(clock.size, 0);
+
+  finishStartup();
+  await flush();
+  assert.equal(clock.size, 1);
+  clock.advance(1000);
+  await second;
+  assert.equal(startCalls, 1);
+  assert.deepEqual(
+    states.map(({phase, stepIndex}) => [phase, stepIndex]),
+    [
+      ['waiting', 0],
+      ['cancelled', 0],
+      ['waiting', 1],
+      ['charging', 1],
+      ['completed', 1],
+    ],
   );
 });
 

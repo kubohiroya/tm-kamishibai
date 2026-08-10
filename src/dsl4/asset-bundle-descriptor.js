@@ -1,9 +1,11 @@
+import {fromByteArray, toByteArray} from 'base64-js';
+
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 
 const bundleKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const manifestKeys = new Set(['assets', 'formatVersion']);
-const assetKeys = new Set(['id', 'kind', 'loading', 'source', 'target']);
+const assetKeys = new Set(['bitmapResolution', 'id', 'kind', 'loading', 'source', 'target']);
 const projectSourceKeys = new Set(['name', 'type']);
 const fileSourceKeys = new Set(['files', 'inputPath', 'mode', 'type']);
 const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'url']);
@@ -11,7 +13,6 @@ const bareRemoteSourceKeys = new Set(['type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
 const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
-const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export const dsl4AssetBundleStoragePaths = deepFreeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets',
@@ -58,11 +59,24 @@ function exactKeys(value, keys, name) {
   }
 }
 
-/** @param {Record<string, unknown>} value @param {Set<string>} keys @param {string} name */
-function exactOptionalTargetKeys(value, keys, name) {
-  const expected = new Set(keys);
+/** @param {Record<string, unknown>} value @param {Readonly<Record<string, unknown>>} storyAsset @param {string} name */
+function exactAssetKeys(value, storyAsset, name) {
+  const expected = new Set(assetKeys);
   if (!Object.hasOwn(value, 'target')) expected.delete('target');
+  // Resolution 1 is the compatibility default for pre-metadata manifests. A high-density
+  // declaration is always explicit so that a tampered bundle cannot silently fall back to 1.
+  if (!Object.hasOwn(value, 'bitmapResolution') && storyAsset.bitmapResolution !== 2) {
+    expected.delete('bitmapResolution');
+  }
   exactKeys(value, expected, name);
+}
+
+/** @param {unknown} value @param {string} name */
+function bitmapResolution(value, name) {
+  if (value !== 1 && value !== 2) {
+    fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', `${name} must be 1 or 2`);
+  }
+  return /** @type {1 | 2} */ (value);
 }
 
 /** @param {Record<string, unknown>} value @param {string} name @param {boolean} allowBare */
@@ -118,40 +132,16 @@ function canonicalJson(value) {
 
 /** @param {Uint8Array} bytes */
 function encodeBase64(bytes) {
-  let result = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    const value = (first << 16) | ((second ?? 0) << 8) | (third ?? 0);
-    result += base64Alphabet[(value >>> 18) & 63];
-    result += base64Alphabet[(value >>> 12) & 63];
-    result += second === undefined ? '=' : base64Alphabet[(value >>> 6) & 63];
-    result += third === undefined ? '=' : base64Alphabet[value & 63];
-  }
-  return result;
+  return fromByteArray(bytes);
 }
 
 /** @param {string} value */
 function decodeBase64(value) {
-  if (
-    value.length % 4 !== 0 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
-  ) {
+  let bytes;
+  try {
+    bytes = toByteArray(value);
+  } catch {
     fail('K4-ASSET-BUNDLE-BASE64-001', 'Asset payload is not canonical base64');
-  }
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
-  const bytes = new Uint8Array((value.length / 4) * 3 - padding);
-  let output = 0;
-  for (let index = 0; index < value.length; index += 4) {
-    const first = base64Alphabet.indexOf(value[index]);
-    const second = base64Alphabet.indexOf(value[index + 1]);
-    const third = value[index + 2] === '=' ? 0 : base64Alphabet.indexOf(value[index + 2]);
-    const fourth = value[index + 3] === '=' ? 0 : base64Alphabet.indexOf(value[index + 3]);
-    const combined = (first << 18) | (second << 12) | (third << 6) | fourth;
-    if (output < bytes.length) bytes[output++] = (combined >>> 16) & 0xff;
-    if (output < bytes.length) bytes[output++] = (combined >>> 8) & 0xff;
-    if (output < bytes.length) bytes[output++] = combined & 0xff;
   }
   if (encodeBase64(bytes) !== value) {
     fail('K4-ASSET-BUNDLE-BASE64-001', 'Asset payload is not canonical base64');
@@ -188,18 +178,33 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
       if (!isRecord(candidate)) {
         fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', `manifest.assets[${index}] must be an object`);
       }
-      exactOptionalTargetKeys(candidate, assetKeys, `manifest.assets[${index}]`);
       const id = nonEmptyString(candidate.id, `manifest.assets[${index}].id`);
       if (seenIds.has(id)) fail('K4-ASSET-BUNDLE-DUPLICATE-001', `Duplicate asset ID: ${id}`);
       seenIds.add(id);
       const storyAsset = storyAssets[id];
       if (!storyAsset) fail('K4-ASSET-BUNDLE-MANIFEST-001', `Unknown asset in bundle: ${id}`);
+      exactAssetKeys(candidate, storyAsset, `manifest.assets[${index}]`);
+      const storyResolution =
+        storyAsset.kind === 'backdrop' || storyAsset.kind === 'costume'
+          ? bitmapResolution(
+              storyAsset.bitmapResolution ?? 1,
+              `StoryDocument asset ${id}.bitmapResolution`,
+            )
+          : undefined;
+      const candidateResolution = Object.hasOwn(candidate, 'bitmapResolution')
+        ? bitmapResolution(candidate.bitmapResolution, `manifest.assets[${index}].bitmapResolution`)
+        : undefined;
       if (
         !assetKinds.has(String(candidate.kind)) ||
         candidate.kind !== storyAsset.kind ||
         candidate.loading !== storyAsset.loading ||
         Object.hasOwn(candidate, 'target') !== (storyAsset.target !== undefined) ||
-        candidate.target !== storyAsset.target
+        candidate.target !== storyAsset.target ||
+        (storyResolution !== undefined &&
+          (candidateResolution === undefined
+            ? storyResolution !== 1
+            : candidateResolution !== storyResolution)) ||
+        (storyResolution === undefined && candidateResolution !== undefined)
       ) {
         fail('K4-ASSET-BUNDLE-MANIFEST-001', `Asset metadata does not match StoryDocument: ${id}`);
       }
