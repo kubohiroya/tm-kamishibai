@@ -2,6 +2,7 @@ import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
+import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 
 const extensionId = 'kubohiroyakamishibairuntime4';
@@ -128,7 +129,9 @@ class KamishibaiDsl4RuntimeExtension {
         sourceFrontend: this.frontend,
         ...limits,
         runtime: Scratch.vm.runtime,
-        tmPoseRuntime: globalThis.tmPose ?? fallbackTMPoseRuntime(),
+        tmPoseRuntime: globalThis.tmPose
+          ? createDsl4BundledTMPoseRuntime({runtime: globalThis.tmPose, globalObject: globalThis})
+          : fallbackTMPoseRuntime(),
         setLoading() {},
         loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,

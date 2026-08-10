@@ -4,6 +4,7 @@ import {Buffer} from 'buffer';
 
 import {createDsl4LocalPreviewBrowserBootstrap} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
+import {createDsl4BundledTMPoseRuntime} from '../dsl4/platform/posenet-bundle.js';
 
 /** @type {Record<string, any>} */ (globalThis).Buffer ??= Buffer;
 
@@ -15,7 +16,7 @@ function resolveTMPoseRuntime() {
     typeof candidate.Webcam === 'function' &&
     typeof candidate.loadFromFiles === 'function'
   ) {
-    return candidate;
+    return createDsl4BundledTMPoseRuntime({runtime: candidate, globalObject: globalThis});
   }
   return Object.freeze({
     Webcam: class MissingTMPoseWebcam {},
