@@ -156,10 +156,14 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     'Runtime Expression',
     'SVG Text',
     'TMPose',
+    'Teachable Machine Pose',
+    'TensorFlow.js',
     'PoseNet MobileNetV1 model',
   ]) {
     assert.match(extensionSource, new RegExp(title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
   }
+  assert.match(extensionSource, /@tensorflow\/tfjs Copyright 2019 Google/u);
+  assert.match(extensionSource, /var tmPose=/u);
   const runtimeStorage = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
   assert.equal(runtimeStorage.source.text.includes("kamishibai: '4.0'"), true);
   assert.equal(runtimeStorage.artifact.controlProfile, 'production');

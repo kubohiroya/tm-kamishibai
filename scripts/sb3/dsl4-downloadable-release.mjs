@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -18,6 +19,10 @@ import {
 } from '../../src/dsl4/runtime-provenance.js';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+const require = createRequire(import.meta.url);
+const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
+const tmPoseBrowserRuntimePath =
+  require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
@@ -457,12 +462,21 @@ async function createProject(assets) {
 }
 
 async function createRuntimeExtensionSource() {
+  const [tensorflowBrowserRuntime, tmPoseBrowserRuntime] = await Promise.all([
+    readFile(tensorflowBrowserRuntimePath, 'utf8'),
+    readFile(tmPoseBrowserRuntimePath, 'utf8'),
+  ]);
   const result = await build({
     entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
     bundle: true,
     charset: 'utf8',
     format: 'iife',
-    banner: {js: formatDsl4RuntimeExtensionHeader()},
+    banner: {
+      js:
+        `${formatDsl4RuntimeExtensionHeader()}\n` +
+        `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
+        `}).call(globalThis);\n${tmPoseBrowserRuntime}\n`,
+    },
     legalComments: 'eof',
     logLevel: 'silent',
     minify: true,

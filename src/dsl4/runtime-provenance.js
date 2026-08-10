@@ -56,6 +56,20 @@ export const dsl4RuntimeProvenance = Object.freeze([
     license: 'MPL-2.0',
   },
   {
+    title: 'Teachable Machine Pose',
+    source: '@teachablemachine/pose',
+    version: '0.8.3',
+    copyright: 'Google LLC',
+    license: 'Apache-2.0',
+  },
+  {
+    title: 'TensorFlow.js',
+    source: '@tensorflow/tfjs',
+    version: '1.3.1',
+    copyright: 'Google LLC',
+    license: 'Apache-2.0',
+  },
+  {
     title: 'PoseNet MobileNetV1 model',
     source: '@tensorflow-models/posenet',
     version: '2.2.2',

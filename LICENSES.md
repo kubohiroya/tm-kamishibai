@@ -21,30 +21,33 @@ Copyright © 2026 Hiroya Kubo.
 次の一覧は`package.json`と`pnpm-lock.yaml`で完全固定している直接依存です。各packageに同梱された
 license表示とsource repositoryを正本とします。
 
-| package                                  | version／revision | license      | source repository                         |
-| ---------------------------------------- | ----------------- | ------------ | ----------------------------------------- |
-| @kubohiroya/turbowarp-asset-manager      | 0.8.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`      |
-| @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`        |
-| @kubohiroya/turbowarp-bubble             | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`             |
-| @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression` |
-| @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`           |
-| @kubohiroya/turbowarp-tmpose             | 1.6.1             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`             |
-| @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`               |
-| @turbowarp/scratch-svg-renderer          | 1.1.0             | MPL-2.0      | `TurboWarp/scratch-svg-renderer`          |
-| base64-js                                | 1.5.1             | MIT          | `beatgammit/base64-js`                    |
-| brfs                                     | 1.6.1             | MIT          | `browserify/brfs`                         |
-| esbuild                                  | 0.28.1            | MIT          | `evanw/esbuild`                           |
-| fflate                                   | 0.8.3             | MIT          | `101arrowz/fflate`                        |
-| scratch-audio                            | `aba00cd`         | BSD-3-Clause | `TurboWarp/scratch-audio`                 |
-| scratch-render                           | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                |
-| scratch-vm                               | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                    |
-| yaml                                     | 2.8.1             | ISC          | `eemeli/yaml`                             |
+| package                                  | version／revision | license      | source repository                              |
+| ---------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
+| @kubohiroya/turbowarp-asset-manager      | 0.8.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`           |
+| @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
+| @kubohiroya/turbowarp-bubble             | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
+| @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
+| @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
+| @kubohiroya/turbowarp-tmpose             | 1.6.1             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
+| @teachablemachine/pose                   | 0.8.3             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
+| @tensorflow/tfjs                         | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
+| @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
+| @turbowarp/scratch-svg-renderer          | 1.1.0             | MPL-2.0      | `TurboWarp/scratch-svg-renderer`               |
+| base64-js                                | 1.5.1             | MIT          | `beatgammit/base64-js`                         |
+| brfs                                     | 1.6.1             | MIT          | `browserify/brfs`                              |
+| esbuild                                  | 0.28.1            | MIT          | `evanw/esbuild`                                |
+| fflate                                   | 0.8.3             | MIT          | `101arrowz/fflate`                             |
+| scratch-audio                            | `aba00cd`         | BSD-3-Clause | `TurboWarp/scratch-audio`                      |
+| scratch-render                           | `a67f7c9`         | MPL-2.0      | `TurboWarp/scratch-render`                     |
+| scratch-vm                               | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                         |
+| yaml                                     | 2.8.1             | ISC          | `eemeli/yaml`                                  |
 
-## DSL 4.0 bundled PoseNet supply
+## DSL 4.0 bundled pose runtime and PoseNet supply
 
-The DSL 4.0 runtime embeds the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
-`tensorflow/tfjs-models` v2.2.2. The model JSON and weight shards are Apache-2.0 material; the
-manifest records their upstream URL and SHA-256 values in
+The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.3 browser runtime, including
+its TensorFlow.js 1.3.1 runtime, instead of loading either library from a CDN. It also embeds the
+PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by `tensorflow/tfjs-models` v2.2.2. The
+model JSON and weight shards are Apache-2.0 material; the manifest records their upstream URL and SHA-256 values in
 [`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js).
 
 ## DSL 3.2 compatibility extension

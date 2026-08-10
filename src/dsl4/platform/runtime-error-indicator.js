@@ -129,10 +129,12 @@ export function createDsl4RuntimeErrorIndicator(options) {
 
   return Object.freeze({
     element: root,
-    /** @param {{message: unknown, code?: unknown}} diagnostic */
+    /** @param {{message: unknown, code?: unknown, title?: unknown}} diagnostic */
     show(diagnostic) {
       if (disposed) throw new TypeError('Runtime error indicator is disposed');
       if (!isRecord(diagnostic)) throw new TypeError('diagnostic must be an object');
+      const renderedTitle = boundedText(diagnostic.title);
+      heading.textContent = renderedTitle.length > 0 ? renderedTitle : locales[locale].title;
       const renderedMessage = boundedText(diagnostic.message);
       message.textContent = renderedMessage.length > 0 ? renderedMessage : locales[locale].title;
       const renderedCode = boundedText(diagnostic.code);

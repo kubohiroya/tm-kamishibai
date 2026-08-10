@@ -8,7 +8,7 @@ import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-s
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
-/* global Scratch */
+/* global Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
 const extensionVersion = '4.0.0-dev';
@@ -17,6 +17,32 @@ const limits = Object.freeze({
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
+const runtimeErrorTitles = Object.freeze({
+  en: 'Kamishibai runtime error',
+  ja: '紙芝居の実行エラー',
+});
+const sourceDiagnosticPrefixes = Object.freeze([
+  'K4-ACTION-LIMIT',
+  'K4-ASSET-001',
+  'K4-ASSET-IMAGE-MIME',
+  'K4-ASSET-LIMIT',
+  'K4-ASSET-REMOTE-URL',
+  'K4-BRANCH',
+  'K4-COMMAND',
+  'K4-EXPRESSION',
+  'K4-ID',
+  'K4-INCLUDE',
+  'K4-KEY',
+  'K4-POSE-MODEL',
+  'K4-REF',
+  'K4-SCENE-LIMIT',
+  'K4-SCHEMA',
+  'K4-SOURCE',
+  'K4-SPEECH-STYLE',
+  'K4-STABLE-ID',
+  'K4-VERSION',
+  'K4-YAML',
+]);
 
 /** @param {any} Scratch */
 function resolveRuntimeMount(Scratch) {
@@ -26,13 +52,22 @@ function resolveRuntimeMount(Scratch) {
   return globalThis.document?.body;
 }
 
-function fallbackTMPoseRuntime() {
-  return Object.freeze({
-    Webcam: class {},
-    async loadFromFiles() {
-      throw new Error('This story requires the Teachable Machine Pose runtime.');
-    },
-  });
+function resolveBundledTMPoseRuntime() {
+  const runtime = typeof tmPose === 'object' && tmPose !== null ? tmPose : globalThis.tmPose;
+  if (
+    typeof runtime !== 'object' ||
+    runtime === null ||
+    typeof runtime.Webcam !== 'function' ||
+    typeof runtime.loadFromFiles !== 'function'
+  ) {
+    throw new Error('The bundled Teachable Machine Pose runtime is unavailable.');
+  }
+  return runtime;
+}
+
+/** @param {string} code */
+function isSourceDiagnostic(code) {
+  return sourceDiagnosticPrefixes.some((prefix) => code.startsWith(prefix));
 }
 
 class KamishibaiDsl4RuntimeExtension {
@@ -179,6 +214,10 @@ class KamishibaiDsl4RuntimeExtension {
   showFailure(failure) {
     const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failure?.code === 'string' ? failure.code : '';
+    const locale = /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+    const title = isSourceDiagnostic(code)
+      ? appShellLocales[locale].ui.invalidScript
+      : runtimeErrorTitles[locale];
     this.status = 'error';
     this.lastError = message;
     this.shell?.hideTitle?.();
@@ -194,7 +233,7 @@ class KamishibaiDsl4RuntimeExtension {
           ja: {title: appShellLocales.ja.ui.invalidScript},
         },
       });
-      this.errorIndicator.show({message, code});
+      this.errorIndicator.show({message, code, title});
     } catch (indicatorError) {
       console.error('Kamishibai DSL 4.0 error indicator failed.', indicatorError);
     }
@@ -288,9 +327,10 @@ class KamishibaiDsl4RuntimeExtension {
         createHostPort: async () => ({
           transition: async () => {},
         }),
-        tmPoseRuntime: globalThis.tmPose
-          ? createDsl4BundledTMPoseRuntime({runtime: globalThis.tmPose, globalObject: globalThis})
-          : fallbackTMPoseRuntime(),
+        tmPoseRuntime: createDsl4BundledTMPoseRuntime({
+          runtime: resolveBundledTMPoseRuntime(),
+          globalObject: globalThis,
+        }),
         setLoading() {},
         loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,

@@ -40,6 +40,14 @@ test('shows a localized fatal diagnostic inside the supplied Scratch stage mount
     assert.equal(root.children[0].children[2].textContent, 'K4-HOST-PORT-MISSING');
     assert.equal(root.children[0].children[2].style.display, 'inline-block');
 
+    indicator.show({
+      title: '紙芝居の実行エラー',
+      message: 'The camera runtime is unavailable.',
+    });
+    assert.equal(root.children[0].children[0].textContent, '紙芝居の実行エラー');
+    assert.equal(root.children[0].children[1].textContent, 'The camera runtime is unavailable.');
+    assert.equal(root.children[0].children[2].style.display, 'none');
+
     indicator.hide();
     assert.equal(root.style.display, 'none');
     indicator.dispose();
