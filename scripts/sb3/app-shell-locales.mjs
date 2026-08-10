@@ -50,6 +50,7 @@ export const appShellLocales = Object.freeze({
     }),
     ui: Object.freeze({
       about: 'About',
+      close: 'Close',
       invalidScript: 'Invalid script',
       language: 'Language',
       open: 'Open',
@@ -71,6 +72,7 @@ export const appShellLocales = Object.freeze({
     }),
     ui: Object.freeze({
       about: 'アプリ情報',
+      close: '閉じる',
       invalidScript: 'エラー：不正な台本ファイル',
       language: '言語',
       open: 'ファイルを開く',
@@ -109,6 +111,8 @@ export const appShellProjectPlaceholders = Object.freeze({
   '{{LANGUAGE_NAME_JA_SELECTED}}': appShellSelectedLanguageNames.ja,
   '{{UI_ABOUT_EN}}': appShellLocales.en.ui.about,
   '{{UI_ABOUT_JA}}': appShellLocales.ja.ui.about,
+  '{{UI_CLOSE_EN}}': appShellLocales.en.ui.close,
+  '{{UI_CLOSE_JA}}': appShellLocales.ja.ui.close,
   '{{UI_INVALID_SCRIPT_EN}}': appShellLocales.en.ui.invalidScript,
   '{{UI_INVALID_SCRIPT_JA}}': appShellLocales.ja.ui.invalidScript,
   '{{UI_LANGUAGE_EN}}': appShellLocales.en.ui.language,

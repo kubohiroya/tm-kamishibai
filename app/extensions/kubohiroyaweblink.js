@@ -20,6 +20,7 @@
             opcode: 'openUrl',
             blockType: Scratch.BlockType.COMMAND,
             text: 'open [URL] in a new tab',
+            hideFromPalette: true,
             arguments: {
               URL: {
                 type: Scratch.ArgumentType.STRING,

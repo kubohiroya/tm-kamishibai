@@ -19,15 +19,20 @@ const opcodes = (manifest) => manifest.blocks.map((definition) => definition.opc
 
 test('freezes the #265 Standard author and template-internal palette boundary', () => {
   assert.equal(contract.formatVersion, 1);
-  assert.equal(contract.standardRuntime.extensionId, 'kubohiroyakamishibairuntime4');
+  assert.equal(contract.standardRuntime.extensionId, 'kubohiroyakamishibai4');
+  assert.equal(contract.standardRuntime.runtimeComponentId, 'kubohiroyakamishibairuntime4');
   assert.deepEqual(contract.standardRuntime.visibleOpcodes, []);
   assert.deepEqual(contract.standardRuntime.hiddenOpcodes, [
     'versionReporter',
     'statusReporter',
     'lastErrorReporter',
     'setTextValue',
+    'showTitle',
+    'closeTitle',
+    'openOfficialWebsite',
+    'toggleTitleLanguage',
   ]);
-  assert.equal(new Set(contract.standardRuntime.hiddenOpcodes).size, 4);
+  assert.equal(new Set(contract.standardRuntime.hiddenOpcodes).size, 8);
 });
 
 test('specifies the app shell as a startup-fixed default-off implementation flag', () => {

@@ -272,7 +272,7 @@ pnpm install
 新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
-`pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
+`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.6.0`を使用します。
 CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として

@@ -3,18 +3,21 @@ import test from 'node:test';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
 
-function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) {
+function fakeActor({id = 'hero-target', actorName = 'Hero', name, x = 0, y = 0} = {}) {
   const calls = [];
   return {
     calls,
     target: {
       id,
+      ...(name === undefined ? {} : {name}),
       isStage: false,
       x,
       y,
       lookupVariableByNameAndType(name, type) {
         calls.push(['lookupVariableByNameAndType', name, type]);
-        return name === 'actorName' && type === '' ? {value: actorName} : undefined;
+        return name === 'actorName' && type === '' && actorName !== null
+          ? {value: actorName}
+          : undefined;
       },
       setXY(nextX, nextY) {
         calls.push(['setXY', nextX, nextY]);
@@ -115,6 +118,14 @@ test('resolves one actorName target and applies show transform and visibility', 
     ['setSize', 30],
     ['setVisible', true],
   ]);
+});
+
+test('resolves a standalone DSL 4.0 actor by its project target name', () => {
+  const hero = fakeActor({actorName: null, name: 'Hero'});
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  assert.equal(platform.resolveActor('Hero'), hero.target);
 });
 
 test('hides one resolved actor at a scene boundary', () => {

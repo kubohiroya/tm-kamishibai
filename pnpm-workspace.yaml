@@ -2,12 +2,12 @@ packages:
   - .
 
 allowBuilds:
-  '@kubohiroya/sb3-toolchain@https://codeload.github.com/kubohiroya/sb3-toolchain/tar.gz/b3f4b9aa3ed3ede363700be815fe522f6a47df0b': true
   es5-ext: false
   esbuild: true
   fsevents: false
 
 minimumReleaseAgeExclude:
+  - '@kubohiroya/sb3-toolchain@0.6.0'
   - '@kubohiroya/turbowarp-async-input@0.3.0'
   - '@kubohiroya/turbowarp-asset-manager@0.8.0'
   - '@kubohiroya/turbowarp-bubble@0.4.0'

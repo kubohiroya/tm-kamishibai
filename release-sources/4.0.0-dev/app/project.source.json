@@ -14,10 +14,12 @@
         ]
       },
       "lists": {},
-      "broadcasts": {},
+      "broadcasts": {
+        "closeTitleMessage": "closeTitle"
+      },
       "blocks": {
         "titleSetVersion": {
-          "opcode": "kubohiroyakamishibairuntime4_setTextValue",
+          "opcode": "kubohiroyakamishibai4_setTextValue",
           "next": null,
           "parent": null,
           "inputs": {
@@ -41,26 +43,80 @@
           "topLevel": true,
           "x": 0,
           "y": 0
+        },
+        "titleStageClick": {
+          "opcode": "event_whenstageclicked",
+          "next": "titleStageClickClose",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 120
+        },
+        "titleStageClickClose": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleStageClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleCloseHat": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleCloseStart",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "closeTitle",
+              "closeTitleMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 240
+        },
+        "titleCloseStart": {
+          "opcode": "kubohiroyakamishibai4_closeTitle",
+          "next": null,
+          "parent": "titleCloseHat",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
         {
-          "assetId": "73cf5ffc7974bb88be15795241beac25",
+          "assetId": "e37ddc2ce796bdd7f4409cc75d606162",
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "73cf5ffc7974bb88be15795241beac25.svg",
+          "md5ext": "e37ddc2ce796bdd7f4409cc75d606162.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "51276950e8742c503b80c8cafe055190",
+          "assetId": "53ae4de655a01a7e40532ec2191e8130",
           "name": "TitleRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "51276950e8742c503b80c8cafe055190.svg",
+          "md5ext": "53ae4de655a01a7e40532ec2191e8130.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         }
@@ -79,7 +135,48 @@
       "variables": {},
       "lists": {},
       "broadcasts": {},
-      "blocks": {},
+      "blocks": {
+        "officialWebsiteFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "officialWebsiteFlagShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "officialWebsiteFlagShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "officialWebsiteFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "officialWebsiteClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "officialWebsiteOpen",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "officialWebsiteOpen": {
+          "opcode": "kubohiroyakamishibai4_openOfficialWebsite",
+          "next": null,
+          "parent": "officialWebsiteClick",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
@@ -105,9 +202,90 @@
       "sounds": [],
       "volume": 100,
       "layerOrder": 1,
-      "visible": false,
+      "visible": true,
       "x": 0,
-      "y": 0,
+      "y": 40,
+      "size": 100,
+      "direction": 90,
+      "draggable": false,
+      "rotationStyle": "all around"
+    },
+    {
+      "isStage": false,
+      "name": "closeTitleButton",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "closeTitleFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "closeTitleFlagShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 40
+        },
+        "closeTitleFlagShow": {
+          "opcode": "looks_show",
+          "next": null,
+          "parent": "closeTitleFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "closeTitleClick": {
+          "opcode": "event_whenthisspriteclicked",
+          "next": "closeTitleBroadcast",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 40,
+          "y": 160
+        },
+        "closeTitleBroadcast": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "closeTitleClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "assetId": "ae88f8d94b468addbf3ea689cf162511",
+          "name": "title-close-button",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "ae88f8d94b468addbf3ea689cf162511.svg",
+          "rotationCenterX": 16,
+          "rotationCenterY": 16
+        }
+      ],
+      "sounds": [],
+      "volume": 100,
+      "layerOrder": 2,
+      "visible": true,
+      "x": 220,
+      "y": 160,
       "size": 100,
       "direction": 90,
       "draggable": false,
@@ -153,42 +331,46 @@
     }
   ],
   "extensions": [
-    "kubohiroyakamishibairuntime4"
+    "kubohiroyakamishibai4"
   ],
   "extensionURLs": {
-    "kubohiroyakamishibairuntime4": "embedded-extension:extensions/kubohiroyakamishibairuntime4.js"
+    "kubohiroyakamishibai4": "embedded-extension:extensions/kubohiroyakamishibai4.js"
   },
   "extensionStorage": {
-    "kubohiroyakamishibairuntime4": {
-      "source": {
-        "formatVersion": 1,
-        "mode": "embedded",
-        "sourceId": "main",
-        "displayName": "story.kamishibai.yaml",
-        "mediaType": "application/yaml",
-        "encoding": "utf-8",
-        "byteLength": 123,
-        "integrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
-        "text": "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 0\n"
-      },
-      "artifact": {
-        "formatVersion": 1,
-        "sourceIntegrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
-        "controlProfile": "production",
-        "resolvedKeymap": {
-          "Space": "navigation.nextAction"
-        },
-        "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
-        "historyNavigationEnabled": false
-      },
-      "assets": {
-        "formatVersion": 1,
-        "manifest": {
-          "formatVersion": 1,
-          "assets": []
-        },
-        "files": [],
-        "integrity": "sha256-R3aRODkmOs97zX1b31v33yudY+C5gYxKiryx/XRGmic="
+    "kubohiroyakamishibai4": {
+      "components": {
+        "kubohiroyakamishibairuntime4": {
+          "source": {
+            "formatVersion": 1,
+            "mode": "embedded",
+            "sourceId": "main",
+            "displayName": "story.kamishibai.yaml",
+            "mediaType": "application/yaml",
+            "encoding": "utf-8",
+            "byteLength": 123,
+            "integrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+            "text": "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 0\n"
+          },
+          "artifact": {
+            "formatVersion": 1,
+            "sourceIntegrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+            "controlProfile": "production",
+            "resolvedKeymap": {
+              "Space": "navigation.nextAction"
+            },
+            "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
+            "historyNavigationEnabled": false
+          },
+          "assets": {
+            "formatVersion": 1,
+            "manifest": {
+              "formatVersion": 1,
+              "assets": []
+            },
+            "files": [],
+            "integrity": "sha256-R3aRODkmOs97zX1b31v33yudY+C5gYxKiryx/XRGmic="
+          }
+        }
       }
     }
   },

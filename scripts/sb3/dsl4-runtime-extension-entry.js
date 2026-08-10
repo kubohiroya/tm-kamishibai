@@ -4,14 +4,26 @@ import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
+import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
+import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
-const extensionId = 'kubohiroyakamishibairuntime4';
+/* global Scratch */
+
+const extensionId = 'kubohiroyakamishibai4';
 const extensionVersion = '4.0.0-dev';
 const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
+
+/** @param {any} Scratch */
+function resolveRuntimeMount(Scratch) {
+  const canvas = Scratch?.vm?.renderer?.canvas;
+  const parent = canvas?.parentElement ?? canvas?.parentNode;
+  if (parent && typeof parent.appendChild === 'function') return parent;
+  return globalThis.document?.body;
+}
 
 function fallbackTMPoseRuntime() {
   return Object.freeze({
@@ -27,12 +39,13 @@ class KamishibaiDsl4RuntimeExtension {
     this.Scratch = Scratch;
     this.frontend = createDsl4ProductionSourceFrontend(schema);
     this.shell = null;
+    this.pendingStart = null;
     this.operation = Promise.resolve();
     this.status = 'ready';
     this.lastError = '';
 
     const runtime = Scratch.vm.runtime;
-    runtime.on('PROJECT_RUN_STOP', () => this.enqueue(() => this.stop('project-stop')));
+    runtime.on('PROJECT_STOP_ALL', () => this.enqueue(() => this.stop('project-stop-all')));
     runtime.on('PROJECT_START', () => this.enqueue(() => this.restart()));
   }
 
@@ -41,6 +54,17 @@ class KamishibaiDsl4RuntimeExtension {
     return {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
+      description:
+        'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
+      docsURI: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+      creator: 'Hiroya Kubo',
+      license: 'MPL-2.0',
+      credits: dsl4RuntimeProvenance
+        .map(
+          (component) =>
+            `${component.title} — ${component.copyright} — ${component.license} (${component.source}@${component.version})`,
+        )
+        .join('\n'),
       blocks: [
         {
           opcode: 'versionReporter',
@@ -73,6 +97,30 @@ class KamishibaiDsl4RuntimeExtension {
           },
           hideFromPalette: true,
         },
+        {
+          opcode: 'showTitle',
+          blockType: BlockType.COMMAND,
+          text: 'show title screen',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'closeTitle',
+          blockType: BlockType.COMMAND,
+          text: 'close title screen',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'openOfficialWebsite',
+          blockType: BlockType.COMMAND,
+          text: 'open official website',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'toggleTitleLanguage',
+          blockType: BlockType.COMMAND,
+          text: 'toggle title language',
+          hideFromPalette: true,
+        },
       ],
     };
   }
@@ -91,6 +139,34 @@ class KamishibaiDsl4RuntimeExtension {
 
   setTextValue() {}
 
+  showTitle() {
+    this.shell?.showTitle?.();
+  }
+
+  closeTitle() {
+    const pendingStart = this.pendingStart;
+    if (!pendingStart || pendingStart.shell !== this.shell) {
+      this.shell?.hideTitle?.();
+      return undefined;
+    }
+    return pendingStart.start();
+  }
+
+  openOfficialWebsite() {
+    if (this.shell?.titleElement) {
+      this.shell.openOfficialWebsite();
+      return;
+    }
+    const opener = globalThis.open;
+    if (typeof opener === 'function') {
+      opener(appShellCommon.about.officialWebsite.url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  toggleTitleLanguage() {
+    this.shell?.toggleTitleLanguage?.();
+  }
+
   enqueue(operation) {
     this.operation = this.operation.then(operation, operation).catch((error) => {
       this.status = 'error';
@@ -101,10 +177,11 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   async stop(reason) {
+    this.pendingStart = null;
     const shell = this.shell;
     this.shell = null;
     if (shell) await shell.dispose(reason);
-    if (this.status === 'running' || this.status === 'starting') this.status = 'stopped';
+    if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
 
   async restart() {
@@ -115,7 +192,37 @@ class KamishibaiDsl4RuntimeExtension {
     const Scratch = this.Scratch;
     const project = JSON.parse(Scratch.vm.toJSON());
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
-    const shell = await createDsl4StandardAppShell({
+    let shell;
+    let started = false;
+    const startRuntime = async () => {
+      if (started || this.shell !== shell) return;
+      started = true;
+      this.pendingStart = null;
+      shell.hideTitle();
+      for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
+        const target = Scratch.vm.runtime.getSpriteTargetByName(name);
+        target?.setVisible?.(false);
+      }
+      this.status = 'running';
+      try {
+        const result = await shell.runtimeHost.start();
+        if (this.shell !== shell) return;
+        if (result.status === 'failed') {
+          this.status = 'error';
+          this.lastError =
+            typeof result.diagnostic?.message === 'string'
+              ? result.diagnostic.message
+              : 'DSL 4.0 story execution failed.';
+          return;
+        }
+        this.status = result.status;
+      } catch (error) {
+        if (this.shell !== shell) return;
+        this.status = 'error';
+        this.lastError = String(error?.message ?? error);
+      }
+    };
+    shell = await createDsl4StandardAppShell({
       featureFlags: {
         dsl4Runtime: true,
         dsl4AppShell: true,
@@ -123,12 +230,41 @@ class KamishibaiDsl4RuntimeExtension {
       },
       surface: 'regularEditor',
       document: globalThis.document,
-      mount: globalThis.document?.body,
+      mount: resolveRuntimeMount(Scratch),
+      // The title overlay is created hidden until its click gate releases the runtime.
+      title: {
+        version: extensionVersion,
+        officialWebsiteUrl: appShellCommon.about.officialWebsite.url,
+        locales: {
+          en: {
+            title: appShellLocales.en.about.title,
+            officialWebsite: appShellLocales.en.about.officialWebsite.name,
+            close: appShellLocales.en.ui.close,
+            language: '日本語',
+          },
+          ja: {
+            title: appShellLocales.ja.about.title,
+            officialWebsite: appShellLocales.ja.about.officialWebsite.name,
+            close: appShellLocales.ja.ui.close,
+            language: 'English',
+          },
+        },
+      },
       runtimeHostOptions: {
         project,
         sourceFrontend: this.frontend,
         ...limits,
         runtime: Scratch.vm.runtime,
+        onTitleStart() {
+          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            BROADCAST_OPTION: 'closeTitle',
+          });
+        },
+        // The packaged Scratch surface has no separate transition renderer yet. Keep the
+        // transition command consumable so a valid DSL 4.0 story can still start and run.
+        createHostPort: async () => ({
+          transition: async () => {},
+        }),
         tmPoseRuntime: globalThis.tmPose
           ? createDsl4BundledTMPoseRuntime({runtime: globalThis.tmPose, globalObject: globalThis})
           : fallbackTMPoseRuntime(),
@@ -143,13 +279,20 @@ class KamishibaiDsl4RuntimeExtension {
     }
 
     this.shell = shell;
-    this.status = 'running';
-    const result = await shell.runtimeHost.start();
-    if (this.shell === shell) this.status = result.status;
+    if (shell.element) {
+      for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
+        const target = Scratch.vm.runtime.getSpriteTargetByName(name);
+        target?.setVisible?.(false);
+      }
+    }
+    this.pendingStart = {shell, start: startRuntime};
+    this.status = 'title';
+    if (shell.titleElement) {
+      shell.showTitle();
+    }
   }
 }
 
-const Scratch = globalThis.Scratch;
 if (!Scratch?.extensions?.unsandboxed) {
   throw new Error('Kamishibai DSL 4.0 Runtime must run unsandboxed.');
 }

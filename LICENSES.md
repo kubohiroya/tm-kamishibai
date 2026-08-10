@@ -46,3 +46,13 @@ The DSL 4.0 runtime embeds the PoseNet MobileNetV1 0.75 / stride16 checkpoint su
 `tensorflow/tfjs-models` v2.2.2. The model JSON and weight shards are Apache-2.0 material; the
 manifest records their upstream URL and SHA-256 values in
 [`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js).
+
+## DSL 3.2 compatibility extension
+
+The offline project source includes the TurboWarp Text extension under its legacy
+`strings` ID so that older projects do not depend on a network extension URL. Its
+original source notice is retained in [`app/extensions/strings.js`](app/extensions/strings.js).
+
+| title | copyright                           | license         | source                                                                         |
+| ----- | ----------------------------------- | --------------- | ------------------------------------------------------------------------------ |
+| Text  | CST1229, BludIsAnLemon, Man-o-Valor | MIT AND MPL-2.0 | [`extensions.turbowarp.org/text.js`](https://extensions.turbowarp.org/text.js) |

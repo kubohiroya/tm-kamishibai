@@ -92,7 +92,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "github:kubohiroya/sb3-toolchain#b3f4b9aa3ed3ede363700be815fe522f6a47df0b",
+    "@kubohiroya/sb3-toolchain": "0.6.0",
     "@types/node": "^26.1.2",
     "ajv": "8.20.0",
     "eslint": "^10.8.0",
