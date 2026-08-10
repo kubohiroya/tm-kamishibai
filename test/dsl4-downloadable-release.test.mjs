@@ -113,7 +113,21 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   const titleSvg = strFromU8(archive[title.md5ext]);
   assert.match(titleSvg, />Participatory AI Kamishibai</u);
   assert.doesNotMatch(titleSvg, /Kamishibai DSL 4\.0/u);
-  assert.equal(project.targets.find(({name}) => name === 'officialWebsiteButton')?.visible, true);
+  const localizedTitle = stage.costumes.find(({name}) => name === 'TitleRuntime');
+  const localizedTitleSvg = strFromU8(archive[localizedTitle.md5ext]);
+  assert.match(localizedTitleSvg, />「参加型」AI紙芝居</u);
+  assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
+  assert.match(localizedTitleSvg, />久保 裕也 \/ hiroya@cuc\.ac\.jp</u);
+  assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
+  const websiteTarget = project.targets.find(({name}) => name === 'officialWebsiteButton');
+  const localizedWebsite = websiteTarget.costumes.find(
+    ({name}) => name === 'official-website-button-runtime',
+  );
+  const localizedWebsiteSvg = strFromU8(archive[localizedWebsite.md5ext]);
+  assert.match(localizedWebsiteSvg, /width="160" height="64"/u);
+  assert.match(localizedWebsiteSvg, />公式Webサイト</u);
+  assert.equal(websiteTarget.visible, true);
+  assert.equal(websiteTarget.y, -16);
   assert.equal(project.targets.find(({name}) => name === 'closeTitleButton')?.visible, true);
   assert.equal(
     project.targets.find(({name}) => name === 'officialWebsiteButton')?.blocks?.officialWebsiteOpen
@@ -355,7 +369,7 @@ test('waits at the title and starts the embedded story from Stage and close-butt
   }
 });
 
-test('shows the browser-localized title and routes its close button through closeTitle', async () => {
+test('localizes the existing Stage title without creating a DOM dialog', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
@@ -371,6 +385,10 @@ test('shows the browser-localized title and routes its close button through clos
     vm.securityManager.canLoadExtensionFromProject = () => true;
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
+    const stage = vm.runtime.getTargetForStage();
+    const website = vm.runtime.getSpriteTargetByName('officialWebsiteButton');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
+    assert.equal(website.sprite.costumes[website.currentCostume].name, 'official-website-button');
     vm.runtime.renderer = {
       draw() {},
       createSVGSkin() {
@@ -383,20 +401,23 @@ test('shows the browser-localized title and routes its close button through clos
     vm.greenFlag();
     const document = restoreGlobals.document;
     const titleDeadline = Date.now() + 5_000;
-    let titleRoot;
     while (Date.now() < titleDeadline) {
       vm.runtime._step();
-      titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
-      if (titleRoot?.style?.display === 'flex') break;
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert(titleRoot, 'The localized title must be mounted after green flag.');
-    assert.equal(titleRoot.style.display, 'flex');
-    assert.equal(titleRoot.children[0].children[2].textContent, '「参加型」AI紙芝居');
-    assert.equal(titleRoot.children[0].children[4].textContent, '公式Webサイト');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
+    assert.equal(
+      website.sprite.costumes[website.currentCostume].name,
+      'official-website-button-runtime',
+    );
+    assert.equal(website.visible, true);
+    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, true);
+    assert.equal(findByAttribute(document.body, 'data-dsl4-title-shell', 'true').length, 0);
+    assert.equal(document.body.style.cursor, 'pointer');
 
-    titleRoot.children[0].children[1].click();
+    await extensionReporter(vm, 'closeTitle');
     const startupDeadline = Date.now() + 5_000;
     while (Date.now() < startupDeadline) {
       vm.runtime._step();
@@ -408,7 +429,8 @@ test('shows the browser-localized title and routes its close button through clos
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'finished');
-    assert.equal(titleRoot.style.display, 'none');
+    assert.equal(website.visible, false);
+    assert.equal(document.body.style.cursor, '');
   } finally {
     vm.quit();
     restoreGlobals();

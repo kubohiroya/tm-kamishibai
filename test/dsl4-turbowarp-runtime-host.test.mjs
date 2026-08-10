@@ -484,6 +484,12 @@ function platformFixture(log) {
     getActivePoseModelName() {
       return null;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     startCamera() {},
     stopCamera() {},
     isCameraRunning() {

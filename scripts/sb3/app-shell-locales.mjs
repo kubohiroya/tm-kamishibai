@@ -23,6 +23,7 @@ export const appShellTitleLines = Object.freeze({
     ]),
   }),
   ja: Object.freeze({
+    authorOrganization: Object.freeze(['千葉商科大学', '総合政策学部']),
     licenseApp: Object.freeze([
       '本アプリのソースコードはMozilla Public License 2.0（MPL-2.0）で',
       '提供されています。',

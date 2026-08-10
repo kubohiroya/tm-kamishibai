@@ -132,11 +132,11 @@
           "rotationCenterY": 180
         },
         {
-          "assetId": "53ae4de655a01a7e40532ec2191e8130",
+          "assetId": "013b87ea76970af6fe5d3b4186e2cbfe",
           "name": "TitleRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "53ae4de655a01a7e40532ec2191e8130.svg",
+          "md5ext": "013b87ea76970af6fe5d3b4186e2cbfe.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         }
@@ -210,12 +210,12 @@
           "rotationCenterY": 32
         },
         {
-          "assetId": "09a2cc36ec9762e01fb072255931a046",
+          "assetId": "ad35a02f4b14fc078f256455076fa00b",
           "name": "official-website-button-runtime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "09a2cc36ec9762e01fb072255931a046.svg",
-          "rotationCenterX": 32,
+          "md5ext": "ad35a02f4b14fc078f256455076fa00b.svg",
+          "rotationCenterX": 80,
           "rotationCenterY": 32
         }
       ],
@@ -224,7 +224,7 @@
       "layerOrder": 1,
       "visible": true,
       "x": 0,
-      "y": 40,
+      "y": -16,
       "size": 100,
       "direction": 90,
       "draggable": false,

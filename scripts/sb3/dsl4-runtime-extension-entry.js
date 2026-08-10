@@ -66,6 +66,10 @@ function resolveBundledTMPoseRuntime() {
   return runtime;
 }
 
+function browserLocale() {
+  return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+}
+
 /** @param {string} code */
 function isSourceDiagnostic(code) {
   return sourceDiagnosticPrefixes.some((prefix) => code.startsWith(prefix));
@@ -93,6 +97,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.operation = Promise.resolve();
     this.status = 'ready';
     this.lastError = '';
+    this.titleLocale = 'en';
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
@@ -197,7 +202,7 @@ class KamishibaiDsl4RuntimeExtension {
   closeTitle() {
     const pendingStart = this.pendingStart;
     if (!pendingStart || pendingStart.shell !== this.shell) {
-      this.shell?.hideTitle?.();
+      this.hideScratchTitle();
       return undefined;
     }
     return pendingStart.start();
@@ -215,7 +220,48 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   toggleTitleLanguage() {
-    this.shell?.toggleTitleLanguage?.();
+    this.titleLocale = this.titleLocale === 'ja' ? 'en' : 'ja';
+    this.showScratchTitle(this.titleLocale);
+  }
+
+  setTargetCostume(target, costumeName) {
+    const costumes = target?.sprite?.costumes;
+    const index = Array.isArray(costumes)
+      ? costumes.findIndex((costume) => costume?.name === costumeName)
+      : -1;
+    if (index < 0 || typeof target?.setCostume !== 'function') {
+      throw new Error(`The packaged title costume is unavailable: ${costumeName}`);
+    }
+    target.setCostume(index);
+  }
+
+  setStageCursor(cursor) {
+    const canvas = this.Scratch?.vm?.renderer?.canvas;
+    if (canvas?.style) canvas.style.cursor = cursor;
+    const mount = resolveRuntimeMount(this.Scratch);
+    if (mount?.style) mount.style.cursor = cursor;
+  }
+
+  showScratchTitle(locale) {
+    const runtime = this.Scratch.vm.runtime;
+    const stage = runtime.getTargetForStage();
+    const website = runtime.getSpriteTargetByName('officialWebsiteButton');
+    const close = runtime.getSpriteTargetByName('closeTitleButton');
+    this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
+    this.setTargetCostume(
+      website,
+      locale === 'ja' ? 'official-website-button-runtime' : 'official-website-button',
+    );
+    website?.setVisible?.(true);
+    close?.setVisible?.(true);
+    this.setStageCursor('pointer');
+  }
+
+  hideScratchTitle() {
+    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
+      this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
+    }
+    this.setStageCursor('');
   }
 
   enqueue(operation, phase = 'operation') {
@@ -233,16 +279,13 @@ class KamishibaiDsl4RuntimeExtension {
   showFailure(failure) {
     const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failure?.code === 'string' ? failure.code : '';
-    const locale = /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+    const locale = browserLocale();
     const title = isSourceDiagnostic(code)
       ? appShellLocales[locale].ui.invalidScript
       : runtimeErrorTitles[locale];
     this.status = 'error';
     this.lastError = message;
-    this.shell?.hideTitle?.();
-    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-      this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
-    }
+    this.hideScratchTitle();
     try {
       this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
         document: globalThis.document,
@@ -260,6 +303,7 @@ class KamishibaiDsl4RuntimeExtension {
 
   async stop(reason) {
     this.pendingStart = null;
+    this.hideScratchTitle();
     const errorIndicator = this.errorIndicator;
     this.errorIndicator = null;
     errorIndicator?.dispose();
@@ -284,10 +328,7 @@ class KamishibaiDsl4RuntimeExtension {
       started = true;
       this.pendingStart = null;
       shell.hideTitle();
-      for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-        const target = Scratch.vm.runtime.getSpriteTargetByName(name);
-        target?.setVisible?.(false);
-      }
+      this.hideScratchTitle();
       this.status = 'running';
       try {
         const result = await shell.runtimeHost.start();
@@ -310,25 +351,6 @@ class KamishibaiDsl4RuntimeExtension {
       surface: 'regularEditor',
       document: globalThis.document,
       mount: resolveRuntimeMount(Scratch),
-      // The title overlay is created hidden until its click gate releases the runtime.
-      title: {
-        version: extensionVersion,
-        officialWebsiteUrl: appShellCommon.about.officialWebsite.url,
-        locales: {
-          en: {
-            title: appShellLocales.en.about.title,
-            officialWebsite: appShellLocales.en.about.officialWebsite.name,
-            close: appShellLocales.en.ui.close,
-            language: '日本語',
-          },
-          ja: {
-            title: appShellLocales.ja.about.title,
-            officialWebsite: appShellLocales.ja.about.officialWebsite.name,
-            close: appShellLocales.ja.ui.close,
-            language: 'English',
-          },
-        },
-      },
       runtimeHostOptions: {
         project,
         sourceFrontend: this.frontend,
@@ -359,17 +381,10 @@ class KamishibaiDsl4RuntimeExtension {
     }
 
     this.shell = shell;
-    if (shell.element) {
-      for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-        const target = Scratch.vm.runtime.getSpriteTargetByName(name);
-        target?.setVisible?.(false);
-      }
-    }
     this.pendingStart = {shell, start: startRuntime};
     this.status = 'title';
-    if (shell.titleElement) {
-      shell.showTitle();
-    }
+    this.titleLocale = browserLocale();
+    this.showScratchTitle(this.titleLocale);
   }
 }
 

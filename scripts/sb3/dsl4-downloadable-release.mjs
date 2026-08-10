@@ -88,8 +88,17 @@ function titleAssets() {
   const titleRuntime = svgAsset(
     'TitleRuntime',
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
+  <metadata>locale:ja</metadata>
   <rect width="480" height="360" fill="#f4fffb"/>
-  <text x="240" y="180" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#007d66">{{ABOUT_TITLE}}</text>
+  <text x="240" y="40" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#007d66">{{ABOUT_TITLE}}</text>
+  <text x="240" y="68" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#006b58">Version {{VERSION}} ({{BUILD_DATE}})</text>
+  <text x="240" y="194" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_APP_LINE_1}}</text>
+  <text x="240" y="210" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_APP_LINE_2}}</text>
+  <text x="240" y="234" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_STORY_LINE_1}}</text>
+  <text x="240" y="250" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_STORY_LINE_2}}</text>
+  <text x="240" y="282" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}</text>
+  <text x="240" y="298" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}</text>
+  <text x="240" y="326" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_NAME}} / {{ABOUT_AUTHOR_EMAIL}}</text>
 </svg>`,
     240,
     180,
@@ -106,11 +115,13 @@ function titleAssets() {
   );
   const websiteRuntime = svgAsset(
     'official-website-button-runtime',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#007d66"/>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
+  <metadata>locale:ja</metadata>
+  <rect width="160" height="64" rx="12" fill="#007d66"/>
   <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
+  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
 </svg>`,
-    32,
+    80,
     32,
   );
   const closeTitle = svgAsset(
@@ -324,7 +335,7 @@ function websiteTarget(websiteFallback, websiteRuntime) {
     layerOrder: 1,
     visible: true,
     x: 0,
-    y: 40,
+    y: -16,
     size: 100,
     direction: 90,
     draggable: false,
