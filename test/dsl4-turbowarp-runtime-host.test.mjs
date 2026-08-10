@@ -11,6 +11,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
+  dsl4StandardProductionFeatureFlags,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {
@@ -1895,13 +1896,13 @@ test('suspends camera controls at natural finish and resumes the same leases for
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
 });
 
-test('wires flagged think advance through the standard TurboWarp runtime host', async () => {
+test('wires Standard production think advance through the TurboWarp runtime host', async () => {
   const project = await packagedProject(speechStory);
   const log = [];
   const fixture = platformFixture(log);
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
-      featureFlags: {dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true},
+      featureFlags: dsl4StandardProductionFeatureFlags,
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));

@@ -4,7 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {createDsl4RuntimeController, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  createDsl4RuntimeController,
+  createDsl4SourceFrontend,
+  dsl4CoreActionNames,
+} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -178,6 +182,9 @@ scenes:
       - Hero.say:
           text: hello
           seconds: 0
+      - Hero.think:
+          text: thinking
+          seconds: 0
       - Hero.setSkin: HeroIdle
       - Caption.setText:
           text: title
@@ -219,6 +226,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'setTransparency',
       'moveTo',
       'say',
+      'think',
       'setSkin',
       'setText',
     ].map((method) => [
@@ -244,9 +252,17 @@ test('dispatches every core action and keeps transition separate from scene move
     return 'happy';
   };
   const evaluated = [];
+  const storyDocument = parseStory(allCoreActionsStory);
+  const exercisedCoreActions = [
+    ...new Set(
+      storyDocument.scenes.flatMap((scene) => scene.actions.map((action) => action.command)),
+    ),
+  ].sort();
+  assert.deepEqual(exercisedCoreActions, [...dsl4CoreActionNames].sort());
   const controller = createDsl4RuntimeController({
-    storyDocument: parseStory(allCoreActionsStory),
+    storyDocument,
     port,
+    speechAdvanceTypewriterEnabled: true,
     evaluateCondition(expression, variables) {
       evaluated.push(expression);
       return expression === 'score == 1' && variables.score === 1;
@@ -268,6 +284,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'setTransparency',
       'moveTo',
       'say',
+      'think',
       'setSkin',
       'setText',
       'setSkin',
@@ -324,8 +341,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 17);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 17);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 18);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 18);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')

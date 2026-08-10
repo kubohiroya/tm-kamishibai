@@ -10,6 +10,7 @@ import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.mjs';
+import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
@@ -146,8 +147,14 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionSource, /^\/\/ Name: Kamishibai DSL 4\.0 Runtime/mu);
   assert.match(extensionSource, /^\/\/ ID: kubohiroyakamishibai4/mu);
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
-  assert.equal(extensionSource.includes('dsl4PoseFeedbackModes:!0'), true);
-  assert.equal(extensionSource.includes('dsl4SpeechAdvanceTypewriter:!0'), true);
+  for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
+    assert.equal(enabled, true);
+    assert.equal(
+      extensionSource.includes(`${flag}:!0`),
+      true,
+      `The Standard release bundle must enable ${flag}.`,
+    );
+  }
   assert.match(extensionSource, /display:none/u);
   for (const title of [
     'Asset Manager',

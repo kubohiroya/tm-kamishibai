@@ -1,6 +1,7 @@
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
+import {dsl4StandardProductionFeatureFlags} from '../../src/dsl4/feature-flags.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
@@ -284,12 +285,7 @@ class KamishibaiDsl4RuntimeExtension {
       }
     };
     shell = await createDsl4StandardAppShell({
-      featureFlags: {
-        dsl4Runtime: true,
-        dsl4AppShell: true,
-        dsl4PoseFeedbackModes: true,
-        dsl4SpeechAdvanceTypewriter: true,
-      },
+      featureFlags: dsl4StandardProductionFeatureFlags,
       surface: 'regularEditor',
       document: globalThis.document,
       mount: resolveRuntimeMount(Scratch),

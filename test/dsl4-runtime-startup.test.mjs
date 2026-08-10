@@ -13,6 +13,7 @@ import {
   createDsl4RuntimeStartup,
   createDsl4SourceFrontend,
   dsl4DefaultFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
   resolveDsl4FeatureFlags,
 } from '../src/dsl4/index.js';
 
@@ -181,6 +182,17 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
 });
 
 test('strictly resolves one immutable startup flag snapshot', async () => {
+  assert.deepEqual(dsl4StandardProductionFeatureFlags, {
+    dsl4Runtime: true,
+    dsl4AppShell: true,
+    dsl4PoseFeedbackModes: true,
+    dsl4SpeechAdvanceTypewriter: true,
+  });
+  assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
+  assert.equal(
+    resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags).dsl4SpeechAdvanceTypewriter,
+    true,
+  );
   const disabledFlags = {
     dsl4Runtime: false,
     dsl4SourceIncludes: false,

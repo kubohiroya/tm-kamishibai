@@ -155,6 +155,7 @@ export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime
 export {
   createDsl4RuntimeStartup,
   dsl4DefaultFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
   resolveDsl4FeatureFlags,
 } from './runtime-startup.js';
 export {
