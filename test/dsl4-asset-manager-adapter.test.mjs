@@ -96,6 +96,92 @@ test('maps project backdrop, costume, and stage sound references deterministical
   assert.deepEqual(fake.calls.release, ['HeroHappy']);
 });
 
+test('maps logical actor IDs to the physical sprite used by 3.2 project costumes', async () => {
+  const fake = fakeComposition();
+  const actorTarget = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Actor', costumes: [{name: 'Urashima-walk-1', skinId: 1}]},
+    lookupVariableByNameAndType(name, type) {
+      assert.equal(name, 'actorName');
+      assert.equal(type, '');
+      return {value: 'Urashima'};
+    },
+  };
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    runtime: {targets: [{isStage: true, sprite: {name: 'Stage'}}, actorTarget]},
+  });
+
+  await adapter.prepare(projectAsset('UrashimaWalk', 'costume', 'Urashima-walk-1', 'Urashima'));
+
+  assert.deepEqual(fake.calls.project, [
+    {
+      name: 'UrashimaWalk',
+      nameMode: 'literal',
+      locator: {kind: 'costume', target: 'Actor', name: 'Urashima-walk-1'},
+    },
+  ]);
+});
+
+test('uses the 3.2 actor template before logical actor clones are created', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    runtime: {
+      targets: [
+        {
+          isStage: false,
+          isOriginal: true,
+          sprite: {name: 'Actor'},
+          lookupVariableByNameAndType() {
+            return {value: '_template_'};
+          },
+        },
+      ],
+    },
+  });
+
+  await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
+
+  assert.equal(fake.calls.project[0].locator.target, 'Actor');
+});
+
+test('waits for a project costume skin before registering its project reference', async () => {
+  const costume = {name: 'Princess', skinId: undefined};
+  const projectCalls = [];
+  const runtime = {
+    targets: [
+      {
+        isStage: false,
+        isOriginal: true,
+        sprite: {name: 'Actor', costumes: [costume]},
+        lookupVariableByNameAndType() {
+          return {value: 'Princess'};
+        },
+      },
+    ],
+  };
+  const composition = {
+    async registerProjectAsset(input) {
+      assert.equal(costume.skinId, 1);
+      projectCalls.push(input);
+      return {name: input.name, mimeType: 'image/svg+xml'};
+    },
+    async registerEmbeddedAsset() {
+      throw new Error('embedded registration is not expected');
+    },
+    releaseAsset() {},
+  };
+  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  setTimeout(() => {
+    costume.skinId = 1;
+  }, 10);
+
+  await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
+  assert.equal(projectCalls.length, 1);
+});
+
 test('registers one embedded image or audio file with path-derived MIME normalization', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});

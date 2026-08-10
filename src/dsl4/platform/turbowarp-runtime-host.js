@@ -394,6 +394,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         : undefined;
     assetSession = createDsl4PlatformAssetSession({
       runtimeComponent,
+      runtime: options.runtime,
       tmPoseRuntime: options.tmPoseRuntime,
       setLoading: options.setLoading,
       ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
