@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check application repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Check canonical docs contract
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: kubohiroya/tmpose-kamishibai-docs
           ref: 12f0b7989534d98fe12654ecea756b664d75398b
