@@ -416,3 +416,56 @@ test('shows the browser-localized title and routes its close button through clos
     else Reflect.deleteProperty(globalThis, 'navigator');
   }
 });
+
+test('logs and renders a pre-title Standard initialization failure', async () => {
+  const result = await buildRelease();
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const originalConsoleError = console.error;
+  const consoleErrors = [];
+  const vm = new VirtualMachine();
+  let originalToJSON;
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+    originalToJSON = vm.toJSON.bind(vm);
+    vm.toJSON = () => '{';
+    console.error = (...args) => consoleErrors.push(args);
+    vm.runtime.renderer = {
+      draw() {},
+      createSVGSkin() {
+        return 1;
+      },
+      destroySkin() {},
+      updateDrawableSkinId() {},
+    };
+
+    await extensionReporter(vm, 'showTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'error');
+    const lastError = await extensionReporter(vm, 'lastErrorReporter');
+    assert.equal(typeof lastError, 'string');
+    assert.notEqual(lastError, '');
+    const errorRoot = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-runtime-error',
+      'true',
+    )[0];
+    assert(errorRoot, 'The pre-title failure must be rendered inside the Scratch stage.');
+    assert.equal(errorRoot.style.display, 'flex');
+    const initializationLog = consoleErrors.find(
+      ([message]) => message === '[Kamishibai DSL 4.0] initialization failed.',
+    );
+    assert(initializationLog, 'The pre-title failure must be written to console.error.');
+    assert(initializationLog[1] instanceof Error);
+    assert.equal(typeof initializationLog[1].stack, 'string');
+    assert.match(initializationLog[1].stack, /JSON|Expected property|Unexpected/iu);
+  } finally {
+    if (originalToJSON) vm.toJSON = originalToJSON;
+    vm.quit();
+    console.error = originalConsoleError;
+    restoreGlobals();
+  }
+});

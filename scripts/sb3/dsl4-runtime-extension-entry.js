@@ -71,6 +71,18 @@ function isSourceDiagnostic(code) {
   return sourceDiagnosticPrefixes.some((prefix) => code.startsWith(prefix));
 }
 
+function loggedError(failure) {
+  if (failure instanceof Error) return failure;
+  const error = new Error(
+    String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.'),
+    {cause: failure},
+  );
+  if (typeof failure?.code === 'string') {
+    Object.defineProperty(error, 'code', {value: failure.code});
+  }
+  return error;
+}
+
 class KamishibaiDsl4RuntimeExtension {
   constructor(Scratch) {
     this.Scratch = Scratch;
@@ -83,7 +95,9 @@ class KamishibaiDsl4RuntimeExtension {
     this.lastError = '';
 
     const runtime = Scratch.vm.runtime;
-    runtime.on('PROJECT_STOP_ALL', () => this.enqueue(() => this.stop('project-stop-all')));
+    runtime.on('PROJECT_STOP_ALL', () =>
+      this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
+    );
   }
 
   getInfo() {
@@ -177,7 +191,7 @@ class KamishibaiDsl4RuntimeExtension {
   setTextValue() {}
 
   showTitle() {
-    return this.enqueue(() => this.restart());
+    return this.enqueue(() => this.restart(), 'initialization');
   }
 
   closeTitle() {
@@ -204,12 +218,16 @@ class KamishibaiDsl4RuntimeExtension {
     this.shell?.toggleTitleLanguage?.();
   }
 
-  enqueue(operation) {
+  enqueue(operation, phase = 'operation') {
     this.operation = this.operation.then(operation, operation).catch((error) => {
-      this.showFailure(error);
-      console.error('Kamishibai DSL 4.0 runtime failed.', error);
+      this.reportFailure(error, phase);
     });
     return this.operation;
+  }
+
+  reportFailure(failure, phase) {
+    this.showFailure(failure);
+    console.error(`[Kamishibai DSL 4.0] ${phase} failed.`, loggedError(failure));
   }
 
   showFailure(failure) {
@@ -275,13 +293,16 @@ class KamishibaiDsl4RuntimeExtension {
         const result = await shell.runtimeHost.start();
         if (this.shell !== shell) return;
         if (result.status === 'failed') {
-          this.showFailure(result.diagnostic ?? 'DSL 4.0 story execution failed.');
+          this.reportFailure(
+            result.diagnostic ?? 'DSL 4.0 story execution failed.',
+            'story-runtime',
+          );
           return;
         }
         this.status = result.status;
       } catch (error) {
         if (this.shell !== shell) return;
-        this.showFailure(error);
+        this.reportFailure(error, 'story-runtime');
       }
     };
     shell = await createDsl4StandardAppShell({
@@ -352,7 +373,12 @@ class KamishibaiDsl4RuntimeExtension {
   }
 }
 
-if (!Scratch?.extensions?.unsandboxed) {
-  throw new Error('Kamishibai DSL 4.0 Runtime must run unsandboxed.');
+try {
+  if (!Scratch?.extensions?.unsandboxed) {
+    throw new Error('Kamishibai DSL 4.0 Runtime must run unsandboxed.');
+  }
+  Scratch.extensions.register(new KamishibaiDsl4RuntimeExtension(Scratch));
+} catch (error) {
+  console.error('[Kamishibai DSL 4.0] extension-bootstrap failed.', loggedError(error));
+  throw error;
 }
-Scratch.extensions.register(new KamishibaiDsl4RuntimeExtension(Scratch));
