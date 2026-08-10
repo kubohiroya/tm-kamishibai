@@ -103,6 +103,37 @@ function titleAssets() {
     240,
     180,
   );
+  const menu = svgAsset(
+    'Menu',
+    `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
+  <rect width="480" height="360" fill="#f4fffb"/>
+  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">Participatory AI Kamishibai</text>
+  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
+    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">Open</text>
+    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">Reload</text>
+    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">About</text>
+    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">Language</text>
+  </g>
+</svg>`,
+    240,
+    180,
+  );
+  const menuRuntime = svgAsset(
+    'MenuRuntime',
+    `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
+  <metadata>locale:ja</metadata>
+  <rect width="480" height="360" fill="#f4fffb"/>
+  <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">「参加型」AI紙芝居</text>
+  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
+    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">ファイルを開く</text>
+    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">もう一度</text>
+    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">アプリ情報</text>
+    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">言語</text>
+  </g>
+</svg>`,
+    240,
+    180,
+  );
   const websiteFallback = svgAsset(
     'official-website-button',
     `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
@@ -133,10 +164,18 @@ function titleAssets() {
     16,
     16,
   );
-  return Object.freeze([title, titleRuntime, websiteFallback, websiteRuntime, closeTitle]);
+  return Object.freeze([
+    title,
+    titleRuntime,
+    menu,
+    menuRuntime,
+    websiteFallback,
+    websiteRuntime,
+    closeTitle,
+  ]);
 }
 
-function stageTarget(title, titleRuntime) {
+function stageTarget(title, titleRuntime, menu, menuRuntime) {
   return {
     isStage: true,
     name: 'Stage',
@@ -230,7 +269,7 @@ function stageTarget(title, titleRuntime) {
     },
     comments: {},
     currentCostume: 0,
-    costumes: [title.costume, titleRuntime.costume],
+    costumes: [title.costume, titleRuntime.costume, menu.costume, menuRuntime.costume],
     sounds: [],
     volume: 100,
     layerOrder: 0,
@@ -411,10 +450,11 @@ function closeTitleTarget(closeTitle) {
 }
 
 async function createProject(assets) {
-  const [title, titleRuntime, websiteFallback, websiteRuntime, closeTitle] = assets;
+  const [title, titleRuntime, menu, menuRuntime, websiteFallback, websiteRuntime, closeTitle] =
+    assets;
   const project = {
     targets: [
-      stageTarget(title, titleRuntime),
+      stageTarget(title, titleRuntime, menu, menuRuntime),
       websiteTarget(websiteFallback, websiteRuntime),
       closeTitleTarget(closeTitle),
     ],
@@ -458,7 +498,7 @@ async function createProject(assets) {
       subtleCrypto: webcrypto.subtle,
     },
   );
-  return installDsl4PackagedRuntimeComponent(
+  const installed = await installDsl4PackagedRuntimeComponent(
     project,
     parsed.storyDocument,
     sourceDescriptor,
@@ -470,6 +510,9 @@ async function createProject(assets) {
       subtleCrypto: webcrypto.subtle,
     },
   );
+  installed.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.application =
+    {mode: 'menu'};
+  return installed;
 }
 
 async function createRuntimeExtensionSource() {

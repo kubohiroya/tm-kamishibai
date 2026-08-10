@@ -139,6 +139,24 @@
           "md5ext": "013b87ea76970af6fe5d3b4186e2cbfe.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
+        },
+        {
+          "assetId": "99e35e453bf725181412c7c63c528dc0",
+          "name": "Menu",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "99e35e453bf725181412c7c63c528dc0.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        },
+        {
+          "assetId": "6183360146c4bcb3e7885ad02aaa2586",
+          "name": "MenuRuntime",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "6183360146c4bcb3e7885ad02aaa2586.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
         }
       ],
       "sounds": [],
@@ -380,6 +398,9 @@
             },
             "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
             "historyNavigationEnabled": false
+          },
+          "application": {
+            "mode": "menu"
           },
           "assets": {
             "formatVersion": 1,

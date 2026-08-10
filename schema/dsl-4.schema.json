@@ -583,7 +583,6 @@
     "poseRecognition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["idleSound", "chargeSound"],
       "properties": {
         "idleSound": {"$ref": "#/$defs/assetId"},
         "chargeSound": {"$ref": "#/$defs/assetId"},
@@ -706,6 +705,7 @@
       "type": "string",
       "enum": [
         "navigation.nextAction",
+        "navigation.nextScene",
         "history.previousAction",
         "history.previousScene",
         "history.nextScene"

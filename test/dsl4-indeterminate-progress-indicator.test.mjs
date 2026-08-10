@@ -23,7 +23,7 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
   assert.equal(root.getAttribute('aria-valuenow'), null);
   assert.equal(root.dataset.dsl4IndeterminateProgress, 'true');
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'circular');
-  assert.equal(root.style.position, 'fixed');
+  assert.equal(root.style.position, 'absolute');
   assert.equal(root.style.zIndex, '2147483647');
   assert.equal(root.style.background, 'rgba(0, 0, 0, 0.12)');
 
@@ -86,6 +86,21 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
   assert.ok(root);
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'bar');
   assert.equal(root.hidden, false);
+  hostOptions.setLoading(
+    {
+      visible: true,
+      resources: {backdrop: 'blob:loading-backdrop', costumes: ['blob:loading-costume']},
+    },
+    {},
+  );
+  const loadingScreen = findByAttribute(document.body, 'data-dsl4-loading-screen', 'true')[0];
+  assert.ok(loadingScreen);
+  assert.equal(loadingScreen.style.position, 'absolute');
+  assert.equal(loadingScreen.style.display, 'block');
+  assert.equal(loadingScreen.children[0].src, 'blob:loading-backdrop');
+  assert.equal(loadingScreen.children[1].src, 'blob:loading-costume');
+  hostOptions.setLoading({visible: false}, {});
+  assert.equal(loadingScreen.style.display, 'none');
   hostOptions.setBusy({visible: true, source: 'camera', label: 'Starting camera'});
   hostOptions.setLoading({visible: false}, {});
   assert.equal(root.hidden, false);

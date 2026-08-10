@@ -341,6 +341,11 @@ export function createDsl4NavigationSession({
       return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
     }
 
+    if (command === 'navigation.nextScene') {
+      void controller.advanceScene(command);
+      return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
+    }
+
     if (!historyReducer || !historyState) {
       return commandFailure(
         'K4-HISTORY-DISABLED',

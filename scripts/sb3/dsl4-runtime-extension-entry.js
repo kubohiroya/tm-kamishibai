@@ -6,6 +6,7 @@ import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browse
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
+import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
@@ -68,6 +69,14 @@ function resolveBundledTMPoseRuntime() {
 
 function browserLocale() {
   return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+}
+
+/** @param {Record<string, any>} project */
+function packagedApplicationMode(project) {
+  const mode =
+    project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4
+      ?.application?.mode;
+  return mode === 'menu' ? 'menu' : 'story';
 }
 
 /** @param {string} code */
@@ -202,7 +211,7 @@ class KamishibaiDsl4RuntimeExtension {
   closeTitle() {
     const pendingStart = this.pendingStart;
     if (!pendingStart || pendingStart.shell !== this.shell) {
-      this.hideScratchTitle();
+      if (this.status === 'title') this.hideScratchTitle();
       return undefined;
     }
     return pendingStart.start();
@@ -264,6 +273,12 @@ class KamishibaiDsl4RuntimeExtension {
     this.setStageCursor('');
   }
 
+  showScratchMenu(locale) {
+    const stage = this.Scratch.vm.runtime.getTargetForStage();
+    this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
+    this.setStageCursor('pointer');
+  }
+
   enqueue(operation, phase = 'operation') {
     this.operation = this.operation.then(operation, operation).catch((error) => {
       this.reportFailure(error, phase);
@@ -320,6 +335,7 @@ class KamishibaiDsl4RuntimeExtension {
 
     const Scratch = this.Scratch;
     const project = JSON.parse(Scratch.vm.toJSON());
+    const applicationMode = packagedApplicationMode(project);
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     let shell;
     let started = false;
@@ -338,6 +354,17 @@ class KamishibaiDsl4RuntimeExtension {
             result.diagnostic ?? 'DSL 4.0 story execution failed.',
             'story-runtime',
           );
+          return;
+        }
+        if (result.status === 'finished') {
+          const covered = await shell.runtimeHost.showCover();
+          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            BROADCAST_OPTION: 'showCover',
+          });
+          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            BROADCAST_OPTION: 'showMenu',
+          });
+          this.status = covered ? 'cover' : 'menu';
           return;
         }
         this.status = result.status;
@@ -361,11 +388,7 @@ class KamishibaiDsl4RuntimeExtension {
             BROADCAST_OPTION: 'closeTitle',
           });
         },
-        // The packaged Scratch surface has no separate transition renderer yet. Keep the
-        // transition command consumable so a valid DSL 4.0 story can still start and run.
-        createHostPort: async () => ({
-          transition: async () => {},
-        }),
+        createHostPort: async ({runtime}) => createDsl4TurboWarpTransitionPort({runtime}),
         tmPoseRuntime: createDsl4BundledTMPoseRuntime({
           runtime: resolveBundledTMPoseRuntime(),
           globalObject: globalThis,
@@ -381,7 +404,20 @@ class KamishibaiDsl4RuntimeExtension {
     }
 
     this.shell = shell;
-    this.pendingStart = {shell, start: startRuntime};
+    const startAfterTitle =
+      applicationMode === 'story'
+        ? startRuntime
+        : async () => {
+            if (this.shell !== shell) return;
+            this.pendingStart = null;
+            this.hideScratchTitle();
+            this.showScratchMenu(this.titleLocale);
+            Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+              BROADCAST_OPTION: 'showMenu',
+            });
+            this.status = 'menu';
+          };
+    this.pendingStart = {shell, start: startAfterTitle};
     this.status = 'title';
     this.titleLocale = browserLocale();
     this.showScratchTitle(this.titleLocale);

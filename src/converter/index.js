@@ -213,7 +213,7 @@ class Converter {
     this.cover = null;
     /** @type {{backdrop?: string, costumes?: string[]} | null} */
     this.loading = null;
-    /** @type {{idleSound: string, chargeSound: string, sequence?: Record<string, number>} | null} */
+    /** @type {{idleSound?: string, chargeSound?: string, sequence?: Record<string, number>} | null} */
     this.poseRecognition = null;
     /** @type {string | null} */
     this.currentScene = null;
@@ -521,17 +521,7 @@ class Converter {
     }
     if (!valid) return;
 
-    const differsFromDefaults = confidenceThreshold !== 0.5 || poseCharge !== 10 || poseIdle !== 0;
-    if (!this.poseRecognition) {
-      if (differsFromDefaults) {
-        this.error(
-          'K4-CONVERT-POSE-CONFIG',
-          'Custom pose recognition values require setPoseRecognitionSound with both sounds so DSL 4.0 can carry sequence configuration.',
-          this.variableCommands.get(configuredNames[0]) ?? null,
-        );
-      }
-      return;
-    }
+    this.poseRecognition ??= {};
 
     /** @type {Record<string, number>} */
     const sequence = {};
@@ -584,10 +574,10 @@ class Converter {
   /** @param {Dsl32Command} command */
   parsePoseRecognition(command) {
     const ids = splitList(command.value);
-    if (ids.length !== 2 || ids.some((id) => !id)) {
+    if (ids.length < 1 || ids.length > 2 || ids.some((id) => !id)) {
       this.error(
         'K4-CONVERT-POSE-SOUND-001',
-        'DSL 4.0 requires both idle and charge sounds; setPoseRecognitionSound must contain exactly two asset IDs.',
+        'setPoseRecognitionSound must contain one idle sound and an optional charge sound.',
         command,
       );
       return;
@@ -600,7 +590,10 @@ class Converter {
       );
       return;
     }
-    this.poseRecognition = {idleSound: ids[0], chargeSound: ids[1]};
+    this.poseRecognition = {
+      idleSound: ids[0],
+      ...(ids[1] ? {chargeSound: ids[1]} : {}),
+    };
     for (const id of ids) this.addReference('asset', id, command, {expectedKind: 'sound'});
   }
 
@@ -914,13 +907,22 @@ class Converter {
         );
         return null;
       }
-      this.warning(
-        'K4-CONVERT-TRANSITION-DURATION',
-        'DSL 3.1/3.2 transition has no duration argument; the DSL 4.0 transition duration is set to 0 seconds.',
-        command,
-      );
       this.validateIdentifier(parts[1], 'Transition effect', command);
-      return {transition: {effect: parts[1], seconds: 0}};
+      const legacyDurations = {fadeOut: 1, fadeUp: 1, fadeToWhite: 1, fadeFromWhite: 1, reset: 0};
+      if (!Object.hasOwn(legacyDurations, parts[1])) {
+        this.error(
+          'K4-CONVERT-TRANSITION-UNSUPPORTED',
+          `Unsupported DSL 3.1/3.2 transition effect: ${parts[1]}.`,
+          command,
+        );
+        return null;
+      }
+      return {
+        transition: {
+          effect: parts[1],
+          seconds: legacyDurations[/** @type {keyof typeof legacyDurations} */ (parts[1])],
+        },
+      };
     }
     if (actionName === 'keyInputToChangeScene' || actionName === 'touchInputToChangeScene') {
       if (parts.length !== 3) {
@@ -1378,7 +1380,16 @@ class Converter {
     /** @type {Record<string, any>} */
     const document = {
       kamishibai: '4.0',
-      controls: {keymaps: {production: {Space: 'navigation.nextAction'}}},
+      controls: {
+        keymaps: {
+          production: {Space: 'navigation.nextAction'},
+          rehearsal: {
+            Space: 'navigation.nextAction',
+            ArrowRight: 'navigation.nextAction',
+            ArrowDown: 'navigation.nextScene',
+          },
+        },
+      },
     };
     if (this.assets.size > 0) document.assets = this.renderAssets();
     if (this.actors.size > 0) document.actors = ownObject(this.actors);

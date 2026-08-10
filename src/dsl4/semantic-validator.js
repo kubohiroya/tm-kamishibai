@@ -382,6 +382,7 @@ export function validateDsl4Semantics(
   );
   if (poseRecognition) {
     for (const key of ['idleSound', 'chargeSound']) {
+      if (!Object.hasOwn(poseRecognition, key)) continue;
       addReferenceIssue(issues, assets, poseRecognition[key], 'sound', `$.poseRecognition.${key}`);
     }
     const preview = /** @type {Record<string, unknown>} */ (poseRecognition.preview ?? {});

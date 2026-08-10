@@ -1742,6 +1742,60 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('rehearsal nextScene cancels the current scene and enters the following scene', async () => {
+  const pending = deferred();
+  const effects = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Next: backdrop
+scenes:
+  opening:
+    - wait: 60
+    - wait: 60
+  following:
+    - stage: Next
+`),
+    port: {
+      wait(_payload, context) {
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('rehearsal scene skip');
+            error.name = 'AbortError';
+            pending.reject(error);
+          },
+          {once: true},
+        );
+        return pending.promise;
+      },
+      stage: async ({backdrop}) => effects.push(backdrop),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => controller.getState().actionIndex === 0, 'opening wait did not start');
+  const skipped = await controller.advanceScene('navigation.nextScene');
+  await run;
+  assert.equal(skipped.status, 'finished');
+  assert.equal(skipped.sceneId, 'following');
+  assert.deepEqual(effects, ['Next']);
+  assert.equal(
+    controller.getTrace().some(({type}) => type === 'navigation.advanceScene'),
+    false,
+  );
+  assert.equal(
+    controller
+      .getTrace()
+      .some(
+        ({type, details}) =>
+          type === 'scene.transition' && details.reason === 'navigation.nextScene',
+      ),
+    true,
+  );
+});
+
 test('reposition pauses without presentation effects and resume starts at the selected action', async () => {
   const pending = deferred();
   const effects = [];

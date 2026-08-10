@@ -1574,6 +1574,41 @@ export function createDsl4RuntimeController({
   }
 
   /**
+   * Skip the remainder of the active scene and continue at the next scene boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advanceScene(reason = 'navigation.nextScene') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    const nextScene = scenes[currentSceneIndex + 1];
+    if (nextScene) return navigate(String(nextScene.id), {reason});
+
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const action = currentAction();
+    finishPresentationTransitions(reason);
+    actionAbortController?.abort(reason);
+    generation += 1;
+    if (action) emit('action.cancel', {reason});
+    runId += 1;
+    runPromise = null;
+    try {
+      releaseStructuredAction(reason);
+      endStructuredStory('runtime-finished');
+    } catch (error) {
+      fail(error);
+      return Promise.resolve(snapshot());
+    }
+    currentActionIndex = /** @type {ReadonlyArray<unknown>} */ (currentScene()?.actions ?? [])
+      .length;
+    actionAbortController = null;
+    status = 'finished';
+    emit('navigation.advanceScene', {fromStoryPath, toStoryPath: null, reason});
+    emit('runtime.finish');
+    return Promise.resolve(snapshot());
+  }
+
+  /**
    * Move to an action start without executing it or restoring non-position state.
    *
    * @param {string} sceneId
@@ -1870,6 +1905,7 @@ export function createDsl4RuntimeController({
     acceptAdvanceInput,
     consumeAdvanceInput,
     advance,
+    advanceScene,
     navigate,
     reposition,
     resume,

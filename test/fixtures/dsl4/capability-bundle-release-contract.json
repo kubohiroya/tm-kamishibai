@@ -29,7 +29,7 @@
     {
       "id": "asset-manager",
       "package": "@kubohiroya/turbowarp-asset-manager",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
       "compositionExport": "./composition",
@@ -84,7 +84,7 @@
     {
       "id": "tmpose",
       "package": "@kubohiroya/turbowarp-tmpose",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
       "compositionExport": "./composition",

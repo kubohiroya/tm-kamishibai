@@ -23,12 +23,12 @@ license表示とsource repositoryを正本とします。
 
 | package                                  | version／revision | license      | source repository                              |
 | ---------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
-| @kubohiroya/turbowarp-asset-manager      | 0.8.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`           |
+| @kubohiroya/turbowarp-asset-manager      | 0.9.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`           |
 | @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
 | @kubohiroya/turbowarp-bubble             | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-tmpose             | 1.6.1             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
+| @kubohiroya/turbowarp-tmpose             | 1.7.0             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
 | @teachablemachine/pose                   | 0.8.3             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                         | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |

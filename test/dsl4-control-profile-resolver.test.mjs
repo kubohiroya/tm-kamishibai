@@ -29,6 +29,10 @@ controls:
       ArrowDown: history.nextScene
     production:
       Space: navigation.nextAction
+    rehearsal:
+      Space: navigation.nextAction
+      ArrowRight: navigation.nextAction
+      ArrowDown: navigation.nextScene
 scenes:
   opening: []
 `;
@@ -44,7 +48,7 @@ test('requires an explicit control profile', () => {
 
 test('rejects an unknown profile and a StoryDocument without controls', () => {
   const story = parseStory(profileStorySource);
-  for (const profile of ['rehearsal', '__proto__', 'constructor']) {
+  for (const profile of ['missing', '__proto__', 'constructor']) {
     const unknown = resolveDsl4ControlProfile(story, profile);
     assert.equal(unknown.ok, false);
     assert.equal(unknown.diagnostics[0].code, 'K4-KEYMAP-PROFILE-UNKNOWN');
@@ -67,6 +71,15 @@ test('resolves only the selected complete profile without inheritance or fallbac
   assert.deepEqual(production.keymap, {Space: 'navigation.nextAction'});
   assert.equal(production.historyEnabled, false);
   assert.equal(Object.hasOwn(production.keymap, 'ArrowLeft'), false);
+
+  const rehearsal = resolveDsl4ControlProfile(story, 'rehearsal');
+  assert.equal(rehearsal.ok, true);
+  assert.equal(rehearsal.historyEnabled, false);
+  assert.deepEqual(rehearsal.keymap, {
+    ArrowDown: 'navigation.nextScene',
+    ArrowRight: 'navigation.nextAction',
+    Space: 'navigation.nextAction',
+  });
 
   const development = resolveDsl4ControlProfile(story, 'development', {
     historyNavigationAvailable: true,

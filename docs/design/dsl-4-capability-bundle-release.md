@@ -26,12 +26,12 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 | capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界         |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.8.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.9.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.4.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.4.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.6.1`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.7.0`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition         |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外             |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外             |

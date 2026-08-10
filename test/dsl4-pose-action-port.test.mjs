@@ -219,11 +219,7 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
     ['play', 'Charge'],
     ['stop', 'Tick'],
   ]);
-  assert.deepEqual(pose.preview, [
-    ['position', 'full-stage'],
-    ['show'],
-    ['hide'],
-  ]);
+  assert.deepEqual(pose.preview, [['position', 'full-stage'], ['show'], ['hide']]);
   assert.equal(pose.composition.isPreviewVisible(), false);
   assert.equal(pose.composition.isRecognizing(), true);
 });

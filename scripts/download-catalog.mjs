@@ -13,10 +13,10 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
-      buildDate: '2026-08-09',
+      buildDate: '2026-08-11',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
-      sha256: 'bbf26e50dda14eef8b55fab3f37b0eecf419c21a77d60874dc7af14bb10395b5',
+      sha256: '2a4b5b816e849242d8a7a0c15e2501649fe1ddfa6866793643450f312f67d15b',
       sourceCommit: 'ae72293b520c7634a24eada080eae39087fd87b1',
       sourceDirectory: 'release-sources/4.0.0-dev/app',
     },

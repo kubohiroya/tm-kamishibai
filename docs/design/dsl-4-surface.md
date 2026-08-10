@@ -50,7 +50,7 @@ Copyright © 2026 Hiroya Kubo.
 | `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音            |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定   |
 | `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
@@ -178,6 +178,11 @@ TMPose 3.2と同じdirectory URLを`url`だけで指定できます。この通�
 assetは起動時に必要となるため、`lazy`でもentry sceneより前に準備します。準備済みassetは紙芝居停止まで
 保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
 `retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
+
+起動時は`loading`から参照されるassetだけを先にmaterializeし、その間は汎用indeterminate indicatorを
+Scratch stage領域の中央・最前面に表示します。準備後は指定backdropを全面表示し、`costumes`を宣言順に
+循環表示しながら残りのstartup assetを準備します。scene間のlazy loadingにも同じLoading宣言を使い、
+設定がない場合は汎用indicatorへfallbackします。indicatorは`circular`／`bar`をapp-shell APIで選択できます。
 
 scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
@@ -370,6 +375,31 @@ bubbleStyles:
       - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
     hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
+
+`poseRecognition.idleSound`と`chargeSound`はそれぞれ任意です。両方を省略した無音、`idleSound`だけの
+3.2互換設定、両方を指定した設定を受理します。音を指定しなくても`sequence`、`selection`、`feedback`、
+`navigation`、`preview`は独立して設定できます。
+
+`cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
+3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
+非埋め込み版は`showMenu`へ遷移します。言語の初期値はブラウザ言語から毎回決定し、localStorage保存を
+互換要件にはしません。
+
+### 4.1 control profile
+
+```yaml
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+    rehearsal:
+      Space: navigation.nextAction
+      ArrowRight: navigation.nextAction
+      ArrowDown: navigation.nextScene
+```
+
+`navigation.nextScene`は`history.nextScene`と異なり、まだ訪問していない次のsceneへ進む通し稽古用commandです。
+現在sceneの残りactionをcancelし、次sceneのlazy asset準備と通常のscene境界処理を行います。
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
@@ -635,6 +665,8 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
+Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
 
 ### 7.2 Actor action
 

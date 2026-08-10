@@ -119,6 +119,10 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
   assert.match(localizedTitleSvg, />久保 裕也 \/ hiroya@cuc\.ac\.jp</u);
   assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
+  assert.deepEqual(
+    stage.costumes.map(({name}) => name),
+    ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'],
+  );
   const websiteTarget = project.targets.find(({name}) => name === 'officialWebsiteButton');
   const localizedWebsite = websiteTarget.costumes.find(
     ({name}) => name === 'official-website-button-runtime',
@@ -187,6 +191,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionSource, /var tmPose=/u);
   const runtimeStorage = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
   assert.equal(runtimeStorage.source.text.includes("kamishibai: '4.0'"), true);
+  assert.deepEqual(runtimeStorage.application, {mode: 'menu'});
   assert.equal(runtimeStorage.artifact.controlProfile, 'production');
   assert.deepEqual(runtimeStorage.assets.manifest.assets, []);
   assert.deepEqual(Object.values(stage.variables), [
@@ -278,7 +283,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   }
 });
 
-test('waits at the title and starts the embedded story from Stage and close-button clicks', async () => {
+test('waits at the title and opens the non-embedded menu from Stage and close-button clicks', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
@@ -318,7 +323,7 @@ test('waits at the title and starts the embedded story from Stage and close-butt
     while (Date.now() < startupDeadline) {
       vm.runtime._step();
       const status = await extensionReporter(vm, 'statusReporter');
-      if (status === 'finished') break;
+      if (status === 'menu') break;
       if (status === 'error') {
         assert.fail(`DSL 4.0 runtime failed: ${await extensionReporter(vm, 'lastErrorReporter')}`);
       }
@@ -327,10 +332,15 @@ test('waits at the title and starts the embedded story from Stage and close-butt
     const finalStatus = await extensionReporter(vm, 'statusReporter');
     assert.equal(
       finalStatus,
-      'finished',
+      'menu',
       `DSL 4.0 runtime remained ${finalStatus} at startup timeout; threads=${JSON.stringify(
         vm.runtime.threads.map(({topBlock, status, stack}) => ({topBlock, status, stack})),
       )}`,
+    );
+    assert.equal(
+      vm.runtime.getTargetForStage().sprite.costumes[vm.runtime.getTargetForStage().currentCostume]
+        .name,
+      'Menu',
     );
 
     vm.greenFlag();
@@ -355,13 +365,18 @@ test('waits at the title and starts the embedded story from Stage and close-butt
     while (Date.now() < closeDeadline) {
       vm.runtime._step();
       const status = await extensionReporter(vm, 'statusReporter');
-      if (status === 'finished') break;
+      if (status === 'menu') break;
       if (status === 'error') {
         assert.fail(`DSL 4.0 runtime failed: ${await extensionReporter(vm, 'lastErrorReporter')}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(await extensionReporter(vm, 'statusReporter'), 'finished');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    assert.equal(
+      vm.runtime.getTargetForStage().sprite.costumes[vm.runtime.getTargetForStage().currentCostume]
+        .name,
+      'Menu',
+    );
     assert.equal(closeTarget.visible, false);
   } finally {
     vm.quit();
@@ -422,15 +437,16 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     while (Date.now() < startupDeadline) {
       vm.runtime._step();
       const status = await extensionReporter(vm, 'statusReporter');
-      if (status === 'finished') break;
+      if (status === 'menu') break;
       if (status === 'error') {
         assert.fail(`DSL 4.0 runtime failed: ${await extensionReporter(vm, 'lastErrorReporter')}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(await extensionReporter(vm, 'statusReporter'), 'finished');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
     assert.equal(website.visible, false);
-    assert.equal(document.body.style.cursor, '');
+    assert.equal(document.body.style.cursor, 'pointer');
   } finally {
     vm.quit();
     restoreGlobals();

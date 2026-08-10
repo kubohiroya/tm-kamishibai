@@ -1,6 +1,7 @@
 import {resolveDsl4FeatureFlags} from '../feature-flags.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4IndeterminateProgressIndicator} from './indeterminate-progress-indicator.js';
+import {createDsl4LoadingScreenPresenter} from './loading-screen-presenter.js';
 import {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
 
 const optionKeys = new Set([
@@ -193,6 +194,8 @@ export async function createDsl4StandardAppShell(options = {}) {
   let disposePromise = null;
   /** @type {ReturnType<typeof createDsl4IndeterminateProgressIndicator> | null} */
   let progressIndicator = null;
+  /** @type {ReturnType<typeof createDsl4LoadingScreenPresenter> | null} */
+  let loadingPresenter = null;
 
   function ensureTitleMount() {
     if (disposed || titleOptions === null || titleMount) return titleMount;
@@ -393,9 +396,22 @@ export async function createDsl4StandardAppShell(options = {}) {
     return progressIndicator;
   }
 
+  function ensureLoadingPresenter() {
+    if (loadingPresenter) return loadingPresenter;
+    if (options.document === undefined) return null;
+    const document = requireDocument(options.document);
+    const mount = options.mount ?? document.body;
+    if (mount === undefined || mount === null) return null;
+    loadingPresenter = createDsl4LoadingScreenPresenter({document, mount});
+    return loadingPresenter;
+  }
+
   /** @param {Readonly<Record<string, unknown>>} payload @param {Readonly<Record<string, unknown>>} context */
   function setLoading(payload, context) {
     const visible = isRecord(payload) && payload.visible === true;
+    if (!disposed && (visible || loadingPresenter)) {
+      ensureLoadingPresenter()?.setLoading(payload);
+    }
     if (!disposed && (visible || progressIndicator)) {
       ensureProgressIndicator()?.setBusy({
         visible,
@@ -451,6 +467,12 @@ export async function createDsl4StandardAppShell(options = {}) {
     indicator?.dispose();
   }
 
+  function disposeLoadingPresenter() {
+    const presenter = loadingPresenter;
+    loadingPresenter = null;
+    presenter?.dispose();
+  }
+
   function disposeTitleMount() {
     const dispose = disposeTitle;
     disposeTitle = null;
@@ -501,6 +523,11 @@ export async function createDsl4StandardAppShell(options = {}) {
       // Preserve the original runtime-host creation error.
     }
     try {
+      disposeLoadingPresenter();
+    } catch {
+      // Preserve the original runtime-host creation error.
+    }
+    try {
       disposeTitleMount();
     } catch {
       // Preserve the original runtime-host creation error.
@@ -533,6 +560,11 @@ export async function createDsl4StandardAppShell(options = {}) {
     }
     try {
       disposeProgressIndicator();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      disposeLoadingPresenter();
     } catch (error) {
       errors.push(error);
     }
@@ -575,6 +607,11 @@ export async function createDsl4StandardAppShell(options = {}) {
       }
       try {
         disposeProgressIndicator();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        disposeLoadingPresenter();
       } catch (error) {
         errors.push(error);
       }

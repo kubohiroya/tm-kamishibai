@@ -42,7 +42,7 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
   assert.equal(first.source.includes('\r'), false);
   assert.deepEqual(
     first.diagnostics.map((diagnostic) => diagnostic.range.start.line),
-    [2, 3, 10, 11, 12, 13, 45],
+    [2, 3, 10, 11, 12, 13],
   );
   assert.ok(first.diagnostics.some((diagnostic) => diagnostic.code === 'K4-CONVERT-VARIABLE-TYPE'));
   assert.ok(
@@ -327,6 +327,40 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
         diagnostic.code === 'K4-CONVERT-POSE-CONFIG' && diagnostic.range.start.line === 2,
     ),
   );
+
+  const silent = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=poseRecog:0.75',
+      'asset=Hero,costume',
+      'actor=Hero,Hero',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'silent-pose-config.txt', poseModels},
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(silent.document?.poseRecognition.sequence.confidenceThreshold, 0.75);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Hero,costume',
+      'asset=Idle,sound',
+      'actor=Hero,Hero',
+      'setPoseRecognitionSound=Idle',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'idle-only-pose-config.txt', poseModels},
+  );
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.document?.poseRecognition.idleSound, 'Idle');
+  assert.equal(Object.hasOwn(idleOnly.document?.poseRecognition, 'chargeSound'), false);
 });
 
 test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
@@ -460,7 +494,7 @@ test('converts timed and styled legacy speech while rejecting persistent speech'
   ]);
 });
 
-test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal style semantics', () => {
+test('preserves the Urashima clear, scale, visibility, layer, and loop semantics', () => {
   const result = convertDsl32ToDsl4(
     [
       'kamishibai=3.2',
@@ -479,7 +513,7 @@ test('preserves the Urashima clear, scale, visibility, layer, loop, and diagonal
   );
 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.document?.textStyles.default.direction, 'up-right');
+  assert.equal(Object.hasOwn(result.document?.textStyles.default, 'direction'), false);
   assert.deepEqual(result.document?.scenes['dragon castle'], [
     {'Fish.say': {text: '', seconds: 0}},
     {'Fish.setSkin': {skin: 'Fish2', scale: 45}},

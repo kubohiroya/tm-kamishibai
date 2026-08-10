@@ -702,6 +702,25 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
   assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
 
+  const silent = frontend.parse(
+    [
+      "kamishibai: '4.0'",
+      'poseRecognition:',
+      '  navigation:',
+      '    allowSkip: true',
+      'scenes:',
+      '  opening: []',
+    ].join('\n'),
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = frontend.parse(base.replace('  chargeSound: Charge\n', ''));
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.storyDocument.poseRecognition.idleSound, 'Tick');
+  assert.equal(Object.hasOwn(idleOnly.storyDocument.poseRecognition, 'chargeSound'), false);
+
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
     ['feedback', '    mode: presenter\n    extra: true\n'],
@@ -1131,7 +1150,6 @@ for (const name of [
   'deprecated-text-asset.kamishibai.yaml',
   'non-scalar-variable.kamishibai.yaml',
   'cover-missing-backdrop.kamishibai.yaml',
-  'pose-recognition-missing-sound.kamishibai.yaml',
   'pose-choices.kamishibai.yaml',
   'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',

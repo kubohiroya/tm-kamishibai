@@ -453,7 +453,9 @@ function platformFixture(log) {
     stopSound(name) {
       log.push(['media.stop', name]);
     },
-    stopAllSounds() {},
+    stopAllSounds() {
+      log.push(['media.stop-all']);
+    },
     async resolveVerifiedRemoteBinary(input, options) {
       const loaded = await options.load(input, {signal: options.signal});
       return {
@@ -2396,11 +2398,15 @@ test('executes media, actor, SVG text, and wait actions through one composed run
 kamishibai: '4.0'
 assets:
   Beach: backdrop
+  Cover: backdrop
   HeroSkin: costume:Hero
   HeroSkin2: costume:Hero
   Bell: sound
 actors:
   Hero: HeroSkin
+cover:
+  backdrop: Cover
+  bgm: Bell
 textStyles:
   title:
     color: '#ffffff'
@@ -2467,9 +2473,12 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const finished = await result.host.start();
   assert.equal(finished.status, 'finished');
+  assert.equal(await result.host.showCover(), true);
   assert.equal(clock.pendingCount(), 0);
   for (const event of [
     ['media.stage', 'Beach'],
+    ['media.stage', 'Cover'],
+    ['media.stop-all'],
     ['media.play', 'Bell'],
     ['actor.size', 30],
     ['actor.visible', true],
