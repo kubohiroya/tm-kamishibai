@@ -113,6 +113,7 @@ function disposedError() {
  *
  * @param {object} options
  * @param {unknown} options.runtimeComponent
+ * @param {unknown} [options.runtime]
  * @param {unknown} [options.binaryEntryProvider]
  * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
  * @param {unknown} options.tmPoseRuntime
@@ -382,6 +383,7 @@ export function createDsl4PlatformAssetSession(options) {
     }
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
+      ...(options.runtime === undefined ? {} : {runtime: options.runtime}),
       ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
       ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
     });
