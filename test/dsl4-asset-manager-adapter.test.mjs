@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
 
 function mimeType(sourceName) {
@@ -29,6 +31,17 @@ function fakeComposition(overrides = {}) {
       ...overrides,
     }),
   };
+}
+
+function productionComposition(runtime) {
+  const previousScratch = globalThis.Scratch;
+  globalThis.Scratch = {vm: {runtime}};
+  try {
+    return createAssetManagerComposition();
+  } finally {
+    if (previousScratch === undefined) Reflect.deleteProperty(globalThis, 'Scratch');
+    else globalThis.Scratch = previousScratch;
+  }
 }
 
 function projectAsset(id, kind, name, target) {
@@ -180,6 +193,52 @@ test('waits for a project costume skin before registering its project reference'
 
   await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
   assert.equal(projectCalls.length, 1);
+});
+
+test('prevents SOURCE_ASSET_NOT_FOUND with the production Asset Manager composition', async () => {
+  const costume = {name: 'Princess', skinId: undefined};
+  const actorTarget = {
+    id: 'actor-target',
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Actor', costumes: [costume], sounds: []},
+    lookupVariableByNameAndType() {
+      return {value: 'Princess'};
+    },
+  };
+  const runtime = {
+    targets: [
+      {id: 'stage-target', isStage: true, sprite: {name: 'Stage', costumes: [], sounds: []}},
+      actorTarget,
+    ],
+    on() {},
+  };
+  const composition = productionComposition(runtime);
+
+  await assert.rejects(
+    composition.registerProjectAsset({
+      name: 'RawPrincessSkin',
+      nameMode: 'literal',
+      locator: {kind: 'costume', target: 'Actor', name: 'Princess'},
+    }),
+    (error) => error?.code === 'SOURCE_ASSET_NOT_FOUND',
+  );
+
+  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  let resource;
+  setTimeout(() => {
+    costume.skinId = 1;
+  }, 10);
+  try {
+    resource = await adapter.prepare(
+      projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'),
+    );
+    assert.equal(resource.mimeType, 'image/x-scratch-costume');
+    assert.equal(composition.isRegistered('PrincessSkin'), true);
+  } finally {
+    if (resource) adapter.release(resource);
+    composition.releaseAll();
+  }
 });
 
 test('registers one embedded image or audio file with path-derived MIME normalization', async () => {
