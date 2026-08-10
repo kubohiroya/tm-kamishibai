@@ -28,6 +28,50 @@ import {
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
+function createPoseFeedbackVariables() {
+  return {
+    'pose-confidence': ['ポーズ認識', 0],
+    'pose-progress': ['チャージ', 0],
+  };
+}
+
+function createPoseFeedbackMonitors() {
+  return [
+    {
+      id: 'pose-confidence',
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'ポーズ認識'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+    {
+      id: 'pose-progress',
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'チャージ'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 343,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+  ];
+}
+
 async function resolveChromeExecutable() {
   const candidates = [
     process.env.CHROME_BIN,
@@ -931,7 +975,7 @@ test(
           {
             isStage: true,
             name: 'Stage',
-            variables: {},
+            variables: createPoseFeedbackVariables(),
             lists: {},
             broadcasts: {},
             blocks: {},
@@ -956,7 +1000,7 @@ test(
             textToSpeechLanguage: null,
           },
         ],
-        monitors: [],
+        monitors: createPoseFeedbackMonitors(),
         extensions: [],
         meta: {semver: '3.0.0'},
       },
@@ -1031,6 +1075,12 @@ test(
       assert.equal(await client.evaluate('location.hash'), '');
       assert.equal(
         await client.evaluate(
+          "document.querySelector('#dsl4-local-preview-runtime > p[role=alert]')?.textContent ?? ''",
+        ),
+        '',
+      );
+      assert.equal(
+        await client.evaluate(
           "document.querySelectorAll('canvas[data-dsl4-turbo-warp-stage=true]').length",
         ),
         1,
@@ -1046,8 +1096,8 @@ test(
       try {
         await waitForEvaluation(
           client,
-          "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState === 'reloaded'",
-          'browser-owned automatic reload',
+          `document.querySelector('[data-summary-value=currentIntegrity]')?.textContent !== ${JSON.stringify(initialIntegrity)}`,
+          'browser-owned committed reload',
         );
       } catch (error) {
         const page = await client.evaluate(`({
@@ -1414,7 +1464,7 @@ scenes:
           {
             isStage: true,
             name: 'Stage',
-            variables: {},
+            variables: createPoseFeedbackVariables(),
             lists: {},
             broadcasts: {},
             blocks: {},
@@ -1469,7 +1519,7 @@ scenes:
             rotationStyle: 'all around',
           },
         ],
-        monitors: [],
+        monitors: createPoseFeedbackMonitors(),
         extensions: [],
         meta: {semver: '3.0.0'},
       },
