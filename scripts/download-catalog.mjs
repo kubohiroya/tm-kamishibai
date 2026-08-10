@@ -17,7 +17,7 @@ export const downloadCatalog = deepFreeze([
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
       sha256: 'f5daa1548a0a41e910a839fb8ff796b62340486a7c09e8f022cd94b0ed9cf569',
-      sourceCommit: '825211d4a73cd91aaad41deb9545ff8f3661a8a6',
+      sourceCommit: '59980e42bf7bc5b52be64112fa5642621a3891df',
       sourceDirectory: 'release-sources/4.0.0-dev/app',
     },
     description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
