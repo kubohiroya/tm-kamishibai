@@ -3526,6 +3526,7 @@ scenes:
   let keyListener = null;
   let touchListener = null;
   const events = [];
+  const cursors = [];
   const keySource = {
     subscribeKeyCandidate(listener) {
       assert.equal(keyListener, null);
@@ -3549,6 +3550,9 @@ scenes:
       createAsyncInputComposition: undefined,
       keySource,
       actorTouchSource,
+      setCursor(event) {
+        cursors.push(event);
+      },
       onEvent(event) {
         events.push(event);
       },
@@ -3569,6 +3573,7 @@ scenes:
   });
   while (!touchListener) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(keyListener, null);
+  assert.deepEqual(cursors, [{visible: true, source: 'touch-input-1', cursor: 'pointer'}]);
   touchListener({
     version: 1,
     actorId: 'Hero',
@@ -3591,6 +3596,10 @@ scenes:
   assert.equal(finished.status, 'finished');
   assert.equal(finished.sceneId, 'ending');
   assert.equal(touchListener, null);
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'touch-input-1', cursor: 'pointer'},
+    {visible: false, source: 'touch-input-1', cursor: 'pointer'},
+  ]);
   await result.host.dispose();
 });
 

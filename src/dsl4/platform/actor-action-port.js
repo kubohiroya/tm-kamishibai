@@ -391,6 +391,7 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {unknown} [options.advanceIndicatorPresenter]
  * @param {(actorId: string) => unknown | Promise<unknown>} [options.stopActorLoop]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -430,6 +431,29 @@ export function createDsl4ActorActionPort(options) {
     throw new TypeError('stopActorLoop must be a function');
   }
   const stopActorLoop = options.stopActorLoop;
+  const setCursor = options.setCursor;
+  if (setCursor !== undefined && typeof setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
+  }
+  let speechCursorId = 0;
+
+  /** @param {boolean} visible @param {string} source */
+  function notifySpeechCursor(visible, source) {
+    if (!setCursor) return;
+    try {
+      void Promise.resolve(
+        setCursor(
+          Object.freeze({
+            visible,
+            source,
+            cursor: 'pointer',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Cursor styling is non-authoritative and cannot change speech semantics.
+    }
+  }
 
   /** @param {string} skin */
   function requireImageAsset(skin) {
@@ -675,6 +699,12 @@ export function createDsl4ActorActionPort(options) {
         }),
       );
     }
+    let cursorSource;
+    if (waitFor === 'advance') {
+      speechCursorId += 1;
+      cursorSource = `speech-advance-${speechCursorId}`;
+      notifySpeechCursor(true, cursorSource);
+    }
     try {
       return await runSpeechPresentationOperation(
         operation,
@@ -684,6 +714,7 @@ export function createDsl4ActorActionPort(options) {
       );
     } finally {
       stopIndicator();
+      if (cursorSource) notifySpeechCursor(false, cursorSource);
     }
   }
 

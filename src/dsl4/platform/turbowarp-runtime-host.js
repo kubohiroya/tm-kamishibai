@@ -609,6 +609,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
       stopActorLoop: mediaPort.stopActorLoop,
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
       ...(standaloneAdvanceIndicatorEnabled
         ? {
@@ -620,6 +621,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     const asyncInputPort = createDsl4AsyncInputActionPort({
       composition: assetSession.asyncInputComposition,
       inputArbitration,
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
     });
     svgTextPlatform = createDsl4SvgTextPlatform({
       enabled: true,

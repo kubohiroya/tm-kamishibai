@@ -71,11 +71,35 @@ function validateSignal(value) {
  * @param {object} options
  * @param {unknown} options.composition
  * @param {unknown} [options.inputArbitration]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  */
 export function createDsl4AsyncInputActionPort(options) {
   if (!isRecord(options)) throw new TypeError('Async input action port options must be an object');
   const composition = validateComposition(options.composition);
   const inputArbitration = validateArbitration(options.inputArbitration);
+  const setCursor = options.setCursor;
+  if (setCursor !== undefined && typeof setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
+  }
+  let touchCursorId = 0;
+
+  /** @param {boolean} visible @param {string} source */
+  function notifyTouchCursor(visible, source) {
+    if (!setCursor) return;
+    try {
+      void Promise.resolve(
+        setCursor(
+          Object.freeze({
+            visible,
+            source,
+            cursor: 'pointer',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Cursor styling is non-authoritative and cannot change input semantics.
+    }
+  }
 
   /**
    * @param {'key' | 'touch'} kind
@@ -118,9 +142,19 @@ export function createDsl4AsyncInputActionPort(options) {
     touchInputToChangeScene(payload, context) {
       const inputCandidates = validateCandidates(payload, 'actors');
       const signal = validateSignal(context);
-      return runWait('touch', inputCandidates, () =>
-        composition.waitForActorTouchCandidate({candidates: inputCandidates, signal}),
-      );
+      touchCursorId += 1;
+      const cursorSource = `touch-input-${touchCursorId}`;
+      notifyTouchCursor(true, cursorSource);
+      let operation;
+      try {
+        operation = runWait('touch', inputCandidates, () =>
+          composition.waitForActorTouchCandidate({candidates: inputCandidates, signal}),
+        );
+      } catch (error) {
+        notifyTouchCursor(false, cursorSource);
+        throw error;
+      }
+      return Promise.resolve(operation).finally(() => notifyTouchCursor(false, cursorSource));
     },
   });
 }
