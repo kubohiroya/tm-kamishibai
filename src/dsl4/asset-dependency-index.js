@@ -1,4 +1,5 @@
 import {deepFreeze} from './story-document.js';
+import {composeBubbleStyles} from './bubble-style.js';
 
 /** @param {Iterable<string>} values */
 function sortedUnique(values) {
@@ -10,27 +11,62 @@ function addDependency(value, dependencies) {
   if (typeof value === 'string') dependencies.add(value);
 }
 
+/** @param {unknown} value @param {Set<string>} dependencies */
+function addFrameDependencies(value, dependencies) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const frames = /** @type {Readonly<Record<string, unknown>>} */ (value).frames;
+  if (!Array.isArray(frames)) return;
+  for (const frame of frames) addDependency(frame, dependencies);
+}
+
 /**
  * @param {Readonly<Record<string, unknown>>} action
  * @param {Set<string>} dependencies
- * @param {Readonly<Record<string, Readonly<Record<string, unknown>>>>} speechStyles
+ * @param {Readonly<Record<string, Readonly<Record<string, unknown>>>>} bubbleStyles
  * @returns {boolean}
  */
-function addActionDependencies(action, dependencies, speechStyles) {
+function addActionDependencies(action, dependencies, bubbleStyles) {
   const command = String(action.command);
   const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
   if (command === 'stage') addDependency(args.backdrop, dependencies);
   if (command === 'bgm' || command === 'sound') addDependency(args.sound, dependencies);
   if (command === 'say' || command === 'think') {
     addDependency(args.startSound, dependencies);
-    addDependency(args.characterSound, dependencies);
-    const style =
-      typeof args.style === 'string'
-        ? /** @type {Readonly<Record<string, unknown>> | undefined} */ (speechStyles[args.style])
-        : undefined;
-    addDependency(style?.characterSound, dependencies);
+    const styleIds = Array.isArray(args.styles)
+      ? /** @type {string[]} */ (args.styles.filter((styleId) => typeof styleId === 'string'))
+      : [];
+    const style = styleIds.length > 0 ? composeBubbleStyles(styleIds, bubbleStyles) : undefined;
+    addDependency(
+      Object.hasOwn(args, 'characterSound') ? args.characterSound : style?.characterSound,
+      dependencies,
+    );
+    const portrait = /** @type {Readonly<Record<string, unknown>>} */ (style?.portrait ?? {});
+    addDependency(portrait.base, dependencies);
+    addFrameDependencies(portrait.blink, dependencies);
+    addFrameDependencies(portrait.lipSync, dependencies);
+    addFrameDependencies(style?.continueIndicator, dependencies);
+    const reveal = /** @type {Readonly<Record<string, unknown>>} */ (style?.reveal ?? {});
+    addDependency(reveal.sound, dependencies);
+    const audio = /** @type {Readonly<Record<string, unknown>>} */ (style?.audio ?? {});
+    addDependency(audio.voice, dependencies);
+    addDependency(audio.reveal, dependencies);
+    addDependency(audio.finish, dependencies);
+  }
+  if (command === 'loop' && Array.isArray(args.steps)) {
+    for (const step of args.steps) {
+      if (typeof step === 'object' && step !== null && !Array.isArray(step)) {
+        addDependency(/** @type {Readonly<Record<string, unknown>>} */ (step).skin, dependencies);
+      }
+    }
   }
   if (command === 'show' || command === 'setSkin') addDependency(args.skin, dependencies);
+  if (command === 'loop' && Array.isArray(args.steps)) {
+    for (const step of args.steps) {
+      if (typeof step === 'object' && step !== null && !Array.isArray(step)) {
+        addDependency(/** @type {Readonly<Record<string, unknown>>} */ (step).skin, dependencies);
+      }
+    }
+  }
   if (command !== 'pose') return false;
 
   const steps = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (args.steps ?? []);
@@ -57,8 +93,8 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
   const assets = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     storyDocument.assets ?? {}
   );
-  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
-    storyDocument.speechStyles ?? {}
+  const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    storyDocument.bubbleStyles ?? {}
   );
   const sceneRetainedAssets = new Set(
     Object.entries(assets)
@@ -135,7 +171,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
       scene.actions ?? []
     )) {
       usesPoseRecognition =
-        addActionDependencies(action, dependencies, speechStyles) || usesPoseRecognition;
+        addActionDependencies(action, dependencies, bubbleStyles) || usesPoseRecognition;
     }
     if (usesPoseRecognition) {
       for (const assetId of poseRecognitionDependencies) dependencies.add(assetId);

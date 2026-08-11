@@ -47,6 +47,12 @@ function fakeHost(overrides = {}) {
       showActor(actor, transform, context) {
         calls.push(['showActor', actor.id, transform, context.sceneId]);
       },
+      hideActor(actor, context) {
+        calls.push(['hideActor', actor.id, context.sceneId]);
+      },
+      setActorLayer(actor, layer, context) {
+        calls.push(['setActorLayer', actor.id, layer, context.sceneId]);
+      },
       setTransparency(actor, effect, context) {
         calls.push(['setTransparency', actor.id, effect, context.sceneId]);
       },
@@ -95,10 +101,11 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
 }
 
-function actorPort({composition, host, resolveActor} = {}) {
+function actorPort({composition, host, resolveActor, stopActorLoop} = {}) {
   return createDsl4ActorActionPort({
     composition: composition ?? fakeComposition().composition,
     host: host ?? fakeHost().host,
+    ...(stopActorLoop === undefined ? {} : {stopActorLoop}),
     resolveActor:
       resolveActor ??
       (() => {
@@ -107,7 +114,7 @@ function actorPort({composition, host, resolveActor} = {}) {
   });
 }
 
-test('maps show, setTransparency, moveTo, and say through one shared presentation host', async () => {
+test('maps show, hide, layer, transparency, move, and speech through one presentation host', async () => {
   const fake = fakeComposition();
   const presentation = fakeHost();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
@@ -123,6 +130,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
+  await port.hide({target: 'Hero'}, actionContext());
+  await port.setLayer({target: 'Hero', layer: 'back'}, actionContext());
   await port.setTransparency({target: 'Hero', transparency: 50}, actionContext());
   await port.moveTo(
     {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
@@ -138,6 +147,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
+    ['hideActor', 'hero-target', 'opening'],
+    ['setActorLayer', 'hero-target', 'back', 'opening'],
     ['setTransparency', 'hero-target', {transparency: 50}, 'opening'],
     ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
@@ -149,6 +160,48 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
     ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
+    ['Hero', 'opening'],
+    ['Hero', 'opening'],
+  ]);
+});
+
+test('waits for an in-flight loop skin before applying a show skin', async () => {
+  const loopStopped = deferred();
+  const loopStopStarted = deferred();
+  const calls = [];
+  const fake = fakeComposition({
+    applyToTarget(name, target) {
+      calls.push(['applyToTarget', name, target.id]);
+    },
+  });
+  const presentation = fakeHost({
+    showActor(actor) {
+      calls.push(['showActor', actor.id]);
+    },
+  });
+  const port = actorPort({
+    composition: fake.composition,
+    host: presentation.host,
+    stopActorLoop(target) {
+      calls.push(['stopActorLoop', target]);
+      loopStopStarted.resolve();
+      return loopStopped.promise;
+    },
+  });
+
+  const show = port.show(
+    {target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30},
+    actionContext(),
+  );
+  await loopStopStarted.promise;
+  assert.deepEqual(calls, [['stopActorLoop', 'Hero']]);
+
+  loopStopped.resolve();
+  await show;
+  assert.deepEqual(calls, [
+    ['stopActorLoop', 'Hero'],
+    ['applyToTarget', 'HeroHappy', 'hero-target'],
+    ['showActor', 'hero-target'],
   ]);
 });
 
@@ -416,10 +469,24 @@ test('rejects malformed and unresolved inputs before presentation side effects',
       ),
     () => port.say({target: 'Hero', text: 42, seconds: 1}, actionContext()),
     () => port.say({target: 'Hero', text: '', seconds: 1, extra: true}, actionContext()),
+    () =>
+      port.say(
+        {
+          target: 'Hero',
+          text: '',
+          seconds: 1,
+          bubbleStyle: 'native',
+          bubbleMotions: [{name: 'unknown'}],
+        },
+        actionContext(),
+      ),
     () => port.say({target: 'Hero', text: '', seconds: 1}, {}),
   ];
   for (const invoke of invalidPayloads) {
-    await assert.rejects(async () => invoke(), /actor action|payload|must|greater|negative/u);
+    await assert.rejects(
+      async () => invoke(),
+      /actor action|payload|must|greater|negative|invalid/u,
+    );
   }
   assert.deepEqual(fake.calls, []);
   assert.deepEqual(presentation.calls, []);
@@ -539,6 +606,81 @@ test('fails closed and cleans speech presentation for invalid advance handles or
     1,
   );
   assert.equal(outcomeCancelCalls, 1);
+});
+
+test('re-arms advance input while Bubble native reveal consumes it', async () => {
+  const calls = [];
+  const presentation = deferred();
+  let finishCount = 0;
+  const host = fakeHost({
+    createSay(_actor, speech) {
+      calls.push(['createSay', speech]);
+      return {
+        start() {
+          calls.push(['start']);
+          return presentation.promise;
+        },
+        finish(reason) {
+          finishCount += 1;
+          calls.push(['finish', reason, finishCount]);
+          if (finishCount === 1) return {consumed: true};
+          presentation.resolve();
+          return {consumed: false};
+        },
+      };
+    },
+    createThink() {
+      throw new Error('unexpected think');
+    },
+  });
+  const port = createDsl4ActorActionPort({
+    composition: fakeComposition().composition,
+    host: host.host,
+    resolveActor: () => ({id: 'hero-target', isStage: false}),
+    speechAdvanceTypewriterEnabled: true,
+  });
+  let waitCount = 0;
+  let cancelCount = 0;
+
+  await port.say(
+    {
+      target: 'Hero',
+      text: 'AB',
+      waitFor: 'advance',
+      bubbleStyle: 'native',
+      bubbleReveal: {unit: 'CHARACTER', intervalSeconds: 0},
+      bubbleMotions: [{name: 'shake', count: 2}],
+    },
+    {
+      ...actionContext(),
+      createAdvanceWait() {
+        waitCount += 1;
+        return {
+          promise: Promise.resolve({outcome: 'advance'}),
+          cancel() {
+            cancelCount += 1;
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(waitCount, 2);
+  assert.equal(cancelCount, 2);
+  assert.deepEqual(calls[0], [
+    'createSay',
+    {
+      text: 'AB',
+      bubbleStyle: 'native',
+      bubbleReveal: {unit: 'CHARACTER', intervalSeconds: 0},
+      bubbleMotions: [{name: 'shake', count: 2}],
+      waitFor: 'advance',
+    },
+  ]);
+  assert.deepEqual(calls.slice(-2), [
+    ['finish', 'advance', 1],
+    ['finish', 'advance', 2],
+  ]);
 });
 
 test('does not inspect dependencies for a pre-aborted action', async () => {

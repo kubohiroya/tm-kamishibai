@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
+import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {strToU8, unzipSync, zipSync} from 'fflate';
+import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
+import {downloadProjectFromBuffer} from '@turbowarp/sbdl';
 
 import {
   createDsl4BinaryEntryProviderFromSb3,
+  dsl4SbdlCompatibility,
   embedDsl4BinaryEntryRuntimeComponentInSb3,
   Sb3BuilderError,
 } from '../src/builder/index.js';
@@ -18,7 +21,10 @@ import {
   createDsl4OneShotBinaryEntryProvider,
   createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
+  dsl4BinaryEntryFormatVersion,
   dsl4BinaryEntryPrefix,
+  dsl4LegacyBinaryEntryFormatVersion,
+  dsl4LegacyBinaryEntryPrefix,
   Dsl4BinaryEntryError,
   loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeComponent,
@@ -26,6 +32,8 @@ import {
 } from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const require = createRequire(import.meta.url);
+const sbdlPackage = require('@turbowarp/sbdl/package.json');
 const schema = JSON.parse(
   await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
@@ -81,6 +89,44 @@ scenes:
 
 function sri(bytes) {
   return `sha256-${createHash('sha256').update(bytes).digest('base64')}`;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function legacyBinaryBundle(rootBundle) {
+  const files = rootBundle.descriptor.files.map(
+    ({assetId, path: filePath, size, integrity, entry}) => ({
+      assetId,
+      path: filePath,
+      size,
+      integrity,
+      entry: `${dsl4LegacyBinaryEntryPrefix}${entry.slice(dsl4BinaryEntryPrefix.length)}`,
+    }),
+  );
+  const content = {
+    formatVersion: dsl4LegacyBinaryEntryFormatVersion,
+    manifest: structuredClone(rootBundle.descriptor.manifest),
+    files,
+  };
+  const entryNames = [...new Set(files.map(({entry}) => entry))].sort();
+  return {
+    descriptor: {...content, integrity: sri(new TextEncoder().encode(canonicalJson(content)))},
+    entryNames,
+    getEntry(entryName) {
+      return rootBundle.getEntry(
+        `${dsl4BinaryEntryPrefix}${entryName.slice(dsl4LegacyBinaryEntryPrefix.length)}`,
+      );
+    },
+  };
 }
 
 function replaceZipEntryName(bytes, from, to) {
@@ -222,12 +268,25 @@ async function rejectsEntryCode(promise, code) {
 test('creates a canonical content-addressed descriptor without Base64 payloads', async () => {
   const component = await fixture();
   const {descriptor, entryNames} = component.binaryBundle;
-  assert.equal(descriptor.formatVersion, 2);
+  assert.equal(descriptor.formatVersion, dsl4BinaryEntryFormatVersion);
   assert.equal(descriptor.files.length, 3);
   assert.equal(entryNames.length, 2, 'identical bytes share one ZIP entry');
   assert.equal(descriptor.files[0].entry.startsWith(dsl4BinaryEntryPrefix), true);
   for (const file of descriptor.files) {
-    assert.deepEqual(Object.keys(file), ['assetId', 'path', 'size', 'integrity', 'entry']);
+    assert.deepEqual(Object.keys(file), [
+      'assetId',
+      'path',
+      'size',
+      'integrity',
+      'contentType',
+      'entry',
+    ]);
+    assert.match(file.entry, /^k4asset-v1-[0-9a-f]{64}$/u);
+    assert.equal(file.entry.includes('/'), false);
+    assert.equal(
+      file.contentType,
+      file.path.endsWith('.svg') ? 'image/svg+xml' : 'application/json',
+    );
     assert.equal(Object.hasOwn(file, 'data'), false);
     assert.equal(Object.hasOwn(file, 'encoding'), false);
   }
@@ -260,6 +319,10 @@ test('rejects descriptor mutation, unsafe paths, noncanonical integrity, and res
   missing.files.pop();
   const unsafe = structuredClone(descriptor);
   unsafe.files[0].entry = '../payload';
+  const nonRoot = structuredClone(descriptor);
+  nonRoot.files[0].entry = `nested/${nonRoot.files[0].entry}`;
+  const wrongContentType = structuredClone(descriptor);
+  wrongContentType.files[0].contentType = 'application/octet-stream';
   const noncanonical = structuredClone(descriptor);
   const integrity = noncanonical.integrity;
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -271,6 +334,8 @@ test('rejects descriptor mutation, unsafe paths, noncanonical integrity, and res
     [reversed, 'K4-ASSET-ENTRY-ORDER-001'],
     [missing, 'K4-ASSET-ENTRY-MANIFEST-001'],
     [unsafe, 'K4-ASSET-ENTRY-PATH-001'],
+    [nonRoot, 'K4-ASSET-ENTRY-PATH-001'],
+    [wrongContentType, 'K4-ASSET-ENTRY-MANIFEST-001'],
     [noncanonical, 'K4-ASSET-ENTRY-DESCRIPTOR-001'],
   ]) {
     await rejectsEntryCode(
@@ -309,6 +374,52 @@ test('rejects descriptor mutation, unsafe paths, noncanonical integrity, and res
     'K4-ASSET-ENTRY-LIMIT-001',
   );
   assert.equal(reads, 0, 'declared limits must fail before payload reads');
+});
+
+test('reads legacy nested v2 descriptors without implicitly converting them to root v3', async () => {
+  const component = await fixture();
+  const legacyBundle = legacyBinaryBundle(component.binaryBundle);
+  const validated = await validateDsl4BinaryEntryAssetBundle(
+    component.storyDocument,
+    legacyBundle.descriptor,
+    bundleOptions,
+  );
+  assert.equal(validated.formatVersion, dsl4LegacyBinaryEntryFormatVersion);
+  assert.equal(
+    validated.files.every(({entry}) => entry.startsWith(dsl4LegacyBinaryEntryPrefix)),
+    true,
+  );
+
+  const mislabeled = structuredClone(component.binaryBundle.descriptor);
+  mislabeled.formatVersion = dsl4LegacyBinaryEntryFormatVersion;
+  await rejectsEntryCode(
+    validateDsl4BinaryEntryAssetBundle(component.storyDocument, mislabeled, bundleOptions),
+    'K4-ASSET-ENTRY-DESCRIPTOR-001',
+  );
+
+  const built = await embedDsl4BinaryEntryRuntimeComponentInSb3(
+    baseSb3(),
+    component.storyDocument,
+    component.sourceDescriptor,
+    component.runtimeArtifact,
+    legacyBundle,
+    componentOptions,
+  );
+  const archive = unzipSync(built.bytes);
+  assert.deepEqual(
+    Object.keys(archive)
+      .filter((name) => name.startsWith(dsl4LegacyBinaryEntryPrefix))
+      .sort(),
+    legacyBundle.entryNames,
+  );
+  const provider = await createDsl4BinaryEntryProviderFromSb3(
+    built.bytes,
+    component.storyDocument,
+    legacyBundle.descriptor,
+    archiveOptions,
+  );
+  assert.equal((await provider.consumeAsset('Image')).files[0].contentType, undefined);
+  await provider.release();
 });
 
 test('consumes each asset once and drops reader references on completion or release', async () => {
@@ -386,6 +497,40 @@ test('consumes each asset once and drops reader references on completion or rele
   await abortedProvider.release();
 });
 
+test('re-reads validated assets for direct runtime backing without weakening one-shot consume', async () => {
+  const component = await fixture();
+  let reads = 0;
+  const provider = await createDsl4OneShotBinaryEntryProvider(
+    component.storyDocument,
+    component.binaryBundle.descriptor,
+    {
+      ...bundleOptions,
+      maxCompressionRatio: 1,
+      releaseAfterLastAsset: false,
+      readEntry(entryName) {
+        reads += 1;
+        const bytes = component.binaryBundle.getEntry(entryName);
+        return {bytes, compressedSize: bytes.length};
+      },
+    },
+  );
+
+  const first = await provider.readAsset('Image');
+  first.files[0].bytes[0] ^= 0xff;
+  const second = await provider.readAsset('Image');
+  assert.deepEqual(second.files[0].bytes, assetSnapshot().getFile('Image', 'image.svg'));
+  assert.equal(provider.remainingAssetCount, 2);
+
+  await provider.consumeAsset('Image');
+  assert.equal(provider.remainingAssetCount, 1);
+  await provider.readAsset('Image');
+  await rejectsEntryCode(provider.consumeAsset('Image'), 'K4-ASSET-ENTRY-CONSUMED-001');
+  assert.equal(reads, 4);
+
+  await provider.release();
+  await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+});
+
 test('embeds and loads the binary mode explicitly without changing the legacy default', async () => {
   const component = await fixture();
   const input = baseSb3();
@@ -418,7 +563,7 @@ test('embeds and loads the binary mode explicitly without changing the legacy de
     first.project.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
       .assets;
   assert.equal(JSON.stringify(stored).includes('"data"'), false);
-  assert.equal(stored.formatVersion, 2);
+  assert.equal(stored.formatVersion, dsl4BinaryEntryFormatVersion);
 
   const loaded = await loadDsl4BinaryEntryRuntimeComponent(first.project, frontend, archiveOptions);
   assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
@@ -443,7 +588,72 @@ test('embeds and loads the binary mode explicitly without changing the legacy de
   assert.equal(provider.released, true);
 });
 
-test('fails closed before inflation for archive mismatch and bounds, and supports resupply', async () => {
+test('preserves root descriptor references and bytes through the pinned sbdl normalization', async () => {
+  assert.equal(sbdlPackage.version, dsl4SbdlCompatibility.version);
+  assert.equal(dsl4SbdlCompatibility.commit, '56e841ccbdc4f8902c11b53c85299a4988c213e2');
+  const component = await fixture();
+  const built = await embedDsl4BinaryEntryRuntimeComponentInSb3(
+    baseSb3(),
+    component.storyDocument,
+    component.sourceDescriptor,
+    component.runtimeArtifact,
+    component.binaryBundle,
+    componentOptions,
+  );
+  const before = unzipSync(built.bytes);
+  const withNestedEntry = zipSync({
+    ...before,
+    'normalization-fixture/note.txt': strToU8('forces sbdl to normalize'),
+  });
+  const normalized = await downloadProjectFromBuffer(withNestedEntry, {
+    date: new Date('2021-12-31T00:00:00.000Z'),
+  });
+  assert.equal(normalized.type, 'sb3');
+  const after = unzipSync(new Uint8Array(normalized.arrayBuffer));
+  const normalizedProject = JSON.parse(strFromU8(after['project.json']));
+  const normalizedDescriptor =
+    normalizedProject.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4
+      .assets;
+  assert.deepEqual(normalizedDescriptor, component.binaryBundle.descriptor);
+  for (const entryName of component.binaryBundle.entryNames) {
+    assert.deepEqual(after[entryName], before[entryName]);
+  }
+});
+
+test('rejects reserved root entry collisions even during explicit component replacement', async () => {
+  const component = await fixture();
+  const collisionEntry = component.binaryBundle.entryNames[0];
+  const project = baseProject();
+  project.targets[0].costumes = [
+    {
+      name: 'Collision',
+      assetId: 'not-a-scratch-md5',
+      dataFormat: 'bin',
+      md5ext: collisionEntry,
+    },
+  ];
+  const collisionSb3 = zipSync({
+    'project.json': strToU8(`${JSON.stringify(project)}\n`),
+    [collisionEntry]: component.binaryBundle.getEntry(collisionEntry),
+  });
+  await assert.rejects(
+    embedDsl4BinaryEntryRuntimeComponentInSb3(
+      collisionSb3,
+      component.storyDocument,
+      component.sourceDescriptor,
+      component.runtimeArtifact,
+      component.binaryBundle,
+      {...componentOptions, replaceExisting: true},
+    ),
+    (error) => {
+      assert.equal(error instanceof Sb3BuilderError, true);
+      assert.equal(error.code, 'K4-ASSET-ENTRY-ARCHIVE-COLLISION-001');
+      return true;
+    },
+  );
+});
+
+test('fails closed before inflation for archive mismatch and bounds', async () => {
   const component = await fixture();
   const built = await embedDsl4BinaryEntryRuntimeComponentInSb3(
     baseSb3(),
@@ -547,18 +757,6 @@ test('fails closed before inflation for archive mismatch and bounds, and support
   );
   await released.release();
   await rejectsEntryCode(released.consumeAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
-
-  const resupplied = await createDsl4BinaryEntryProviderFromSb3(
-    built.bytes,
-    component.storyDocument,
-    component.binaryBundle.descriptor,
-    archiveOptions,
-  );
-  assert.deepEqual(
-    (await resupplied.consumeAsset('Image')).files[0].bytes,
-    assetSnapshot().getFile('Image', 'image.svg'),
-  );
-  await resupplied.release();
 
   const badBundle = {
     ...component.binaryBundle,

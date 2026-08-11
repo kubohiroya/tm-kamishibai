@@ -2,7 +2,7 @@ import {unzipSync} from 'fflate';
 
 import {
   createDsl4OneShotBinaryEntryProvider,
-  dsl4BinaryEntryPrefix,
+  dsl4BinaryEntryPrefixes,
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from '../dsl4/binary-entry-provider.js';
@@ -39,6 +39,60 @@ function positiveRatio(value, name) {
 /** @param {Uint8Array} left @param {Uint8Array} right */
 function equalBytes(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** @param {string} entryName */
+function isDsl4BinaryEntryName(entryName) {
+  return dsl4BinaryEntryPrefixes.some((prefix) => entryName.startsWith(prefix));
+}
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** @param {Record<string, unknown>} project */
+function installedDsl4EntryNames(project) {
+  const extensionStorage = isRecord(project.extensionStorage) ? project.extensionStorage : {};
+  const unbundled = isRecord(extensionStorage.kubohiroyakamishibairuntime4)
+    ? extensionStorage.kubohiroyakamishibairuntime4
+    : {};
+  const bundle = isRecord(extensionStorage.kubohiroyakamishibai4)
+    ? extensionStorage.kubohiroyakamishibai4
+    : {};
+  const components = isRecord(bundle.components) ? bundle.components : {};
+  const bundled = isRecord(components.kubohiroyakamishibairuntime4)
+    ? components.kubohiroyakamishibairuntime4
+    : {};
+  const names = new Set();
+  for (const container of [unbundled, bundled]) {
+    const assets = isRecord(container.assets) ? container.assets : {};
+    if (!Array.isArray(assets.files)) continue;
+    for (const file of assets.files) {
+      if (isRecord(file) && typeof file.entry === 'string') names.add(file.entry);
+    }
+  }
+  return names;
+}
+
+/** @param {Record<string, unknown>} project */
+function scratchAssetEntryNames(project) {
+  const names = new Set();
+  const targets = Array.isArray(project.targets) ? project.targets : [];
+  for (const target of targets) {
+    if (!isRecord(target)) continue;
+    for (const collectionName of ['costumes', 'sounds']) {
+      const assets = Array.isArray(target[collectionName]) ? target[collectionName] : [];
+      for (const asset of assets) {
+        if (!isRecord(asset)) continue;
+        if (typeof asset.md5ext === 'string') names.add(asset.md5ext);
+        if (typeof asset.assetId === 'string' && typeof asset.dataFormat === 'string') {
+          names.add(`${asset.assetId}.${asset.dataFormat}`);
+        }
+      }
+    }
+  }
+  return names;
 }
 
 /** @param {string} entryName */
@@ -149,14 +203,25 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
         'binaryBundle.entryNames do not exactly match the descriptor',
       );
     }
-    const existingOwnedEntries = Object.keys(archive).filter((name) =>
-      name.startsWith(dsl4BinaryEntryPrefix),
-    );
+    const existingOwnedEntries = Object.keys(archive).filter(isDsl4BinaryEntryName);
     if (existingOwnedEntries.length > 0 && options.replaceExisting !== true) {
       entryFail(
         'K4-ASSET-ENTRY-ARCHIVE-EXISTS-001',
         'SB3 already contains reserved DSL 4.0 binary entries',
       );
+    }
+    if (existingOwnedEntries.length > 0) {
+      const installedEntries = installedDsl4EntryNames(project);
+      const scratchEntries = scratchAssetEntryNames(project);
+      const collision = existingOwnedEntries.find(
+        (entryName) => !installedEntries.has(entryName) || scratchEntries.has(entryName),
+      );
+      if (collision !== undefined) {
+        entryFail(
+          'K4-ASSET-ENTRY-ARCHIVE-COLLISION-001',
+          `Reserved DSL 4.0 entry is owned by another archive component: ${collision}`,
+        );
+      }
     }
     const candidateEntries = new Map();
     for (const assetId of provider.assetIds) {
@@ -229,113 +294,22 @@ export async function createDsl4BinaryEntryProviderFromSb3(
   if (!(sb3Bytes instanceof Uint8Array)) {
     throw new TypeError('sb3Bytes must be a Uint8Array');
   }
-  const archiveLimit = positiveLimit(options.maxArchiveBytes, 'maxArchiveBytes');
-  const archiveEntryLimit = positiveLimit(options.maxArchiveEntries, 'maxArchiveEntries');
-  const archiveEntryByteLimit = positiveLimit(options.maxArchiveEntryBytes, 'maxArchiveEntryBytes');
-  const archiveExpandedLimit = positiveLimit(
-    options.maxArchiveExpandedBytes,
-    'maxArchiveExpandedBytes',
-  );
-  const ratioLimit = positiveRatio(options.maxCompressionRatio, 'maxCompressionRatio');
-  if (sb3Bytes.length > archiveLimit) {
-    entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveBytes');
-  }
-  const validated = await validateDsl4BinaryEntryAssetBundle(storyDocument, descriptor, {
-    maxFiles: options.maxAssetFiles,
-    maxFileBytes: options.maxAssetFileBytes,
-    maxTotalBytes: options.maxAssetBytes,
-    subtleCrypto: options.subtleCrypto,
-  });
-  const expectedEntries = new Map();
-  for (const file of /** @type {ReadonlyArray<Record<string, any>>} */ (validated.files)) {
-    const existing = expectedEntries.get(file.entry);
-    if (existing !== undefined && existing !== file.size) {
-      entryFail(
-        'K4-ASSET-ENTRY-MANIFEST-001',
-        `Content-addressed entry has conflicting sizes: ${file.entry}`,
-      );
-    }
-    expectedEntries.set(file.entry, file.size);
-  }
   let retainedBytes = new Uint8Array(sb3Bytes);
-  const metadata = new Map();
-  const seen = new Set();
-  let entryCount = 0;
-  let expandedBytes = 0;
+  let inspection;
   try {
-    unzipSync(retainedBytes, {
-      filter(info) {
-        entryCount += 1;
-        if (entryCount > archiveEntryLimit) {
-          entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveEntries');
-        }
-        validateArchiveEntryName(info.name);
-        if (seen.has(info.name)) {
-          entryFail('K4-ASSET-ENTRY-DUPLICATE-001', `Duplicate ZIP entry: ${info.name}`);
-        }
-        seen.add(info.name);
-        if (info.originalSize > archiveEntryByteLimit) {
-          entryFail(
-            'K4-ASSET-ENTRY-ARCHIVE-LIMIT-001',
-            `ZIP entry exceeds maxArchiveEntryBytes: ${info.name}`,
-          );
-        }
-        expandedBytes += info.originalSize;
-        if (!Number.isSafeInteger(expandedBytes) || expandedBytes > archiveExpandedLimit) {
-          entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveExpandedBytes');
-        }
-        const expectedSize = expectedEntries.get(info.name);
-        if (expectedSize !== undefined) {
-          if (info.originalSize !== expectedSize) {
-            entryFail(
-              'K4-ASSET-ENTRY-SIZE-001',
-              `ZIP entry size does not match its descriptor: ${info.name}`,
-            );
-          }
-          if (info.compression !== 0 && info.compression !== 8) {
-            entryFail(
-              'K4-ASSET-ENTRY-COMPRESSION-001',
-              `ZIP entry uses an unsupported compression method: ${info.name}`,
-            );
-          }
-          if (
-            (info.size === 0 && info.originalSize !== 0) ||
-            (info.size !== 0 && info.originalSize / info.size > ratioLimit)
-          ) {
-            entryFail(
-              'K4-ASSET-ENTRY-COMPRESSION-001',
-              `ZIP entry exceeds maxCompressionRatio: ${info.name}`,
-            );
-          }
-          metadata.set(info.name, {
-            compressedSize: info.size,
-            originalSize: info.originalSize,
-          });
-        } else if (info.name.startsWith(dsl4BinaryEntryPrefix)) {
-          entryFail('K4-ASSET-ENTRY-MANIFEST-001', `Unexpected reserved ZIP entry: ${info.name}`);
-        }
-        return false;
-      },
-    });
+    inspection = await inspectDsl4BinaryEntryArchive(
+      retainedBytes,
+      storyDocument,
+      descriptor,
+      options,
+    );
   } catch (error) {
     retainedBytes = new Uint8Array(0);
-    metadata.clear();
-    if (error instanceof Dsl4BinaryEntryError) throw error;
-    entryFail('K4-ASSET-ENTRY-ARCHIVE-001', 'SB3 is not a valid bounded ZIP archive', error);
+    throw error;
   }
-  if (!seen.has('project.json')) {
-    retainedBytes = new Uint8Array(0);
-    metadata.clear();
-    entryFail('K4-ASSET-ENTRY-ARCHIVE-001', 'SB3 is missing project.json');
-  }
-  for (const entryName of expectedEntries.keys()) {
-    if (!metadata.has(entryName)) {
-      retainedBytes = new Uint8Array(0);
-      metadata.clear();
-      entryFail('K4-ASSET-ENTRY-MANIFEST-001', `SB3 is missing binary entry: ${entryName}`);
-    }
-  }
-  return createDsl4OneShotBinaryEntryProvider(storyDocument, validated, {
+  const ratioLimit = positiveRatio(options.maxCompressionRatio, 'maxCompressionRatio');
+  const metadata = new Map(inspection.entries.map((entry) => [entry.name, entry]));
+  return createDsl4OneShotBinaryEntryProvider(storyDocument, inspection.descriptor, {
     maxFiles: options.maxAssetFiles,
     maxFileBytes: options.maxAssetFileBytes,
     maxTotalBytes: options.maxAssetBytes,
@@ -372,5 +346,148 @@ export async function createDsl4BinaryEntryProviderFromSb3(
       metadata.clear();
     },
     subtleCrypto: options.subtleCrypto,
+  });
+}
+
+/**
+ * Inspect a normalized SB3 without inflating its entries.
+ *
+ * The returned metadata is safe to embed in a fixed Packager adapter: it contains only aggregate
+ * bounds and reserved content-addressed entry names, never project or asset bytes.
+ *
+ * @param {Buffer | Uint8Array} sb3Bytes
+ * @param {Readonly<Record<string, unknown>>} storyDocument
+ * @param {unknown} descriptor
+ * @param {object} options
+ * @param {number} options.maxArchiveBytes
+ * @param {number} options.maxArchiveEntries
+ * @param {number} options.maxArchiveEntryBytes
+ * @param {number} options.maxArchiveExpandedBytes
+ * @param {number} options.maxAssetFiles
+ * @param {number} options.maxAssetFileBytes
+ * @param {number} options.maxAssetBytes
+ * @param {number} options.maxCompressionRatio
+ * @param {{digest: Function}} [options.subtleCrypto]
+ */
+export async function inspectDsl4BinaryEntryArchive(sb3Bytes, storyDocument, descriptor, options) {
+  if (!(sb3Bytes instanceof Uint8Array)) {
+    throw new TypeError('sb3Bytes must be a Uint8Array');
+  }
+  const archiveLimit = positiveLimit(options.maxArchiveBytes, 'maxArchiveBytes');
+  const archiveEntryLimit = positiveLimit(options.maxArchiveEntries, 'maxArchiveEntries');
+  const archiveEntryByteLimit = positiveLimit(options.maxArchiveEntryBytes, 'maxArchiveEntryBytes');
+  const archiveExpandedLimit = positiveLimit(
+    options.maxArchiveExpandedBytes,
+    'maxArchiveExpandedBytes',
+  );
+  const ratioLimit = positiveRatio(options.maxCompressionRatio, 'maxCompressionRatio');
+  if (sb3Bytes.length > archiveLimit) {
+    entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveBytes');
+  }
+  const validated = await validateDsl4BinaryEntryAssetBundle(storyDocument, descriptor, {
+    maxFiles: options.maxAssetFiles,
+    maxFileBytes: options.maxAssetFileBytes,
+    maxTotalBytes: options.maxAssetBytes,
+    subtleCrypto: options.subtleCrypto,
+  });
+  const expectedEntries = new Map();
+  for (const file of /** @type {ReadonlyArray<Record<string, any>>} */ (validated.files)) {
+    const existing = expectedEntries.get(file.entry);
+    if (existing !== undefined && existing !== file.size) {
+      entryFail(
+        'K4-ASSET-ENTRY-MANIFEST-001',
+        `Content-addressed entry has conflicting sizes: ${file.entry}`,
+      );
+    }
+    expectedEntries.set(file.entry, file.size);
+  }
+  const metadata = new Map();
+  const seen = new Set();
+  let entryCount = 0;
+  let expandedBytes = 0;
+  let maxEntryBytes = 0;
+  try {
+    unzipSync(new Uint8Array(sb3Bytes), {
+      filter(info) {
+        entryCount += 1;
+        if (entryCount > archiveEntryLimit) {
+          entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveEntries');
+        }
+        validateArchiveEntryName(info.name);
+        if (seen.has(info.name)) {
+          entryFail('K4-ASSET-ENTRY-DUPLICATE-001', `Duplicate ZIP entry: ${info.name}`);
+        }
+        seen.add(info.name);
+        if (info.originalSize > archiveEntryByteLimit) {
+          entryFail(
+            'K4-ASSET-ENTRY-ARCHIVE-LIMIT-001',
+            `ZIP entry exceeds maxArchiveEntryBytes: ${info.name}`,
+          );
+        }
+        maxEntryBytes = Math.max(maxEntryBytes, info.originalSize);
+        expandedBytes += info.originalSize;
+        if (!Number.isSafeInteger(expandedBytes) || expandedBytes > archiveExpandedLimit) {
+          entryFail('K4-ASSET-ENTRY-ARCHIVE-LIMIT-001', 'SB3 exceeds maxArchiveExpandedBytes');
+        }
+        const expectedSize = expectedEntries.get(info.name);
+        if (expectedSize !== undefined) {
+          if (info.originalSize !== expectedSize) {
+            entryFail(
+              'K4-ASSET-ENTRY-SIZE-001',
+              `ZIP entry size does not match its descriptor: ${info.name}`,
+            );
+          }
+          if (info.compression !== 0 && info.compression !== 8) {
+            entryFail(
+              'K4-ASSET-ENTRY-COMPRESSION-001',
+              `ZIP entry uses an unsupported compression method: ${info.name}`,
+            );
+          }
+          if (
+            (info.size === 0 && info.originalSize !== 0) ||
+            (info.size !== 0 && info.originalSize / info.size > ratioLimit)
+          ) {
+            entryFail(
+              'K4-ASSET-ENTRY-COMPRESSION-001',
+              `ZIP entry exceeds maxCompressionRatio: ${info.name}`,
+            );
+          }
+          metadata.set(info.name, {
+            name: info.name,
+            compressedSize: info.size,
+            uncompressedSize: info.originalSize,
+          });
+        } else if (isDsl4BinaryEntryName(info.name)) {
+          entryFail('K4-ASSET-ENTRY-MANIFEST-001', `Unexpected reserved ZIP entry: ${info.name}`);
+        }
+        return false;
+      },
+    });
+  } catch (error) {
+    metadata.clear();
+    if (error instanceof Dsl4BinaryEntryError) throw error;
+    entryFail('K4-ASSET-ENTRY-ARCHIVE-001', 'SB3 is not a valid bounded ZIP archive', error);
+  }
+  if (!seen.has('project.json')) {
+    entryFail('K4-ASSET-ENTRY-ARCHIVE-001', 'SB3 is missing project.json');
+  }
+  for (const entryName of expectedEntries.keys()) {
+    if (!metadata.has(entryName)) {
+      entryFail('K4-ASSET-ENTRY-MANIFEST-001', `SB3 is missing binary entry: ${entryName}`);
+    }
+  }
+  return Object.freeze({
+    descriptor: validated,
+    archive: Object.freeze({
+      bytes: sb3Bytes.length,
+      entryCount,
+      expandedBytes,
+      maxEntryBytes,
+    }),
+    entries: Object.freeze(
+      [...metadata.values()]
+        .sort((left, right) => left.name.localeCompare(right.name, 'en'))
+        .map((entry) => Object.freeze(entry)),
+    ),
   });
 }

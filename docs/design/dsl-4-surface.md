@@ -47,16 +47,25 @@ Copyright © 2026 Hiroya Kubo.
 | `actors`          | 任意 | actorと初期costumeの対応          |
 | `cover`           | 任意 | 表紙の背景とBGM                   |
 | `textStyles`      | 任意 | SVG Textの名前付きstyle           |
-| `speechStyles`    | 任意 | say／thinkの名前付き文字送りstyle |
+| `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音            |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定  |
 | `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
 
-識別子にはUnicodeの文字、数字、`_`、`-`を使用できます。先頭は文字または`_`とし、
-`.`はactor actionの区切りとして予約します。すべての識別子はUnicode NFCでなければなりません。
+actor、style、variable、branch、action、parameterなど、DSL構文上の識別子にはUnicodeの文字、数字、
+`_`、`-`を使用できます。先頭は文字または`_`とし、`.`はactor actionの区切りとして予約します。
+これらの構文識別子はUnicode NFCでなければなりません。
+
+asset IDとscene IDはScratch上の名前をそのまま保持できる、空でない文字列です。空白、`.`、`/`、
+Unicodeの正規化形式、C0制御文字、DELを含められます。YAML sourceでは必要に応じてdouble-quoted scalarの
+escapeを使います。parser、converter、runtimeは値をtrim、NFC変換、alias化しません。`__proto__`など
+object pollutionを生じるmapping keyは、文字種とは別の安全境界として引き続き拒否します。
+
+`bubbleStyles`の名前だけは人が読むclass名として扱い、内部の空白と日本語を使用できます。空文字、
+先頭・末尾の空白、改行、tab、制御文字は使用できず、Unicode NFCでなければなりません。
 
 YAMLのduplicate key、anchor、alias、merge key、custom tag、複数文書を認めません。実装は
 YAMLの構文位置を保持し、schema検証に成功するまでアセット読込などの副作用を開始しません。
@@ -122,6 +131,13 @@ assets:
       integrity: sha256-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
       contentType: image/webp
       size: 654321
+  LivePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    retention: scene
+    source:
+      url: https://teachablemachine.withgoogle.com/models/example/
 ```
 
 `kind`は`backdrop`、`costume`、`sound`、`poseModel`のいずれかです。`costume`は`target`を
@@ -130,9 +146,14 @@ assets:
 成果物へ埋め込み、ネットワークなしで動作するself-containedなSB3を生成します。
 
 `delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
-`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。期待するbyte列を固定する`integrity`、MIME typeを固定する
-`contentType`、上限検査に使う`size`をすべて必須とします。`integrity`は
-`sha256-`に続けて64桁の小文字16進SHA-256を記述します。HTTP、検証情報の省略、`name`または`file`との
+`source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。poseModelは
+TMPose 3.2と同じdirectory URLを`url`だけで指定できます。この通常モードは取得時点のmodel内容を正本とし、
+`model.json`、`metadata.json`、model manifestが宣言するweights fileをlazy取得します。
+
+内容を固定する場合はmodel directoryをlocalへ取得して`file`で指定し、SB3へembedded化します。remoteの
+ままbyte列を検証する場合は、期待するbyte列を固定する`integrity`、MIME typeを固定する`contentType`、
+上限検査に使う`size`を三つとも指定します。`integrity`は`sha256-`に続けて64桁の小文字16進SHA-256を
+記述します。三項目の一部だけの指定、poseModel以外での検証情報省略、HTTP、`name`または`file`との
 併記はschema errorです。
 
 ### 3.3 読み込みとメモリ保持方針
@@ -158,6 +179,11 @@ assetは起動時に必要となるため、`lazy`でもentry sceneより前に�
 保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
 `retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
 
+起動時は`loading`から参照されるassetだけを先にmaterializeし、その間は汎用indeterminate indicatorを
+Scratch stage領域の中央・最前面に表示します。準備後は指定backdropを全面表示し、`costumes`を宣言順に
+循環表示しながら残りのstartup assetを準備します。scene間のlazy loadingにも同じLoading宣言を使い、
+設定がない場合は汎用indicatorへfallbackします。indicatorは`circular`／`bar`をapp-shell APIで選択できます。
+
 scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
 準備に成功した場合はcurrent／nextのdependencyを比較し、nextでも必要なresourceは再登録せず、
@@ -167,21 +193,26 @@ nextの最大二つが一時共存し得ますが、訪問済みmodelをすべ�
 
 ### 3.4 runtime境界と失敗
 
-builderはremote assetの検証情報だけをasset bundle manifestへ格納し、byte列をSB3へ格納しません。
+builderはremote assetのURLと、指定されていれば検証情報だけをasset bundle manifestへ格納し、byte列を
+SB3へ格納しません。
 controller coreは`fetch`、filesystem、VMへ直接依存せず、既存のasset preload coordinatorを通して
 asset lifecycleを呼びます。通常のembedded lifecycleではremote取得を拒否し、hostが
 `createDsl4RemoteAssetLifecycle`へ`loadRemoteAsset`を明示的に注入した場合だけremote modeを有効に
 できます。
 
-loaderは宣言されたURLと期待値、`AbortSignal`を受け取り、byte列と実際のContent-Typeを返します。
+loaderは宣言されたURL、指定されていれば期待値、および`AbortSignal`を受け取り、byte列と実際の
+Content-Typeを返します。
 hostは接続先hostのallowlist、timeout、redirect数、stream受信中の最大byte数を制限します。lifecycleは
-loaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform adapterへ登録します。
+verified remoteではloaderの返却後、`size`、`contentType`、`integrity`をすべて再検証してからplatform
+adapterへ登録します。
 URL credentialはsource frontendで拒否するため、認証情報を作品へ埋め込む用途には使用できません。
-remote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive byte列に加え、
-実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
+検証情報付きremote `poseModel`のURLは一つのarchiveを指します。host loaderは検証対象となるarchive
+byte列に加え、実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
 extractorが`model.json`、`metadata.json`、weights fileを展開します。path traversal、duplicate entry、
 file数、圧縮前後と展開後の合計byte数へ上限を適用し、各fileをarchive integrityとextractor format versionへ
 bindingしてからTMPose adapterへ登録します。loaderが別経路で渡した未検証の展開fileは受理しません。
+通常の裸URL poseModelはarchiveを要求せず、同じdirectory配下の三fileをhost loader経由で取得します。
+この経路は内容同一性を主張しないため、verified remote cacheへ保存しません。
 
 materialize済みresourceは`retention`に従ってadapterからasset単位でreleaseし、停止・再起動・dispose時は
 retentionにかかわらず全件releaseします。
@@ -196,8 +227,10 @@ offlineへ切り戻す場合は`delivery: embedded`とローカル`file`へ戻�
 IndexedDBへ保存した検証済みbyte列の寿命は`retention`とは別に管理します。memory resourceをreleaseしても
 永続cacheは削除せず、cacheをclearしても既にmaterialize済みのresourceは直ちに無効化しません。cacheは
 最終利用からのTTL、LRU、byte budget、format versionによりboundedに掃除し、保存失敗時は機械可読warningを
-返します。remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
+返します。verified remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
 再検証を行います。
+裸URL poseModelはsession内のmaterialize済みresourceだけを再利用し、解放後の再materializeではURLから
+現在のmodelを取得します。
 
 DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にstable story IDと台本ファイルのbasenameから
 次のようなdatabase名を生成し、story manifestへ保存します。
@@ -256,12 +289,16 @@ HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同�
 runtime／schema接続はIssue #284で実装済みです。TMPose 1.6.1の`releasePoseModel()`／`releaseAll()`は
 classifierとPoseNet双方のdispose完了を待ちます。
 
-self-contained 4.0 SB3の`binary-entry`形式は明示opt-inです。runtime startupへ渡すproviderは
+self-contained 4.0 SB3の新規`binary-entry`形式は`dsl4RootBinaryEntryPackaging`による明示opt-inです。
+descriptor format version 3はSB3 rootの`k4asset-v1-<sha256-hex>`だけを参照します。runtime startupへ渡すproviderは
 `releaseAfterLastAsset: false`で作成し、全assetのtransaction commit後にproduct backingが一度だけreleaseします。
-永続keyはstable story ID／asset ID／bundle integrityを組み合わせ、provider解放後のscene再訪はIndexedDBだけから
-再materializeします。editorは`createExportBundle()`で同一descriptor／integrityの一時entry集合を再構築でき、保存後は
-`releaseEntries()`でその参照を破棄します。cache miss、quota、unavailable、abort時にnetwork fallbackは行いません。
-互換用Base64形式とDSL 3.2は変更せず、`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+embedded assetは30日TTLのremote cacheへ保存せず、起動ごとのsession identityで分離したsession backingまたは
+個別entryを取得できるdirect sourceから再materializeします。session backing確立後の欠落／破損ではSB3から再抽出せず
+安全停止します。editorは同一descriptor／integrityの一時entry集合を再構築し、保存後は`releaseEntries()`で参照を
+破棄します。source integrity errorではpolicyにかかわらずfallbackしません。
+互換用Base64形式とDSL 3.2は変更せず、flag OFFまたは`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+旧nested format version 2は読み取り互換だけを維持し、root形式へ暗黙変換しません。詳細は
+[root binary／Packager契約](./dsl-4-root-binary-packager-contract.md)を参照してください。
 
 real Chromiumのpose memory fixtureは24回のscene再訪で最大20 logical tensors／196,608 bytes、解放後0、
 classifier／PoseNet dispose各24回を確認します。JavaScript heapのfixture上限はpeak増加32 MiB、CDP強制GC後は
@@ -302,23 +339,126 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
-speechStyles:
-  novel:
+bubbleStyles:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
+    textStyle: title
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
+  Native reveal:
+    textStyle: title
+    maxWidth: 320
+    textLocale: ja
+    portrait:
+      base: HeroFace
+      blink: {frames: [EyesOpen, EyesClosed], frameIntervalSeconds: 0.4}
+      lipSync: {frames: [MouthClosed, MouthOpen], frameIntervalSeconds: 0.08}
+    continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.12}
+    reveal:
+      unit: CHARACTER
+      layout: RESERVED
+      intervalSeconds: 0.05
+      sound: Typewriter
+    audio: {voice: HeroVoice, finish: ContinueSound}
+    showAnimation: {name: fadeIn, durationSeconds: 0.2, ease: easeOut}
+    visibleAnimations:
+      - {name: shake, direction: right, count: 2, ease: easeInOut}
+      - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
+    hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
+
+`poseRecognition.idleSound`と`chargeSound`はそれぞれ任意です。両方を省略した無音、`idleSound`だけの
+3.2互換設定、両方を指定した設定を受理します。音を指定しなくても`sequence`、`selection`、`feedback`、
+`navigation`、`preview`は独立して設定できます。
+
+`cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
+3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
+非埋め込み版は`showMenu`へ遷移します。言語の初期値はブラウザ言語から毎回決定し、localStorage保存を
+互換要件にはしません。
+
+### 4.1 control profile
+
+```yaml
+controls:
+  keymaps:
+    production:
+      Space: rehearsal.skipPose
+    rehearsal:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
+```
+
+`rehearsal.skipPose`はactive pose stepだけを完了し、同じpose actionの次stepへ進みます。
+`rehearsal.skipAction`はactive actionを3.2と同じ最終状態へ完了し、次actionへ進みます。pose中に受理した場合は
+pose action全体を終了します。`rehearsal.skipScene`はactive actionを完了した後、現在sceneの残りから`bgm`と
+`transition`だけを最終状態で適用し、stage、actor、wait、input等を実行せず次sceneへ進みます。既存BGMは停止せず、
+activeな`sound`だけを停止します。三commandは最初に受理した入力のcleanupと境界到達が完了するまで後続入力を受理しません。
+
+これらは`history.nextScene`と異なり実行履歴を移動しません。選択するprofile名に特別な意味はなく、たとえば
+`controls.keymaps.production`へ三commandを明示すれば本番buildでも有効です。keymapに記述しなければ無効です。
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
-`speechStyles`は`Actor.say`／`Actor.think`の文字送りpresentationだけを名前付きで再利用します。
-各styleは`characterIntervalSeconds`を必須とし、`characterSound`、`noSoundCharacters`、
-`restCharacters`、`restCharacterIntervalSeconds`を指定できます。本文、完了条件、吹き出し開始時の音声は
+`bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationを、再利用可能な部分styleとして
+宣言します。各styleは単独で完結している必要はありません。`styles`から参照した全styleとaction内指定を
+合成したeffective styleに対して、`characterSound`には`characterIntervalSeconds`が必要、などの相互依存を
+検証します。本文、完了条件、吹き出し開始時の音声はセリフごとに異なるため、`text`、`seconds`、
+`waitFor`、`startSound`をstyleへ含めません。
+
+style定義自身の`styles`配列から既存styleを参照し、名前付き合成styleを定義できます。参照先を配列順に
+合成した後、その定義自身に記述したpropertyを適用します。名前付き合成は再帰的に使用できますが、直接・
+間接を問わず循環参照は`K4-BUBBLE-STYLE-CYCLE-001`で拒否します。参照先が存在しない場合と同じstyleの
+重複指定もエラーです。
+
+`continueIndicator.frames`は2件以上のtarget-independent `image` asset ID、
+`frameIntervalSeconds`は正の秒数です。同じframe IDを複数回指定して表示時間を調整できます。
+actionが参照するeffective styleに含まれる全frameを、sceneのasset依存としてprepareします。
+
+Bubble Compositionでは
+`textStyle`は本文レイヤーの`textStyles` IDで、省略時は`default`です。`placement`、`distance`、
+`tailLength`、`offset`、`visualStyle`、`portrait`、`continueIndicator`で吹き出しsurfaceを構成し、
+`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
+`restCharacterIntervalSeconds`で文字送りを指定できます。本文、完了条件、吹き出し開始時の音声は
 セリフごとに異なるため、`text`、`seconds`、`waitFor`、`startSound`をstyleへ含めません。
+
+SVG Text 0.4では`textStyles`は文字レイヤーだけを担当し、吹き出しの方向は持ちません。3.2の
+`svgTextStyle`に含まれる`DIRECTION`は、converterがそのstyleを使うsay／think用`bubbleStyles`の
+`placement`へ移します。DSL4を直接記述する場合も、吹き出し位置は`bubbleStyles.placement`で指定します。
+
+Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`を使用し、TurboWarp Runtime HostがSVG Text 0.4の
+compositionを公式adapterで接続します。`maxWidth`と`textLocale`を指定すると、このcapabilityの
+`measureText`を使ってlocale-awareな自動改行を行います。`portrait.lipSync`は発話中だけ表示する口パクframe、
+`continueIndicator`は入力待機中だけ表示するframeです。旧`portrait.talk`と`advanceIndicator`は
+0.2 APIとの名称不一致を残さないため受理しません。
+
+Bubble native presentationでは`reveal.unit`に`CHARACTER`、`WORD`、`LINE`、`BLOCK`を指定できます。
+`WORD`は既定でspace、tab、CR、LFを区切りにし、`delimiters`で置換できます。`layout: DYNAMIC`は
+表示済み本文に合わせてlayoutし、`RESERVED`は全文の領域を先に確保します。`intervalSeconds: 0`は
+自動送りを止め、`waitFor: advance`の入力1回につき1 unitを表示します。正の値では時間で進み、表示途中の
+advance入力は残り全文を表示し、次の入力でspeechを完了します。
+
+`audio.voice`、`audio.reveal`、`audio.finish`と`reveal.sound`はsound asset IDです。
+`reveal.sound`がある場合は`audio.reveal`より優先します。`audio.voice`とactionの`startSound`は
+二重再生を避けるため併用できません。`showAnimation`／`hideAnimation`は
+`fadeIn`／`fadeOut`、`floatIn`／`floatOut`、`zoomIn`／`zoomOut`、`riseUp`、`sink`、`shake`、
+`explode`、`animateBubbleShape`とeasing・duration等をBubble surfaceへ渡します。`visibleAnimations`は
+吹き出し表示後に`handle.animate()`へ配列順で渡し、表示中のshake、explode、外形変形を実行します。
+native `reveal`と旧`characterIntervalSeconds`系を同じeffective styleへ混在させると意味が二重になるため
+`K4-SPEECH-STYLE-002`で拒否します。
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
@@ -395,12 +535,16 @@ container／localeを検査せず、DOMを生成しません。shell disposeはr
 通知して一時状態を残しません。
 
 `navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
-`navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+`navigation.nextAction`で成立を迂回せず、`true`では現在の`waitForPose`だけをcancelし、cleanup後に同じ
+`Actor.pose` actionの次stepへ進みます。skipしたstepの成立soundは再生せず、最終stepのskipはactionを
+正常完了して次actionへ進みます。step skipでは`action.cancel`を発火しません。
 `false`で拒否されたkeymap入力はDOM eventを消費せず、`setSkin`やstep soundなどpose待機外の処理は
 従来どおりnavigation可能です。policy有効時の受理commandは同じ同期dispatch境界で処理し、historyと
 `navigation.nextAction`の混在連打でも到着順を変更しません。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
-起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
+`dsl4PoseFeedbackModes`のprogrammatic既定値はOFFのまま維持します。配布Standard 4.0 runtimeはこのflagを
+明示的にONにし、起動時にconsumerとmonitor境界を検証・初期化します。OFFの独自compositionでは
+sound-only動作を維持します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`の二値です。
 省略時は`mirrored`として従来の表示を維持します。scene固有の上書きは長形式sceneの
@@ -522,6 +666,7 @@ iconへ反映します。
 | `stage`                   | backdrop ID、または`{backdrop, stableId?}`  |
 | `bgm` / `sound`           | sound ID、または`{sound, stableId?}`        |
 | `wait`                    | 秒数、または`{seconds, stableId?}`          |
+| `broadcastMessageAndWait` | message名、または`{message, stableId?}`     |
 | `transition`              | `{effect, seconds, stableId?}`              |
 | `goto`                    | scene ID、または`{scene, stableId?}`        |
 | `branch`                  | branch ID、または`{branch, stableId?}`      |
@@ -531,18 +676,65 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
+Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
+
+`broadcastMessageAndWait`は、通常ならsceneのaction列に直接書く処理をTurboWarp project側へ委譲するための
+core actionです。`broadcastMessageAndWait: "message"`は、Stageに宣言されたbroadcast名と大文字小文字・空白を
+含めて完全一致する`message`を一度送信し、そのmessageで開始されたStage、sprite、cloneの全receiver threadが
+終了してから次のactionへ進みます。完全一致するbroadcastまたはreceiverがない場合は何もせず直ちに完了します。
+
+DSL4の`broadcastMessageAndWait`は、Scratchの「メッセージを送って待つ」（broadcast and wait）に相当します。
+たとえば、紙芝居のsceneの途中にScratchで作成したミニゲームを挟み、ゲーム終了後に台本の次actionへ戻る用途に
+使えます。また、コスチュームの切り替えを多用するアニメーションsequenceをScratch側のblockで作成し、その演出が
+すべて終わるまで台本を待機させる用途にも使えます。台本から独立してScratch editor上で調整した方が扱いやすい処理を、
+一つのmessageを境界としてsceneへ組み込むための機能です。
+
+```yaml
+- Narrator.say:
+    text: ミニゲームに挑戦しよう
+    seconds: 2
+- broadcastMessageAndWait: playMiniGame
+- broadcastMessageAndWait: playCostumeAnimation
+- Narrator.say:
+    text: お話に戻ります
+    seconds: 2
+```
+
+Scratch側では`playMiniGame`や`playCostumeAnimation`の「メッセージを受け取ったとき」scriptが終了した時点を、
+それぞれミニゲームやアニメーションsequenceの完了境界にします。receiverが`forever` blockなどで終了しない場合、
+台本も次のactionへ進みません。常駐処理を開始する用途ではなく、有限時間で完了する一連の処理に使用します。
+
+```yaml
+- broadcastMessageAndWait: showEndingEffects
+- broadcastMessageAndWait:
+    message: showEndingEffects
+    stableId: endingEffects
+```
+
+同じmessageを待つsessionが複数あっても、各actionは自身の送信で返されたthread identityだけを所有します。
+skip、stop、scene再開始、live reload、host破棄ではそのactionが所有する未完了threadだけを停止し、別sessionや
+project内の無関係なthreadは停止しません。DSL4の`ActionContext`、変数、遷移結果はreceiverへ暗黙伝播せず、
+引数や遷移結果が必要な作品固有処理はCustom actionを使います。
+
+このactionはTurboWarp host capabilityで、起動時固定・既定OFFの`dsl4BroadcastMessageAndWait`を必要とし、
+同flagは`dsl4Runtime`を必要とします。OFFではactionを含む台本を実行前に拒否します。ロールバックはflagを
+OFFに戻し、台本を標準core actionまたはCustom actionへ戻します。
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                             |
-| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                     |
-| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                        |
-| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, style?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                           |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                   |
-| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                         |
+| action                     | 引数                                                                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
+| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
+| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
 `Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
 `seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
@@ -550,12 +742,23 @@ iconへ反映します。
 完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
 再利用しません。
 
-`style`にはトップレベルの`speechStyles`で宣言したIDを指定します。styleを指定したactionでは、
-`characterIntervalSeconds`、`characterSound`、`noSoundCharacters`、`restCharacters`、
-`restCharacterIntervalSeconds`をインライン指定できません。既存のインライン形式はstyleを指定しない場合に
-引き続き使用できます。runtime controllerはstyleを共通speech引数へ解決してからActor portへ渡すため、
-platform adapterはstyle registryを参照しません。style内の`characterSound`は、そのstyleを参照したsceneの
-asset依存として扱います。
+`styles`にはトップレベルの`bubbleStyles`で宣言した名前を1件以上のYAML配列として指定します。1件でも
+配列が必要であり、スペース区切り文字列は受理しません。記載順にdeep mergeし、同じpropertyは後のstyleを
+優先します。objectは再帰的にmergeし、配列とscalarは連結せず後の値で全体を置換します。同じstyle名の
+重複指定はエラーです。最後にaction内の文字送り指定を適用するため、action固有値が最優先になります。
+合成後のeffective styleを共通speech引数へ解決してからActor portへ渡すため、platform adapterはstyle
+registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
+残さず未知keyとして拒否します。
+
+`continueIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
+表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
+入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
+残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
+terminal cleanupで同期的に解除します。
+
+`dsl4TurboWarpBubble`がONのとき、runtime controllerは合成後のeffective styleをBubble platformへ定義します。
+Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`awaiting-continue`、完了／cancelを
+`close`へ写像し、sound、portrait、blink、lip-sync、indicator frameのasset依存もeffective styleから収集します。
 
 `characterIntervalSeconds`を指定すると、Unicode grapheme cluster単位で1文字ずつ表示します。実行環境は
 `Intl.Segmenter`を提供しなければならず、未提供の場合はcode point単位へfallbackせず開始前に失敗します。
@@ -576,6 +779,11 @@ sound停止はAsset Managerのasset ID単位です。speechに指定したsound 
 speechが実際に再生を開始したasset IDだけを停止します。
 `dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
+`dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
+`dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。
+`dsl4TurboWarpBubbleAdvancedPresentation`も起動時固定・既定OFFで、`dsl4TurboWarpBubble`を必要とします。
+OFFでは`reveal`、`audio`、`showAnimation`、`hideAnimation`、`visibleAnimations`を含むstyleを起動時に明示拒否し、
+未対応runtimeで黙って無視しません。
 
 ```yaml
 - Hero.show:
@@ -598,7 +806,8 @@ speechが実際に再生を開始したasset IDだけを停止します。
     text: 助けに行こう
     seconds: 8
     waitFor: advance
-    style: novel
+    styles:
+      - Hero style
     startSound: HeroGreetingVoice
 - Hero.think:
     text: どうしよう……
@@ -634,6 +843,14 @@ foreground・backgroundのどちらも、途中でスキップ、停止、再開
 同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
 先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
 進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
+
+`Actor.hide`はScratch／TurboWarpのvisible stateを`false`にし、透明度effectとは混同しません。次の
+`Actor.show`は同じactorを再表示します。`Actor.setSkin.scale`はskin適用後に正のサイズ百分率を設定します。
+`Actor.setLayer`の`front`／`back`は絶対位置、数値は正なら前方、負なら後方への相対移動です。
+
+`Actor.loop.steps`は先頭skinを直ちに適用し、各`seconds`後に次のskinへ進むbackground loopです。step数と
+duration数を同じ構造に固定し、少なくとも一つのdurationを正数にします。同じactorの`setSkin`、runtime停止、
+またはenvironment破棄でloop timerを回収します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。
@@ -706,7 +923,7 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 - branchの`else`が一件だけ存在して末尾にあること
 - `stableId`が文書全体で一意であること
 - `file`が安全なローカル相対pathであること
-- 識別子がUnicode NFCであること
+- 構文識別子がUnicode NFCであり、asset／scene IDが空でないこと
 - keymapと作品内入力に衝突がないこと
 - custom actionが登録済みで、引数がRegistry parameter宣言と一致すること
 
@@ -716,22 +933,22 @@ JSON Schemaは型、必須項目、未知key、actionの引数形を検証しま
 
 初期実装で固定する診断codeは次です。Source Mapによる行・列・関連位置はparser実装時に加えます。
 
-| code                     | 意味                                        |
-| ------------------------ | ------------------------------------------- |
-| `K4-YAML-*`              | YAML構文または禁止機能                      |
-| `K4-VERSION-001`         | versionが文字列`4.0`ではない                |
-| `K4-SCHEMA-001`          | 引数型、必須field、構造がschemaと一致しない |
-| `K4-SCHEMA-UNKNOWN-KEY`  | schemaにないkey                             |
-| `K4-ID-INVALID`          | 識別子の文字規則違反                        |
-| `K4-KEY-UNSUPPORTED`     | 未対応keyまたはmodifier combination         |
-| `K4-REF-001`             | 参照先が未定義                              |
-| `K4-REF-002`             | asset kindが利用箇所と一致しない            |
-| `K4-REF-003`             | costume targetがactorと一致しない           |
-| `K4-ASSET-001`           | `file`が安全なローカル相対pathではない      |
-| `K4-BRANCH-001`          | branchの末尾が`else`ではない                |
-| `K4-STABLE-ID-001`       | `stableId`が文書内で重複                    |
-| `K4-KEY-001`             | navigation keymapと作品内key inputが衝突    |
-| `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action          |
+| code                     | 意味                                           |
+| ------------------------ | ---------------------------------------------- |
+| `K4-YAML-*`              | YAML構文または禁止機能                         |
+| `K4-VERSION-001`         | versionが文字列`4.0`ではない                   |
+| `K4-SCHEMA-001`          | 引数型、必須field、構造がschemaと一致しない    |
+| `K4-SCHEMA-UNKNOWN-KEY`  | schemaにないkey                                |
+| `K4-ID-INVALID`          | 構文識別子の文字規則違反、または空のliteral ID |
+| `K4-KEY-UNSUPPORTED`     | 未対応keyまたはmodifier combination            |
+| `K4-REF-001`             | 参照先が未定義                                 |
+| `K4-REF-002`             | asset kindが利用箇所と一致しない               |
+| `K4-REF-003`             | costume targetがactorと一致しない              |
+| `K4-ASSET-001`           | `file`が安全なローカル相対pathではない         |
+| `K4-BRANCH-001`          | branchの末尾が`else`ではない                   |
+| `K4-STABLE-ID-001`       | `stableId`が文書内で重複                       |
+| `K4-KEY-001`             | navigation keymapと作品内key inputが衝突       |
+| `K4-COMMAND-UNSUPPORTED` | Action Registryにないcustom action             |
 
 入力byte数、YAML node数、nesting深度、scalar長、scene数、sceneごとのaction数、asset数、診断数には
 資源上限を設け、超過を`K4-RESOURCE-LIMIT`で停止します。実装済み上限、必須explicit上限、benchmarkに

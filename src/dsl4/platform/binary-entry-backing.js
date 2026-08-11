@@ -76,49 +76,62 @@ function binaryAssets(component) {
 }
 
 /**
- * Ingest one validated binary-entry provider into Asset Manager's transactional store.
+ * Establish one startup-fixed Asset Manager session/direct backing for a binary-entry provider.
  *
- * The provider remains reachable while an ingest transaction is pending. It is released only
- * after every asset has committed, or later during explicit disposal after a failed ingest.
+ * The provider remains readable until Asset Manager releases it. Session mode releases it only
+ * after sequential commit and read-back validation; direct mode retains it until disposal.
  *
  * @param {object} options
  * @param {Readonly<Record<string, any>>} options.runtimeComponent
  * @param {unknown} options.provider
  * @param {Readonly<Record<string, Function>>} options.composition
  * @param {string} options.namespace
+ * @param {'prefer' | 'required' | 'disabled'} options.policy
+ * @param {string} options.sessionId
+ * @param {(warning: Readonly<Record<string, unknown>>) => unknown} [options.onWarning]
+ * @param {(error: unknown) => unknown} [options.onFatalError]
  */
 export function createDsl4BinaryEntryBacking({
   runtimeComponent,
   provider: providerCandidate,
   composition,
   namespace,
+  policy,
+  sessionId,
+  onWarning,
+  onFatalError,
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
   if (!isRecord(providerCandidate)) throw new TypeError('binaryEntryProvider must be an object');
   if (
     !Array.isArray(providerCandidate.assetIds) ||
     providerCandidate.releaseAfterLastAsset !== false ||
-    typeof providerCandidate.consumeAsset !== 'function' ||
+    typeof providerCandidate.readAsset !== 'function' ||
     typeof providerCandidate.release !== 'function' ||
     !isRecord(providerCandidate.descriptor)
   ) {
     throw new TypeError(
-      'binaryEntryProvider must be a validated one-shot provider with deferred release',
+      'binaryEntryProvider must be a validated replayable provider with deferred release',
     );
   }
   if (!isRecord(composition)) throw new TypeError('Asset Manager composition must be an object');
-  for (const method of [
-    'putBinaryBundle',
-    'getBinaryBundle',
-    'deleteBinaryBundle',
-    'releaseBinaryStore',
-  ]) {
-    if (typeof composition[method] !== 'function') {
-      throw new TypeError(`Asset Manager composition must provide ${method}`);
-    }
+  if (typeof composition.createSessionBinaryBacking !== 'function') {
+    throw new TypeError('Asset Manager composition must provide createSessionBinaryBacking');
   }
   if (typeof namespace !== 'string' || namespace.length === 0) {
     throw new TypeError('binary asset namespace must be a non-empty string');
+  }
+  if (!['prefer', 'required', 'disabled'].includes(policy)) {
+    throw new TypeError('session binary backing policy must be prefer, required, or disabled');
+  }
+  if (typeof sessionId !== 'string' || sessionId.length === 0) {
+    throw new TypeError('session binary backing ID must be a non-empty string');
+  }
+  if (onWarning !== undefined && typeof onWarning !== 'function') {
+    throw new TypeError('session binary backing onWarning must be a function');
+  }
+  if (onFatalError !== undefined && typeof onFatalError !== 'function') {
+    throw new TypeError('session binary backing onFatalError must be a function');
   }
 
   const {descriptor, assets} = binaryAssets(runtimeComponent);
@@ -145,15 +158,46 @@ export function createDsl4BinaryEntryBacking({
 
   /** @type {Record<string, any> | null} */
   let provider = /** @type {Record<string, any>} */ (providerCandidate);
+  /** @type {Record<string, any> | null} */
+  let sessionBacking = null;
   const controller = new AbortController();
-  let state = 'ingesting';
+  let state = 'establishing';
+  /** @type {'session' | 'direct' | null} */
+  let mode = null;
   let disposed = false;
   /** @type {unknown} */
   let failure = null;
+  /** @type {Readonly<Record<string, unknown>> | null} */
+  let warning = null;
+  let fatalNotified = false;
+  let providerReadQueue = Promise.resolve();
+
+  /** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+  function enqueueProviderRead(operation) {
+    const result = providerReadQueue.then(operation, operation);
+    providerReadQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   /** @param {string} assetId */
   function key(assetId) {
     return Object.freeze({namespace, name: assetId, integrity: descriptor.integrity});
+  }
+
+  /** @param {unknown} fatalError */
+  function notifyFatal(fatalError) {
+    failure = fatalError;
+    state = 'failed';
+    if (fatalNotified) return;
+    fatalNotified = true;
+    try {
+      onFatalError?.(fatalError);
+    } catch {
+      // A diagnostic observer cannot replace the authoritative backing failure.
+    }
   }
 
   /** @param {string} assetId @param {unknown} stored */
@@ -162,7 +206,7 @@ export function createDsl4BinaryEntryBacking({
     if (!isRecord(stored) || !Array.isArray(stored.files) || !expected) {
       throw backingError(
         'K4-BINARY-BACKING-CORRUPT-001',
-        `Binary backing store returned an invalid asset: ${assetId}`,
+        `Binary backing returned an invalid asset: ${assetId}`,
       );
     }
     if (
@@ -173,7 +217,7 @@ export function createDsl4BinaryEntryBacking({
     ) {
       throw backingError(
         'K4-BINARY-BACKING-CORRUPT-001',
-        `Binary backing store metadata does not match: ${assetId}`,
+        `Binary backing metadata does not match: ${assetId}`,
       );
     }
     const expectedByPath = new Map(
@@ -189,51 +233,74 @@ export function createDsl4BinaryEntryBacking({
       ) {
         throw backingError(
           'K4-BINARY-BACKING-CORRUPT-001',
-          `Binary backing store file does not match: ${assetId}`,
+          `Binary backing file does not match: ${assetId}`,
         );
       }
     }
     return /** @type {Readonly<Record<string, any>>} */ (stored);
   }
 
-  const ready = (async () => {
-    try {
-      for (const assetId of expectedAssetIds) {
-        if (controller.signal.aborted) {
-          throw backingError('K4-BINARY-BACKING-ABORTED-001', 'Binary ingestion was aborted');
-        }
-        let cached = false;
-        try {
-          const stored = await composition.getBinaryBundle(key(assetId), {
-            signal: controller.signal,
-          });
-          validateStored(assetId, stored);
-          cached = true;
-        } catch (error) {
-          if (errorCode(error) !== 'ASSET_BINARY_BUNDLE_NOT_FOUND') throw error;
-        }
-        if (cached) continue;
-        const source = await /** @type {Function} */ (provider.consumeAsset)(assetId, {
-          signal: controller.signal,
-        });
-        if (!isRecord(source) || source.assetId !== assetId || !Array.isArray(source.files)) {
+  const source = Object.freeze({
+    /** @param {Readonly<Record<string, any>>} asset @param {{signal?: AbortSignal}} [readOptions] */
+    read(asset, readOptions = {}) {
+      return enqueueProviderRead(async () => {
+        const activeProvider = provider;
+        if (!activeProvider) {
           throw backingError(
-            'K4-BINARY-BACKING-PROVIDER-001',
-            `Binary provider returned an invalid asset: ${assetId}`,
+            'K4-BINARY-BACKING-RELEASED-001',
+            'Binary entry source has been released',
           );
         }
-        // Keep `source` reachable until put resolves: put resolves only after transaction complete.
-        await composition.putBinaryBundle(
-          {
+        const loaded = await /** @type {Function} */ (activeProvider.readAsset)(asset.name, {
+          signal: readOptions.signal,
+        });
+        if (!isRecord(loaded) || loaded.assetId !== asset.name || !Array.isArray(loaded.files)) {
+          throw backingError(
+            'K4-BINARY-BACKING-PROVIDER-001',
+            `Binary provider returned an invalid asset: ${asset.name}`,
+          );
+        }
+        return Object.freeze({...key(asset.name), files: loaded.files});
+      });
+    },
+    release() {
+      return enqueueProviderRead(async () => {
+        const activeProvider = provider;
+        provider = null;
+        if (activeProvider) await /** @type {Function} */ (activeProvider.release)();
+      });
+    },
+  });
+
+  const ready = (async () => {
+    try {
+      const established = await composition.createSessionBinaryBacking(
+        {
+          policy,
+          sessionId,
+          assets: expectedAssetIds.map((assetId) => ({
             ...key(assetId),
-            files: source.files,
-          },
-          {signal: controller.signal},
-        );
+            files: /** @type {ReadonlyArray<Record<string, any>>} */ (assets.get(assetId)).map(
+              (file) => ({path: file.path, size: file.size, integrity: file.integrity}),
+            ),
+          })),
+          source,
+          onFatalError: notifyFatal,
+        },
+        {signal: controller.signal},
+      );
+      sessionBacking = established;
+      mode = /** @type {'session' | 'direct'} */ (established.mode);
+      if (isRecord(established.warning)) {
+        const warningSnapshot = Object.freeze({...established.warning});
+        warning = warningSnapshot;
+        try {
+          onWarning?.(warningSnapshot);
+        } catch {
+          // Warning presentation cannot change the fixed backing mode.
+        }
       }
-      await /** @type {Function} */ (provider.release)();
-      provider = null;
-      state = 'ready';
+      if (state !== 'failed') state = 'ready';
     } catch (error) {
       failure = error;
       state = 'failed';
@@ -251,29 +318,36 @@ export function createDsl4BinaryEntryBacking({
     const linked = linkSignals(externalSignal, controller.signal);
     try {
       await ready;
-      const stored = validateStored(
-        assetId,
-        await composition.getBinaryBundle(key(assetId), {signal: linked.signal}),
-      );
-      return Object.freeze(
-        stored.files.map(
-          /** @param {Record<string, any>} file */ (file) =>
-            Object.freeze({
-              path: file.path,
-              size: file.size,
-              integrity: file.integrity,
-              bytes: new Uint8Array(file.bytes),
-            }),
-        ),
-      );
+      if (!sessionBacking) {
+        throw backingError('K4-BINARY-BACKING-STATE-001', 'Binary backing is unavailable');
+      }
+      try {
+        const stored = validateStored(
+          assetId,
+          await sessionBacking.get(key(assetId), {signal: linked.signal}),
+        );
+        return Object.freeze(
+          stored.files.map(
+            /** @param {Record<string, any>} file */ (file) =>
+              Object.freeze({
+                path: file.path,
+                size: file.size,
+                integrity: file.integrity,
+                ...(file.contentType === undefined ? {} : {contentType: file.contentType}),
+                bytes: new Uint8Array(file.bytes),
+              }),
+          ),
+        );
+      } catch (error) {
+        if (mode === 'session') notifyFatal(error);
+        throw error;
+      }
     } finally {
       linked.cleanup();
     }
   }
 
-  /**
-   * Materialize a temporary editor export. `releaseEntries` drops every application reference.
-   */
+  /** Materialize a temporary editor export. */
   async function createExportBundle() {
     await ready;
     const entries = new Map();
@@ -343,19 +417,22 @@ export function createDsl4BinaryEntryBacking({
     disposePromise = (async () => {
       const errors = [];
       await ready.catch(() => {});
-      if (provider) {
+      if (sessionBacking) {
         try {
-          await /** @type {Function} */ (provider.release)();
+          await sessionBacking.dispose();
         } catch (error) {
           errors.push(error);
         }
-        provider = null;
+        sessionBacking = null;
       }
-      try {
-        await composition.releaseBinaryStore();
-      } catch (error) {
-        errors.push(error);
+      if (provider) {
+        try {
+          await source.release();
+        } catch (error) {
+          errors.push(error);
+        }
       }
+      if (state !== 'failed') state = 'disposed';
       if (errors.length > 0) {
         throw new AggregateError(errors, 'DSL 4.0 binary backing disposal failed');
       }
@@ -370,8 +447,11 @@ export function createDsl4BinaryEntryBacking({
     getState() {
       return Object.freeze({
         state,
+        mode,
+        sessionId,
         disposed,
         providerRetained: provider !== null,
+        warning,
         failureCode: failure === null ? null : errorCode(failure) || 'K4-BINARY-BACKING-UNKNOWN',
       });
     },

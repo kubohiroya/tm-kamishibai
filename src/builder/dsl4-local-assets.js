@@ -277,18 +277,15 @@ export async function loadDsl4LocalAssetSnapshot(
       kind: asset.kind,
       loading: asset.loading,
       ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      ...(asset.kind === 'backdrop' || asset.kind === 'costume'
+        ? {bitmapResolution: asset.bitmapResolution ?? 1}
+        : {}),
     };
     if (asset.delivery === 'remote') {
       const source = /** @type {Readonly<Record<string, unknown>>} */ (asset.source);
       manifestAssets.push({
         ...common,
-        source: {
-          type: 'remote',
-          url: source.url,
-          integrity: source.integrity,
-          contentType: source.contentType,
-          size: source.size,
-        },
+        source: {type: 'remote', ...source},
       });
       continue;
     }

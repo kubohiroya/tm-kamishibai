@@ -4,7 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {createDsl4RuntimeController, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  createDsl4RuntimeController,
+  createDsl4SourceFrontend,
+  dsl4CoreActionNames,
+} from '../src/dsl4/index.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -27,6 +31,84 @@ function deferred() {
   });
   return {promise, resolve, reject};
 }
+
+test('gates Bubble native reveal and motion behind the startup-fixed advanced flag', () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  native:
+    reveal: {unit: CHARACTER, intervalSeconds: 0.1}
+    showAnimation: {name: fadeIn, durationSeconds: 0.1}
+scenes:
+  opening:
+    - Hero.say: {text: hello, seconds: 1, styles: [native]}
+`);
+
+  assert.throws(
+    () =>
+      createDsl4RuntimeController({
+        storyDocument,
+        port: {},
+        speechAdvanceTypewriterEnabled: true,
+        turboWarpBubbleEnabled: true,
+      }),
+    /dsl4TurboWarpBubbleAdvancedPresentation/u,
+  );
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    port: {},
+    speechAdvanceTypewriterEnabled: true,
+    turboWarpBubbleEnabled: true,
+    turboWarpBubbleAdvancedPresentationEnabled: true,
+  });
+  assert.equal(controller.getState().status, 'idle');
+});
+
+test('passes only runtime presentation fields from a composed Bubble style', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  native:
+    maxWidth: 240
+    placement: up-right
+    reveal: {unit: WORD, delimiters: " /", intervalSeconds: 0.1}
+    showAnimation: {name: fadeIn, durationSeconds: 0.1}
+    visibleAnimations: [{name: shake, count: 2}]
+scenes:
+  opening:
+    - Hero.say: {text: hello, seconds: 0, styles: [native]}
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    port: {
+      async say(payload) {
+        calls.push(payload);
+      },
+    },
+    speechAdvanceTypewriterEnabled: true,
+    turboWarpBubbleEnabled: true,
+    turboWarpBubbleAdvancedPresentationEnabled: true,
+  });
+
+  await controller.start();
+  assert.deepEqual(calls, [
+    {
+      target: 'Hero',
+      text: 'hello',
+      seconds: 0,
+      bubbleReveal: {unit: 'WORD', delimiters: ' /', intervalSeconds: 0.1},
+      bubbleMotions: [{name: 'shake', count: 2}],
+      bubbleStyle: '\u0000dsl4:["native"]',
+    },
+  ]);
+});
 
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -83,6 +165,7 @@ scenes:
       - bgm: Music
       - sound: Effect
       - wait: 0
+      - broadcastMessageAndWait: opening-effect
       - transition:
           effect: fadeOut
           seconds: 0
@@ -91,6 +174,14 @@ scenes:
           x: 0
           y: 0
           scale: 100
+      - Hero.hide: {}
+      - Hero.setLayer: back
+      - Hero.loop:
+          steps:
+            - skin: HeroIdle
+              seconds: 0.3
+            - skin: HeroHappy
+              seconds: 0.3
       - Hero.setTransparency: 50
       - Hero.moveTo:
           x: 10
@@ -100,7 +191,12 @@ scenes:
       - Hero.say:
           text: hello
           seconds: 0
-      - Hero.setSkin: HeroIdle
+      - Hero.think:
+          text: thinking
+          seconds: 0
+      - Hero.setSkin:
+          skin: HeroIdle
+          scale: 45
       - Caption.setText:
           text: title
           style: title
@@ -136,11 +232,16 @@ test('dispatches every core action and keeps transition separate from scene move
       'bgm',
       'sound',
       'wait',
+      'broadcastMessageAndWait',
       'transition',
       'show',
+      'hide',
+      'setLayer',
+      'loop',
       'setTransparency',
       'moveTo',
       'say',
+      'think',
       'setSkin',
       'setText',
     ].map((method) => [
@@ -166,9 +267,18 @@ test('dispatches every core action and keeps transition separate from scene move
     return 'happy';
   };
   const evaluated = [];
+  const storyDocument = parseStory(allCoreActionsStory);
+  const exercisedCoreActions = [
+    ...new Set(
+      storyDocument.scenes.flatMap((scene) => scene.actions.map((action) => action.command)),
+    ),
+  ].sort();
+  assert.deepEqual(exercisedCoreActions, [...dsl4CoreActionNames].sort());
   const controller = createDsl4RuntimeController({
-    storyDocument: parseStory(allCoreActionsStory),
+    storyDocument,
     port,
+    speechAdvanceTypewriterEnabled: true,
+    broadcastMessageAndWaitEnabled: true,
     evaluateCondition(expression, variables) {
       evaluated.push(expression);
       return expression === 'score == 1' && variables.score === 1;
@@ -185,16 +295,21 @@ test('dispatches every core action and keeps transition separate from scene move
       'bgm',
       'sound',
       'wait',
+      'broadcastMessageAndWait',
       'transition',
       'show',
+      'hide',
+      'setLayer',
+      'loop',
       'setTransparency',
       'moveTo',
       'say',
+      'think',
       'setSkin',
       'setText',
       'setSkin',
       'waitForPose',
-      'sound',
+      'bgm',
       'keyInputToChangeScene',
       'touchInputToChangeScene',
       'poseInputToChangeScene',
@@ -204,10 +319,16 @@ test('dispatches every core action and keeps transition separate from scene move
     target: 'Hero',
     transparency: 50,
   });
+  assert.deepEqual(calls.find(({method}) => method === 'setSkin').payload, {
+    target: 'Hero',
+    skin: 'HeroIdle',
+    scale: 45,
+  });
   assert.deepEqual(calls.find(({method}) => method === 'waitForPose').payload, {
     target: 'Hero',
     pose: 'happy',
     stepIndex: 0,
+    stepCount: 1,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.6,
@@ -246,8 +367,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 17);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 17);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 22);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 22);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
@@ -464,6 +585,7 @@ scenes:
 
 test('runs every Actor.pose step in order with optional skin and sound', async () => {
   const calls = [];
+  const poseCalls = [];
   const story = parseStory(`
 kamishibai: '4.0'
 assets:
@@ -493,8 +615,16 @@ scenes:
     storyDocument: story,
     port: {
       setSkin: async ({skin}) => calls.push(['skin', skin]),
-      waitForPose: async ({pose, recognition}) => calls.push(['wait', pose, recognition]),
-      sound: async ({sound}) => calls.push(['sound', sound]),
+      waitForPose: async ({pose, recognition, stepIndex, stepCount}, context) => {
+        calls.push(['wait', pose, recognition]);
+        poseCalls.push({
+          stepIndex,
+          stepCount,
+          signal: context.signal,
+          actionSignal: context.actionSignal,
+        });
+      },
+      bgm: async ({sound}) => calls.push(['bgm', sound]),
     },
   });
 
@@ -506,7 +636,7 @@ scenes:
     [
       ['skin', 'FirstSkin'],
       ['wait', 'first'],
-      ['sound', 'Effect'],
+      ['bgm', 'Effect'],
       ['wait', 'middle'],
       ['skin', 'LastSkin'],
       ['wait', 'last'],
@@ -521,6 +651,17 @@ scenes:
     feedback: {mode: 'scratchMirror'},
     navigation: {allowSkip: false},
   });
+  assert.deepEqual(
+    poseCalls.map(({stepIndex, stepCount}) => [stepIndex, stepCount]),
+    [
+      [0, 3],
+      [1, 3],
+      [2, 3],
+    ],
+  );
+  assert.ok(poseCalls.every(({actionSignal}) => actionSignal === poseCalls[0].actionSignal));
+  assert.equal(new Set(poseCalls.map(({signal}) => signal)).size, 3);
+  assert.ok(poseCalls.every(({signal, actionSignal}) => signal !== actionSignal));
 });
 
 test('advances through empty scenes and the final scene deterministically', async () => {
@@ -546,6 +687,78 @@ scenes:
       .filter(({type}) => type === 'scene.enter')
       .map(({sceneId}) => sceneId),
     ['first', 'second', 'final'],
+  );
+});
+
+test('hides every story actor before publishing each scene entry', async () => {
+  const order = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+  GuideSkin: costume:Guide
+actors:
+  Hero: HeroSkin
+  Guide: GuideSkin
+scenes:
+  first: []
+  final: []
+`),
+    port: {
+      hideSceneActors(transition) {
+        order.push(['hide', transition]);
+      },
+    },
+    onEvent(event) {
+      if (event.type === 'scene.enter') order.push(['enter', event.sceneId]);
+    },
+  });
+
+  const state = await controller.start();
+
+  assert.equal(state.status, 'finished');
+  assert.deepEqual(order, [
+    ['hide', {actors: ['Hero', 'Guide'], from: null, to: 'first', reason: 'start'}],
+    ['enter', 'first'],
+    ['hide', {actors: ['Hero', 'Guide'], from: 'first', to: 'final', reason: 'sequential'}],
+    ['enter', 'final'],
+  ]);
+  assert.equal(Object.isFrozen(order[0][1]), true);
+  assert.equal(Object.isFrozen(order[0][1].actors), true);
+});
+
+test('fails before publishing a destination scene when actor hiding fails', async () => {
+  let resetCount = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroSkin: costume:Hero
+actors:
+  Hero: HeroSkin
+scenes:
+  first: []
+  final: []
+`),
+    port: {
+      hideSceneActors() {
+        resetCount += 1;
+        if (resetCount === 2) throw new Error('actor hide failed');
+      },
+    },
+  });
+
+  const state = await controller.start();
+
+  assert.equal(state.status, 'failed');
+  assert.equal(state.sceneId, 'first');
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'scene.enter')
+      .map(({sceneId}) => sceneId),
+    ['first'],
   );
 });
 
@@ -665,7 +878,7 @@ scenes:
         return pendingPose.promise;
       },
       setSkin: async ({skin}) => effects.push(`skin:${skin}`),
-      sound: async ({sound}) => effects.push(`sound:${sound}`),
+      bgm: async ({sound}) => effects.push(`bgm:${sound}`),
     },
   });
   const run = controller.start();
@@ -970,7 +1183,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
     port: {
       setSkin: () => skinPending.promise,
       waitForPose: async () => skinWaitCalls++,
-      sound: async () => {},
+      bgm: async () => {},
       stage: async () => skinStageCalls++,
     },
   });
@@ -992,7 +1205,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
     port: {
       setSkin: async () => {},
       waitForPose: async () => {},
-      sound: () => {
+      bgm: () => {
         soundCalls += 1;
         return soundPending.promise;
       },
@@ -1009,7 +1222,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
   await soundRun;
 });
 
-test('pose navigation policy waits for cleanup and advances a skippable pose once', async () => {
+test('pose navigation policy waits for cleanup and skips the final pose step once', async () => {
   const cleanup = deferred();
   const events = [];
   let stageCalls = 0;
@@ -1031,19 +1244,206 @@ test('pose navigation policy waits for cleanup and advances a skippable pose onc
   assert.equal(controller.canAdvance('navigation.nextAction'), false);
   const duplicateAdvance = controller.advance('navigation.nextAction');
   assert.strictEqual(duplicateAdvance, firstAdvance);
-  assert.strictEqual(controller.getRunPromise(), firstAdvance);
+  assert.strictEqual(controller.getRunPromise(), staleRun);
   assert.deepEqual(events, ['abort']);
   assert.equal(stageCalls, 0);
 
   cleanup.resolve();
-  const state = await firstAdvance;
+  await firstAdvance;
   await duplicateAdvance;
   await staleRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(stageCalls, 1);
   assert.deepEqual(events, ['abort', 'cleanup', 'stage']);
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
   assert.equal(controller.getRunPromise(), null);
+});
+
+test('Space skips only the current pose wait and starts each later step once', async () => {
+  const cleanups = [deferred(), deferred()];
+  const events = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Tick: sound
+  Charge: sound
+  StepSound: sound
+  HeroIdle: costume:Hero
+  HeroReady: costume:Hero
+  Beach: backdrop
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  idleSound: Tick
+  chargeSound: Charge
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+              skin: HeroReady
+              sound: StepSound
+            - pose: jump
+              sound: StepSound
+      - stage: Beach
+`),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: async ({skin}) => events.push(['skin', skin]),
+      waitForPose: ({stepIndex}, context) =>
+        new Promise((_resolve, reject) => {
+          events.push(['pose', stepIndex]);
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              events.push(['abort', stepIndex]);
+              void cleanups[stepIndex].promise.then(() => {
+                events.push(['cleanup', stepIndex]);
+                const error = new Error('pose wait cancelled');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            },
+            {once: true},
+          );
+        }),
+      bgm: async ({sound}) => events.push(['bgm', sound]),
+      stage: async ({backdrop}) => events.push(['stage', backdrop]),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 0),
+    'first pose step did not start',
+  );
+  assert.deepEqual(events, [
+    ['skin', 'HeroReady'],
+    ['pose', 0],
+  ]);
+
+  const firstSkip = controller.advance('navigation.nextAction');
+  const duplicateFirstSkip = controller.advance('navigation.nextAction');
+  assert.strictEqual(duplicateFirstSkip, firstSkip);
+  cleanups[0].resolve();
+  await firstSkip;
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    'second pose step did not start',
+  );
+  assert.equal(controller.getState().actionIndex, 0);
+
+  const secondSkip = controller.advance('navigation.nextAction');
+  cleanups[1].resolve();
+  await secondSkip;
+  await run;
+
+  assert.deepEqual(events, [
+    ['skin', 'HeroReady'],
+    ['pose', 0],
+    ['abort', 0],
+    ['cleanup', 0],
+    ['pose', 1],
+    ['abort', 1],
+    ['cleanup', 1],
+    ['stage', 'Beach'],
+  ]);
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'pose.step.skip')
+      .map(({details}) => details.stepIndex),
+    [0, 1],
+  );
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.commit').length, 2);
+  assert.equal(controller.getState().status, 'finished');
+});
+
+test('Space skips a pose step while its skin is still being applied', async () => {
+  const events = [];
+  const abortableWait = (event, context) =>
+    new Promise((_resolve, reject) => {
+      events.push(event);
+      context.signal.addEventListener(
+        'abort',
+        () => {
+          events.push([...event, 'abort']);
+          const error = new Error('pose step operation cancelled');
+          error.name = 'AbortError';
+          reject(error);
+        },
+        {once: true},
+      );
+    });
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  HeroReady: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+              skin: HeroReady
+            - pose: jump
+`),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: (_payload, context) => abortableWait(['skin', 0], context),
+      waitForPose: ({stepIndex}, context) => abortableWait(['pose', stepIndex], context),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => events.length === 1, 'pose skin application did not start');
+  assert.equal(controller.canAdvance('navigation.nextAction'), true);
+
+  await controller.advance('navigation.nextAction');
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    'second pose step did not start',
+  );
+
+  assert.deepEqual(events.slice(0, 3), [
+    ['skin', 0],
+    ['skin', 0, 'abort'],
+    ['pose', 1],
+  ]);
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'pose.step.skip')
+      .map(({details}) => details.stepIndex),
+    [0],
+  );
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+
+  controller.stop('test-complete');
+  await run;
 });
 
 test('stop wins while a skippable pose is waiting for cancellation cleanup', async () => {
@@ -1212,8 +1612,9 @@ scenes:
   assert.deepEqual(events, ['pose-start', 'abort']);
   cleanup.resolve();
 
-  const state = await advance;
+  await advance;
   await initialRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(state.sceneId, 'ending');
   assert.ok(events.indexOf('cleanup') < events.indexOf('stage'));
@@ -1224,7 +1625,8 @@ scenes:
     ),
     true,
   );
-  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 1);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
 });
 
 test('restart invalidates an old pose cleanup lock without waiting for it', async () => {
@@ -1257,15 +1659,17 @@ test('restart invalidates an old pose cleanup lock without waiting for it', asyn
 
   const newAdvance = controller.advance('navigation.nextAction');
   newCleanup.resolve();
-  const state = await newAdvance;
+  await newAdvance;
+  await restartedRun;
+  const state = controller.getState();
   assert.equal(state.status, 'finished');
   assert.equal(stageCalls, 1);
 
   oldCleanup.resolve();
-  await Promise.all([firstRun, oldAdvance, restartedRun]);
+  await Promise.all([firstRun, oldAdvance]);
   assert.equal(controller.getState().status, 'finished');
   assert.equal(stageCalls, 1);
-  assert.deepEqual(cancelReasons, ['navigation.nextAction', 'navigation.nextAction']);
+  assert.deepEqual(cancelReasons, ['restart']);
 });
 
 test('pose navigation policy remains inert while its startup gate is disabled', async () => {
@@ -1436,6 +1840,162 @@ scenes:
   finalWait.resolve();
   await Promise.all([firstRun, finalRun]);
   assert.equal(controller.getState().status, 'finished');
+});
+
+test('rehearsal nextScene cancels the current scene and enters the following scene', async () => {
+  const pending = deferred();
+  const effects = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Next: backdrop
+scenes:
+  opening:
+    - wait: 60
+    - wait: 60
+  following:
+    - stage: Next
+`),
+    port: {
+      wait(_payload, context) {
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('rehearsal scene skip');
+            error.name = 'AbortError';
+            pending.reject(error);
+          },
+          {once: true},
+        );
+        return pending.promise;
+      },
+      stage: async ({backdrop}) => effects.push(backdrop),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => controller.getState().actionIndex === 0, 'opening wait did not start');
+  const skipped = await controller.advanceScene('navigation.nextScene');
+  await run;
+  assert.equal(skipped.status, 'finished');
+  assert.equal(skipped.sceneId, 'following');
+  assert.deepEqual(effects, ['Next']);
+  assert.equal(
+    controller.getTrace().some(({type}) => type === 'navigation.advanceScene'),
+    false,
+  );
+  assert.equal(
+    controller
+      .getTrace()
+      .some(
+        ({type, details}) =>
+          type === 'scene.transition' && details.reason === 'navigation.nextScene',
+      ),
+    true,
+  );
+});
+
+test('3.2 rehearsal scene skip stops the active sound and applies only stateful tail actions', async () => {
+  const activeSound = deferred();
+  const followingWait = deferred();
+  const calls = [];
+  const playingBgm = new Set();
+  const stoppedSounds = [];
+  let brightness = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Hidden: backdrop
+  Music: sound
+  NextMusic: sound
+  Effect: sound
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+scenes:
+  opening:
+    - bgm: Music
+    - sound: Effect
+    - stage: Hidden
+    - wait: 30
+    - bgm: NextMusic
+    - transition: {effect: fadeOut, seconds: 30}
+    - Hero.show: {skin: HeroIdle, x: 0, y: 0, scale: 100}
+    - stage: Hidden
+  following:
+    - wait: 30
+`),
+    port: {
+      async bgm({sound}) {
+        calls.push(['bgm', sound]);
+        playingBgm.add(sound);
+      },
+      sound({sound}, context) {
+        calls.push(['sound', sound]);
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            stoppedSounds.push(sound);
+            const error = new Error('sound cancelled');
+            error.name = 'AbortError';
+            activeSound.reject(error);
+          },
+          {once: true},
+        );
+        return activeSound.promise;
+      },
+      async stage({backdrop}) {
+        calls.push(['stage', backdrop]);
+      },
+      wait(_payload, context) {
+        calls.push(['wait']);
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('wait cancelled');
+            error.name = 'AbortError';
+            followingWait.reject(error);
+          },
+          {once: true},
+        );
+        return followingWait.promise;
+      },
+      async transition({effect, seconds}) {
+        calls.push(['transition', effect, seconds]);
+        brightness = effect === 'fadeOut' ? -100 : 0;
+      },
+      async show(payload) {
+        calls.push(['show', payload.target]);
+      },
+    },
+  });
+
+  const staleRun = controller.start();
+  await waitFor(
+    () => calls.some(([type]) => type === 'sound'),
+    'active sound did not start before scene skip',
+  );
+  assert.equal(controller.canRehearsalSkip('rehearsal.skipScene'), true);
+  const skipped = await controller.skipScene();
+
+  assert.equal(skipped.sceneId, 'following');
+  assert.equal(skipped.status, 'running');
+  assert.deepEqual(stoppedSounds, ['Effect']);
+  assert.deepEqual([...playingBgm], ['Music', 'NextMusic']);
+  assert.equal(brightness, -100);
+  assert.deepEqual(calls, [
+    ['bgm', 'Music'],
+    ['sound', 'Effect'],
+    ['bgm', 'NextMusic'],
+    ['transition', 'fadeOut', 0],
+    ['wait'],
+  ]);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.skip').length, 4);
+  assert.equal(controller.canRehearsalSkip('rehearsal.skipScene'), true);
+
+  controller.stop('test-cleanup');
+  await Promise.allSettled([staleRun, controller.getRunPromise()]);
 });
 
 test('reposition pauses without presentation effects and resume starts at the selected action', async () => {

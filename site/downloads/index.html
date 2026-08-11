@@ -33,7 +33,6 @@
     .status--development { background: #f8e8c9; color: #71491a; }
     .actions { display: grid; gap: 8px; margin-top: auto; padding-top: .5rem; }
     .button { display: block; padding: 11px 14px; border-radius: 8px; background: var(--accent); color: white; text-align: center; text-decoration: none; font-weight: 700; }
-    .button--secondary { border: 1px solid var(--accent); background: transparent; color: var(--accent); }
     .button--disabled { border: 1px solid var(--line); background: #eee8e2; color: var(--muted); cursor: not-allowed; }
     .file-info { margin-bottom: 0; color: var(--muted); font-size: .88rem; }
     .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -50,10 +49,11 @@
       <img class="site-brand__symbol" src="../favicon.png" width="40" height="40" alt="">
       <span>TMPose紙芝居</span>
     </a>
-    <nav class="site-nav" aria-label="サイトナビゲーション">
+    <nav class="site-nav" aria-label="サイトナビゲーション" data-navigation-contract-version="1.0.0">
       <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/">トップ</a>
       <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/">ドキュメント</a>
-      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">サンプル</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/">ワークショップ</a>
+      <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai-samples/">作品</a>
       <a class="site-nav__link" href="https://kubohiroya.github.io/tmpose-kamishibai/downloads/" aria-current="page">ダウンロード</a>
     </nav>
     <a class="site-repository" href="https://github.com/kubohiroya/tmpose-kamishibai" target="_blank" rel="noopener" aria-label="tmpose-kamishibaiをGitHubで開く" title="tmpose-kamishibaiをGitHubで開く">
@@ -74,5 +74,18 @@
 {{DOWNLOAD_CARDS}}
   </section>
 </main>
+<footer class="site-footer" data-site-footer-version="1">
+  <div class="site-footer__inner">
+    <a class="site-footer__brand" href="https://kubohiroya.github.io/tmpose-kamishibai/">
+      <img class="site-footer__symbol" src="../favicon.png" width="36" height="36" alt="">
+      <span>TMPose紙芝居</span>
+    </a>
+    <div class="site-footer__legal">
+      <p>© 2026 Hiroya Kubo</p>
+      <p class="site-footer__notice">各文書・作品・素材には個別の利用条件が適用されます。</p>
+      <a class="site-footer__rights" href="https://kubohiroya.github.io/tmpose-kamishibai/licenses/">ライセンス・権利表示</a>
+    </div>
+  </div>
+</footer>
 </body>
 </html>

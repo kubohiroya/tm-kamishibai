@@ -109,6 +109,56 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
   };
 }
 
+function bitmapStory() {
+  const result = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  Hero:
+    kind: costume
+    target: Actor
+    file: costumes/hero.png
+    bitmapResolution: 2
+actors:
+  Actor: Hero
+scenes:
+  opening: []
+`,
+    {sourceId: 'bitmap-costume-test'},
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  return result.storyDocument;
+}
+
+function bitmapSnapshot() {
+  const bytes = new Uint8Array([1, 2, 3]);
+  return {
+    manifest: {
+      formatVersion: 1,
+      assets: [
+        {
+          id: 'Hero',
+          kind: 'costume',
+          target: 'Actor',
+          loading: 'eager',
+          bitmapResolution: 2,
+          source: {
+            type: 'file',
+            inputPath: 'costumes/hero.png',
+            mode: 'file',
+            files: [{path: 'hero.png', size: bytes.length, integrity: sri(bytes)}],
+          },
+        },
+      ],
+    },
+    getFile(assetId, filePath) {
+      assert.equal(assetId, 'Hero');
+      assert.equal(filePath, 'hero.png');
+      return bytes;
+    },
+  };
+}
+
 async function rejectsCode(input, code) {
   await assert.rejects(validateDsl4EmbeddedAssetBundle(story(), input, options), (error) => {
     assert.equal(error instanceof Dsl4AssetBundleError, true);
@@ -162,6 +212,14 @@ test('rejects structure, order, duplicate, base64, size, hash, and bundle mutati
   missing.files.pop();
   const invalidBase64 = structuredClone(descriptor);
   invalidBase64.files[0].data = '*invalid*';
+  const invalidBase64Alphabet = structuredClone(descriptor);
+  invalidBase64Alphabet.files[0].data = 'AA*A';
+  const urlSafeBase64Alphabet = structuredClone(descriptor);
+  urlSafeBase64Alphabet.files[0].data = '____';
+  const misplacedBase64Padding = structuredClone(descriptor);
+  misplacedBase64Padding.files[0].data = 'AA=A';
+  const nonCanonicalBase64PaddingBits = structuredClone(descriptor);
+  nonCanonicalBase64PaddingBits.files[0].data = 'AB==';
   const wrongSize = structuredClone(descriptor);
   wrongSize.files[0].size += 1;
   const wrongHash = structuredClone(descriptor);
@@ -181,6 +239,10 @@ test('rejects structure, order, duplicate, base64, size, hash, and bundle mutati
     [duplicate, 'K4-ASSET-BUNDLE-DUPLICATE-001'],
     [missing, 'K4-ASSET-BUNDLE-MANIFEST-001'],
     [invalidBase64, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [invalidBase64Alphabet, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [urlSafeBase64Alphabet, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [misplacedBase64Padding, 'K4-ASSET-BUNDLE-BASE64-001'],
+    [nonCanonicalBase64PaddingBits, 'K4-ASSET-BUNDLE-BASE64-001'],
     [wrongSize, 'K4-ASSET-BUNDLE-DESCRIPTOR-001'],
     [wrongHash, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
     [wrongBundle, 'K4-ASSET-BUNDLE-INTEGRITY-001'],
@@ -212,6 +274,26 @@ test('rejects a payload for a project reference and enforces finite limits', asy
   );
 });
 
+test('binds bitmapResolution through the asset manifest and rejects tampering', async () => {
+  const storyDocument = bitmapStory();
+  const snapshot = bitmapSnapshot();
+  const descriptor = await createDsl4EmbeddedAssetBundle(storyDocument, snapshot, options);
+  assert.equal(descriptor.manifest.assets[0].bitmapResolution, 2);
+
+  const missing = structuredClone(descriptor);
+  delete missing.manifest.assets[0].bitmapResolution;
+  await assert.rejects(
+    validateDsl4EmbeddedAssetBundle(storyDocument, missing, options),
+    (error) => error.code === 'K4-ASSET-BUNDLE-DESCRIPTOR-001',
+  );
+  const wrong = structuredClone(descriptor);
+  wrong.manifest.assets[0].bitmapResolution = 1;
+  await assert.rejects(
+    validateDsl4EmbeddedAssetBundle(storyDocument, wrong, options),
+    (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
+  );
+});
+
 test('supports a canonical empty file payload', async () => {
   const descriptor = await createDsl4EmbeddedAssetBundle(
     story(),
@@ -222,6 +304,30 @@ test('supports a canonical empty file payload', async () => {
   assert.equal(descriptor.files[0].data, '');
   const validated = await validateDsl4EmbeddedAssetBundle(story(), descriptor, options);
   assert.deepEqual(validated.getFile('Image', 'image.svg'), new Uint8Array());
+});
+
+test('validates a model-sized base64 payload without overflowing the regexp stack', async () => {
+  const modelBytes = new Uint8Array(5_897_600);
+  for (let index = 0; index < modelBytes.length; index += 1) {
+    modelBytes[index] = index % 251;
+  }
+  const largeOptions = {...options, maxTotalBytes: 8 * 1024 * 1024};
+  const descriptor = await createDsl4EmbeddedAssetBundle(
+    story(),
+    snapshot(modelBytes),
+    largeOptions,
+  );
+  const validated = await validateDsl4EmbeddedAssetBundle(
+    story(),
+    structuredClone(descriptor),
+    largeOptions,
+  );
+  const recovered = validated.getFile('Image', 'image.svg');
+  assert.equal(recovered.length, modelBytes.length);
+  assert.equal(recovered[0], 0);
+  assert.equal(recovered[250], 250);
+  assert.equal(recovered[251], 0);
+  assert.equal(recovered.at(-1), modelBytes.at(-1));
 });
 
 test('stores verified remote metadata without an embedded payload', async () => {
@@ -283,4 +389,48 @@ scenes:
     validateDsl4EmbeddedAssetBundle(parsed.storyDocument, changed, options),
     (error) => error.code === 'K4-ASSET-BUNDLE-MANIFEST-001',
   );
+});
+
+test('stores an unpinned remote pose URL without inventing verification metadata', async () => {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  RemotePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/pose/
+scenes:
+  opening:
+    poseModel: RemotePose
+    actions: []
+`,
+    {sourceId: 'bare-remote-pose-bundle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const snapshot = {
+    manifest: {
+      formatVersion: 1,
+      assets: [
+        {
+          id: 'RemotePose',
+          kind: 'poseModel',
+          loading: 'lazy',
+          source: {type: 'remote', url: 'https://cdn.example.com/pose/'},
+        },
+      ],
+    },
+    getFile() {
+      assert.fail('remote assets must not request local bytes');
+    },
+  };
+  const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
+  assert.deepEqual(descriptor.files, []);
+  assert.deepEqual(descriptor.manifest.assets[0].source, {
+    type: 'remote',
+    url: 'https://cdn.example.com/pose/',
+  });
+  await validateDsl4EmbeddedAssetBundle(parsed.storyDocument, descriptor, options);
 });

@@ -79,6 +79,7 @@ function normalizeAsset(asset, source) {
     kind: asset.kind,
     loading: asset.loading,
     ...(asset.target === undefined ? {} : {target: asset.target}),
+    ...(asset.bitmapResolution === undefined ? {} : {bitmapResolution: asset.bitmapResolution}),
     source: source(asset),
   };
 }

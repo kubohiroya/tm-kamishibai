@@ -13,6 +13,7 @@ export default [
       'node_modules/**',
       'release-sources/**',
       'tmp/**',
+      'src/dsl4/platform/posenet-bundle-assets.js',
       // These files are immutable build artifacts synchronized from their upstream repositories.
       'app/extensions/kubohiroyaassetmanager.js',
       'app/extensions/kubohiroyaasyncinput.js',

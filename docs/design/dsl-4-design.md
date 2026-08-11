@@ -121,8 +121,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   DSL設計から分離する既定OFFのblock cleanup
 - [`sb3-toolchain` PR #38](https://github.com/kubohiroya/sb3-toolchain/pull/38):
   完全固定npm sourceの`status`／`sync`／`update`
-- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/extension-bundles.md)
-- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/source-format-v1.md)
+- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/extension-bundles.md)
+- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/source-format-v1.md)
 
 ## 1. 設計の目的
 
@@ -486,7 +486,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
 scenes:
   opening:
@@ -494,7 +493,8 @@ scenes:
 ```
 
 3.2の`svgTextStyle=STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`を名前付きmappingへ
-正規化します。`size: 100`は480×360ステージの標準14px相当、`direction`は吹き出しにだけ適用、
+正規化します。`size: 100`は480×360ステージの標準14px相当です。SVG Text 0.4では方向を文字
+styleから分離し、`DIRECTION`はそのstyleを使うsay／thinkの`bubbleStyles.placement`へ移します。
 文字列中の`\n`は改行という3.2契約を維持します。アニメーションを4.0初版へ含めるかは未決です。
 
 ### 3.9 アクター、表紙、初期変数 `[提案]`
@@ -561,8 +561,13 @@ compositionへ束ね、`dsl4AppShell`が有効なsessionだけruntime hostとpre
 containerはpresenter modeで初めて遅延生成し、surface固有の暗黙modeを追加しません。flag OFFまたは別modeでは
 presenter optionのDOM設定を検査しません。
 `allowSkip: false`のrefusalは実際の`waitForPose` pending期間だけに適用し、拒否したkeymap入力をDOMで
-消費しません。policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
+消費しません。`allowSkip: true`ではaction全体のsignalから分離したstep signalだけをcancelし、pose portの
+cleanup後に次stepへ進みます。skipしたstepのsoundは再生せず、最終step後は通常のaction commitを行います。
+policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch境界を通し、historyと
 `navigation.nextAction`の到着順を保ちます。`setSkin`やstep sound中は従来のnavigation契約を維持します。
+
+3.1／3.2 converterは従来のSpaceによるpose step skipを保つため、pose actionを一件以上変換したとき
+`poseRecognition.navigation.allowSkip: true`を明示します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
@@ -688,7 +693,6 @@ textStyles:
     font: Noto Sans JP
     size: 150
     align: center
-    direction: up
 
 actors:
   Hero: HeroIdle
@@ -954,6 +958,12 @@ sceneは配列位置ではなくscene IDで識別し、actionはscene内の0始�
 ```text
 /scenes/opening/actions/2/args/skin
 ```
+
+StoryPathのsegmentはRFC 6901の`~0`／`~1`に加え、literal `%`を`%25`、C0制御文字とDELを
+uppercaseの`%HH`で表します。たとえばscene ID `chapter/1%`は`chapter~11%25`となります。
+percent escapeは一回だけdecodeするため、literal文字列`%00`の`%2500`とNULの`%00`は衝突しません。
+source、diagnostic、永続descriptorへraw control characterを出さず、decode後のscene／asset IDは元の
+文字列と完全に一致します。
 
 内容や空白だけを変更してもpathは変わりません。scene名の変更、actionの移動、前方へのaction
 挿入ではpathが変わります。このIDは同じ文書構造内の診断・実行トレース・Source Map対応を
@@ -1568,6 +1578,11 @@ media assetはscene間で表示や再生が継続することがあるため、�
 6. commit時に、`retention: scene`でTが不要とするresourceだけをasset単位でreleaseする
 7. historyで再訪したsceneの解放済みresourceは、IndexedDBまたはembedded sourceから再materializeする
 
+sceneの初回entryとすべてのscene遷移では、Tのactionを開始する前に`StoryDocument.actors`の全actorを
+非表示にします。actor targetは一件も変更する前にすべて解決し、missingまたはambiguousなtargetがあれば
+scene stateと`scene.transition`／`scene.enter` eventをcommitしません。stage、backdrop、effect、BGM、app shellの
+UI targetはこの可視性resetの対象外です。
+
 poseModelはpreload中にcurrentとselected nextの最大二つが一時共存し得ます。通常状態で訪問済みmodel数に比例して
 完全初期化済みPoseNet／TensorFlow resourceを残しません。Abort、superseded navigation、live reload、disposeが
 競合してもstale resourceを公開せず、releaseをidempotentにします。
@@ -1612,7 +1627,7 @@ JavaScript heapへmaterializeしません。metadataを失ったorphan binaryは
 別tabから遅れて到着した古いsnapshotでentries／bytesを上書きしません。memory releaseでcache recordを削除せず、
 cache clearでmaterialize済みresourceを直ちに無効化しません。
 
-remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
+verified remote assetは台本DBのvalid recordをcache-firstで使用します。miss／破損／期限切れの場合だけhost loaderから取得し、
 size、Content-Type、SHA-256検証後にtransactionalに保存します。IndexedDB unavailable／write failureの場合は
 検証済みbytesによるmemory-only実行を許可して機械可読warningを返し、networkとvalid cacheの両方がない場合は
 fail closedとします。
@@ -1621,18 +1636,22 @@ fail closedとします。
 
 self-contained SB3のbinary payloadは、長寿命JavaScript literal、data URL、Base64化したruntime snapshotを正本に
 せず、manifestへbindingされたZIP entryからone-shot providerで取り込みます。editor／builderは同一integrityの
-SB3を再保存できるよう、providerを破棄する前にIndexedDB backing bytesを再供給できることを確認します。
+SB3を再保存できるよう、providerを破棄する前にsession backingまたはdirect entry sourceを確立します。
 
-binary-entry経路は互換用Base64経路を置換せず、明示APIでのみ選択する既定OFFのformatとします。descriptor
-format version 2は各fileを`assetId`、台本内path、展開後size、SHA-256 integrity、content-addressed ZIP entryへ
-bindingし、payload自体を`project.json`へ格納しません。ZIP layout version 1のentry名は
-`kamishibai/assets/v1/<sha256-hex>`とし、同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+binary-entry経路は互換用Base64経路を置換しません。`dsl4RootBinaryEntryPackaging`はbuild開始時固定・既定OFFで、
+ON時だけdescriptor format version 3とSB3 rootの`k4asset-v1-<sha256-hex>`を生成します。v3の各fileは
+`assetId`、台本内logical path、展開後size、SHA-256 integrity、Content-Type、entryへbindingされ、payload自体を
+`project.json`へ格納しません。同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+
+旧format version 2と`kamishibai/assets/v1/<sha256-hex>`は読み取り互換として分離し、basenameによる暗黙変換を
+行いません。Packager bridge、session backing policy、security上限、diagnosticの規範契約は
+[DSL 4.0 root binary／Packager契約](./dsl-4-root-binary-packager-contract.md)に定義します。
 
 runtimeはSB3全体を展開せず、中央directoryを走査してから要求されたassetのentryだけを展開します。providerは
 同じassetの2回目の取得と同時取得を拒否し、最後のembedded assetを渡した時点、または明示`release()`時点で
 SB3 byte snapshot、entry reader、release callbackへの参照を破棄します。`AbortSignal`による取得中断を
 machine-readable errorとして扱います。editorのpreview／再保存では破棄済みproviderを再利用せず、同じ
-snapshotまたは永続backing storeから新しいproviderを供給します。
+snapshot、session backing、または個別entryを取得できるdirect sourceから新しいproviderを供給します。
 
 この経路では呼出側がarchive byte数、archive entry数、1 entryの展開後byte数、archive全体の展開後byte数、
 asset file数、1 asset fileのbyte数、asset file合計byte数、圧縮比の上限をすべて明示します。path traversal、
@@ -1640,20 +1659,19 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
 
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
-同時materialize poseModel数、IndexedDB budgetを制限します。remote pose archiveはarchive自体の検証後にtrusted
+同時materialize poseModel数、IndexedDB budgetを制限します。verified remote pose archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
-Issue #327の製品接続では、`assetBundleFormat: binary-entry`を明示したruntime startupだけが
-deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.7.0のtransactional binary storeへ
-順番にingestし、最後の`IDBTransaction.oncomplete`まで検証済みsource byte参照を保持します。全commit後にproviderと
-SB3 readerへの到達可能参照を破棄し、scene materializationとhistory再訪はstoreの`getBinaryBundle()`から供給します。
-keyはstable story ID、asset ID、descriptor全体のintegrityへbindingし、story別database名には
-`<cacheIdentity.databaseName>--binary-v1`を使用します。cache miss、IndexedDB unavailable、quota、abort、corrupt recordは
-外部URLへfallbackせず、Asset Managerの機械可読codeを維持してfail closedにします。
+`assetBundleFormat: binary-entry`を明示したruntime startupだけがdeferred-release providerを受け取ります。
+旧製品接続で用いた30日TTLのpersistent binary storeはremote cache用途と混同しないよう廃止し、embedded assetは
+起動時固定の`prefer | required | disabled` policyによりsession backingまたはdirect sourceへ接続します。
+session backingは起動ごとのidentityで分離し、全commitとread-back検証までsourceを保持します。確立後のrecord欠落、
+破損、transaction failureではSB3から再抽出せず、安全停止します。persistent remote cacheのdatabase、TTL、LRU、lease、
+clear操作は変更しません。
 
 player runtime componentはmanifestだけを保持し、ingest後のproviderやdecoded byte copyを公開snapshotへ含めません。
-editorが再保存するときだけbacking storeから全entryを一時materializeし、元descriptorと同じcontent-addressed entryを
+editorが再保存するときだけsession backingまたはdirect sourceからentryを一時materializeし、元descriptorと同じcontent-addressed entryを
 再構成します。保存処理の`releaseEntries()`後は一時copyを破棄します。互換用Base64 loader／writerは既定のままで、
 binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.6.1のrelease完了待ちと既存の
 two-phase scene retentionにより、通常時のmodel保持はcurrent、preload中はcurrent＋selected nextへ制限します。
@@ -1736,11 +1754,11 @@ unsupported browser fallbackの正本は
 
 ## 11. 独立capability projectとKamishibai Bundle
 
-> **4.0.0 closeout（2026-08-08）:** この章には3.2 `extensionBundles`を4.0へ適用する比較検討の
-> 履歴が含まれます。実装済み4.0 Standardの正本は
-> [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。競合する記述では、
-> source-composed Standard Runtime ID `kubohiroyakamishibairuntime4`、完全固定npm provider、
-> `./composition`、first-party Structured Dataというcloseout契約を優先します。
+> **4.0.0 closeout（2026-08-11、Issue #517）:** 実装済み4.0 Standardの正本は
+> [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。Runtime member内部は
+> 完全固定npm provider、`./composition`、first-party Structured Dataでsource compositionし、展開ソース上の
+> Runtime member `kubohiroyakamishibairuntime4`とWeb Link member `kubohiroyaweblink`を、既存の
+> `sb3-toolchain extensionBundles`でComposite ID `kubohiroyakamishibai4`へ変換します。
 
 ### 11.0 3.2 legacy Bundle契約 `[現行事実]`
 
@@ -2130,7 +2148,7 @@ block contributionとして公開することをmodule分割の目標にしま�
 dependencies:
   '@kubohiroya/turbowarp-svg-text': 'github:kubohiroya/turbowarp-svg-text#<commit>'
 devDependencies:
-  '@kubohiroya/sb3-toolchain': 'github:kubohiroya/sb3-toolchain#<commit>'
+  '@kubohiroya/sb3-toolchain': '0.6.0'
 ```
 
 GitHub providerのcapabilityは`package.json`／lockfileまたは`embedded-extensions.json`でresolved commitと

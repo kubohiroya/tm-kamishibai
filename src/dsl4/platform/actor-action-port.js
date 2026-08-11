@@ -1,3 +1,4 @@
+import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -33,6 +34,8 @@ function validateComposition(value) {
 function validateHost(value, speechAdvanceTypewriterEnabled) {
   const methods = [
     'showActor',
+    'hideActor',
+    'setActorLayer',
     'setTransparency',
     'createTransparencyTransition',
     'createMove',
@@ -62,6 +65,10 @@ function validateSpeechPayload(value, command, extended) {
     'noSoundCharacters',
     'restCharacters',
     'restCharacterIntervalSeconds',
+    'advanceIndicator',
+    'bubbleStyle',
+    'bubbleReveal',
+    'bubbleMotions',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   const missing = ['target', 'text'].filter((key) => !Object.hasOwn(value, key));
@@ -229,7 +236,7 @@ function validatePresentationOperation(value, command) {
       `${command} presentation operation must provide start and finish`,
     );
   }
-  return /** @type {{start: () => unknown, startBackground?: () => void, finish: (reason?: string) => unknown}} */ (
+  return /** @type {{start: () => unknown, startBackground?: () => void, finish: (reason?: string) => unknown, setSpeechLifecycle?: (lifecycle: Readonly<{onTextComplete: () => void, onTerminal: () => void}>) => void}} */ (
     /** @type {unknown} */ (value)
   );
 }
@@ -311,35 +318,53 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
   if (!isRecord(context) || typeof context.createAdvanceWait !== 'function') {
     throw portError('K4-ACTOR-PORT-001', 'speech advance context must provide createAdvanceWait');
   }
-  const advanceWait = context.createAdvanceWait();
-  if (
-    !isRecord(advanceWait) ||
-    !isRecord(advanceWait.promise) ||
-    typeof advanceWait.promise.then !== 'function' ||
-    typeof advanceWait.cancel !== 'function'
-  ) {
-    if (isRecord(advanceWait) && typeof advanceWait.cancel === 'function') {
-      advanceWait.cancel();
+  const createAdvanceWaitForContext = /** @type {Function} */ (context.createAdvanceWait);
+  const createAdvanceWait = () => {
+    const advanceWait = createAdvanceWaitForContext.call(context);
+    if (
+      !isRecord(advanceWait) ||
+      !isRecord(advanceWait.promise) ||
+      typeof advanceWait.promise.then !== 'function' ||
+      typeof advanceWait.cancel !== 'function'
+    ) {
+      if (isRecord(advanceWait) && typeof advanceWait.cancel === 'function') {
+        advanceWait.cancel();
+      }
+      throw portError('K4-ACTOR-PORT-001', 'createAdvanceWait returned an invalid handle');
     }
-    throw portError('K4-ACTOR-PORT-001', 'createAdvanceWait returned an invalid handle');
-  }
+    return /** @type {{promise: Promise<unknown>, cancel: () => void}} */ (
+      /** @type {unknown} */ (advanceWait)
+    );
+  };
+  let advanceWait = createAdvanceWait();
   const presentation = runPresentationOperation(operation, signal);
   try {
-    const outcome = await Promise.race([
-      presentation.then(() => 'presentation'),
-      advanceWait.promise.then((/** @type {unknown} */ result) => {
-        if (isRecord(result) && result.outcome === 'advance') return 'advance';
-        if (isRecord(result) && result.outcome === 'cancelled') return 'cancelled';
-        throw portError('K4-ACTOR-PORT-001', 'speech advance wait returned an invalid outcome');
-      }),
-    ]);
-    if (outcome === 'advance') operation.finish('advance');
-    if (outcome === 'cancelled') {
-      operation.finish('cancel');
-      if (signal.aborted) throw abortError();
-      throw portError('K4-ACTOR-PORT-001', 'speech advance wait was cancelled unexpectedly');
+    while (true) {
+      let outcome;
+      try {
+        outcome = await Promise.race([
+          presentation.then(() => 'presentation'),
+          advanceWait.promise.then((/** @type {unknown} */ result) => {
+            if (isRecord(result) && result.outcome === 'advance') return 'advance';
+            if (isRecord(result) && result.outcome === 'cancelled') return 'cancelled';
+            throw portError('K4-ACTOR-PORT-001', 'speech advance wait returned an invalid outcome');
+          }),
+        ]);
+      } finally {
+        advanceWait.cancel();
+      }
+      if (outcome === 'presentation') return await presentation;
+      if (outcome === 'cancelled') {
+        operation.finish('cancel');
+        if (signal.aborted) throw abortError();
+        throw portError('K4-ACTOR-PORT-001', 'speech advance wait was cancelled unexpectedly');
+      }
+      const finishResult = operation.finish('advance');
+      if (!isRecord(finishResult) || finishResult.consumed !== true) {
+        return await presentation;
+      }
+      advanceWait = createAdvanceWait();
     }
-    return await presentation;
   } catch (error) {
     try {
       operation.finish('cancel');
@@ -349,8 +374,6 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
       }
     }
     throw error;
-  } finally {
-    advanceWait.cancel();
   }
 }
 
@@ -365,6 +388,9 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
  * @param {(actorId: string, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.resolveActor
  * @param {unknown} options.host
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {unknown} [options.advanceIndicatorPresenter]
+ * @param {(actorId: string) => unknown | Promise<unknown>} [options.stopActorLoop]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -377,7 +403,33 @@ export function createDsl4ActorActionPort(options) {
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
+  const bubbleAdvanceIndicatorEnabled = options.bubbleAdvanceIndicatorEnabled ?? false;
+  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
+  }
+  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  /** @type {Record<string, Function> | undefined} */
+  let advanceIndicatorPresenter;
+  if (bubbleAdvanceIndicatorEnabled) {
+    if (
+      !isRecord(options.advanceIndicatorPresenter) ||
+      typeof options.advanceIndicatorPresenter.create !== 'function'
+    ) {
+      throw new TypeError(
+        'advanceIndicatorPresenter.create is required when bubble advance indicators are enabled',
+      );
+    }
+    advanceIndicatorPresenter = /** @type {Record<string, Function>} */ (
+      options.advanceIndicatorPresenter
+    );
+  }
   const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
+  if (options.stopActorLoop !== undefined && typeof options.stopActorLoop !== 'function') {
+    throw new TypeError('stopActorLoop must be a function');
+  }
+  const stopActorLoop = options.stopActorLoop;
 
   /** @param {string} skin */
   function requireImageAsset(skin) {
@@ -473,10 +525,92 @@ export function createDsl4ActorActionPort(options) {
         );
       }
     }
+    const bubbleStyle = Object.hasOwn(value, 'bubbleStyle')
+      ? requireNonEmptyString(value.bubbleStyle, 'bubbleStyle', command)
+      : undefined;
+    let bubbleReveal;
+    if (Object.hasOwn(value, 'bubbleReveal')) {
+      if (bubbleStyle === undefined) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleReveal requires bubbleStyle`);
+      }
+      const candidate = value.bubbleReveal;
+      const allowedRevealKeys = new Set([
+        'unit',
+        'delimiters',
+        'showDelimiters',
+        'layout',
+        'intervalSeconds',
+        'sound',
+      ]);
+      if (
+        !isRecord(candidate) ||
+        Object.keys(candidate).some((key) => !allowedRevealKeys.has(key)) ||
+        !['CHARACTER', 'WORD', 'LINE', 'BLOCK'].includes(String(candidate.unit))
+      ) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleReveal is invalid`);
+      }
+      bubbleReveal = candidate;
+    }
+    let bubbleMotions;
+    if (Object.hasOwn(value, 'bubbleMotions')) {
+      if (bubbleStyle === undefined) {
+        throw portError('K4-ACTOR-PORT-001', `${command}.bubbleMotions requires bubbleStyle`);
+      }
+      try {
+        bubbleMotions = normalizeDsl4BubbleMotions(value.bubbleMotions);
+      } catch (error) {
+        const normalizedError = portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.bubbleMotions is invalid`,
+        );
+        Object.defineProperty(normalizedError, 'cause', {value: error});
+        throw normalizedError;
+      }
+    }
+    let advanceIndicator;
+    if (Object.hasOwn(value, 'advanceIndicator') && bubbleStyle === undefined) {
+      if (!bubbleAdvanceIndicatorEnabled) {
+        throw portError('K4-ACTOR-PORT-001', 'bubble advance indicator is disabled');
+      }
+      const candidate = value.advanceIndicator;
+      if (
+        !isRecord(candidate) ||
+        Object.keys(candidate).some((key) => key !== 'frames' && key !== 'frameIntervalSeconds') ||
+        !Array.isArray(candidate.frames) ||
+        candidate.frames.length < 2 ||
+        candidate.frames.some((frame) => typeof frame !== 'string' || frame.length === 0)
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.advanceIndicator must provide at least two frame asset names`,
+        );
+      }
+      const frameIntervalSeconds = requireFiniteNumber(
+        candidate.frameIntervalSeconds,
+        'advanceIndicator.frameIntervalSeconds',
+        command,
+      );
+      if (frameIntervalSeconds <= 0 || !Number.isFinite(frameIntervalSeconds * 1000)) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          `${command}.advanceIndicator.frameIntervalSeconds must be greater than zero`,
+        );
+      }
+      advanceIndicator = Object.freeze({
+        frames: Object.freeze([...candidate.frames]),
+        frameIntervalSeconds,
+      });
+    }
     const signal = validateContext(context);
     if (signal.aborted) throw abortError();
     for (const sound of new Set([startSound, characterSound].filter(Boolean))) {
       requireAudioAsset(/** @type {string} */ (sound));
+    }
+    if (isRecord(bubbleReveal) && typeof bubbleReveal.sound === 'string') {
+      requireAudioAsset(bubbleReveal.sound);
+    }
+    if (advanceIndicator) {
+      for (const frame of advanceIndicator.frames) requireImageAsset(frame);
     }
     const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
       /** @type {unknown} */ (context)
@@ -494,12 +628,63 @@ export function createDsl4ActorActionPort(options) {
           ...(noSoundCharacters === undefined ? {} : {noSoundCharacters}),
           ...(restCharacters === undefined ? {} : {restCharacters}),
           ...(restCharacterIntervalSeconds === undefined ? {} : {restCharacterIntervalSeconds}),
+          ...(bubbleStyle === undefined ? {} : {bubbleStyle}),
+          ...(bubbleReveal === undefined ? {} : {bubbleReveal}),
+          ...(bubbleMotions === undefined ? {} : {bubbleMotions}),
+          ...(waitFor === undefined ? {} : {waitFor}),
         }),
         actionContext,
       ),
       command,
     );
-    return runSpeechPresentationOperation(operation, signal, context, waitFor === 'advance');
+    /** @type {{start: Function, stop: Function} | undefined} */
+    let indicatorOperation;
+    let indicatorStopped = false;
+    const stopIndicator = () => {
+      if (indicatorStopped || !indicatorOperation) return;
+      indicatorStopped = true;
+      indicatorOperation.stop();
+    };
+    if (advanceIndicator && waitFor === 'advance') {
+      indicatorOperation = advanceIndicatorPresenter?.create(
+        actor,
+        advanceIndicator,
+        actionContext,
+      );
+      if (
+        !isRecord(indicatorOperation) ||
+        typeof indicatorOperation.start !== 'function' ||
+        typeof indicatorOperation.stop !== 'function'
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-004',
+          `${command} advance indicator operation must provide start and stop`,
+        );
+      }
+      if (typeof operation.setSpeechLifecycle !== 'function') {
+        throw portError(
+          'K4-ACTOR-PORT-004',
+          `${command} presentation operation must provide setSpeechLifecycle`,
+        );
+      }
+      const activeIndicator = indicatorOperation;
+      operation.setSpeechLifecycle(
+        Object.freeze({
+          onTextComplete: () => activeIndicator.start(),
+          onTerminal: stopIndicator,
+        }),
+      );
+    }
+    try {
+      return await runSpeechPresentationOperation(
+        operation,
+        signal,
+        context,
+        waitFor === 'advance',
+      );
+    } finally {
+      stopIndicator();
+    }
   }
 
   return Object.freeze({
@@ -521,11 +706,49 @@ export function createDsl4ActorActionPort(options) {
         /** @type {unknown} */ (context)
       );
       const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => stopActorLoop?.(target), signal);
       await runCancellable(() => composition.applyToTarget(skin, actor), signal);
       await runCancellable(
         () => host.showActor(actor, Object.freeze({x, y, scale}), actionContext),
         signal,
       );
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async hide(payload, context) {
+      const value = validatePayloadShape(payload, ['target'], 'hide');
+      const target = requireNonEmptyString(value.target, 'target', 'hide');
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => host.hideActor(actor, actionContext), signal);
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async setLayer(payload, context) {
+      const value = validatePayloadShape(payload, ['target', 'layer'], 'setLayer');
+      const target = requireNonEmptyString(value.target, 'target', 'setLayer');
+      const layer = value.layer;
+      if (
+        layer !== 'front' &&
+        layer !== 'back' &&
+        (typeof layer !== 'number' || !Number.isFinite(layer))
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          'setLayer.layer must be front, back, or a finite number',
+        );
+      }
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => host.setActorLayer(actor, layer, actionContext), signal);
     },
 
     /** @param {unknown} payload @param {unknown} context */

@@ -1,7 +1,9 @@
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
+import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -21,7 +23,13 @@ const speechPresentationArgumentNames = Object.freeze([
   'restCharacters',
   'restCharacterIntervalSeconds',
 ]);
-
+const advancedBubbleStyleNames = Object.freeze([
+  'reveal',
+  'audio',
+  'showAnimation',
+  'hideAnimation',
+  'visibleAnimations',
+]);
 export const dsl4RuntimeQuiesceDefaults = Object.freeze({
   quiesceTimeoutMs: 5_000,
   minimumQuiesceTimeoutMs: 100,
@@ -61,6 +69,7 @@ function deferred() {
  *
  * @typedef {object} ActionContext
  * @property {AbortSignal} signal
+ * @property {AbortSignal} [actionSignal]
  * @property {number} generation
  * @property {string} sceneId
  * @property {string} actionPath
@@ -104,10 +113,6 @@ function safeErrorMessage(error) {
  * @param {string} value
  * @returns {string}
  */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
 /**
  * @param {Readonly<Record<string, unknown>>} storyDocument
  * @param {string | null} storyPath
@@ -143,6 +148,10 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
+ * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
+ * @param {boolean} [options.turboWarpBubbleEnabled]
+ * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
+ * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -157,6 +166,10 @@ export function createDsl4RuntimeController({
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
   speechAdvanceTypewriterEnabled = false,
+  bubbleAdvanceIndicatorEnabled = false,
+  turboWarpBubbleEnabled = false,
+  turboWarpBubbleAdvancedPresentationEnabled = false,
+  broadcastMessageAndWaitEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -201,6 +214,29 @@ export function createDsl4RuntimeController({
   if (typeof speechAdvanceTypewriterEnabled !== 'boolean') {
     throw new TypeError('speechAdvanceTypewriterEnabled must be boolean');
   }
+  if (typeof bubbleAdvanceIndicatorEnabled !== 'boolean') {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled must be boolean');
+  }
+  if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleEnabled must be boolean');
+  }
+  if (turboWarpBubbleEnabled && !speechAdvanceTypewriterEnabled) {
+    throw new TypeError('turboWarpBubbleEnabled requires speechAdvanceTypewriterEnabled');
+  }
+  if (typeof turboWarpBubbleAdvancedPresentationEnabled !== 'boolean') {
+    throw new TypeError('turboWarpBubbleAdvancedPresentationEnabled must be boolean');
+  }
+  if (turboWarpBubbleAdvancedPresentationEnabled && !turboWarpBubbleEnabled) {
+    throw new TypeError(
+      'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
+    );
+  }
+  if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
+    throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -217,17 +253,58 @@ export function createDsl4RuntimeController({
   ) {
     throw new TypeError('finishPresentationTransitions runtime port method must be a function');
   }
+  if (port.hideSceneActors !== undefined && typeof port.hideSceneActors !== 'function') {
+    throw new TypeError('hideSceneActors runtime port method must be a function');
+  }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
-  const speechStylesValue = storyDocument.speechStyles ?? {};
-  if (!isRecord(speechStylesValue)) {
-    throw new TypeError('DSL 4.0 StoryDocument speechStyles must be an object');
+  if (
+    !broadcastMessageAndWaitEnabled &&
+    scenes.some((scene) =>
+      /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions ?? []).some(
+        (action) => action.command === 'broadcastMessageAndWait',
+      ),
+    )
+  ) {
+    const error = new TypeError(
+      'dsl4BroadcastMessageAndWait must be enabled for broadcastMessageAndWait actions',
+    );
+    Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-BROADCAST-FLAG-001'});
+    throw error;
   }
-  const speechStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
-    speechStylesValue
+  const storyActorsValue = storyDocument.actors ?? {};
+  if (!isRecord(storyActorsValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument actors must be an object');
+  }
+  const storyActorIds = Object.freeze(Object.keys(storyActorsValue));
+  const bubbleStylesValue = storyDocument.bubbleStyles ?? {};
+  if (!isRecord(bubbleStylesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument bubbleStyles must be an object');
+  }
+  const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+    bubbleStylesValue
   );
+  if (
+    !bubbleAdvanceIndicatorEnabled &&
+    !turboWarpBubbleEnabled &&
+    Object.values(bubbleStyles).some((style) => Object.hasOwn(style, 'continueIndicator'))
+  ) {
+    throw new TypeError(
+      'dsl4BubbleAdvanceIndicator must be enabled for bubbleStyles.continueIndicator',
+    );
+  }
+  if (
+    !turboWarpBubbleAdvancedPresentationEnabled &&
+    Object.values(bubbleStyles).some((style) =>
+      advancedBubbleStyleNames.some((field) => Object.hasOwn(style, field)),
+    )
+  ) {
+    throw new TypeError(
+      'dsl4TurboWarpBubbleAdvancedPresentation must be enabled for reveal, audio, or Bubble motion',
+    );
+  }
   if (!speechAdvanceTypewriterEnabled) {
     const extendedSpeechAction = scenes
       .flatMap(
@@ -238,7 +315,7 @@ export function createDsl4RuntimeController({
         if (action.command === 'think') return true;
         if (action.command !== 'say') return false;
         const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
-        return ['waitFor', 'startSound', 'style', ...speechPresentationArgumentNames].some((key) =>
+        return ['waitFor', 'startSound', 'styles', ...speechPresentationArgumentNames].some((key) =>
           Object.hasOwn(args, key),
         );
       });
@@ -300,10 +377,14 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
-  /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
   let poseAdvanceLock = null;
-  /** @type {{generation: number} | null} */
+  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, waitingForRecognition: boolean, skipRequested: boolean, skipReason: string | null} | null} */
   let activePoseWait = null;
+  /** @type {{command: 'rehearsal.skipAction' | 'rehearsal.skipScene', sceneIndex: number, actionIndex: number, completion: ReturnType<typeof deferred>, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  let rehearsalSkipLock = null;
+  /** @type {{sceneIndex: number, reason: 'rehearsal.skipScene'} | null} */
+  let rehearsalSceneSkip = null;
   /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void} | null} */
   let activeAdvanceWait = null;
   /** @type {Record<string, any> | null} */
@@ -355,6 +436,18 @@ export function createDsl4RuntimeController({
     return actions[currentActionIndex];
   }
 
+  /** @param {Readonly<Record<string, unknown>> | null} action */
+  function isRehearsalSceneStatefulAction(action) {
+    return action?.command === 'bgm' || action?.command === 'transition';
+  }
+
+  /** @param {typeof rehearsalSkipLock} lock */
+  function settleRehearsalSkip(lock) {
+    if (!lock || rehearsalSkipLock !== lock) return;
+    rehearsalSkipLock = null;
+    lock.completion.resolve(undefined);
+  }
+
   /** @param {number} scenePosition @param {number} actionPosition */
   function actionAt(scenePosition, actionPosition) {
     const scene = scenes[scenePosition];
@@ -402,7 +495,7 @@ export function createDsl4RuntimeController({
       typeof action?.id === 'string'
         ? action.id
         : sceneId
-          ? `/scenes/${storyPathSegment(sceneId)}`
+          ? `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`
           : '/';
     const token = deepFreeze({
       kind: 'Dsl4QuiesceToken',
@@ -565,7 +658,7 @@ export function createDsl4RuntimeController({
     const action = actions[actionPosition];
     return typeof action?.id === 'string'
       ? action.id
-      : `/scenes/${storyPathSegment(String(scene.id))}`;
+      : `/scenes/${encodeDsl4StoryPathSegment(String(scene.id))}`;
   }
 
   /**
@@ -629,7 +722,8 @@ export function createDsl4RuntimeController({
   function emit(type, details = {}) {
     const scene = currentScene();
     const action = currentAction();
-    const scenePath = typeof scene?.id === 'string' ? `/scenes/${storyPathSegment(scene.id)}` : '/';
+    const scenePath =
+      typeof scene?.id === 'string' ? `/scenes/${encodeDsl4StoryPathSegment(scene.id)}` : '/';
     const event = /** @type {RuntimeEvent} */ (
       deepFreeze({
         sequence: sequence++,
@@ -642,6 +736,31 @@ export function createDsl4RuntimeController({
       })
     );
     trace.push(event);
+    const lock = rehearsalSkipLock;
+    if (lock) {
+      const enteredAnotherScene = type === 'scene.enter' && currentSceneIndex !== lock.sceneIndex;
+      const startedAnotherAction =
+        type === 'action.start' &&
+        (currentSceneIndex !== lock.sceneIndex || currentActionIndex !== lock.actionIndex);
+      const terminal =
+        type === 'runtime.finish' || type === 'runtime.fail' || type === 'runtime.stop';
+      if (
+        terminal ||
+        enteredAnotherScene ||
+        (lock.command === 'rehearsal.skipAction' && startedAnotherAction)
+      ) {
+        settleRehearsalSkip(lock);
+      }
+    }
+    if (
+      rehearsalSceneSkip &&
+      ((type === 'scene.enter' && currentSceneIndex !== rehearsalSceneSkip.sceneIndex) ||
+        type === 'runtime.finish' ||
+        type === 'runtime.fail' ||
+        type === 'runtime.stop')
+    ) {
+      rehearsalSceneSkip = null;
+    }
     try {
       onEvent?.(event);
     } catch {
@@ -830,6 +949,14 @@ export function createDsl4RuntimeController({
     }
     const nextScene = scenes[nextIndex];
     const from = currentScene()?.id ?? null;
+    port.hideSceneActors?.(
+      deepFreeze({
+        actors: storyActorIds,
+        from,
+        to: sceneId,
+        reason,
+      }),
+    );
     applyPosePreviewMirroring(nextScene);
     bindStructuredScene(sceneId, actionIndex);
     currentSceneIndex = nextIndex;
@@ -899,7 +1026,7 @@ export function createDsl4RuntimeController({
         matches = await evaluateCondition(rule.if, context.variables, context);
       } catch (error) {
         throw mapDsl4RuntimeExpressionError(error, {
-          storyPath: `/branches/${storyPathSegment(branchId)}/${ruleIndex}/if`,
+          storyPath: `/branches/${encodeDsl4StoryPathSegment(branchId)}/${ruleIndex}/if`,
           sourcePath: `$.branches[${JSON.stringify(branchId)}][${ruleIndex}].if`,
         });
       }
@@ -916,32 +1043,49 @@ export function createDsl4RuntimeController({
    * @param {Record<string, unknown>} args
    */
   function resolveSpeechStyle(command, args) {
-    if (!Object.hasOwn(args, 'style')) return args;
-    if (speechPresentationArgumentNames.some((key) => Object.hasOwn(args, key))) {
-      const error = new Error(
-        `${command}.style cannot be combined with inline speech presentation`,
-      );
+    if (!Object.hasOwn(args, 'styles')) return args;
+    const styleIds = args.styles;
+    if (
+      !Array.isArray(styleIds) ||
+      styleIds.length === 0 ||
+      styleIds.some((styleId) => typeof styleId !== 'string') ||
+      new Set(styleIds).size !== styleIds.length
+    ) {
+      const error = new Error(`${command}.styles must be an array of bubble style names`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
       throw error;
     }
-    const styleId = args.style;
-    const style = typeof styleId === 'string' ? speechStyles[styleId] : undefined;
-    if (!isRecord(style)) {
-      const error = new Error(`Speech style is unavailable: ${String(styleId)}`);
-      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
-      throw error;
-    }
-    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'style'));
-    const resolvedStyle = /** @type {Record<string, unknown>} */ (cloneValue(style));
-    return {...resolvedStyle, ...actionArgs};
+    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
+    const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
+    const presentation = Object.fromEntries(
+      speechPresentationArgumentNames
+        .filter((field) => Object.hasOwn(resolvedStyle, field))
+        .map((field) => [field, resolvedStyle[field]]),
+    );
+    return {
+      ...presentation,
+      ...(!turboWarpBubbleEnabled && Object.hasOwn(resolvedStyle, 'continueIndicator')
+        ? {advanceIndicator: resolvedStyle.continueIndicator}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled && Object.hasOwn(resolvedStyle, 'reveal')
+        ? {bubbleReveal: resolvedStyle.reveal}
+        : {}),
+      ...(turboWarpBubbleAdvancedPresentationEnabled &&
+      Object.hasOwn(resolvedStyle, 'visibleAnimations')
+        ? {bubbleMotions: resolvedStyle.visibleAnimations}
+        : {}),
+      ...actionArgs,
+      ...(turboWarpBubbleEnabled ? {bubbleStyle: bubbleStyleNameForStyleIds(styleIds)} : {}),
+    };
   }
 
   /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
+   * @param {{rehearsalSceneSkip?: boolean}} [options]
    * @returns {Promise<{sceneId: string, reason: string} | null>}
    */
-  async function dispatch(action, context) {
+  async function dispatch(action, context, {rehearsalSceneSkip = false} = {}) {
     const command = String(action.command);
     const target = action.target === null ? null : String(action.target);
     const args = /** @type {Record<string, unknown>} */ (action.args);
@@ -1013,37 +1157,91 @@ export function createDsl4RuntimeController({
       const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
       const poseModel = String(currentScene()?.poseModel ?? '');
       for (const [stepIndex, step] of steps.entries()) {
-        if (typeof step.skin === 'string') {
-          await invokePort('setSkin', {target, skin: step.skin}, context);
-          ensureActive(context);
+        const stepController = new AbortController();
+        const handleActionAbort = () => stepController.abort(context.signal.reason);
+        if (context.signal.aborted) handleActionAbort();
+        else context.signal.addEventListener('abort', handleActionAbort, {once: true});
+        const poseWait = {
+          generation: context.generation,
+          stepIndex,
+          controller: stepController,
+          completion: deferred(),
+          cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
+          waitingForRecognition: false,
+          skipRequested: false,
+          skipReason: null,
+        };
+        if (
+          poseAdvanceLock?.generation === context.generation &&
+          poseAdvanceLock.stepIndex !== stepIndex
+        ) {
+          poseAdvanceLock = null;
         }
-        const poseWait = {generation: context.generation};
         activePoseWait = poseWait;
+        const stepContext = {
+          ...context,
+          signal: stepController.signal,
+          actionSignal: context.signal,
+        };
+        let skipped = false;
         try {
+          if (typeof step.skin === 'string') {
+            await invokePort('setSkin', {target, skin: step.skin}, stepContext);
+            ensureActive(context);
+          }
+          poseWait.waitingForRecognition = true;
           await invokePort(
             'waitForPose',
             {
               target,
               pose: step.pose,
               stepIndex,
+              stepCount: steps.length,
               poseModel,
               recognition: cloneValue(poseSequenceRecognition),
             },
-            context,
+            stepContext,
           );
+          if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
+            skipped = true;
+          }
+        } catch (error) {
+          const errorRecord = isRecord(error) ? error : {};
+          if (
+            !poseWait.skipRequested ||
+            context.signal.aborted ||
+            !isCurrent(context.generation) ||
+            errorRecord.name !== 'AbortError'
+          ) {
+            throw error;
+          }
+          skipped = true;
         } finally {
+          poseWait.cleanup();
           if (activePoseWait === poseWait) activePoseWait = null;
+          poseWait.completion.resolve(undefined);
+        }
+        if (skipped) {
+          emit('pose.step.skip', {
+            stepIndex,
+            reason: poseWait.skipReason ?? 'navigation.nextAction',
+          });
+          continue;
         }
         ensureActive(context);
         if (typeof step.sound === 'string') {
-          await invokePort('sound', {sound: step.sound}, context);
+          await invokePort('bgm', {sound: step.sound}, context);
           ensureActive(context);
         }
       }
       return null;
     }
     const portArgs =
-      command === 'say' || command === 'think' ? resolveSpeechStyle(command, args) : args;
+      command === 'say' || command === 'think'
+        ? resolveSpeechStyle(command, args)
+        : rehearsalSceneSkip && command === 'transition'
+          ? {...args, seconds: 0}
+          : args;
     await invokePort(command, target === null ? {...portArgs} : {target, ...portArgs}, context);
     return null;
   }
@@ -1143,8 +1341,21 @@ export function createDsl4RuntimeController({
             completeQuiesce(currentSceneIndex, currentActionIndex, 'finished', false);
             break;
           }
+          const sceneSkip =
+            rehearsalSceneSkip?.sceneIndex === currentSceneIndex ? rehearsalSceneSkip : null;
+          if (sceneSkip) {
+            emit('navigation.advanceScene', {
+              fromStoryPath: storyPathAt(currentSceneIndex, currentActionIndex),
+              toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
+              reason: sceneSkip.reason,
+            });
+          }
           if (
-            !(await enterScene(String(scenes[currentSceneIndex + 1].id), 'sequential', activeRunId))
+            !(await enterScene(
+              String(scenes[currentSceneIndex + 1].id),
+              sceneSkip?.reason ?? 'sequential',
+              activeRunId,
+            ))
           ) {
             break;
           }
@@ -1189,6 +1400,17 @@ export function createDsl4RuntimeController({
             break;
           }
         }
+        const applyingRehearsalSceneState = rehearsalSceneSkip?.sceneIndex === currentSceneIndex;
+        if (applyingRehearsalSceneState && !isRehearsalSceneStatefulAction(currentAction())) {
+          try {
+            releaseStructuredAction('rehearsal.skipScene');
+          } catch (error) {
+            fail(error);
+            break;
+          }
+          emit('action.skip', {reason: 'rehearsal.skipScene'});
+          continue;
+        }
         generation += 1;
         const actionGeneration = generation;
         actionAbortController = new AbortController();
@@ -1196,7 +1418,9 @@ export function createDsl4RuntimeController({
         emit('action.start');
         let transition = null;
         try {
-          transition = await dispatch(currentAction(), context);
+          transition = await dispatch(currentAction(), context, {
+            rehearsalSceneSkip: applyingRehearsalSceneState,
+          });
         } catch (error) {
           if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
           fail(error);
@@ -1316,10 +1540,9 @@ export function createDsl4RuntimeController({
     }
     const action = currentAction();
     const wasRunning = status === 'running';
-    const poseCancellationPending = poseAdvanceLock?.runId === runId;
-    if (wasRunning && !poseCancellationPending) actionAbortController?.abort(reason);
+    if (wasRunning) actionAbortController?.abort(reason);
     generation += 1;
-    if (wasRunning && action && !poseCancellationPending) emit('action.cancel', {reason});
+    if (wasRunning && action) emit('action.cancel', {reason});
     try {
       endStructuredStory(reason);
     } catch (error) {
@@ -1333,11 +1556,8 @@ export function createDsl4RuntimeController({
     return snapshot();
   }
 
-  /** @param {string} reason */
-  function isPoseNavigationAdvance(reason) {
+  function hasActivePoseWait() {
     return (
-      poseNavigationPolicyEnabled &&
-      reason === 'navigation.nextAction' &&
       status === 'running' &&
       actionAbortController !== null &&
       activePoseWait?.generation === generation &&
@@ -1345,10 +1565,38 @@ export function createDsl4RuntimeController({
     );
   }
 
+  /** @param {string} reason */
+  function isPoseNavigationAdvance(reason) {
+    const poseWait = activePoseWait;
+    return (
+      hasActivePoseWait() &&
+      (poseWait?.waitingForRecognition || poseSequenceRecognition.navigation.allowSkip) &&
+      (reason === 'rehearsal.skipPose' ||
+        (poseNavigationPolicyEnabled && reason === 'navigation.nextAction'))
+    );
+  }
+
+  /** @param {string} command */
+  function canRehearsalSkip(command) {
+    if (status !== 'running') return false;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
+    if (poseAdvanceLock || rehearsalSkipLock || rehearsalSceneSkip) return false;
+    if (command === 'rehearsal.skipPose') {
+      return hasActivePoseWait() && poseSequenceRecognition.navigation.allowSkip;
+    }
+    if (command === 'rehearsal.skipAction') {
+      return actionAbortController !== null && currentAction() !== null;
+    }
+    if (command === 'rehearsal.skipScene') {
+      return currentSceneIndex >= 0 && currentScene() !== null;
+    }
+    return false;
+  }
+
   /** @param {string} [reason] */
   function canAdvance(reason = 'navigation.nextAction') {
     if (status !== 'running') return false;
-    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock) return false;
     if (!isPoseNavigationAdvance(reason)) return true;
     return poseSequenceRecognition.navigation.allowSkip;
@@ -1422,55 +1670,40 @@ export function createDsl4RuntimeController({
   }
 
   /**
-   * @param {string} reason
-   * @param {string} fromStoryPath
-   * @param {Promise<Readonly<Record<string, unknown>>> | null} activeRun
-   * @param {{runId: number, operation: Promise<Readonly<Record<string, unknown>>> | null}} lock
-   */
-  async function advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock) {
-    try {
-      if (activeRun) await activeRun;
-    } finally {
-      if (poseAdvanceLock === lock) poseAdvanceLock = null;
-    }
-    const activeRunId = lock.runId;
-    if (status !== 'running' || runId !== activeRunId) return snapshot();
-    return continueAfterAdvanceCancellation(reason, fromStoryPath, activeRunId);
-  }
-
-  /**
-   * Cancel the current action and continue at the next normal execution boundary.
+   * Skip the active pose step or cancel the current action at the next execution boundary.
    *
    * @param {string} [reason]
    * @returns {Promise<Readonly<Record<string, unknown>>>}
    */
   function advance(reason = 'navigation.nextAction') {
     if (status !== 'running') return Promise.resolve(snapshot());
-    if (poseAdvanceLock && poseAdvanceLock.runId !== runId) poseAdvanceLock = null;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
     if (poseAdvanceLock) return poseAdvanceLock.operation;
     if (!canAdvance(reason)) return Promise.resolve(snapshot());
-    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
-    finishPresentationTransitions(reason);
     if (isPoseNavigationAdvance(reason)) {
-      const activeRun = runPromise;
-      actionAbortController?.abort(reason);
-      generation += 1;
-      emit('action.cancel', {reason});
-      runId += 1;
-      /** @type {{runId: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
-      const lock = {runId, operation: Promise.resolve(snapshot())};
-      const operation = advancePoseAfterCleanup(reason, fromStoryPath, activeRun, lock);
+      const poseWait = activePoseWait;
+      if (!poseWait) return Promise.resolve(snapshot());
+      /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
+      const lock = {
+        generation,
+        stepIndex: poseWait.stepIndex,
+        operation: Promise.resolve(snapshot()),
+      };
+      poseWait.skipRequested = true;
+      poseWait.skipReason = reason;
+      poseWait.controller.abort(reason);
+      const operation = poseWait.completion.promise.then(() => snapshot());
       lock.operation = operation;
       poseAdvanceLock = lock;
-      runPromise = operation;
       void operation
         .finally(() => {
           if (poseAdvanceLock === lock) poseAdvanceLock = null;
-          if (runPromise === operation) runPromise = null;
         })
         .catch(() => {});
       return operation;
     }
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    finishPresentationTransitions(reason);
     const action = currentAction();
     actionAbortController?.abort(reason);
     generation += 1;
@@ -1478,6 +1711,135 @@ export function createDsl4RuntimeController({
     runId += 1;
     runPromise = null;
     return continueAfterAdvanceCancellation(reason, fromStoryPath, runId);
+  }
+
+  function skipPose() {
+    if (!canRehearsalSkip('rehearsal.skipPose')) return Promise.resolve(snapshot());
+    return advance('rehearsal.skipPose');
+  }
+
+  /**
+   * Complete the active action at its cancellation endpoint and resume at the next action boundary.
+   *
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function skipAction() {
+    if (!canRehearsalSkip('rehearsal.skipAction')) return Promise.resolve(snapshot());
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const staleRun = runPromise;
+    const completion = deferred();
+    const lock = {
+      command: /** @type {const} */ ('rehearsal.skipAction'),
+      sceneIndex: currentSceneIndex,
+      actionIndex: currentActionIndex,
+      completion,
+      operation: Promise.resolve(snapshot()),
+    };
+    finishPresentationTransitions(lock.command);
+    rehearsalSkipLock = lock;
+    const action = currentAction();
+    actionAbortController?.abort(lock.command);
+    generation += 1;
+    if (action) emit('action.cancel', {reason: lock.command});
+    runId += 1;
+    const activeRunId = runId;
+    runPromise = null;
+    const operation = (async () => {
+      if (staleRun) await staleRun;
+      if (status === 'running' && runId === activeRunId) {
+        void continueAfterAdvanceCancellation(lock.command, fromStoryPath, activeRunId);
+      } else {
+        settleRehearsalSkip(lock);
+      }
+      await completion.promise;
+      return snapshot();
+    })();
+    lock.operation = operation;
+    void operation.catch(() => {});
+    return operation;
+  }
+
+  /**
+   * Fast-forward the current scene with the exact stateful tail allowed by the 3.2 runtime.
+   *
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function skipScene() {
+    if (!canRehearsalSkip('rehearsal.skipScene')) return Promise.resolve(snapshot());
+    const staleRun = runPromise;
+    const completion = deferred();
+    const lock = {
+      command: /** @type {const} */ ('rehearsal.skipScene'),
+      sceneIndex: currentSceneIndex,
+      actionIndex: currentActionIndex,
+      completion,
+      operation: Promise.resolve(snapshot()),
+    };
+    finishPresentationTransitions(lock.command);
+    rehearsalSkipLock = lock;
+    rehearsalSceneSkip = {sceneIndex: currentSceneIndex, reason: lock.command};
+    const action = currentAction();
+    actionAbortController?.abort(lock.command);
+    generation += 1;
+    if (action) emit('action.cancel', {reason: lock.command});
+    runId += 1;
+    const activeRunId = runId;
+    runPromise = null;
+    const operation = (async () => {
+      if (staleRun) await staleRun;
+      if (status === 'running' && runId === activeRunId) {
+        try {
+          releaseStructuredAction(lock.command);
+        } catch (error) {
+          fail(error);
+        }
+        actionAbortController = null;
+        if (status === 'running') runPromise = run(activeRunId);
+      } else {
+        rehearsalSceneSkip = null;
+        settleRehearsalSkip(lock);
+      }
+      await completion.promise;
+      return snapshot();
+    })();
+    lock.operation = operation;
+    void operation.catch(() => {});
+    return operation;
+  }
+
+  /**
+   * Skip the remainder of the active scene and continue at the next scene boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advanceScene(reason = 'navigation.nextScene') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    const nextScene = scenes[currentSceneIndex + 1];
+    if (nextScene) return navigate(String(nextScene.id), {reason});
+
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const action = currentAction();
+    finishPresentationTransitions(reason);
+    actionAbortController?.abort(reason);
+    generation += 1;
+    if (action) emit('action.cancel', {reason});
+    runId += 1;
+    runPromise = null;
+    try {
+      releaseStructuredAction(reason);
+      endStructuredStory('runtime-finished');
+    } catch (error) {
+      fail(error);
+      return Promise.resolve(snapshot());
+    }
+    currentActionIndex = /** @type {ReadonlyArray<unknown>} */ (currentScene()?.actions ?? [])
+      .length;
+    actionAbortController = null;
+    status = 'finished';
+    emit('navigation.advanceScene', {fromStoryPath, toStoryPath: null, reason});
+    emit('runtime.finish');
+    return Promise.resolve(snapshot());
   }
 
   /**
@@ -1774,9 +2136,14 @@ export function createDsl4RuntimeController({
     start,
     stop,
     canAdvance,
+    canRehearsalSkip,
     acceptAdvanceInput,
     consumeAdvanceInput,
     advance,
+    skipPose,
+    skipAction,
+    skipScene,
+    advanceScene,
     navigate,
     reposition,
     resume,

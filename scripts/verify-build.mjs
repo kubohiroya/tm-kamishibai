@@ -5,12 +5,12 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {
   downloadCardsPlaceholder,
   downloadCatalog,
-  dsl4DocsUrl,
   recommendedDownload,
 } from './download-catalog.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
 import {createDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
+import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputDirectory = path.join(projectRoot, 'dist');
@@ -22,9 +22,11 @@ const heroImagePath = path.join(outputDirectory, 'images/image01.png');
 const downloadSourceDirectory = path.join(projectRoot, 'site/downloads');
 const downloadDirectory = path.join(outputDirectory, 'downloads');
 const downloadIndexPath = path.join(downloadDirectory, 'index.html');
+const licensesIndexPath = path.join(outputDirectory, 'licenses', 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
 const docsSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-docs/';
+const workshopSiteUrl = `${docsSiteUrl}workshops/`;
 const sampleSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
@@ -110,6 +112,26 @@ async function verifySiteAppBars() {
       `${path.relative(outputDirectory, htmlFile)} must contain exactly one site AppBar.`,
     );
     assert(
+      html.includes(`data-navigation-contract-version="${NAVIGATION_CONTRACT.contractVersion}"`),
+      `${path.relative(outputDirectory, htmlFile)} must use the active navigation contract.`,
+    );
+    assert(
+      (html.match(/<footer class="site-footer" data-site-footer-version="1">/gu) ?? []).length ===
+        1,
+      `${path.relative(outputDirectory, htmlFile)} must contain exactly one site footer.`,
+    );
+    const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] ?? '';
+    assert(footer.includes('© 2026 Hiroya Kubo'), 'The site footer is missing its copyright.');
+    assert(
+      footer.includes('各文書・作品・素材には個別の利用条件が適用されます。'),
+      'The site footer is missing its individual-rights notice.',
+    );
+    assert(
+      footer.includes('href="https://kubohiroya.github.io/tmpose-kamishibai/licenses/"'),
+      'The site footer is missing its rights page.',
+    );
+    assert(!footer.includes('github.com'), 'The site footer must not duplicate the GitHub link.');
+    assert(
       stylesheets.filter((href) => href === relativeCss).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must load the site stylesheet once.`,
     );
@@ -117,12 +139,7 @@ async function verifySiteAppBars() {
       scripts.filter((src) => src === relativeScript).length === 1,
       `${path.relative(outputDirectory, htmlFile)} must load the AppBar behavior once.`,
     );
-    for (const destination of [
-      'https://kubohiroya.github.io/tmpose-kamishibai/',
-      docsSiteUrl,
-      sampleSiteUrl,
-      'https://kubohiroya.github.io/tmpose-kamishibai/downloads/',
-    ]) {
+    for (const destination of NAVIGATION_CONTRACT.items.map(({href}) => href)) {
       assert(
         html.includes(`href="${destination}"`),
         `${path.relative(outputDirectory, htmlFile)} is missing ${destination}.`,
@@ -173,7 +190,8 @@ async function verifySiteIndex() {
   const localLinks = await verifyLocalReferences(siteIndexPath, 'a', 'href');
   const allLinks = attributeValues(html, 'a', 'href');
   const altTexts = attributeValues(html, 'img', 'alt');
-  const cardCount = (html.match(/<a\b(?=[^>]*class="content-card")[^>]*>/gu) ?? []).length;
+  const cardCount = (html.match(/<a\b(?=[^>]*class="[^"]*\bcontent-card\b[^"]*")[^>]*>/gu) ?? [])
+    .length;
   const [sourceImage, publishedImage] = await Promise.all([
     readFile(heroImageSourcePath),
     readFile(heroImagePath),
@@ -190,9 +208,10 @@ async function verifySiteIndex() {
     sourceImage.equals(publishedImage),
     'The published top-page hero image differs from site/images/image01.png.',
   );
-  assert(cardCount === 4, `Expected four top-page content cards, found ${cardCount}.`);
+  assert(cardCount === 5, `Expected five top-page content cards, found ${cardCount}.`);
   assert(allLinks.includes(urashimaWebUrl), 'The top page does not link to the Urashima sample.');
   assert(allLinks.includes(docsSiteUrl), 'The top page does not link to the documentation site.');
+  assert(allLinks.includes(workshopSiteUrl), 'The top page does not link to the workshop site.');
   assert(!localLinks.includes('docs/'), 'The top page still links to a local documentation build.');
   assert(localLinks.includes('downloads/'), 'The top-page download card is missing.');
   assert(allLinks.includes(sampleSiteUrl), 'The top page does not link to the sample site.');
@@ -200,7 +219,7 @@ async function verifySiteIndex() {
     !allLinks.includes('https://sqs.prof.cuc.ac.jp/kamishibai/'),
     'The top page still links to the retired SQS web app.',
   );
-  for (const icon of ['▶️', '📕', '🎭', '📁']) {
+  for (const icon of ['▶️', '📕', '🧑‍🏫', '🎭', '📁']) {
     assert(
       html.includes(`<span class="card-icon" aria-hidden="true">${icon}</span>`),
       `The top-page card icon ${icon} is missing.`,
@@ -254,9 +273,11 @@ async function verifyDownloads(releaseBuilds = []) {
       `The ${entry.series} card does not use its catalog description.`,
     );
   }
+  assert(!html.includes('4.0ドキュメントを参照できます。'), 'The 4.0 card has a docs note.');
+  assert(!html.includes('4.0ドキュメントを開く'), 'The 4.0 card has a docs action.');
   assert(
-    html.includes(`href="${dsl4DocsUrl}"`),
-    'The 4.0 card does not link to the published author guide.',
+    !html.includes('/dsl-author-guides/dsl-4.0-author-guide/'),
+    'The 4.0 card links to the author guide.',
   );
   for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
     assert(
@@ -332,6 +353,9 @@ export async function verifyBuild({releaseBuilds} = {}) {
     `The legacy documentation path must contain only its redirect page: ${docsEntries.join(', ')}`,
   );
   await access(path.join(outputDirectory, 'docs/index.html'));
+  await access(licensesIndexPath);
+  await verifyLocalReferences(licensesIndexPath, 'img', 'src');
+  await verifyLocalReferences(licensesIndexPath, 'a', 'href');
   await access(path.join(outputDirectory, 'images/image01.png'));
 
   console.log(

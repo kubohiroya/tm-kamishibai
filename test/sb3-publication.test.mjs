@@ -49,6 +49,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   const packageJson = JSON.parse(packageJsonSource);
   const downloadPage = renderDownloadCards(downloadTemplate);
 
+  assert.deepEqual(
+    downloadCatalog.map(({series}) => series),
+    ['4.0', '3.2', '3.1'],
+  );
   assert.equal(downloadTemplate.split(downloadCardsPlaceholder).length - 1, 1);
   assert(!downloadPage.includes(downloadCardsPlaceholder));
   const cardPositions = downloadCatalog.map(({series}) =>
@@ -66,10 +70,9 @@ test('renders ordered versioned download cards from one release catalog', async 
     assert.match(downloadPage, new RegExp(`href="${release.filename}" download`, 'u'));
     assert(downloadPage.includes(`<code>${release.filename}</code>（${release.version}）`));
   }
-  assert.match(
-    downloadPage,
-    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/dsl-author-guides\/dsl-4\.0-author-guide\/"/u,
-  );
+  assert.doesNotMatch(downloadPage, /4\.0ドキュメントを参照できます。/u);
+  assert.doesNotMatch(downloadPage, /4\.0ドキュメントを開く/u);
+  assert.doesNotMatch(downloadPage, /\/dsl-author-guides\/dsl-4\.0-author-guide\//u);
   for (const entry of downloadCatalog.filter(({artifact}) => !artifact)) {
     assert(downloadPage.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`));
     assert(downloadPage.includes(entry.unavailableNote));
@@ -77,10 +80,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(downloadPage, /href="kamishibai\.sb3"/u);
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
-  assert.match(
+  assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
-    /^github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}$/u,
-    'SB3 toolchain dependency must use a fixed commit.',
+    '0.6.0',
+    'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
@@ -151,9 +154,30 @@ test('renders the top-page version from the recommended download catalog entry',
 
 test('opens the Urashima web sample from the top-page Web card', async () => {
   const siteIndex = await readFile(path.join(projectRoot, 'site/index.html'), 'utf8');
+  const webCardHrefPosition = siteIndex.indexOf(`href="${urashimaWebUrl}"`);
+  const webCardStart = siteIndex.lastIndexOf('<a', webCardHrefPosition);
+  const webCardEnd = siteIndex.indexOf('</a>', webCardHrefPosition);
+  const webCard = siteIndex.slice(webCardStart, webCardEnd + '</a>'.length);
+  const heroImagePosition = siteIndex.indexOf('class="hero-image"');
+  const siteContentsPosition = siteIndex.indexOf('id="site-contents"');
+  const siteContentsCardsStart = siteIndex.indexOf('<div class="cards">', siteContentsPosition);
+  const siteContentsCardsEnd = siteIndex.indexOf('</div>', siteContentsCardsStart);
+  const siteContentsCards = siteIndex.slice(siteContentsCardsStart, siteContentsCardsEnd);
 
-  assert(siteIndex.includes(`href="${urashimaWebUrl}"`));
-  assert.match(siteIndex, /Web版を開く/u);
+  assert.ok(webCardHrefPosition >= 0);
+  assert.ok(heroImagePosition < webCardHrefPosition);
+  assert.ok(webCardHrefPosition < siteContentsPosition);
+  assert.doesNotMatch(siteContentsCards, /Web版を開く|stories\/urashima\/web/u);
+  assert.match(
+    siteContentsCards,
+    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/workshops\/"/u,
+  );
+  assert.match(siteContentsCards, /ワークショップ一覧へ/u);
+  assert.match(webCard, /class="content-card featured-web-card"/u);
+  assert.match(webCard, /Web版を開く/u);
+  assert.match(webCard, /DSL\s+3\.2系/u);
+  assert.match(webCard, /組み込み台本「浦島太郎」/u);
+  assert.match(webCard, /DSL 3\.2版「浦島太郎」へ/u);
   assert.doesNotMatch(siteIndex, /https:\/\/sqs\.prof\.cuc\.ac\.jp\/kamishibai\//u);
 });
 

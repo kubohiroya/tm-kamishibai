@@ -11,7 +11,7 @@
     "actors": {"$ref": "#/$defs/actors"},
     "cover": {"$ref": "#/$defs/cover"},
     "textStyles": {"$ref": "#/$defs/textStyles"},
-    "speechStyles": {"$ref": "#/$defs/speechStyles"},
+    "bubbleStyles": {"$ref": "#/$defs/bubbleStyles"},
     "variables": {"$ref": "#/$defs/variables"},
     "loading": {"$ref": "#/$defs/loadingScreen"},
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
@@ -63,10 +63,41 @@
         "size": {"type": "integer", "minimum": 1}
       }
     },
-    "assetId": {"$ref": "#/$defs/id"},
-    "sceneId": {"$ref": "#/$defs/id"},
+    "remotePoseModelSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$"
+        },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-[0-9a-f]{64}$"
+        },
+        "contentType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "size": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "integrity": ["contentType", "size"],
+        "contentType": ["integrity", "size"],
+        "size": ["integrity", "contentType"]
+      }
+    },
+    "literalId": {"type": "string", "minLength": 1},
+    "assetId": {"$ref": "#/$defs/literalId"},
+    "sceneId": {"$ref": "#/$defs/literalId"},
     "actorId": {"$ref": "#/$defs/id"},
     "styleId": {"$ref": "#/$defs/id"},
+    "bubbleStyleName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?!.*\\s$)[^\\p{Cc}\\p{Cs}\\p{Zl}\\p{Zp}]+$"
+    },
     "stableId": {"$ref": "#/$defs/id"},
     "compactAsset": {
       "type": "string",
@@ -81,6 +112,7 @@
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "bitmapResolution": {"type": "integer", "enum": [1, 2], "default": 1},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}
@@ -174,6 +206,7 @@
         "name": {"type": "string", "minLength": 1},
         "file": {"$ref": "#/$defs/filePath"},
         "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "bitmapResolution": {"type": "integer", "enum": [1, 2], "default": 1},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}
@@ -218,7 +251,7 @@
       "properties": {
         "kind": {"const": "poseModel"},
         "file": {"$ref": "#/$defs/filePath"},
-        "source": {"$ref": "#/$defs/remoteAssetSource"},
+        "source": {"$ref": "#/$defs/remotePoseModelSource"},
         "delivery": {"$ref": "#/$defs/deliveryPolicy"},
         "loading": {"$ref": "#/$defs/loadingPolicy"},
         "retention": {"$ref": "#/$defs/retentionPolicy"}
@@ -273,12 +306,12 @@
     },
     "assets": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/assetId"},
       "additionalProperties": {"$ref": "#/$defs/asset"}
     },
     "actors": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/actorId"},
       "additionalProperties": {"$ref": "#/$defs/assetId"}
     },
     "cover": {
@@ -298,8 +331,7 @@
         "color": {"type": "string"},
         "font": {"type": "string", "minLength": 1},
         "size": {"type": "number", "exclusiveMinimum": 0},
-        "align": {"type": "string", "enum": ["left", "center", "right"]},
-        "direction": {"type": "string", "enum": ["up", "down", "left", "right"]}
+        "align": {"type": "string", "enum": ["left", "center", "right"]}
       }
     },
     "textStyles": {
@@ -307,27 +339,225 @@
       "propertyNames": {"$ref": "#/$defs/id"},
       "additionalProperties": {"$ref": "#/$defs/textStyle"}
     },
-    "speechStyle": {
+    "bubbleStyle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["characterIntervalSeconds"],
-      "dependentRequired": {
-        "noSoundCharacters": ["characterSound"],
-        "restCharacters": ["restCharacterIntervalSeconds"],
-        "restCharacterIntervalSeconds": ["restCharacters"]
-      },
       "properties": {
+        "styles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/bubbleStyleName"}
+        },
+        "textStyle": {"$ref": "#/$defs/styleId"},
+        "maxWidth": {"type": "number", "exclusiveMinimum": 0},
+        "textLocale": {"type": "string", "minLength": 1},
+        "placement": {
+          "oneOf": [
+            {
+              "enum": [
+                "up",
+                "up-up-right",
+                "up-right",
+                "right-up-right",
+                "right",
+                "right-down-right",
+                "down-right",
+                "down-down-right",
+                "down",
+                "down-down-left",
+                "down-left",
+                "left-down-left",
+                "left",
+                "left-up-left",
+                "up-left",
+                "up-up-left",
+                "north",
+                "north-northeast",
+                "northeast",
+                "east-northeast",
+                "east",
+                "east-southeast",
+                "southeast",
+                "south-southeast",
+                "south",
+                "south-southwest",
+                "southwest",
+                "west-southwest",
+                "west",
+                "west-northwest",
+                "northwest",
+                "north-northwest",
+                "HEADER_LIKE",
+                "CENTER",
+                "FOOTER_LIKE"
+              ]
+            },
+            {"type": "number", "minimum": 0, "maximum": 360}
+          ]
+        },
+        "distance": {"type": "number", "minimum": 0},
+        "tailLength": {"type": "number", "exclusiveMinimum": 0},
+        "offset": {
+          "oneOf": [
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [{"type": "number"}, {"type": "number"}],
+              "items": false
+            },
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "prefixItems": [
+                {"type": "number"},
+                {"type": "number"},
+                {"type": "number", "exclusiveMinimum": 0}
+              ],
+              "items": false
+            }
+          ]
+        },
+        "visualStyle": {
+          "enum": [
+            "NORMAL",
+            "THINKING",
+            "DREAMING",
+            "YELLING",
+            "OFF_PANEL",
+            "WAVY",
+            "WHISPERING",
+            "ANNOUNCEMENT",
+            "NARRATION",
+            "NO_BUBBLE"
+          ]
+        },
+        "portrait": {"$ref": "#/$defs/bubblePortrait"},
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "characterSound": {"$ref": "#/$defs/assetId"},
         "noSoundCharacters": {"type": "string", "minLength": 1},
         "restCharacters": {"type": "string", "minLength": 1},
-        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+        "restCharacterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "continueIndicator": {"$ref": "#/$defs/bubbleContinueIndicator"},
+        "reveal": {"$ref": "#/$defs/bubbleReveal"},
+        "audio": {"$ref": "#/$defs/bubbleAudio"},
+        "showAnimation": {"$ref": "#/$defs/bubbleMotion"},
+        "hideAnimation": {"$ref": "#/$defs/bubbleMotion"},
+        "visibleAnimations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/bubbleMotion"}
+        }
       }
     },
-    "speechStyles": {
+    "bubbleContinueIndicator": {
       "type": "object",
-      "propertyNames": {"$ref": "#/$defs/id"},
-      "additionalProperties": {"$ref": "#/$defs/speechStyle"}
+      "additionalProperties": false,
+      "required": ["frames", "frameIntervalSeconds"],
+      "properties": {
+        "frames": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/assetId"}
+        },
+        "frameIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "bubbleFrameAnimation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames", "frameIntervalSeconds"],
+      "properties": {
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assetId"}
+        },
+        "frameIntervalSeconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "bubblePortrait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": {"$ref": "#/$defs/assetId"},
+        "blink": {"$ref": "#/$defs/bubbleFrameAnimation"},
+        "lipSync": {"$ref": "#/$defs/bubbleFrameAnimation"}
+      }
+    },
+    "bubbleReveal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit"],
+      "properties": {
+        "unit": {"enum": ["CHARACTER", "WORD", "LINE", "BLOCK"]},
+        "delimiters": {"type": "string", "minLength": 1},
+        "showDelimiters": {"type": "boolean"},
+        "layout": {"enum": ["DYNAMIC", "RESERVED"]},
+        "intervalSeconds": {"type": "number", "minimum": 0},
+        "sound": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "bubbleAudio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voice": {"$ref": "#/$defs/assetId"},
+        "reveal": {"$ref": "#/$defs/assetId"},
+        "finish": {"$ref": "#/$defs/assetId"}
+      }
+    },
+    "bubbleMotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "enum": [
+            "fadeIn",
+            "fadeOut",
+            "floatIn",
+            "floatOut",
+            "zoomIn",
+            "zoomOut",
+            "riseUp",
+            "sink",
+            "shake",
+            "explode",
+            "animateBubbleShape"
+          ]
+        },
+        "durationSeconds": {"type": "number", "minimum": 0},
+        "ease": {"enum": ["linear", "easeIn", "easeOut", "easeInOut"]},
+        "direction": {
+          "oneOf": [{"type": "number"}, {"type": "string", "minLength": 1}]
+        },
+        "count": {"type": "integer", "minimum": 1},
+        "relativeScale": {"type": "number", "minimum": 0},
+        "speed": {"type": "number", "minimum": 0},
+        "visualStyle": {
+          "enum": [
+            "NORMAL",
+            "THINKING",
+            "DREAMING",
+            "YELLING",
+            "OFF_PANEL",
+            "WAVY",
+            "WHISPERING",
+            "ANNOUNCEMENT",
+            "NARRATION",
+            "NO_BUBBLE"
+          ]
+        }
+      }
+    },
+    "bubbleStyles": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/bubbleStyleName"},
+      "additionalProperties": {"$ref": "#/$defs/bubbleStyle"}
     },
     "variableValue": {
       "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}]
@@ -353,7 +583,6 @@
     "poseRecognition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["idleSound", "chargeSound"],
       "properties": {
         "idleSound": {"$ref": "#/$defs/assetId"},
         "chargeSound": {"$ref": "#/$defs/assetId"},
@@ -476,6 +705,10 @@
       "type": "string",
       "enum": [
         "navigation.nextAction",
+        "navigation.nextScene",
+        "rehearsal.skipPose",
+        "rehearsal.skipAction",
+        "rehearsal.skipScene",
         "history.previousAction",
         "history.previousScene",
         "history.nextScene"
@@ -568,6 +801,20 @@
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
             "seconds": {"type": "number", "minimum": 0}
+          }
+        }
+      ]
+    },
+    "broadcastMessageAndWaitArgs": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "message": {"type": "string", "minLength": 1}
           }
         }
       ]
@@ -728,52 +975,17 @@
         {"required": ["seconds"], "properties": {"seconds": true}},
         {"required": ["waitFor"], "properties": {"waitFor": true}}
       ],
-      "dependentRequired": {
-        "characterSound": ["characterIntervalSeconds"],
-        "noSoundCharacters": ["characterIntervalSeconds", "characterSound"],
-        "restCharacters": ["characterIntervalSeconds", "restCharacterIntervalSeconds"],
-        "restCharacterIntervalSeconds": ["characterIntervalSeconds", "restCharacters"]
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {"style": true},
-            "required": ["style"]
-          },
-          "then": {
-            "not": {
-              "anyOf": [
-                {
-                  "properties": {"characterIntervalSeconds": true},
-                  "required": ["characterIntervalSeconds"]
-                },
-                {
-                  "properties": {"characterSound": true},
-                  "required": ["characterSound"]
-                },
-                {
-                  "properties": {"noSoundCharacters": true},
-                  "required": ["noSoundCharacters"]
-                },
-                {
-                  "properties": {"restCharacters": true},
-                  "required": ["restCharacters"]
-                },
-                {
-                  "properties": {"restCharacterIntervalSeconds": true},
-                  "required": ["restCharacterIntervalSeconds"]
-                }
-              ]
-            }
-          }
-        }
-      ],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
         "seconds": {"type": "number", "minimum": 0},
         "waitFor": {"const": "advance"},
-        "style": {"$ref": "#/$defs/styleId"},
+        "styles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/bubbleStyleName"}
+        },
         "characterIntervalSeconds": {"type": "number", "exclusiveMinimum": 0},
         "startSound": {"$ref": "#/$defs/assetId"},
         "characterSound": {"$ref": "#/$defs/assetId"},
@@ -791,10 +1003,58 @@
           "required": ["skin"],
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
-            "skin": {"$ref": "#/$defs/assetId"}
+            "skin": {"$ref": "#/$defs/assetId"},
+            "scale": {"type": "number", "exclusiveMinimum": 0}
           }
         }
       ]
+    },
+    "hideArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"stableId": {"$ref": "#/$defs/stableId"}}
+    },
+    "setLayerArgs": {
+      "oneOf": [
+        {"enum": ["front", "back"]},
+        {"type": "number"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layer"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "layer": {"oneOf": [{"enum": ["front", "back"]}, {"type": "number"}]}
+          }
+        }
+      ]
+    },
+    "loopStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skin", "seconds"],
+      "properties": {
+        "skin": {"$ref": "#/$defs/assetId"},
+        "seconds": {"type": "number", "minimum": 0}
+      }
+    },
+    "loopArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "stableId": {"$ref": "#/$defs/stableId"},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/loopStep"},
+          "contains": {
+            "type": "object",
+            "required": ["seconds"],
+            "properties": {"seconds": {"type": "number", "exclusiveMinimum": 0}}
+          }
+        }
+      }
     },
     "setTextArgs": {
       "type": "object",
@@ -865,6 +1125,14 @@
       "additionalProperties": false,
       "required": ["wait"],
       "properties": {"wait": {"$ref": "#/$defs/waitArgs"}}
+    },
+    "broadcastMessageAndWaitAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["broadcastMessageAndWait"],
+      "properties": {
+        "broadcastMessageAndWait": {"$ref": "#/$defs/broadcastMessageAndWaitArgs"}
+      }
     },
     "transitionAction": {
       "type": "object",
@@ -964,6 +1232,33 @@
         "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.setSkin$": {"$ref": "#/$defs/setSkinArgs"}
       }
     },
+    "hideAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.hide$": {"$ref": "#/$defs/hideArgs"}
+      }
+    },
+    "setLayerAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.setLayer$": {"$ref": "#/$defs/setLayerArgs"}
+      }
+    },
+    "loopAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.loop$": {"$ref": "#/$defs/loopArgs"}
+      }
+    },
     "setTextAction": {
       "type": "object",
       "minProperties": 1,
@@ -988,7 +1283,7 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|setTransparency|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|hide|setTransparency|moveTo|say|think|setSkin|setLayer|loop|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
           "$ref": "#/$defs/customActorActionArgs"
         }
       }
@@ -999,6 +1294,7 @@
         {"$ref": "#/$defs/bgmAction"},
         {"$ref": "#/$defs/soundAction"},
         {"$ref": "#/$defs/waitAction"},
+        {"$ref": "#/$defs/broadcastMessageAndWaitAction"},
         {"$ref": "#/$defs/transitionAction"},
         {"$ref": "#/$defs/gotoAction"},
         {"$ref": "#/$defs/branchAction"},
@@ -1011,6 +1307,9 @@
         {"$ref": "#/$defs/sayAction"},
         {"$ref": "#/$defs/thinkAction"},
         {"$ref": "#/$defs/setSkinAction"},
+        {"$ref": "#/$defs/hideAction"},
+        {"$ref": "#/$defs/setLayerAction"},
+        {"$ref": "#/$defs/loopAction"},
         {"$ref": "#/$defs/setTextAction"},
         {"$ref": "#/$defs/poseAction"},
         {"$ref": "#/$defs/customActorAction"}
@@ -1036,7 +1335,7 @@
     "scenes": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": {"$ref": "#/$defs/id"},
+      "propertyNames": {"$ref": "#/$defs/sceneId"},
       "additionalProperties": {"$ref": "#/$defs/scene"}
     }
   }

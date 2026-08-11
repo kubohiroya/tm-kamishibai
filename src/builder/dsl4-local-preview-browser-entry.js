@@ -4,6 +4,7 @@ import {Buffer} from 'buffer';
 
 import {createDsl4LocalPreviewBrowserBootstrap} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
+import {createDsl4BundledTMPoseRuntime} from '../dsl4/platform/posenet-bundle.js';
 
 /** @type {Record<string, any>} */ (globalThis).Buffer ??= Buffer;
 
@@ -15,7 +16,7 @@ function resolveTMPoseRuntime() {
     typeof candidate.Webcam === 'function' &&
     typeof candidate.loadFromFiles === 'function'
   ) {
-    return candidate;
+    return createDsl4BundledTMPoseRuntime({runtime: candidate, globalObject: globalThis});
   }
   return Object.freeze({
     Webcam: class MissingTMPoseWebcam {},
@@ -25,10 +26,23 @@ function resolveTMPoseRuntime() {
   });
 }
 
+/** @param {string} name */
+function configuredLimit(name) {
+  const value = Number(globalThis.document?.documentElement?.dataset?.[name]);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`The local preview ${name} configuration is invalid.`);
+  }
+  return value;
+}
+
 const client = createDsl4LocalPreviewBrowserBootstrap({
   globalObject: globalThis,
   sourceFrontend: createDsl4ProductionSourceFrontend(schema),
   getTMPoseRuntime: resolveTMPoseRuntime,
+  maxProjectBytes: configuredLimit('dsl4MaxProjectBytes'),
+  maxProjectJsonBytes: configuredLimit('dsl4MaxProjectJsonBytes'),
+  maxAssetFiles: configuredLimit('dsl4MaxAssetFiles'),
+  maxAssetBytes: configuredLimit('dsl4MaxAssetBytes'),
 });
 
 void client.start().catch(() => {

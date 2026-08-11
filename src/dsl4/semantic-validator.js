@@ -3,17 +3,61 @@ import {
   dsl4EmptyActionRegistrySnapshot,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+import {composeBubbleStyles} from './bubble-style.js';
 
-const identifierSections = [
-  'assets',
-  'actors',
-  'textStyles',
-  'speechStyles',
-  'variables',
-  'branches',
-  'scenes',
-];
+const identifierSections = ['actors', 'textStyles', 'bubbleStyles', 'variables', 'branches'];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
+const speechPresentationFields = [
+  'characterIntervalSeconds',
+  'characterSound',
+  'noSoundCharacters',
+  'restCharacters',
+  'restCharacterIntervalSeconds',
+];
+
+/**
+ * @param {SemanticIssue[]} issues
+ * @param {Record<string, unknown>} presentation
+ * @param {string} path
+ */
+function validateSpeechPresentation(issues, presentation, path) {
+  /** @type {Array<[string, string[]]>} */
+  const requirements = [
+    ['characterSound', ['characterIntervalSeconds']],
+    ['noSoundCharacters', ['characterIntervalSeconds', 'characterSound']],
+    ['restCharacters', ['characterIntervalSeconds', 'restCharacterIntervalSeconds']],
+    ['restCharacterIntervalSeconds', ['characterIntervalSeconds', 'restCharacters']],
+  ];
+  for (const [field, dependencies] of requirements) {
+    if (!Object.hasOwn(presentation, field)) continue;
+    for (const dependency of dependencies) {
+      if (Object.hasOwn(presentation, dependency)) continue;
+      issues.push({
+        code: 'K4-SPEECH-STYLE-001',
+        path: `${path}.${field}`,
+        message: `${field} requires ${dependency} after bubble styles are composed`,
+      });
+    }
+  }
+}
+
+/** @param {string} value */
+function escapedJsonString(value) {
+  return JSON.stringify(value).replace(
+    /[\u0000-\u001f\u007f]/gu,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/** @param {string} base @param {string} property */
+function propertyPath(base, property) {
+  return `${base}[${escapedJsonString(property)}]`;
+}
+
+/** @param {unknown} value */
+function diagnosticValue(value) {
+  return escapedJsonString(String(value));
+}
 
 /**
  * @typedef {object} SemanticIssue
@@ -100,14 +144,18 @@ function sceneActions(scene) {
 function addReferenceIssue(issues, collection, id, expectedKind, path) {
   if (typeof id !== 'string') return;
   if (!Object.hasOwn(collection, id)) {
-    issues.push({code: 'K4-REF-001', path, message: `Unknown reference: ${id}`});
+    issues.push({
+      code: 'K4-REF-001',
+      path,
+      message: `Unknown reference: ${diagnosticValue(id)}`,
+    });
     return;
   }
   if (expectedKind && assetKind(collection[id]).kind !== expectedKind) {
     issues.push({
       code: 'K4-REF-002',
       path,
-      message: `Reference ${id} must have asset kind ${expectedKind}`,
+      message: `Reference ${diagnosticValue(id)} must have asset kind ${expectedKind}`,
     });
   }
 }
@@ -132,8 +180,8 @@ export function validateDsl4Semantics(
   const scenes = /** @type {Record<string, unknown>} */ (story.scenes ?? {});
   const branches = /** @type {Record<string, Record<string, string>[]>} */ (story.branches ?? {});
   const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
-  const speechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const bubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
   const stableIds = new Map();
   const storyInputCodes = new Map();
@@ -160,7 +208,7 @@ export function validateDsl4Semantics(
       if (!isCanonicalRemoteHttpsUrl(source.url)) {
         issues.push({
           code: 'K4-ASSET-REMOTE-URL-001',
-          path: `$.assets.${id}.source.url`,
+          path: `${propertyPath('$.assets', id)}.source.url`,
           message: 'Remote asset URL must be an absolute HTTPS URL without credentials or fragment',
         });
       }
@@ -170,7 +218,7 @@ export function validateDsl4Semantics(
       ) {
         issues.push({
           code: 'K4-ASSET-IMAGE-MIME-001',
-          path: `$.assets.${id}.source.contentType`,
+          path: `${propertyPath('$.assets', id)}.source.contentType`,
           message: 'Target-independent image assets require an image Content-Type',
         });
       }
@@ -183,7 +231,7 @@ export function validateDsl4Semantics(
     ) {
       issues.push({
         code: 'K4-ASSET-001',
-        path: `$.assets.${id}.file`,
+        path: `${propertyPath('$.assets', id)}.file`,
         message: 'Asset file must be a local relative path without dot segments',
       });
     }
@@ -198,19 +246,121 @@ export function validateDsl4Semantics(
       issues.push({
         code: 'K4-REF-003',
         path: `$.actors.${actor}`,
-        message: `Initial costume ${initialCostume} must target actor ${actor}`,
+        message: `Initial costume ${diagnosticValue(initialCostume)} must target actor ${diagnosticValue(actor)}`,
       });
     }
   }
 
-  for (const [styleId, style] of Object.entries(speechStyles)) {
+  for (const [styleId, style] of Object.entries(bubbleStyles)) {
+    const inheritedStyleIds = Array.isArray(style.styles)
+      ? /** @type {string[]} */ (style.styles)
+      : [];
+    inheritedStyleIds.forEach((inheritedStyleId, styleIndex) =>
+      addReferenceIssue(
+        issues,
+        bubbleStyles,
+        inheritedStyleId,
+        undefined,
+        `$.bubbleStyles.${styleId}.styles[${styleIndex}]`,
+      ),
+    );
+    if (style.textStyle !== 'default') {
+      addReferenceIssue(
+        issues,
+        textStyles,
+        style.textStyle,
+        undefined,
+        `$.bubbleStyles.${styleId}.textStyle`,
+      );
+    }
     addReferenceIssue(
       issues,
       assets,
       style.characterSound,
       'sound',
-      `$.speechStyles.${styleId}.characterSound`,
+      `$.bubbleStyles.${styleId}.characterSound`,
     );
+    const portrait = /** @type {Record<string, unknown>} */ (style.portrait ?? {});
+    addReferenceIssue(
+      issues,
+      assets,
+      portrait.base,
+      'image',
+      `$.bubbleStyles.${styleId}.portrait.base`,
+    );
+    for (const animationName of ['blink', 'lipSync']) {
+      const animation = /** @type {Record<string, unknown>} */ (portrait[animationName] ?? {});
+      for (const [index, frame] of /** @type {unknown[]} */ (animation.frames ?? []).entries()) {
+        addReferenceIssue(
+          issues,
+          assets,
+          frame,
+          'image',
+          `$.bubbleStyles.${styleId}.portrait.${animationName}.frames[${index}]`,
+        );
+      }
+    }
+    const indicator = /** @type {Record<string, unknown>} */ (style.continueIndicator ?? {});
+    for (const [index, frame] of /** @type {unknown[]} */ (indicator.frames ?? []).entries()) {
+      addReferenceIssue(
+        issues,
+        assets,
+        frame,
+        'image',
+        `$.bubbleStyles.${styleId}.continueIndicator.frames[${index}]`,
+      );
+    }
+    const reveal = /** @type {Record<string, unknown>} */ (style.reveal ?? {});
+    addReferenceIssue(
+      issues,
+      assets,
+      reveal.sound,
+      'sound',
+      `$.bubbleStyles.${styleId}.reveal.sound`,
+    );
+    const audio = /** @type {Record<string, unknown>} */ (style.audio ?? {});
+    for (const audioName of ['voice', 'reveal', 'finish']) {
+      addReferenceIssue(
+        issues,
+        assets,
+        audio[audioName],
+        'sound',
+        `$.bubbleStyles.${styleId}.audio.${audioName}`,
+      );
+    }
+  }
+
+  const reportedStyleCycles = new Set();
+  for (const styleId of Object.keys(bubbleStyles)) {
+    try {
+      const effectiveStyle = composeBubbleStyles([styleId], bubbleStyles);
+      if (
+        Object.hasOwn(effectiveStyle, 'reveal') &&
+        speechPresentationFields.some((field) => Object.hasOwn(effectiveStyle, field))
+      ) {
+        issues.push({
+          code: 'K4-SPEECH-STYLE-002',
+          path: `$.bubbleStyles.${styleId}.reveal`,
+          message: 'Bubble reveal cannot be combined with legacy character presentation fields',
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof Error)) continue;
+      const styleError = /** @type {Error & {reason?: string, cycle?: unknown}} */ (error);
+      if (styleError.reason !== 'cycle' || !Array.isArray(styleError.cycle)) {
+        continue;
+      }
+      const cycle = /** @type {string[]} */ (styleError.cycle);
+      const cycleMembers = cycle.slice(0, -1);
+      const cycleKey = [...new Set(cycleMembers)].sort().join('\u0000');
+      if (reportedStyleCycles.has(cycleKey)) continue;
+      reportedStyleCycles.add(cycleKey);
+      issues.push({
+        code: 'K4-BUBBLE-STYLE-CYCLE-001',
+        path: `$.bubbleStyles.${styleId}.styles`,
+        message: `Bubble styles must not form a cycle: ${cycle.join(' -> ')}`,
+      });
+    }
   }
 
   const cover = /** @type {Record<string, unknown> | undefined} */ (story.cover);
@@ -232,6 +382,7 @@ export function validateDsl4Semantics(
   );
   if (poseRecognition) {
     for (const key of ['idleSound', 'chargeSound']) {
+      if (!Object.hasOwn(poseRecognition, key)) continue;
       addReferenceIssue(issues, assets, poseRecognition[key], 'sound', `$.poseRecognition.${key}`);
     }
     const preview = /** @type {Record<string, unknown>} */ (poseRecognition.preview ?? {});
@@ -263,7 +414,7 @@ export function validateDsl4Semantics(
         issues.push({
           code: 'K4-PREVIEW-CONTROL-ASSET-001',
           path,
-          message: `Camera preview control asset ${id} must use eager loading`,
+          message: `Camera preview control asset ${diagnosticValue(id)} must use eager loading`,
         });
       }
     }
@@ -300,15 +451,14 @@ export function validateDsl4Semantics(
           assets,
           scenePoseModel,
           'poseModel',
-          `$.scenes.${sceneId}.poseModel`,
+          `${propertyPath('$.scenes', sceneId)}.poseModel`,
         );
       }
     }
 
     let usesPoseRecognition = false;
-    const actionBasePath = Array.isArray(scene)
-      ? `$.scenes.${sceneId}`
-      : `$.scenes.${sceneId}.actions`;
+    const scenePath = propertyPath('$.scenes', sceneId);
+    const actionBasePath = Array.isArray(scene) ? scenePath : `${scenePath}.actions`;
     sceneActions(scene).forEach((action, actionIndex) => {
       const [key] = Object.keys(action);
       const value = action[key];
@@ -370,15 +520,89 @@ export function validateDsl4Semantics(
             issues.push({
               code: 'K4-REF-003',
               path: `${actionPath}.skin`,
-              message: `Costume ${skin} must target actor ${actor}`,
+              message: `Costume ${diagnosticValue(skin)} must target actor ${diagnosticValue(actor)}`,
             });
           }
+        } else if (opcode === 'loop') {
+          const steps = /** @type {{skin: string, seconds: number}[]} */ (
+            /** @type {Record<string, unknown>} */ (value).steps
+          );
+          steps.forEach((step, stepIndex) => {
+            addReferenceIssue(
+              issues,
+              assets,
+              step.skin,
+              'costume',
+              `${actionPath}.steps[${stepIndex}].skin`,
+            );
+            if (
+              typeof step.skin === 'string' &&
+              Object.hasOwn(assets, step.skin) &&
+              assetKind(assets[step.skin]).target !== actor
+            ) {
+              issues.push({
+                code: 'K4-REF-003',
+                path: `${actionPath}.steps[${stepIndex}].skin`,
+                message: `Costume ${diagnosticValue(step.skin)} must target actor ${diagnosticValue(actor)}`,
+              });
+            }
+          });
         } else if (opcode === 'setText') {
           const style = /** @type {Record<string, unknown>} */ (value).style;
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
-          addReferenceIssue(issues, speechStyles, speech.style, undefined, `${actionPath}.style`);
+          const styleIds = Array.isArray(speech.styles)
+            ? /** @type {string[]} */ (speech.styles)
+            : [];
+          styleIds.forEach((styleId, styleIndex) =>
+            addReferenceIssue(
+              issues,
+              bubbleStyles,
+              styleId,
+              undefined,
+              `${actionPath}.styles[${styleIndex}]`,
+            ),
+          );
+          if (styleIds.every((styleId) => Object.hasOwn(bubbleStyles, styleId))) {
+            let effectivePresentation;
+            try {
+              effectivePresentation = composeBubbleStyles(styleIds, bubbleStyles);
+            } catch {
+              effectivePresentation = null;
+            }
+            if (effectivePresentation) {
+              for (const field of speechPresentationFields) {
+                if (Object.hasOwn(speech, field)) effectivePresentation[field] = speech[field];
+              }
+              validateSpeechPresentation(issues, effectivePresentation, actionPath);
+              if (
+                Object.hasOwn(effectivePresentation, 'reveal') &&
+                speechPresentationFields.some((field) =>
+                  Object.hasOwn(effectivePresentation, field),
+                )
+              ) {
+                issues.push({
+                  code: 'K4-SPEECH-STYLE-002',
+                  path: `${actionPath}.styles`,
+                  message:
+                    'Bubble reveal cannot be combined with legacy character presentation fields',
+                });
+              }
+              if (
+                Object.hasOwn(speech, 'startSound') &&
+                typeof effectivePresentation.audio === 'object' &&
+                effectivePresentation.audio !== null &&
+                Object.hasOwn(effectivePresentation.audio, 'voice')
+              ) {
+                issues.push({
+                  code: 'K4-SPEECH-STYLE-002',
+                  path: `${actionPath}.startSound`,
+                  message: 'startSound cannot be combined with Bubble audio.voice',
+                });
+              }
+            }
+          }
           for (const field of ['startSound', 'characterSound']) {
             addReferenceIssue(issues, assets, speech[field], 'sound', `${actionPath}.${field}`);
           }
@@ -403,7 +627,7 @@ export function validateDsl4Semantics(
               issues.push({
                 code: 'K4-REF-003',
                 path: `${actionPath}.steps[${stepIndex}].skin`,
-                message: `Costume ${step.skin} must target actor ${actor}`,
+                message: `Costume ${diagnosticValue(step.skin)} must target actor ${diagnosticValue(actor)}`,
               });
             }
             addReferenceIssue(
@@ -462,7 +686,7 @@ export function validateDsl4Semantics(
     if (usesPoseRecognition && typeof scenePoseModel !== 'string') {
       issues.push({
         code: 'K4-POSE-MODEL-001',
-        path: `$.scenes.${sceneId}`,
+        path: scenePath,
         message: 'A scene with pose actions must use the long form and declare poseModel',
       });
     }

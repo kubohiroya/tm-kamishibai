@@ -173,6 +173,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
     'svg-text-action-port.js',
     'tmpose-model-adapter.js',
     'turbowarp-actor-adapter.js',
+    'turbowarp-broadcast-action-port.js',
   ]) {
     const filename = path.join(dsl4Root, 'platform', relative);
     const source = await readFile(filename, 'utf8');
@@ -180,11 +181,14 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
       assert.doesNotMatch(specifier, /^node:/u, relative);
       assert.doesNotMatch(specifier, /scratch-vm/u, relative);
     }
-    assert.doesNotMatch(
-      source,
-      /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\b|\bstartHats\b|getInfo\s*\()/u,
-      relative,
-    );
+    const forbiddenPlatformDependency =
+      relative === 'turbowarp-broadcast-action-port.js'
+        ? /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\.|getInfo\s*\()/u
+        : /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\b|\bstartHats\b|getInfo\s*\()/u;
+    assert.doesNotMatch(source, forbiddenPlatformDependency, relative);
+    if (relative === 'turbowarp-broadcast-action-port.js') {
+      assert.match(source, /runtime\.startHats\(/u, relative);
+    }
   }
 });
 

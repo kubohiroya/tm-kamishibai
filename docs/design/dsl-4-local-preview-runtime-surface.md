@@ -62,13 +62,14 @@ StoryDocumentを含めません。disposeはprotocol接続を切断した後、c
 
 ## 5. TurboWarp stage ownership
 
-browser stage ownerは最大64 MiB（hard maximum 128 MiB）のbase SB3 byte copy、480×360のcanvas、TurboWarp VM、
+browser stage ownerは既定192 MiB（推奨上限256 MiB、絶対上限1 GiB）のbase SB3 byte copy、480×360のcanvas、TurboWarp VM、
 renderer、audio engine、storage、bitmap adapterを1 preview pageにつき一度だけ所有します。VMはcompatibility mode、
 turbo mode、compilerを無効にしてbase projectをloadし、green flagは開始しません。DSL runtime sessionが同じVM
 runtimeを使用し、StoryDocumentの初回valid generationを先頭から開始します。
 
 canvasはkeyboard focusを持つ実stageで、primary pointerとkeyboard inputをVM I/Oへ渡します。外部extension URLの
-自動loadは拒否し、標準templateが必要とする固定extension登録は注入された`prepareVm`境界だけで行います。base SB3
+自動loadは拒否します。検証済みruntime componentと同居するStandard extension IDだけは、埋め込みJavaScriptを実行しない
+空のbuilt-in markerとして`prepareVm`境界で登録し、browser-owned runtimeとの二重起動を避けてbase SB3を読込みます。base SB3
 byte copyはstory／scene reload時のpresentation resetに同じprojectを再loadするためstage lifetimeだけ保持し、disposeで
 空byte列へ置換します。公開snapshotにはproject、VM、runtime、asset dataを含めません。
 
@@ -94,7 +95,7 @@ platformとbundle builderはlocal preview clientから直接有効化せず、�
 ### 5.1 runtime artifact delivery
 
 Node hostはbase SB3と単一browser runtime bundleを必ず一組で受け取り、入力と共有しないbounded byte copyとして所有します。
-base SB3は既定64 MiB／hard maximum 128 MiB、browser bundleは既定24 MiB／hard maximum 48 MiBです。snapshotには
+base SB3は既定192 MiB／推奨上限256 MiB／絶対上限1 GiB、browser bundleは既定24 MiB／hard maximum 48 MiBです。snapshotには
 availabilityとbyte lengthだけを出し、実byte、project内容、path、tokenを含めません。
 
 browser bundleはpage bootstrapに必要なため`/runtime/browser.js`から配信しますが、`no-store`、`nosniff`、
@@ -133,8 +134,8 @@ production local preview clientはbase SB3からのcomponent読込、stage reset
 ### 5.3 base runtime component loader
 
 browserは認証済みendpointから取得したbase SB3の防御的copyをloaderへ渡し、`project.json`だけを展開します。compressed
-SB3は既定64 MiB／hard maximum 128 MiB、ZIP entry数は既定4096／hard maximum 16384、展開後`project.json`は
-既定48 MiB／hard maximum 96 MiBです。全entryの重複とunsafe pathを検査し、`project.json`の存在、compression method、
+SB3は既定192 MiB／推奨上限256 MiB／絶対上限1 GiB、ZIP entry数は既定4096／hard maximum 16384、展開後`project.json`は
+既定192 MiB／推奨上限256 MiB／絶対上限1 GiBです。embedded asset bundleのBase64展開（約4/3倍）とruntime extensionを同時に収容しつつ、全entryの重複とunsafe pathを検査し、`project.json`の存在、compression method、
 UTF-8、JSON object、`targets`配列を検証してからruntime component loaderへ渡します。展開用SB3 copyとJSON byte列は
 処理終了時に空にし、projectやarchiveを公開snapshotへ含めません。
 
@@ -171,7 +172,13 @@ runtime project取得とevent streamは引き続きactive exact Origin＋bearer 
 browser clientはURL fragmentのone-use tokenをmemoryへ取り込み、`history.replaceState`でfragmentを消してからconnectします。
 connect responseの保持済みrecordを有限queueへ入れ、直ちに認証済みNDJSON streamを開いた後でbase SB3を取得します。これにより
 TurboWarp packageとprojectの起動中に保存されたgenerationも失いません。queueは既定64 record／32 MiB、1 generationは既定
-4 MiB、projectは既定64 MiBで有限化し、streamのContent-Type、projectのContent-Length、各revisionをfail-closedで検証します。
+4 MiB、projectは既定192 MiBで有限化し、streamのContent-Type、projectのContent-Length、各revisionをfail-closedで検証します。
+
+public CLIでは`--max-total-asset-bytes`／`--max-asset-file-bytes`に加えて、`--max-project-bytes`と
+`--max-project-json-bytes`でこの3種類のbyte上限を個別に指定できます。アセット128 MiB、SB3 256 MiB、展開後JSON 256 MiBの
+推奨上限を超える値は、memory枯渇の危険を確認したことを示す`--allow-large-preview-artifacts`がない限り拒否します。
+確認済みの場合も有限な絶対上限（アセット512 MiB、SB3／展開後JSON 1 GiB）を維持します。Nodeの入力読込、hostの配信、
+browserのContent-Length検査、SB3 loaderの展開上限、runtime componentのasset上限へ同じ選択値を渡し、片側だけの変更を禁止します。
 
 base component検証後にだけ固定TurboWarp packageを遅延loadし、同じpageのcanvas、VM、renderer、audio、storage、bitmap adapter、
 generation bridgeを起動します。`.k4.yml`を含むmanifest指定sourceのvalid summaryはwire acknowledgementと対応付けて共有CLI overlayへ
@@ -182,9 +189,11 @@ valid generationで復旧できます。raw YAML、絶対path、token、StoryDoc
 上書き保存してdispose時に正確に復元します。TurboWarp storageが要求する`Buffer`はbrowser bundleへ明示的にpolyfillします。
 pagehide／startup failure／明示disposeではevent streamをabortし、generation bridge／runtime session、stage、共有overlayの順に解放します。
 
-browser-owned pageに限り、固定Ajv validatorとTurboWarp runtimeが生成コードを使うためCSP `script-src`へ`'unsafe-eval'`を追加します。
+browser-owned pageに限り、固定Ajv validatorとTurboWarp runtimeが生成コードを使うためCSP `script-src`へ`'unsafe-eval'`、
+同梱runtimeが生成するworker用に`worker-src 'self' blob:`、同梱font用に`font-src 'self' data:`、認証済みpageが
+埋め込み音声から生成するmedia URL用に`media-src 'self' blob:`を追加します。
 script自体は引き続き`'self'`だけから取得し、connect、frame、base、form、外部default sourceの制限は維持します。protocol-owned pageは
-`'unsafe-eval'`を許可しません。実Chromium E2Eは初回stage表示、valid YAML auto reload、invalid時のcurrent保持、recovery、page離脱時の
+これらの追加sourceを許可しません。実Chromium E2Eは初回stage表示、valid YAML auto reload、invalid時のcurrent保持、recovery、page離脱時の
 transport／runtime cleanupをloopback hostと実TurboWarp bundleの組み合わせで確認します。
 
 camera／poseのbrowser libraryはbootstrapへ`tmPoseRuntime`として明示注入します。production entryは同一pageへ事前提供された
@@ -196,8 +205,8 @@ modelを外部取得するため、self-contained runtimeとremote code／asset 
 VM／renderer／audio、Standard Runtime composition、embedded pose model fileを使ってactor表示、sound再生、pose action完了を検証します。
 startupは20秒以下、強制GC後のJavaScript heapは192 MiB以下を有限上限とし、camera／modelの作成回数、prediction、classifier／PoseNet
 の一回だけの解放、canvas／`Scratch` global／transportのcleanupもassertします。2026-08-07にarm64 macOS 27.0、Google Chrome
-151.0.7922.76で確認し、実測値はtest diagnosticへ毎回記録します。source 64 KiB、asset 64件／64 MiB、base SB3 64 MiB、browser
-bundle 24 MiBという既存の入力上限は同じfixtureでも維持します。
+151.0.7922.76で確認し、実測値はtest diagnosticへ毎回記録します。sourceは64 KiB、assetは既定64件／64 MiB（推奨上限128 MiB）、
+base SB3は既定192 MiB、browser bundleは24 MiBという有限の入力上限を同じfixtureでも維持します。
 
 browser clientはbase component、stage、runtime owner、初回generation queue、共有overlayがすべて起動した後だけ、same-origin bearer認証済み
 `/api/runtime-ready`へversion 1のackを送ります。hostはbrowser-owned接続だけでこれを受理し、redacted snapshot／eventへready状態を

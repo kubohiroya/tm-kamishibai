@@ -188,7 +188,13 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
 
     const page = await fetch(origin);
     assert.equal(page.status, 200);
-    assert.match(page.headers.get('content-security-policy'), /connect-src 'self'/u);
+    const contentSecurityPolicy = page.headers.get('content-security-policy');
+    assert.match(contentSecurityPolicy, /connect-src 'self'/u);
+    assert.match(contentSecurityPolicy, /media-src 'self';/u);
+    assert.doesNotMatch(
+      contentSecurityPolicy,
+      /(?:'unsafe-eval'|worker-src[^;]*blob:|font-src[^;]*data:|media-src[^;]*blob:)/u,
+    );
     const pageBody = await page.text();
     assert.match(pageBody, /dsl4-local-preview-client\.js/u);
     assert.match(
@@ -516,6 +522,10 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     runtimeOwner: 'browser',
     projectBytes,
     browserBundleBytes,
+    maxProjectBytes: 300 * 1024 * 1024,
+    maxProjectJsonBytes: 400 * 1024 * 1024,
+    maxAssetFiles: 123,
+    maxTotalAssetBytes: 200 * 1024 * 1024,
     watcherOptions: {
       watchFactory: sourceWatch.factory,
       quietWindowMs: 0,
@@ -535,8 +545,17 @@ test('streams generations to a browser-owned runtime without creating a Node pro
     const page = await fetch(launchUrl.origin);
     const pageBody = await page.text();
     assert.match(pageBody, /src="\/runtime\/browser\.js"/u);
+    assert.match(pageBody, /data-dsl4-max-project-bytes="314572800"/u);
+    assert.match(pageBody, /data-dsl4-max-project-json-bytes="419430400"/u);
+    assert.match(pageBody, /data-dsl4-max-asset-files="123"/u);
+    assert.match(pageBody, /data-dsl4-max-asset-bytes="209715200"/u);
     assert.equal(pageBody.includes('dsl4-local-preview-client.js'), false);
-    assert.match(page.headers.get('content-security-policy'), /script-src 'self' 'unsafe-eval'/u);
+    const contentSecurityPolicy = page.headers.get('content-security-policy');
+    assert.match(contentSecurityPolicy, /script-src 'self' 'unsafe-eval'/u);
+    assert.match(contentSecurityPolicy, /worker-src 'self' blob:/u);
+    assert.match(contentSecurityPolicy, /font-src 'self' data:/u);
+    assert.match(contentSecurityPolicy, /media-src 'self' blob:/u);
+    assert.match(contentSecurityPolicy, /connect-src 'self'/u);
 
     const connected = await request(launchUrl.origin, '/api/connect', {body: {token}});
     assert.equal(connected.snapshot.status, 'connected');

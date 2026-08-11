@@ -3,6 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {recommendedDownload, renderDownloadCards} from './download-catalog.mjs';
+import {replaceSiteNavigation} from './site-navigation.mjs';
 import {renderSiteVersion} from './site-version.mjs';
 import {buildDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {verifyBuild} from './verify-build.mjs';
@@ -29,6 +30,30 @@ async function renderSiteMetadata() {
     writeFile(siteIndexPath, renderSiteVersion(sourceHtml, recommendedDownload.version)),
     writeFile(downloadIndexPath, renderDownloadCards(downloadHtml)),
   ]);
+}
+
+async function renderSiteNavigation() {
+  const htmlFiles = await findHtmlFiles(outputPath);
+  let updatedCount = 0;
+  for (const htmlFile of htmlFiles) {
+    const sourceHtml = await readFile(htmlFile, 'utf8');
+    const relativePath = path.relative(outputPath, htmlFile).split(path.sep).join('/');
+    const pathname =
+      relativePath === 'index.html'
+        ? '/tmpose-kamishibai/'
+        : `/tmpose-kamishibai/${relativePath.replace(/(?:index\.html)?$/u, '')}`;
+    const updatedHtml = replaceSiteNavigation(sourceHtml, {
+      site: 'tmpose-kamishibai',
+      pathname,
+    });
+    if (updatedHtml !== sourceHtml) {
+      await writeFile(htmlFile, updatedHtml);
+      updatedCount += 1;
+    }
+  }
+  console.log(
+    `Rendered the contract AppBar in ${updatedCount} of ${htmlFiles.length} HTML file(s).`,
+  );
 }
 
 async function findHtmlFiles(directory) {
@@ -72,6 +97,7 @@ async function addFaviconLinks() {
 }
 
 await prepareOutputDirectory();
+await renderSiteNavigation();
 await renderSiteMetadata();
 const releaseBuilds = await Promise.all(
   downloadableReleases.map(async (release) => {

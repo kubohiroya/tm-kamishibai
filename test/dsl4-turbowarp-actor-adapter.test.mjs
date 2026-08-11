@@ -3,18 +3,21 @@ import test from 'node:test';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
 
-function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) {
+function fakeActor({id = 'hero-target', actorName = 'Hero', name, x = 0, y = 0} = {}) {
   const calls = [];
   return {
     calls,
     target: {
       id,
+      ...(name === undefined ? {} : {name}),
       isStage: false,
       x,
       y,
       lookupVariableByNameAndType(name, type) {
         calls.push(['lookupVariableByNameAndType', name, type]);
-        return name === 'actorName' && type === '' ? {value: actorName} : undefined;
+        return name === 'actorName' && type === '' && actorName !== null
+          ? {value: actorName}
+          : undefined;
       },
       setXY(nextX, nextY) {
         calls.push(['setXY', nextX, nextY]);
@@ -31,6 +34,18 @@ function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) 
       },
       setEffect(effect, value) {
         calls.push(['setEffect', effect, value]);
+      },
+      goToFront() {
+        calls.push(['goToFront']);
+      },
+      goToBack() {
+        calls.push(['goToBack']);
+      },
+      goForwardLayers(count) {
+        calls.push(['goForwardLayers', count]);
+      },
+      goBackwardLayers(count) {
+        calls.push(['goBackwardLayers', count]);
       },
     },
   };
@@ -114,6 +129,35 @@ test('resolves one actorName target and applies show transform and visibility', 
     ['setXY', 10, -20],
     ['setSize', 30],
     ['setVisible', true],
+  ]);
+});
+
+test('resolves a standalone DSL 4.0 actor by its project target name', () => {
+  const hero = fakeActor({actorName: null, name: 'Hero'});
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  assert.equal(platform.resolveActor('Hero'), hero.target);
+});
+
+test('applies hide, scale, and absolute or relative layer changes to one actor', () => {
+  const hero = fakeActor();
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  platform.host.hideActor(platform.resolveActor('Hero'));
+  platform.host.setActorScale(hero.target, 45);
+  for (const layer of ['front', 'back', 2, -3]) {
+    platform.host.setActorLayer(hero.target, layer);
+  }
+
+  assert.deepEqual(hero.calls.slice(-6), [
+    ['setVisible', false],
+    ['setSize', 45],
+    ['goToFront'],
+    ['goToBack'],
+    ['goForwardLayers', 2],
+    ['goBackwardLayers', 3],
   ]);
 });
 
@@ -452,6 +496,202 @@ test('shows and clears say on timeout or synchronous finish', async () => {
   assert.deepEqual(fake.bubbleCalls.at(-1), ['', 'hero-target']);
 });
 
+test('renders typewriter speech through one Bubble handle and closes it on advance', async () => {
+  const hero = fakeActor();
+  const clock = manualScheduler();
+  const calls = [];
+  const handle = {
+    async setText(text) {
+      calls.push(['setText', text]);
+    },
+    async setAnimationMode(mode) {
+      calls.push(['setAnimationMode', mode]);
+    },
+    async close() {
+      calls.push(['close']);
+    },
+  };
+  const bubbleComposition = {
+    async show(input) {
+      calls.push(['show', input]);
+      return handle;
+    },
+    async releaseAll() {},
+  };
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: {targets: [hero.target]},
+    scheduler: clock.scheduler,
+    speechAdvanceTypewriterEnabled: true,
+    bubbleComposition,
+  });
+  const operation = platform.host.createThink(hero.target, {
+    text: '浦島',
+    waitFor: 'advance',
+    bubbleStyle: 'dialogue',
+    characterIntervalSeconds: 0.1,
+  });
+  const pending = operation.start();
+  for (let flush = 0; flush < 8; flush += 1) await Promise.resolve();
+
+  assert.deepEqual(calls[0], [
+    'show',
+    {
+      actor: hero.target,
+      actorKey: 'hero-target',
+      kind: 'think',
+      text: '浦',
+      styleName: 'dialogue',
+      animationMode: 'talking',
+    },
+  ]);
+  clock.advance(100);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(calls.slice(1), [
+    ['setText', '浦島'],
+    ['setAnimationMode', 'awaiting-continue'],
+  ]);
+
+  operation.finish('advance');
+  await pending;
+  assert.deepEqual(calls.at(-1), ['close']);
+  assert.equal(clock.pendingCount(), 0);
+});
+
+test('drives Bubble native reveal units and preserves finish audio lifecycle', async () => {
+  const hero = fakeActor();
+  const clock = manualScheduler();
+  const calls = [];
+  const handle = {
+    async animate(motion) {
+      calls.push(['animate', motion]);
+    },
+    async revealNext() {
+      calls.push(['revealNext']);
+      return true;
+    },
+    async revealAll() {
+      calls.push(['revealAll']);
+    },
+    async finish() {
+      calls.push(['finish']);
+    },
+    async setAnimationMode(mode) {
+      calls.push(['setAnimationMode', mode]);
+    },
+    async close() {
+      calls.push(['close']);
+    },
+  };
+  const bubbleComposition = {
+    async show(input) {
+      calls.push(['show', input]);
+      return handle;
+    },
+    async releaseAll() {},
+  };
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: {targets: [hero.target]},
+    scheduler: clock.scheduler,
+    speechAdvanceTypewriterEnabled: true,
+    bubbleComposition,
+  });
+  const operation = platform.host.createSay(hero.target, {
+    text: '浦島太郎',
+    waitFor: 'advance',
+    bubbleStyle: 'native',
+    bubbleReveal: {unit: 'CHARACTER', layout: 'RESERVED', intervalSeconds: 0.1},
+    bubbleMotions: [
+      {name: 'shake', direction: 'right', count: 2},
+      {name: 'animateBubbleShape', visualStyle: 'YELLING', durationSeconds: 0.2},
+    ],
+  });
+  const pending = operation.start();
+  for (let flush = 0; flush < 8; flush += 1) await Promise.resolve();
+
+  assert.deepEqual(calls[0], [
+    'show',
+    {
+      actor: hero.target,
+      actorKey: 'hero-target',
+      kind: 'say',
+      text: '浦島太郎',
+      styleName: 'native',
+      animationMode: 'talking',
+      reveal: {
+        unit: 'CHARACTER',
+        delimiters: ' \t\r\n',
+        showDelimiters: false,
+        layout: 'RESERVED',
+        intervalSeconds: 0,
+      },
+    },
+  ]);
+  assert.deepEqual(calls.slice(1, 3), [
+    ['animate', {name: 'shake', direction: 'right', count: 2}],
+    ['animate', {name: 'animateBubbleShape', visualStyle: 'YELLING', durationSeconds: 0.2}],
+  ]);
+  for (let index = 0; index < 3; index += 1) {
+    clock.advance(100);
+    for (let flush = 0; flush < 8; flush += 1) await Promise.resolve();
+  }
+  assert.equal(calls.filter(([name]) => name === 'revealNext').length, 3);
+  assert.deepEqual(calls.at(-1), ['setAnimationMode', 'awaiting-continue']);
+
+  assert.deepEqual(operation.finish('advance'), {consumed: false});
+  await pending;
+  assert.deepEqual(calls.slice(-2), [['finish'], ['close']]);
+  assert.equal(clock.pendingCount(), 0);
+});
+
+test('uses advance as revealNext when native reveal disables automatic progress', async () => {
+  const hero = fakeActor();
+  const calls = [];
+  const handle = {
+    async revealNext() {
+      calls.push('revealNext');
+      return true;
+    },
+    async revealAll() {},
+    async finish() {
+      calls.push('finish');
+    },
+    async setAnimationMode(mode) {
+      calls.push(mode);
+    },
+    async close() {
+      calls.push('close');
+    },
+  };
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: {targets: [hero.target]},
+    speechAdvanceTypewriterEnabled: true,
+    bubbleComposition: {
+      async show() {
+        return handle;
+      },
+      async releaseAll() {},
+    },
+  });
+  const operation = platform.host.createSay(hero.target, {
+    text: 'AB',
+    waitFor: 'advance',
+    bubbleStyle: 'manual',
+    bubbleReveal: {unit: 'CHARACTER', intervalSeconds: 0},
+  });
+  const pending = operation.start();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(operation.finish('advance'), {consumed: true});
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
+  assert.deepEqual(calls.slice(-2), ['revealNext', 'awaiting-continue']);
+  assert.deepEqual(operation.finish('advance'), {consumed: false});
+  await pending;
+  assert.deepEqual(calls.slice(-2), ['finish', 'close']);
+});
+
 test('handles zero-second operations without retaining a timer', async () => {
   const hero = fakeActor({x: 1, y: 2});
   const fake = fakeRuntime([hero.target]);
@@ -547,6 +787,26 @@ test('rejects invalid runtime, scheduler, target, specs, duration, and repeated 
   const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
   assert.throws(() => platform.host.showActor({}, {x: 0, y: 0, scale: 1}), /target/u);
   assert.throws(() => platform.host.showActor(hero.target, {x: 0, y: 0, scale: 0}), /positive/u);
+  const bubblePlatform = createDsl4TurboWarpActorPlatform({
+    runtime: {targets: [hero.target]},
+    speechAdvanceTypewriterEnabled: true,
+    bubbleComposition: {
+      async show() {
+        assert.fail('invalid motion must be rejected before Bubble show');
+      },
+      async releaseAll() {},
+    },
+  });
+  assert.throws(
+    () =>
+      bubblePlatform.host.createSay(hero.target, {
+        text: 'hello',
+        seconds: 1,
+        bubbleStyle: 'native',
+        bubbleMotions: [{name: 'unknown'}],
+      }),
+    /bubbleMotions is invalid/u,
+  );
   for (const transparency of [-1, 101, Number.NaN]) {
     assert.throws(
       () => platform.host.setTransparency(hero.target, {transparency}),

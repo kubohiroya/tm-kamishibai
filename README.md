@@ -64,17 +64,33 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --output dist/story-4.sb3 \
   --control-profile production \
   --channel bundled \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 256 \
   --max-total-asset-bytes 134217728
 ```
 
-`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込み、`delivery: remote`を明示したassetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
+DSL embedded assetをBase64本文ではなくSB3 rootのcontent-addressed entryとして試す場合は、build開始時に
+`--enable-root-binary-entries`を明示します。これは既定OFFです。OFFでは従来のBase64形式を生成するため、
+ロールバック時はflagを外して成果物を再buildします。entry形式、対応sbdl version、Packager／session backingの契約は
+[DSL 4.0 root binary／Packager契約](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-root-binary-packager-contract.md)を参照してください。
+
+root-entry SB3をTurboWarp Packagerへ渡す場合は、固定`@turbowarp/packager` 3.13.0とbuilder exportの
+`packageDsl4WithTurboWarpPackager()`を使用します。Plain HTML／`zip-one-asset`は同じPackager ZIP closureを
+`scaffolding.loadProject()`前に登録し、通常ZIP／Electronは`assets/`配下の個別entryをdirect sourceとして登録します。
+実行時のPackager objectを差し替えたり、生成HTMLを任意の文字列置換で更新したりしないでください。対応templateが変化した場合、
+adapterはbuildをfail closedにします。必要な引数とsurface別の所有権は上記契約書を参照してください。
+
+TurboWarpエディターでSB3を直接開いて実行する成果物は、`--enable-root-binary-entries`を指定せずBase64形式でbuildしてください。
+エディターは読み込み後にSB3 ZIP entry sourceを保持しないため、v3 root-entry descriptorだけを持つSB3は直接実行できません。
+
+`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込みます。`delivery: remote`のpose modelは通常のTMPoseディレクトリURLだけでも指定でき、内容を固定したい場合は`file`へローカル化して埋め込みます。integrity／Content-Type／sizeをすべて指定したremote assetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
 
 `--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
 
 local previewでも同じflagとgraph上限を指定できます。ON時はincluded sourceとlocal assetを含む全体を二回取得し、同じgeneration keyになった場合だけruntimeへstageします。新規sourceは任意のbasename／directoryで`.k4.yml` suffixを使用できます（entry sourceだけはmanifestのroot-level basenameです）。途中保存や一部assetだけが新しい状態は公開しません。詳細は[DSL 4.0 Source Graph Preview](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-source-include-preview.md)を参照してください。
+
+実カメラを使う最終確認は、[DSL 4.0 実Chrome・実カメラ Smoke 手順](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-physical-camera-smoke.md)に従います。自動E2Eはカメラをスタブ化しているため、実機確認の代替にはなりません。
 
 台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
 
@@ -88,8 +104,15 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes 65536 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --max-total-asset-bytes 67108864 \
+  --max-project-bytes 201326592 \
+  --max-project-json-bytes 201326592
 ```
+
+`--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
+展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
+`--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
+絶対上限を適用します。
 
 Source Graphを監視する場合は、上のcommandへ次を追加します。
 
@@ -105,7 +128,7 @@ buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに�
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes 1048576 \
+  --max-source-bytes 262144 \
   --format pretty
 ```
 
@@ -118,36 +141,76 @@ DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記する�
 speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り当ててください。
 `noSoundCharacters`には文字音を鳴らさない文字、`restCharacters`には文字音を鳴らさず長めに休止する
 文字を連結して指定します。休止時間は`restCharacterIntervalSeconds`で指定します。文字集合の判定は
-本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`speechStyles`へ
-名前付きでまとめ、`say`／`think`の`style`から再利用できます。`text`、`seconds`、`waitFor`、
-`startSound`はactionごとに指定します。styleを使うactionに文字送り設定を重ねて指定することはできません。
-既存のインライン指定も引き続き使用できます。
+本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`bubbleStyles`へ
+名前付きの部分styleとしてまとめ、`say`／`think`の`styles`配列から複数を再利用できます。styleは記載順に
+deep mergeされ、後のstyleを優先し、最後にaction内指定を適用します。配列値は連結せず全体を置換します。
+style名には内部空白や日本語を使用できますが、前後空白、改行、tab、制御文字は使用できません。
+style定義内の`styles`配列から既存styleを合成して、新しい名前付きstyleを定義することもできます。参照先を
+順に合成してから定義自身のpropertyを適用し、循環参照、未知参照、重複参照はエラーにします。
 
 ```yaml
 assets:
   HeroIdle: costume:Hero
   HeroGreetingVoice: sound
   Typewriter: sound
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 actors:
   Hero: HeroIdle
-speechStyles:
-  novel:
+bubbleStyles:
+  Typing base:
     characterIntervalSeconds: 0.05
-    characterSound: Typewriter
     noSoundCharacters: '「」'
+  日本語 効果音:
+    characterSound: Typewriter
     restCharacters: '、。…'
     restCharacterIntervalSeconds: 0.5
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+  Hero style:
+    styles:
+      - Typing base
+      - 日本語 効果音
+    placement: FOOTER_LIKE
+    visualStyle: NARRATION
 scenes:
   opening:
     - Hero.say:
         text: こんにちは！
         seconds: 10
         waitFor: advance
-        style: novel
+        styles:
+          - Hero style
         startSound: HeroGreetingVoice
 ```
 
-この拡張は起動時固定の`dsl4SpeechAdvanceTypewriter` feature flagが既定OFFです。入力対象や
+`continueIndicator`は`waitFor: advance`で全文の表示が終わってから入力を待つ間だけ、本文末尾に
+`frames`のimage assetを順番にループ表示します。`frames`は2枚以上、`frameIntervalSeconds`は正の秒数です。
+文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
+sceneのasset依存へ含まれます。
+
+DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble` Compositionが所有します。
+`textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
+`HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
+portraitのbase／blink／lip-syncと`continueIndicator`のframe assetもstyleへ宣言でき、参照sceneの
+lazy dependencyとして読み込まれます。Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
+TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
+本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
+
+Bubble 0.4では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
+`LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
+animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
+外形animationを同じsurface上で実行します。native revealと旧`characterIntervalSeconds`系は同じ
+effective styleへ混在させず、用途に応じてどちらか一方を選びます。
+
+これらの拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`、`dsl4BubbleAdvanceIndicator`、
+`dsl4TurboWarpBubble`、`dsl4TurboWarpBubbleAdvancedPresentation` feature flagが既定OFFです。
+Bubble経路ではportraitとindicatorもBubbleが所有します。入力対象や
 `seconds`／`waitFor`の組み合わせを含む完全な仕様は
 [DSL 4.0 surface仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#72-actor-action)を参照してください。
 
@@ -155,67 +218,10 @@ API、アセットマニフェスト、安全設定、出力形式について�
 
 ### DSL 3.1／3.2から4.0への変換
 
-外部テキストのDSL 3.1／3.2台本を、DSL 4.0 YAMLへ明示的に変換できます。DSL 3.1は、3.2.3が
-維持する互換grammarとしてwarning付きで解釈します。入力ファイルは変更せず、変換に成功した場合だけ
-出力をatomicに作成または置換します。
-
-```bash
-pnpm exec tmpose-kamishibai convert-dsl4 \
-  --input source.txt \
-  --output story.kamishibai.yaml \
-  --pose-models pose-models.json
-```
-
-3.1／3.2の`TMPoseURL`はremote URLのまま4.0へ移せません。ポーズを使う台本では、URLとlocal
-`poseModel` assetの対応をJSONで明示します。converterはURLを取得せず、指定したproject-relative
-pathだけを台本へ記録します。
-
-```json
-{
-  "https://example.com/models/rescue/": {
-    "id": "RescuePose",
-    "file": "rescue-pose",
-    "loading": "lazy"
-  }
-}
-```
-
-asset、actor、cover、runtime variable、loading、pose recognition sound、SVG Text style、branch、
-scene、およびDSL 4.0 coreに対応するactionを変換します。3.1互換解釈、型推論、costumeのlogical actorへの
-付け替え、旧DSLに秒数指定がないtransitionには、元ファイルの行・列を含むwarningを標準エラー出力へ表示します。
-
-意味を保てない次の入力は、変換結果を部分出力せずerrorにします。
-
-- 旧Text Asset、remote／cache asset
-- 秒数なしの永続`say`／`think`、style付き`say`／`think`、`hide`など意味を保って自動変換できないaction
-- 4.0で必須のcharge soundがないpose recognition設定
-- local model置換がない`TMPoseURL`、空のpose名、要素数が異なるbranch／key／touch inputのparallel list
-- 最後の無条件遷移がないbranch
-
-3.1／3.2の`Actor:pose`は候補選択ではなく、pose名の順にすべて成立させる4.0
-`Actor.pose.steps`へ変換します。skin／soundの不足要素は旧runtimeと同じく省略扱い、pose数を超える余分な
-要素はwarning付きで除外します。Async Inputによる候補1件選択は3.1／3.2テキストDSLのactionではなく
-SB3 block graph側の機能であるため、このconverterは`poseInputToChangeScene`を推測生成しません。
-
-headerの`poseRecog`は`sequence.confidenceThreshold`へ変換します。旧runtimeが0.1秒ごとに100を目標として
-`confidence × poseCharge`を加えるため、`poseCharge`は
-`sequence.fullConfidenceHoldSeconds = 10 / poseCharge`へ変換します。`poseIdle=0`はそのまま変換
-できますが、非zero値は旧runtimeだけがconfidenceを乗算するため、意味を変えず自動変換できません。
-scene内の`setRuntimeVariable`と、1以外の`startSceneIndex`も4.0 coreに同等の実行位置がないため
-errorにします。
-
-対応表、判定分類、旧Text AssetのSVG Text移行例は
-[DSL 4.0移行仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md)を
+外部テキストのDSL 3.1／3.2台本を、入力を変更せずDSL 4.0 YAMLへ変換できます。コマンド、pose model
+置換、診断、自動変換できない入力、変換後の検証、JavaScript APIは、独立した
+[紙芝居DSL 3.2から4.0への変換ガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/dsl-author-guides/dsl-3.2-to-4.0-conversion-guide/)を
 参照してください。
-
-JavaScriptから副作用なしで変換する場合は、package exportを利用できます。
-
-```js
-import {convertDsl32ToDsl4} from '@kubohiroya/tmpose-kamishibai/converter';
-
-const result = convertDsl32ToDsl4(sourceText, {sourceId: 'source.txt'});
-if (result.ok) console.log(result.yaml);
-```
 
 ## DSL 3.2の互換性
 
@@ -289,7 +295,7 @@ pnpm install
 新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
-`pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
+`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.6.0`を使用します。
 CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として

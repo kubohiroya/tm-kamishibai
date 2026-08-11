@@ -1,12 +1,14 @@
 import {deepFreeze} from './story-document.js';
+import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
 export const dsl4BrowserTurboWarpStageDefaults = deepFreeze({
-  maxProjectBytes: 64 * 1024 * 1024,
+  maxProjectBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxProjectBytes,
   stageWidth: 480,
   stageHeight: 360,
 });
 
-export const dsl4BrowserTurboWarpStageMaximumProjectBytes = 128 * 1024 * 1024;
+export const dsl4BrowserTurboWarpStageMaximumProjectBytes =
+  dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectBytes;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -420,6 +422,39 @@ export function createDsl4BrowserTurboWarpStage(options) {
     return canvas;
   }
 
+  /** @param {'en' | 'ja'} locale */
+  function showApplicationMenu(locale) {
+    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
+    const runtime = vm.runtime;
+    const stage = runtime.getTargetForStage?.();
+    const costumeName = locale === 'ja' ? 'MenuRuntime' : 'Menu';
+    const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
+    const stageIndex = stageCostumes.findIndex(
+      /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
+    );
+    if (stageIndex >= 0) stage.setCostume?.(stageIndex);
+    canvas.style.cursor = 'pointer';
+  }
+
+  /** @param {'en' | 'ja'} locale */
+  function showApplicationTitle(locale) {
+    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
+    const runtime = vm.runtime;
+    const stage = runtime.getTargetForStage?.();
+    const costumeName = locale === 'ja' ? 'TitleRuntime' : 'Title';
+    const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
+    const stageIndex = stageCostumes.findIndex(
+      /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
+    );
+    if (stageIndex >= 0) stage.setCostume?.(stageIndex);
+    canvas.style.cursor = 'pointer';
+  }
+
+  function hideApplicationOverlay() {
+    if (status !== 'ready') throw new TypeError('TurboWarp browser stage is not ready');
+    canvas.style.cursor = 'auto';
+  }
+
   function dispose() {
     if (disposePromise) return disposePromise;
     if (disposed) return Promise.resolve(snapshot());
@@ -454,6 +489,9 @@ export function createDsl4BrowserTurboWarpStage(options) {
     dispose,
     getRuntime,
     getCanvas,
+    showApplicationMenu,
+    showApplicationTitle,
+    hideApplicationOverlay,
     getState: snapshot,
   });
 }

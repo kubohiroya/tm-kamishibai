@@ -18,6 +18,8 @@ function fakeComposition(overrides = {}) {
   const assets = new Map([
     ['Beach', 'image/svg+xml'],
     ['HeroHappy', 'image/png'],
+    ['Fish1', 'image/png'],
+    ['Fish2', 'image/png'],
     ['OpeningSound', 'audio/wav'],
   ]);
   return {
@@ -53,6 +55,31 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
 }
 
+function manualScheduler() {
+  let nextId = 1;
+  const timers = new Map();
+  return {
+    scheduler: {
+      setTimeout(callback, milliseconds) {
+        const id = nextId++;
+        timers.set(id, {callback, milliseconds});
+        return id;
+      },
+      clearTimeout(id) {
+        timers.delete(id);
+      },
+    },
+    pendingCount: () => timers.size,
+    runNext() {
+      const [id, timer] = timers.entries().next().value ?? [];
+      if (!timer) return false;
+      timers.delete(id);
+      timer.callback();
+      return timer.milliseconds;
+    },
+  };
+}
+
 function actionCalls(calls) {
   return calls.filter(([method]) =>
     ['applyToStage', 'applyToTarget', 'playSound', 'stopSound'].includes(method),
@@ -85,6 +112,136 @@ test('maps stage, bgm, sound, and setSkin to one shared Asset Manager compositio
     ['applyToTarget', 'HeroHappy', 'hero-target'],
   ]);
   assert.deepEqual(resolved, [['Hero', 'opening']]);
+});
+
+test('applies setSkin scale and runs a cancellable deterministic background costume loop', async () => {
+  const fake = fakeComposition();
+  const clock = manualScheduler();
+  const actor = Object.freeze({id: 'fish-target', isStage: false});
+  const scales = [];
+  const port = createDsl4MediaActionPort({
+    composition: fake.composition,
+    resolveActor: () => actor,
+    setActorScale(target, scale) {
+      scales.push([target.id, scale]);
+    },
+    scheduler: clock.scheduler,
+  });
+
+  await port.setSkin({target: 'Fish', skin: 'Fish1', scale: 45}, actionContext());
+  await port.loop(
+    {
+      target: 'Fish',
+      steps: [
+        {skin: 'Fish1', seconds: 0.3},
+        {skin: 'Fish2', seconds: 0.4},
+      ],
+    },
+    actionContext(),
+  );
+  assert.equal(clock.pendingCount(), 1);
+  assert.equal(clock.runNext(), 300);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(scales, [['fish-target', 45]]);
+  assert.deepEqual(actionCalls(fake.calls), [
+    ['applyToTarget', 'Fish1', 'fish-target'],
+    ['applyToTarget', 'Fish1', 'fish-target'],
+    ['applyToTarget', 'Fish2', 'fish-target'],
+  ]);
+
+  port.dispose();
+  assert.equal(clock.pendingCount(), 0);
+});
+
+test('serializes a replacement skin after an in-flight loop skin', async () => {
+  const inFlightLoopSkin = deferred();
+  const applications = [];
+  const fake = fakeComposition({
+    applyToTarget(name, target) {
+      applications.push([name, target.id]);
+      if (applications.length === 2) return inFlightLoopSkin.promise;
+    },
+  });
+  const clock = manualScheduler();
+  const port = createDsl4MediaActionPort({
+    composition: fake.composition,
+    resolveActor: () => ({id: 'fish-target', isStage: false}),
+    scheduler: clock.scheduler,
+  });
+
+  await port.loop(
+    {
+      target: 'Fish',
+      steps: [
+        {skin: 'Fish1', seconds: 0.3},
+        {skin: 'Fish2', seconds: 0.3},
+      ],
+    },
+    actionContext(),
+  );
+  clock.runNext();
+  await Promise.resolve();
+  const replacement = port.setSkin({target: 'Fish', skin: 'HeroHappy'}, actionContext());
+
+  await Promise.resolve();
+  assert.deepEqual(applications, [
+    ['Fish1', 'fish-target'],
+    ['Fish2', 'fish-target'],
+  ]);
+  inFlightLoopSkin.resolve();
+  await replacement;
+  assert.deepEqual(applications, [
+    ['Fish1', 'fish-target'],
+    ['Fish2', 'fish-target'],
+    ['HeroHappy', 'fish-target'],
+  ]);
+  assert.equal(clock.pendingCount(), 0);
+});
+
+test('does not let a failed superseded loop stop its replacement loop', async () => {
+  const staleApplication = deferred();
+  const backgroundErrors = [];
+  const applications = [];
+  const fake = fakeComposition({
+    applyToTarget(name, target) {
+      applications.push([name, target.id]);
+      if (applications.length === 2) return staleApplication.promise;
+    },
+  });
+  const clock = manualScheduler();
+  const port = createDsl4MediaActionPort({
+    composition: fake.composition,
+    resolveActor: () => ({id: 'fish-target', isStage: false}),
+    scheduler: clock.scheduler,
+    onBackgroundError(error) {
+      backgroundErrors.push(error);
+    },
+  });
+  const loop = {
+    target: 'Fish',
+    steps: [
+      {skin: 'Fish1', seconds: 0.3},
+      {skin: 'Fish2', seconds: 0.3},
+    ],
+  };
+
+  await port.loop(loop, actionContext());
+  clock.runNext();
+  await Promise.resolve();
+  const replacement = port.loop(loop, actionContext());
+  staleApplication.reject(new Error('stale loop failure'));
+  await replacement;
+  await Promise.resolve();
+
+  assert.equal(backgroundErrors.length, 1);
+  assert.match(backgroundErrors[0].message, /stale loop failure/u);
+  assert.equal(clock.pendingCount(), 1);
+  assert.deepEqual(applications, [
+    ['Fish1', 'fish-target'],
+    ['Fish2', 'fish-target'],
+    ['Fish1', 'fish-target'],
+  ]);
+  port.dispose();
 });
 
 test('stops only an until-done sound and rejects with AbortError on cancellation', async () => {

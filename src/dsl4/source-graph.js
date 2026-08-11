@@ -8,7 +8,7 @@ const namedDeclarationNamespaces = Object.freeze([
   'assets',
   'actors',
   'textStyles',
-  'speechStyles',
+  'bubbleStyles',
   'variables',
   'branches',
   'scenes',

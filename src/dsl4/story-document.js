@@ -1,4 +1,5 @@
 import {dsl4ActorCoreActionNames} from './action-registry.js';
+import {encodeDsl4StoryPathSegment} from './story-path.js';
 
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
@@ -26,6 +27,31 @@ function cloneValue(value) {
       cloneValue(child),
     ]),
   );
+}
+
+/**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {unknown} value
+ * @param {any} document
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {Array<string | number>} yamlPath
+ * @param {string} storyPath
+ */
+function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, storyPath) {
+  if (typeof value !== 'object' || value === null) return;
+  const entries = Array.isArray(value)
+    ? value.map((child, index) => [index, child])
+    : Object.entries(/** @type {Record<string, unknown>} */ (value));
+  for (const [key, child] of entries) {
+    const segment = encodeDsl4StoryPathSegment(String(key));
+    const childStoryPath = `${storyPath}/${segment}`;
+    const childYamlPath = [...yamlPath, key];
+    sourceMap[childStoryPath] = sourceRangeForNode(
+      document.getIn(childYamlPath, true),
+      lineCounter,
+    );
+    mapNestedSource(sourceMap, child, document, lineCounter, childYamlPath, childStoryPath);
+  }
 }
 
 /**
@@ -101,10 +127,6 @@ export function sourceOriginForStoryPath(storyDocument, storyPath = '/') {
  * @param {string} value
  * @returns {string}
  */
-function storyPathSegment(value) {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
 /**
  * @param {unknown} asset
  * @param {string} id
@@ -117,6 +139,7 @@ function normalizeAsset(asset, id) {
       id,
       kind,
       name: id,
+      ...(kind === 'backdrop' || kind === 'costume' ? {bitmapResolution: 1} : {}),
       delivery: 'embedded',
       loading: 'eager',
       retention: kind === 'poseModel' ? 'scene' : 'story',
@@ -129,6 +152,9 @@ function normalizeAsset(asset, id) {
     delivery: 'embedded',
     loading: 'eager',
     retention: sourceAsset.kind === 'poseModel' ? 'scene' : 'story',
+    ...(sourceAsset.kind === 'backdrop' || sourceAsset.kind === 'costume'
+      ? {bitmapResolution: sourceAsset.bitmapResolution ?? 1}
+      : {}),
     ...sourceAsset,
   };
 }
@@ -241,7 +267,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
 function mapBranchSources(sourceMap, branches, document, lineCounter) {
   for (const [branchId, value] of Object.entries(branches)) {
     if (!Array.isArray(value)) continue;
-    const branchPath = `/branches/${storyPathSegment(branchId)}`;
+    const branchPath = `/branches/${encodeDsl4StoryPathSegment(branchId)}`;
     sourceMap[branchPath] = sourceRangeForNode(
       document.getIn(['branches', branchId], true),
       lineCounter,
@@ -278,7 +304,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   const command = separator === -1 ? sourceCommand : sourceCommand.slice(separator + 1);
   const sourceArguments = sourceAction[sourceCommand];
   const customAction = separator !== -1 && !actorCoreActionNames.has(command);
-  const actionPath = `/scenes/${storyPathSegment(sceneId)}/actions/${actionIndex}`;
+  const actionPath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}/actions/${actionIndex}`;
   const actionRange = sourceRangeForNode(actionNode, lineCounter);
   const argumentNode = actionNode?.get?.(sourceCommand, true);
   const argumentRecord =
@@ -307,10 +333,12 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       branch: 'branch',
       goto: 'scene',
       setSkin: 'skin',
+      setLayer: 'layer',
       setTransparency: 'transparency',
       sound: 'sound',
       stage: 'backdrop',
       wait: 'seconds',
+      broadcastMessageAndWait: 'message',
     }[command];
     if (!argumentName) throw new Error(`Cannot normalize scalar arguments for ${command}`);
     args = {[argumentName]: sourceArguments};
@@ -334,10 +362,18 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
         field === 'routes' && !Object.hasOwn(argumentRecord, 'routes') ? undefined : field;
       if (sourceField) fieldNode = argumentNode.get(sourceField, true);
     }
-    sourceMap[`${actionPath}/args/${storyPathSegment(field)}`] = sourceRangeForNode(
+    sourceMap[`${actionPath}/args/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
       fieldNode,
       lineCounter,
     );
+    if (field === 'styles' && Array.isArray(args[field])) {
+      args[field].forEach((_, styleIndex) => {
+        sourceMap[`${actionPath}/args/styles/${styleIndex}`] = sourceRangeForNode(
+          fieldNode?.get?.(styleIndex, true) ?? fieldNode,
+          lineCounter,
+        );
+      });
+    }
   }
   if (stableId) {
     sourceMap[`${actionPath}/stableId`] = sourceRangeForNode(
@@ -374,31 +410,32 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
-      sourceMap[`/assets/${storyPathSegment(id)}`] = sourceRangeForNode(
-        document.getIn(['assets', id], true),
-        lineCounter,
-      );
+      const assetPath = `/assets/${encodeDsl4StoryPathSegment(id)}`;
+      sourceMap[assetPath] = sourceRangeForNode(document.getIn(['assets', id], true), lineCounter);
+      mapNestedSource(sourceMap, asset, document, lineCounter, ['assets', id], assetPath);
       return [id, normalizeAsset(asset, id)];
     }),
   );
 
-  const sourceSpeechStyles = /** @type {Record<string, Record<string, unknown>>} */ (
-    story.speechStyles ?? {}
+  const sourceBubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleStyles ?? {}
   );
-  const speechStyles = cloneValue(sourceSpeechStyles);
-  const speechStylesNode = document.getIn(['speechStyles'], true);
-  if (speechStylesNode) {
-    sourceMap['/speechStyles'] = sourceRangeForNode(speechStylesNode, lineCounter);
-    for (const [styleId, style] of Object.entries(sourceSpeechStyles)) {
-      const stylePath = `/speechStyles/${storyPathSegment(styleId)}`;
-      const styleNode = document.getIn(['speechStyles', styleId], true);
+  const bubbleStyles = cloneValue(sourceBubbleStyles);
+  const bubbleStylesNode = document.getIn(['bubbleStyles'], true);
+  if (bubbleStylesNode) {
+    sourceMap['/bubbleStyles'] = sourceRangeForNode(bubbleStylesNode, lineCounter);
+    for (const [styleId, style] of Object.entries(sourceBubbleStyles)) {
+      const stylePath = `/bubbleStyles/${encodeDsl4StoryPathSegment(styleId)}`;
+      const styleNode = document.getIn(['bubbleStyles', styleId], true);
       sourceMap[stylePath] = sourceRangeForNode(styleNode, lineCounter);
-      for (const field of Object.keys(style)) {
-        sourceMap[`${stylePath}/${storyPathSegment(field)}`] = sourceRangeForNode(
-          document.getIn(['speechStyles', styleId, field], true),
-          lineCounter,
-        );
-      }
+      mapNestedSource(
+        sourceMap,
+        style,
+        document,
+        lineCounter,
+        ['bubbleStyles', styleId],
+        stylePath,
+      );
     }
   }
 
@@ -410,7 +447,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     const sourceActions = /** @type {Record<string, unknown>[]} */ (
       isShortScene ? sourceScene : /** @type {Record<string, unknown>} */ (sourceScene).actions
     );
-    const scenePath = `/scenes/${storyPathSegment(sceneId)}`;
+    const scenePath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`;
     sourceMap[scenePath] = sourceRangeForNode(sceneNode, lineCounter);
     const actions = sourceActions.map((action, actionIndex) => {
       const actionSourcePath = isShortScene
@@ -453,7 +490,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     actors: cloneValue(story.actors ?? {}),
     cover: cloneValue(story.cover ?? null),
     textStyles: cloneValue(story.textStyles ?? {}),
-    speechStyles,
+    bubbleStyles,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),

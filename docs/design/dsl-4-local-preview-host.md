@@ -42,7 +42,9 @@ source frontendへ委譲します。HTTP responseとbrowser eventにはsource te
 - HTTP APIはmanifestで認可されたsource watcherだけを操作し、任意path read endpointを持たない
 - browser module配信はpackage内の`src/builder/*.js`／`src/dsl4/*.js`へ固定し、path traversalを拒否する
 - CSPはsame-origin script／connectだけを許可し、frame埋込みと外部base／formを拒否する。browser-owned pageだけは固定Ajv／
-  TurboWarp runtimeの生成コード用に`script-src 'unsafe-eval'`を追加し、protocol-owned pageには追加しない
+  TurboWarp runtimeの生成コード用に`script-src 'unsafe-eval'`、同梱runtimeが生成するworker用に
+  `worker-src 'self' blob:`、同梱font用に`font-src 'self' data:`、認証済みpageが埋め込み音声から生成する
+  media URL用に`media-src 'self' blob:`を追加する。protocol-owned pageには追加しない
 
 remote bind、remote preview、token再発行、source write、directory listing、telemetryは提供しません。
 

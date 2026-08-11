@@ -10,13 +10,31 @@ const dangerousIdentifiers = new Set(['__proto__', 'constructor', 'prototype']);
 const supportedKeyCodePattern =
   /^(?:Space|Enter|Escape|Tab|Backspace|Delete|Home|End|PageUp|PageDown|Arrow(?:Up|Down|Left|Right)|Digit[0-9]|Key[A-Z]|Numpad[0-9]|F(?:[1-9]|1[0-2]))$/u;
 const numberPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
+const bubbleDirections = new Set([
+  'up',
+  'up-up-right',
+  'up-right',
+  'right-up-right',
+  'right',
+  'right-down-right',
+  'down-right',
+  'down-down-right',
+  'down',
+  'down-down-left',
+  'down-left',
+  'left-down-left',
+  'left',
+  'left-up-left',
+  'up-left',
+  'up-up-left',
+]);
 
 /**
  * @typedef {{line: number, column: number}} SourcePosition
  * @typedef {{start: SourcePosition, end: SourcePosition}} SourceRange
  * @typedef {{key: string, value: string, lineNumber: number, columnNumber: number, sourceLine: string}} Dsl32Command
  * @typedef {{code: string, severity: 'error' | 'warning', message: string, sourceId: string, range: SourceRange, command: string | null}} ConversionDiagnostic
- * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'poseModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command}} ConvertedAsset
+ * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'poseModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command} | {kind: 'poseModel', delivery: 'remote', source: {url: string}, loading: 'lazy', command: Dsl32Command}} ConvertedAsset
  * @typedef {{kind: 'asset' | 'actor' | 'branch' | 'scene' | 'style', id: string, expectedKind?: 'backdrop' | 'costume' | 'sound' | 'poseModel', actor?: string, command: Dsl32Command}} ConversionReference
  * @typedef {{ok: boolean, source: string, document: Record<string, any> | null, yaml: string | null, diagnostics: ConversionDiagnostic[]}} ConversionResult
  * @typedef {{id: string, file: string, loading?: 'eager' | 'lazy'}} PoseModelReplacement
@@ -131,12 +149,8 @@ function normalizePoseModels(input) {
     if (typeof replacement.id !== 'string' || typeof replacement.file !== 'string') {
       throw new TypeError(`poseModels[${sourceUrl}] requires string id and file fields.`);
     }
-    if (
-      replacement.id !== replacement.id.normalize('NFC') ||
-      !identifierPattern.test(replacement.id) ||
-      dangerousIdentifiers.has(replacement.id)
-    ) {
-      throw new TypeError(`poseModels[${sourceUrl}].id is not a valid DSL 4.0 identifier.`);
+    if (replacement.id.length === 0 || dangerousIdentifiers.has(replacement.id)) {
+      throw new TypeError(`poseModels[${sourceUrl}].id must be a non-empty safe string.`);
     }
     if (!isSafePoseModelFile(replacement.file)) {
       throw new TypeError(`poseModels[${sourceUrl}].file must be a safe project-relative path.`);
@@ -170,6 +184,10 @@ class Converter {
     this.actors = new Map();
     /** @type {Map<string, Record<string, any>>} */
     this.textStyles = new Map();
+    /** @type {Map<string, string>} */
+    this.textStyleBubbleDirections = new Map();
+    /** @type {Map<string, {textStyle: string, kind: 'say' | 'think'}>} */
+    this.bubbleStyles = new Map();
     /** @type {Map<string, string | number | boolean>} */
     this.variables = new Map();
     /** @type {Map<string, Dsl32Command>} */
@@ -178,6 +196,9 @@ class Converter {
     this.scenes = new Map();
     /** @type {Map<string, string>} */
     this.scenePoseModels = new Map();
+    /** @type {Map<string, string>} */
+    this.remotePoseModels = new Map();
+    this.nextRemotePoseModelId = 1;
     /** @type {Map<string, Dsl32Command>} */
     this.scenesUsingPose = new Map();
     /** @type {Map<string, Record<string, any>[]>} */
@@ -192,7 +213,7 @@ class Converter {
     this.cover = null;
     /** @type {{backdrop?: string, costumes?: string[]} | null} */
     this.loading = null;
-    /** @type {{idleSound: string, chargeSound: string, sequence?: Record<string, number>} | null} */
+    /** @type {{idleSound?: string, chargeSound?: string, sequence?: Record<string, number>} | null} */
     this.poseRecognition = null;
     /** @type {string | null} */
     this.currentScene = null;
@@ -265,6 +286,15 @@ class Converter {
     return true;
   }
 
+  /** @param {string} id @param {string} label @param {Dsl32Command} command */
+  validateLiteralId(id, label, command) {
+    if (id.length === 0 || dangerousIdentifiers.has(id)) {
+      this.error('K4-CONVERT-ID-INVALID', `${label} must be a non-empty safe string.`, command);
+      return false;
+    }
+    return true;
+  }
+
   /** @param {Map<string, any>} collection @param {string} id @param {string} label @param {Dsl32Command} command */
   rejectDuplicate(collection, id, label, command) {
     if (!collection.has(id)) return false;
@@ -304,7 +334,7 @@ class Converter {
     }
     const id = command.value.slice(0, separator).trim();
     const address = command.value.slice(separator + 1).trim();
-    if (!this.validateIdentifier(id, 'Asset ID', command)) return;
+    if (!this.validateLiteralId(id, 'Asset ID', command)) return;
     if (this.rejectDuplicate(this.assets, id, 'Asset', command)) return;
     const asset = this.parseAssetAddress(id, address, command);
     if (asset) this.assets.set(id, asset);
@@ -371,7 +401,7 @@ class Converter {
     }
     const [actor, costume] = parts;
     if (!this.validateIdentifier(actor, 'Actor ID', command)) return;
-    if (!this.validateIdentifier(costume, 'Costume asset ID', command)) return;
+    if (!this.validateLiteralId(costume, 'Costume asset ID', command)) return;
     if (this.rejectDuplicate(this.actors, actor, 'Actor', command)) return;
     this.actors.set(actor, costume);
     this.addReference('asset', costume, command, {expectedKind: 'costume', actor});
@@ -491,17 +521,7 @@ class Converter {
     }
     if (!valid) return;
 
-    const differsFromDefaults = confidenceThreshold !== 0.5 || poseCharge !== 10 || poseIdle !== 0;
-    if (!this.poseRecognition) {
-      if (differsFromDefaults) {
-        this.error(
-          'K4-CONVERT-POSE-CONFIG',
-          'Custom pose recognition values require setPoseRecognitionSound with both sounds so DSL 4.0 can carry sequence configuration.',
-          this.variableCommands.get(configuredNames[0]) ?? null,
-        );
-      }
-      return;
-    }
+    this.poseRecognition ??= {};
 
     /** @type {Record<string, number>} */
     const sequence = {};
@@ -554,10 +574,10 @@ class Converter {
   /** @param {Dsl32Command} command */
   parsePoseRecognition(command) {
     const ids = splitList(command.value);
-    if (ids.length !== 2 || ids.some((id) => !id)) {
+    if (ids.length < 1 || ids.length > 2 || ids.some((id) => !id)) {
       this.error(
         'K4-CONVERT-POSE-SOUND-001',
-        'DSL 4.0 requires both idle and charge sounds; setPoseRecognitionSound must contain exactly two asset IDs.',
+        'setPoseRecognitionSound must contain one idle sound and an optional charge sound.',
         command,
       );
       return;
@@ -570,7 +590,10 @@ class Converter {
       );
       return;
     }
-    this.poseRecognition = {idleSound: ids[0], chargeSound: ids[1]};
+    this.poseRecognition = {
+      idleSound: ids[0],
+      ...(ids[1] ? {chargeSound: ids[1]} : {}),
+    };
     for (const id of ids) this.addReference('asset', id, command, {expectedKind: 'sound'});
   }
 
@@ -595,15 +618,22 @@ class Converter {
     if (!font) {
       this.error('K4-CONVERT-STYLE-FONT', 'SVG Text style font must not be empty.', command);
     }
-    if (!['up', 'down', 'left', 'right'].includes(direction)) {
+    if (!bubbleDirections.has(direction)) {
       this.error(
         'K4-CONVERT-STYLE-DIRECTION',
-        `DSL 4.0 only supports up, down, left, or right text direction; received ${direction}.`,
+        `Unsupported Bubble direction: ${direction}.`,
         command,
       );
     }
     if (size === null || !font) return;
-    this.textStyles.set(id, {background, color, font, size, align, direction});
+    this.textStyleBubbleDirections.set(id, direction);
+    this.textStyles.set(id, {
+      background,
+      color,
+      font,
+      size,
+      align,
+    });
   }
 
   /** @param {Dsl32Command} command */
@@ -680,7 +710,7 @@ class Converter {
   /** @param {Dsl32Command} command */
   parseScene(command) {
     const id = command.value.trim();
-    if (!this.validateIdentifier(id, 'Scene ID', command)) {
+    if (!this.validateLiteralId(id, 'Scene ID', command)) {
       this.currentScene = null;
       return;
     }
@@ -715,14 +745,51 @@ class Converter {
       ? this.poseModels[sourceUrl]
       : undefined;
     if (!replacement) {
-      this.error(
-        'K4-CONVERT-POSE-MODEL',
-        `TMPoseURL cannot remain remote in DSL 4.0. Add an exact replacement for ${sourceUrl || '(empty)'} to --pose-models.`,
-        command,
-      );
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(sourceUrl);
+      } catch {
+        this.error(
+          'K4-CONVERT-POSE-MODEL',
+          `TMPoseURL must be an absolute HTTPS URL or have an exact --pose-models replacement: ${sourceUrl || '(empty)'}`,
+          command,
+        );
+        return;
+      }
+      if (
+        parsedUrl.protocol !== 'https:' ||
+        !parsedUrl.hostname ||
+        parsedUrl.username ||
+        parsedUrl.password ||
+        parsedUrl.hash
+      ) {
+        this.error(
+          'K4-CONVERT-POSE-MODEL',
+          `TMPoseURL must be an absolute HTTPS URL without credentials or fragment, or have an exact --pose-models replacement: ${sourceUrl}`,
+          command,
+        );
+        return;
+      }
+      const normalizedUrl = sourceUrl.endsWith('/') ? sourceUrl : `${sourceUrl}/`;
+      let assetId = this.remotePoseModels.get(normalizedUrl);
+      if (!assetId) {
+        do {
+          assetId = `PoseModel${this.nextRemotePoseModelId}`;
+          this.nextRemotePoseModelId += 1;
+        } while (this.assets.has(assetId));
+        this.assets.set(assetId, {
+          kind: 'poseModel',
+          delivery: 'remote',
+          source: {url: normalizedUrl},
+          loading: 'lazy',
+          command,
+        });
+        this.remotePoseModels.set(normalizedUrl, assetId);
+      }
+      this.scenePoseModels.set(this.currentScene, assetId);
       return;
     }
-    if (!this.validateIdentifier(replacement.id, 'Pose model asset ID', command)) return;
+    if (!this.validateLiteralId(replacement.id, 'Pose model asset ID', command)) return;
     if (!this.validatePoseModelFile(replacement.file, command)) return;
     if (replacement.loading !== undefined && !['eager', 'lazy'].includes(replacement.loading)) {
       this.error(
@@ -736,6 +803,7 @@ class Converter {
     if (existing) {
       if (
         existing.kind !== 'poseModel' ||
+        !('file' in existing) ||
         existing.file !== replacement.file ||
         (existing.loading ?? 'eager') !== (replacement.loading ?? 'eager')
       ) {
@@ -839,13 +907,22 @@ class Converter {
         );
         return null;
       }
-      this.warning(
-        'K4-CONVERT-TRANSITION-DURATION',
-        'DSL 3.1/3.2 transition has no duration argument; the DSL 4.0 transition duration is set to 0 seconds.',
-        command,
-      );
       this.validateIdentifier(parts[1], 'Transition effect', command);
-      return {transition: {effect: parts[1], seconds: 0}};
+      const legacyDurations = {fadeOut: 1, fadeUp: 1, fadeToWhite: 1, fadeFromWhite: 1, reset: 0};
+      if (!Object.hasOwn(legacyDurations, parts[1])) {
+        this.error(
+          'K4-CONVERT-TRANSITION-UNSUPPORTED',
+          `Unsupported DSL 3.1/3.2 transition effect: ${parts[1]}.`,
+          command,
+        );
+        return null;
+      }
+      return {
+        transition: {
+          effect: parts[1],
+          seconds: legacyDurations[/** @type {keyof typeof legacyDurations} */ (parts[1])],
+        },
+      };
     }
     if (actionName === 'keyInputToChangeScene' || actionName === 'touchInputToChangeScene') {
       if (parts.length !== 3) {
@@ -941,6 +1018,9 @@ class Converter {
     }
     if (actionName === 'say' || actionName === 'think') {
       if (parts.length === 3) {
+        if (parts[2] === '') {
+          return {[key]: {text: '', seconds: 0}};
+        }
         this.error(
           'K4-CONVERT-PERSISTENT-SPEECH',
           `A DSL 3.1/3.2 ${actionName} action without seconds is persistent and has no equivalent DSL 4.0 core action.`,
@@ -949,12 +1029,28 @@ class Converter {
         return null;
       }
       if (parts.length === 5) {
-        this.error(
-          'K4-CONVERT-SPEECH-STYLE',
-          `Styled ${actionName} is not part of the DSL 4.0 core schema and requires manual migration.`,
-          command,
-        );
-        return null;
+        if (!parts[4]) {
+          this.error('K4-CONVERT-ACTION-ARGS', `${actionName} style must not be empty.`, command);
+          return null;
+        }
+        const seconds = this.parseNumber(parts[3], `${actionName} seconds`, command, {
+          minimum: 0,
+        });
+        if (seconds === null) return null;
+        const textStyle = parts[4];
+        this.addReference('style', textStyle, command);
+        const bubbleStyle = `legacy-${actionName}-${textStyle}`;
+        this.bubbleStyles.set(bubbleStyle, {
+          textStyle,
+          kind: /** @type {'say' | 'think'} */ (actionName),
+        });
+        return {
+          [key]: {
+            text: parts[2].replaceAll('\\n', '\n'),
+            seconds,
+            styles: [bubbleStyle],
+          },
+        };
       }
       if (parts.length !== 4) {
         this.error('K4-CONVERT-ACTION-ARGS', `${actionName} requires TEXT:SECONDS.`, command);
@@ -964,13 +1060,86 @@ class Converter {
       return seconds === null ? null : {[key]: {text: parts[2].replaceAll('\\n', '\n'), seconds}};
     }
     if (actionName === 'setSkin') {
-      if (parts.length !== 3 || !parts[2]) {
-        this.error('K4-CONVERT-ACTION-ARGS', 'setSkin requires one costume asset ID.', command);
+      if ((parts.length !== 3 && parts.length !== 4) || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setSkin requires SKIN with an optional positive SCALE.',
+          command,
+        );
         return null;
       }
+      const scale =
+        parts.length === 4
+          ? this.parseNumber(parts[3], 'setSkin scale', command, {exclusiveMinimum: 0})
+          : null;
+      if (parts.length === 4 && scale === null) return null;
       this.addReference('asset', parts[2], command, {expectedKind: 'costume', actor: target});
       this.addCostumeUse(parts[2], target);
-      return {[key]: parts[2]};
+      return {[key]: scale === null ? parts[2] : {skin: parts[2], scale}};
+    }
+    if (actionName === 'hide') {
+      if (parts.length !== 2) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'hide does not accept arguments.', command);
+        return null;
+      }
+      return {[key]: {}};
+    }
+    if (actionName === 'setLayer') {
+      if (parts.length !== 3 || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setLayer requires front, back, or a finite relative layer count.',
+          command,
+        );
+        return null;
+      }
+      if (parts[2] === 'front' || parts[2] === 'back') return {[key]: parts[2]};
+      const layer = this.parseNumber(parts[2], 'setLayer count', command);
+      return layer === null ? null : {[key]: layer};
+    }
+    if (actionName === 'loop') {
+      if (parts.length !== 4) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'loop requires SKINS:DURATIONS.', command);
+        return null;
+      }
+      const skins = splitList(parts[2]);
+      const rawDurations = splitList(parts[3]);
+      if (
+        skins.length === 0 ||
+        skins.length !== rawDurations.length ||
+        skins.some((skin) => !skin)
+      ) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop skin and duration lists must have the same non-zero length.',
+          command,
+        );
+        return null;
+      }
+      const durations = rawDurations.map((raw) =>
+        this.parseNumber(raw, 'loop duration', command, {minimum: 0}),
+      );
+      if (durations.some((duration) => duration === null)) return null;
+      if (!durations.some((duration) => /** @type {number} */ (duration) > 0)) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop requires at least one positive duration.',
+          command,
+        );
+        return null;
+      }
+      for (const skin of skins) {
+        this.addReference('asset', skin, command, {expectedKind: 'costume', actor: target});
+        this.addCostumeUse(skin, target);
+      }
+      return {
+        [key]: {
+          steps: skins.map((skin, index) => ({
+            skin,
+            seconds: /** @type {number} */ (durations[index]),
+          })),
+        },
+      };
     }
     if (actionName === 'setText') {
       if (parts.length !== 4 || !parts[3]) {
@@ -1153,11 +1322,20 @@ class Converter {
     const rendered = new Map();
     for (const [id, asset] of this.assets) {
       if (asset.kind === 'poseModel') {
-        rendered.set(id, {
-          kind: 'poseModel',
-          file: asset.file,
-          ...(asset.loading ? {loading: asset.loading} : {}),
-        });
+        if ('delivery' in asset && asset.delivery === 'remote') {
+          rendered.set(id, {
+            kind: 'poseModel',
+            delivery: 'remote',
+            source: asset.source,
+            loading: asset.loading,
+          });
+        } else if ('file' in asset) {
+          rendered.set(id, {
+            kind: 'poseModel',
+            file: asset.file,
+            ...(asset.loading ? {loading: asset.loading} : {}),
+          });
+        }
       } else if (asset.kind === 'backdrop') {
         rendered.set(id, asset.name === id ? 'backdrop' : {kind: 'backdrop', name: asset.name});
       } else if (asset.kind === 'sound') {
@@ -1200,16 +1378,49 @@ class Converter {
 
   buildDocument() {
     /** @type {Record<string, any>} */
-    const document = {kamishibai: '4.0'};
+    const document = {
+      kamishibai: '4.0',
+      controls: {
+        keymaps: {
+          production: {Space: 'rehearsal.skipPose'},
+          rehearsal: {
+            Space: 'rehearsal.skipPose',
+            ArrowRight: 'rehearsal.skipAction',
+            ArrowDown: 'rehearsal.skipScene',
+          },
+        },
+      },
+    };
     if (this.assets.size > 0) document.assets = this.renderAssets();
     if (this.actors.size > 0) document.actors = ownObject(this.actors);
     if (this.cover) document.cover = this.cover;
     if (this.textStyles.size > 0) document.textStyles = ownObject(this.textStyles);
+    if (this.bubbleStyles.size > 0) {
+      document.bubbleStyles = ownObject(
+        [...this.bubbleStyles].map(([id, definition]) => {
+          return [
+            id,
+            {
+              textStyle: definition.textStyle,
+              ...(this.textStyleBubbleDirections.has(definition.textStyle)
+                ? {placement: this.textStyleBubbleDirections.get(definition.textStyle)}
+                : {}),
+              visualStyle: definition.kind === 'think' ? 'THINKING' : 'NORMAL',
+            },
+          ];
+        }),
+      );
+    }
     if (this.variables.size > 0) document.variables = ownObject(this.variables);
     if (this.loading?.backdrop && this.loading.costumes) {
       document.loading = {backdrop: this.loading.backdrop, costumes: this.loading.costumes};
     }
-    if (this.poseRecognition) document.poseRecognition = this.poseRecognition;
+    if (this.poseRecognition || this.scenesUsingPose.size > 0) {
+      document.poseRecognition = {
+        ...(this.poseRecognition ?? {}),
+        ...(this.scenesUsingPose.size > 0 ? {navigation: {allowSkip: true}} : {}),
+      };
+    }
     if (this.branches.size > 0) document.branches = ownObject(this.branches);
     document.scenes = this.renderScenes();
     return document;
@@ -1294,7 +1505,7 @@ class Converter {
       if (!this.scenePoseModels.has(sceneId)) {
         this.error(
           'K4-CONVERT-POSE-MODEL',
-          `Scene ${sceneId} uses Actor.pose but has no convertible TMPoseURL. Add TMPoseURL and an exact --pose-models replacement.`,
+          `Scene ${sceneId} uses Actor.pose but has no convertible TMPoseURL. Add a TMPoseURL or an exact --pose-models replacement.`,
           command,
         );
       }

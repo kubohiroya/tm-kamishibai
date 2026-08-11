@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {strToU8, zipSync} from 'fflate';
 
 import {
+  dsl4BrowserRuntimeComponentDefaults,
   dsl4BrowserRuntimeComponentMaximums,
   Dsl4BrowserRuntimeComponentError,
   loadDsl4BrowserRuntimeComponent,
@@ -97,6 +98,11 @@ function loadOptions(projectBytes, extra = {}) {
   };
 }
 
+test('keeps project.json limits compatible with a 128 MiB embedded asset bundle', () => {
+  assert.equal(dsl4BrowserRuntimeComponentDefaults.maxProjectJsonBytes, 192 * 1024 * 1024);
+  assert.equal(dsl4BrowserRuntimeComponentMaximums.maxProjectJsonBytes, 1024 * 1024 * 1024);
+});
+
 test('loads one immutable base runtime component without accepting a generation source', async () => {
   const project = await packagedProject();
   const bytes = sb3(project, {'asset.svg': strToU8('<svg/>')});
@@ -120,6 +126,27 @@ test('loads one immutable base runtime component without accepting a generation 
   assert.equal(parseCount, 1);
   assert.equal(Object.isFrozen(loaded), true);
   assert.equal(Object.hasOwn(loaded, 'generation'), false);
+  assert.equal(loaded.standardRuntimeMarkerRequired, false);
+});
+
+test('marks the packaged Standard extension without authorizing its embedded code', async () => {
+  const project = structuredClone(await packagedProject());
+  project.extensions = ['kubohiroyakamishibai4'];
+  project.extensionURLs = {
+    kubohiroyakamishibai4: 'data:text/javascript;base64,ZmFrZQ==',
+  };
+  const loaded = await loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project)));
+  assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+  assert.equal(loaded.standardRuntimeMarkerRequired, true);
+  assert.equal(JSON.stringify(loaded).includes('ZmFrZQ=='), false);
+
+  project.extensionURLs.kubohiroyakamishibai4 = 'https://example.com/runtime.js';
+  await assert.rejects(
+    loadDsl4BrowserRuntimeComponent(loadOptions(sb3(project))),
+    (error) =>
+      error instanceof Dsl4BrowserRuntimeComponentError &&
+      error.code === 'K4-PREVIEW-PROJECT-EXTENSION-001',
+  );
 });
 
 test('enforces compressed, entry-count, and project.json expansion limits before loading', async () => {

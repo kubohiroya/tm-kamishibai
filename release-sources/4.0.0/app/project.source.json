@@ -3,12 +3,43 @@
     {
       "isStage": true,
       "name": "Stage",
-      "variables": {},
+      "variables": {
+        "dsl4-pose-confidence": [
+          "ポーズ認識",
+          0
+        ],
+        "dsl4-pose-progress": [
+          "チャージ",
+          0
+        ]
+      },
       "lists": {},
-      "broadcasts": {},
+      "broadcasts": {
+        "closeTitleMessage": "closeTitle"
+      },
       "blocks": {
+        "titleFlag": {
+          "opcode": "event_whenflagclicked",
+          "next": "titleFlagShow",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 0
+        },
+        "titleFlagShow": {
+          "opcode": "kubohiroyakamishibai4_showTitle",
+          "next": null,
+          "parent": "titleFlag",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
         "titleSetVersion": {
-          "opcode": "kubohiroyakamishibairuntime4_setTextValue",
+          "opcode": "kubohiroyakamishibai4_setTextValue",
           "next": null,
           "parent": null,
           "inputs": {
@@ -30,28 +61,100 @@
           "fields": {},
           "shadow": false,
           "topLevel": true,
-          "x": 0,
+          "x": 240,
           "y": 0
+        },
+        "titleStageClick": {
+          "opcode": "event_whenstageclicked",
+          "next": "titleStageClickClose",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 120
+        },
+        "titleStageClickClose": {
+          "opcode": "event_broadcast",
+          "next": null,
+          "parent": "titleStageClick",
+          "inputs": {
+            "BROADCAST_INPUT": [
+              1,
+              [
+                11,
+                "closeTitle",
+                "closeTitleMessage"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "titleCloseHat": {
+          "opcode": "event_whenbroadcastreceived",
+          "next": "titleCloseStart",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "BROADCAST_OPTION": [
+              "closeTitle",
+              "closeTitleMessage"
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 0,
+          "y": 240
+        },
+        "titleCloseStart": {
+          "opcode": "kubohiroyakamishibai4_closeTitle",
+          "next": null,
+          "parent": "titleCloseHat",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
         }
       },
       "comments": {},
       "currentCostume": 0,
       "costumes": [
         {
-          "assetId": "73cf5ffc7974bb88be15795241beac25",
+          "assetId": "812248d06815a5467b8c6966cb2e18bf",
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "73cf5ffc7974bb88be15795241beac25.svg",
+          "md5ext": "812248d06815a5467b8c6966cb2e18bf.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "51276950e8742c503b80c8cafe055190",
+          "assetId": "3714ae8d8ff44f82a232cd489c412369",
           "name": "TitleRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "51276950e8742c503b80c8cafe055190.svg",
+          "md5ext": "3714ae8d8ff44f82a232cd489c412369.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        },
+        {
+          "assetId": "8abd76def4a84e4516163f956cdcfc83",
+          "name": "Menu",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "8abd76def4a84e4516163f956cdcfc83.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        },
+        {
+          "assetId": "25e75263647cc980ff37773a95d9dad1",
+          "name": "MenuRuntime",
+          "bitmapResolution": 1,
+          "dataFormat": "svg",
+          "md5ext": "25e75263647cc980ff37773a95d9dad1.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         }
@@ -63,86 +166,90 @@
       "videoTransparency": 50,
       "videoState": "on",
       "textToSpeechLanguage": null
-    },
-    {
-      "isStage": false,
-      "name": "officialWebsiteButton",
-      "variables": {},
-      "lists": {},
-      "broadcasts": {},
-      "blocks": {},
-      "comments": {},
-      "currentCostume": 0,
-      "costumes": [
-        {
-          "assetId": "d6f7f3387ffb150b0f5bf4f7e3609679",
-          "name": "official-website-button",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "md5ext": "d6f7f3387ffb150b0f5bf4f7e3609679.svg",
-          "rotationCenterX": 80,
-          "rotationCenterY": 32
-        },
-        {
-          "assetId": "09a2cc36ec9762e01fb072255931a046",
-          "name": "official-website-button-runtime",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "md5ext": "09a2cc36ec9762e01fb072255931a046.svg",
-          "rotationCenterX": 32,
-          "rotationCenterY": 32
-        }
-      ],
-      "sounds": [],
-      "volume": 100,
-      "layerOrder": 1,
-      "visible": false,
-      "x": 0,
-      "y": 0,
-      "size": 100,
-      "direction": 90,
-      "draggable": false,
-      "rotationStyle": "all around"
     }
   ],
-  "monitors": [],
+  "monitors": [
+    {
+      "id": "dsl4-pose-confidence",
+      "mode": "slider",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "ポーズ認識"
+      },
+      "spriteName": null,
+      "value": 0,
+      "width": 0,
+      "height": 0,
+      "x": 0,
+      "y": 0,
+      "visible": false,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    },
+    {
+      "id": "dsl4-pose-progress",
+      "mode": "slider",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "チャージ"
+      },
+      "spriteName": null,
+      "value": 0,
+      "width": 0,
+      "height": 0,
+      "x": 343,
+      "y": 0,
+      "visible": false,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    }
+  ],
   "extensions": [
-    "kubohiroyakamishibairuntime4"
+    "kubohiroyakamishibai4"
   ],
   "extensionURLs": {
-    "kubohiroyakamishibairuntime4": "embedded-extension:extensions/kubohiroyakamishibairuntime4.js"
+    "kubohiroyakamishibai4": "embedded-extension:extensions/kubohiroyakamishibai4.js"
   },
   "extensionStorage": {
-    "kubohiroyakamishibairuntime4": {
-      "source": {
-        "formatVersion": 1,
-        "mode": "embedded",
-        "sourceId": "main",
-        "displayName": "story.kamishibai.yaml",
-        "mediaType": "application/yaml",
-        "encoding": "utf-8",
-        "byteLength": 123,
-        "integrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
-        "text": "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 0\n"
-      },
-      "artifact": {
-        "formatVersion": 1,
-        "sourceIntegrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
-        "controlProfile": "production",
-        "resolvedKeymap": {
-          "Space": "navigation.nextAction"
-        },
-        "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
-        "historyNavigationEnabled": false
-      },
-      "assets": {
-        "formatVersion": 1,
-        "manifest": {
-          "formatVersion": 1,
-          "assets": []
-        },
-        "files": [],
-        "integrity": "sha256-R3aRODkmOs97zX1b31v33yudY+C5gYxKiryx/XRGmic="
+    "kubohiroyakamishibai4": {
+      "components": {
+        "kubohiroyakamishibairuntime4": {
+          "source": {
+            "formatVersion": 1,
+            "mode": "embedded",
+            "sourceId": "main",
+            "displayName": "story.kamishibai.yaml",
+            "mediaType": "application/yaml",
+            "encoding": "utf-8",
+            "byteLength": 123,
+            "integrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+            "text": "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening:\n    - wait: 0\n"
+          },
+          "artifact": {
+            "formatVersion": 1,
+            "sourceIntegrity": "sha256-TUwSgPWh/Wq30vIpSRCbXhKSyEPqntB/oqhnNTb7DsQ=",
+            "controlProfile": "production",
+            "resolvedKeymap": {
+              "Space": "navigation.nextAction"
+            },
+            "resolvedKeymapIntegrity": "sha256-gAucwg58IYU8GVvUd1hV5XTOk50dlNMtn4FIf/GS6/Y=",
+            "historyNavigationEnabled": false
+          },
+          "application": {
+            "mode": "menu"
+          },
+          "assets": {
+            "formatVersion": 1,
+            "manifest": {
+              "formatVersion": 1,
+              "assets": []
+            },
+            "files": [],
+            "integrity": "sha256-R3aRODkmOs97zX1b31v33yudY+C5gYxKiryx/XRGmic="
+          }
+        }
       }
     }
   },

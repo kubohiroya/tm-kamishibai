@@ -1,4 +1,5 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
+import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -6,6 +7,8 @@ import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-star
 import {deepFreeze} from '../story-document.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
+import {createDsl4BubbleAdvanceIndicatorPresenter} from './bubble-advance-indicator.js';
+import {createDsl4BubblePlatform} from './bubble-platform.js';
 import {createDsl4CameraPreviewControls} from './camera-preview-controls.js';
 import {createDsl4MediaActionPort} from './media-action-port.js';
 import {createDsl4PlatformAssetSession} from './platform-asset-session.js';
@@ -13,6 +16,7 @@ import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
+import {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 
 /**
  * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
@@ -27,7 +31,11 @@ const hostPortMethods = new Set([
   'touchInputToChangeScene',
 ]);
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
+const terminalRuntimeEvents = new Set(['runtime.finish', 'runtime.fail', 'runtime.stop']);
+const terminalRuntimeStatuses = new Set(['finished', 'failed', 'stopped']);
 const defaultCacheLeaseHeartbeatMs = 30_000;
+const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
+let fallbackSessionIdCounter = 0;
 
 /** @param {() => void} callback @param {number} milliseconds */
 function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
@@ -39,6 +47,80 @@ function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function createSessionBackingId() {
+  const cryptoObject = globalThis.crypto;
+  if (typeof cryptoObject?.randomUUID === 'function') return cryptoObject.randomUUID();
+  if (typeof cryptoObject?.getRandomValues === 'function') {
+    const bytes = cryptoObject.getRandomValues(new Uint8Array(16));
+    return `dsl4-${[...bytes].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+  }
+  fallbackSessionIdCounter += 1;
+  return `dsl4-${Date.now().toString(36)}-${fallbackSessionIdCounter.toString(36)}`;
+}
+
+/**
+ * @param {Record<string, any>} options
+ * @param {Readonly<Record<string, any>>} featureFlags
+ * @param {'embedded-base64' | 'binary-entry'} assetBundleFormat
+ */
+export function resolveDsl4SessionBackingConfig(options, featureFlags, assetBundleFormat) {
+  if (options.binaryBundleStoreOptions !== undefined) {
+    throw new TypeError('binaryBundleStoreOptions was replaced by sessionBacking.storeOptions');
+  }
+  if (options.sessionBacking !== undefined && !isRecord(options.sessionBacking)) {
+    throw new TypeError('sessionBacking must be an object');
+  }
+  if (
+    options.onSessionBackingWarning !== undefined &&
+    typeof options.onSessionBackingWarning !== 'function'
+  ) {
+    throw new TypeError('onSessionBackingWarning must be a function');
+  }
+  if (
+    options.onSessionBackingFatalError !== undefined &&
+    typeof options.onSessionBackingFatalError !== 'function'
+  ) {
+    throw new TypeError('onSessionBackingFatalError must be a function');
+  }
+  if (assetBundleFormat !== 'binary-entry') {
+    if (
+      options.sessionBacking !== undefined ||
+      options.onSessionBackingWarning !== undefined ||
+      options.onSessionBackingFatalError !== undefined
+    ) {
+      throw new TypeError('session backing options require assetBundleFormat binary-entry');
+    }
+    return null;
+  }
+  const input = isRecord(options.sessionBacking) ? options.sessionBacking : {};
+  const unknown = Object.keys(input).filter(
+    (key) => !['policy', 'sessionId', 'storeOptions'].includes(key),
+  );
+  if (unknown.length > 0) {
+    throw new TypeError(`Unknown sessionBacking option: ${unknown.sort().join(', ')}`);
+  }
+  const policy = input.policy ?? (featureFlags.dsl4SessionBinaryBacking ? 'prefer' : 'disabled');
+  if (typeof policy !== 'string' || !sessionBackingPolicies.has(policy)) {
+    throw new TypeError('sessionBacking.policy must be prefer, required, or disabled');
+  }
+  if (!featureFlags.dsl4SessionBinaryBacking && policy !== 'disabled') {
+    throw new TypeError(
+      'sessionBacking.policy prefer or required requires dsl4SessionBinaryBacking',
+    );
+  }
+  if (input.sessionId !== undefined && (typeof input.sessionId !== 'string' || !input.sessionId)) {
+    throw new TypeError('sessionBacking.sessionId must be a non-empty string');
+  }
+  if (input.storeOptions !== undefined && !isRecord(input.storeOptions)) {
+    throw new TypeError('sessionBacking.storeOptions must be an object');
+  }
+  return Object.freeze({
+    policy,
+    sessionId: input.sessionId ?? createSessionBackingId(),
+    storeOptions: Object.freeze({...input.storeOptions}),
+  });
 }
 
 /** @param {string} code @param {string} message */
@@ -221,6 +303,20 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
   }
 }
 
+/** @param {Readonly<Record<string, unknown>>} storyDocument @param {boolean} enabled */
+function validateBroadcastMessageAndWaitFeature(storyDocument, enabled) {
+  const scenes = Array.isArray(storyDocument.scenes) ? storyDocument.scenes : [];
+  const action = scenes
+    .flatMap((scene) => (isRecord(scene) && Array.isArray(scene.actions) ? scene.actions : []))
+    .find((candidate) => isRecord(candidate) && candidate.command === 'broadcastMessageAndWait');
+  if (action && !enabled) {
+    throw hostError(
+      'K4-HOST-BROADCAST-FLAG-001',
+      'dsl4BroadcastMessageAndWait must be enabled for broadcastMessageAndWait actions',
+    );
+  }
+}
+
 /** @param {Readonly<Record<string, unknown>>} storyDocument */
 function resolvePoseFeedbackMode(storyDocument) {
   const poseRecognition = isRecord(storyDocument.poseRecognition)
@@ -238,21 +334,31 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
  * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
+ * @param {(backing: Record<string, any> | null) => void} publishBinarySessionBacking
  * @param {(observer: ((event: Readonly<Record<string, unknown>>) => void) | null) => void} publishRuntimeLifecycleObserver
  * @param {boolean} poseFeedbackEnabled
  * @param {boolean} posePreviewMirroringEnabled
  * @param {boolean} cameraPreviewControlsEnabled
  * @param {boolean} speechAdvanceTypewriterEnabled
+ * @param {boolean} bubbleAdvanceIndicatorEnabled
+ * @param {boolean} turboWarpBubbleEnabled
+ * @param {(port: Readonly<{prepareMenu: () => Promise<boolean>, showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
+ * @param {(port: Readonly<{getState: () => Readonly<Record<string, number>>}>) => void} [publishRuntimeDiagnostics]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
   runtimeComponent,
   publishVerifiedRemoteCache,
+  publishBinarySessionBacking,
   publishRuntimeLifecycleObserver,
   poseFeedbackEnabled,
   posePreviewMirroringEnabled,
   cameraPreviewControlsEnabled,
   speechAdvanceTypewriterEnabled,
+  bubbleAdvanceIndicatorEnabled,
+  turboWarpBubbleEnabled,
+  publishApplicationPort = () => {},
+  publishRuntimeDiagnostics = () => {},
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -262,8 +368,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let assetSession = null;
   /** @type {ReturnType<typeof createDsl4TurboWarpActorPlatform> | null} */
   let actorPlatform = null;
+  /** @type {ReturnType<typeof createDsl4BubbleAdvanceIndicatorPresenter> | null} */
+  let bubbleAdvanceIndicatorPresenter = null;
+  /** @type {ReturnType<typeof createDsl4MediaActionPort> | null} */
+  let mediaPort = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
+  /** @type {ReturnType<typeof createDsl4BubblePlatform> | null} */
+  let bubblePlatform = null;
   /** @type {ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null} */
   let scratchPoseFeedbackAdapter = null;
   /** @type {ReturnType<typeof createDsl4PoseFeedbackPresenter> | null} */
@@ -272,9 +384,29 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let runtimeExpressionComposition = null;
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
   let cameraPreviewControls = null;
+  /** @type {ReturnType<typeof createDsl4TurboWarpBroadcastActionPort> | null} */
+  let broadcastActionPort = null;
   const inputArbitration = createDsl4InputArbitration();
+  const broadcastMessageAndWaitEnabled = resolveDsl4FeatureFlags(
+    options.featureFlags,
+  ).dsl4BroadcastMessageAndWait;
+  validateBroadcastMessageAndWaitFeature(component.storyDocument, broadcastMessageAndWaitEnabled);
+  const standaloneAdvanceIndicatorEnabled =
+    bubbleAdvanceIndicatorEnabled && !turboWarpBubbleEnabled;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
   let hostPort = Object.freeze({});
+  const bubbleCompositionProxy = turboWarpBubbleEnabled
+    ? Object.freeze({
+        /** @param {unknown} input */
+        show(input) {
+          if (!bubblePlatform) throw new TypeError('Bubble platform is not ready');
+          return bubblePlatform.composition.show(input);
+        },
+        releaseAll() {
+          return bubblePlatform?.releaseAll();
+        },
+      })
+    : null;
   const preview = isRecord(component.storyDocument.poseRecognition)
     ? /** @type {Record<string, any>} */ (component.storyDocument.poseRecognition).preview
     : null;
@@ -308,8 +440,12 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
+    if (broadcastMessageAndWaitEnabled) {
+      broadcastActionPort = createDsl4TurboWarpBroadcastActionPort({runtime: options.runtime});
+    }
     actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
+      ...(bubbleCompositionProxy === null ? {} : {bubbleComposition: bubbleCompositionProxy}),
       ...(speechAdvanceTypewriterEnabled
         ? {
             speechAdvanceTypewriterEnabled: true,
@@ -368,8 +504,11 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         : undefined;
     assetSession = createDsl4PlatformAssetSession({
       runtimeComponent,
+      runtime: options.runtime,
       tmPoseRuntime: options.tmPoseRuntime,
       setLoading: options.setLoading,
+      ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
       ...(options.loadRemoteAsset === undefined ? {} : {loadRemoteAsset: options.loadRemoteAsset}),
       ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
       ...(options.verifiedRemoteCacheOptions === undefined
@@ -386,9 +525,19 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(options.binaryEntryProvider === undefined
         ? {}
         : {binaryEntryProvider: options.binaryEntryProvider}),
-      ...(options.binaryBundleStoreOptions === undefined
+      ...(options.binarySessionBackingPolicy === undefined
         ? {}
-        : {binaryBundleStoreOptions: options.binaryBundleStoreOptions}),
+        : {binarySessionBackingPolicy: options.binarySessionBackingPolicy}),
+      ...(options.binarySessionId === undefined ? {} : {binarySessionId: options.binarySessionId}),
+      ...(options.sessionBinaryBackingOptions === undefined
+        ? {}
+        : {sessionBinaryBackingOptions: options.sessionBinaryBackingOptions}),
+      ...(options.onBinarySessionBackingWarning === undefined
+        ? {}
+        : {onBinarySessionBackingWarning: options.onBinarySessionBackingWarning}),
+      ...(options.onBinarySessionBackingFatalError === undefined
+        ? {}
+        : {onBinarySessionBackingFatalError: options.onBinarySessionBackingFatalError}),
       ...(options.createTMPoseComposition === undefined
         ? {}
         : {createTMPoseComposition: options.createTMPoseComposition}),
@@ -431,15 +580,42 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
         : {}),
     });
-    const mediaPort = createDsl4MediaActionPort({
+    await assetSession.binaryAssetBacking?.ready;
+    publishBinarySessionBacking(assetSession.binaryAssetBacking);
+    mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
+      setActorScale: actorPlatform.host.setActorScale,
+      ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+      ...(options.onBackgroundActionError === undefined
+        ? {}
+        : {onBackgroundError: options.onBackgroundActionError}),
     });
+    if (standaloneAdvanceIndicatorEnabled) {
+      const activeAssetSession = assetSession;
+      bubbleAdvanceIndicatorPresenter = createDsl4BubbleAdvanceIndicatorPresenter({
+        runtime: options.runtime,
+        getAssetResource: (assetId) => activeAssetSession.getAssetResource(assetId),
+        ...(options.createAdvanceIndicatorImage === undefined
+          ? {}
+          : {createImage: options.createAdvanceIndicatorImage}),
+        ...(options.advanceIndicatorScheduler === undefined
+          ? {}
+          : {scheduler: options.advanceIndicatorScheduler}),
+      });
+    }
     const actorPort = createDsl4ActorActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
+      stopActorLoop: mediaPort.stopActorLoop,
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
+      ...(standaloneAdvanceIndicatorEnabled
+        ? {
+            bubbleAdvanceIndicatorEnabled: true,
+            advanceIndicatorPresenter: bubbleAdvanceIndicatorPresenter,
+          }
+        : {}),
     });
     const asyncInputPort = createDsl4AsyncInputActionPort({
       composition: assetSession.asyncInputComposition,
@@ -454,6 +630,18 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         ? {}
         : {createComposition: options.createSvgTextComposition}),
     });
+    if (turboWarpBubbleEnabled) {
+      bubblePlatform = createDsl4BubblePlatform({
+        runtime: options.runtime,
+        storyDocument: component.storyDocument,
+        assetManager: assetSession.assetManagerComposition,
+        textCapability: createSvgTextCompositionCapability(svgTextPlatform.composition),
+        ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+        ...(options.createBubbleComposition === undefined
+          ? {}
+          : {createComposition: options.createBubbleComposition}),
+      });
+    }
     hostPort = validateHostPort(
       typeof options.createHostPort === 'function'
         ? await options.createHostPort(
@@ -481,12 +669,27 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
 
     const port = /** @type {Record<string, Function>} */ ({});
-    addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
+    addPortMethods(
+      port,
+      mediaPort,
+      ['stage', 'bgm', 'sound', 'setSkin', 'loop'],
+      'media action port',
+    );
+    if (broadcastActionPort) {
+      addPortMethods(
+        port,
+        broadcastActionPort,
+        ['broadcastMessageAndWait'],
+        'TurboWarp broadcast action port',
+      );
+    }
     addPortMethods(
       port,
       actorPort,
       [
         'show',
+        'hide',
+        'setLayer',
         'setTransparency',
         'moveTo',
         'say',
@@ -494,6 +697,35 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ],
       'actor action port',
     );
+    const activeActorPlatform = actorPlatform;
+    const storyActors = isRecord(component.storyDocument.actors)
+      ? component.storyDocument.actors
+      : {};
+    const hideStoryActors = () => {
+      const actors = Object.keys(storyActors).map((actorId) => {
+        const actor = activeActorPlatform.resolveActor(actorId);
+        if (actor === null) {
+          throw hostError(
+            'K4-HOST-ACTOR-RESET-001',
+            `TurboWarp actor is unavailable at the scene boundary: ${actorId}`,
+          );
+        }
+        return {actorId, actor};
+      });
+      for (const {actorId, actor} of actors) {
+        try {
+          activeActorPlatform.host.hideActor(actor);
+        } catch (cause) {
+          const error = hostError(
+            'K4-HOST-ACTOR-RESET-002',
+            `TurboWarp actor could not be hidden at the scene boundary: ${actorId}`,
+          );
+          Object.defineProperty(error, 'cause', {value: cause});
+          throw error;
+        }
+      }
+    };
+    port.hideSceneActors = hideStoryActors;
     port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
@@ -539,6 +771,23 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     Object.freeze(port);
 
     const activeAssetSession = assetSession;
+    const poseModelAssetIds = Object.values(component.storyDocument.assets ?? {})
+      .filter((asset) => isRecord(asset) && asset.kind === 'poseModel')
+      .map((asset) => String(asset.id));
+    publishRuntimeDiagnostics(
+      Object.freeze({
+        getState() {
+          const registeredPoseModelCount = poseModelAssetIds.filter((assetId) =>
+            activeAssetSession.tmposeComposition.isPoseModelRegistered(assetId),
+          ).length;
+          return Object.freeze({
+            registeredPoseModelCount,
+            activePoseModelCount:
+              activeAssetSession.tmposeComposition.getActivePoseModelName() === null ? 0 : 1,
+          });
+        },
+      }),
+    );
     const baseAssetLifecycle = activeAssetSession.lifecycle;
     const previewControls = configuredPreviewControls;
     const controlAssetIds = hasConfiguredPreviewControls
@@ -566,6 +815,29 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       if (errors.length === 1) throw errors[0];
       if (errors.length > 1) throw new AggregateError(errors, message);
     }
+
+    /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+    function setLoadingWithResources(payload, context) {
+      const loading = isRecord(payload.loading) ? payload.loading : null;
+      if (!payload.visible || !loading) return baseAssetLifecycle.setLoading(payload, context);
+      /** @param {unknown} assetId */
+      const resourceUrl = (assetId) => {
+        if (typeof assetId !== 'string') return null;
+        const resource = activeAssetSession.getAssetResource(assetId);
+        return isRecord(resource) && typeof resource.objectUrl === 'string'
+          ? resource.objectUrl
+          : null;
+      };
+      const backdrop = resourceUrl(loading.backdrop);
+      const costumes = Array.isArray(loading.costumes)
+        ? loading.costumes.map(resourceUrl).filter((value) => value !== null)
+        : [];
+      return baseAssetLifecycle.setLoading(
+        Object.freeze({...payload, resources: Object.freeze({backdrop, costumes})}),
+        context,
+      );
+    }
+
     const assetLifecycle = hasConfiguredPreviewControls
       ? Object.freeze({
           /** @param {Record<string, any>} payload @param {Record<string, any>} context */
@@ -605,7 +877,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
           /** @param {Record<string, any>} payload @param {Record<string, any>} context */
           setLoading(payload, context) {
-            return baseAssetLifecycle.setLoading(payload, context);
+            return setLoadingWithResources(payload, context);
           },
           /** @param {Record<string, any>} payload */
           async releaseAssets(payload) {
@@ -625,25 +897,105 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             );
           },
         })
-      : baseAssetLifecycle;
+      : Object.freeze({
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          prepare(payload, context) {
+            return baseAssetLifecycle.prepare(payload, context);
+          },
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          setLoading(payload, context) {
+            return setLoadingWithResources(payload, context);
+          },
+          /** @param {Record<string, any>} payload */
+          releaseAssets(payload) {
+            return baseAssetLifecycle.releaseAssets(payload);
+          },
+          /** @param {Record<string, any>} payload */
+          release(payload) {
+            return baseAssetLifecycle.release(payload);
+          },
+        });
 
-    publishRuntimeLifecycleObserver(
-      hasConfiguredPreviewControls
-        ? (event) => {
-            if (
-              event.type === 'runtime.finish' ||
-              event.type === 'runtime.fail' ||
-              event.type === 'runtime.stop'
-            ) {
-              cameraPreviewControls?.stop();
-              return;
-            }
-            if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
-              cameraPreviewControls?.start();
-            }
+    const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
+    const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
+    async function resetStoryPresentation() {
+      actorPlatform?.finishTransparencyTransitions();
+      hideStoryActors();
+      await assetSession?.assetManagerComposition.stopAllSounds();
+    }
+    publishApplicationPort(
+      Object.freeze({
+        async prepareMenu() {
+          await resetStoryPresentation();
+          if (typeof cover?.bgm === 'string') {
+            await mediaPort?.bgm(
+              {sound: cover.bgm},
+              Object.freeze({signal: new AbortController().signal}),
+            );
           }
-        : null,
+          return true;
+        },
+        async showCover() {
+          if (!cover) return false;
+          const abortController = new AbortController();
+          const coverContext = Object.freeze({signal: abortController.signal});
+          await resetStoryPresentation();
+          if (typeof cover.backdrop === 'string') {
+            await mediaPort?.stage({backdrop: cover.backdrop}, coverContext);
+          }
+          if (typeof cover.bgm === 'string') {
+            await mediaPort?.bgm({sound: cover.bgm}, coverContext);
+          }
+          return true;
+        },
+        ...(storyCameraLifecycle
+          ? {
+              stopStoryCamera() {
+                return storyCameraLifecycle.stop();
+              },
+            }
+          : {}),
+      }),
     );
+
+    /** @param {unknown} error @param {string} phase */
+    function reportStoryCameraFailure(error, phase) {
+      try {
+        void Promise.resolve(
+          options.onBackgroundActionError?.(error, {
+            command: 'camera',
+            code: `K4-STORY-CAMERA-${phase}`,
+          }),
+        ).catch(() => {});
+      } catch {
+        // A background error observer cannot change camera cleanup ownership.
+      }
+    }
+
+    publishRuntimeLifecycleObserver((event) => {
+      if (event.type === 'runtime.start') {
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'START'));
+        return;
+      }
+      if (
+        event.type === 'runtime.finish' ||
+        event.type === 'runtime.fail' ||
+        event.type === 'runtime.stop'
+      ) {
+        mediaPort?.stopAllLoops();
+        cameraPreviewControls?.stop();
+        void storyCameraLifecycle?.stop().catch((error) => reportStoryCameraFailure(error, 'STOP'));
+        return;
+      }
+      if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
+        if (hasConfiguredPreviewControls) cameraPreviewControls?.start();
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'RESUME'));
+      }
+    });
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
@@ -659,12 +1011,16 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => broadcastActionPort?.dispose(),
+            () => mediaPort?.dispose(),
+            () => bubbleAdvanceIndicatorPresenter?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
             () => poseFeedbackPresenter?.dispose(),
             () => cameraPreviewControls?.dispose(),
             () => hostPort.dispose?.(),
             () => runtimeExpressionComposition?.releaseAll(),
+            () => bubblePlatform?.releaseAll(),
             () => svgTextPlatform?.releaseAll(),
             () => inputArbitration.dispose(),
             () => assetSession?.dispose(reason),
@@ -687,12 +1043,16 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => broadcastActionPort?.dispose(),
+      () => mediaPort?.dispose(),
+      () => bubbleAdvanceIndicatorPresenter?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
       () => poseFeedbackPresenter?.dispose(),
       () => cameraPreviewControls?.dispose(),
       () => hostPort.dispose?.(),
       () => runtimeExpressionComposition?.releaseAll(),
+      () => bubblePlatform?.releaseAll(),
       () => svgTextPlatform?.releaseAll(),
       () => inputArbitration.dispose(),
       () => assetSession?.dispose('partial-creation-failed'),
@@ -728,12 +1088,16 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {number} [options.maxAssetBytes]
  * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
  * @param {unknown} [options.binaryEntryProvider]
- * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
+ * @param {Readonly<{policy?: 'prefer' | 'required' | 'disabled', sessionId?: string, storeOptions?: Readonly<Record<string, unknown>>}>} [options.sessionBacking]
+ * @param {(warning: Readonly<Record<string, unknown>>) => unknown} [options.onSessionBackingWarning]
+ * @param {(error: unknown) => unknown} [options.onSessionBackingFatalError]
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {unknown} [options.runtime]
  * @param {unknown} [options.tmPoseRuntime]
  * @param {Function} [options.setLoading]
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  * @param {Function} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
  * @param {number} [options.cacheLeaseHeartbeatMs]
@@ -750,8 +1114,12 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {unknown} [options.actorTouchSource]
  * @param {Function} [options.createRuntimeExpressionComposition]
  * @param {Function} [options.createSvgTextComposition]
+ * @param {Function} [options.createBubbleComposition]
  * @param {unknown} [options.actorScheduler]
+ * @param {(error: unknown) => unknown} [options.onBackgroundActionError]
  * @param {number} [options.actorFrameMilliseconds]
+ * @param {Function} [options.createAdvanceIndicatorImage]
+ * @param {unknown} [options.advanceIndicatorScheduler]
  * @param {Function} [options.poseSchedule]
  * @param {Function} [options.poseNow]
  * @param {Readonly<Record<string, unknown>>} [options.poseFeedbackPresenter] Standard app-shell presenter options
@@ -781,11 +1149,22 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (assetBundleFormat === 'embedded-base64' && options.binaryEntryProvider !== undefined) {
     throw new TypeError('binaryEntryProvider requires assetBundleFormat binary-entry');
   }
+  const sessionBackingConfig = resolveDsl4SessionBackingConfig(
+    options,
+    featureFlags,
+    assetBundleFormat,
+  );
   if (options.createHostPort !== undefined && typeof options.createHostPort !== 'function') {
     throw new TypeError('createHostPort must be a function');
   }
   if (options.evaluateCondition !== undefined && typeof options.evaluateCondition !== 'function') {
     throw new TypeError('evaluateCondition must be a function');
+  }
+  if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (options.setCursor !== undefined && typeof options.setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
   }
   const cacheLeaseHeartbeatMs = options.cacheLeaseHeartbeatMs ?? defaultCacheLeaseHeartbeatMs;
   if (!Number.isSafeInteger(cacheLeaseHeartbeatMs) || cacheLeaseHeartbeatMs < 1) {
@@ -799,8 +1178,20 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
 
   /** @type {Record<string, any> | null} */
   let verifiedRemoteCache = null;
+  /** @type {Record<string, any> | null} */
+  let binarySessionBacking = null;
+  /** @type {unknown} */
+  let sessionBackingFatalError = null;
+  /** @type {null | (() => void)} */
+  let stopForSessionBackingFatal = null;
   /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
   let runtimeLifecycleObserver = null;
+  /** @type {Set<(event: Readonly<Record<string, unknown>>) => void>} */
+  const runtimeEventListeners = new Set();
+  /** @type {Readonly<Record<string, Function>> | null} */
+  let applicationPort = null;
+  /** @type {Readonly<{getState: () => Readonly<Record<string, number>>}> | null} */
+  let runtimeDiagnosticsPort = null;
   if (
     options.createRuntimeExpressionComposition !== undefined &&
     typeof options.createRuntimeExpressionComposition !== 'function'
@@ -815,6 +1206,40 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       'Provide either evaluateCondition or createRuntimeExpressionComposition, not both',
     );
   }
+
+  /** @param {unknown} error */
+  function handleSessionBackingFatalError(error) {
+    sessionBackingFatalError = error;
+    try {
+      stopForSessionBackingFatal?.();
+    } catch {
+      // The backing error remains authoritative if the runtime is already stopped or disposed.
+    }
+    try {
+      options.onSessionBackingFatalError?.(error);
+    } catch {
+      // Diagnostic presentation cannot suppress safe runtime stop.
+    }
+  }
+
+  const runtimeEnvironmentOptions =
+    sessionBackingConfig === null
+      ? options
+      : {
+          ...options,
+          binarySessionBackingPolicy: sessionBackingConfig.policy,
+          binarySessionId: sessionBackingConfig.sessionId,
+          sessionBinaryBackingOptions: sessionBackingConfig.storeOptions,
+          /** @param {Readonly<Record<string, unknown>>} warning */
+          onBinarySessionBackingWarning(warning) {
+            try {
+              options.onSessionBackingWarning?.(warning);
+            } catch {
+              // Warning presentation cannot change the fixed backing mode.
+            }
+          },
+          onBinarySessionBackingFatalError: handleSessionBackingFatalError,
+        };
 
   const startup = await createDsl4RuntimeStartup({
     featureFlags,
@@ -834,6 +1259,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       } catch {
         // Internal UI observers cannot change runtime execution or suppress consumer events.
       }
+      for (const listener of runtimeEventListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Terminal result listeners cannot change runtime execution or consumer events.
+        }
+      }
       options.onEvent?.(event);
     },
     onInputError: options.onInputError,
@@ -843,10 +1275,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {Readonly<Record<string, any>>} */ startupContext,
     ) {
       return createDsl4TurboWarpRuntimeEnvironment(
-        options,
+        runtimeEnvironmentOptions,
         runtimeComponent,
         (/** @type {any} */ cache) => {
           verifiedRemoteCache = cache;
+        },
+        (/** @type {any} */ backing) => {
+          binarySessionBacking = backing;
         },
         (observer) => {
           runtimeLifecycleObserver = observer;
@@ -855,18 +1290,71 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         startupContext.featureFlags.dsl4PosePreviewMirroring,
         startupContext.featureFlags.dsl4CameraPreviewControls,
         startupContext.featureFlags.dsl4SpeechAdvanceTypewriter,
+        startupContext.featureFlags.dsl4BubbleAdvanceIndicator,
+        startupContext.featureFlags.dsl4TurboWarpBubble,
+        (port) => {
+          applicationPort = port;
+        },
+        (port) => {
+          runtimeDiagnosticsPort = port;
+        },
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
+
+  /** @param {{sceneId?: string}} [startOptions] */
+  function startSessionUntilTerminal(startOptions) {
+    let observedStart = false;
+    /** @type {(event: Readonly<Record<string, unknown>>) => void} */
+    let listener = () => {};
+    const terminalEvent = new Promise((resolve) => {
+      listener = (event) => {
+        if (event.type === 'runtime.start') {
+          observedStart = true;
+          return;
+        }
+        if (!observedStart || !terminalRuntimeEvents.has(String(event.type))) return;
+        resolve(session.getState().runtime);
+      };
+      runtimeEventListeners.add(listener);
+    });
+    let initialRun;
+    try {
+      initialRun = Promise.resolve(session.start(startOptions));
+    } catch (error) {
+      runtimeEventListeners.delete(listener);
+      throw error;
+    }
+    return Promise.race([
+      terminalEvent,
+      initialRun.then((result) =>
+        terminalRuntimeStatuses.has(String(result.status)) ? result : terminalEvent,
+      ),
+    ]).finally(() => runtimeEventListeners.delete(listener));
+  }
+
+  stopForSessionBackingFatal = () => {
+    session.stop('session-binary-backing-fatal');
+  };
+  if (sessionBackingFatalError !== null) {
+    try {
+      stopForSessionBackingFatal();
+    } catch {
+      // Startup already owns and reports the authoritative backing failure.
+    }
+  }
   const cachePort = /** @type {Record<string, any> | null} */ (
     /** @type {unknown} */ (verifiedRemoteCache)
+  );
+  const binaryBackingPort = /** @type {Record<string, any> | null} */ (
+    /** @type {unknown} */ (binarySessionBacking)
   );
   /** @type {Promise<void> | null} */
   let disposePromise = null;
@@ -936,9 +1424,18 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           await activateCacheLease();
           if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
           ensureActive();
-          return await session.start(startOptions);
+          const result = await startSessionUntilTerminal(startOptions);
+          // The runtime lifecycle observer already starts terminal camera cleanup. Camera
+          // startup may still be pending (for example, while browser permission settles), so
+          // awaiting that cleanup here would prevent the terminal result and menu from publishing.
+          return result;
         } finally {
-          if (cacheExecutionId === activeCacheExecutionId) await deactivateCacheLease();
+          if (cacheExecutionId === activeCacheExecutionId) {
+            // Releasing an IndexedDB cache lease is maintenance work. A stalled browser
+            // transaction must not keep the terminal story result — and therefore the
+            // application menu — from being published.
+            void deactivateCacheLease();
+          }
         }
       })();
     },
@@ -992,6 +1489,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     getRunPromise() {
       return session.getRunPromise();
     },
+    async showCover() {
+      ensureActive();
+      return applicationPort?.showCover?.() ?? false;
+    },
+    async prepareMenu() {
+      ensureActive();
+      return applicationPort?.prepareMenu?.() ?? false;
+    },
     verifiedRemoteCache:
       cachePort === null
         ? null
@@ -1007,6 +1512,26 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
             deleteStoryCache: cachePort.deleteStoryCache,
             getHeartbeatError() {
               return cacheLeaseError;
+            },
+          }),
+    diagnostics: Object.freeze({
+      getState() {
+        const port =
+          /** @type {Readonly<{getState: () => Readonly<Record<string, number>>}> | null} */ (
+            runtimeDiagnosticsPort
+          );
+        return (
+          port?.getState() ?? Object.freeze({registeredPoseModelCount: 0, activePoseModelCount: 0})
+        );
+      },
+    }),
+    sessionBinaryBacking:
+      binaryBackingPort === null
+        ? null
+        : Object.freeze({
+            getState: binaryBackingPort.getState,
+            getFatalError() {
+              return sessionBackingFatalError;
             },
           }),
     /** @param {string} [reason] */

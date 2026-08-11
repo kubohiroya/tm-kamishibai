@@ -67,6 +67,60 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
+test('normalizes compact and named broadcastMessageAndWait actions with exact message text', () => {
+  const source = `
+kamishibai: '4.0'
+scenes:
+  opening:
+    - broadcastMessageAndWait: "Opening Effect"
+    - broadcastMessageAndWait:
+        message: "演出 メッセージ"
+        stableId: broadcast-2
+`;
+  const result = frontend.parse(source, {sourceId: 'broadcast.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+      command,
+      target,
+      args,
+      ...(stableId ? {stableId} : {}),
+    })),
+    [
+      {
+        command: 'broadcastMessageAndWait',
+        target: null,
+        args: {message: 'Opening Effect'},
+      },
+      {
+        command: 'broadcastMessageAndWait',
+        target: null,
+        args: {message: '演出 メッセージ'},
+        stableId: 'broadcast-2',
+      },
+    ],
+  );
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/message']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/args/message']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/stableId']);
+
+  for (const action of [
+    '    - broadcastMessageAndWait: ""',
+    '    - broadcastMessageAndWait: 1',
+    '    - broadcastMessageAndWait: {message: ok, unexpected: true}',
+    '    - broadcastMessageAndWait: {stableId: missing-message}',
+  ]) {
+    const invalid = frontend.parse(`kamishibai: '4.0'\nscenes:\n  opening:\n${action}\n`, {
+      sourceId: 'story.kamishibai.yaml',
+    });
+    assert.equal(invalid.ok, false, action);
+    const diagnostic = invalid.diagnostics.find(({code}) => code.startsWith('K4-SCHEMA'));
+    assert.ok(diagnostic, action);
+    assert.equal(diagnostic.sourceId, 'story.kamishibai.yaml');
+    assert.equal(diagnostic.range.start.line, 4);
+  }
+});
+
 test('normalizes say and think completion, typewriter, start sound, and source positions', () => {
   const source = `
 kamishibai: '4.0'
@@ -142,65 +196,125 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
-test('normalizes reusable speech styles and validates style references and dependencies', () => {
+test('normalizes and composes reusable bubble styles with human-readable names', () => {
   const source = `
 kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   TalkTick: sound
   WrongTick: backdrop
+  Next1:
+    kind: image
+    file: ui/next-1.png
+  Next2:
+    kind: image
+    file: ui/next-2.png
 actors:
   Hero: HeroIdle
-speechStyles:
-  novel:
+bubbleStyles:
+  Novel base:
     characterIntervalSeconds: 0.08
-    characterSound: TalkTick
     noSoundCharacters: "「」"
+  日本語 効果音:
+    characterSound: TalkTick
     restCharacters: "、。…"
     restCharacterIntervalSeconds: 0.5
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.12
+  Hero style:
+    styles:
+      - Novel base
+      - 日本語 効果音
 scenes:
   opening:
     - Hero.say:
         text: スタイルで進む。
         waitFor: advance
-        style: novel
+        styles:
+          - Hero style
 `;
-  const result = frontend.parse(source, {sourceId: 'speech-style.kamishibai.yaml'});
+  const result = frontend.parse(source, {sourceId: 'bubble-style.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.speechStyles, {
-    novel: {
+  assert.deepEqual(result.storyDocument.bubbleStyles, {
+    'Novel base': {
       characterIntervalSeconds: 0.08,
-      characterSound: 'TalkTick',
       noSoundCharacters: '「」',
+    },
+    '日本語 効果音': {
+      characterSound: 'TalkTick',
       restCharacters: '、。…',
       restCharacterIntervalSeconds: 0.5,
+      continueIndicator: {
+        frames: ['Next1', 'Next2'],
+        frameIntervalSeconds: 0.12,
+      },
+    },
+    'Hero style': {
+      styles: ['Novel base', '日本語 効果音'],
     },
   });
   assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {
     text: 'スタイルで進む。',
     waitFor: 'advance',
-    style: 'novel',
+    styles: ['Hero style'],
   });
-  for (const field of [
-    'characterIntervalSeconds',
-    'characterSound',
-    'noSoundCharacters',
-    'restCharacters',
-    'restCharacterIntervalSeconds',
+  for (const [style, fields] of [
+    ['Novel base', ['characterIntervalSeconds', 'noSoundCharacters']],
+    [
+      '日本語 効果音',
+      ['characterSound', 'restCharacters', 'restCharacterIntervalSeconds', 'continueIndicator'],
+    ],
   ]) {
-    assert.ok(result.storyDocument.sourceMap[`/speechStyles/novel/${field}`], field);
+    for (const field of fields) {
+      assert.ok(result.storyDocument.sourceMap[`/bubbleStyles/${style}/${field}`], field);
+    }
   }
-  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/style']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/0']);
+  assert.ok(result.storyDocument.sourceMap['/bubbleStyles/Hero style/styles/1']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/styles/0']);
+  assert.ok(
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/0'],
+  );
+  assert.ok(
+    result.storyDocument.sourceMap['/bubbleStyles/日本語 効果音/continueIndicator/frames/1'],
+  );
+  assert.ok(
+    result.storyDocument.sourceMap[
+      '/bubbleStyles/日本語 効果音/continueIndicator/frameIntervalSeconds'
+    ],
+  );
 
   for (const [needle, replacement] of [
-    ['        style: novel', '        style: missing'],
-    ['        style: novel', '        style: novel\n        characterIntervalSeconds: 0.1'],
+    ['      - 日本語 効果音', '      - missing'],
+    ['      - 日本語 効果音', '      - Novel base'],
+    ['          - Hero style', '          - missing'],
     ['    characterSound: TalkTick\n', ''],
     ['    characterSound: TalkTick', '    characterSound: WrongTick'],
     ['    restCharacterIntervalSeconds: 0.5\n', ''],
+    ['      frames: [Next1, Next2]', '      frames: [Next1]'],
+    ['      frameIntervalSeconds: 0.12', '      frameIntervalSeconds: 0'],
   ]) {
     const invalid = frontend.parse(source.replace(needle, replacement));
     assert.equal(invalid.ok, false, replacement);
+  }
+
+  for (const replacement of [
+    '        style: Novel base',
+    '        styles: Novel base',
+    '        styles: []',
+  ]) {
+    const invalid = frontend.parse(
+      source.replace('        styles:\n          - Hero style', replacement),
+    );
+    assert.equal(invalid.ok, false, replacement);
+  }
+
+  for (const invalidName of ['" Novel base"', '"Novel base "']) {
+    const invalid = frontend.parse(source.replace('  Novel base:', `  ${invalidName}:`));
+    assert.equal(invalid.ok, false, invalidName);
   }
 
   const missingSound = frontend.parse(
@@ -209,9 +323,208 @@ scenes:
   assert.equal(missingSound.ok, false);
   assert.ok(
     missingSound.diagnostics.some(
-      ({code, path}) => code === 'K4-REF-001' && path === '$.speechStyles.novel.characterSound',
+      ({code, path}) =>
+        code === 'K4-REF-001' && path === '$.bubbleStyles.日本語 効果音.characterSound',
     ),
     JSON.stringify(missingSound.diagnostics),
+  );
+});
+
+test('rejects recursive bubble style composition', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+bubbleStyles:
+  style-a:
+    styles:
+      - style-b
+  style-b:
+    styles:
+      - style-a
+scenes:
+  opening:
+    - wait: 0
+`);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(({code}) => code === 'K4-BUBBLE-STYLE-CYCLE-001'),
+    JSON.stringify(result.diagnostics),
+  );
+});
+
+test('accepts Bubble 0.4 wrapping, lip-sync, reveal, audio, and motion styles', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png}
+  Blink: {kind: image, file: blink.png}
+  Lip1: {kind: image, file: lip1.png}
+  Lip2: {kind: image, file: lip2.png}
+  Next1: {kind: image, file: next1.png}
+  Next2: {kind: image, file: next2.png}
+  Voice: sound
+  RevealTick: sound
+  Finish: sound
+actors:
+  Hero: HeroIdle
+textStyles:
+  dialogue: {font: sans-serif}
+bubbleStyles:
+  cinematic:
+    textStyle: dialogue
+    maxWidth: 240
+    textLocale: ja
+    portrait:
+      base: Face
+      blink: {frames: [Blink], frameIntervalSeconds: 0.4}
+      lipSync: {frames: [Lip1, Lip2], frameIntervalSeconds: 0.1}
+    continueIndicator: {frames: [Next1, Next2], frameIntervalSeconds: 0.2}
+    reveal:
+      unit: CHARACTER
+      delimiters: " /"
+      showDelimiters: true
+      layout: RESERVED
+      intervalSeconds: 0.05
+      sound: RevealTick
+    audio: {voice: Voice, reveal: RevealTick, finish: Finish}
+    showAnimation: {name: fadeIn, durationSeconds: 0.2, ease: easeOut}
+    visibleAnimations:
+      - {name: shake, direction: right, count: 2, ease: easeInOut}
+      - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
+    hideAnimation: {name: floatOut, direction: down, speed: 1}
+scenes:
+  opening:
+    - Hero.say: {text: hello, waitFor: advance, styles: [cinematic]}
+`;
+  const result = frontend.parse(source, {sourceId: 'bubble-advanced.kamishibai.yaml'});
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.audio, {
+    voice: 'Voice',
+    reveal: 'RevealTick',
+    finish: 'Finish',
+  });
+  assert.deepEqual(result.storyDocument.bubbleStyles.cinematic.portrait.lipSync.frames, [
+    'Lip1',
+    'Lip2',
+  ]);
+  for (const path of [
+    '/bubbleStyles/cinematic/maxWidth',
+    '/bubbleStyles/cinematic/portrait/lipSync/frames/1',
+    '/bubbleStyles/cinematic/reveal/sound',
+    '/bubbleStyles/cinematic/audio/finish',
+    '/bubbleStyles/cinematic/showAnimation/durationSeconds',
+    '/bubbleStyles/cinematic/visibleAnimations/1/visualStyle',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+
+  const conflict = frontend.parse(
+    source.replace('    reveal:\n', '    characterIntervalSeconds: 0.1\n    reveal:\n'),
+  );
+  assert.equal(conflict.ok, false);
+  assert.ok(conflict.diagnostics.some(({code}) => code === 'K4-SPEECH-STYLE-002'));
+
+  const duplicateVoice = frontend.parse(
+    source.replace('waitFor: advance, styles:', 'waitFor: advance, startSound: Voice, styles:'),
+  );
+  assert.equal(duplicateVoice.ok, false);
+  assert.ok(
+    duplicateVoice.diagnostics.some(
+      ({code, path}) => code === 'K4-SPEECH-STYLE-002' && path.endsWith('.startSound'),
+    ),
+  );
+
+  const wrongAudioKind = frontend.parse(source.replace('finish: Finish', 'finish: Face'));
+  assert.equal(wrongAudioKind.ok, false);
+  assert.ok(
+    wrongAudioKind.diagnostics.some(
+      ({code, path}) => code === 'K4-REF-002' && path.endsWith('.audio.finish'),
+    ),
+  );
+});
+
+test('rejects pre-0.2 Bubble portrait and indicator field names', () => {
+  for (const field of [
+    '      talk: {frames: [Face], frameIntervalSeconds: 0.1}',
+    '    advanceIndicator: {frames: [Face, Face], frameIntervalSeconds: 0.1}',
+  ]) {
+    const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  Face: {kind: image, file: face.png}
+actors: {Hero: HeroIdle}
+bubbleStyles:
+  old:
+    portrait:
+      base: Face
+${field}
+scenes: {opening: [{Hero.say: {text: hello, seconds: 1, styles: [old]}}]}
+`);
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(({code}) => code === 'K4-SCHEMA-UNKNOWN-KEY'));
+  }
+});
+
+test('accepts one-frame portrait animation but requires two continue indicator frames', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  Face:
+    kind: image
+    file: face.svg
+  Blink:
+    kind: image
+    file: blink.svg
+  Next1:
+    kind: image
+    file: next-1.svg
+  Next2:
+    kind: image
+    file: next-2.svg
+bubbleStyles:
+  novel:
+    portrait:
+      base: Face
+      blink:
+        frames: [Blink]
+        frameIntervalSeconds: 0.4
+    continueIndicator:
+      frames: [Next1, Next2]
+      frameIntervalSeconds: 0.2
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source, {sourceId: 'bubble-animation.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const invalid = frontend.parse(source.replace('[Next1, Next2]', '[Next1]'));
+  assert.equal(invalid.ok, false);
+  assert.ok(
+    invalid.diagnostics.some(
+      ({code, path}) => code === 'K4-SCHEMA-001' && path.includes('continueIndicator/frames'),
+    ),
+    JSON.stringify(invalid.diagnostics),
+  );
+});
+
+test('rejects the legacy speechStyles top-level key', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+speechStyles:
+  novel:
+    characterIntervalSeconds: 0.08
+scenes:
+  opening:
+    - wait: 0
+`);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.diagnostics.some(({code, path}) => code === 'K4-SCHEMA-UNKNOWN-KEY' && path === '$'),
+    JSON.stringify(result.diagnostics),
   );
 });
 
@@ -262,7 +575,9 @@ scenes:
     const result = frontend.parse(source.replace(needle, replacement));
     assert.equal(result.ok, false, replacement);
     assert.ok(
-      result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')),
+      result.diagnostics.some(
+        ({code}) => code.startsWith('K4-SCHEMA') || code === 'K4-SPEECH-STYLE-001',
+      ),
       replacement,
     );
   }
@@ -440,6 +755,25 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   assert.deepEqual(valid.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
   assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
   assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
+
+  const silent = frontend.parse(
+    [
+      "kamishibai: '4.0'",
+      'poseRecognition:',
+      '  navigation:',
+      '    allowSkip: true',
+      'scenes:',
+      '  opening: []',
+    ].join('\n'),
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = frontend.parse(base.replace('  chargeSound: Charge\n', ''));
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.storyDocument.poseRecognition.idleSound, 'Tick');
+  assert.equal(Object.hasOwn(idleOnly.storyDocument.poseRecognition, 'chargeSound'), false);
 
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
@@ -630,7 +964,79 @@ test('accepts Japanese NFC identifiers and keeps case-distinct identifiers separ
   assert.equal(result.storyDocument.scenes[0].actions[1].stableId, '開始表示');
 });
 
-test('remote delivery requires verified metadata and stays independent from loading policy', async () => {
+test('preserves literal asset and scene IDs with whitespace, punctuation, controls, and Unicode form', () => {
+  const assetId = ' Asset.e\u0301%/~\u0001\u007f ';
+  const bubbleAssetId = ' Bubble.e\u0301./\u0002 ';
+  const sceneId = ' Scene.e\u0301%/~\n\u007f ';
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  " Asset.e\\u0301%/~\\x01\\x7F ": backdrop
+  " Bubble.e\\u0301./\\x02 ":
+    kind: image
+    file: bubble.svg
+bubbleStyles:
+  literal:
+    portrait:
+      base: " Bubble.e\\u0301./\\x02 "
+      blink:
+        frames: [" Bubble.e\\u0301./\\x02 "]
+        frameIntervalSeconds: 0.4
+    continueIndicator:
+      frames: [" Bubble.e\\u0301./\\x02 ", " Bubble.e\\u0301./\\x02 "]
+      frameIntervalSeconds: 0.2
+scenes:
+  " Scene.e\\u0301%/~\\n\\x7F ":
+    - stage: " Asset.e\\u0301%/~\\x01\\x7F "
+    - goto: " Scene.e\\u0301%/~\\n\\x7F "
+`);
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(Object.hasOwn(result.storyDocument.assets, assetId), true);
+  assert.equal(result.storyDocument.assets[assetId].name, assetId);
+  assert.equal(Object.hasOwn(result.storyDocument.assets, bubbleAssetId), true);
+  assert.deepEqual(result.storyDocument.bubbleStyles.literal.portrait, {
+    base: bubbleAssetId,
+    blink: {frames: [bubbleAssetId], frameIntervalSeconds: 0.4},
+  });
+  assert.deepEqual(result.storyDocument.bubbleStyles.literal.continueIndicator, {
+    frames: [bubbleAssetId, bubbleAssetId],
+    frameIntervalSeconds: 0.2,
+  });
+  assert.equal(result.storyDocument.scenes[0].id, sceneId);
+  assert.equal(
+    result.storyDocument.scenes[0].actions[0].id,
+    '/scenes/ Scene.é%25~1~0%0A%7F /actions/0',
+  );
+  assert.equal(
+    Object.hasOwn(result.storyDocument.sourceMap, '/assets/ Asset.é%25~1~0%01%7F '),
+    true,
+  );
+  assert.equal(
+    Object.keys(result.storyDocument.sourceMap).some((path) => /[\u0000-\u001f\u007f]/u.test(path)),
+    false,
+  );
+});
+
+test('escapes literal scene controls in schema diagnostics and StoryPaths', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+scenes:
+  "broken\\x01\\x7F scene":
+    - wait: invalid
+`);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.diagnostics.length > 0, true);
+  for (const diagnostic of result.diagnostics) {
+    assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.path), false);
+    assert.equal(/[\u0000-\u001f\u007f]/u.test(diagnostic.storyPath ?? ''), false);
+  }
+  assert.equal(result.diagnostics[0].path.includes('\\u0001\\u007f'), true);
+  assert.equal(result.diagnostics[0].storyPath.includes('%01%7F'), true);
+});
+
+test('verified remote delivery preserves metadata and stays independent from loading policy', async () => {
   const result = await validateFixture('valid', 'remote-assets.kamishibai.yaml');
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.storyDocument.assets.OpeningMusic, {
@@ -683,6 +1089,54 @@ scenes:
   assert.equal(result.storyDocument.assets.DefaultPose.retention, 'scene');
 });
 
+test('normalizes bitmap costume resolution metadata with a safe default', () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  ProjectBackdrop: backdrop
+  Hero:
+    kind: costume
+    target: Actor
+    file: costumes/hero.png
+    bitmapResolution: 2
+  Ocean:
+    kind: backdrop
+    file: backdrops/ocean.svg
+  RemoteBitmap:
+    kind: backdrop
+    delivery: remote
+    bitmapResolution: 1
+    source:
+      url: https://cdn.example.com/ocean.png
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/png
+      size: 123
+scenes:
+  opening: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.storyDocument.assets.ProjectBackdrop.bitmapResolution, 1);
+  assert.equal(result.storyDocument.assets.Hero.bitmapResolution, 2);
+  assert.equal(result.storyDocument.assets.Ocean.bitmapResolution, 1);
+  assert.equal(result.storyDocument.assets.RemoteBitmap.bitmapResolution, 1);
+
+  for (const value of [0, 3, 1.5, '2']) {
+    const invalid = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  Hero:
+    kind: costume
+    target: Actor
+    file: hero.png
+    bitmapResolution: ${JSON.stringify(value)}
+scenes:
+  opening: []
+`);
+    assert.equal(invalid.ok, false, JSON.stringify(invalid.diagnostics));
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('remote delivery rejects malformed or credential-bearing HTTPS URLs semantically', async () => {
   const fixture = await readFile(
     path.join(fixtureRoot, 'valid', 'remote-assets.kamishibai.yaml'),
@@ -703,6 +1157,30 @@ test('remote delivery rejects malformed or credential-bearing HTTPS URLs semanti
       url,
     );
   }
+});
+
+test('accepts an unpinned TMPose directory URL while keeping partial verification metadata invalid', async () => {
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  LivePose:
+    kind: poseModel
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://teachablemachine.withgoogle.com/models/example/
+scenes:
+  opening:
+    poseModel: LivePose
+    actions: []
+`);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.assets.LivePose.source, {
+    url: 'https://teachablemachine.withgoogle.com/models/example/',
+  });
+
+  const partial = await validateFixture('invalid', 'remote-missing-integrity.kamishibai.yaml');
+  assert.equal(partial.ok, false);
 });
 
 test('compact and named actions plus short and long scenes normalize identically', async () => {
@@ -726,7 +1204,6 @@ for (const name of [
   'deprecated-text-asset.kamishibai.yaml',
   'non-scalar-variable.kamishibai.yaml',
   'cover-missing-backdrop.kamishibai.yaml',
-  'pose-recognition-missing-sound.kamishibai.yaml',
   'pose-choices.kamishibai.yaml',
   'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',
@@ -738,7 +1215,6 @@ for (const name of [
   'remote-missing-integrity.kamishibai.yaml',
   'remote-invalid-integrity.kamishibai.yaml',
   'remote-invalid-metadata.kamishibai.yaml',
-  'non-nfc-id.kamishibai.yaml',
   'duplicate-id.kamishibai.yaml',
   'unknown-top-level-key.kamishibai.yaml',
   'custom-action-unknown-key.kamishibai.yaml',
@@ -753,15 +1229,20 @@ for (const name of [
 
 for (const [name, code] of [
   ['version-number.kamishibai.yaml', 'K4-VERSION-001'],
-  ['invalid-id.kamishibai.yaml', 'K4-ID-INVALID'],
   ['unknown-top-level-key.kamishibai.yaml', 'K4-SCHEMA-UNKNOWN-KEY'],
   ['modifier-key.kamishibai.yaml', 'K4-KEY-UNSUPPORTED'],
-  ['non-nfc-id.kamishibai.yaml', 'K4-ID-001'],
   ['duplicate-id.kamishibai.yaml', 'K4-YAML-001'],
 ]) {
   test(`${name} reports ${code}`, async () => {
     const result = await validateFixture('invalid', name);
     assert.ok(result.diagnostics.some((error) => error.code === code));
+  });
+}
+
+for (const name of ['invalid-id.kamishibai.yaml', 'non-nfc-id.kamishibai.yaml']) {
+  test(`${name} is accepted as a literal scene ID`, async () => {
+    const result = await validateFixture('invalid', name);
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   });
 }
 

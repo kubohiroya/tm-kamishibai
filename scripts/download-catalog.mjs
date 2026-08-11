@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
-export const dsl4DocsUrl =
-  'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -31,7 +29,7 @@ export const downloadCatalog = deepFreeze([
   },
   {
     artifact: {
-      buildDate: '2026-08-08',
+      buildDate: '2026-08-11',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
       sha256: 'b4982e6464744fe1cd1d848253357d28b9423b4998017df40c0dccdc94074864',
@@ -123,13 +121,6 @@ function renderActions(entry) {
     actions.push(
       `<a class="button" href="${escapeHtml(entry.artifact.filename)}" download>` +
         `📁 ${escapeHtml(entry.series)}のSB3をダウンロード</a>`,
-    );
-  }
-  if (entry.docsUrl) {
-    const secondary = entry.artifact ? ' button--secondary' : '';
-    actions.push(
-      `<a class="button${secondary}" href="${escapeHtml(entry.docsUrl)}">` +
-        `📕 ${escapeHtml(entry.series)}ドキュメントを開く</a>`,
     );
   }
   if (!entry.artifact) {

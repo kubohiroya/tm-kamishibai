@@ -84,7 +84,9 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes N \
   --max-asset-file-bytes N \
   --max-asset-files N \
-  --max-total-asset-bytes N
+  --max-total-asset-bytes N \
+  --max-project-bytes N \
+  --max-project-json-bytes N
 
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \

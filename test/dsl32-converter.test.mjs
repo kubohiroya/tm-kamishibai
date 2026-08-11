@@ -42,7 +42,7 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
   assert.equal(first.source.includes('\r'), false);
   assert.deepEqual(
     first.diagnostics.map((diagnostic) => diagnostic.range.start.line),
-    [2, 3, 10, 11, 12, 13, 45],
+    [2, 3, 10, 11, 12, 13],
   );
   assert.ok(first.diagnostics.some((diagnostic) => diagnostic.code === 'K4-CONVERT-VARIABLE-TYPE'));
   assert.ok(
@@ -61,6 +61,35 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
     {pose: 'jump', skin: 'HeroHappy', sound: 'Success'},
   ]);
   assert.equal(first.yaml.includes('poseInputToChangeScene'), false);
+});
+
+test('preserves literal asset, Scratch source, and scene names without generated aliases', () => {
+  const assetId = 'Backdrop ./%\u0001 x';
+  const sourceName = 'Scratch.name/\u0002 x';
+  const sceneId = 'Opening ./%\u0003 x';
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      `asset=${assetId},backdrop:${sourceName}`,
+      `sceneLabel=${sceneId}`,
+      `action=stage:${assetId}`,
+    ].join('\n'),
+    {sourceId: 'literal-names.txt'},
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(Object.keys(result.document.assets), [assetId]);
+  assert.deepEqual(result.document.assets[assetId], {kind: 'backdrop', name: sourceName});
+  assert.deepEqual(Object.keys(result.document.scenes), [sceneId]);
+  assert.equal(result.document.scenes[sceneId][0].stage, assetId);
+  assert.match(result.yaml, /\\x01|\\u0001/u);
+  assert.match(result.yaml, /\\x02|\\u0002/u);
+  assert.match(result.yaml, /\\x03|\\u0003/u);
+
+  const validated = frontend.parse(result.yaml, {sourceId: 'literal-names.k4.yml'});
+  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
+  assert.equal(validated.storyDocument.assets[assetId].name, sourceName);
+  assert.equal(validated.storyDocument.scenes[0].id, sceneId);
 });
 
 test('converts DSL 3.1 through the maintained compatibility grammar with an explicit warning', async () => {
@@ -248,6 +277,7 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
     {pose: 'help', skin: 'Hero', sound: 'Success'},
     {pose: 'jump'},
   ]);
+  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
 });
 
 test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', () => {
@@ -275,6 +305,7 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     fullConfidenceHoldSeconds: 0.5,
     idleChargePerSecond: 0,
   });
+  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
   assert.equal(result.document?.variables.poseCharge, 20);
 
   const incompatible = convertDsl32ToDsl4(
@@ -296,19 +327,67 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
         diagnostic.code === 'K4-CONVERT-POSE-CONFIG' && diagnostic.range.start.line === 2,
     ),
   );
+
+  const silent = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=poseRecog:0.75',
+      'asset=Hero,costume',
+      'actor=Hero,Hero',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'silent-pose-config.txt', poseModels},
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(silent.document?.poseRecognition.sequence.confidenceThreshold, 0.75);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Hero,costume',
+      'asset=Idle,sound',
+      'actor=Hero,Hero',
+      'setPoseRecognitionSound=Idle',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'idle-only-pose-config.txt', poseModels},
+  );
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.document?.poseRecognition.idleSound, 'Idle');
+  assert.equal(Object.hasOwn(idleOnly.document?.poseRecognition, 'chargeSound'), false);
 });
 
-test('requires an explicit local replacement for each scene TMPoseURL', async () => {
+test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
   const source = await readFile(path.join(fixtureRoot, 'full.dsl32.txt'));
-  const missing = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
-  assert.equal(missing.ok, false);
-  assert.equal(missing.yaml, null);
-  assert.ok(
-    missing.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === 'K4-CONVERT-POSE-MODEL' && diagnostic.range.start.line === 36,
-    ),
-  );
+  const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
+  assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
+  assert.deepEqual(remote.document?.assets.PoseModel1, {
+    kind: 'poseModel',
+    delivery: 'remote',
+    source: {url: 'https://example.com/models/rescue/'},
+    loading: 'lazy',
+  });
+  assert.equal(remote.document?.scenes.rescue.poseModel, 'PoseModel1');
+
+  const literalId = ' Rescue.pose/\u0001 model ';
+  const embedded = convertDsl32ToDsl4(source, {
+    sourceId: 'full.dsl32.txt',
+    poseModels: {
+      'https://example.com/models/rescue/': {
+        id: literalId,
+        file: 'pose-models/rescue',
+      },
+    },
+  });
+  assert.equal(embedded.ok, true, JSON.stringify(embedded.diagnostics));
+  assert.equal(embedded.document?.scenes.rescue.poseModel, literalId);
+  assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue');
 
   const malformed = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',
@@ -333,7 +412,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
       'asset=Narration,text',
       'actor=Hero,Narration',
       'sceneLabel=opening',
-      'action=Hero:hide',
+      'action=Hero:setScale:100',
     ].join('\n'),
     {sourceId: 'legacy.txt'},
   );
@@ -353,7 +432,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
   );
 });
 
-test('converts timed think and rejects persistent or styled legacy speech', () => {
+test('converts timed and styled legacy speech while rejecting persistent speech', () => {
   const timed = convertDsl32ToDsl4(
     [
       'kamishibai=3.2',
@@ -371,7 +450,6 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
 
   for (const [sourceId, action, code] of [
     ['persistent-think.txt', 'action=Hero:think:待って', 'K4-CONVERT-PERSISTENT-SPEECH'],
-    ['styled-think.txt', 'action=Hero:think:待って:2:balloonStyle', 'K4-CONVERT-SPEECH-STYLE'],
   ]) {
     const result = convertDsl32ToDsl4(
       [
@@ -386,6 +464,72 @@ test('converts timed think and rejects persistent or styled legacy speech', () =
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === code));
   }
+
+  const styled = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=HeroIdle,costume:Actor:hero-idle',
+      'svgTextStyle=balloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right',
+      'actor=Hero,HeroIdle',
+      'sceneLabel=opening',
+      'action=Hero:think:待って:2:balloonStyle',
+    ].join('\n'),
+    {sourceId: 'styled-think.txt'},
+  );
+  assert.equal(styled.ok, true, JSON.stringify(styled.diagnostics));
+  assert.deepEqual(styled.document?.bubbleStyles['legacy-think-balloonStyle'], {
+    textStyle: 'balloonStyle',
+    placement: 'up-right',
+    visualStyle: 'THINKING',
+  });
+  assert.equal(Object.hasOwn(styled.document?.textStyles.balloonStyle, 'direction'), false);
+  assert.deepEqual(styled.document?.scenes.opening, [
+    {
+      'Hero.think': {
+        text: '待って',
+        seconds: 2,
+        styles: ['legacy-think-balloonStyle'],
+      },
+    },
+  ]);
+});
+
+test('preserves the Urashima clear, scale, visibility, layer, and loop semantics', () => {
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Fish1,costume:Fish:fish-1',
+      'asset=Fish2,costume:Fish:fish-2',
+      'svgTextStyle=default:#ffffff:#575e75:Helvetica:100:left:up-right',
+      'actor=Fish,Fish1',
+      'sceneLabel=dragon castle',
+      'action=Fish:say:',
+      'action=Fish:setSkin:Fish2:45',
+      'action=Fish:setLayer:back',
+      'action=Fish:loop:Fish1,Fish2:0.3,0.3',
+      'action=Fish:hide',
+    ].join('\n'),
+    {sourceId: 'urashima-actions.txt'},
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(Object.hasOwn(result.document?.textStyles.default, 'direction'), false);
+  assert.deepEqual(result.document?.scenes['dragon castle'], [
+    {'Fish.say': {text: '', seconds: 0}},
+    {'Fish.setSkin': {skin: 'Fish2', scale: 45}},
+    {'Fish.setLayer': 'back'},
+    {
+      'Fish.loop': {
+        steps: [
+          {skin: 'Fish1', seconds: 0.3},
+          {skin: 'Fish2', seconds: 0.3},
+        ],
+      },
+    },
+    {'Fish.hide': {}},
+  ]);
+  const validated = frontend.parse(result.yaml, {sourceId: 'urashima-actions.k4.yml'});
+  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
 });
 
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {
@@ -507,7 +651,7 @@ test('exposes convert-dsl4 through the installable CLI contract', async (context
   await writeFile(
     invalidManifestPath,
     JSON.stringify({
-      'https://example.com/models/rescue/': {id: 'invalid id', file: 'pose-models/rescue'},
+      'https://example.com/models/rescue/': {id: '', file: 'pose-models/rescue'},
     }),
   );
   manifestStderr = '';

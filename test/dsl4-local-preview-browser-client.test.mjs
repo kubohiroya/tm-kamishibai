@@ -133,6 +133,7 @@ test('browser preview client owns the authenticated generation stream and preser
     }
     throw new Error(`Unexpected endpoint: ${endpoint}`);
   };
+  const onApplicationOpen = () => {};
   const client = createDsl4LocalPreviewBrowserClient({
     document,
     location: {hash: `#${token}`, pathname: '/', search: ''},
@@ -153,9 +154,19 @@ test('browser preview client owns the authenticated generation stream and preser
     sourceFrontend: {parse() {}},
     platform: {},
     runtimeOptions: {},
+    maxProjectBytes: 300 * 1024 * 1024,
+    maxProjectJsonBytes: 400 * 1024 * 1024,
+    maxAssetFiles: 123,
+    maxAssetBytes: 200 * 1024 * 1024,
+    onApplicationOpen,
     createShell: () => shell,
     createRuntime(options) {
       assert.deepEqual(options.projectBytes, projectBytes);
+      assert.equal(options.maxProjectBytes, 300 * 1024 * 1024);
+      assert.equal(options.maxProjectJsonBytes, 400 * 1024 * 1024);
+      assert.equal(options.maxAssetFiles, 123);
+      assert.equal(options.maxAssetBytes, 200 * 1024 * 1024);
+      assert.equal(options.onApplicationOpen, onApplicationOpen);
       return runtime;
     },
   });

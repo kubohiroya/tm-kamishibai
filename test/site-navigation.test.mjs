@@ -9,10 +9,14 @@ import {renderAppBarState, updateAppBarScrollState} from '../site/site-shell.js'
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const siteRoot = 'https://kubohiroya.github.io/tmpose-kamishibai/';
 const destinations = {
-  top: siteRoot,
-  docs: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/',
-  samples: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/',
-  downloads: `${siteRoot}downloads/`,
+  top: {label: 'トップ', href: siteRoot},
+  docs: {label: 'ドキュメント', href: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/'},
+  workshops: {
+    label: 'ワークショップ',
+    href: 'https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/',
+  },
+  samples: {label: '作品', href: 'https://kubohiroya.github.io/tmpose-kamishibai-samples/'},
+  downloads: {label: 'ダウンロード', href: `${siteRoot}downloads/`},
 };
 const pages = [
   {
@@ -32,6 +36,13 @@ const pages = [
   {
     path: 'site/downloads/index.html',
     current: 'downloads',
+    stylesheet: '../site-shell.css',
+    script: '../site-shell.js',
+    symbol: '../favicon.png',
+  },
+  {
+    path: 'site/licenses/index.html',
+    current: 'top',
     stylesheet: '../site-shell.css',
     script: '../site-shell.js',
     symbol: '../favicon.png',
@@ -66,15 +77,28 @@ test('uses one accessible site header across the published entry pages', async (
       ),
     );
     assert.match(html, /<main id="main-content">/u);
+    assert.equal(
+      (html.match(/<footer class="site-footer" data-site-footer-version="1">/gu) ?? []).length,
+      1,
+      `${page.path} must expose exactly one versioned site footer.`,
+    );
+    assert.match(html, /<p>© 2026 Hiroya Kubo<\/p>/u);
+    assert.match(html, /各文書・作品・素材には個別の利用条件が適用されます。/u);
+    assert.match(
+      html,
+      /<a\b(?=[^>]*class="site-footer__rights")(?=[^>]*href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai\/licenses\/")[^>]*>\s*ライセンス・権利表示\s*<\/a\s*>/u,
+    );
+    const footer = html.match(/<footer class="site-footer"[\s\S]*?<\/footer>/u)?.[0] ?? '';
+    assert(!footer.includes('github.com'), `${page.path} must not duplicate the GitHub link.`);
 
-    for (const [section, href] of Object.entries(destinations)) {
+    for (const [section, {href, label}] of Object.entries(destinations)) {
       const currentAttribute = section === page.current ? ' aria-current="page"' : '';
       assert.match(
         html,
         new RegExp(
           `<a\\b(?=[^>]*class="site-nav__link")(?=[^>]*href="${href.replaceAll('.', '\\.')}")${
             currentAttribute ? '(?=[^>]*aria-current="page")' : '(?![^>]*aria-current="page")'
-          }[^>]*>`,
+          }[^>]*>\\s*${label}\\s*<\\/a\\s*>`,
           'u',
         ),
       );
@@ -107,6 +131,9 @@ test('keeps the shared navigation visible and operable on narrow screens', async
   assert.match(css, /\.site-header--hidden\s*\{[\s\S]*?transform:\s*translateY\(/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/u);
   assert.match(css, /@media print/u);
+  assert.match(css, /\.site-footer\s*\{[\s\S]*?border-top:/u);
+  assert.match(css, /\.site-footer__rights\s*\{[\s\S]*?min-height:\s*44px;/u);
+  assert.match(css, /@media print[\s\S]*?\.site-footer\s*\{[\s\S]*?display:\s*none/u);
   assert.match(css, /:focus-visible/u);
 });
 
