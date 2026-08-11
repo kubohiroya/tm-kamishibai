@@ -135,6 +135,7 @@ const enabledOptions = (project, extra = {}) => ({
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
     dsl4Runtime: false,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -200,6 +201,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   );
   const disabledFlags = {
     dsl4Runtime: false,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -219,6 +221,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(resolveDsl4FeatureFlags({}), disabledFlags);
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
     dsl4Runtime: true,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -236,6 +239,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
     dsl4Runtime: false,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -253,6 +257,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
     dsl4Runtime: false,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -270,6 +275,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
     dsl4Runtime: false,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -293,6 +299,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true}),
     {
       dsl4Runtime: true,
+      dsl4BroadcastMessageAndWait: false,
       dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
@@ -310,6 +317,17 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     },
   );
   assert.throws(() => resolveDsl4FeatureFlags({dsl4Runtime: 1}), TypeError);
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4BroadcastMessageAndWait: true}),
+    /requires dsl4Runtime/u,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4BroadcastMessageAndWait: true,
+    }).dsl4BroadcastMessageAndWait,
+    true,
+  );
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4CameraPreviewControls: 1}), TypeError);
@@ -377,6 +395,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     }),
     {
       dsl4Runtime: true,
+      dsl4BroadcastMessageAndWait: false,
       dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: true,
@@ -433,6 +452,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(result.enabled, true);
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -603,6 +623,7 @@ test('enables internal Structured Data independently without exposing a generic 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4BroadcastMessageAndWait: false,
     dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
@@ -678,6 +699,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4BroadcastMessageAndWait: false,
       dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
@@ -813,6 +835,7 @@ test('creates an atomic runtime environment only after component validation', as
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4BroadcastMessageAndWait: false,
       dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,

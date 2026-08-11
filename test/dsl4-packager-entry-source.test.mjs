@@ -20,10 +20,17 @@ import {
   claimDsl4PackagerEntrySource,
   createDsl4BinaryEntryAssetBundle,
   createDsl4BinaryEntryProviderFromPackagerSource,
+  createDsl4EmbeddedSourceDescriptor,
+  createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
   dsl4PackagerEntrySourceRegistryName,
   Dsl4PackagerEntrySourceError,
 } from '../src/dsl4/index.js';
+import {
+  createDsl4PackagedBinaryRuntimeBridge,
+  inspectDsl4PackagedBinaryRuntime,
+  resolveDsl4PackagerSessionPolicy,
+} from '../src/dsl4/platform/packaged-binary-runtime.js';
 
 const require = createRequire(import.meta.url);
 const TurboWarpPackager = require('@turbowarp/packager');
@@ -109,11 +116,11 @@ function fixtureSnapshot() {
   };
 }
 
-function baseProject(descriptor) {
+function baseProject(descriptor, source, artifact) {
   return {
     extensionStorage: {
       kubohiroyakamishibai4: {
-        components: {kubohiroyakamishibairuntime4: {assets: descriptor}},
+        components: {kubohiroyakamishibairuntime4: {artifact, assets: descriptor, source}},
       },
     },
     targets: [
@@ -152,7 +159,20 @@ async function fixture() {
     maxTotalBytes: limits.maxAssetBytes,
     subtleCrypto,
   });
-  const project = baseProject(binaryBundle.descriptor);
+  const source = await createDsl4EmbeddedSourceDescriptor(sourceText, {
+    sourceId: 'main',
+    displayName: 'story.k4.yml',
+    maxSourceBytes: 64 * 1024,
+    subtleCrypto,
+  });
+  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    source,
+    'production',
+    {maxSourceBytes: 64 * 1024, subtleCrypto},
+  );
+  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const project = baseProject(binaryBundle.descriptor, source, artifactResult.artifact);
   const archive = {'project.json': strToU8(`${JSON.stringify(project)}\n`)};
   for (const entryName of binaryBundle.entryNames) {
     archive[entryName] = binaryBundle.getEntry(entryName);
@@ -160,7 +180,14 @@ async function fixture() {
   const input = zipSync(archive, {level: 6});
   const loadedProject = await TurboWarpPackager.loadProject(input);
   assert.equal(loadedProject.type, 'sb3');
-  return {binaryBundle, input, loadedProject, snapshot, storyDocument: parsed.storyDocument};
+  return {
+    binaryBundle,
+    input,
+    loadedProject,
+    project,
+    snapshot,
+    storyDocument: parsed.storyDocument,
+  };
 }
 
 function configuredPackager(loadedProject, target) {
@@ -229,6 +256,23 @@ test('pins the audited TurboWarp Packager release and maps each supported surfac
     mode: 'direct',
   });
   assert.throws(() => resolveDsl4PackagerEntrySourceSurface('nwjs-linux-x64'), TypeError);
+  assert.deepEqual(resolveDsl4PackagerSessionPolicy('plain-html'), {
+    policy: 'prefer',
+    sessionBackingEnabled: true,
+  });
+  assert.deepEqual(resolveDsl4PackagerSessionPolicy('zip-one-asset'), {
+    policy: 'prefer',
+    sessionBackingEnabled: true,
+  });
+  assert.deepEqual(resolveDsl4PackagerSessionPolicy('zip'), {
+    policy: 'disabled',
+    sessionBackingEnabled: false,
+  });
+  assert.deepEqual(resolveDsl4PackagerSessionPolicy('electron'), {
+    policy: 'disabled',
+    sessionBackingEnabled: false,
+  });
+  assert.throws(() => resolveDsl4PackagerSessionPolicy('editor'), TypeError);
 });
 
 test('registers the actual Plain HTML and zip-one-asset ZIP closure before loadProject', async () => {
@@ -350,6 +394,85 @@ test('claims a direct source without IndexedDB or a second SB3 fetch', async () 
     true,
   );
   await provider.release();
+});
+
+test('connects the packaged Runtime 4 bridge to archive and direct providers', async () => {
+  const value = await fixture();
+  assert.deepEqual(inspectDsl4PackagedBinaryRuntime(value.project), {formatVersion: 3});
+  for (const target of ['html', 'zip']) {
+    const {packager} = await packageFixture(value, target);
+    const contextValues = {};
+    if (target === 'zip') {
+      Object.assign(contextValues, {
+        URL,
+        location: new URL('https://example.test/story/index.html'),
+        async fetch(url) {
+          const entryName = decodeURIComponent(new URL(url).pathname.split('/').pop());
+          const bytes = value.binaryBundle.getEntry(entryName);
+          return {
+            ok: true,
+            async arrayBuffer() {
+              return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+            },
+          };
+        },
+      });
+    }
+    const context = vm.createContext(contextValues);
+    vm.runInContext(packager.options.custom.js, context);
+    if (target === 'html') {
+      const registry = context[Symbol.for(dsl4PackagerEntrySourceRegistryName)];
+      const normalizedArchive = unzipSync(new Uint8Array(value.loadedProject.arrayBuffer));
+      registry.attachZip(fakeZip(normalizedArchive));
+    }
+    const bridge = await createDsl4PackagedBinaryRuntimeBridge({
+      project: value.project,
+      sourceFrontend: frontend,
+      maxSourceBytes: 64 * 1024,
+      maxAssetFiles: 8,
+      maxAssetBytes: 128 * 1024,
+      globalObject: context,
+      subtleCrypto,
+    });
+    assert(bridge);
+    assert.equal(bridge.assetBundleFormat, 'binary-entry');
+    assert.deepEqual(bridge.runtimeLimits, {
+      maxAssetFiles: 8,
+      maxAssetFileBytes: 128 * 1024,
+      maxAssetBytes: 128 * 1024,
+    });
+    assert.equal(bridge.surface, target === 'html' ? 'plain-html' : 'zip');
+    assert.deepEqual(bridge.sessionBacking, {
+      policy: target === 'html' ? 'prefer' : 'disabled',
+    });
+    assert.equal(bridge.sessionBackingEnabled, target === 'html');
+    const pose = await bridge.binaryEntryProvider.readAsset('Pose');
+    assert.deepEqual(
+      pose.files.map(({path: filePath}) => filePath),
+      ['metadata.json', 'model.json', 'weights.bin'],
+    );
+    await bridge.binaryEntryProvider.release();
+  }
+});
+
+test('keeps the Base64 rollback project outside the Packager entry source bridge', async () => {
+  const value = await fixture();
+  const base64Project = structuredClone(value.project);
+  base64Project.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets =
+    {formatVersion: 1};
+  assert.equal(inspectDsl4PackagedBinaryRuntime(base64Project), null);
+  assert.equal(
+    await createDsl4PackagedBinaryRuntimeBridge({
+      project: base64Project,
+      sourceFrontend: frontend,
+      maxSourceBytes: 64 * 1024,
+      maxAssetFiles: 8,
+      maxAssetBytes: 128 * 1024,
+      globalObject: {},
+      subtleCrypto,
+    }),
+    null,
+  );
 });
 
 test('fails closed for template drift, incompatible releases, and source mismatch', async () => {

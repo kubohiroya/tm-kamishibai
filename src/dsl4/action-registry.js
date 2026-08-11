@@ -11,6 +11,7 @@ export const dsl4GlobalCoreActionNames = Object.freeze([
   'bgm',
   'sound',
   'wait',
+  'broadcastMessageAndWait',
   'transition',
   'goto',
   'branch',

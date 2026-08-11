@@ -834,6 +834,17 @@ test('opens the non-embedded title and menu without validating a packaged story 
 
     assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
+    assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
+      surface: null,
+      backing: null,
+    });
+    assert.deepEqual(JSON.parse(await extensionReporter(vm, 'runtimeDiagnosticsReporter')), {
+      status: 'ready',
+      surface: null,
+      runtime: null,
+      resources: null,
+      backing: null,
+    });
     const titleControls = findByAttribute(
       restoreGlobals.document.body,
       'data-dsl4-title-controls',
@@ -887,7 +898,6 @@ test('opens the non-embedded title and menu without validating a packaged story 
     );
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
-
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {

@@ -78,6 +78,7 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 | `bgm`                          | `bgm`                                       | 自動                                                                  |
 | `sound`                        | `sound`                                     | 自動                                                                  |
 | `wait`                         | `wait`                                      | 自動                                                                  |
+| TurboWarp broadcast and wait   | `broadcastMessageAndWait`                   | 手動。message名を完全一致で指定し、receiverへの引数・結果伝播はしない |
 | `transition`                   | `transition: {effect, seconds}`             | 自動。3.2のfade系は固定1秒、resetは0秒を保持                          |
 | Actor `show`                   | `Actor.show: {skin, x, y, scale}`           | 自動。costume target補正時はwarning                                   |
 | Actor `setSkin`                | `Actor.setSkin`                             | 自動。3.2のscale指定も`{skin, scale}`として保持                       |
@@ -101,8 +102,11 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 決定的に変換します。
 
 custom Scratch block、Scratch variable／broadcastへ直接依存する作品固有code、block順に依存する副作用は台本
-sourceだけから検出できません。converter成功後も作品固有blockをレビューし、必要ならDSL4 custom actionとして
-明示登録します。
+sourceだけから検出できません。converter成功後も作品固有blockをレビューします。引数・結果・DSL4 contextを
+渡さず、単一messageを送信して全receiverの完了を待つだけでよい処理は、起動時固定・既定OFFの
+`dsl4BroadcastMessageAndWait`を有効にして`broadcastMessageAndWait`へ手動移行できます。typed argument、
+scene遷移結果、DSL4 context、登録時のparameter検証が必要な場合はDSL4 Custom actionとして明示登録します。
+converterはproject内broadcastの意図や安全な待機境界を推測せず、このactionを自動生成しません。
 
 ## 5. 旧Text AssetからSVG Textへの手動移行
 

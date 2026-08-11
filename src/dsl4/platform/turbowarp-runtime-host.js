@@ -16,6 +16,7 @@ import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
+import {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 
 /**
  * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
@@ -302,6 +303,20 @@ function validateStoryCapabilities(storyDocument, port, evaluateCondition) {
   }
 }
 
+/** @param {Readonly<Record<string, unknown>>} storyDocument @param {boolean} enabled */
+function validateBroadcastMessageAndWaitFeature(storyDocument, enabled) {
+  const scenes = Array.isArray(storyDocument.scenes) ? storyDocument.scenes : [];
+  const action = scenes
+    .flatMap((scene) => (isRecord(scene) && Array.isArray(scene.actions) ? scene.actions : []))
+    .find((candidate) => isRecord(candidate) && candidate.command === 'broadcastMessageAndWait');
+  if (action && !enabled) {
+    throw hostError(
+      'K4-HOST-BROADCAST-FLAG-001',
+      'dsl4BroadcastMessageAndWait must be enabled for broadcastMessageAndWait actions',
+    );
+  }
+}
+
 /** @param {Readonly<Record<string, unknown>>} storyDocument */
 function resolvePoseFeedbackMode(storyDocument) {
   const poseRecognition = isRecord(storyDocument.poseRecognition)
@@ -328,6 +343,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} bubbleAdvanceIndicatorEnabled
  * @param {boolean} turboWarpBubbleEnabled
  * @param {(port: Readonly<{prepareMenu: () => Promise<boolean>, showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
+ * @param {(port: Readonly<{getState: () => Readonly<Record<string, number>>}>) => void} [publishRuntimeDiagnostics]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -342,6 +358,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   bubbleAdvanceIndicatorEnabled,
   turboWarpBubbleEnabled,
   publishApplicationPort = () => {},
+  publishRuntimeDiagnostics = () => {},
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -367,7 +384,13 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let runtimeExpressionComposition = null;
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
   let cameraPreviewControls = null;
+  /** @type {ReturnType<typeof createDsl4TurboWarpBroadcastActionPort> | null} */
+  let broadcastActionPort = null;
   const inputArbitration = createDsl4InputArbitration();
+  const broadcastMessageAndWaitEnabled = resolveDsl4FeatureFlags(
+    options.featureFlags,
+  ).dsl4BroadcastMessageAndWait;
+  validateBroadcastMessageAndWaitFeature(component.storyDocument, broadcastMessageAndWaitEnabled);
   const standaloneAdvanceIndicatorEnabled =
     bubbleAdvanceIndicatorEnabled && !turboWarpBubbleEnabled;
   /** @type {Readonly<Record<string, Function>> | Record<string, Function>} */
@@ -417,6 +440,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
+    if (broadcastMessageAndWaitEnabled) {
+      broadcastActionPort = createDsl4TurboWarpBroadcastActionPort({runtime: options.runtime});
+    }
     actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
       ...(bubbleCompositionProxy === null ? {} : {bubbleComposition: bubbleCompositionProxy}),
@@ -649,6 +675,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ['stage', 'bgm', 'sound', 'setSkin', 'loop'],
       'media action port',
     );
+    if (broadcastActionPort) {
+      addPortMethods(
+        port,
+        broadcastActionPort,
+        ['broadcastMessageAndWait'],
+        'TurboWarp broadcast action port',
+      );
+    }
     addPortMethods(
       port,
       actorPort,
@@ -737,6 +771,23 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     Object.freeze(port);
 
     const activeAssetSession = assetSession;
+    const poseModelAssetIds = Object.values(component.storyDocument.assets ?? {})
+      .filter((asset) => isRecord(asset) && asset.kind === 'poseModel')
+      .map((asset) => String(asset.id));
+    publishRuntimeDiagnostics(
+      Object.freeze({
+        getState() {
+          const registeredPoseModelCount = poseModelAssetIds.filter((assetId) =>
+            activeAssetSession.tmposeComposition.isPoseModelRegistered(assetId),
+          ).length;
+          return Object.freeze({
+            registeredPoseModelCount,
+            activePoseModelCount:
+              activeAssetSession.tmposeComposition.getActivePoseModelName() === null ? 0 : 1,
+          });
+        },
+      }),
+    );
     const baseAssetLifecycle = activeAssetSession.lifecycle;
     const previewControls = configuredPreviewControls;
     const controlAssetIds = hasConfiguredPreviewControls
@@ -960,6 +1011,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => broadcastActionPort?.dispose(),
             () => mediaPort?.dispose(),
             () => bubbleAdvanceIndicatorPresenter?.dispose(),
             () => actorPlatform?.dispose(),
@@ -991,6 +1043,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => broadcastActionPort?.dispose(),
       () => mediaPort?.dispose(),
       () => bubbleAdvanceIndicatorPresenter?.dispose(),
       () => actorPlatform?.dispose(),
@@ -1137,6 +1190,8 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   const runtimeEventListeners = new Set();
   /** @type {Readonly<Record<string, Function>> | null} */
   let applicationPort = null;
+  /** @type {Readonly<{getState: () => Readonly<Record<string, number>>}> | null} */
+  let runtimeDiagnosticsPort = null;
   if (
     options.createRuntimeExpressionComposition !== undefined &&
     typeof options.createRuntimeExpressionComposition !== 'function'
@@ -1240,13 +1295,16 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         (port) => {
           applicationPort = port;
         },
+        (port) => {
+          runtimeDiagnosticsPort = port;
+        },
       );
     },
   });
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
@@ -1456,6 +1514,17 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
               return cacheLeaseError;
             },
           }),
+    diagnostics: Object.freeze({
+      getState() {
+        const port =
+          /** @type {Readonly<{getState: () => Readonly<Record<string, number>>}> | null} */ (
+            runtimeDiagnosticsPort
+          );
+        return (
+          port?.getState() ?? Object.freeze({registeredPoseModelCount: 0, activePoseModelCount: 0})
+        );
+      },
+    }),
     sessionBinaryBacking:
       binaryBackingPort === null
         ? null

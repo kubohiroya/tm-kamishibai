@@ -8,9 +8,15 @@ import {
   collectDsl4BrowserDroppedFiles,
 } from '../../src/dsl4/platform/browser-story-file-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
+import {createDsl4PackagedBinaryRuntimeBridge} from '../../src/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeTitleControls} from '../../src/dsl4/platform/runtime-title-controls.js';
+import {createDsl4RuntimeWarningIndicator} from '../../src/dsl4/platform/runtime-warning-indicator.js';
+import {
+  createDsl4SessionBackingFatalDiagnostic,
+  createDsl4SessionBackingWarningDiagnostic,
+} from '../../src/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
@@ -116,6 +122,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.frontend = createDsl4ProductionSourceFrontend(schema);
     this.shell = null;
     this.errorIndicator = null;
+    this.warningIndicator = null;
+    this.binaryRuntimeSurface = null;
     this.pendingStart = null;
     this.operation = Promise.resolve();
     this.status = 'ready';
@@ -174,6 +182,20 @@ class KamishibaiDsl4RuntimeExtension {
           disableMonitor: true,
         },
         {
+          opcode: 'binaryBackingStatusReporter',
+          blockType: BlockType.REPORTER,
+          text: 'Kamishibai DSL 4.0 binary backing status',
+          hideFromPalette: true,
+          disableMonitor: true,
+        },
+        {
+          opcode: 'runtimeDiagnosticsReporter',
+          blockType: BlockType.REPORTER,
+          text: 'Kamishibai DSL 4.0 runtime diagnostics',
+          hideFromPalette: true,
+          disableMonitor: true,
+        },
+        {
           opcode: 'setTextValue',
           blockType: BlockType.COMMAND,
           text: 'set internal text [NAME] to [VALUE]',
@@ -221,6 +243,25 @@ class KamishibaiDsl4RuntimeExtension {
 
   lastErrorReporter() {
     return this.lastError;
+  }
+
+  binaryBackingStatusReporter() {
+    const backing = this.shell?.runtimeHost?.sessionBinaryBacking;
+    return JSON.stringify({
+      surface: this.binaryRuntimeSurface,
+      backing: backing?.getState?.() ?? null,
+    });
+  }
+
+  runtimeDiagnosticsReporter() {
+    const runtimeHost = this.shell?.runtimeHost;
+    return JSON.stringify({
+      status: this.status,
+      surface: this.binaryRuntimeSurface,
+      runtime: runtimeHost?.getState?.().runtime ?? null,
+      resources: runtimeHost?.diagnostics?.getState?.() ?? null,
+      backing: runtimeHost?.sessionBinaryBacking?.getState?.() ?? null,
+    });
   }
 
   setTextValue() {}
@@ -530,6 +571,26 @@ class KamishibaiDsl4RuntimeExtension {
     console.error(`[Kamishibai DSL 4.0] ${phase} failed.`, loggedError(failure));
   }
 
+  showSessionBackingWarning(warning) {
+    const diagnostic = createDsl4SessionBackingWarningDiagnostic(warning, browserLocale());
+    try {
+      this.warningIndicator ??= createDsl4RuntimeWarningIndicator({
+        document: globalThis.document,
+        mount: resolveRuntimeMount(this.Scratch),
+      });
+      this.warningIndicator.show(diagnostic);
+    } catch (indicatorError) {
+      console.error('Kamishibai DSL 4.0 warning indicator failed.', indicatorError);
+    }
+    console.warn('[Kamishibai DSL 4.0] session-binary-backing warning.', warning);
+  }
+
+  showSessionBackingFatal(failure) {
+    const diagnostic = createDsl4SessionBackingFatalDiagnostic(failure, browserLocale());
+    this.warningIndicator?.hide();
+    this.reportFailure(diagnostic, 'session-binary-backing');
+  }
+
   showFailure(failure) {
     const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failure?.code === 'string' ? failure.code : '';
@@ -563,8 +624,12 @@ class KamishibaiDsl4RuntimeExtension {
     const errorIndicator = this.errorIndicator;
     this.errorIndicator = null;
     errorIndicator?.dispose();
+    const warningIndicator = this.warningIndicator;
+    this.warningIndicator = null;
+    warningIndicator?.dispose();
     const shell = this.shell;
     this.shell = null;
+    this.binaryRuntimeSurface = null;
     if (shell) await shell.dispose(reason);
     if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
@@ -602,6 +667,13 @@ class KamishibaiDsl4RuntimeExtension {
       return;
     }
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
+    let binaryRuntime = await createDsl4PackagedBinaryRuntimeBridge({
+      project,
+      sourceFrontend: this.frontend,
+      ...limits,
+      globalObject: globalThis,
+      subtleCrypto: globalThis.crypto?.subtle,
+    });
     let shell;
     let started = false;
     const startRuntime = async () => {
@@ -615,10 +687,12 @@ class KamishibaiDsl4RuntimeExtension {
         const result = await shell.runtimeHost.start();
         if (this.shell !== shell) return;
         if (result.status === 'failed') {
-          this.reportFailure(
-            result.diagnostic ?? 'DSL 4.0 story execution failed.',
-            'story-runtime',
-          );
+          if (this.status !== 'error') {
+            this.reportFailure(
+              result.diagnostic ?? 'DSL 4.0 story execution failed.',
+              'story-runtime',
+            );
+          }
           return;
         }
         if (result.status === 'finished') {
@@ -636,41 +710,73 @@ class KamishibaiDsl4RuntimeExtension {
         this.status = result.status;
       } catch (error) {
         if (this.shell !== shell) return;
-        this.reportFailure(error, 'story-runtime');
+        if (this.status !== 'error') this.reportFailure(error, 'story-runtime');
       }
     };
-    shell = await createDsl4StandardAppShell({
-      featureFlags: dsl4StandardProductionFeatureFlags,
-      surface: 'regularEditor',
-      document: globalThis.document,
-      mount: resolveRuntimeMount(Scratch),
-      runtimeHostOptions: {
-        project,
-        sourceFrontend: this.frontend,
-        ...limits,
-        runtime: Scratch.vm.runtime,
-        onTitleStart() {
-          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
-            BROADCAST_OPTION: 'closeTitle',
-          });
+    try {
+      shell = await createDsl4StandardAppShell({
+        featureFlags: binaryRuntime
+          ? {
+              ...dsl4StandardProductionFeatureFlags,
+              dsl4SessionBinaryBacking: binaryRuntime.sessionBackingEnabled,
+            }
+          : dsl4StandardProductionFeatureFlags,
+        surface: binaryRuntime ? 'packager' : 'regularEditor',
+        document: globalThis.document,
+        mount: resolveRuntimeMount(Scratch),
+        runtimeHostOptions: {
+          project,
+          sourceFrontend: this.frontend,
+          ...limits,
+          ...(binaryRuntime
+            ? {
+                ...binaryRuntime.runtimeLimits,
+                assetBundleFormat: binaryRuntime.assetBundleFormat,
+                binaryEntryProvider: binaryRuntime.binaryEntryProvider,
+                sessionBacking: binaryRuntime.sessionBacking,
+                onSessionBackingWarning: (warning) => this.showSessionBackingWarning(warning),
+                onSessionBackingFatalError: (failure) => this.showSessionBackingFatal(failure),
+              }
+            : {}),
+          runtime: Scratch.vm.runtime,
+          onTitleStart() {
+            Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+              BROADCAST_OPTION: 'closeTitle',
+            });
+          },
+          createHostPort: async ({runtime}) => createDsl4TurboWarpTransitionPort({runtime}),
+          tmPoseRuntime: createDsl4BundledTMPoseRuntime({
+            runtime: resolveBundledTMPoseRuntime(),
+            globalObject: globalThis,
+          }),
+          setLoading() {},
+          loadRemoteAsset,
+          subtleCrypto: globalThis.crypto?.subtle,
         },
-        createHostPort: async ({runtime}) => createDsl4TurboWarpTransitionPort({runtime}),
-        tmPoseRuntime: createDsl4BundledTMPoseRuntime({
-          runtime: resolveBundledTMPoseRuntime(),
-          globalObject: globalThis,
-        }),
-        setLoading() {},
-        loadRemoteAsset,
-        subtleCrypto: globalThis.crypto?.subtle,
-      },
-    });
-    if (!shell.ok || !shell.runtimeHost) {
-      const diagnostic = shell.diagnostics[0];
-      throw new Error(diagnostic?.message ?? 'The packaged DSL 4.0 story is invalid.');
+      });
+      if (!shell.ok || !shell.runtimeHost) {
+        const diagnostic = shell.diagnostics[0];
+        throw new Error(diagnostic?.message ?? 'The packaged DSL 4.0 story is invalid.');
+      }
+    } catch (error) {
+      if (binaryRuntime) {
+        try {
+          await binaryRuntime.binaryEntryProvider.release();
+        } catch (releaseError) {
+          throw new AggregateError(
+            [error, releaseError],
+            'Packaged DSL 4.0 startup and entry source release failed',
+          );
+        } finally {
+          binaryRuntime = null;
+        }
+      }
+      throw error;
     }
     shell.runtimeHost.attach(globalThis.document);
 
     this.shell = shell;
+    this.binaryRuntimeSurface = binaryRuntime?.surface ?? null;
     const startAfterTitle =
       applicationMode === 'story'
         ? startRuntime

@@ -151,6 +151,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
+ * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -168,6 +169,7 @@ export function createDsl4RuntimeController({
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
+  broadcastMessageAndWaitEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -232,6 +234,9 @@ export function createDsl4RuntimeController({
       'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
     );
   }
+  if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
+    throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -255,6 +260,20 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  if (
+    !broadcastMessageAndWaitEnabled &&
+    scenes.some((scene) =>
+      /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions ?? []).some(
+        (action) => action.command === 'broadcastMessageAndWait',
+      ),
+    )
+  ) {
+    const error = new TypeError(
+      'dsl4BroadcastMessageAndWait must be enabled for broadcastMessageAndWait actions',
+    );
+    Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-BROADCAST-FLAG-001'});
+    throw error;
+  }
   const storyActorsValue = storyDocument.actors ?? {};
   if (!isRecord(storyActorsValue)) {
     throw new TypeError('DSL 4.0 StoryDocument actors must be an object');

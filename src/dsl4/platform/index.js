@@ -30,6 +30,7 @@ export {
   verifyDsl4PoseNetBundle,
 } from './posenet-bundle.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
+export {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 export {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';
 export {
