@@ -684,6 +684,27 @@ core actionです。`broadcastMessageAndWait: "message"`は、Stageに宣言さ�
 含めて完全一致する`message`を一度送信し、そのmessageで開始されたStage、sprite、cloneの全receiver threadが
 終了してから次のactionへ進みます。完全一致するbroadcastまたはreceiverがない場合は何もせず直ちに完了します。
 
+DSL4の`broadcastMessageAndWait`は、Scratchの「メッセージを送って待つ」（broadcast and wait）に相当します。
+たとえば、紙芝居のsceneの途中にScratchで作成したミニゲームを挟み、ゲーム終了後に台本の次actionへ戻る用途に
+使えます。また、コスチュームの切り替えを多用するアニメーションsequenceをScratch側のblockで作成し、その演出が
+すべて終わるまで台本を待機させる用途にも使えます。台本から独立してScratch editor上で調整した方が扱いやすい処理を、
+一つのmessageを境界としてsceneへ組み込むための機能です。
+
+```yaml
+- Narrator.say:
+    text: ミニゲームに挑戦しよう
+    seconds: 2
+- broadcastMessageAndWait: playMiniGame
+- broadcastMessageAndWait: playCostumeAnimation
+- Narrator.say:
+    text: お話に戻ります
+    seconds: 2
+```
+
+Scratch側では`playMiniGame`や`playCostumeAnimation`の「メッセージを受け取ったとき」scriptが終了した時点を、
+それぞれミニゲームやアニメーションsequenceの完了境界にします。receiverが`forever` blockなどで終了しない場合、
+台本も次のactionへ進みません。常駐処理を開始する用途ではなく、有限時間で完了する一連の処理に使用します。
+
 ```yaml
 - broadcastMessageAndWait: showEndingEffects
 - broadcastMessageAndWait:
