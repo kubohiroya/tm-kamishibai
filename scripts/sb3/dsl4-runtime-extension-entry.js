@@ -82,10 +82,13 @@ function browserLocale() {
 }
 
 /** @param {Record<string, any>} project */
+function packagedRuntimeComponent(project) {
+  return project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4;
+}
+
+/** @param {Record<string, any>} project */
 function packagedApplicationMode(project) {
-  const mode =
-    project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4
-      ?.application?.mode;
+  const mode = packagedRuntimeComponent(project)?.application?.mode;
   return mode === 'menu' ? 'menu' : 'story';
 }
 
@@ -367,9 +370,7 @@ class KamishibaiDsl4RuntimeExtension {
     }
     input.type = 'file';
     input.accept = '.k4.yml,.k4.yaml,application/yaml,text/yaml,text/plain';
-    input.multiple = true;
-    input.webkitdirectory = true;
-    input.setAttribute?.('webkitdirectory', '');
+    input.multiple = false;
     if (input.style) input.style.display = 'none';
     input.addEventListener(
       'change',

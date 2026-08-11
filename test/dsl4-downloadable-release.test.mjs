@@ -957,21 +957,10 @@ controls:
   keymaps:
     production:
       Space: navigation.nextAction
-assets:
-  Card:
-    kind: backdrop
-    file: assets/card.svg
-    loading: lazy
 scenes:
   selected:
     - wait: 0.1
 `),
-  );
-  const card = browserFile(
-    'card.svg',
-    new TextEncoder().encode(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
-    ),
   );
   const vm = new VirtualMachine();
   try {
@@ -1017,17 +1006,15 @@ scenes:
     const input = restoreGlobals.document.body.children.find(
       (element) => element.tagName === 'INPUT' && element.type === 'file',
     );
-    assert(input, 'Open must create a browser directory input.');
-    assert.equal(input.multiple, true);
-    assert.equal(input.webkitdirectory, true);
+    assert(input, 'Open must create a DSL 4.0 YAML file input.');
+    assert.equal(input.multiple, false);
+    assert.equal(input.webkitdirectory, undefined);
+    assert.equal(input.getAttribute('webkitdirectory'), null);
+    assert.match(input.accept, /\.k4\.yml/u);
     input.files = [
       {
         ...source,
-        webkitRelativePath: 'selected-project/selected.k4.yml',
-      },
-      {
-        ...card,
-        webkitRelativePath: 'selected-project/assets/card.svg',
+        webkitRelativePath: '',
       },
     ];
     input.dispatch('change');

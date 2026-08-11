@@ -482,13 +482,19 @@ test(
       );
       const menu = await client.evaluate(`(() => {
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
         const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
         const runtime = globalThis.Scratch.vm.runtime;
         const stage = runtime.getTargetForStage();
+        open.click();
+        const input = document.querySelector('input[type=file]');
         return {
           reloadDisabled: reload?.disabled,
           reloadAriaDisabled: reload?.getAttribute('aria-disabled'),
           reloadCursor: reload ? getComputedStyle(reload).cursor : null,
+          inputAccept: input?.accept,
+          inputMultiple: input?.multiple,
+          inputWebkitDirectory: input?.webkitdirectory,
           iconFilters: icons.map((icon) => getComputedStyle(icon).filter),
           stageCostume: stage.getCostumes()[stage.currentCostume].name,
           errorVisible:
@@ -498,6 +504,9 @@ test(
       assert.equal(menu.reloadDisabled, true);
       assert.equal(menu.reloadAriaDisabled, 'true');
       assert.equal(menu.reloadCursor, 'not-allowed');
+      assert.match(menu.inputAccept, /\.k4\.yml/u);
+      assert.equal(menu.inputMultiple, false);
+      assert.equal(menu.inputWebkitDirectory, false);
       assert.equal(menu.iconFilters.length, 4);
       assert.equal(
         menu.iconFilters.every((filter) => filter !== 'none'),
