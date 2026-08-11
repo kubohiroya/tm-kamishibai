@@ -181,6 +181,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
         turboWarpBubbleAdvancedPresentationEnabled:
           featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
+        broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
       });
     } catch (error) {
       try {

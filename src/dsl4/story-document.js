@@ -338,6 +338,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       sound: 'sound',
       stage: 'backdrop',
       wait: 'seconds',
+      broadcastMessageAndWait: 'message',
     }[command];
     if (!argumentName) throw new Error(`Cannot normalize scalar arguments for ${command}`);
     args = {[argumentName]: sourceArguments};

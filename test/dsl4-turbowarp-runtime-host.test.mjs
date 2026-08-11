@@ -40,6 +40,16 @@ scenes:
   opening:
     - wait: 0
 `;
+const broadcastStory = `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - broadcastMessageAndWait: message
+`;
 const speechStory = `
 kamishibai: '4.0'
 assets:
@@ -326,6 +336,12 @@ function platformFixture(log) {
     isCloud: false,
     value: 0,
   };
+  const broadcastMessage = {
+    id: 'broadcast-message',
+    name: 'message',
+    type: 'broadcast_msg',
+    value: 'message',
+  };
   const monitorRecords = new Map();
   const monitorBlocksById = new Map();
   for (const variable of [poseConfidence, poseProgress]) {
@@ -374,6 +390,7 @@ function platformFixture(log) {
     variables: {
       [poseConfidence.id]: poseConfidence,
       [poseProgress.id]: poseProgress,
+      [broadcastMessage.id]: broadcastMessage,
     },
     lookupVariableByNameAndType(name, type) {
       assert.equal(type, '');
@@ -536,8 +553,10 @@ function platformFixture(log) {
       log.push(['pose.preview-mirroring', mode]);
     },
   };
+  const runtimeListeners = new Map();
   const runtime = {
     targets: [stage, actor],
+    threads: [],
     monitorBlocks,
     getMonitorState: () => monitorState,
     getTargetForStage() {
@@ -550,6 +569,21 @@ function platformFixture(log) {
       _think(message) {
         log.push(['actor.think', message]);
       },
+    },
+    on(type, listener) {
+      const listeners = runtimeListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      runtimeListeners.set(type, listeners);
+    },
+    off(type, listener) {
+      runtimeListeners.get(type)?.delete(listener);
+    },
+    startHats(opcode, fields) {
+      log.push(['runtime.start-hats', opcode, {...fields}]);
+      return [];
+    },
+    _stopThread(thread) {
+      log.push(['runtime.stop-thread', thread]);
     },
   };
   return {
@@ -637,6 +671,29 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
   assert.equal(result.enabled, false);
   assert.equal(result.host, null);
   assert.equal(factoryCalls, 0);
+});
+
+test('gates broadcastMessageAndWait and dispatches it through the built-in TurboWarp port', async () => {
+  const project = await packagedProject(broadcastStory);
+  const disabledFixture = platformFixture([]);
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(enabledOptions(project, disabledFixture)),
+    (error) => error.code === 'K4-HOST-BROADCAST-FLAG-001',
+  );
+
+  const log = [];
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      featureFlags: {dsl4Runtime: true, dsl4BroadcastMessageAndWait: true},
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  assert.equal((await enabled.host.start()).status, 'finished');
+  assert.deepEqual(
+    log.filter(([type]) => type === 'runtime.start-hats'),
+    [['runtime.start-hats', 'event_whenbroadcastreceived', {BROADCAST_OPTION: 'message'}]],
+  );
+  await enabled.host.dispose('broadcast-test');
 });
 
 test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
