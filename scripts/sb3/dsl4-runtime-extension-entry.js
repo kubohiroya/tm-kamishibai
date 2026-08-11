@@ -25,7 +25,7 @@ import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
-const extensionVersion = '4.0.0-dev';
+const extensionVersion = '4.0.0';
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({

@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-dev",
+    "version": "4.0.0",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "single-embedded-extension",
@@ -21,8 +21,8 @@
       "openOfficialWebsite",
       "toggleTitleLanguage"
     ],
-    "projectSource": "release-sources/4.0.0-dev/app/project.source.json",
-    "bundleManifest": "release-sources/4.0.0-dev/app/embedded-extensions.json",
+    "projectSource": "release-sources/4.0.0/app/project.source.json",
+    "bundleManifest": "release-sources/4.0.0/app/embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": false
@@ -138,8 +138,8 @@
       "kind": "single-embedded-extension",
       "unbundle": null,
       "provenance": [
-        "release-sources/4.0.0-dev/app/project.source.json",
-        "release-sources/4.0.0-dev/app/embedded-extensions.json",
+        "release-sources/4.0.0/app/project.source.json",
+        "release-sources/4.0.0/app/embedded-extensions.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
@@ -185,18 +185,26 @@
   "releaseOrder": [
     "release-capability-packages",
     "update-exact-package-and-lock-pins",
+    "set-release-version",
     "run-full-verification",
     "write-versioned-release-source",
     "verify-deterministic-sb3",
     "update-download-catalog-integrity-and-source-commit",
+    "merge-with-provenance-preserving-strategy",
+    "rerun-release-verification",
+    "create-version-tag",
+    "publish-npm-package",
+    "publish-github-release",
     "publish-site"
   ],
   "rollbackOrder": [
     "disable-default-off-feature-surface",
-    "restore-previous-exact-package-and-lock-pins",
-    "restore-previous-release-source-and-download-catalog",
+    "deprecate-released-npm-version-if-required",
+    "annotate-github-release",
+    "restore-previous-recommended-download",
     "rerun-full-verification",
-    "republish-site"
+    "republish-site",
+    "release-fix-as-next-patch"
   ],
   "evidence": [
     "test/dsl4-extension-pins.test.mjs",

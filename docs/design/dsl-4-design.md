@@ -1754,7 +1754,7 @@ unsupported browser fallbackの正本は
 
 ## 11. 独立capability projectとKamishibai Bundle
 
-> **4.0.0-dev closeout（2026-08-10、Issue #517）:** 実装済み4.0 Standardの正本は
+> **4.0.0 closeout（2026-08-11、Issue #517）:** 実装済み4.0 Standardの正本は
 > [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。Runtime member内部は
 > 完全固定npm provider、`./composition`、first-party Structured Dataでsource compositionし、展開ソース上の
 > Runtime member `kubohiroyakamishibairuntime4`とWeb Link member `kubohiroyaweblink`を、既存の

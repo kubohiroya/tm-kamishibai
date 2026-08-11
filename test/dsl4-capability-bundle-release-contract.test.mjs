@@ -138,8 +138,8 @@ test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversibl
     kind: 'single-embedded-extension',
     unbundle: null,
     provenance: [
-      'release-sources/4.0.0-dev/app/project.source.json',
-      'release-sources/4.0.0-dev/app/embedded-extensions.json',
+      'release-sources/4.0.0/app/project.source.json',
+      'release-sources/4.0.0/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -175,19 +175,32 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   assert.deepEqual(contract.releaseOrder, [
     'release-capability-packages',
     'update-exact-package-and-lock-pins',
+    'set-release-version',
     'run-full-verification',
     'write-versioned-release-source',
     'verify-deterministic-sb3',
     'update-download-catalog-integrity-and-source-commit',
+    'merge-with-provenance-preserving-strategy',
+    'rerun-release-verification',
+    'create-version-tag',
+    'publish-npm-package',
+    'publish-github-release',
     'publish-site',
   ]);
-  assert.equal(contract.rollbackOrder[0], 'disable-default-off-feature-surface');
-  assert.equal(contract.rollbackOrder.at(-1), 'republish-site');
+  assert.deepEqual(contract.rollbackOrder, [
+    'disable-default-off-feature-surface',
+    'deprecate-released-npm-version-if-required',
+    'annotate-github-release',
+    'restore-previous-recommended-download',
+    'rerun-full-verification',
+    'republish-site',
+    'release-fix-as-next-patch',
+  ]);
 
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-dev/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(release.artifact.sourceCommit, /^[0-9a-f]{40}$/u);
 

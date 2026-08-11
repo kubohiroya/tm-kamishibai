@@ -832,7 +832,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,

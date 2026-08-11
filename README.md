@@ -14,12 +14,12 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 
 ## npmパッケージ
 
-[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai)は、外部の画像・音声をベースSB3へ組み込み、台本の`asset=`行をプロジェクト内参照へ変換するCLIとJavaScript APIを提供します。
+[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai)は、DSL 4.0 YAMLの検証、local preview、自己完結SB3の生成と、3.1／3.2台本の変換を行うCLI／JavaScript APIを提供します。
 
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.2.3
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0
 ```
 
 ```bash
@@ -31,7 +31,7 @@ pnpm exec tmpose-kamishibai build-sb3 \
   --profile editor
 ```
 
-開発中のDSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
+DSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
 
 ```json
 {

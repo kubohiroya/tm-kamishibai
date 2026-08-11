@@ -30,7 +30,7 @@ const applicationMenuIconPaths = Object.freeze({
   about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
   language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
 const closeTitleBroadcastId = 'closeTitleMessage';
