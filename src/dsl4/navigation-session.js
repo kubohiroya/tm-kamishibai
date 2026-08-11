@@ -74,6 +74,7 @@ function historyFailure(result) {
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
+ * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -99,6 +100,7 @@ export function createDsl4NavigationSession({
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
+  broadcastMessageAndWaitEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -139,6 +141,9 @@ export function createDsl4NavigationSession({
     throw new TypeError(
       'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
     );
+  }
+  if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
+    throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
   }
   if (
     inputArbitration !== undefined &&
@@ -271,6 +276,7 @@ export function createDsl4NavigationSession({
       bubbleAdvanceIndicatorEnabled,
       turboWarpBubbleEnabled,
       turboWarpBubbleAdvancedPresentationEnabled,
+      broadcastMessageAndWaitEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });

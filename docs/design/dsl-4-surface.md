@@ -666,6 +666,7 @@ iconへ反映します。
 | `stage`                   | backdrop ID、または`{backdrop, stableId?}`  |
 | `bgm` / `sound`           | sound ID、または`{sound, stableId?}`        |
 | `wait`                    | 秒数、または`{seconds, stableId?}`          |
+| `broadcastMessageAndWait` | message名、または`{message, stableId?}`     |
 | `transition`              | `{effect, seconds, stableId?}`              |
 | `goto`                    | scene ID、または`{scene, stableId?}`        |
 | `branch`                  | branch ID、または`{branch, stableId?}`      |
@@ -677,6 +678,27 @@ iconへ反映します。
 `branch`または入力actionを使います。
 Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
 Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
+
+`broadcastMessageAndWait`は、通常ならsceneのaction列に直接書く処理をTurboWarp project側へ委譲するための
+core actionです。`broadcastMessageAndWait: "message"`は、Stageに宣言されたbroadcast名と大文字小文字・空白を
+含めて完全一致する`message`を一度送信し、そのmessageで開始されたStage、sprite、cloneの全receiver threadが
+終了してから次のactionへ進みます。完全一致するbroadcastまたはreceiverがない場合は何もせず直ちに完了します。
+
+```yaml
+- broadcastMessageAndWait: showEndingEffects
+- broadcastMessageAndWait:
+    message: showEndingEffects
+    stableId: endingEffects
+```
+
+同じmessageを待つsessionが複数あっても、各actionは自身の送信で返されたthread identityだけを所有します。
+skip、stop、scene再開始、live reload、host破棄ではそのactionが所有する未完了threadだけを停止し、別sessionや
+project内の無関係なthreadは停止しません。DSL4の`ActionContext`、変数、遷移結果はreceiverへ暗黙伝播せず、
+引数や遷移結果が必要な作品固有処理はCustom actionを使います。
+
+このactionはTurboWarp host capabilityで、起動時固定・既定OFFの`dsl4BroadcastMessageAndWait`を必要とし、
+同flagは`dsl4Runtime`を必要とします。OFFではactionを含む台本を実行前に拒否します。ロールバックはflagを
+OFFに戻し、台本を標準core actionまたはCustom actionへ戻します。
 
 ### 7.2 Actor action
 
