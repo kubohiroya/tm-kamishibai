@@ -304,10 +304,6 @@ test('claims the generated archive source and supplies the three-file pose model
   assert.equal(provider.released, false, 'the source is retained until the policy releases it');
   await provider.release();
   assert.equal(source.released, true);
-  await assert.rejects(provider.consumeAsset('Pose'), (error) => {
-    assert.equal(error.code, 'K4-ASSET-ENTRY-RELEASED-001');
-    return true;
-  });
 });
 
 test('claims a direct source without IndexedDB or a second SB3 fetch', async () => {

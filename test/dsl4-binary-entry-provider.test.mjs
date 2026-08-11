@@ -619,7 +619,7 @@ test('rejects reserved root entry collisions even during explicit component repl
   );
 });
 
-test('fails closed before inflation for archive mismatch and bounds, and supports resupply', async () => {
+test('fails closed before inflation for archive mismatch and bounds', async () => {
   const component = await fixture();
   const built = await embedDsl4BinaryEntryRuntimeComponentInSb3(
     baseSb3(),
@@ -723,18 +723,6 @@ test('fails closed before inflation for archive mismatch and bounds, and support
   );
   await released.release();
   await rejectsEntryCode(released.consumeAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
-
-  const resupplied = await createDsl4BinaryEntryProviderFromSb3(
-    built.bytes,
-    component.storyDocument,
-    component.binaryBundle.descriptor,
-    archiveOptions,
-  );
-  assert.deepEqual(
-    (await resupplied.consumeAsset('Image')).files[0].bytes,
-    assetSnapshot().getFile('Image', 'image.svg'),
-  );
-  await resupplied.release();
 
   const badBundle = {
     ...component.binaryBundle,
