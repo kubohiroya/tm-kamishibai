@@ -67,6 +67,60 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
+test('normalizes compact and named broadcastMessageAndWait actions with exact message text', () => {
+  const source = `
+kamishibai: '4.0'
+scenes:
+  opening:
+    - broadcastMessageAndWait: "Opening Effect"
+    - broadcastMessageAndWait:
+        message: "演出 メッセージ"
+        stableId: broadcast-2
+`;
+  const result = frontend.parse(source, {sourceId: 'broadcast.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map(({command, target, args, stableId}) => ({
+      command,
+      target,
+      args,
+      ...(stableId ? {stableId} : {}),
+    })),
+    [
+      {
+        command: 'broadcastMessageAndWait',
+        target: null,
+        args: {message: 'Opening Effect'},
+      },
+      {
+        command: 'broadcastMessageAndWait',
+        target: null,
+        args: {message: '演出 メッセージ'},
+        stableId: 'broadcast-2',
+      },
+    ],
+  );
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/0/args/message']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/args/message']);
+  assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/1/stableId']);
+
+  for (const action of [
+    '    - broadcastMessageAndWait: ""',
+    '    - broadcastMessageAndWait: 1',
+    '    - broadcastMessageAndWait: {message: ok, unexpected: true}',
+    '    - broadcastMessageAndWait: {stableId: missing-message}',
+  ]) {
+    const invalid = frontend.parse(`kamishibai: '4.0'\nscenes:\n  opening:\n${action}\n`, {
+      sourceId: 'story.kamishibai.yaml',
+    });
+    assert.equal(invalid.ok, false, action);
+    const diagnostic = invalid.diagnostics.find(({code}) => code.startsWith('K4-SCHEMA'));
+    assert.ok(diagnostic, action);
+    assert.equal(diagnostic.sourceId, 'story.kamishibai.yaml');
+    assert.equal(diagnostic.range.start.line, 4);
+  }
+});
+
 test('normalizes say and think completion, typewriter, start sound, and source positions', () => {
   const source = `
 kamishibai: '4.0'
@@ -702,6 +756,25 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
   assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
 
+  const silent = frontend.parse(
+    [
+      "kamishibai: '4.0'",
+      'poseRecognition:',
+      '  navigation:',
+      '    allowSkip: true',
+      'scenes:',
+      '  opening: []',
+    ].join('\n'),
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = frontend.parse(base.replace('  chargeSound: Charge\n', ''));
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.storyDocument.poseRecognition.idleSound, 'Tick');
+  assert.equal(Object.hasOwn(idleOnly.storyDocument.poseRecognition, 'chargeSound'), false);
+
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
     ['feedback', '    mode: presenter\n    extra: true\n'],
@@ -1131,7 +1204,6 @@ for (const name of [
   'deprecated-text-asset.kamishibai.yaml',
   'non-scalar-variable.kamishibai.yaml',
   'cover-missing-backdrop.kamishibai.yaml',
-  'pose-recognition-missing-sound.kamishibai.yaml',
   'pose-choices.kamishibai.yaml',
   'pose-empty-steps.kamishibai.yaml',
   'top-level-pose-models.kamishibai.yaml',

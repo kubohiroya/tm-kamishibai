@@ -6,10 +6,14 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {strToU8, zipSync} from 'fflate';
+import {strToU8, unzipSync, zipSync} from 'fflate';
 
 import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
-import {createDsl4SourceFrontend, loadDsl4RuntimeComponent} from '../src/dsl4/index.js';
+import {
+  createDsl4SourceFrontend,
+  dsl4BinaryEntryPrefix,
+  loadDsl4RuntimeComponent,
+} from '../src/dsl4/index.js';
 import {readSb3} from '../src/builder/sb3.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -139,6 +143,15 @@ test('parses a complete build-dsl4 contract and rejects incomplete or unbounded 
   assert.equal(parsed.options.replaceExisting, false);
   assert.match(usage(), /build-dsl4/u);
   assert.match(usage(), /--enable-source-includes/u);
+  assert.match(usage(), /--enable-root-binary-entries/u);
+
+  const rootBinary = parseCliArguments(
+    cliArguments(fixture, 'story.sb3', ['--enable-root-binary-entries']),
+  );
+  assert.deepEqual(rootBinary.options.featureFlags, {
+    dsl4Runtime: true,
+    dsl4RootBinaryEntryPackaging: true,
+  });
 
   const includes = parseCliArguments(
     cliArguments(fixture, 'story.sb3', [
@@ -247,6 +260,19 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     assert.deepEqual(await readFile(fixture.baseSb3Path), inputBefore[0]);
     assert.deepEqual(await readFile(fixture.sourcePath), inputBefore[2]);
     assert.notDeepEqual(await readFile(fixture.sourceManifestPath), inputBefore[1]);
+  });
+});
+
+test('enables root binary entry packaging explicitly from the CLI', async () => {
+  await withFixture(async (fixture) => {
+    const result = await runCli(
+      cliArguments(fixture, 'root.sb3', ['--enable-root-binary-entries']),
+      {stdout: {write() {}}},
+    );
+    const archive = unzipSync(await readFile(result.outputPath));
+    const entries = Object.keys(archive).filter((name) => name.startsWith(dsl4BinaryEntryPrefix));
+    assert.equal(entries.length, 1);
+    assert.match(entries[0], /^k4asset-v1-[0-9a-f]{64}$/u);
   });
 });
 

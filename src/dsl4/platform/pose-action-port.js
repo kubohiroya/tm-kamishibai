@@ -93,6 +93,10 @@ function validateTMPoseComposition(value) {
     'activatePoseModel',
     'isPoseModelRegistered',
     'getActivePoseModelName',
+    'showPreview',
+    'hidePreview',
+    'isPreviewVisible',
+    'setPreviewPosition',
     'startRecognition',
     'stopRecognition',
     'isRecognizing',
@@ -273,9 +277,27 @@ export function createDsl4PoseActionPort(options) {
   /** @type {Promise<void>} */
   let recognitionQueue = Promise.resolve();
   let poseCursorId = 0;
+  const previewOwners = new Set();
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
+  }
+
+  /** @param {unknown} owner */
+  function claimPreview(owner) {
+    previewOwners.add(owner);
+    tmpose.setPreviewPosition('full-stage');
+  }
+
+  /** @param {unknown} owner */
+  function showClaimedPreview(owner) {
+    if (previewOwners.has(owner)) tmpose.showPreview();
+  }
+
+  /** @param {unknown} owner */
+  function releasePreview(owner) {
+    previewOwners.delete(owner);
+    if (previewOwners.size === 0) tmpose.hidePreview();
   }
 
   /**
@@ -539,6 +561,7 @@ export function createDsl4PoseActionPort(options) {
 
       const operation = createOperation(externalSignal);
       activeSequence = operation;
+      claimPreview(operation);
       const displacedSelection = currentSelection;
       displacedSelection?.controller.abort('actor-sequence-priority');
       let confidence = 0;
@@ -551,6 +574,7 @@ export function createDsl4PoseActionPort(options) {
         notifyPoseCursor(true, 'pose-sequence');
         if (displacedSelection) await displacedSelection.done;
         await ensureRecognition(input.poseModel, operation.controller.signal);
+        showClaimedPreview(operation);
         if (input.idleSound) await playSound(input.idleSound);
         if (operation.controller.signal.aborted) throw abortError('pose sequence was cancelled');
         let previousTime = now();
@@ -588,6 +612,7 @@ export function createDsl4PoseActionPort(options) {
         }
         terminalPhase = 'completed';
       } finally {
+        releasePreview(operation);
         if (statePublished) {
           statePublished = false;
           publishPoseState(input, terminalPhase, confidence, progress);
@@ -617,6 +642,7 @@ export function createDsl4PoseActionPort(options) {
           Object.assign(createOperation(externalSignal), {wake: null})
         );
       const previousSelection = currentSelection;
+      claimPreview(operation);
       previousSelection?.controller.abort('newer-pose-candidate-wait');
       currentSelection = operation;
       poseCursorId += 1;
@@ -629,6 +655,7 @@ export function createDsl4PoseActionPort(options) {
           throw abortError('pose candidate wait was cancelled');
         }
         await startSelectionRecognition(input, operation.controller.signal);
+        showClaimedPreview(operation);
         const selected = await asyncInput.waitForPoseCandidate({
           candidates: input.poses,
           signal: operation.controller.signal,
@@ -641,6 +668,7 @@ export function createDsl4PoseActionPort(options) {
         }
         return selected;
       } finally {
+        releasePreview(operation);
         notifyPoseCursor(false, cursorSource);
         operation.detach();
         operation.wake = null;

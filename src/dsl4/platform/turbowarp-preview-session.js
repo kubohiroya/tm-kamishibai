@@ -2,6 +2,7 @@ import {createDsl4NavigationSession} from '../navigation-session.js';
 import {resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
 import {createDsl4TurboWarpRuntimeEnvironment} from './turbowarp-runtime-host.js';
+import {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -86,6 +87,11 @@ function ownRuntimeEnvironment(session, environment) {
   });
 }
 
+/** @param {Readonly<{runtime: unknown}>} context */
+function createDefaultHostPort(context) {
+  return createDsl4TurboWarpTransitionPort({runtime: context.runtime});
+}
+
 /**
  * Create the concrete session factory consumed by the browser preview runtime bridge.
  *
@@ -121,8 +127,12 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
     /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
     let runtimeLifecycleObserver = null;
     const environment = await createDsl4TurboWarpRuntimeEnvironment(
-      options,
+      {
+        ...options,
+        createHostPort: options.createHostPort ?? createDefaultHostPort,
+      },
       generationComponent,
+      () => {},
       () => {},
       (observer) => {
         runtimeLifecycleObserver = observer;
@@ -171,6 +181,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         turboWarpBubbleEnabled: featureFlags.dsl4TurboWarpBubble,
         turboWarpBubbleAdvancedPresentationEnabled:
           featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
+        broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
       });
     } catch (error) {
       try {

@@ -80,10 +80,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(downloadPage, /href="kamishibai\.sb3"/u);
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
-  assert.match(
+  assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
-    /^github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}$/u,
-    'SB3 toolchain dependency must use a fixed commit.',
+    '0.6.0',
+    'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(

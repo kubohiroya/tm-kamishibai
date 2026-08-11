@@ -583,7 +583,6 @@
     "poseRecognition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["idleSound", "chargeSound"],
       "properties": {
         "idleSound": {"$ref": "#/$defs/assetId"},
         "chargeSound": {"$ref": "#/$defs/assetId"},
@@ -706,6 +705,10 @@
       "type": "string",
       "enum": [
         "navigation.nextAction",
+        "navigation.nextScene",
+        "rehearsal.skipPose",
+        "rehearsal.skipAction",
+        "rehearsal.skipScene",
         "history.previousAction",
         "history.previousScene",
         "history.nextScene"
@@ -798,6 +801,20 @@
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
             "seconds": {"type": "number", "minimum": 0}
+          }
+        }
+      ]
+    },
+    "broadcastMessageAndWaitArgs": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "message": {"type": "string", "minLength": 1}
           }
         }
       ]
@@ -986,10 +1003,58 @@
           "required": ["skin"],
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
-            "skin": {"$ref": "#/$defs/assetId"}
+            "skin": {"$ref": "#/$defs/assetId"},
+            "scale": {"type": "number", "exclusiveMinimum": 0}
           }
         }
       ]
+    },
+    "hideArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"stableId": {"$ref": "#/$defs/stableId"}}
+    },
+    "setLayerArgs": {
+      "oneOf": [
+        {"enum": ["front", "back"]},
+        {"type": "number"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layer"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "layer": {"oneOf": [{"enum": ["front", "back"]}, {"type": "number"}]}
+          }
+        }
+      ]
+    },
+    "loopStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skin", "seconds"],
+      "properties": {
+        "skin": {"$ref": "#/$defs/assetId"},
+        "seconds": {"type": "number", "minimum": 0}
+      }
+    },
+    "loopArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "stableId": {"$ref": "#/$defs/stableId"},
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/loopStep"},
+          "contains": {
+            "type": "object",
+            "required": ["seconds"],
+            "properties": {"seconds": {"type": "number", "exclusiveMinimum": 0}}
+          }
+        }
+      }
     },
     "setTextArgs": {
       "type": "object",
@@ -1060,6 +1125,14 @@
       "additionalProperties": false,
       "required": ["wait"],
       "properties": {"wait": {"$ref": "#/$defs/waitArgs"}}
+    },
+    "broadcastMessageAndWaitAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["broadcastMessageAndWait"],
+      "properties": {
+        "broadcastMessageAndWait": {"$ref": "#/$defs/broadcastMessageAndWaitArgs"}
+      }
     },
     "transitionAction": {
       "type": "object",
@@ -1159,6 +1232,33 @@
         "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.setSkin$": {"$ref": "#/$defs/setSkinArgs"}
       }
     },
+    "hideAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.hide$": {"$ref": "#/$defs/hideArgs"}
+      }
+    },
+    "setLayerAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.setLayer$": {"$ref": "#/$defs/setLayerArgs"}
+      }
+    },
+    "loopAction": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.loop$": {"$ref": "#/$defs/loopArgs"}
+      }
+    },
     "setTextAction": {
       "type": "object",
       "minProperties": 1,
@@ -1183,7 +1283,7 @@
       "maxProperties": 1,
       "additionalProperties": false,
       "patternProperties": {
-        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|setTransparency|moveTo|say|think|setSkin|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
+        "^[\\p{L}_][\\p{L}\\p{N}_-]*\\.(?!(?:show|hide|setTransparency|moveTo|say|think|setSkin|setLayer|loop|setText|pose)$)[\\p{L}_][\\p{L}\\p{N}_-]*$": {
           "$ref": "#/$defs/customActorActionArgs"
         }
       }
@@ -1194,6 +1294,7 @@
         {"$ref": "#/$defs/bgmAction"},
         {"$ref": "#/$defs/soundAction"},
         {"$ref": "#/$defs/waitAction"},
+        {"$ref": "#/$defs/broadcastMessageAndWaitAction"},
         {"$ref": "#/$defs/transitionAction"},
         {"$ref": "#/$defs/gotoAction"},
         {"$ref": "#/$defs/branchAction"},
@@ -1206,6 +1307,9 @@
         {"$ref": "#/$defs/sayAction"},
         {"$ref": "#/$defs/thinkAction"},
         {"$ref": "#/$defs/setSkinAction"},
+        {"$ref": "#/$defs/hideAction"},
+        {"$ref": "#/$defs/setLayerAction"},
+        {"$ref": "#/$defs/loopAction"},
         {"$ref": "#/$defs/setTextAction"},
         {"$ref": "#/$defs/poseAction"},
         {"$ref": "#/$defs/customActorAction"}

@@ -90,22 +90,30 @@ test('keeps every external capability on its reviewed composition boundary', asy
   ]);
 });
 
-test('ships the Standard artifact as one embedded source-composed runtime', async () => {
-  const [projectSource, entrypoint] = await Promise.all([
+test('ships the Standard artifact as one embedded runtime extension', async () => {
+  const [projectSource, bundleManifestSource, entrypoint] = await Promise.all([
     readRepositoryFile(contract.standardArtifact.projectSource),
+    readRepositoryFile(contract.standardArtifact.bundleManifest),
     readRepositoryFile(contract.standardArtifact.entrypoint),
   ]);
   const project = JSON.parse(projectSource);
+  const bundleManifest = JSON.parse(bundleManifestSource);
   const {extensionId} = contract.standardArtifact;
 
-  assert.equal(contract.standardArtifact.integration, 'source-composition');
+  assert.equal(contract.standardArtifact.integration, 'single-embedded-extension');
   assert.deepEqual(project.extensions, [extensionId]);
   assert.deepEqual(project.extensionURLs, {
     [extensionId]: `embedded-extension:extensions/${extensionId}.js`,
   });
   assert.deepEqual(Object.keys(project.extensionStorage), [extensionId]);
+  assert.equal(bundleManifest.extensionBundles, undefined);
+  assert.deepEqual(
+    bundleManifest.extensions.map(({id}) => id),
+    [extensionId],
+  );
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
   assert.match(entrypoint, new RegExp(`const extensionId = '${extensionId}'`));
+  assert.doesNotMatch(entrypoint, /kubohiroyaweblink/u);
 
   const opcodes = [...entrypoint.matchAll(/opcode: '([^']+)'/gu)].map((match) => match[1]);
   assert.deepEqual(opcodes, contract.standardArtifact.hiddenOpcodes);
@@ -125,11 +133,17 @@ test('ships the Standard artifact as one embedded source-composed runtime', asyn
   }
 });
 
-test('separates Standard source composition from the reversible 3.2 bundle path', () => {
+test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversible', () => {
   assert.deepEqual(contract.bundleBoundaries.standard4, {
-    kind: 'source-composition',
-    unbundle: 'not-applicable',
-    provenance: ['package.json', 'pnpm-lock.yaml', 'LICENSES.md'],
+    kind: 'single-embedded-extension',
+    unbundle: null,
+    provenance: [
+      'release-sources/4.0.0-dev/app/project.source.json',
+      'release-sources/4.0.0-dev/app/embedded-extensions.json',
+      'package.json',
+      'pnpm-lock.yaml',
+      'LICENSES.md',
+    ],
   });
   assert.deepEqual(contract.bundleBoundaries.legacy32, {
     kind: 'extensionBundles',
@@ -144,6 +158,17 @@ test('separates Standard source composition from the reversible 3.2 bundle path'
   ]);
   assert.equal(contract.previewPolicy.remotePreview, 'forbidden');
   assert.equal(contract.previewPolicy.localPreviewHost, 'tracked-by-issue-258');
+});
+
+test('keeps the 3.2 title state transition for Standard 4.0', () => {
+  assert.match(contract.titleLifecycle.reference, /\/3\.2\/.*#%E7%8A%B6%E6%85%8B/u);
+  assert.deepEqual(contract.titleLifecycle.greenFlag, ['initialize', 'showTitle', 'title']);
+  assert.deepEqual(contract.titleLifecycle.closeInputs, ['stage-click', 'close-button']);
+  assert.equal(contract.titleLifecycle.sharedBroadcast, 'closeTitle');
+  assert.equal(contract.titleLifecycle.embeddedExit, 'startStory');
+  assert.deepEqual(contract.titleLifecycle.externalExit, ['showCover', 'showMenu']);
+  assert.deepEqual(contract.titleLifecycle.storyExit, ['stopStory', 'showCover', 'showMenu']);
+  assert.equal(contract.titleLifecycle.storyExitShowsTitle, false);
 });
 
 test('pins a deterministic release, publication, and rollback sequence', async () => {

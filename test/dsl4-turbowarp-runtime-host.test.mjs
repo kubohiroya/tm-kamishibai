@@ -11,12 +11,14 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
   createDsl4SourceFrontend,
+  dsl4StandardProductionFeatureFlags,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {
   createDsl4StandardAppShell,
   createDsl4TurboWarpPreviewSessionFactory,
   createDsl4TurboWarpRuntimeHost,
+  resolveDsl4SessionBackingConfig,
 } from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
 import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
@@ -37,6 +39,16 @@ controls:
 scenes:
   opening:
     - wait: 0
+`;
+const broadcastStory = `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - broadcastMessageAndWait: message
 `;
 const speechStory = `
 kamishibai: '4.0'
@@ -324,6 +336,12 @@ function platformFixture(log) {
     isCloud: false,
     value: 0,
   };
+  const broadcastMessage = {
+    id: 'broadcast-message',
+    name: 'message',
+    type: 'broadcast_msg',
+    value: 'message',
+  };
   const monitorRecords = new Map();
   const monitorBlocksById = new Map();
   for (const variable of [poseConfidence, poseProgress]) {
@@ -372,12 +390,16 @@ function platformFixture(log) {
     variables: {
       [poseConfidence.id]: poseConfidence,
       [poseProgress.id]: poseProgress,
+      [broadcastMessage.id]: broadcastMessage,
     },
     lookupVariableByNameAndType(name, type) {
       assert.equal(type, '');
       if (name === 'ポーズ認識') return poseConfidence;
       if (name === 'チャージ') return poseProgress;
       return null;
+    },
+    setEffect(effect, value) {
+      log.push(['stage.effect', effect, value]);
     },
   };
   const actor = {
@@ -402,6 +424,18 @@ function platformFixture(log) {
     },
     setEffect(effect, value) {
       log.push(['actor.effect', effect, value]);
+    },
+    goToFront() {
+      log.push(['actor.layer', 'front']);
+    },
+    goToBack() {
+      log.push(['actor.layer', 'back']);
+    },
+    goForwardLayers(count) {
+      log.push(['actor.layer', count]);
+    },
+    goBackwardLayers(count) {
+      log.push(['actor.layer', -count]);
     },
   };
   const assetManagerComposition = {
@@ -440,7 +474,9 @@ function platformFixture(log) {
     stopSound(name) {
       log.push(['media.stop', name]);
     },
-    stopAllSounds() {},
+    stopAllSounds() {
+      log.push(['media.stop-all']);
+    },
     async resolveVerifiedRemoteBinary(input, options) {
       const loaded = await options.load(input, {signal: options.signal});
       return {
@@ -483,6 +519,12 @@ function platformFixture(log) {
     getActivePoseModelName() {
       return null;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     startCamera() {},
     stopCamera() {},
     isCameraRunning() {
@@ -511,8 +553,10 @@ function platformFixture(log) {
       log.push(['pose.preview-mirroring', mode]);
     },
   };
+  const runtimeListeners = new Map();
   const runtime = {
     targets: [stage, actor],
+    threads: [],
     monitorBlocks,
     getMonitorState: () => monitorState,
     getTargetForStage() {
@@ -525,6 +569,21 @@ function platformFixture(log) {
       _think(message) {
         log.push(['actor.think', message]);
       },
+    },
+    on(type, listener) {
+      const listeners = runtimeListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      runtimeListeners.set(type, listeners);
+    },
+    off(type, listener) {
+      runtimeListeners.get(type)?.delete(listener);
+    },
+    startHats(opcode, fields) {
+      log.push(['runtime.start-hats', opcode, {...fields}]);
+      return [];
+    },
+    _stopThread(thread) {
+      log.push(['runtime.stop-thread', thread]);
     },
   };
   return {
@@ -614,6 +673,98 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
   assert.equal(factoryCalls, 0);
 });
 
+test('gates broadcastMessageAndWait and dispatches it through the built-in TurboWarp port', async () => {
+  const project = await packagedProject(broadcastStory);
+  const disabledFixture = platformFixture([]);
+  await assert.rejects(
+    createDsl4TurboWarpRuntimeHost(enabledOptions(project, disabledFixture)),
+    (error) => error.code === 'K4-HOST-BROADCAST-FLAG-001',
+  );
+
+  const log = [];
+  const enabled = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture(log), {
+      featureFlags: {dsl4Runtime: true, dsl4BroadcastMessageAndWait: true},
+    }),
+  );
+  assert.equal(enabled.ok, true, JSON.stringify(enabled.diagnostics));
+  assert.equal((await enabled.host.start()).status, 'finished');
+  assert.deepEqual(
+    log.filter(([type]) => type === 'runtime.start-hats'),
+    [['runtime.start-hats', 'event_whenbroadcastreceived', {BROADCAST_OPTION: 'message'}]],
+  );
+  await enabled.host.dispose('broadcast-test');
+});
+
+test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
+  const direct = resolveDsl4SessionBackingConfig(
+    {},
+    {dsl4SessionBinaryBacking: false},
+    'binary-entry',
+  );
+  assert.equal(direct.policy, 'disabled');
+  assert.equal(typeof direct.sessionId, 'string');
+  assert.equal(direct.sessionId.length > 0, true);
+  assert.deepEqual(direct.storeOptions, {});
+  assert.equal(Object.isFrozen(direct), true);
+  assert.equal(Object.isFrozen(direct.storeOptions), true);
+
+  const preferred = resolveDsl4SessionBackingConfig(
+    {sessionBacking: {sessionId: 'fixed-session', storeOptions: {maxSessionBytes: 1}}},
+    {dsl4SessionBinaryBacking: true},
+    'binary-entry',
+  );
+  assert.deepEqual(preferred, {
+    policy: 'prefer',
+    sessionId: 'fixed-session',
+    storeOptions: {maxSessionBytes: 1},
+  });
+  assert.equal(
+    resolveDsl4SessionBackingConfig(
+      {sessionBacking: {policy: 'required'}},
+      {dsl4SessionBinaryBacking: true},
+      'binary-entry',
+    ).policy,
+    'required',
+  );
+  assert.equal(
+    resolveDsl4SessionBackingConfig(
+      {sessionBacking: {policy: 'disabled'}},
+      {dsl4SessionBinaryBacking: true},
+      'binary-entry',
+    ).policy,
+    'disabled',
+  );
+
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'prefer'}},
+        {dsl4SessionBinaryBacking: false},
+        'binary-entry',
+      ),
+    /requires dsl4SessionBinaryBacking/u,
+  );
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'disabled'}},
+        {dsl4SessionBinaryBacking: false},
+        'embedded-base64',
+      ),
+    /require assetBundleFormat binary-entry/u,
+  );
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {binaryBundleStoreOptions: {}},
+        {dsl4SessionBinaryBacking: false},
+        'binary-entry',
+      ),
+    /replaced by sessionBacking\.storeOptions/u,
+  );
+});
+
 test('creates browser preview sessions from wire StoryDocuments without parsing source again', async () => {
   const project = await packagedProject();
   const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
@@ -669,6 +820,49 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   await third.dispose('preview-test');
   assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 3);
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
+});
+
+test('provides the DSL 3.2 transition port to browser preview sessions by default', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const transitionSource = frontend.parse(
+    `
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - transition:
+        effect: fadeOut
+        seconds: 0
+`,
+    {sourceId: 'main'},
+  );
+  assert.equal(transitionSource.ok, true, JSON.stringify(transitionSource.diagnostics));
+  const log = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture(log),
+    resetManagedPresentation() {},
+  });
+  const session = await createSession({
+    storyDocument: transitionSource.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  await session.start();
+  assert.deepEqual(
+    log.filter(([event]) => event === 'stage.effect'),
+    [['stage.effect', 'brightness', -100]],
+  );
+  await session.dispose('preview-transition-test');
 });
 
 test('attaches browser preview key and stage pointer input for the owned session lifetime', async () => {
@@ -1895,13 +2089,13 @@ test('suspends camera controls at natural finish and resumes the same leases for
   assert.deepEqual([...revoked].sort(), [...objectUrls].sort());
 });
 
-test('wires flagged think advance through the standard TurboWarp runtime host', async () => {
+test('wires Standard production think advance through the TurboWarp runtime host', async () => {
   const project = await packagedProject(speechStory);
   const log = [];
   const fixture = platformFixture(log);
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
-      featureFlags: {dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true},
+      featureFlags: dsl4StandardProductionFeatureFlags,
     }),
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
@@ -2377,10 +2571,15 @@ test('executes media, actor, SVG text, and wait actions through one composed run
 kamishibai: '4.0'
 assets:
   Beach: backdrop
+  Cover: backdrop
   HeroSkin: costume:Hero
+  HeroSkin2: costume:Hero
   Bell: sound
 actors:
   Hero: HeroSkin
+cover:
+  backdrop: Cover
+  bgm: Bell
 textStyles:
   title:
     color: '#ffffff'
@@ -2397,6 +2596,19 @@ scenes:
         x: 10
         y: 20
         scale: 30
+    - Hero.hide: {}
+    - Hero.show:
+        skin: HeroSkin
+        x: 10
+        y: 20
+        scale: 30
+    - Hero.setLayer: back
+    - Hero.loop:
+        steps:
+          - skin: HeroSkin
+            seconds: 0.3
+          - skin: HeroSkin2
+            seconds: 0.3
     - Hero.setTransparency: 50
     - Hero.moveTo:
         x: 40
@@ -2405,7 +2617,9 @@ scenes:
     - Hero.say:
         text: hello
         seconds: 0
-    - Hero.setSkin: HeroSkin
+    - Hero.setSkin:
+        skin: HeroSkin
+        scale: 45
     - Hero.setText:
         text: title
         style: title
@@ -2413,6 +2627,7 @@ scenes:
     - wait: 0
 `);
   const log = [];
+  const clock = manualScheduler();
   const uiVisibility = [];
   const fixture = platformFixture(log);
   fixture.runtime.targets.push({
@@ -2425,15 +2640,24 @@ scenes:
       uiVisibility.push(visible);
     },
   });
-  const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {actorScheduler: clock.scheduler}),
+  );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const finished = await result.host.start();
   assert.equal(finished.status, 'finished');
+  assert.equal(await result.host.showCover(), true);
+  assert.equal(clock.pendingCount(), 0);
   for (const event of [
     ['media.stage', 'Beach'],
+    ['media.stage', 'Cover'],
+    ['media.stop-all'],
     ['media.play', 'Bell'],
     ['actor.size', 30],
     ['actor.visible', true],
+    ['actor.visible', false],
+    ['actor.layer', 'back'],
+    ['actor.size', 45],
     ['actor.effect', 'ghost', 50],
     ['actor.xy', 40, 50],
     ['actor.say', 'hello'],

@@ -94,6 +94,8 @@ function fakeTMPose(overrides = {}) {
   ]);
   let activeModel = 'OtherPose';
   let recognizing = true;
+  let previewVisible = true;
+  const preview = [];
   const composition = {
     activatePoseModel(name) {
       log.push(['activate', name]);
@@ -104,6 +106,20 @@ function fakeTMPose(overrides = {}) {
     },
     getActivePoseModelName() {
       return activeModel;
+    },
+    showPreview() {
+      previewVisible = true;
+      preview.push(['show']);
+    },
+    hidePreview() {
+      previewVisible = false;
+      preview.push(['hide']);
+    },
+    isPreviewVisible() {
+      return previewVisible;
+    },
+    setPreviewPosition(position) {
+      preview.push(['position', position]);
     },
     async startRecognition() {
       log.push(['recognition.start']);
@@ -141,6 +157,7 @@ function fakeTMPose(overrides = {}) {
     labels,
     listeners,
     log,
+    preview,
     emit(event) {
       for (const listener of [...listeners]) listener(event);
     },
@@ -202,6 +219,9 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
     ['play', 'Charge'],
     ['stop', 'Tick'],
   ]);
+  assert.deepEqual(pose.preview, [['position', 'full-stage'], ['show'], ['hide']]);
+  assert.equal(pose.composition.isPreviewVisible(), false);
+  assert.equal(pose.composition.isRecognizing(), true);
 });
 
 test('shows a non-authoritative camera busy indicator while recognition starts', async () => {
@@ -381,6 +401,8 @@ test('publishes completed before awaiting asynchronous sound cleanup', async () 
     states.map(({phase}) => phase),
     ['waiting', 'charging', 'completed'],
   );
+  assert.deepEqual(pose.preview.slice(-1), [['hide']]);
+  assert.equal(pose.composition.isRecognizing(), true);
 
   finishSoundCleanup();
   await pending;
@@ -394,7 +416,7 @@ test('publishes cancelled before awaiting asynchronous sound cleanup', async () 
     finishSoundCleanup = resolve;
   });
   const controller = new AbortController();
-  const {port} = setup({
+  const {pose, port} = setup({
     onPoseState: (event) => states.push(event),
     stopSound: () => soundCleanup,
   });
@@ -412,6 +434,8 @@ test('publishes cancelled before awaiting asynchronous sound cleanup', async () 
     states.map(({phase}) => phase),
     ['waiting', 'cancelled'],
   );
+  assert.deepEqual(pose.preview.slice(-1), [['hide']]);
+  assert.equal(pose.composition.isRecognizing(), true);
 
   finishSoundCleanup();
   await assert.rejects(pending, (error) => error.name === 'AbortError');

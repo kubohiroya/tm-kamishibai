@@ -1,4 +1,12 @@
 kamishibai: "4.0"
+controls:
+  keymaps:
+    production:
+      Space: rehearsal.skipPose
+    rehearsal:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 assets:
   Beach: backdrop
   LoadingBackground:
@@ -115,7 +123,7 @@ scenes:
         seconds: 2
     - transition:
         effect: fadeOut
-        seconds: 0
+        seconds: 1
   ending:
     - stage: Beach
     - Caption.setText:

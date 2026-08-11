@@ -2,9 +2,19 @@
   "formatVersion": 1,
   "issue": 265,
   "standardRuntime": {
-    "extensionId": "kubohiroyakamishibairuntime4",
+    "extensionId": "kubohiroyakamishibai4",
+    "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "visibleOpcodes": [],
-    "hiddenOpcodes": ["versionReporter", "statusReporter", "lastErrorReporter", "setTextValue"]
+    "hiddenOpcodes": [
+      "versionReporter",
+      "statusReporter",
+      "lastErrorReporter",
+      "setTextValue",
+      "showTitle",
+      "closeTitle",
+      "openOfficialWebsite",
+      "toggleTitleLanguage"
+    ]
   },
   "featureFlags": {
     "appShell": {

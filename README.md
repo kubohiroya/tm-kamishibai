@@ -70,6 +70,17 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
+DSL embedded assetをBase64本文ではなくSB3 rootのcontent-addressed entryとして試す場合は、build開始時に
+`--enable-root-binary-entries`を明示します。これは既定OFFです。OFFでは従来のBase64形式を生成するため、
+ロールバック時はflagを外して成果物を再buildします。entry形式、対応sbdl version、Packager／session backingの契約は
+[DSL 4.0 root binary／Packager契約](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-root-binary-packager-contract.md)を参照してください。
+
+root-entry SB3をTurboWarp Packagerへ渡す場合は、固定`@turbowarp/packager` 3.13.0とbuilder exportの
+`packageDsl4WithTurboWarpPackager()`を使用します。Plain HTML／`zip-one-asset`は同じPackager ZIP closureを
+`scaffolding.loadProject()`前に登録し、通常ZIP／Electronは`assets/`配下の個別entryをdirect sourceとして登録します。
+実行時のPackager objectを差し替えたり、生成HTMLを任意の文字列置換で更新したりしないでください。対応templateが変化した場合、
+adapterはbuildをfail closedにします。必要な引数とsurface別の所有権は上記契約書を参照してください。
+
 `project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込みます。`delivery: remote`のpose modelは通常のTMPoseディレクトリURLだけでも指定でき、内容を固定したい場合は`file`へローカル化して埋め込みます。integrity／Content-Type／sizeをすべて指定したremote assetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
 
 `--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
@@ -90,8 +101,15 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes 65536 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --max-total-asset-bytes 67108864 \
+  --max-project-bytes 201326592 \
+  --max-project-json-bytes 201326592
 ```
+
+`--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
+展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
+`--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
+絶対上限を適用します。
 
 Source Graphを監視する場合は、上のcommandへ次を追加します。
 
@@ -274,7 +292,7 @@ pnpm install
 新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
-`pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
+`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.6.0`を使用します。
 CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として

@@ -150,6 +150,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
+ * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -167,6 +168,7 @@ export function createDsl4RuntimeController({
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
+  broadcastMessageAndWaitEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -231,6 +233,9 @@ export function createDsl4RuntimeController({
       'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
     );
   }
+  if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
+    throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -254,6 +259,20 @@ export function createDsl4RuntimeController({
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  if (
+    !broadcastMessageAndWaitEnabled &&
+    scenes.some((scene) =>
+      /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (scene.actions ?? []).some(
+        (action) => action.command === 'broadcastMessageAndWait',
+      ),
+    )
+  ) {
+    const error = new TypeError(
+      'dsl4BroadcastMessageAndWait must be enabled for broadcastMessageAndWait actions',
+    );
+    Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-BROADCAST-FLAG-001'});
+    throw error;
+  }
   const storyActorsValue = storyDocument.actors ?? {};
   if (!isRecord(storyActorsValue)) {
     throw new TypeError('DSL 4.0 StoryDocument actors must be an object');
@@ -357,10 +376,14 @@ export function createDsl4RuntimeController({
   let actionAbortController = null;
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
-  /** @type {{generation: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
   let poseAdvanceLock = null;
-  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, skipRequested: boolean} | null} */
+  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, skipRequested: boolean, skipReason: string | null} | null} */
   let activePoseWait = null;
+  /** @type {{command: 'rehearsal.skipAction' | 'rehearsal.skipScene', sceneIndex: number, actionIndex: number, completion: ReturnType<typeof deferred>, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
+  let rehearsalSkipLock = null;
+  /** @type {{sceneIndex: number, reason: 'rehearsal.skipScene'} | null} */
+  let rehearsalSceneSkip = null;
   /** @type {{generation: number, armed: boolean, completion: ReturnType<typeof deferred>, cleanup: () => void} | null} */
   let activeAdvanceWait = null;
   /** @type {Record<string, any> | null} */
@@ -410,6 +433,18 @@ export function createDsl4RuntimeController({
       currentScene()?.actions ?? []
     );
     return actions[currentActionIndex];
+  }
+
+  /** @param {Readonly<Record<string, unknown>> | null} action */
+  function isRehearsalSceneStatefulAction(action) {
+    return action?.command === 'bgm' || action?.command === 'transition';
+  }
+
+  /** @param {typeof rehearsalSkipLock} lock */
+  function settleRehearsalSkip(lock) {
+    if (!lock || rehearsalSkipLock !== lock) return;
+    rehearsalSkipLock = null;
+    lock.completion.resolve(undefined);
   }
 
   /** @param {number} scenePosition @param {number} actionPosition */
@@ -700,6 +735,31 @@ export function createDsl4RuntimeController({
       })
     );
     trace.push(event);
+    const lock = rehearsalSkipLock;
+    if (lock) {
+      const enteredAnotherScene = type === 'scene.enter' && currentSceneIndex !== lock.sceneIndex;
+      const startedAnotherAction =
+        type === 'action.start' &&
+        (currentSceneIndex !== lock.sceneIndex || currentActionIndex !== lock.actionIndex);
+      const terminal =
+        type === 'runtime.finish' || type === 'runtime.fail' || type === 'runtime.stop';
+      if (
+        terminal ||
+        enteredAnotherScene ||
+        (lock.command === 'rehearsal.skipAction' && startedAnotherAction)
+      ) {
+        settleRehearsalSkip(lock);
+      }
+    }
+    if (
+      rehearsalSceneSkip &&
+      ((type === 'scene.enter' && currentSceneIndex !== rehearsalSceneSkip.sceneIndex) ||
+        type === 'runtime.finish' ||
+        type === 'runtime.fail' ||
+        type === 'runtime.stop')
+    ) {
+      rehearsalSceneSkip = null;
+    }
     try {
       onEvent?.(event);
     } catch {
@@ -1021,9 +1081,10 @@ export function createDsl4RuntimeController({
   /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
+   * @param {{rehearsalSceneSkip?: boolean}} [options]
    * @returns {Promise<{sceneId: string, reason: string} | null>}
    */
-  async function dispatch(action, context) {
+  async function dispatch(action, context, {rehearsalSceneSkip = false} = {}) {
     const command = String(action.command);
     const target = action.target === null ? null : String(action.target);
     const args = /** @type {Record<string, unknown>} */ (action.args);
@@ -1110,7 +1171,14 @@ export function createDsl4RuntimeController({
           completion: deferred(),
           cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
           skipRequested: false,
+          skipReason: null,
         };
+        if (
+          poseAdvanceLock?.generation === context.generation &&
+          poseAdvanceLock.stepIndex !== stepIndex
+        ) {
+          poseAdvanceLock = null;
+        }
         activePoseWait = poseWait;
         let skipped = false;
         try {
@@ -1145,7 +1213,10 @@ export function createDsl4RuntimeController({
           poseWait.completion.resolve(undefined);
         }
         if (skipped) {
-          emit('pose.step.skip', {stepIndex, reason: 'navigation.nextAction'});
+          emit('pose.step.skip', {
+            stepIndex,
+            reason: poseWait.skipReason ?? 'navigation.nextAction',
+          });
           continue;
         }
         ensureActive(context);
@@ -1157,7 +1228,11 @@ export function createDsl4RuntimeController({
       return null;
     }
     const portArgs =
-      command === 'say' || command === 'think' ? resolveSpeechStyle(command, args) : args;
+      command === 'say' || command === 'think'
+        ? resolveSpeechStyle(command, args)
+        : rehearsalSceneSkip && command === 'transition'
+          ? {...args, seconds: 0}
+          : args;
     await invokePort(command, target === null ? {...portArgs} : {target, ...portArgs}, context);
     return null;
   }
@@ -1257,8 +1332,21 @@ export function createDsl4RuntimeController({
             completeQuiesce(currentSceneIndex, currentActionIndex, 'finished', false);
             break;
           }
+          const sceneSkip =
+            rehearsalSceneSkip?.sceneIndex === currentSceneIndex ? rehearsalSceneSkip : null;
+          if (sceneSkip) {
+            emit('navigation.advanceScene', {
+              fromStoryPath: storyPathAt(currentSceneIndex, currentActionIndex),
+              toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
+              reason: sceneSkip.reason,
+            });
+          }
           if (
-            !(await enterScene(String(scenes[currentSceneIndex + 1].id), 'sequential', activeRunId))
+            !(await enterScene(
+              String(scenes[currentSceneIndex + 1].id),
+              sceneSkip?.reason ?? 'sequential',
+              activeRunId,
+            ))
           ) {
             break;
           }
@@ -1303,6 +1391,17 @@ export function createDsl4RuntimeController({
             break;
           }
         }
+        const applyingRehearsalSceneState = rehearsalSceneSkip?.sceneIndex === currentSceneIndex;
+        if (applyingRehearsalSceneState && !isRehearsalSceneStatefulAction(currentAction())) {
+          try {
+            releaseStructuredAction('rehearsal.skipScene');
+          } catch (error) {
+            fail(error);
+            break;
+          }
+          emit('action.skip', {reason: 'rehearsal.skipScene'});
+          continue;
+        }
         generation += 1;
         const actionGeneration = generation;
         actionAbortController = new AbortController();
@@ -1310,7 +1409,9 @@ export function createDsl4RuntimeController({
         emit('action.start');
         let transition = null;
         try {
-          transition = await dispatch(currentAction(), context);
+          transition = await dispatch(currentAction(), context, {
+            rehearsalSceneSkip: applyingRehearsalSceneState,
+          });
         } catch (error) {
           if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
           fail(error);
@@ -1446,16 +1547,39 @@ export function createDsl4RuntimeController({
     return snapshot();
   }
 
-  /** @param {string} reason */
-  function isPoseNavigationAdvance(reason) {
+  function hasActivePoseWait() {
     return (
-      poseNavigationPolicyEnabled &&
-      reason === 'navigation.nextAction' &&
       status === 'running' &&
       actionAbortController !== null &&
       activePoseWait?.generation === generation &&
       currentAction()?.command === 'pose'
     );
+  }
+
+  /** @param {string} reason */
+  function isPoseNavigationAdvance(reason) {
+    return (
+      hasActivePoseWait() &&
+      (reason === 'rehearsal.skipPose' ||
+        (poseNavigationPolicyEnabled && reason === 'navigation.nextAction'))
+    );
+  }
+
+  /** @param {string} command */
+  function canRehearsalSkip(command) {
+    if (status !== 'running') return false;
+    if (poseAdvanceLock && poseAdvanceLock.generation !== generation) poseAdvanceLock = null;
+    if (poseAdvanceLock || rehearsalSkipLock || rehearsalSceneSkip) return false;
+    if (command === 'rehearsal.skipPose') {
+      return hasActivePoseWait() && poseSequenceRecognition.navigation.allowSkip;
+    }
+    if (command === 'rehearsal.skipAction') {
+      return actionAbortController !== null && currentAction() !== null;
+    }
+    if (command === 'rehearsal.skipScene') {
+      return currentSceneIndex >= 0 && currentScene() !== null;
+    }
+    return false;
   }
 
   /** @param {string} [reason] */
@@ -1548,9 +1672,14 @@ export function createDsl4RuntimeController({
     if (isPoseNavigationAdvance(reason)) {
       const poseWait = activePoseWait;
       if (!poseWait) return Promise.resolve(snapshot());
-      /** @type {{generation: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
-      const lock = {generation, operation: Promise.resolve(snapshot())};
+      /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>}} */
+      const lock = {
+        generation,
+        stepIndex: poseWait.stepIndex,
+        operation: Promise.resolve(snapshot()),
+      };
       poseWait.skipRequested = true;
+      poseWait.skipReason = reason;
       poseWait.controller.abort(reason);
       const operation = poseWait.completion.promise.then(() => snapshot());
       lock.operation = operation;
@@ -1571,6 +1700,135 @@ export function createDsl4RuntimeController({
     runId += 1;
     runPromise = null;
     return continueAfterAdvanceCancellation(reason, fromStoryPath, runId);
+  }
+
+  function skipPose() {
+    if (!canRehearsalSkip('rehearsal.skipPose')) return Promise.resolve(snapshot());
+    return advance('rehearsal.skipPose');
+  }
+
+  /**
+   * Complete the active action at its cancellation endpoint and resume at the next action boundary.
+   *
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function skipAction() {
+    if (!canRehearsalSkip('rehearsal.skipAction')) return Promise.resolve(snapshot());
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const staleRun = runPromise;
+    const completion = deferred();
+    const lock = {
+      command: /** @type {const} */ ('rehearsal.skipAction'),
+      sceneIndex: currentSceneIndex,
+      actionIndex: currentActionIndex,
+      completion,
+      operation: Promise.resolve(snapshot()),
+    };
+    finishPresentationTransitions(lock.command);
+    rehearsalSkipLock = lock;
+    const action = currentAction();
+    actionAbortController?.abort(lock.command);
+    generation += 1;
+    if (action) emit('action.cancel', {reason: lock.command});
+    runId += 1;
+    const activeRunId = runId;
+    runPromise = null;
+    const operation = (async () => {
+      if (staleRun) await staleRun;
+      if (status === 'running' && runId === activeRunId) {
+        void continueAfterAdvanceCancellation(lock.command, fromStoryPath, activeRunId);
+      } else {
+        settleRehearsalSkip(lock);
+      }
+      await completion.promise;
+      return snapshot();
+    })();
+    lock.operation = operation;
+    void operation.catch(() => {});
+    return operation;
+  }
+
+  /**
+   * Fast-forward the current scene with the exact stateful tail allowed by the 3.2 runtime.
+   *
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function skipScene() {
+    if (!canRehearsalSkip('rehearsal.skipScene')) return Promise.resolve(snapshot());
+    const staleRun = runPromise;
+    const completion = deferred();
+    const lock = {
+      command: /** @type {const} */ ('rehearsal.skipScene'),
+      sceneIndex: currentSceneIndex,
+      actionIndex: currentActionIndex,
+      completion,
+      operation: Promise.resolve(snapshot()),
+    };
+    finishPresentationTransitions(lock.command);
+    rehearsalSkipLock = lock;
+    rehearsalSceneSkip = {sceneIndex: currentSceneIndex, reason: lock.command};
+    const action = currentAction();
+    actionAbortController?.abort(lock.command);
+    generation += 1;
+    if (action) emit('action.cancel', {reason: lock.command});
+    runId += 1;
+    const activeRunId = runId;
+    runPromise = null;
+    const operation = (async () => {
+      if (staleRun) await staleRun;
+      if (status === 'running' && runId === activeRunId) {
+        try {
+          releaseStructuredAction(lock.command);
+        } catch (error) {
+          fail(error);
+        }
+        actionAbortController = null;
+        if (status === 'running') runPromise = run(activeRunId);
+      } else {
+        rehearsalSceneSkip = null;
+        settleRehearsalSkip(lock);
+      }
+      await completion.promise;
+      return snapshot();
+    })();
+    lock.operation = operation;
+    void operation.catch(() => {});
+    return operation;
+  }
+
+  /**
+   * Skip the remainder of the active scene and continue at the next scene boundary.
+   *
+   * @param {string} [reason]
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function advanceScene(reason = 'navigation.nextScene') {
+    if (status !== 'running') return Promise.resolve(snapshot());
+    const nextScene = scenes[currentSceneIndex + 1];
+    if (nextScene) return navigate(String(nextScene.id), {reason});
+
+    const fromStoryPath = storyPathAt(currentSceneIndex, currentActionIndex);
+    const action = currentAction();
+    finishPresentationTransitions(reason);
+    actionAbortController?.abort(reason);
+    generation += 1;
+    if (action) emit('action.cancel', {reason});
+    runId += 1;
+    runPromise = null;
+    try {
+      releaseStructuredAction(reason);
+      endStructuredStory('runtime-finished');
+    } catch (error) {
+      fail(error);
+      return Promise.resolve(snapshot());
+    }
+    currentActionIndex = /** @type {ReadonlyArray<unknown>} */ (currentScene()?.actions ?? [])
+      .length;
+    actionAbortController = null;
+    status = 'finished';
+    emit('navigation.advanceScene', {fromStoryPath, toStoryPath: null, reason});
+    emit('runtime.finish');
+    return Promise.resolve(snapshot());
   }
 
   /**
@@ -1867,9 +2125,14 @@ export function createDsl4RuntimeController({
     start,
     stop,
     canAdvance,
+    canRehearsalSkip,
     acceptAdvanceInput,
     consumeAdvanceInput,
     advance,
+    skipPose,
+    skipAction,
+    skipScene,
+    advanceScene,
     navigate,
     reposition,
     resume,

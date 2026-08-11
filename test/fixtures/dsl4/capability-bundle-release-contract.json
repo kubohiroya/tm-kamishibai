@@ -4,12 +4,23 @@
   "standardArtifact": {
     "series": "4.0",
     "version": "4.0.0-dev",
-    "extensionId": "kubohiroyakamishibairuntime4",
-    "integration": "source-composition",
+    "extensionId": "kubohiroyakamishibai4",
+    "runtimeComponentId": "kubohiroyakamishibairuntime4",
+    "integration": "single-embedded-extension",
     "registrationCount": 1,
     "visibleOpcodes": [],
-    "hiddenOpcodes": ["versionReporter", "statusReporter", "lastErrorReporter", "setTextValue"],
+    "hiddenOpcodes": [
+      "versionReporter",
+      "statusReporter",
+      "lastErrorReporter",
+      "setTextValue",
+      "showTitle",
+      "closeTitle",
+      "openOfficialWebsite",
+      "toggleTitleLanguage"
+    ],
     "projectSource": "release-sources/4.0.0-dev/app/project.source.json",
+    "bundleManifest": "release-sources/4.0.0-dev/app/embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": false
@@ -18,7 +29,7 @@
     {
       "id": "asset-manager",
       "package": "@kubohiroya/turbowarp-asset-manager",
-      "version": "0.8.0",
+      "version": "0.10.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
       "compositionExport": "./composition",
@@ -73,7 +84,7 @@
     {
       "id": "tmpose",
       "package": "@kubohiroya/turbowarp-tmpose",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
       "compositionExport": "./composition",
@@ -95,6 +106,8 @@
     }
   ],
   "supportPackages": [
+    {"package": "@teachablemachine/pose", "version": "0.8.3", "license": "Apache-2.0"},
+    {"package": "@tensorflow/tfjs", "version": "1.3.1", "license": "Apache-2.0"},
     {"package": "fflate", "version": "0.8.3", "license": "MIT"},
     {"package": "yaml", "version": "2.9.0", "license": "ISC"}
   ],
@@ -120,9 +133,15 @@
   },
   "bundleBoundaries": {
     "standard4": {
-      "kind": "source-composition",
-      "unbundle": "not-applicable",
-      "provenance": ["package.json", "pnpm-lock.yaml", "LICENSES.md"]
+      "kind": "single-embedded-extension",
+      "unbundle": null,
+      "provenance": [
+        "release-sources/4.0.0-dev/app/project.source.json",
+        "release-sources/4.0.0-dev/app/embedded-extensions.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "LICENSES.md"
+      ]
     },
     "legacy32": {
       "kind": "extensionBundles",
@@ -150,6 +169,16 @@
     "transport": "loopback-origin-token-root-restricted",
     "productionPersistence": "forbidden",
     "localPreviewHost": "tracked-by-issue-258"
+  },
+  "titleLifecycle": {
+    "reference": "https://kubohiroya.github.io/tmpose-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
+    "greenFlag": ["initialize", "showTitle", "title"],
+    "closeInputs": ["stage-click", "close-button"],
+    "sharedBroadcast": "closeTitle",
+    "embeddedExit": "startStory",
+    "externalExit": ["showCover", "showMenu"],
+    "storyExit": ["stopStory", "showCover", "showMenu"],
+    "storyExitShowsTitle": false
   },
   "releaseOrder": [
     "release-capability-packages",

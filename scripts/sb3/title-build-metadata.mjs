@@ -18,7 +18,9 @@ export const officialWebsiteFaviconPlaceholder = '{{OFFICIAL_WEBSITE_FAVICON}}';
 export const titleBuildDateEnvironmentVariable = 'KAMISHIBAI_BUILD_DATE';
 const assetManagerSetTextValueOpcodes = new Set([
   'kubohiroyaassetmanager_setTextValue',
+  'kubohiroyakamishibai4_setTextValue',
   'kubohiroyakamishibairuntime4_setTextValue',
+  'kubohiroyakamishibai4_kubohiroyakamishibairuntime4__setTextValue',
   'tmposebundle_kubohiroyaassetmanager__setTextValue',
 ]);
 
@@ -212,6 +214,12 @@ async function stampSvgAsset({
   return Object.freeze({assetId, filename});
 }
 
+async function svgAssetContainsPlaceholder(assetsDirectory, costume, placeholder) {
+  if (costume.dataFormat !== 'svg') return false;
+  const svg = await readFile(path.join(assetsDirectory, costume.md5ext), 'utf8');
+  return svg.includes(placeholder);
+}
+
 async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   const projectPath = path.join(sourceDirectory, 'project.source.json');
   const sourceManifestPath = path.join(sourceDirectory, 'sb3-source.json');
@@ -309,6 +317,41 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
       sourceManifest,
     });
   }
+  let localizedTitleAsset = null;
+  if (
+    await svgAssetContainsPlaceholder(assetsDirectory, runtimeTitleCostumes[0], '{{ABOUT_TITLE}}')
+  ) {
+    const localized = appShellLocales.ja;
+    const localizedTitleReplacements = [
+      [titleVersionPlaceholder, metadata.label],
+      ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
+      ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(appShellTitleLines.ja.licenseApp[0])],
+      ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(appShellTitleLines.ja.licenseApp[1])],
+      ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(appShellTitleLines.ja.licenseStory[0])],
+      ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(appShellTitleLines.ja.licenseStory[1])],
+      [
+        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}',
+        escapeXml(appShellTitleLines.ja.authorOrganization[0]),
+      ],
+      [
+        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}',
+        escapeXml(appShellTitleLines.ja.authorOrganization[1]),
+      ],
+      ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
+      ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
+    ];
+    for (const [placeholder, replacement] of localizedTitleReplacements) {
+      localizedTitleAsset = await stampSvgAsset({
+        assetsDirectory,
+        costume: runtimeTitleCostumes[0],
+        description: 'The localized TitleRuntime SVG',
+        placeholder,
+        project,
+        replacement,
+        sourceManifest,
+      });
+    }
+  }
   let officialWebsiteFallbackAsset = await stampSvgAsset({
     assetsDirectory,
     costume: officialWebsiteCostumes[0],
@@ -327,7 +370,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     replacement: escapeXml(localized.about.officialWebsite.name),
     sourceManifest,
   });
-  const officialWebsiteAsset = await stampSvgAsset({
+  let officialWebsiteAsset = await stampSvgAsset({
     assetsDirectory,
     costume: officialWebsiteRuntimeCostumes[0],
     description: 'The runtime official-website-button SVG',
@@ -336,6 +379,23 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     replacement: favicon.toString('base64'),
     sourceManifest,
   });
+  if (
+    await svgAssetContainsPlaceholder(
+      assetsDirectory,
+      officialWebsiteRuntimeCostumes[0],
+      '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+    )
+  ) {
+    officialWebsiteAsset = await stampSvgAsset({
+      assetsDirectory,
+      costume: officialWebsiteRuntimeCostumes[0],
+      description: 'The localized runtime official-website-button SVG',
+      placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+      project,
+      replacement: escapeXml(appShellLocales.ja.about.officialWebsite.name),
+      sourceManifest,
+    });
+  }
 
   const resolvedProjectSource = `${JSON.stringify(project, null, 2)}\n`;
   for (const placeholder of Object.keys(appShellProjectPlaceholders)) {
@@ -357,6 +417,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   return Object.freeze({
     officialWebsiteAsset,
     officialWebsiteFallbackAsset,
+    localizedTitleAsset,
     titleAsset: Object.freeze({...titleAsset, label: metadata.label}),
   });
 }

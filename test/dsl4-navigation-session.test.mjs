@@ -314,6 +314,118 @@ scenes:
   await run;
 });
 
+test('reproduces the 3.2 rehearsal key contexts from a production YAML profile', async () => {
+  const poseCleanups = [deferred(), deferred()];
+  const finalWait = deferred();
+  const calls = [];
+  let poseIndex = 0;
+  const story = parseStory(`
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
+assets:
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors: {Hero: HeroIdle}
+poseRecognition:
+  navigation: {allowSkip: true}
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - {pose: first}
+            - {pose: second}
+      - wait: 30
+      - wait: 30
+  ending:
+    - wait: 30
+`);
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    port: {
+      waitForPose({stepIndex}, context) {
+        poseIndex = stepIndex;
+        calls.push(['pose', stepIndex]);
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              calls.push(['pose-abort', stepIndex]);
+              void poseCleanups[stepIndex].promise.then(() => {
+                calls.push(['pose-cleanup', stepIndex]);
+                const error = new Error('pose cancelled');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            },
+            {once: true},
+          );
+        });
+      },
+      wait({seconds}, context) {
+        calls.push(['wait', seconds]);
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              calls.push(['wait-abort', seconds]);
+              const error = new Error('wait cancelled');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            {once: true},
+          );
+          void finalWait.promise.then(() => {});
+        });
+      },
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  const {session} = created;
+  const initialRun = session.start();
+  await waitFor(() => calls.some(([type]) => type === 'pose'), 'first pose did not start');
+
+  const space = keyEvent('Space');
+  assert.equal(session.handleKeyDown(space), true);
+  assert.deepEqual(space.counters, {preventDefault: 1, stopPropagation: 1});
+  assert.equal(session.handleKeyDown(keyEvent('ArrowRight')), false);
+  assert.equal(session.handleKeyDown(keyEvent('ArrowDown')), false);
+  poseCleanups[0].resolve();
+  await waitFor(() => poseIndex === 1, 'Space did not continue to the next pose step');
+
+  const right = keyEvent('ArrowRight');
+  assert.equal(session.handleKeyDown(right), true);
+  assert.equal(session.handleKeyDown(keyEvent('ArrowDown')), false);
+  poseCleanups[1].resolve();
+  await waitFor(
+    () => calls.some(([type]) => type === 'wait'),
+    'ArrowRight did not finish the pose action',
+  );
+  assert.equal(session.getState().runtime.actionPath, '/scenes/rescue/actions/1');
+
+  const down = keyEvent('ArrowDown');
+  assert.equal(session.handleKeyDown(down), true);
+  await waitFor(
+    () => session.getState().runtime.sceneId === 'ending',
+    'ArrowDown did not enter the next scene',
+  );
+  assert.equal(session.getState().runtime.actionPath, '/scenes/ending/actions/0');
+  assert.equal(session.handleKeyDown(keyEvent('Space')), false);
+  assert.equal(session.handleKeyDown(keyEvent('ArrowRight')), true);
+
+  session.stop('test-cleanup');
+  await Promise.allSettled([initialRun, session.getRunPromise()]);
+});
+
 test('preserves mixed history and nextAction arrival order while pose policy is enabled', async () => {
   async function runOrder(codes) {
     const waits = [];

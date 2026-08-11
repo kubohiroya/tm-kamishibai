@@ -42,7 +42,7 @@ test('converts the complete DSL 3.2 fixture into deterministic schema-valid DSL 
   assert.equal(first.source.includes('\r'), false);
   assert.deepEqual(
     first.diagnostics.map((diagnostic) => diagnostic.range.start.line),
-    [2, 3, 10, 11, 12, 13, 45],
+    [2, 3, 10, 11, 12, 13],
   );
   assert.ok(first.diagnostics.some((diagnostic) => diagnostic.code === 'K4-CONVERT-VARIABLE-TYPE'));
   assert.ok(
@@ -327,6 +327,40 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
         diagnostic.code === 'K4-CONVERT-POSE-CONFIG' && diagnostic.range.start.line === 2,
     ),
   );
+
+  const silent = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'setRuntimeVariable=poseRecog:0.75',
+      'asset=Hero,costume',
+      'actor=Hero,Hero',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'silent-pose-config.txt', poseModels},
+  );
+  assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
+  assert.equal(silent.document?.poseRecognition.sequence.confidenceThreshold, 0.75);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'chargeSound'), false);
+
+  const idleOnly = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Hero,costume',
+      'asset=Idle,sound',
+      'actor=Hero,Hero',
+      'setPoseRecognitionSound=Idle',
+      'sceneLabel=rescue',
+      'TMPoseURL=https://example.com/models/rescue/',
+      'action=Hero:pose:Hero:help:',
+    ].join('\n'),
+    {sourceId: 'idle-only-pose-config.txt', poseModels},
+  );
+  assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
+  assert.equal(idleOnly.document?.poseRecognition.idleSound, 'Idle');
+  assert.equal(Object.hasOwn(idleOnly.document?.poseRecognition, 'chargeSound'), false);
 });
 
 test('preserves TMPoseURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
@@ -378,7 +412,7 @@ test('does not silently drop legacy Text Assets or unsupported DSL 3.2 actions',
       'asset=Narration,text',
       'actor=Hero,Narration',
       'sceneLabel=opening',
-      'action=Hero:hide',
+      'action=Hero:setScale:100',
     ].join('\n'),
     {sourceId: 'legacy.txt'},
   );
@@ -458,6 +492,44 @@ test('converts timed and styled legacy speech while rejecting persistent speech'
       },
     },
   ]);
+});
+
+test('preserves the Urashima clear, scale, visibility, layer, and loop semantics', () => {
+  const result = convertDsl32ToDsl4(
+    [
+      'kamishibai=3.2',
+      'asset=Fish1,costume:Fish:fish-1',
+      'asset=Fish2,costume:Fish:fish-2',
+      'svgTextStyle=default:#ffffff:#575e75:Helvetica:100:left:up-right',
+      'actor=Fish,Fish1',
+      'sceneLabel=dragon castle',
+      'action=Fish:say:',
+      'action=Fish:setSkin:Fish2:45',
+      'action=Fish:setLayer:back',
+      'action=Fish:loop:Fish1,Fish2:0.3,0.3',
+      'action=Fish:hide',
+    ].join('\n'),
+    {sourceId: 'urashima-actions.txt'},
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal(Object.hasOwn(result.document?.textStyles.default, 'direction'), false);
+  assert.deepEqual(result.document?.scenes['dragon castle'], [
+    {'Fish.say': {text: '', seconds: 0}},
+    {'Fish.setSkin': {skin: 'Fish2', scale: 45}},
+    {'Fish.setLayer': 'back'},
+    {
+      'Fish.loop': {
+        steps: [
+          {skin: 'Fish1', seconds: 0.3},
+          {skin: 'Fish2', seconds: 0.3},
+        ],
+      },
+    },
+    {'Fish.hide': {}},
+  ]);
+  const validated = frontend.parse(result.yaml, {sourceId: 'urashima-actions.k4.yml'});
+  assert.equal(validated.ok, true, JSON.stringify(validated.diagnostics));
 });
 
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {

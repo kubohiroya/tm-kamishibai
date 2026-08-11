@@ -34,6 +34,8 @@ function validateComposition(value) {
 function validateHost(value, speechAdvanceTypewriterEnabled) {
   const methods = [
     'showActor',
+    'hideActor',
+    'setActorLayer',
     'setTransparency',
     'createTransparencyTransition',
     'createMove',
@@ -388,6 +390,7 @@ async function runSpeechPresentationOperation(operation, signal, context, waitFo
  * @param {boolean} [options.speechAdvanceTypewriterEnabled]
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {unknown} [options.advanceIndicatorPresenter]
+ * @param {(actorId: string) => unknown | Promise<unknown>} [options.stopActorLoop]
  */
 export function createDsl4ActorActionPort(options) {
   if (!isRecord(options)) throw new TypeError('actor action port options must be an object');
@@ -423,6 +426,10 @@ export function createDsl4ActorActionPort(options) {
     );
   }
   const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
+  if (options.stopActorLoop !== undefined && typeof options.stopActorLoop !== 'function') {
+    throw new TypeError('stopActorLoop must be a function');
+  }
+  const stopActorLoop = options.stopActorLoop;
 
   /** @param {string} skin */
   function requireImageAsset(skin) {
@@ -699,11 +706,49 @@ export function createDsl4ActorActionPort(options) {
         /** @type {unknown} */ (context)
       );
       const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => stopActorLoop?.(target), signal);
       await runCancellable(() => composition.applyToTarget(skin, actor), signal);
       await runCancellable(
         () => host.showActor(actor, Object.freeze({x, y, scale}), actionContext),
         signal,
       );
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async hide(payload, context) {
+      const value = validatePayloadShape(payload, ['target'], 'hide');
+      const target = requireNonEmptyString(value.target, 'target', 'hide');
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => host.hideActor(actor, actionContext), signal);
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    async setLayer(payload, context) {
+      const value = validatePayloadShape(payload, ['target', 'layer'], 'setLayer');
+      const target = requireNonEmptyString(value.target, 'target', 'setLayer');
+      const layer = value.layer;
+      if (
+        layer !== 'front' &&
+        layer !== 'back' &&
+        (typeof layer !== 'number' || !Number.isFinite(layer))
+      ) {
+        throw portError(
+          'K4-ACTOR-PORT-001',
+          'setLayer.layer must be front, back, or a finite number',
+        );
+      }
+      const signal = validateContext(context);
+      if (signal.aborted) throw abortError();
+      const actionContext = /** @type {Readonly<Record<string, unknown>>} */ (
+        /** @type {unknown} */ (context)
+      );
+      const actor = await resolveTarget(target, actionContext, signal);
+      await runCancellable(() => host.setActorLayer(actor, layer, actionContext), signal);
     },
 
     /** @param {unknown} payload @param {unknown} context */

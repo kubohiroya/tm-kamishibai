@@ -28,7 +28,11 @@ controls:
       ArrowUp: history.previousScene
       ArrowDown: history.nextScene
     production:
-      Space: navigation.nextAction
+      Space: rehearsal.skipPose
+    rehearsal:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 scenes:
   opening: []
 `;
@@ -44,7 +48,7 @@ test('requires an explicit control profile', () => {
 
 test('rejects an unknown profile and a StoryDocument without controls', () => {
   const story = parseStory(profileStorySource);
-  for (const profile of ['rehearsal', '__proto__', 'constructor']) {
+  for (const profile of ['missing', '__proto__', 'constructor']) {
     const unknown = resolveDsl4ControlProfile(story, profile);
     assert.equal(unknown.ok, false);
     assert.equal(unknown.diagnostics[0].code, 'K4-KEYMAP-PROFILE-UNKNOWN');
@@ -64,9 +68,18 @@ test('resolves only the selected complete profile without inheritance or fallbac
   const story = parseStory(profileStorySource);
   const production = resolveDsl4ControlProfile(story, 'production');
   assert.equal(production.ok, true);
-  assert.deepEqual(production.keymap, {Space: 'navigation.nextAction'});
+  assert.deepEqual(production.keymap, {Space: 'rehearsal.skipPose'});
   assert.equal(production.historyEnabled, false);
   assert.equal(Object.hasOwn(production.keymap, 'ArrowLeft'), false);
+
+  const rehearsal = resolveDsl4ControlProfile(story, 'rehearsal');
+  assert.equal(rehearsal.ok, true);
+  assert.equal(rehearsal.historyEnabled, false);
+  assert.deepEqual(rehearsal.keymap, {
+    ArrowDown: 'rehearsal.skipScene',
+    ArrowRight: 'rehearsal.skipAction',
+    Space: 'rehearsal.skipPose',
+  });
 
   const development = resolveDsl4ControlProfile(story, 'development', {
     historyNavigationAvailable: true,
@@ -118,7 +131,7 @@ test('returns frozen copies without changing StoryDocument', () => {
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.keymap), true);
   assert.notStrictEqual(result.keymap, originalKeymap);
-  assert.deepEqual(story.controls.keymaps.production, {Space: 'navigation.nextAction'});
+  assert.deepEqual(story.controls.keymaps.production, {Space: 'rehearsal.skipPose'});
 });
 
 test('fails closed when the selected profile needs unavailable history navigation', () => {

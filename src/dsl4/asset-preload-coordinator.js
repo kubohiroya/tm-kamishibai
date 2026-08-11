@@ -88,6 +88,10 @@ export function createDsl4AssetPreloadCoordinator({
   const startupAssetIds = sortedUnique([...index.startup, ...index.cover, ...index.actors]).filter(
     (assetId) => !excludedStartup.has(assetId),
   );
+  const startupLoadingAssetIds = index.loading.filter((assetId) => !excludedStartup.has(assetId));
+  const startupContentAssetIds = startupAssetIds.filter(
+    (assetId) => !startupLoadingAssetIds.includes(assetId),
+  );
   const sceneRetainedAssetIds = new Set(index.sceneRetained);
   const persistentSceneAssetIds = new Set([
     ...index.loading,
@@ -207,18 +211,57 @@ export function createDsl4AssetPreloadCoordinator({
       error: null,
     };
     current = preparation;
+    let loadingVisible = false;
     try {
       await releasePromise;
       if (current !== preparation || preparation.abortController.signal.aborted) {
         return Object.freeze({ok: false, cancelled: true});
       }
       onEvent('assets.startup.start', {assetIds: startupAssetIds});
-      invokePrepare(preparation, {
-        phase: 'startup',
-        sceneId: null,
-        assetIds: startupAssetIds,
-      });
-      await preparation.promise;
+      if (startupLoadingAssetIds.length > 0) {
+        await port.setLoading(
+          Object.freeze({visible: true, sceneId: null, loading: null, phase: 'startup'}),
+          context(preparation),
+        );
+        loadingVisible = true;
+        onEvent('assets.loading.show', {sceneId: null, phase: 'startup-bootstrap'});
+        invokePrepare(preparation, {
+          phase: 'startup',
+          sceneId: null,
+          assetIds: startupLoadingAssetIds,
+        });
+        await preparation.promise;
+        await port.setLoading(
+          Object.freeze({visible: false, sceneId: null, loading: null, phase: 'startup'}),
+          context(preparation),
+        );
+        loadingVisible = false;
+        onEvent('assets.loading.hide', {sceneId: null, phase: 'startup-bootstrap'});
+      }
+      if (startupContentAssetIds.length > 0) {
+        await port.setLoading(
+          Object.freeze({visible: true, sceneId: null, loading, phase: 'startup'}),
+          context(preparation),
+        );
+        loadingVisible = true;
+        onEvent('assets.loading.show', {sceneId: null, phase: 'startup'});
+        invokePrepare(preparation, {
+          phase: 'startup',
+          sceneId: null,
+          assetIds: startupContentAssetIds,
+        });
+        await preparation.promise;
+        await port.setLoading(
+          Object.freeze({visible: false, sceneId: null, loading, phase: 'startup'}),
+          context(preparation),
+        );
+        loadingVisible = false;
+        onEvent('assets.loading.hide', {sceneId: null, phase: 'startup'});
+      }
+      if (startupAssetIds.length === 0) {
+        invokePrepare(preparation, {phase: 'startup', sceneId: null, assetIds: []});
+        await preparation.promise;
+      }
       if (current !== preparation || preparation.abortController.signal.aborted) {
         return Object.freeze({ok: false, cancelled: true});
       }
@@ -226,6 +269,20 @@ export function createDsl4AssetPreloadCoordinator({
       onEvent('assets.startup.ready', {assetIds: startupAssetIds});
       return Object.freeze({ok: true, prepared: true});
     } catch (error) {
+      if (loadingVisible) {
+        try {
+          await port.setLoading(
+            Object.freeze({visible: false, sceneId: null, loading, phase: 'startup'}),
+            context(preparation),
+          );
+          onEvent('assets.loading.hide', {sceneId: null, phase: 'startup-error'});
+        } catch (hideError) {
+          error = new AggregateError(
+            [error, hideError],
+            'Asset startup and Loading cleanup failed',
+          );
+        }
+      }
       if (current === preparation) current = null;
       if (preparation.abortController.signal.aborted) {
         return Object.freeze({ok: false, cancelled: true});

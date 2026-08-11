@@ -10,6 +10,7 @@ export {createDsl4PlatformAssetSession} from './platform-asset-session.js';
 export {createDsl4PoseActionPort} from './pose-action-port.js';
 export {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 export {createDsl4IndeterminateProgressIndicator} from './indeterminate-progress-indicator.js';
+export {createDsl4LoadingScreenPresenter} from './loading-screen-presenter.js';
 export {createDsl4StandardAppShell} from './standard-app-shell.js';
 export {
   createDsl4ScratchPoseFeedbackAdapter,
@@ -29,6 +30,11 @@ export {
   verifyDsl4PoseNetBundle,
 } from './posenet-bundle.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
+export {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
+export {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';
-export {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
+export {
+  createDsl4TurboWarpRuntimeHost,
+  resolveDsl4SessionBackingConfig,
+} from './turbowarp-runtime-host.js';
 export {createDsl4BrowserRemoteAssetLoader} from './browser-remote-asset-loader.js';

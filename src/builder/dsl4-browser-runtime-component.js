@@ -4,19 +4,22 @@ import {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from '../dsl4/browser-turbowarp-stage.js';
+import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+
+const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
 
 export const dsl4BrowserRuntimeComponentDefaults = deepFreeze({
   maxProjectBytes: dsl4BrowserTurboWarpStageDefaults.maxProjectBytes,
   maxArchiveEntries: 4096,
-  maxProjectJsonBytes: 48 * 1024 * 1024,
+  maxProjectJsonBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxProjectJsonBytes,
 });
 
 export const dsl4BrowserRuntimeComponentMaximums = deepFreeze({
   maxProjectBytes: dsl4BrowserTurboWarpStageMaximumProjectBytes,
   maxArchiveEntries: 16_384,
-  maxProjectJsonBytes: 96 * 1024 * 1024,
+  maxProjectJsonBytes: dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes,
 });
 
 export class Dsl4BrowserRuntimeComponentError extends Error {
@@ -60,6 +63,27 @@ function validateEntryName(entryName) {
   ) {
     fail('K4-PREVIEW-PROJECT-PATH-001', 'Preview SB3 contains an unsafe ZIP entry path');
   }
+}
+
+/** @param {Record<string, any>} project */
+function requiresStandardRuntimeMarker(project) {
+  if (
+    !Array.isArray(project.extensions) ||
+    !project.extensions.includes(standardRuntimeExtensionId)
+  ) {
+    return false;
+  }
+  const extensionUrl = project.extensionURLs?.[standardRuntimeExtensionId];
+  if (
+    typeof extensionUrl !== 'string' ||
+    !extensionUrl.startsWith('data:text/javascript;base64,')
+  ) {
+    fail(
+      'K4-PREVIEW-PROJECT-EXTENSION-001',
+      'Preview Standard runtime extension metadata is invalid',
+    );
+  }
+  return true;
 }
 
 /**
@@ -175,12 +199,13 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput) {
   if (!Array.isArray(project.targets)) {
     fail('K4-PREVIEW-PROJECT-JSON-001', 'Preview project.json must contain a targets array');
   }
-
-  return loadDsl4RuntimeComponent(project, sourceFrontend, {
+  const standardRuntimeMarkerRequired = requiresStandardRuntimeMarker(project);
+  const component = await loadDsl4RuntimeComponent(project, sourceFrontend, {
     maxSourceBytes: options.maxSourceBytes,
     maxAssetFiles: options.maxAssetFiles,
     maxAssetBytes: options.maxAssetBytes,
     historyNavigationAvailable: options.historyNavigationAvailable ?? false,
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   });
+  return component.ok ? deepFreeze({...component, standardRuntimeMarkerRequired}) : component;
 }

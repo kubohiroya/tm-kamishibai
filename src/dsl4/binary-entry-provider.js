@@ -3,11 +3,34 @@ import {validateDsl4AssetBundleManifest} from './asset-bundle-descriptor.js';
 import {deepFreeze} from './story-document.js';
 
 const descriptorKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
-const fileKeys = new Set(['assetId', 'entry', 'integrity', 'path', 'size']);
+const legacyFileKeys = new Set(['assetId', 'entry', 'integrity', 'path', 'size']);
+const rootFileKeys = new Set(['assetId', 'contentType', 'entry', 'integrity', 'path', 'size']);
 const base64Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-export const dsl4BinaryEntryFormatVersion = 2;
-export const dsl4BinaryEntryPrefix = 'kamishibai/assets/v1/';
+export const dsl4LegacyBinaryEntryFormatVersion = 2;
+export const dsl4LegacyBinaryEntryPrefix = 'kamishibai/assets/v1/';
+export const dsl4BinaryEntryFormatVersion = 3;
+export const dsl4BinaryEntryPrefix = 'k4asset-v1-';
+export const dsl4BinaryEntryPrefixes = deepFreeze([
+  dsl4LegacyBinaryEntryPrefix,
+  dsl4BinaryEntryPrefix,
+]);
+
+const contentTypesByExtension = new Map([
+  ['bin', 'application/octet-stream'],
+  ['gif', 'image/gif'],
+  ['jpeg', 'image/jpeg'],
+  ['jpg', 'image/jpeg'],
+  ['json', 'application/json'],
+  ['m4a', 'audio/mp4'],
+  ['mp3', 'audio/mpeg'],
+  ['oga', 'audio/ogg'],
+  ['ogg', 'audio/ogg'],
+  ['png', 'image/png'],
+  ['svg', 'image/svg+xml'],
+  ['wav', 'audio/wav'],
+  ['webp', 'image/webp'],
+]);
 
 export class Dsl4BinaryEntryError extends Error {
   /** @param {string} code @param {string} message @param {unknown} [cause] */
@@ -80,6 +103,31 @@ function safeRelativePath(value, name) {
   return filePath;
 }
 
+/** @param {unknown} value @param {string} name */
+function mediaType(value, name) {
+  const contentType = nonEmptyString(value, name);
+  if (
+    contentType !== contentType.toLowerCase() ||
+    contentType.includes(';') ||
+    !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/u.test(contentType)
+  ) {
+    fail(
+      'K4-ASSET-ENTRY-DESCRIPTOR-001',
+      `${name} must be a lowercase Content-Type without parameters`,
+    );
+  }
+  return contentType;
+}
+
+/** @param {string} filePath */
+export function dsl4BinaryEntryContentType(filePath) {
+  const logicalPath = safeRelativePath(filePath, 'logical path');
+  const basename = logicalPath.slice(logicalPath.lastIndexOf('/') + 1);
+  const dot = basename.lastIndexOf('.');
+  const extension = dot === -1 ? '' : basename.slice(dot + 1).toLowerCase();
+  return contentTypesByExtension.get(extension) ?? 'application/octet-stream';
+}
+
 /** @param {unknown} value @returns {unknown} */
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -137,9 +185,41 @@ function equalBytes(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-/** @param {string} integrity */
-function entryNameForIntegrity(integrity) {
-  return `${dsl4BinaryEntryPrefix}${integrityHex(integrity)}`;
+/** @param {unknown} value @param {string} name */
+function rootEntryName(value, name) {
+  const entry = nonEmptyString(value, name);
+  if (!/^k4asset-v1-[0-9a-f]{64}$/u.test(entry)) {
+    fail('K4-ASSET-ENTRY-PATH-001', `${name} must be a root k4asset-v1-<sha256-hex> entry`);
+  }
+  return entry;
+}
+
+/** @param {number} formatVersion */
+function binaryEntryLayout(formatVersion) {
+  if (formatVersion === dsl4LegacyBinaryEntryFormatVersion) {
+    return {
+      formatVersion,
+      fileKeys: legacyFileKeys,
+      prefix: dsl4LegacyBinaryEntryPrefix,
+      validateEntry: safeRelativePath,
+      includesContentType: false,
+    };
+  }
+  if (formatVersion === dsl4BinaryEntryFormatVersion) {
+    return {
+      formatVersion,
+      fileKeys: rootFileKeys,
+      prefix: dsl4BinaryEntryPrefix,
+      validateEntry: rootEntryName,
+      includesContentType: true,
+    };
+  }
+  fail('K4-ASSET-ENTRY-DESCRIPTOR-001', 'Binary entry bundle format is invalid');
+}
+
+/** @param {string} integrity @param {ReturnType<typeof binaryEntryLayout>} layout */
+function entryNameForIntegrity(integrity, layout) {
+  return `${layout.prefix}${integrityHex(integrity)}`;
 }
 
 /** @param {Readonly<Record<string, any>>} manifest */
@@ -175,9 +255,10 @@ export async function validateDsl4BinaryEntryAssetBundle(
   if (!isRecord(input))
     fail('K4-ASSET-ENTRY-DESCRIPTOR-001', 'Binary entry bundle must be an object');
   exactKeys(input, descriptorKeys, 'binary entry bundle');
-  if (input.formatVersion !== dsl4BinaryEntryFormatVersion || !Array.isArray(input.files)) {
+  if (!Number.isSafeInteger(input.formatVersion) || !Array.isArray(input.files)) {
     fail('K4-ASSET-ENTRY-DESCRIPTOR-001', 'Binary entry bundle format is invalid');
   }
+  const layout = binaryEntryLayout(Number(input.formatVersion));
   const manifest = validateDsl4AssetBundleManifest(storyDocument, input.manifest);
   if (input.files.length > fileLimit) {
     fail('K4-ASSET-ENTRY-LIMIT-001', 'Binary entry bundle exceeds maxFiles');
@@ -191,7 +272,7 @@ export async function validateDsl4BinaryEntryAssetBundle(
     if (!isRecord(candidate)) {
       fail('K4-ASSET-ENTRY-DESCRIPTOR-001', `files[${index}] must be an object`);
     }
-    exactKeys(candidate, fileKeys, `files[${index}]`);
+    exactKeys(candidate, layout.fileKeys, `files[${index}]`);
     const assetId = nonEmptyString(candidate.assetId, `files[${index}].assetId`);
     const filePath = safeRelativePath(candidate.path, `files[${index}].path`);
     const key = `${assetId}\0${filePath}`;
@@ -205,11 +286,16 @@ export async function validateDsl4BinaryEntryAssetBundle(
     }
     const size = Number(candidate.size);
     const integrity = sri(candidate.integrity, `files[${index}].integrity`);
-    const entry = safeRelativePath(candidate.entry, `files[${index}].entry`);
+    const entry = layout.validateEntry(candidate.entry, `files[${index}].entry`);
+    const contentType = layout.includesContentType
+      ? mediaType(candidate.contentType, `files[${index}].contentType`)
+      : undefined;
+    const expectedContentType = dsl4BinaryEntryContentType(filePath);
     if (
       size !== expected.size ||
       integrity !== expected.integrity ||
-      entry !== entryNameForIntegrity(integrity)
+      entry !== entryNameForIntegrity(integrity, layout) ||
+      (layout.includesContentType && contentType !== expectedContentType)
     ) {
       fail('K4-ASSET-ENTRY-MANIFEST-001', `File metadata does not match: ${assetId}/${filePath}`);
     }
@@ -225,7 +311,14 @@ export async function validateDsl4BinaryEntryAssetBundle(
     if (totalBytes > totalLimit) {
       fail('K4-ASSET-ENTRY-LIMIT-001', 'Binary entry bundle exceeds maxTotalBytes');
     }
-    files.push({assetId, path: filePath, size, integrity, entry});
+    files.push({
+      assetId,
+      path: filePath,
+      size,
+      integrity,
+      ...(contentType === undefined ? {} : {contentType}),
+      entry,
+    });
   }
   if (seen.size !== expectedFiles.size) {
     fail('K4-ASSET-ENTRY-MANIFEST-001', 'Binary entry bundle is missing one or more files');
@@ -244,7 +337,7 @@ export async function validateDsl4BinaryEntryAssetBundle(
   if (canonicalJson(files) !== canonicalJson(sortedFiles)) {
     fail('K4-ASSET-ENTRY-ORDER-001', 'Binary entry files are not in canonical order');
   }
-  const content = {formatVersion: dsl4BinaryEntryFormatVersion, manifest, files};
+  const content = {formatVersion: layout.formatVersion, manifest, files};
   const integrity = sri(input.integrity, 'bundle integrity');
   const expectedIntegrity = await computeDsl4Sha256Integrity(
     new TextEncoder().encode(canonicalJson(content)),
@@ -288,6 +381,7 @@ export async function createDsl4BinaryEntryAssetBundle(storyDocument, snapshot, 
   }
   const files = [];
   const entries = new Map();
+  const layout = binaryEntryLayout(dsl4BinaryEntryFormatVersion);
   for (const asset of /** @type {ReadonlyArray<Record<string, any>>} */ (manifest.assets)) {
     if (asset.source.type !== 'file') continue;
     for (const file of asset.source.files) {
@@ -302,13 +396,20 @@ export async function createDsl4BinaryEntryAssetBundle(storyDocument, snapshot, 
           `File integrity does not match: ${asset.id}/${file.path}`,
         );
       }
-      const entry = entryNameForIntegrity(integrity);
+      const entry = entryNameForIntegrity(integrity, layout);
       const existing = entries.get(entry);
       if (existing && !equalBytes(existing, bytes)) {
         fail('K4-ASSET-ENTRY-INTEGRITY-001', `Content-addressed entry collision: ${entry}`);
       }
       if (!existing) entries.set(entry, new Uint8Array(bytes));
-      files.push({assetId: asset.id, path: file.path, size: bytes.length, integrity, entry});
+      files.push({
+        assetId: asset.id,
+        path: file.path,
+        size: bytes.length,
+        integrity,
+        contentType: dsl4BinaryEntryContentType(file.path),
+        entry,
+      });
     }
   }
   const content = {formatVersion: dsl4BinaryEntryFormatVersion, manifest, files};
@@ -433,6 +534,107 @@ export async function createDsl4OneShotBinaryEntryProvider(
     }
   }
 
+  /**
+   * Read and validate one logical asset from the entry source.
+   *
+   * `consume` preserves the original one-shot builder contract. Direct runtime backing uses the
+   * same validation path without consuming the asset so a released scene can materialize it again.
+   *
+   * @param {string} assetId
+   * @param {{signal?: AbortSignal}} readOptions
+   * @param {boolean} consume
+   */
+  async function materializeAsset(assetId, readOptions, consume) {
+    if (released || releaseRequested) {
+      fail('K4-ASSET-ENTRY-RELEASED-001', 'Binary entry provider has been released');
+    }
+    if (pending) fail('K4-ASSET-ENTRY-BUSY-001', 'Binary entry provider is already reading');
+    const files = filesByAsset.get(assetId);
+    if (!files) fail('K4-ASSET-ENTRY-LOOKUP-001', `Binary asset not found: ${assetId}`);
+    if (consume && consumed.has(assetId)) {
+      fail('K4-ASSET-ENTRY-CONSUMED-001', `Binary asset was already consumed: ${assetId}`);
+    }
+    assertNotAborted(readOptions.signal);
+    const linkedAbort = linkAbortSignals(readOptions.signal, sourceAbort.signal);
+    const signal = linkedAbort.signal;
+    const operation = (async () => {
+      try {
+        const output = [];
+        for (const file of files) {
+          assertNotAborted(signal);
+          let loaded;
+          try {
+            loaded = await /** @type {Function} */ (reader)(file.entry, {signal});
+          } catch (error) {
+            if (signal.aborted) {
+              fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry read was aborted', error);
+            }
+            if (error instanceof Dsl4BinaryEntryError) throw error;
+            fail('K4-ASSET-ENTRY-READ-001', `Cannot read binary entry: ${file.entry}`, error);
+          }
+          if (
+            !isRecord(loaded) ||
+            !(loaded.bytes instanceof Uint8Array) ||
+            !Number.isSafeInteger(loaded.compressedSize) ||
+            Number(loaded.compressedSize) < 0
+          ) {
+            fail(
+              'K4-ASSET-ENTRY-READ-001',
+              `Binary entry reader returned invalid data: ${file.entry}`,
+            );
+          }
+          const bytes = new Uint8Array(loaded.bytes);
+          const compressedSize = Number(loaded.compressedSize);
+          if (
+            (compressedSize === 0 && bytes.length !== 0) ||
+            (compressedSize !== 0 && bytes.length / compressedSize > ratioLimit)
+          ) {
+            fail(
+              'K4-ASSET-ENTRY-COMPRESSION-001',
+              `Binary entry exceeds compression ratio: ${file.entry}`,
+            );
+          }
+          if (bytes.length !== file.size) {
+            fail('K4-ASSET-ENTRY-SIZE-001', `Binary entry size does not match: ${file.entry}`);
+          }
+          const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
+          if (integrity !== file.integrity) {
+            fail(
+              'K4-ASSET-ENTRY-INTEGRITY-001',
+              `Binary entry integrity does not match: ${file.entry}`,
+            );
+          }
+          output.push(
+            Object.freeze({
+              path: file.path,
+              size: bytes.length,
+              integrity,
+              ...(file.contentType === undefined ? {} : {contentType: file.contentType}),
+              bytes,
+            }),
+          );
+        }
+        assertNotAborted(signal);
+        if (releaseRequested) {
+          fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry read was superseded by release');
+        }
+        if (consume) {
+          consumed.add(assetId);
+          if (releaseAfterLastAsset && consumed.size === assetIds.length) await finalize();
+        }
+        return Object.freeze({assetId, files: Object.freeze(output)});
+      } finally {
+        linkedAbort.cleanup();
+      }
+    })();
+    pending = operation;
+    try {
+      return await operation;
+    } finally {
+      pending = null;
+    }
+  }
+
   const provider = {
     descriptor: validated,
     assetIds,
@@ -443,96 +645,13 @@ export async function createDsl4OneShotBinaryEntryProvider(
     get remainingAssetCount() {
       return assetIds.length - consumed.size;
     },
+    /** @param {string} assetId @param {{signal?: AbortSignal}} [readOptions] */
+    readAsset(assetId, readOptions = {}) {
+      return materializeAsset(assetId, readOptions, false);
+    },
     /** @param {string} assetId @param {{signal?: AbortSignal}} [consumeOptions] */
-    async consumeAsset(assetId, consumeOptions = {}) {
-      if (released || releaseRequested) {
-        fail('K4-ASSET-ENTRY-RELEASED-001', 'Binary entry provider has been released');
-      }
-      if (pending) fail('K4-ASSET-ENTRY-BUSY-001', 'Binary entry provider is already consuming');
-      const files = filesByAsset.get(assetId);
-      if (!files) fail('K4-ASSET-ENTRY-LOOKUP-001', `Binary asset not found: ${assetId}`);
-      if (consumed.has(assetId)) {
-        fail('K4-ASSET-ENTRY-CONSUMED-001', `Binary asset was already consumed: ${assetId}`);
-      }
-      assertNotAborted(consumeOptions.signal);
-      const linkedAbort = linkAbortSignals(consumeOptions.signal, sourceAbort.signal);
-      const signal = linkedAbort.signal;
-      const operation = (async () => {
-        try {
-          const output = [];
-          for (const file of files) {
-            assertNotAborted(signal);
-            let loaded;
-            try {
-              loaded = await /** @type {Function} */ (reader)(file.entry, {signal});
-            } catch (error) {
-              if (signal.aborted) {
-                fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry consumption was aborted', error);
-              }
-              if (error instanceof Dsl4BinaryEntryError) throw error;
-              fail('K4-ASSET-ENTRY-READ-001', `Cannot read binary entry: ${file.entry}`, error);
-            }
-            if (
-              !isRecord(loaded) ||
-              !(loaded.bytes instanceof Uint8Array) ||
-              !Number.isSafeInteger(loaded.compressedSize) ||
-              Number(loaded.compressedSize) < 0
-            ) {
-              fail(
-                'K4-ASSET-ENTRY-READ-001',
-                `Binary entry reader returned invalid data: ${file.entry}`,
-              );
-            }
-            const bytes = new Uint8Array(loaded.bytes);
-            const compressedSize = Number(loaded.compressedSize);
-            if (
-              (compressedSize === 0 && bytes.length !== 0) ||
-              (compressedSize !== 0 && bytes.length / compressedSize > ratioLimit)
-            ) {
-              fail(
-                'K4-ASSET-ENTRY-COMPRESSION-001',
-                `Binary entry exceeds compression ratio: ${file.entry}`,
-              );
-            }
-            if (bytes.length !== file.size) {
-              fail('K4-ASSET-ENTRY-SIZE-001', `Binary entry size does not match: ${file.entry}`);
-            }
-            const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
-            if (integrity !== file.integrity) {
-              fail(
-                'K4-ASSET-ENTRY-INTEGRITY-001',
-                `Binary entry integrity does not match: ${file.entry}`,
-              );
-            }
-            output.push(
-              Object.freeze({
-                path: file.path,
-                size: bytes.length,
-                integrity,
-                bytes,
-              }),
-            );
-          }
-          assertNotAborted(signal);
-          if (releaseRequested) {
-            fail(
-              'K4-ASSET-ENTRY-ABORTED-001',
-              'Binary entry consumption was superseded by release',
-            );
-          }
-          consumed.add(assetId);
-          if (releaseAfterLastAsset && consumed.size === assetIds.length) await finalize();
-          return Object.freeze({assetId, files: Object.freeze(output)});
-        } finally {
-          linkedAbort.cleanup();
-        }
-      })();
-      pending = operation;
-      try {
-        return await operation;
-      } finally {
-        pending = null;
-      }
+    consumeAsset(assetId, consumeOptions = {}) {
+      return materializeAsset(assetId, consumeOptions, true);
     },
     async release() {
       if (released) return;
