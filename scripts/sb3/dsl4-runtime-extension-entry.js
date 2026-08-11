@@ -357,14 +357,15 @@ class KamishibaiDsl4RuntimeExtension {
           return;
         }
         if (result.status === 'finished') {
-          const covered = await shell.runtimeHost.showCover();
+          await shell.runtimeHost.showCover();
           Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showCover',
           });
+          this.showScratchMenu(this.titleLocale);
           Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showMenu',
           });
-          this.status = covered ? 'cover' : 'menu';
+          this.status = 'menu';
           return;
         }
         this.status = result.status;

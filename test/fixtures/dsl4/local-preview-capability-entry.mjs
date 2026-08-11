@@ -15,13 +15,33 @@ const metrics = {
   predictions: 0,
   classifierDisposals: 0,
   poseNetDisposals: 0,
+  previewVisibilityChanges: [],
 };
+
+function displayValue(styleText) {
+  return /(?:^|;)\s*display:\s*([^;]+)/u.exec(styleText ?? '')?.[1].trim() ?? '';
+}
 
 class DeterministicWebcam {
   constructor() {
     this.canvas = globalThis.document.createElement('canvas');
     this.canvas.width = 320;
     this.canvas.height = 240;
+    let previousDisplay = this.canvas.style.display;
+    const previewObserver = new globalThis.MutationObserver((records) => {
+      const displays = records.map(({oldValue}) => displayValue(oldValue));
+      displays.push(this.canvas.style.display);
+      for (const display of displays) {
+        if (display === previousDisplay) continue;
+        previousDisplay = display;
+        metrics.previewVisibilityChanges.push(display);
+      }
+    });
+    previewObserver.observe(this.canvas, {
+      attributeFilter: ['style'],
+      attributeOldValue: true,
+      attributes: true,
+    });
     this.webcam = globalThis.document.createElement('video');
     Object.defineProperty(this.webcam, 'srcObject', {
       configurable: true,
@@ -31,6 +51,7 @@ class DeterministicWebcam {
           return [
             {
               stop() {
+                previewObserver.disconnect();
                 metrics.cameraTrackStops += 1;
               },
             },

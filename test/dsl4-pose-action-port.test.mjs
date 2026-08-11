@@ -9,11 +9,19 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'rescue'};
 }
 
+function sequenceActionContext(stepController, actionController) {
+  return {
+    ...actionContext(stepController),
+    actionSignal: actionController.signal,
+  };
+}
+
 function sequencePayload(overrides = {}) {
   return {
     target: 'Hero',
     pose: 'help',
     stepIndex: 0,
+    stepCount: 1,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.5,
@@ -224,6 +232,55 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
   assert.equal(pose.composition.isRecognizing(), true);
 });
 
+test('keeps the camera preview visible until the final pose step completes', async () => {
+  const {pose, clock, port} = setup();
+  const actionController = new AbortController();
+  pose.confidence.set('help', 1);
+
+  const first = port.waitForPose(
+    sequencePayload({stepIndex: 0, stepCount: 2}),
+    sequenceActionContext(new AbortController(), actionController),
+  );
+  await flush();
+  clock.advance(1000);
+  await first;
+
+  assert.equal(pose.composition.isPreviewVisible(), true);
+  assert.equal(pose.preview.filter(([method]) => method === 'hide').length, 0);
+
+  pose.confidence.set('stand', 1);
+  const final = port.waitForPose(
+    sequencePayload({pose: 'stand', stepIndex: 1, stepCount: 2}),
+    sequenceActionContext(new AbortController(), actionController),
+  );
+  await flush();
+  clock.advance(1000);
+  await final;
+
+  assert.equal(pose.composition.isPreviewVisible(), false);
+  assert.equal(pose.preview.filter(([method]) => method === 'hide').length, 1);
+});
+
+test('keeps the camera preview while an intermediate pose step is skipped', async () => {
+  const {pose, port} = setup();
+  const actionController = new AbortController();
+  const stepController = new AbortController();
+  const first = port.waitForPose(
+    sequencePayload({stepIndex: 0, stepCount: 2}),
+    sequenceActionContext(stepController, actionController),
+  );
+  await flush();
+
+  stepController.abort('navigation.nextAction');
+  await assert.rejects(first, (error) => error.name === 'AbortError');
+  assert.equal(pose.composition.isPreviewVisible(), true);
+  assert.equal(pose.preview.filter(([method]) => method === 'hide').length, 0);
+
+  actionController.abort('scene-transition');
+  assert.equal(pose.composition.isPreviewVisible(), false);
+  assert.equal(pose.preview.filter(([method]) => method === 'hide').length, 1);
+});
+
 test('shows a non-authoritative camera busy indicator while recognition starts', async () => {
   const busy = [];
   const cursors = [];
@@ -353,7 +410,7 @@ test('aborts during recognition startup and reuses the pending startup for the n
     ],
   );
 
-  const second = port.waitForPose(sequencePayload({stepIndex: 1}), actionContext());
+  const second = port.waitForPose(sequencePayload({stepIndex: 1, stepCount: 2}), actionContext());
   await flush();
   assert.equal(startCalls, 1);
   assert.equal(clock.size, 0);
@@ -669,6 +726,10 @@ test('aborts either mode without leaving timers or listeners', async () => {
 
 test('rejects unavailable models, unknown labels, invalid confidence, and concurrent sequences', async () => {
   const {pose, clock, port} = setup();
+  await assert.rejects(
+    port.waitForPose(sequencePayload({stepIndex: 2, stepCount: 2}), actionContext()),
+    (error) => error.code === 'K4-POSE-PORT-001',
+  );
   await assert.rejects(
     port.waitForPose(sequencePayload({poseModel: 'Missing'}), actionContext()),
     (error) => error.code === 'K4-POSE-PORT-002',

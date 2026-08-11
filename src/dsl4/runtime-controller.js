@@ -69,6 +69,7 @@ function deferred() {
  *
  * @typedef {object} ActionContext
  * @property {AbortSignal} signal
+ * @property {AbortSignal} [actionSignal]
  * @property {number} generation
  * @property {string} sceneId
  * @property {string} actionPath
@@ -1169,10 +1170,11 @@ export function createDsl4RuntimeController({
               target,
               pose: step.pose,
               stepIndex,
+              stepCount: steps.length,
               poseModel,
               recognition: cloneValue(poseSequenceRecognition),
             },
-            {...context, signal: stepController.signal},
+            {...context, signal: stepController.signal, actionSignal: context.signal},
           );
           if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
             skipped = true;

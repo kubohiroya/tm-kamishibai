@@ -324,6 +324,7 @@ test('dispatches every core action and keeps transition separate from scene move
     target: 'Hero',
     pose: 'happy',
     stepIndex: 0,
+    stepCount: 1,
     poseModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.6,
@@ -580,6 +581,7 @@ scenes:
 
 test('runs every Actor.pose step in order with optional skin and sound', async () => {
   const calls = [];
+  const poseCalls = [];
   const story = parseStory(`
 kamishibai: '4.0'
 assets:
@@ -609,7 +611,15 @@ scenes:
     storyDocument: story,
     port: {
       setSkin: async ({skin}) => calls.push(['skin', skin]),
-      waitForPose: async ({pose, recognition}) => calls.push(['wait', pose, recognition]),
+      waitForPose: async ({pose, recognition, stepIndex, stepCount}, context) => {
+        calls.push(['wait', pose, recognition]);
+        poseCalls.push({
+          stepIndex,
+          stepCount,
+          signal: context.signal,
+          actionSignal: context.actionSignal,
+        });
+      },
       sound: async ({sound}) => calls.push(['sound', sound]),
     },
   });
@@ -637,6 +647,17 @@ scenes:
     feedback: {mode: 'scratchMirror'},
     navigation: {allowSkip: false},
   });
+  assert.deepEqual(
+    poseCalls.map(({stepIndex, stepCount}) => [stepIndex, stepCount]),
+    [
+      [0, 3],
+      [1, 3],
+      [2, 3],
+    ],
+  );
+  assert.ok(poseCalls.every(({actionSignal}) => actionSignal === poseCalls[0].actionSignal));
+  assert.equal(new Set(poseCalls.map(({signal}) => signal)).size, 3);
+  assert.ok(poseCalls.every(({signal, actionSignal}) => signal !== actionSignal));
 });
 
 test('advances through empty scenes and the final scene deterministically', async () => {

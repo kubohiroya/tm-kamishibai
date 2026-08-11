@@ -1617,6 +1617,13 @@ scenes:
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.filter(({type}) => type === 'pose.step.skip').length === 1",
           'browser-owned pose-step rehearsal skip',
         );
+        assert.equal(
+          await client.evaluate(
+            "globalThis.dsl4LocalPreviewCapabilityFixture.metrics.previewVisibilityChanges.filter((display) => display === 'none').length",
+          ),
+          0,
+          'The camera preview must remain visible between pose steps.',
+        );
         await pressKey(client, {
           key: 'ArrowRight',
           code: 'ArrowRight',
@@ -1733,6 +1740,7 @@ scenes:
       assert.equal(observed.metrics.modelLoads, 1);
       assert.ok(observed.metrics.predictions >= 1);
       assert.ok(observed.metrics.webcamUpdates >= 1);
+      assert.deepEqual(observed.metrics.previewVisibilityChanges, ['block', 'none']);
       assert.equal(observed.canvasCount, 1);
       assert.deepEqual(observed.errors, []);
 

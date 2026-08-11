@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
+import {createHash, webcrypto} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {runInThisContext} from 'node:vm';
 import test from 'node:test';
@@ -10,6 +11,15 @@ import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.mjs';
+import {
+  createDsl4ProductionSourceFrontend,
+  embedDsl4PackagedRuntimeComponentInSb3,
+} from '../src/builder/index.js';
+import {
+  createDsl4EmbeddedAssetBundle,
+  createDsl4EmbeddedSourceDescriptor,
+  createDsl4RuntimeArtifactDescriptor,
+} from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
@@ -22,9 +32,90 @@ const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
 const release = downloadableReleases.find(({series}) => series === '4.0');
 assert(release, 'The release catalog must publish a DSL 4.0 artifact.');
+const schema = JSON.parse(
+  await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
+);
+const frontend = createDsl4ProductionSourceFrontend(schema);
+const storyComponentLimits = Object.freeze({
+  maxSourceBytes: 1024 * 1024,
+  maxAssetFiles: 64,
+  maxAssetBytes: 64 * 1024 * 1024,
+});
 
 async function buildRelease() {
   return createDownloadableReleaseSb3(release);
+}
+
+async function buildEmbeddedStoryRelease() {
+  const result = await buildRelease();
+  const sourceText = `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  EndCover:
+    kind: backdrop
+    name: Menu
+cover:
+  backdrop: EndCover
+scenes:
+  opening:
+    - wait: 0
+`;
+  const parsed = frontend.parse(sourceText, {sourceId: 'main'});
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const source = await createDsl4EmbeddedSourceDescriptor(sourceText, {
+    sourceId: 'main',
+    displayName: 'story.kamishibai.yaml',
+    maxSourceBytes: storyComponentLimits.maxSourceBytes,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const artifact = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    source,
+    'production',
+    {maxSourceBytes: storyComponentLimits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
+  );
+  assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
+  const assets = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    {
+      manifest: {
+        formatVersion: 1,
+        assets: [
+          {
+            id: 'EndCover',
+            kind: 'backdrop',
+            loading: 'eager',
+            source: {type: 'project', name: 'Menu'},
+          },
+        ],
+      },
+      getFile() {
+        assert.fail('The embedded story fixture has no binary file asset.');
+      },
+    },
+    {
+      maxFiles: storyComponentLimits.maxAssetFiles,
+      maxTotalBytes: storyComponentLimits.maxAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    },
+  );
+  const embedded = await embedDsl4PackagedRuntimeComponentInSb3(
+    result.archive,
+    parsed.storyDocument,
+    source,
+    artifact.artifact,
+    assets,
+    {
+      channel: 'bundled',
+      ...storyComponentLimits,
+      replaceExisting: true,
+      subtleCrypto: webcrypto.subtle,
+    },
+  );
+  return embedded.bytes;
 }
 
 function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
@@ -378,6 +469,69 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
       'Menu',
     );
     assert.equal(closeTarget.visible, false);
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
+});
+
+test('returns a naturally finished embedded story to the menu and allows a restart', async () => {
+  const archive = await buildEmbeddedStoryRelease();
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, archive);
+    let nextSkinId = 1;
+    let nextDrawableId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextDrawableId;
+      nextDrawableId += 1;
+      for (const costume of target.sprite?.costumes ?? []) {
+        costume.skinId = nextSkinId;
+        nextSkinId += 1;
+      }
+    }
+    vm.runtime.renderer = {
+      draw() {},
+      createSVGSkin() {
+        return 1;
+      },
+      destroySkin() {},
+      updateDrawableSkinId() {},
+    };
+
+    vm.greenFlag();
+    const titleDeadline = Date.now() + 5_000;
+    while (Date.now() < titleDeadline) {
+      vm.runtime._step();
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+
+    await extensionReporter(vm, 'closeTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    const stage = vm.runtime.getTargetForStage();
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Menu');
+    assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, false);
+    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, false);
+
+    vm.greenFlag();
+    const restartDeadline = Date.now() + 5_000;
+    while (Date.now() < restartDeadline) {
+      vm.runtime._step();
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
+    assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, true);
+    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, true);
   } finally {
     vm.quit();
     restoreGlobals();

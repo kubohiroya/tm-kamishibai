@@ -84,7 +84,19 @@ function validateContext(value) {
   ) {
     throw portError('K4-POSE-PORT-001', 'pose action signal is invalid');
   }
-  return /** @type {AbortSignal} */ (/** @type {unknown} */ (signal));
+  const actionSignal = isRecord(value) ? (value.actionSignal ?? signal) : null;
+  if (
+    !isRecord(actionSignal) ||
+    typeof actionSignal.aborted !== 'boolean' ||
+    typeof actionSignal.addEventListener !== 'function' ||
+    typeof actionSignal.removeEventListener !== 'function'
+  ) {
+    throw portError('K4-POSE-PORT-001', 'pose action owner signal is invalid');
+  }
+  return {
+    signal: /** @type {AbortSignal} */ (/** @type {unknown} */ (signal)),
+    actionSignal: /** @type {AbortSignal} */ (/** @type {unknown} */ (actionSignal)),
+  };
 }
 
 /** @param {unknown} value */
@@ -143,14 +155,24 @@ function validateSequencePayload(value) {
   if (!feedbackModes.has(feedbackMode)) {
     throw portError('K4-POSE-PORT-001', 'feedback.mode is unsupported');
   }
+  const stepIndex = requireNumber(
+    value.stepIndex ?? 0,
+    'stepIndex',
+    (number) => Number.isSafeInteger(number) && number >= 0,
+  );
+  const stepCount = requireNumber(
+    value.stepCount ?? 1,
+    'stepCount',
+    (number) => Number.isSafeInteger(number) && number >= 1,
+  );
+  if (stepIndex >= stepCount) {
+    throw portError('K4-POSE-PORT-001', 'stepIndex must be less than stepCount');
+  }
   return {
     target: requireString(value.target, 'target'),
     pose: requireString(value.pose, 'pose'),
-    stepIndex: requireNumber(
-      value.stepIndex ?? 0,
-      'stepIndex',
-      (number) => Number.isSafeInteger(number) && number >= 0,
-    ),
+    stepIndex,
+    stepCount,
     poseModel: requireString(value.poseModel, 'poseModel'),
     confidenceThreshold: requireNumber(
       recognition.confidenceThreshold,
@@ -278,6 +300,8 @@ export function createDsl4PoseActionPort(options) {
   let recognitionQueue = Promise.resolve();
   let poseCursorId = 0;
   const previewOwners = new Set();
+  /** @type {null | {signal: AbortSignal, owner: object, handleAbort: () => void}} */
+  let sequencePreview = null;
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
@@ -298,6 +322,28 @@ export function createDsl4PoseActionPort(options) {
   function releasePreview(owner) {
     previewOwners.delete(owner);
     if (previewOwners.size === 0) tmpose.hidePreview();
+  }
+
+  /** @param {object} owner */
+  function releaseSequencePreview(owner) {
+    const lease = sequencePreview;
+    if (!lease || lease.owner !== owner) return;
+    sequencePreview = null;
+    lease.signal.removeEventListener('abort', lease.handleAbort);
+    releasePreview(owner);
+  }
+
+  /** @param {AbortSignal} signal */
+  function claimSequencePreview(signal) {
+    if (sequencePreview?.signal === signal) return sequencePreview.owner;
+    if (sequencePreview) releaseSequencePreview(sequencePreview.owner);
+    const owner = {};
+    const handleAbort = () => releaseSequencePreview(owner);
+    sequencePreview = {signal, owner, handleAbort};
+    claimPreview(owner);
+    signal.addEventListener('abort', handleAbort, {once: true});
+    if (signal.aborted) handleAbort();
+    return owner;
   }
 
   /**
@@ -552,8 +598,10 @@ export function createDsl4PoseActionPort(options) {
     async waitForPose(payload, context) {
       ensureAvailable();
       const input = validateSequencePayload(payload);
-      const externalSignal = validateContext(context);
-      if (externalSignal.aborted) throw abortError('pose sequence was cancelled');
+      const {signal: externalSignal, actionSignal} = validateContext(context);
+      if (externalSignal.aborted || actionSignal.aborted) {
+        throw abortError('pose sequence was cancelled');
+      }
       requireKnownPoses(input.poseModel, [input.pose]);
       if (activeSequence) {
         throw portError('K4-POSE-PORT-006', 'another Actor pose sequence is already active');
@@ -561,7 +609,7 @@ export function createDsl4PoseActionPort(options) {
 
       const operation = createOperation(externalSignal);
       activeSequence = operation;
-      claimPreview(operation);
+      const previewOwner = claimSequencePreview(actionSignal);
       const displacedSelection = currentSelection;
       displacedSelection?.controller.abort('actor-sequence-priority');
       let confidence = 0;
@@ -574,7 +622,7 @@ export function createDsl4PoseActionPort(options) {
         notifyPoseCursor(true, 'pose-sequence');
         if (displacedSelection) await displacedSelection.done;
         await ensureRecognition(input.poseModel, operation.controller.signal);
-        showClaimedPreview(operation);
+        showClaimedPreview(previewOwner);
         if (input.idleSound) await playSound(input.idleSound);
         if (operation.controller.signal.aborted) throw abortError('pose sequence was cancelled');
         let previousTime = now();
@@ -612,7 +660,10 @@ export function createDsl4PoseActionPort(options) {
         }
         terminalPhase = 'completed';
       } finally {
-        releasePreview(operation);
+        const continuesToNextStep =
+          input.stepIndex + 1 < input.stepCount &&
+          (terminalPhase === 'completed' || (externalSignal.aborted && !actionSignal.aborted));
+        if (!continuesToNextStep) releaseSequencePreview(previewOwner);
         if (statePublished) {
           statePublished = false;
           publishPoseState(input, terminalPhase, confidence, progress);
@@ -633,7 +684,7 @@ export function createDsl4PoseActionPort(options) {
     async poseInputToChangeScene(payload, context) {
       ensureAvailable();
       const input = validateSelectionPayload(payload);
-      const externalSignal = validateContext(context);
+      const {signal: externalSignal} = validateContext(context);
       if (externalSignal.aborted) throw abortError('pose candidate wait was cancelled');
       requireKnownPoses(input.poseModel, input.poses);
 
@@ -685,6 +736,7 @@ export function createDsl4PoseActionPort(options) {
       sequence?.controller.abort('pose-port-dispose');
       selection?.controller.abort('pose-port-dispose');
       selection?.wake?.();
+      if (sequencePreview) releaseSequencePreview(sequencePreview.owner);
       disposePromise = Promise.all([sequence?.done, selection?.done].filter(Boolean)).then(
         () => undefined,
       );
