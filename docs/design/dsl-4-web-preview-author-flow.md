@@ -2,23 +2,27 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #390実装済み（起動時flagは既定OFF）
+文書状態: Issue #390／#394実装済み（起動時flagは既定OFF）
 
 ## 1. 利用条件
 
 Web Previewは開発用App Shellの機能です。production SB3、通常のTurboWarp editor、Web player、Packagerには
-登録または保存しません。hostは起動時に次の三つをすべて明示的にONにします。
+登録または保存しません。現在の非blocking auto reload UXを使うhostは、起動時に次の四つをすべて明示的に
+ONにします。
 
 ```js
 const featureFlags = {
   dsl4Runtime: true,
   dsl4AppShell: true,
   dsl4WebPreviewAdapter: true,
+  dsl4PreviewReloadOverlay: true,
 };
 ```
 
-子flagだけをONにすると起動前に設定errorになります。一般作者向けの既定値はすべてOFFです。HTTPSまたは
-localhostのtop-level desktop Chromiumで、`showDirectoryPicker()`とread handle APIが利用できる必要があります。
+`dsl4PreviewReloadOverlay`はWeb／CLI browser preview共通のflagで、`dsl4WebPreviewAdapter`の子ではありません。
+ただしWeb Previewで本手順のUXを使う場合は両方をONにします。依存する親flagがOFFのまま子flagだけをONにすると
+起動前に設定errorになります。一般作者向けの既定値はすべてOFFです。HTTPSまたはlocalhostのtop-level desktop
+Chromiumで、`showDirectoryPicker()`とread handle APIが利用できる必要があります。
 
 ## 2. project layout
 
@@ -51,18 +55,32 @@ manifestとそのYAMLだけを読み、asset、base SB3、builder設定は変更
 2. OS pickerでproject rootを選びます。要求するpermissionはreadだけです。
 3. 初回YAMLがvalidならmodalなしで先頭から開始します。
 4. 外部editorでYAMLを保存します。
-5. validな変更ならreload候補が表示されるので、先頭、現在scene、現在actionのいずれかを選びます。
-6. `Escape`は候補を保留し、現在のimmutable実行を継続します。
+5. stableかつvalidな変更なら、sessionの再開方針を使ってsafe boundaryで自動reloadします。既定は現在actionで、
+   replay-safeでなければ現在scene、さらに利用不能ならストーリー先頭へfallbackします。
+6. 自動reloadはmodalを開かずfocusも奪いません。commit完了後、常時表示のreload status buttonが成功を通知します。
 
 foregroundでは読込完了後500 msで次回pollを予約します。通常保存とatomic replaceのどちらも、同じcanonical
 integrityを二回読めた時だけstageします。連続保存や重複pollが起きても同時readは一つで、古い結果は採用しません。
 tabをbackgroundへ移すと5秒間隔へ落とし、visibleへ戻した時に即時pollします。
 
+再開方針はpreview sessionだけに保持し、project、YAML、SB3、production artifactへ保存しません。方針または開始位置を
+手動で変更するときだけreload status buttonを押します。dialogの第1段階で「ストーリーの最初から」「このsceneの
+最初から」「このactionから」を選び、第2段階で次のいずれかを明示します。
+
+- この位置から今回だけreload
+- この位置からreloadし、次回以降も使用
+- 今はreloadせず、次回以降に使用
+- キャンセル
+
+位置を選んだだけではreloadも方針変更も行いません。`Escape`、close button、キャンセルはdialog内の未確定値だけを
+破棄します。保存時に完了済みの自動reloadを保留または巻き戻す操作ではありません。
+
 ## 4. 診断と回復
 
 - initial invalid／missing: runtimeを開始せずwatchを継続します。
 - 実行中のinvalid／missing: 現在のintegrityを置換せず、reload dialogを開きません。
-- source復旧: 次のstable valid snapshotを通常のreload候補として表示します。
+- source復旧: currentと同じbytesならdiagnosticだけを解除し、異なるstable valid snapshotなら通常の再開方針で
+  自動reloadします。
 - permission取消: 自動でpermission promptを出さず、現在実行を保って作者の再選択へ戻します。
 - `K4-PREVIEW-SOURCE-UNSTABLE`: 部分保存をstageせず、次回pollでretryします。
 
@@ -110,6 +128,7 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 
 ## 6. rollback
 
-`dsl4WebPreviewAdapter=false`へ戻すとproject open button、feature detection、permission request、poll timer、
-visibility listener、browser adapterを初期化しません。共有source frontend、Node watcher、preview protocol、
+`dsl4PreviewReloadOverlay=false`へ戻すと共通status buttonと自動適用方針を無効化し、従来のblocking candidate dialogへ
+戻せます。`dsl4WebPreviewAdapter=false`へ戻すとproject open button、feature detection、permission request、poll timer、
+visibility listener、browser adapter自体を初期化しません。共有source frontend、Node watcher、preview protocol、
 `validate-dsl4`、`build-dsl4`はそのまま利用できます。handleを永続化しないためdata migrationは不要です。

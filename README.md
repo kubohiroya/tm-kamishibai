@@ -109,6 +109,11 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-project-json-bytes 201326592
 ```
 
+stableかつvalidなYAML変更は保存のたびにblocking dialogを出さず、safe boundaryで自動reloadします。session方針の
+既定は現在actionで、replay-safeでなければ現在scene、さらに利用不能ならストーリー先頭へfallbackします。常時表示の
+reload status buttonはcommit完了を通知し、押した場合だけ、今回の手動reload位置または次回以降の方針をstory／scene／
+actionから設定するdialogを開きます。
+
 `--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
 展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
 `--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
