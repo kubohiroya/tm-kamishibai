@@ -27,6 +27,7 @@ import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
 import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
+  selectDsl4BrowserStorySource,
 } from '../src/dsl4/platform/browser-story-file-loader.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
@@ -472,6 +473,22 @@ scenes:
       size,
     })),
     [{assetId: 'Card', path: 'card.svg', size: card.byteLength}],
+  );
+});
+
+test('keeps the selected source suffix strict after the native chooser accepts YAML files', () => {
+  assert.throws(
+    () =>
+      selectDsl4BrowserStorySource([
+        {path: 'story.yml', file: browserFile('story.yml', new Uint8Array())},
+      ]),
+    /No \.k4\.yml file was selected/u,
+  );
+  assert.equal(
+    selectDsl4BrowserStorySource([
+      {path: 'story.k4.yml', file: browserFile('story.k4.yml', new Uint8Array())},
+    ]).path,
+    'story.k4.yml',
   );
 });
 
@@ -1010,7 +1027,7 @@ scenes:
     assert.equal(input.multiple, false);
     assert.equal(input.webkitdirectory, undefined);
     assert.equal(input.getAttribute('webkitdirectory'), null);
-    assert.match(input.accept, /\.k4\.yml/u);
+    assert.equal(input.accept, '.yml,.yaml');
     input.files = [
       {
         ...source,

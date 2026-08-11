@@ -369,7 +369,7 @@ class KamishibaiDsl4RuntimeExtension {
       throw new Error('This browser cannot open a DSL 4.0 story file.');
     }
     input.type = 'file';
-    input.accept = '.k4.yml,.k4.yaml,application/yaml,text/yaml,text/plain';
+    input.accept = '.yml,.yaml';
     input.multiple = false;
     if (input.style) input.style.display = 'none';
     input.addEventListener(

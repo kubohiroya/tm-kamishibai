@@ -504,7 +504,7 @@ test(
       assert.equal(menu.reloadDisabled, true);
       assert.equal(menu.reloadAriaDisabled, 'true');
       assert.equal(menu.reloadCursor, 'not-allowed');
-      assert.match(menu.inputAccept, /\.k4\.yml/u);
+      assert.equal(menu.inputAccept, '.yml,.yaml');
       assert.equal(menu.inputMultiple, false);
       assert.equal(menu.inputWebkitDirectory, false);
       assert.equal(menu.iconFilters.length, 4);
