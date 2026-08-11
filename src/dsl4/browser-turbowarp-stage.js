@@ -1,12 +1,14 @@
 import {deepFreeze} from './story-document.js';
+import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
 export const dsl4BrowserTurboWarpStageDefaults = deepFreeze({
-  maxProjectBytes: 64 * 1024 * 1024,
+  maxProjectBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxProjectBytes,
   stageWidth: 480,
   stageHeight: 360,
 });
 
-export const dsl4BrowserTurboWarpStageMaximumProjectBytes = 128 * 1024 * 1024;
+export const dsl4BrowserTurboWarpStageMaximumProjectBytes =
+  dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectBytes;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {

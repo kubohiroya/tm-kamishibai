@@ -34,6 +34,14 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   structuredDataIntegrationEnabled: false,
 });
 
+// Standard release capabilities are explicit and independent from the default-off rollout policy.
+export const dsl4StandardProductionFeatureFlags = deepFreeze({
+  dsl4Runtime: true,
+  dsl4AppShell: true,
+  dsl4PoseFeedbackModes: true,
+  dsl4SpeechAdvanceTypewriter: true,
+});
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

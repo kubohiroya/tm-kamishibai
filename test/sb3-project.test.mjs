@@ -100,6 +100,19 @@ test('bundles Animated Text and SVG Text with their embedded callers', () => {
   );
 });
 
+test('keeps the legacy Text extension self-contained for offline project loading', () => {
+  const project = loadKamishibaiProject();
+  const stringsUrl = project.extensionURLs.strings;
+  assert.match(stringsUrl, /^data:text\/javascript;base64,/u);
+  const stringsSource = Buffer.from(
+    stringsUrl.slice(stringsUrl.indexOf(',') + 1),
+    'base64',
+  ).toString('utf8');
+  assert.match(stringsSource, /^\/\/ Name: Text/mu);
+  assert.match(stringsSource, /^\/\/ ID: strings/mu);
+  assert.match(stringsSource, /Scratch\.extensions\.register\(/u);
+});
+
 test('skips generated output preparation when an SB3 path is configured', async () => {
   let buildCalled = false;
   const result = await prepareTestSb3({

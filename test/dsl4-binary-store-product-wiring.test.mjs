@@ -251,6 +251,12 @@ function completeTMPoseComposition(calls) {
     getActivePoseModelName() {
       return active;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     async startCamera() {},
     stopCamera() {},
     isCameraRunning() {

@@ -248,6 +248,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} speechAdvanceTypewriterEnabled
  * @param {boolean} bubbleAdvanceIndicatorEnabled
  * @param {boolean} turboWarpBubbleEnabled
+ * @param {(port: Readonly<{showCover: () => Promise<boolean>}>) => void} [publishApplicationPort]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -260,6 +261,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   speechAdvanceTypewriterEnabled,
   bubbleAdvanceIndicatorEnabled,
   turboWarpBubbleEnabled,
+  publishApplicationPort = () => {},
 ) {
   const component =
     /** @type {Readonly<{storyDocument: Readonly<Record<string, unknown>>, sourceDescriptor?: Readonly<Record<string, unknown>>}>} */ (
@@ -271,6 +273,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let actorPlatform = null;
   /** @type {ReturnType<typeof createDsl4BubbleAdvanceIndicatorPresenter> | null} */
   let bubbleAdvanceIndicatorPresenter = null;
+  /** @type {ReturnType<typeof createDsl4MediaActionPort> | null} */
+  let mediaPort = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4BubblePlatform> | null} */
@@ -460,9 +464,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
         : {}),
     });
-    const mediaPort = createDsl4MediaActionPort({
+    mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
+      setActorScale: actorPlatform.host.setActorScale,
+      ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+      ...(options.onBackgroundActionError === undefined
+        ? {}
+        : {onBackgroundError: options.onBackgroundActionError}),
     });
     if (standaloneAdvanceIndicatorEnabled) {
       const activeAssetSession = assetSession;
@@ -481,6 +490,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
       host: actorPlatform.host,
+      stopActorLoop: mediaPort.stopActorLoop,
       ...(speechAdvanceTypewriterEnabled ? {speechAdvanceTypewriterEnabled: true} : {}),
       ...(standaloneAdvanceIndicatorEnabled
         ? {
@@ -541,12 +551,19 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
 
     const port = /** @type {Record<string, Function>} */ ({});
-    addPortMethods(port, mediaPort, ['stage', 'bgm', 'sound', 'setSkin'], 'media action port');
+    addPortMethods(
+      port,
+      mediaPort,
+      ['stage', 'bgm', 'sound', 'setSkin', 'loop'],
+      'media action port',
+    );
     addPortMethods(
       port,
       actorPort,
       [
         'show',
+        'hide',
+        'setLayer',
         'setTransparency',
         'moveTo',
         'say',
@@ -558,7 +575,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     const storyActors = isRecord(component.storyDocument.actors)
       ? component.storyDocument.actors
       : {};
-    port.hideSceneActors = () => {
+    const hideStoryActors = () => {
       const actors = Object.keys(storyActors).map((actorId) => {
         const actor = activeActorPlatform.resolveActor(actorId);
         if (actor === null) {
@@ -582,6 +599,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         }
       }
     };
+    port.hideSceneActors = hideStoryActors;
     port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
@@ -654,6 +672,29 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       if (errors.length === 1) throw errors[0];
       if (errors.length > 1) throw new AggregateError(errors, message);
     }
+
+    /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+    function setLoadingWithResources(payload, context) {
+      const loading = isRecord(payload.loading) ? payload.loading : null;
+      if (!payload.visible || !loading) return baseAssetLifecycle.setLoading(payload, context);
+      /** @param {unknown} assetId */
+      const resourceUrl = (assetId) => {
+        if (typeof assetId !== 'string') return null;
+        const resource = activeAssetSession.getAssetResource(assetId);
+        return isRecord(resource) && typeof resource.objectUrl === 'string'
+          ? resource.objectUrl
+          : null;
+      };
+      const backdrop = resourceUrl(loading.backdrop);
+      const costumes = Array.isArray(loading.costumes)
+        ? loading.costumes.map(resourceUrl).filter((value) => value !== null)
+        : [];
+      return baseAssetLifecycle.setLoading(
+        Object.freeze({...payload, resources: Object.freeze({backdrop, costumes})}),
+        context,
+      );
+    }
+
     const assetLifecycle = hasConfiguredPreviewControls
       ? Object.freeze({
           /** @param {Record<string, any>} payload @param {Record<string, any>} context */
@@ -693,7 +734,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
           /** @param {Record<string, any>} payload @param {Record<string, any>} context */
           setLoading(payload, context) {
-            return baseAssetLifecycle.setLoading(payload, context);
+            return setLoadingWithResources(payload, context);
           },
           /** @param {Record<string, any>} payload */
           async releaseAssets(payload) {
@@ -713,25 +754,63 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             );
           },
         })
-      : baseAssetLifecycle;
+      : Object.freeze({
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          prepare(payload, context) {
+            return baseAssetLifecycle.prepare(payload, context);
+          },
+          /** @param {Record<string, any>} payload @param {Record<string, any>} context */
+          setLoading(payload, context) {
+            return setLoadingWithResources(payload, context);
+          },
+          /** @param {Record<string, any>} payload */
+          releaseAssets(payload) {
+            return baseAssetLifecycle.releaseAssets(payload);
+          },
+          /** @param {Record<string, any>} payload */
+          release(payload) {
+            return baseAssetLifecycle.release(payload);
+          },
+        });
 
-    publishRuntimeLifecycleObserver(
-      hasConfiguredPreviewControls
-        ? (event) => {
-            if (
-              event.type === 'runtime.finish' ||
-              event.type === 'runtime.fail' ||
-              event.type === 'runtime.stop'
-            ) {
-              cameraPreviewControls?.stop();
-              return;
-            }
-            if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
-              cameraPreviewControls?.start();
-            }
+    const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
+    publishApplicationPort(
+      Object.freeze({
+        async showCover() {
+          if (!cover) return false;
+          const abortController = new AbortController();
+          const coverContext = Object.freeze({signal: abortController.signal});
+          actorPlatform?.finishTransparencyTransitions();
+          hideStoryActors();
+          await assetSession?.assetManagerComposition.stopAllSounds();
+          if (typeof cover.backdrop === 'string') {
+            await mediaPort?.stage({backdrop: cover.backdrop}, coverContext);
           }
-        : null,
+          if (typeof cover.bgm === 'string') {
+            await mediaPort?.bgm({sound: cover.bgm}, coverContext);
+          }
+          return true;
+        },
+      }),
     );
+
+    publishRuntimeLifecycleObserver((event) => {
+      if (
+        event.type === 'runtime.finish' ||
+        event.type === 'runtime.fail' ||
+        event.type === 'runtime.stop'
+      ) {
+        mediaPort?.stopAllLoops();
+        cameraPreviewControls?.stop();
+        return;
+      }
+      if (
+        hasConfiguredPreviewControls &&
+        (event.type === 'navigation.reposition' || event.type === 'runtime.resume')
+      ) {
+        cameraPreviewControls?.start();
+      }
+    });
 
     /** @type {Promise<void> | null} */
     let disposePromise = null;
@@ -747,6 +826,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         disposePromise = (async () => {
           const errors = [];
           for (const release of [
+            () => mediaPort?.dispose(),
             () => bubbleAdvanceIndicatorPresenter?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
@@ -777,6 +857,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   } catch (error) {
     const cleanupErrors = [];
     for (const release of [
+      () => mediaPort?.dispose(),
       () => bubbleAdvanceIndicatorPresenter?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),
@@ -846,6 +927,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {Function} [options.createSvgTextComposition]
  * @param {Function} [options.createBubbleComposition]
  * @param {unknown} [options.actorScheduler]
+ * @param {(error: unknown) => unknown} [options.onBackgroundActionError]
  * @param {number} [options.actorFrameMilliseconds]
  * @param {Function} [options.createAdvanceIndicatorImage]
  * @param {unknown} [options.advanceIndicatorScheduler]
@@ -904,6 +986,8 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   let verifiedRemoteCache = null;
   /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
   let runtimeLifecycleObserver = null;
+  /** @type {Readonly<Record<string, Function>> | null} */
+  let applicationPort = null;
   if (
     options.createRuntimeExpressionComposition !== undefined &&
     typeof options.createRuntimeExpressionComposition !== 'function'
@@ -960,6 +1044,9 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
         startupContext.featureFlags.dsl4SpeechAdvanceTypewriter,
         startupContext.featureFlags.dsl4BubbleAdvanceIndicator,
         startupContext.featureFlags.dsl4TurboWarpBubble,
+        (port) => {
+          applicationPort = port;
+        },
       );
     },
   });
@@ -1096,6 +1183,10 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     },
     getRunPromise() {
       return session.getRunPromise();
+    },
+    async showCover() {
+      ensureActive();
+      return applicationPort?.showCover?.() ?? false;
     },
     verifiedRemoteCache:
       cachePort === null

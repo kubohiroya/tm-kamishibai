@@ -121,8 +121,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   DSL設計から分離する既定OFFのblock cleanup
 - [`sb3-toolchain` PR #38](https://github.com/kubohiroya/sb3-toolchain/pull/38):
   完全固定npm sourceの`status`／`sync`／`update`
-- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/extension-bundles.md)
-- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/b3f4b9aa3ed3ede363700be815fe522f6a47df0b/docs/ja/source-format-v1.md)
+- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/extension-bundles.md)
+- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/source-format-v1.md)
 
 ## 1. 設計の目的
 
@@ -1751,11 +1751,11 @@ unsupported browser fallbackの正本は
 
 ## 11. 独立capability projectとKamishibai Bundle
 
-> **4.0.0-dev closeout（2026-08-07）:** この章には3.2 `extensionBundles`を4.0へ適用する比較検討の
-> 履歴が含まれます。実装済み4.0 Standardの正本は
-> [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。競合する記述では、
-> source-composed Standard Runtime ID `kubohiroyakamishibairuntime4`、完全固定npm provider、
-> `./composition`、first-party Structured Dataというcloseout契約を優先します。
+> **4.0.0-dev closeout（2026-08-10、Issue #517）:** 実装済み4.0 Standardの正本は
+> [`dsl-4-capability-bundle-release.md`](./dsl-4-capability-bundle-release.md)です。Runtime member内部は
+> 完全固定npm provider、`./composition`、first-party Structured Dataでsource compositionし、展開ソース上の
+> Runtime member `kubohiroyakamishibairuntime4`とWeb Link member `kubohiroyaweblink`を、既存の
+> `sb3-toolchain extensionBundles`でComposite ID `kubohiroyakamishibai4`へ変換します。
 
 ### 11.0 3.2 legacy Bundle契約 `[現行事実]`
 
@@ -2145,7 +2145,7 @@ block contributionとして公開することをmodule分割の目標にしま�
 dependencies:
   '@kubohiroya/turbowarp-svg-text': 'github:kubohiroya/turbowarp-svg-text#<commit>'
 devDependencies:
-  '@kubohiroya/sb3-toolchain': 'github:kubohiroya/sb3-toolchain#<commit>'
+  '@kubohiroya/sb3-toolchain': '0.6.0'
 ```
 
 GitHub providerのcapabilityは`package.json`／lockfileまたは`embedded-extensions.json`でresolved commitと

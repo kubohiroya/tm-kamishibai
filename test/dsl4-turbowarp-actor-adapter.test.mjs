@@ -3,18 +3,21 @@ import test from 'node:test';
 
 import {createDsl4TurboWarpActorPlatform} from '../src/dsl4/platform/index.js';
 
-function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) {
+function fakeActor({id = 'hero-target', actorName = 'Hero', name, x = 0, y = 0} = {}) {
   const calls = [];
   return {
     calls,
     target: {
       id,
+      ...(name === undefined ? {} : {name}),
       isStage: false,
       x,
       y,
       lookupVariableByNameAndType(name, type) {
         calls.push(['lookupVariableByNameAndType', name, type]);
-        return name === 'actorName' && type === '' ? {value: actorName} : undefined;
+        return name === 'actorName' && type === '' && actorName !== null
+          ? {value: actorName}
+          : undefined;
       },
       setXY(nextX, nextY) {
         calls.push(['setXY', nextX, nextY]);
@@ -31,6 +34,18 @@ function fakeActor({id = 'hero-target', actorName = 'Hero', x = 0, y = 0} = {}) 
       },
       setEffect(effect, value) {
         calls.push(['setEffect', effect, value]);
+      },
+      goToFront() {
+        calls.push(['goToFront']);
+      },
+      goToBack() {
+        calls.push(['goToBack']);
+      },
+      goForwardLayers(count) {
+        calls.push(['goForwardLayers', count]);
+      },
+      goBackwardLayers(count) {
+        calls.push(['goBackwardLayers', count]);
       },
     },
   };
@@ -117,14 +132,33 @@ test('resolves one actorName target and applies show transform and visibility', 
   ]);
 });
 
-test('hides one resolved actor at a scene boundary', () => {
+test('resolves a standalone DSL 4.0 actor by its project target name', () => {
+  const hero = fakeActor({actorName: null, name: 'Hero'});
+  const fake = fakeRuntime([hero.target]);
+  const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
+
+  assert.equal(platform.resolveActor('Hero'), hero.target);
+});
+
+test('applies hide, scale, and absolute or relative layer changes to one actor', () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);
   const platform = createDsl4TurboWarpActorPlatform({runtime: fake.runtime});
 
   platform.host.hideActor(platform.resolveActor('Hero'));
+  platform.host.setActorScale(hero.target, 45);
+  for (const layer of ['front', 'back', 2, -3]) {
+    platform.host.setActorLayer(hero.target, layer);
+  }
 
-  assert.deepEqual(hero.calls.at(-1), ['setVisible', false]);
+  assert.deepEqual(hero.calls.slice(-6), [
+    ['setVisible', false],
+    ['setSize', 45],
+    ['goToFront'],
+    ['goToBack'],
+    ['goForwardLayers', 2],
+    ['goBackwardLayers', 3],
+  ]);
 });
 
 test('maps transparency 0, 50, and 100 directly to the Scratch ghost effect', () => {

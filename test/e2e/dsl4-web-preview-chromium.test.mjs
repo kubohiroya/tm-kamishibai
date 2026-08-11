@@ -28,6 +28,50 @@ import {
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
+function createPoseFeedbackVariables() {
+  return {
+    'pose-confidence': ['ポーズ認識', 0],
+    'pose-progress': ['チャージ', 0],
+  };
+}
+
+function createPoseFeedbackMonitors() {
+  return [
+    {
+      id: 'pose-confidence',
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'ポーズ認識'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+    {
+      id: 'pose-progress',
+      mode: 'slider',
+      opcode: 'data_variable',
+      params: {VARIABLE: 'チャージ'},
+      spriteName: null,
+      value: 0,
+      width: 0,
+      height: 0,
+      x: 343,
+      y: 0,
+      visible: false,
+      sliderMin: 0,
+      sliderMax: 100,
+      isDiscrete: true,
+    },
+  ];
+}
+
 async function resolveChromeExecutable() {
   const candidates = [
     process.env.CHROME_BIN,
@@ -931,7 +975,7 @@ test(
           {
             isStage: true,
             name: 'Stage',
-            variables: {},
+            variables: createPoseFeedbackVariables(),
             lists: {},
             broadcasts: {},
             blocks: {},
@@ -956,7 +1000,7 @@ test(
             textToSpeechLanguage: null,
           },
         ],
-        monitors: [],
+        monitors: createPoseFeedbackMonitors(),
         extensions: [],
         meta: {semver: '3.0.0'},
       },
@@ -1031,6 +1075,12 @@ test(
       assert.equal(await client.evaluate('location.hash'), '');
       assert.equal(
         await client.evaluate(
+          "document.querySelector('#dsl4-local-preview-runtime > p[role=alert]')?.textContent ?? ''",
+        ),
+        '',
+      );
+      assert.equal(
+        await client.evaluate(
           "document.querySelectorAll('canvas[data-dsl4-turbo-warp-stage=true]').length",
         ),
         1,
@@ -1046,8 +1096,8 @@ test(
       try {
         await waitForEvaluation(
           client,
-          "document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState === 'reloaded'",
-          'browser-owned automatic reload',
+          `document.querySelector('[data-summary-value=currentIntegrity]')?.textContent !== ${JSON.stringify(initialIntegrity)}`,
+          'browser-owned committed reload',
         );
       } catch (error) {
         const page = await client.evaluate(`({
@@ -1295,10 +1345,14 @@ poseRecognition:
     confidenceThreshold: 0.5
     fullConfidenceHoldSeconds: 0.01
     idleChargePerSecond: 0
+  navigation:
+    allowSkip: true
 controls:
   keymaps:
     production:
-      Space: navigation.nextAction
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 scenes:
   opening:
     poseModel: RescuePose
@@ -1312,6 +1366,13 @@ scenes:
       - Hero.pose:
           steps:
             - pose: help
+            - pose: help
+      - wait: 60
+      - bgm: Cue
+      - transition: {effect: fadeOut, seconds: 30}
+      - Hero.hide: {}
+  ending:
+    - wait: 60
 `;
     await Promise.all([
       writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
@@ -1414,7 +1475,7 @@ scenes:
           {
             isStage: true,
             name: 'Stage',
-            variables: {},
+            variables: createPoseFeedbackVariables(),
             lists: {},
             broadcasts: {},
             blocks: {},
@@ -1469,7 +1530,7 @@ scenes:
             rotationStyle: 'all around',
           },
         ],
-        monitors: [],
+        monitors: createPoseFeedbackMonitors(),
         extensions: [],
         meta: {semver: '3.0.0'},
       },
@@ -1541,8 +1602,50 @@ scenes:
       try {
         await waitForEvaluation(
           client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/2') && globalThis.dsl4LocalPreviewCapabilityFixture?.metrics.predictions > 0",
+          'browser-owned first pose step',
+        );
+        assert.equal(
+          await client.evaluate(
+            "document.querySelector('canvas')?.focus(); document.activeElement?.tagName",
+          ),
+          'CANVAS',
+        );
+        await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
+        await waitForEvaluation(
+          client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.filter(({type}) => type === 'pose.step.skip').length === 1",
+          'browser-owned pose-step rehearsal skip',
+        );
+        await pressKey(client, {
+          key: 'ArrowRight',
+          code: 'ArrowRight',
+          windowsVirtualKeyCode: 39,
+        });
+        await waitForEvaluation(
+          client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/3')",
+          'browser-owned action rehearsal skip',
+        );
+        await pressKey(client, {
+          key: 'ArrowDown',
+          code: 'ArrowDown',
+          windowsVirtualKeyCode: 40,
+        });
+        await waitForEvaluation(
+          client,
+          "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/ending/actions/0')",
+          'browser-owned scene rehearsal skip',
+        );
+        await pressKey(client, {
+          key: 'ArrowRight',
+          code: 'ArrowRight',
+          windowsVirtualKeyCode: 39,
+        });
+        await waitForEvaluation(
+          client,
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
-          'browser-owned representative capability fixture',
+          'browser-owned representative capability fixture completion',
         );
       } catch (error) {
         const page = await client.evaluate(`({
@@ -1582,14 +1685,47 @@ scenes:
       assert.deepEqual(observed.actor, {
         costume: 'HeroSkin',
         size: 45,
-        visible: true,
+        visible: false,
         x: 15,
         y: -20,
       });
       assert.deepEqual(observed.actionCommits, [
         '/scenes/opening/actions/0',
         '/scenes/opening/actions/1',
-        '/scenes/opening/actions/2',
+        '/scenes/opening/actions/4',
+        '/scenes/opening/actions/5',
+      ]);
+      const rehearsalEvents = await client.evaluate(`
+        globalThis.dsl4LocalPreviewCapabilityFixture.events
+          .filter(({type}) => type === 'pose.step.skip' || type === 'action.cancel' || type === 'action.skip')
+          .map(({type, actionPath, details}) => ({type, actionPath, reason: details.reason}))
+      `);
+      assert.deepEqual(rehearsalEvents, [
+        {
+          type: 'pose.step.skip',
+          actionPath: '/scenes/opening/actions/2',
+          reason: 'rehearsal.skipPose',
+        },
+        {
+          type: 'action.cancel',
+          actionPath: '/scenes/opening/actions/2',
+          reason: 'rehearsal.skipAction',
+        },
+        {
+          type: 'action.cancel',
+          actionPath: '/scenes/opening/actions/3',
+          reason: 'rehearsal.skipScene',
+        },
+        {
+          type: 'action.skip',
+          actionPath: '/scenes/opening/actions/6',
+          reason: 'rehearsal.skipScene',
+        },
+        {
+          type: 'action.cancel',
+          actionPath: '/scenes/ending/actions/0',
+          reason: 'rehearsal.skipAction',
+        },
       ]);
       assert.equal(observed.started, true);
       assert.equal(host.getSnapshot().browserRuntimeReady, true);
@@ -1597,7 +1733,7 @@ scenes:
       assert.equal(observed.metrics.modelLoads, 1);
       assert.ok(observed.metrics.predictions >= 1);
       assert.ok(observed.metrics.webcamUpdates >= 1);
-      assert.ok(observed.canvasCount >= 2);
+      assert.equal(observed.canvasCount, 1);
       assert.deepEqual(observed.errors, []);
 
       await client.send('HeapProfiler.enable');

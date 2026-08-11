@@ -23,7 +23,7 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
   assert.equal(root.getAttribute('aria-valuenow'), null);
   assert.equal(root.dataset.dsl4IndeterminateProgress, 'true');
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'circular');
-  assert.equal(root.style.position, 'fixed');
+  assert.equal(root.style.position, 'absolute');
   assert.equal(root.style.zIndex, '2147483647');
   assert.equal(root.style.background, 'rgba(0, 0, 0, 0.12)');
 
@@ -86,6 +86,21 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
   assert.ok(root);
   assert.equal(root.dataset.dsl4IndeterminateProgressVariant, 'bar');
   assert.equal(root.hidden, false);
+  hostOptions.setLoading(
+    {
+      visible: true,
+      resources: {backdrop: 'blob:loading-backdrop', costumes: ['blob:loading-costume']},
+    },
+    {},
+  );
+  const loadingScreen = findByAttribute(document.body, 'data-dsl4-loading-screen', 'true')[0];
+  assert.ok(loadingScreen);
+  assert.equal(loadingScreen.style.position, 'absolute');
+  assert.equal(loadingScreen.style.display, 'block');
+  assert.equal(loadingScreen.children[0].src, 'blob:loading-backdrop');
+  assert.equal(loadingScreen.children[1].src, 'blob:loading-costume');
+  hostOptions.setLoading({visible: false}, {});
+  assert.equal(loadingScreen.style.display, 'none');
   hostOptions.setBusy({visible: true, source: 'camera', label: 'Starting camera'});
   hostOptions.setLoading({visible: false}, {});
   assert.equal(root.hidden, false);
@@ -98,4 +113,149 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
 
   await shell.dispose('indicator-test');
   assert.equal(document.body.children.length, 0);
+});
+
+test('Standard app shell restores localized title controls and lifecycle visibility', async () => {
+  const document = createFakeDocument();
+  const opened = [];
+  const previousOpen = globalThis.open;
+  globalThis.open = (...args) => opened.push(args);
+  let hostOptions;
+  let closed = 0;
+  let started = 0;
+  try {
+    const shell = await createDsl4StandardAppShell({
+      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+      surface: 'regularEditor',
+      document,
+      mount: document.body,
+      title: {
+        version: '4.0.0-dev',
+        officialWebsiteUrl: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+        initialLocale: 'en',
+        locales: {
+          en: {
+            title: 'Participatory AI Kamishibai',
+            officialWebsite: 'Official Website',
+            close: 'Close',
+            language: '日本語',
+          },
+          ja: {
+            title: '「参加型」AI紙芝居',
+            officialWebsite: '公式Webサイト',
+            close: '閉じる',
+            language: 'English',
+          },
+        },
+      },
+      runtimeHostOptions: {
+        onCloseTitle() {
+          closed += 1;
+        },
+        onTitleStart() {
+          started += 1;
+        },
+      },
+      createRuntimeHost(options) {
+        hostOptions = options;
+        return {ok: true, enabled: true, diagnostics: [], host: {dispose() {}}};
+      },
+    });
+    const titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
+    assert.ok(titleRoot);
+    const panel = titleRoot.children[0];
+    const language = panel.children[0];
+    const close = panel.children[1];
+    const heading = panel.children[2];
+    const official = panel.children[4];
+    assert.equal(titleRoot.style.display, 'none');
+    assert.equal(titleRoot.style.position, 'absolute');
+    assert.equal(titleRoot.style.cursor, 'pointer');
+    assert.equal(panel.style.cursor, 'pointer');
+    assert.equal(close.style.position, 'absolute');
+    assert.equal(language.style.position, 'absolute');
+    assert.equal(language.style.cursor, 'pointer');
+    assert.equal(close.style.cursor, 'pointer');
+    assert.equal(official.style.cursor, 'pointer');
+    assert.equal(heading.textContent, 'Participatory AI Kamishibai');
+    assert.equal(official.textContent, 'Official Website');
+    language.click();
+    assert.equal(heading.textContent, '「参加型」AI紙芝居');
+    assert.equal(official.textContent, '公式Webサイト');
+    official.click();
+    assert.deepEqual(opened, [
+      ['https://kubohiroya.github.io/tmpose-kamishibai/', '_blank', 'noopener,noreferrer'],
+    ]);
+    shell.showTitle();
+    titleRoot.click();
+    assert.equal(started, 1);
+    assert.equal(titleRoot.style.display, 'none');
+    shell.showTitle();
+    close.click();
+    assert.equal(closed, 1);
+    assert.equal(started, 1);
+    assert.equal(titleRoot.style.display, 'none');
+    hostOptions.onEvent({type: 'runtime.start'});
+    assert.equal(titleRoot.style.display, 'none');
+    hostOptions.onEvent({type: 'runtime.finish'});
+    assert.equal(titleRoot.style.display, 'none');
+    hostOptions.onEvent({type: 'runtime.fail'});
+    assert.equal(titleRoot.style.display, 'none');
+    shell.showTitle();
+    assert.equal(titleRoot.style.display, 'flex');
+    titleRoot.click();
+    assert.equal(started, 1);
+    assert.equal(titleRoot.style.display, 'none');
+    await shell.dispose('title-controls-test');
+    assert.equal(document.body.children.length, 0);
+  } finally {
+    if (previousOpen === undefined) delete globalThis.open;
+    else globalThis.open = previousOpen;
+  }
+});
+
+test('selects Japanese as the default title locale from browser preferences', async () => {
+  const document = createFakeDocument();
+  const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {language: 'ja-JP', languages: ['ja-JP', 'en-US']},
+  });
+  try {
+    const shell = await createDsl4StandardAppShell({
+      featureFlags: {dsl4Runtime: true, dsl4AppShell: true},
+      surface: 'regularEditor',
+      document,
+      mount: document.body,
+      title: {
+        version: '4.0.0-dev',
+        officialWebsiteUrl: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+        locales: {
+          en: {
+            title: 'Participatory AI Kamishibai',
+            officialWebsite: 'Official Website',
+            close: 'Close',
+            language: '日本語',
+          },
+          ja: {
+            title: '「参加型」AI紙芝居',
+            officialWebsite: '公式Webサイト',
+            close: '閉じる',
+            language: 'English',
+          },
+        },
+      },
+      runtimeHostOptions: {},
+      createRuntimeHost() {
+        return {ok: true, enabled: true, diagnostics: [], host: {dispose() {}}};
+      },
+    });
+    const titleRoot = findByAttribute(document.body, 'data-dsl4-title-shell', 'true')[0];
+    assert.equal(titleRoot.children[0].children[2].textContent, '「参加型」AI紙芝居');
+    assert.equal(titleRoot.children[0].children[4].textContent, '公式Webサイト');
+    await shell.dispose('browser-locale-test');
+  } finally {
+    if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+    else delete globalThis.navigator;
+  }
 });

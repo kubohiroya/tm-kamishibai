@@ -6,7 +6,11 @@ import {
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import {deepFreeze} from './story-document.js';
 
-export {dsl4DefaultFeatureFlags, resolveDsl4FeatureFlags} from './feature-flags.js';
+export {
+  dsl4DefaultFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
+  resolveDsl4FeatureFlags,
+} from './feature-flags.js';
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle

@@ -47,6 +47,12 @@ function fakeHost(overrides = {}) {
       showActor(actor, transform, context) {
         calls.push(['showActor', actor.id, transform, context.sceneId]);
       },
+      hideActor(actor, context) {
+        calls.push(['hideActor', actor.id, context.sceneId]);
+      },
+      setActorLayer(actor, layer, context) {
+        calls.push(['setActorLayer', actor.id, layer, context.sceneId]);
+      },
       setTransparency(actor, effect, context) {
         calls.push(['setTransparency', actor.id, effect, context.sceneId]);
       },
@@ -95,10 +101,11 @@ function actionContext(controller = new AbortController()) {
   return {signal: controller.signal, generation: 1, sceneId: 'opening'};
 }
 
-function actorPort({composition, host, resolveActor} = {}) {
+function actorPort({composition, host, resolveActor, stopActorLoop} = {}) {
   return createDsl4ActorActionPort({
     composition: composition ?? fakeComposition().composition,
     host: host ?? fakeHost().host,
+    ...(stopActorLoop === undefined ? {} : {stopActorLoop}),
     resolveActor:
       resolveActor ??
       (() => {
@@ -107,7 +114,7 @@ function actorPort({composition, host, resolveActor} = {}) {
   });
 }
 
-test('maps show, setTransparency, moveTo, and say through one shared presentation host', async () => {
+test('maps show, hide, layer, transparency, move, and speech through one presentation host', async () => {
   const fake = fakeComposition();
   const presentation = fakeHost();
   const actor = Object.freeze({id: 'hero-target', isStage: false});
@@ -123,6 +130,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   });
 
   await port.show({target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30}, actionContext());
+  await port.hide({target: 'Hero'}, actionContext());
+  await port.setLayer({target: 'Hero', layer: 'back'}, actionContext());
   await port.setTransparency({target: 'Hero', transparency: 50}, actionContext());
   await port.moveTo(
     {target: 'Hero', x: 40, y: 50, seconds: 1.5, easing: 'easeIn'},
@@ -138,6 +147,8 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
   ]);
   assert.deepEqual(presentation.calls, [
     ['showActor', 'hero-target', {x: 10, y: -20, scale: 30}, 'opening'],
+    ['hideActor', 'hero-target', 'opening'],
+    ['setActorLayer', 'hero-target', 'back', 'opening'],
     ['setTransparency', 'hero-target', {transparency: 50}, 'opening'],
     ['createMove', 'hero-target', {x: 40, y: 50, seconds: 1.5, easing: 'easeIn'}, 'opening'],
     ['startMove'],
@@ -149,6 +160,48 @@ test('maps show, setTransparency, moveTo, and say through one shared presentatio
     ['Hero', 'opening'],
     ['Hero', 'opening'],
     ['Hero', 'opening'],
+    ['Hero', 'opening'],
+    ['Hero', 'opening'],
+  ]);
+});
+
+test('waits for an in-flight loop skin before applying a show skin', async () => {
+  const loopStopped = deferred();
+  const loopStopStarted = deferred();
+  const calls = [];
+  const fake = fakeComposition({
+    applyToTarget(name, target) {
+      calls.push(['applyToTarget', name, target.id]);
+    },
+  });
+  const presentation = fakeHost({
+    showActor(actor) {
+      calls.push(['showActor', actor.id]);
+    },
+  });
+  const port = actorPort({
+    composition: fake.composition,
+    host: presentation.host,
+    stopActorLoop(target) {
+      calls.push(['stopActorLoop', target]);
+      loopStopStarted.resolve();
+      return loopStopped.promise;
+    },
+  });
+
+  const show = port.show(
+    {target: 'Hero', skin: 'HeroHappy', x: 10, y: -20, scale: 30},
+    actionContext(),
+  );
+  await loopStopStarted.promise;
+  assert.deepEqual(calls, [['stopActorLoop', 'Hero']]);
+
+  loopStopped.resolve();
+  await show;
+  assert.deepEqual(calls, [
+    ['stopActorLoop', 'Hero'],
+    ['applyToTarget', 'HeroHappy', 'hero-target'],
+    ['showActor', 'hero-target'],
   ]);
 });
 

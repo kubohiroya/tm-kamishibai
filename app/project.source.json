@@ -37982,7 +37982,7 @@
   "extensionURLs": {
     "sipcconsole": "https://extensions.turbowarp.org/-SIPC-/consoles.js",
     "lmsTempVars2": "https://extensions.turbowarp.org/Lily/TempVariables2.js",
-    "strings": "https://extensions.turbowarp.org/text.js",
+    "strings": "embedded-extension:extensions/strings.js",
     "kubohiroyaassetmanager": "embedded-extension:extensions/kubohiroyaassetmanager.js",
     "tmpose": "embedded-extension:extensions/tmpose.js",
     "localstorage": "https://extensions.turbowarp.org/local-storage.js",

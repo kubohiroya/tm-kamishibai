@@ -140,11 +140,15 @@ test('preloads the resolved target before transition and waits behind Loading', 
   await waitUntil(() =>
     calls.some(({method, payload}) => method === 'setLoading' && payload.visible),
   );
-  assert.deepEqual(calls[0].payload, {
-    phase: 'startup',
-    sceneId: null,
-    assetIds: ['AlwaysReady', 'CoverLazy', 'HeroInitial', 'LoadingBackdrop', 'LoadingCostume'],
-  });
+  assert.deepEqual(
+    calls
+      .filter(({method, payload}) => method === 'prepare' && payload.phase === 'startup')
+      .map(({payload}) => payload.assetIds),
+    [
+      ['LoadingBackdrop', 'LoadingCostume'],
+      ['AlwaysReady', 'CoverLazy', 'HeroInitial'],
+    ],
+  );
   const nextPrepare = calls.find(
     ({method, payload}) => method === 'prepare' && payload.sceneId === 'next',
   );
@@ -174,7 +178,9 @@ test('preloads the resolved target before transition and waits behind Loading', 
   assert.equal(state.status, 'finished');
   assert.deepEqual(effects, ['stage', 'sound']);
   assert.deepEqual(
-    calls.filter(({method}) => method === 'setLoading').map(({payload}) => payload.visible),
+    calls
+      .filter(({method, payload}) => method === 'setLoading' && payload.sceneId === 'next')
+      .map(({payload}) => payload.visible),
     [true, false],
   );
   const trace = controller.getTrace();
@@ -215,9 +221,14 @@ test('does not show Loading when scene preparation is already fulfilled', async 
 
   const state = await controller.start({sceneId: 'next'});
   assert.equal(state.status, 'finished');
-  assert.deepEqual(loadingCalls, []);
+  assert.deepEqual(
+    loadingCalls.filter(({sceneId}) => sceneId !== null),
+    [],
+  );
   assert.equal(
-    controller.getTrace().some(({type}) => type === 'assets.loading.show'),
+    controller
+      .getTrace()
+      .some(({type, details}) => type === 'assets.loading.show' && details.sceneId !== null),
     false,
   );
 });
@@ -362,7 +373,7 @@ test('hides Loading and fails before the first action when preparation rejects',
         return payload.phase === 'scene' ? pendingScene.promise : Promise.resolve();
       },
       async setLoading(payload) {
-        loadingCalls.push(payload.visible);
+        loadingCalls.push(payload);
       },
       async releaseAssets() {},
       async release() {},
@@ -370,13 +381,16 @@ test('hides Loading and fails before the first action when preparation rejects',
   });
 
   const run = controller.start({sceneId: 'next'});
-  await waitUntil(() => loadingCalls.includes(true));
+  await waitUntil(() => loadingCalls.some(({sceneId, visible}) => sceneId === 'next' && visible));
   pendingScene.reject(new Error('decode failed'));
   const state = await run;
   assert.equal(state.status, 'failed');
   assert.equal(state.diagnostic.code, 'K4-ASSET-PREPARE-001');
   assert.match(state.diagnostic.message, /decode failed/u);
-  assert.deepEqual(loadingCalls, [true, false]);
+  assert.deepEqual(
+    loadingCalls.filter(({phase}) => phase === undefined).map(({visible}) => visible),
+    [true, false],
+  );
   assert.equal(stageCalls, 0);
   assert.equal(controller.getTrace().at(-1).type, 'runtime.fail');
 });

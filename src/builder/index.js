@@ -63,7 +63,9 @@ export {
 export {
   createDsl4LocalPreviewBrowserBootstrap,
   dsl4LocalPreviewBrowserBootstrapDefaults,
+  dsl4LocalPreviewBrowserBootstrapMaximums,
 } from './dsl4-local-preview-browser-bootstrap.js';
+export {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,

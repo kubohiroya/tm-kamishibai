@@ -325,6 +325,7 @@ export async function installDsl4RuntimeComponent(
   }
   selected.source = structuredClone(source);
   selected.artifact = structuredClone(validatedArtifactSuccess.artifact);
+  selected.application = {mode: 'story'};
   if (validatedAssets) selected.assets = structuredClone(validatedAssets.descriptor);
   return output;
 }

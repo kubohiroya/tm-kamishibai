@@ -50,7 +50,7 @@ Copyright © 2026 Hiroya Kubo.
 | `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音            |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定  |
 | `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
@@ -178,6 +178,11 @@ TMPose 3.2と同じdirectory URLを`url`だけで指定できます。この通�
 assetは起動時に必要となるため、`lazy`でもentry sceneより前に準備します。準備済みassetは紙芝居停止まで
 保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
 `retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
+
+起動時は`loading`から参照されるassetだけを先にmaterializeし、その間は汎用indeterminate indicatorを
+Scratch stage領域の中央・最前面に表示します。準備後は指定backdropを全面表示し、`costumes`を宣言順に
+循環表示しながら残りのstartup assetを準備します。scene間のlazy loadingにも同じLoading宣言を使い、
+設定がない場合は汎用indicatorへfallbackします。indicatorは`circular`／`bar`をapp-shell APIで選択できます。
 
 scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
@@ -370,6 +375,37 @@ bubbleStyles:
       - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
     hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
+
+`poseRecognition.idleSound`と`chargeSound`はそれぞれ任意です。両方を省略した無音、`idleSound`だけの
+3.2互換設定、両方を指定した設定を受理します。音を指定しなくても`sequence`、`selection`、`feedback`、
+`navigation`、`preview`は独立して設定できます。
+
+`cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
+3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
+非埋め込み版は`showMenu`へ遷移します。言語の初期値はブラウザ言語から毎回決定し、localStorage保存を
+互換要件にはしません。
+
+### 4.1 control profile
+
+```yaml
+controls:
+  keymaps:
+    production:
+      Space: rehearsal.skipPose
+    rehearsal:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
+```
+
+`rehearsal.skipPose`はactive pose stepだけを完了し、同じpose actionの次stepへ進みます。
+`rehearsal.skipAction`はactive actionを3.2と同じ最終状態へ完了し、次actionへ進みます。pose中に受理した場合は
+pose action全体を終了します。`rehearsal.skipScene`はactive actionを完了した後、現在sceneの残りから`bgm`と
+`transition`だけを最終状態で適用し、stage、actor、wait、input等を実行せず次sceneへ進みます。既存BGMは停止せず、
+activeな`sound`だけを停止します。三commandは最初に受理した入力のcleanupと境界到達が完了するまで後続入力を受理しません。
+
+これらは`history.nextScene`と異なり実行履歴を移動しません。選択するprofile名に特別な意味はなく、たとえば
+`controls.keymaps.production`へ三commandを明示すれば本番buildでも有効です。keymapに記述しなければ無効です。
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
@@ -635,16 +671,21 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
+Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
 
 ### 7.2 Actor action
 
 | action                     | 引数                                                                                                                                                                          |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
 | `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
 | `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                            |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
 | `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
 | `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
@@ -755,6 +796,14 @@ foreground・backgroundのどちらも、途中でスキップ、停止、再開
 同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
 先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
 進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
+
+`Actor.hide`はScratch／TurboWarpのvisible stateを`false`にし、透明度effectとは混同しません。次の
+`Actor.show`は同じactorを再表示します。`Actor.setSkin.scale`はskin適用後に正のサイズ百分率を設定します。
+`Actor.setLayer`の`front`／`back`は絶対位置、数値は正なら前方、負なら後方への相対移動です。
+
+`Actor.loop.steps`は先頭skinを直ちに適用し、各`seconds`後に次のskinへ進むbackground loopです。step数と
+duration数を同じ構造に固定し、少なくとも一つのdurationを正数にします。同じactorの`setSkin`、runtime停止、
+またはenvironment破棄でloop timerを回収します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。

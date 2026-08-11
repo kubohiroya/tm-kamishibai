@@ -610,6 +610,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
           sessionId: options.sessionId,
           featureFlags: options.featureFlags,
           maxProjectBytes,
+          maxProjectJsonBytes: options.maxProjectJsonBytes,
           maxGenerationMessageBytes,
           maxSourceBytes: options.maxSourceBytes,
           maxAssetFiles: options.maxAssetFiles,

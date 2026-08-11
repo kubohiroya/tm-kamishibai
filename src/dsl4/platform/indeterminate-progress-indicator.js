@@ -83,6 +83,14 @@ export function createDsl4IndeterminateProgressIndicator(options) {
   }
   const document = requireDocument(options.document);
   const mount = requireElement(options.mount, 'progress indicator mount');
+  const previousMountPosition = mount.style?.position;
+  if (
+    mount !== document.body &&
+    isRecord(mount.style) &&
+    (previousMountPosition === undefined || previousMountPosition === '')
+  ) {
+    mount.style.position = 'relative';
+  }
   const initialVariant = resolveVariant(options.variant);
   /** @type {Record<string, string>} */
   const labels = {...defaultLabels};
@@ -204,7 +212,7 @@ export function createDsl4IndeterminateProgressIndicator(options) {
     element.setAttribute('aria-label', labels.default);
     element.hidden = true;
     Object.assign(element.style, {
-      position: 'fixed',
+      position: 'absolute',
       inset: '0',
       zIndex: '2147483647',
       isolation: 'isolate',
@@ -299,6 +307,13 @@ export function createDsl4IndeterminateProgressIndicator(options) {
       cursorStyle?.remove();
       delete mount.dataset.dsl4CursorSurface;
       delete mount.dataset.dsl4Cursor;
+      if (
+        mount !== document.body &&
+        isRecord(mount.style) &&
+        (previousMountPosition === undefined || previousMountPosition === '')
+      ) {
+        mount.style.position = previousMountPosition ?? '';
+      }
     } finally {
       root = null;
       cursorStyle = null;

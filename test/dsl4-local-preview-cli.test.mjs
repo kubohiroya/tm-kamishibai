@@ -198,6 +198,33 @@ test('parses the bounded preview-dsl4 --watch contract and rejects unsafe argume
     () => parseCliArguments(previewArguments(['--max-source-files', '8'])),
     /requires --enable-source-includes/u,
   );
+
+  const recommendedAssetBytes = 128 * 1024 * 1024;
+  const maximumAssets = previewArguments();
+  maximumAssets[maximumAssets.indexOf('--max-asset-file-bytes') + 1] =
+    String(recommendedAssetBytes);
+  maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] =
+    String(recommendedAssetBytes);
+  assert.equal(parseCliArguments(maximumAssets).options.maxTotalAssetBytes, recommendedAssetBytes);
+  maximumAssets[maximumAssets.indexOf('--max-total-asset-bytes') + 1] = String(
+    recommendedAssetBytes + 1,
+  );
+  assert.throws(
+    () => parseCliArguments(maximumAssets),
+    /requires --allow-large-preview-artifacts/u,
+  );
+  const acknowledged = parseCliArguments([
+    ...maximumAssets,
+    '--allow-large-preview-artifacts',
+    '--max-project-bytes',
+    String(300 * 1024 * 1024),
+    '--max-project-json-bytes',
+    String(400 * 1024 * 1024),
+  ]).options;
+  assert.equal(acknowledged.allowLargePreviewArtifacts, true);
+  assert.equal(acknowledged.maxTotalAssetBytes, recommendedAssetBytes + 1);
+  assert.equal(acknowledged.maxProjectBytes, 300 * 1024 * 1024);
+  assert.equal(acknowledged.maxProjectJsonBytes, 400 * 1024 * 1024);
 });
 
 test('runCli delegates preview only with the production frontend and selected IO', async () => {
@@ -237,6 +264,39 @@ test('waits for runtime-ready, redacts the token, and cleans up on SIGINT', asyn
   assert.equal(fixture.disposeCount, 1);
   assert.equal(fixture.signalTarget.listenerCount('SIGINT'), 0);
   assert.equal(fixture.signalTarget.listenerCount('SIGTERM'), 0);
+});
+
+test('requires explicit acknowledgement and forwards selected large artifact limits', async () => {
+  const largeProjectBytes = 300 * 1024 * 1024;
+  const largeProjectJsonBytes = 400 * 1024 * 1024;
+  await assert.rejects(
+    runDsl4LocalPreviewCommand(
+      {...commandOptions(), maxProjectBytes: largeProjectBytes},
+      {stdout: {write() {}}, stderr: {write() {}}},
+    ),
+    (error) => error.code === 'K4-PREVIEW-CLI-LIMIT-ACK',
+  );
+
+  const captured = captureIo();
+  const fixture = createCommandFixture({
+    async onOpen({emit, signalTarget}) {
+      queueMicrotask(() => emit({type: 'local-preview.runtime-ready'}));
+      setImmediate(() => signalTarget.emit('SIGINT'));
+    },
+  });
+  await runDsl4LocalPreviewCommand(
+    commandOptions([
+      '--max-project-bytes',
+      String(largeProjectBytes),
+      '--max-project-json-bytes',
+      String(largeProjectJsonBytes),
+      '--allow-large-preview-artifacts',
+    ]),
+    {...fixture.dependencies, ...captured.io},
+  );
+  assert.equal(fixture.hostOptions.maxProjectBytes, largeProjectBytes);
+  assert.equal(fixture.hostOptions.maxProjectJsonBytes, largeProjectJsonBytes);
+  assert.match(captured.stderr, /large preview artifact limits were explicitly enabled/u);
 });
 
 test('forwards explicit Source Graph limits to both the initial build and live host', async () => {

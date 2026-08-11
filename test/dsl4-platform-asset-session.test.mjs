@@ -205,6 +205,12 @@ function factories(log, overrides = {}) {
     getActivePoseModelName() {
       return null;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     async startCamera() {},
     stopCamera() {},
     isCameraRunning() {
