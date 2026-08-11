@@ -16,10 +16,11 @@ import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowa
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
-/* global DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
+/* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
 const extensionVersion = '4.0.0-dev';
+const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
@@ -257,6 +258,7 @@ class KamishibaiDsl4RuntimeExtension {
           en: appShellLocales.en.ui,
           ja: appShellLocales.ja.ui,
         },
+        icons: applicationMenuIcons,
         onOpen: () => this.openStoryFile(),
         onReload: () => this.reloadStory(),
         onAbout: () => this.showAbout(),

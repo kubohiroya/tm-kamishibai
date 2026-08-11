@@ -16,7 +16,7 @@ export const downloadCatalog = deepFreeze([
       buildDate: '2026-08-11',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
-      sha256: '3d206ea5d03bb3978b7654eb9fbd8812d94be01aab33bbcea8ba64ea557bd710',
+      sha256: '56f4c539d71f13013e7da538efb99ecd9b55dfc58f087d1270a0540991f31e39',
       sourceCommit: '7ab2908b9e5abca1757045e1d3c80811da58793a',
       sourceDirectory: 'release-sources/4.0.0-dev/app',
     },

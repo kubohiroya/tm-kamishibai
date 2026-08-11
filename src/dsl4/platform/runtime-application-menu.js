@@ -27,6 +27,7 @@ function requireDocument(value) {
  * @param {unknown} options.document
  * @param {unknown} options.mount
  * @param {Readonly<Record<'en' | 'ja', Readonly<Record<string, string>>>>} options.locales
+ * @param {Readonly<Record<'open' | 'reload' | 'about' | 'language', string>>} options.icons
  * @param {() => unknown | Promise<unknown>} options.onOpen
  * @param {() => unknown | Promise<unknown>} options.onReload
  * @param {() => unknown | Promise<unknown>} options.onAbout
@@ -57,6 +58,11 @@ export function createDsl4RuntimeApplicationMenu(options) {
       }
     }
   }
+  for (const action of /** @type {const} */ (['open', 'reload', 'about', 'language'])) {
+    if (typeof options.icons?.[action] !== 'string' || options.icons[action].length === 0) {
+      throw new TypeError(`icons.${action} must be a non-empty string`);
+    }
+  }
 
   const rootCandidate = document.createElement('section');
   if (!isRecord(rootCandidate) || typeof rootCandidate.addEventListener !== 'function') {
@@ -83,11 +89,12 @@ export function createDsl4RuntimeApplicationMenu(options) {
     }
   }
 
+  /** @type {ReadonlyArray<Readonly<{action: 'open' | 'reload' | 'about' | 'language', left: string, top: string, callback: null | Function}>>} */
   const definitions = Object.freeze([
-    {action: 'open', icon: '📂', left: '10%', top: '25.5556%', callback: options.onOpen},
-    {action: 'reload', icon: '↻', left: '53.3333%', top: '25.5556%', callback: options.onReload},
-    {action: 'about', icon: 'ⓘ', left: '10%', top: '58.8889%', callback: options.onAbout},
-    {action: 'language', icon: '🌐', left: '53.3333%', top: '58.8889%', callback: null},
+    {action: 'open', left: '10%', top: '25.5556%', callback: options.onOpen},
+    {action: 'reload', left: '53.3333%', top: '25.5556%', callback: options.onReload},
+    {action: 'about', left: '10%', top: '58.8889%', callback: options.onAbout},
+    {action: 'language', left: '53.3333%', top: '58.8889%', callback: null},
   ]);
   const buttons = new Map();
   /** @type {'en' | 'ja'} */
@@ -113,7 +120,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
 
   for (const definition of definitions) {
     const button = document.createElement('button');
-    const icon = document.createElement('span');
+    const icon = document.createElement('img');
     const label = document.createElement('span');
     for (const element of [button, icon, label]) {
       if (!isRecord(element) || typeof element.appendChild !== 'function') {
@@ -125,8 +132,10 @@ export function createDsl4RuntimeApplicationMenu(options) {
     button.style.cssText = `position:absolute;left:${definition.left};top:${definition.top};width:36.6667%;height:24.4444%;display:flex;min-width:0;min-height:0;align-items:center;justify-content:center;flex-direction:column;gap:2px;border:2px solid #005f50;border-radius:14px;background:#007d66;color:#fff;box-shadow:0 3px 8px rgba(0,0,0,.2);cursor:pointer;font:inherit;`;
     button.style.cursor = 'pointer';
     icon.setAttribute('aria-hidden', 'true');
-    icon.style.cssText = 'font-size:clamp(18px,5.5cqw,30px);line-height:1;';
-    icon.textContent = definition.icon;
+    icon.src = options.icons[definition.action];
+    icon.alt = '';
+    icon.style.cssText =
+      'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;';
     label.style.cssText = 'font-size:clamp(12px,3.8cqw,20px);line-height:1.15;text-align:center;';
     button.appendChild(icon);
     button.appendChild(label);

@@ -24,6 +24,12 @@ const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.m
 const tmPoseBrowserRuntimePath =
   require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
+const applicationMenuIconPaths = Object.freeze({
+  open: path.join(projectRoot, 'app/assets/1766a36329eca190b2b19bba53ef7d8f.svg'),
+  reload: path.join(projectRoot, 'app/assets/8cf6379b2d82bea5a39bb46757a9bd3d.svg'),
+  about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
+  language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
+});
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
@@ -342,17 +348,29 @@ async function createProject(assets) {
 }
 
 async function createRuntimeExtensionSource() {
-  const [tensorflowBrowserRuntime, tmPoseBrowserRuntime, officialWebsiteFavicon] =
-    await Promise.all([
-      readFile(tensorflowBrowserRuntimePath, 'utf8'),
-      readFile(tmPoseBrowserRuntimePath, 'utf8'),
-      readFile(officialWebsiteFaviconPath),
-    ]);
+  const [
+    tensorflowBrowserRuntime,
+    tmPoseBrowserRuntime,
+    officialWebsiteFavicon,
+    ...applicationMenuIconFiles
+  ] = await Promise.all([
+    readFile(tensorflowBrowserRuntimePath, 'utf8'),
+    readFile(tmPoseBrowserRuntimePath, 'utf8'),
+    readFile(officialWebsiteFaviconPath),
+    ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
+  ]);
+  const applicationMenuIcons = Object.fromEntries(
+    Object.keys(applicationMenuIconPaths).map((action, index) => [
+      action,
+      `data:image/svg+xml;base64,${applicationMenuIconFiles[index].toString('base64')}`,
+    ]),
+  );
   const result = await build({
     entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
     bundle: true,
     charset: 'utf8',
     define: {
+      DSL4_APPLICATION_MENU_ICONS: JSON.stringify(applicationMenuIcons),
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
         `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
       ),

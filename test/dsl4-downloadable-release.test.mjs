@@ -48,6 +48,22 @@ const storyComponentLimits = Object.freeze({
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
+const version3MenuIconFilenames = Object.freeze({
+  open: '1766a36329eca190b2b19bba53ef7d8f.svg',
+  reload: '8cf6379b2d82bea5a39bb46757a9bd3d.svg',
+  about: 'fc0a44695524e272260a18d76320828f.svg',
+  language: '7069974a56d188a8d1e9e79513df9e0e.svg',
+});
+const version3MenuIconDataUrls = Object.freeze(
+  Object.fromEntries(
+    await Promise.all(
+      Object.entries(version3MenuIconFilenames).map(async ([action, filename]) => {
+        const bytes = await readFile(new URL(`../app/assets/${filename}`, import.meta.url));
+        return [action, `data:image/svg+xml;base64,${bytes.toString('base64')}`];
+      }),
+    ),
+  ),
+);
 
 async function buildRelease() {
   return createDownloadableReleaseSb3(release);
@@ -705,7 +721,11 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(applicationMenus.length, 1);
     assert.equal(applicationMenus[0].style.display, 'block');
     for (const action of ['open', 'reload', 'about', 'language']) {
-      assert.equal(findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action).length, 1);
+      const buttons = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action);
+      assert.equal(buttons.length, 1);
+      assert.equal(buttons[0].children[0].tagName, 'IMG');
+      assert.equal(buttons[0].children[0].src, version3MenuIconDataUrls[action]);
+      assert.equal(buttons[0].children[0].alt, '');
     }
 
     const languageButton = findByAttribute(
