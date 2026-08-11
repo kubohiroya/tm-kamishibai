@@ -133,6 +133,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
       },
       generationComponent,
       () => {},
+      () => {},
       (observer) => {
         runtimeLifecycleObserver = observer;
       },

@@ -135,6 +135,7 @@ const enabledOptions = (project, extra = {}) => ({
 test('defaults OFF and does not inspect runtime inputs or adapters', async () => {
   assert.deepEqual(dsl4DefaultFeatureFlags, {
     dsl4Runtime: false,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -193,8 +194,13 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags).dsl4SpeechAdvanceTypewriter,
     true,
   );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: true}),
+    /requires dsl4Runtime/u,
+  );
   const disabledFlags = {
     dsl4Runtime: false,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -213,6 +219,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(resolveDsl4FeatureFlags({}), disabledFlags);
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4Runtime: true}), {
     dsl4Runtime: true,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -229,6 +236,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
     dsl4Runtime: false,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -245,6 +253,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
     dsl4Runtime: false,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -261,6 +270,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
     dsl4Runtime: false,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -283,6 +293,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     resolveDsl4FeatureFlags({dsl4Runtime: true, dsl4SpeechAdvanceTypewriter: true}),
     {
       dsl4Runtime: true,
+      dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
@@ -366,6 +377,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     }),
     {
       dsl4Runtime: true,
+      dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: true,
       dsl4WebPreviewAdapter: true,
@@ -421,6 +433,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(result.enabled, true);
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -590,6 +603,7 @@ test('enables internal Structured Data independently without exposing a generic 
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.featureFlags, {
     dsl4Runtime: true,
+    dsl4SessionBinaryBacking: false,
     dsl4SourceIncludes: false,
     dsl4AppShell: false,
     dsl4WebPreviewAdapter: false,
@@ -664,6 +678,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,
@@ -798,6 +813,7 @@ test('creates an atomic runtime environment only after component validation', as
     channel: 'unbundled',
     featureFlags: {
       dsl4Runtime: true,
+      dsl4SessionBinaryBacking: false,
       dsl4SourceIncludes: false,
       dsl4AppShell: false,
       dsl4WebPreviewAdapter: false,

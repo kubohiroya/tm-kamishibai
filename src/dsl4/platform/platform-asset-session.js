@@ -115,7 +115,11 @@ function disposedError() {
  * @param {unknown} options.runtimeComponent
  * @param {unknown} [options.runtime]
  * @param {unknown} [options.binaryEntryProvider]
- * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
+ * @param {'prefer' | 'required' | 'disabled'} [options.binarySessionBackingPolicy]
+ * @param {string} [options.binarySessionId]
+ * @param {Readonly<Record<string, unknown>>} [options.sessionBinaryBackingOptions]
+ * @param {(warning: Readonly<Record<string, unknown>>) => unknown} [options.onBinarySessionBackingWarning]
+ * @param {(error: unknown) => unknown} [options.onBinarySessionBackingFatalError]
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
  * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
@@ -204,10 +208,35 @@ export function createDsl4PlatformAssetSession(options) {
     throw new TypeError('verifiedRemoteCacheOptions must be an object');
   }
   if (
-    options.binaryBundleStoreOptions !== undefined &&
-    !isRecord(options.binaryBundleStoreOptions)
+    options.sessionBinaryBackingOptions !== undefined &&
+    !isRecord(options.sessionBinaryBackingOptions)
   ) {
-    throw new TypeError('binaryBundleStoreOptions must be an object');
+    throw new TypeError('sessionBinaryBackingOptions must be an object');
+  }
+  if (binaryEntryEnabled) {
+    if (
+      typeof options.binarySessionBackingPolicy !== 'string' ||
+      !['prefer', 'required', 'disabled'].includes(options.binarySessionBackingPolicy)
+    ) {
+      throw new TypeError(
+        'binarySessionBackingPolicy must be prefer, required, or disabled for binary-entry loading',
+      );
+    }
+    if (typeof options.binarySessionId !== 'string' || options.binarySessionId.length === 0) {
+      throw new TypeError('binarySessionId must be a non-empty string for binary-entry loading');
+    }
+  }
+  if (
+    options.onBinarySessionBackingWarning !== undefined &&
+    typeof options.onBinarySessionBackingWarning !== 'function'
+  ) {
+    throw new TypeError('onBinarySessionBackingWarning must be a function');
+  }
+  if (
+    options.onBinarySessionBackingFatalError !== undefined &&
+    typeof options.onBinarySessionBackingFatalError !== 'function'
+  ) {
+    throw new TypeError('onBinarySessionBackingFatalError must be a function');
   }
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
@@ -323,9 +352,8 @@ export function createDsl4PlatformAssetSession(options) {
         : {}),
       ...(binaryEntryEnabled
         ? {
-            binaryBundleStore: {
-              ...options.binaryBundleStoreOptions,
-              databaseName: `${/** @type {Record<string, any>} */ (cacheIdentity).databaseName}--binary-v1`,
+            sessionBinaryBacking: {
+              ...options.sessionBinaryBackingOptions,
               ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
             },
           }
@@ -361,9 +389,7 @@ export function createDsl4PlatformAssetSession(options) {
             'releaseVerifiedRemoteStoryCacheLease',
           ]
         : []),
-      ...(binaryEntryEnabled
-        ? ['putBinaryBundle', 'getBinaryBundle', 'deleteBinaryBundle', 'releaseBinaryStore']
-        : []),
+      ...(binaryEntryEnabled ? ['createSessionBinaryBacking'] : []),
     ];
     const assetManagerComposition = validateCompositionMethods(
       assetManagerCandidate,
@@ -376,6 +402,16 @@ export function createDsl4PlatformAssetSession(options) {
           provider: options.binaryEntryProvider,
           composition: assetManagerComposition,
           namespace: /** @type {Record<string, any>} */ (cacheIdentity).id,
+          policy: /** @type {'prefer' | 'required' | 'disabled'} */ (
+            options.binarySessionBackingPolicy
+          ),
+          sessionId: /** @type {string} */ (options.binarySessionId),
+          ...(options.onBinarySessionBackingWarning === undefined
+            ? {}
+            : {onWarning: options.onBinarySessionBackingWarning}),
+          ...(options.onBinarySessionBackingFatalError === undefined
+            ? {}
+            : {onFatalError: options.onBinarySessionBackingFatalError}),
         })
       : null;
     if (binaryAssetBacking) {

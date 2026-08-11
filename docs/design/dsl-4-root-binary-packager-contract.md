@@ -156,6 +156,38 @@ const result = await packageDsl4WithTurboWarpPackager({
 `dsl4SessionBinaryBacking`も起動時固定・既定OFFです。OFFは`policy: disabled`相当のdirect sourceを使用します。
 ON時の既定は`prefer`で、`required`と`disabled`を明示できます。選択したmodeを物語の実行途中で変更しません。
 
+runtime hostでは次の起動時optionを使用します。`sessionId`を省略した場合は起動ごとに新しいIDを生成します。
+`storeOptions`はAsset Manager 0.10.0のsession専用storeへだけ渡し、persistent remote cacheや既存の
+`binaryBundleStore`には渡しません。
+
+```js
+await createDsl4TurboWarpRuntimeHost({
+  featureFlags: {
+    dsl4Runtime: true,
+    dsl4SessionBinaryBacking: true,
+  },
+  assetBundleFormat: 'binary-entry',
+  binaryEntryProvider,
+  sessionBacking: {
+    policy: 'prefer',
+    // sessionId: crypto.randomUUID(),
+    storeOptions: {
+      maxSessionBytes: 512 * 1024 * 1024,
+    },
+  },
+  onSessionBackingWarning(warning) {
+    showNonFatalStorageWarning(warning);
+  },
+  onSessionBackingFatalError(error) {
+    showFatalStorageDiagnostic(error);
+  },
+});
+```
+
+flagがOFFのとき、`sessionBacking.policy`の省略または明示した`disabled`だけを許可します。
+`prefer`または`required`はflagをONにしなければ起動前に拒否します。旧Kamishibai接続optionの
+`binaryBundleStoreOptions`は使用できません。
+
 | policy     | 起動前のsession store失敗                                                       | 起動後のstore読込失敗                          |
 | ---------- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `prefer`   | partial sessionだけをcleanupし、未解放の同じsourceからdirect modeを選択して警告 | 安全停止。再抽出、再書込み、direct切替をしない |

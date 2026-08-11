@@ -276,7 +276,7 @@ test('keeps normal ZIP entries individually addressable and declares Electron di
   assert.equal(packager.options.custom.js.includes('"surface":"zip","mode":"direct"'), true);
 });
 
-test('claims the generated archive source and supplies the three-file pose model once', async () => {
+test('claims the generated archive source and replays the three-file pose model until release', async () => {
   const value = await fixture();
   const {packager} = await packageFixture(value, 'html');
   const context = vm.createContext({});
@@ -293,7 +293,9 @@ test('claims the generated archive source and supplies the three-file pose model
     source,
     limits,
   );
-  const pose = await provider.consumeAsset('Pose');
+  const firstRead = await provider.readAsset('Pose');
+  firstRead.files[0].bytes[0] ^= 0xff;
+  const pose = await provider.readAsset('Pose');
   assert.deepEqual(
     pose.files.map(({path: filePath}) => filePath),
     ['metadata.json', 'model.json', 'weights.bin'],
@@ -301,6 +303,9 @@ test('claims the generated archive source and supplies the three-file pose model
   for (const file of pose.files) {
     assert.deepEqual(file.bytes, value.snapshot.getFile('Pose', file.path));
   }
+  assert.equal(provider.remainingAssetCount, 1);
+  await provider.consumeAsset('Pose');
+  assert.equal(provider.remainingAssetCount, 0);
   assert.equal(provider.released, false, 'the source is retained until the policy releases it');
   await provider.release();
   assert.equal(source.released, true);

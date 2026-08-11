@@ -497,6 +497,40 @@ test('consumes each asset once and drops reader references on completion or rele
   await abortedProvider.release();
 });
 
+test('re-reads validated assets for direct runtime backing without weakening one-shot consume', async () => {
+  const component = await fixture();
+  let reads = 0;
+  const provider = await createDsl4OneShotBinaryEntryProvider(
+    component.storyDocument,
+    component.binaryBundle.descriptor,
+    {
+      ...bundleOptions,
+      maxCompressionRatio: 1,
+      releaseAfterLastAsset: false,
+      readEntry(entryName) {
+        reads += 1;
+        const bytes = component.binaryBundle.getEntry(entryName);
+        return {bytes, compressedSize: bytes.length};
+      },
+    },
+  );
+
+  const first = await provider.readAsset('Image');
+  first.files[0].bytes[0] ^= 0xff;
+  const second = await provider.readAsset('Image');
+  assert.deepEqual(second.files[0].bytes, assetSnapshot().getFile('Image', 'image.svg'));
+  assert.equal(provider.remainingAssetCount, 2);
+
+  await provider.consumeAsset('Image');
+  assert.equal(provider.remainingAssetCount, 1);
+  await provider.readAsset('Image');
+  await rejectsEntryCode(provider.consumeAsset('Image'), 'K4-ASSET-ENTRY-CONSUMED-001');
+  assert.equal(reads, 4);
+
+  await provider.release();
+  await rejectsEntryCode(provider.readAsset('Image'), 'K4-ASSET-ENTRY-RELEASED-001');
+});
+
 test('embeds and loads the binary mode explicitly without changing the legacy default', async () => {
   const component = await fixture();
   const input = baseSb3();
