@@ -465,6 +465,12 @@ sequenceDiagram
       Port->>Platform: stage / media / actor / text / wait operation
       Platform-->>Port: completed
       Port-->>Controller: completed
+    else broadcastMessageAndWait
+      Controller->>Port: broadcastMessageAndWait(message, AbortSignal)
+      Port->>Platform: start exact-name broadcast hats once
+      Platform-->>Port: receiver thread identities
+      Port->>Port: wait until every owned thread leaves runtime
+      Port-->>Controller: completed; cancel stops owned threads only
     else goto
       Controller->>Controller: choose args.scene as next scene
     else conditional branch
@@ -548,8 +554,15 @@ sequenceDiagram
 | `keyInputToChangeScene`／`touchInputToChangeScene`／`poseInputToChangeScene` | runtime controller + input／pose port    | portから返った選択値を、台本で宣言済みのrouteだけに対応付ける                                    |
 | `pose`                                                                       | runtime controller + pose／media port    | step順にskin、pose待機、soundを実行し、全step完了後にcommitする                                  |
 | `stage`／`bgm`／`sound`／`wait`／`transition`                                | global runtime port                      | controllerは正規化済み引数とcancel可能なcontextを渡す                                            |
+| `broadcastMessageAndWait`                                                    | TurboWarp broadcast port                 | 完全一致するmessageを一度送信し、その送信で開始したreceiver threadだけの完了を待つ               |
 | `show`／`setTransparency`／`moveTo`／`say`／`think`／`setSkin`／`setText`    | actor／media／SVG Text port              | actor targetを付けてplatform adapterへ委譲する                                                   |
 | custom action                                                                | optional custom action port              | immutable registryに基づくScratch handlerを起動し、`completed`または`transitioned`だけを受理する |
+
+`broadcastMessageAndWait`の所有境界は、TurboWarp runtimeが一回の`startHats`から返したthread identityです。
+receiverが0件なら同期的に完了し、Stage、sprite、cloneを区別せず返された全threadの終了を待ちます。cancelまたは
+host disposeでは所有threadだけを停止します。message名はStageのbroadcast宣言と完全一致で解決し、case-fold、trim、
+alias解決は行いません。receiverへDSL4の`ActionContext`は渡さないため、typed argument、遷移結果、contextが必要な
+処理はCustom action portの責務です。このportは`dsl4BroadcastMessageAndWait`がONのsessionだけで構築します。
 
 ## 6. 入力、履歴、停止の補助シーケンス
 

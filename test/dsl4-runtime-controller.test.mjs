@@ -165,6 +165,7 @@ scenes:
       - bgm: Music
       - sound: Effect
       - wait: 0
+      - broadcastMessageAndWait: opening-effect
       - transition:
           effect: fadeOut
           seconds: 0
@@ -231,6 +232,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'bgm',
       'sound',
       'wait',
+      'broadcastMessageAndWait',
       'transition',
       'show',
       'hide',
@@ -276,6 +278,7 @@ test('dispatches every core action and keeps transition separate from scene move
     storyDocument,
     port,
     speechAdvanceTypewriterEnabled: true,
+    broadcastMessageAndWaitEnabled: true,
     evaluateCondition(expression, variables) {
       evaluated.push(expression);
       return expression === 'score == 1' && variables.score === 1;
@@ -292,6 +295,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'bgm',
       'sound',
       'wait',
+      'broadcastMessageAndWait',
       'transition',
       'show',
       'hide',
@@ -362,8 +366,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 21);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 21);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 22);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 22);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
