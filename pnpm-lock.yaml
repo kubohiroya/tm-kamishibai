@@ -74,6 +74,9 @@ importers:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.6.0
         version: 0.6.0(supports-color@7.2.0)
+      '@turbowarp/packager':
+        specifier: 3.13.0
+        version: 3.13.0
       '@turbowarp/sbdl':
         specifier: 7.0.0
         version: 7.0.0
@@ -311,6 +314,14 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
+  '@fiahfy/icns@0.0.7':
+    resolution: {integrity: sha512-0apAtbUXTU3Opy/Z4h69o53voBa+am8FmdZauyagUMskAVYN1a5yIRk48Sf+tEdBLlefbvqLWPJ4pxr/Y/QtTg==}
+    engines: {node: '>=8'}
+
+  '@fiahfy/packbits@0.0.6':
+    resolution: {integrity: sha512-XuhF/edg+iIvXjkCWgfj6fWtRi/KrEPg2ILXj1l86EN4EssuOiPcLKgkMDr9cL8jTGtVd/MKUWW6Y0/ZVf1PGA==}
+    engines: {node: '>=8'}
+
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
     engines: {node: '>=18.18.0'}
@@ -441,6 +452,9 @@ packages:
 
   '@turbowarp/nanolog@0.2.0':
     resolution: {integrity: sha512-texcM9oxfEsADVlVDR5UhLkYclPKsV9mytJh+9pHHonNcUrxRVGF6FkJTzWO/Hl5NafU1crSdw737nqKE3atSA==}
+
+  '@turbowarp/packager@3.13.0':
+    resolution: {integrity: sha512-ZPQM+t/am8XNMzCaPLvgJqlZZOAJu9/dYIxiFPzR6Bp61oX8xrnm0HLrjhsdsMqW0vVqo2mPND76oNBVaBSOTA==}
 
   '@turbowarp/sbdl@7.0.0':
     resolution: {integrity: sha512-NBIiKHHxgBYkgm1npUBFcgzoUw/hMcoFHhFhcM2+C20jqnbRvZTPx3p63COuKPZnW48IZmpUe+hY8ZoBLXh6ZA==}
@@ -1030,6 +1044,9 @@ packages:
 
   cross-fetch@3.1.5:
     resolution: {integrity: sha512-lvb1SBsI0Z7GDwmuid+mU3kWVBwTVUbe7S0H52yaaAdQOXq2YktTCZdlAcNKFzE6QtRz0snpw9bNiPeOIkkQvw==}
+
+  cross-fetch@4.1.0:
+    resolution: {integrity: sha512-uKm5PU+MHTootlWEY+mZ4vvXoCn4fLQxT9dSc1sXVMSFkINTJVN8cAQROpwcKm8bJ/c7rgZVIBWzH5T78sNZZw==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -1971,6 +1988,15 @@ packages:
       encoding:
         optional: true
 
+  node-fetch@2.7.0:
+    resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
+    engines: {node: 4.x || >=6.0.0}
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+
   node-libs-browser@2.2.1:
     resolution: {integrity: sha512-h/zcD8H9kaDZ9ALUWwlBUDo6TKF8a7qBSCSEGfjTVIYeqsioSKaAX+BN7NgiMGp6iSIXZ3PxgCu8KS3b71YK5Q==}
 
@@ -2121,6 +2147,10 @@ packages:
   pkg-dir@4.2.0:
     resolution: {integrity: sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ==}
     engines: {node: '>=8'}
+
+  pngjs@6.0.0:
+    resolution: {integrity: sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg==}
+    engines: {node: '>=12.13.0'}
 
   posix-character-classes@0.1.1:
     resolution: {integrity: sha512-xTgYBc3fuo7Yt7JbiuFxSYGToMoz8fLoE6TC9Wx1P/u+LfeThMOAqmuyECnlBaaJb+u1m9hHiXUEtwW4OzfUJg==}
@@ -2859,6 +2889,13 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
+  '@fiahfy/icns@0.0.7':
+    dependencies:
+      '@fiahfy/packbits': 0.0.6
+      pngjs: 6.0.0
+
+  '@fiahfy/packbits@0.0.6': {}
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -3000,6 +3037,17 @@ snapshots:
       setimmediate: 1.0.5
 
   '@turbowarp/nanolog@0.2.0': {}
+
+  '@turbowarp/packager@3.13.0':
+    dependencies:
+      '@fiahfy/icns': 0.0.7
+      '@turbowarp/json': 0.1.2
+      '@turbowarp/jszip': 3.12.0
+      '@turbowarp/sbdl': 7.0.0
+      cross-fetch: 4.1.0
+      sha.js: 2.4.12
+    transitivePeerDependencies:
+      - encoding
 
   '@turbowarp/sbdl@7.0.0':
     dependencies:
@@ -3650,6 +3698,12 @@ snapshots:
   cross-fetch@3.1.5:
     dependencies:
       node-fetch: 2.6.7
+    transitivePeerDependencies:
+      - encoding
+
+  cross-fetch@4.1.0:
+    dependencies:
+      node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
 
@@ -4791,6 +4845,10 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
+  node-fetch@2.7.0:
+    dependencies:
+      whatwg-url: 5.0.0
+
   node-libs-browser@2.2.1:
     dependencies:
       assert: 1.5.1
@@ -4970,6 +5028,8 @@ snapshots:
   pkg-dir@4.2.0:
     dependencies:
       find-up: 4.1.0
+
+  pngjs@6.0.0: {}
 
   posix-character-classes@0.1.1: {}
 

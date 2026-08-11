@@ -42,6 +42,16 @@ license表示とsource repositoryを正本とします。
 | scratch-vm                               | `c482342`         | MPL-2.0      | `TurboWarp/scratch-vm`                         |
 | yaml                                     | 2.8.1             | ISC          | `eemeli/yaml`                                  |
 
+## DSL 4.0 Packager build dependencies
+
+次のpackageはroot binary entryの正規化・Packager bridge回帰testと配布成果物生成にだけ使用し、
+npm runtime packageへ直接組み込みません。Packagerが成果物へ含める第三者noticeは、Packager自身の生成headerを維持します。
+
+| package             | version | license | source repository          |
+| ------------------- | ------- | ------- | -------------------------- |
+| @turbowarp/packager | 3.13.0  | MPL-2.0 | `TurboWarp/packager`       |
+| @turbowarp/sbdl     | 7.0.0   | MIT     | `forkphorus/sb-downloader` |
+
 ## DSL 4.0 bundled pose runtime and PoseNet supply
 
 The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.3 browser runtime, including
