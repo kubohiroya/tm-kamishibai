@@ -1721,9 +1721,14 @@ quiesce中のcandidateを置き換えます。stage ackが返すcandidate IDは�
 すべて一致した場合だけ受理し、ackへ実行中integrityと新しいgenerationを返します。重複・逆行revision、
 旧sessionのcandidate、切断中commitは拒否します。
 
-`preview.source.defer`はreload modalのEscに対応し、quiesce中またはToken発行済みの旧runtimeを安全位置から
-再開した上でcandidateとTokenを破棄します。defer ack後のcandidate IDはstaleであり、後からcommitすることは
-できません。同じsourceを再提示する場合も新revision／新candidateとしてquiesceとplan生成をやり直します。
+`preview.source.defer`は、hostがcandidateを自動commitせず明示的に保留するlegacy／rollback surfaceのために残す
+optional protocol操作です。quiesce中またはToken発行済みの旧runtimeを安全位置から再開した上でcandidateとTokenを
+破棄します。defer ack後のcandidate IDはstaleであり、後からcommitすることはできません。同じsourceを再提示する
+場合も新revision／新candidateとしてquiesceとplan生成をやり直します。
+
+Issue #394の共通reload overlayでは、valid generationをsession方針で自動commitするため、通常保存ごとに
+`preview.source.defer`を選ぶmodalを開きません。status buttonから開くdialogの`Escape`は未確定の手動再開位置と
+適用範囲だけを破棄し、完了済みの自動commitをdeferまたは巻き戻ししません。
 
 graceful stop、host crash、transport切断はいずれもprotocolのdisconnectへ収束させます。disconnectは
 pending／deferred candidateとcandidate診断だけを破棄し、現在のruntimeを停止・巻き戻ししません。再接続は

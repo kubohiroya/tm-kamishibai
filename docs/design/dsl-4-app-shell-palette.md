@@ -201,26 +201,32 @@ development previewでは、最初に取得した台本がvalidなら確認modal
 missingまたはinvalidならruntimeを開始せず、preview shellを残してwatch状態と診断を表示します。
 productionではpreview shellへfallbackせず、通常のerror状態へ遷移します。
 
-source変更時のquiesce、candidate検証、再開位置1／2／3の選択、artifact fingerprintはIssue #258と
-#266の契約に従います。invalid candidateは現在のimmutable runtimeを置換しません。
+source変更時のquiesce、candidate検証、自動reload、再開方針、artifact fingerprintはIssue #258、#266、#394の
+契約に従います。valid candidateはsession方針の既定actionからscene、storyへ安全にfallbackして自動commitし、
+invalid candidateは現在のimmutable runtimeを置換しません。
 
-## 7. reload選択UI
+## 7. reload status／再開方針UI
 
-development previewのreload選択は、次のaccessibility契約を満たすmodal dialogとします。
+development previewはvalidなsource更新のたびにmodalを開きません。safe boundaryで自動reloadし、commit ack後に
+常時表示のreload status buttonで結果を通知します。buttonを作者が明示的に押した場合だけ、最新の検証済みgenerationを
+手動reloadする位置または次回以降の方針を設定するmodal dialogを開きます。
 
+- 自動reloadはfocusを奪わず、status buttonとpolite live regionで完了を通知する
 - 見出しでlabelされた`aria-modal="true"`のdialogとする
-- 選択肢1、2、3をbuttonとして表示し、modal表示中だけ`Digit1`、`Digit2`、`Digit3`を受け付ける
+- 第1段階でstory、scene、actionの3位置をbuttonとして表示し、位置選択だけでは副作用を起こさない
+- 第2段階で「今回だけreload」「reloadして次回以降も使用」「reloadせず次回以降に使用」「キャンセル」を分ける
+- dialogの第1段階にfocusがある間だけ`Digit1`、`Digit2`、`Digit3`を受け付ける
 - `Tab`／`Shift+Tab`をdialog内に閉じ込め、`Enter`／`Space`でfocus中のbuttonを実行する
-- `Escape`は選択せず保留して現在の実行を再開し、dialogを開く前の要素へfocusを戻す
+- `Escape`は未確定の位置と適用範囲だけを破棄し、reload status buttonへfocusを戻す
 - 初期focusは最初の有効な選択肢とし、有効な選択肢がなければ見出しへ置く
 - 選べないbuttonは実際の`disabled`状態とし、`aria-describedby`で理由を関連付ける
 - 状態、warning、選択可否を色だけで伝えない
 - watch／candidate更新はpolite live region、実行を阻止するerrorはassertive live regionで通知する
-- timeoutや暗黙のdefault選択で実行しない
+- manual dialogの位置選択やfocusだけでは実行せず、第2段階の明示的activationを必要とする
 
-固定のsemantic summaryにはsource表示名、現在／候補integrityの短縮値、検証結果、scene／action／asset数、
-現在のscene／action位置、各選択肢の可否と理由、warning数と変更categoryを含めます。台本文、runtime variable、
-全文diff、組込みeditorは含めません。
+固定のsemantic summaryにはsource表示名、現在／候補integrityの短縮値、検証結果、scene／action／asset数、現在の
+scene／action位置、希望方針、実際の開始位置、fallback理由、各選択肢の可否、warning数と変更categoryを含めます。
+台本文、runtime variable、全文diff、組込みeditorは含めません。
 
 ## 8. feature flagとrollback
 

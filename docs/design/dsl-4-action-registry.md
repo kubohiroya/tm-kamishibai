@@ -343,6 +343,9 @@ candidate ID不一致、旧StoryDocumentと矛盾するaction anchor／variable�
 
 ### 8.3 Escと旧snapshot再開
 
+この節の`Esc`は、`preview.source.defer`を使うlegacy／rollback blocking candidate surfaceの意味です。Issue #394の
+共通reload overlayはvalid generationを自動commitし、status dialogの`Esc`では未確定の手動設定だけを破棄します。
+
 `Esc`はcandidateとQuiesceTokenを破棄し、旧StoryDocument／Registry Snapshotを次の位置から再開する。
 破棄後のcandidate IDはstaleであり、同じcandidateを後からcommitできない。再度選択するには新revisionとして
 stageし、現在のexecutionに対してquiesceとplan生成をやり直す。

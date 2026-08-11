@@ -32,12 +32,13 @@ browser adapter、Node watcher、runtimeは別々のlive reloadを実装しま�
 
 - `createDsl4PreviewSourceWatcher`: Node.jsの`fs.watch`と安定読込
 - `createDsl4PreviewProtocolSession`: handshake、stage、commit、defer、disconnect
-- `createDsl4DevelopmentPreviewShell`: 初回自動開始、診断、reload選択1／2／3
+- `createDsl4DevelopmentPreviewShell`: 初回自動開始、診断、legacy candidate操作
 - `createDsl4BrowserPreviewSourceAdapter`: read-only picker、安定読込、polling、回復診断
 - `createDsl4PreviewSourceProtocolPort`: browser／Node共通のrevision、stage、commit、defer
 - `createDsl4BrowserPreviewCoordinator`: source adapterとprotocolのsession接続
 - `createDsl4WebPreviewShell`: project open、watch status、診断、reload UI、CLI fallback
-- `dsl4AppShell`と`dsl4WebPreviewAdapter`: 起動時固定、既定OFFの依存flag
+- `createDsl4PreviewReloadSurface`: valid generationの非blocking自動reload、status button、手動再開方針
+- `dsl4AppShell`、`dsl4WebPreviewAdapter`、`dsl4PreviewReloadOverlay`: 起動時固定、既定OFFのflag
 - `validate-dsl4`と`build-dsl4`: local検証とfull rebuild
 - `preview-dsl4 --watch`: loopback host、browser-owned実TurboWarp runtime、共通reload overlay
 
@@ -180,7 +181,9 @@ any active state ── stop/reselect/pagehide ──> disposed
 
 初回sourceがvalidならprotocolの`storyStart`相当をmodalなしでcommitします。初回missing／invalid時はruntimeを
 開始せずwatchを継続します。実行中のinvalid／missing candidateは現在のimmutable snapshotを置換せず、reload
-modalも開きません。回復後のvalid candidateは通常どおり選択1／2／3を表示します。
+dialogも開きません。回復後のvalid candidateがcurrentと同じbytesならdiagnosticだけを解除し、異なるbytesなら
+sessionの再開方針で自動commitします。既定はactionで、replay-safeでなければscene、さらに利用不能ならstoryへ
+fallbackします。
 
 ## 7. diagnostic契約
 
@@ -224,22 +227,26 @@ adapterがstable resultをpublishするたび、session内で単調増加するr
 ```text
 dsl4Runtime=true
   └─ dsl4AppShell=true
-       └─ dsl4WebPreviewAdapter=true
+       ├─ dsl4WebPreviewAdapter=true
+       └─ dsl4PreviewReloadOverlay=true
 ```
 
-三つとも起動時固定、既定OFFです。依存先がOFFのまま子flagだけをONにした設定は起動前に拒否し、暗黙に親flagを
-ONにしません。`dsl4WebPreviewAdapter=false`ではproject open button、feature detection、permission request、
-visibility listener、poll timer、observer、browser adapterを初期化しません。
+四つとも起動時固定、既定OFFです。`dsl4PreviewReloadOverlay`はWeb／CLI共通なのでWeb adapterの子ではありませんが、
+Web Previewで現行の非blocking auto reload UXを使う場合は両方をONにします。依存先がOFFのまま子flagだけをONにした
+設定は起動前に拒否し、暗黙に親flagをONにしません。`dsl4WebPreviewAdapter=false`ではproject open button、
+feature detection、permission request、visibility listener、poll timer、observer、browser adapterを初期化しません。
 
 UIは少なくともproject open／reselect button、watch status、safe diagnostic、source表示名、現在／候補integrity、
-reload選択1／2／3、local fallbackへの案内を持ちます。source本文、組込みeditor、absolute path、runtime variable、
-full diffは表示しません。permission再取得をtimerや自動処理から要求せず、必ず作者のbutton操作へ戻します。
+常時表示のreload status button、明示的に開く再開方針dialog、local fallbackへの案内を持ちます。source本文、
+組込みeditor、absolute path、runtime variable、full diffは表示しません。permission再取得をtimerや自動処理から
+要求せず、必ず作者のbutton操作へ戻します。
 
 ## 9. session memory、cleanup、production除外
 
-初版のdirectory/file handle、manifest bytes、source bytes、timer、observer、pending read、candidate、modal stateは
-session memoryだけに保持します。IndexedDB、local/session storage、Cache Storage、service worker、YAML、manifest、
-SB3、user config、URL、telemetryへ保存しません。
+初版のdirectory/file handle、manifest bytes、source bytes、timer、observer、pending read、candidate、dialog state、
+再開方針はsession memoryだけに保持します。reload status buttonの希望表示位置だけはversion付きbrowser-local key
+`dsl4.preview.reload.anchor.v1`へ保存できます。これ以外をIndexedDB、local/session storage、Cache Storage、
+service worker、YAML、manifest、SB3、user config、URL、telemetryへ保存しません。
 
 stop、project再選択、`pagehide`、shell disposeは同じidempotent cleanupへ収束します。
 
@@ -304,25 +311,26 @@ fake handle／deterministic clockのunit／protocol testに加え、
 初回valid、valid reload、invalid candidate、missing／restore、unsupported fallbackをChromiumで確認済みです。
 Edge実測とsave latency測定は、flagを一般作者向け既定ONへ切り替える前のrelease gateとして残します。
 
-| case                     | unit | protocol integration | Chromium E2E | 合否条件                                            |
-| ------------------------ | ---: | -------------------: | -----------: | --------------------------------------------------- |
-| unsupported／insecure    | 必須 |                    - |         必須 | pickerを呼ばずfallback表示                          |
-| picker cancel／deny      | 必須 |                    - |         必須 | 機械可読診断、再選択可能                            |
-| initial valid            | 必須 |                 必須 |         必須 | modalなしで先頭から開始                             |
-| initial invalid          | 必須 |                 必須 |         必須 | runtime未開始、watch継続                            |
-| valid reload 1／2／3     | 必須 |                 必須 |         必須 | Node経路と同じstage／commit sequence                |
-| invalid candidate        | 必須 |                 必須 |         必須 | current integrity不変、modalなし                    |
-| missing／restore         | 必須 |                 必須 |         必須 | 一回診断後にrecovery candidate                      |
-| rapid save               | 必須 |                 必須 |         必須 | 最新integrityだけpending／commit                    |
-| overlapping poll         | 必須 |                    - |         必須 | 同時read sequenceが最大1                            |
-| atomic replace           | 必須 |                 必須 |         必須 | rootからhandleを再取得して変更検出                  |
-| partial／unstable read   | 必須 |                 必須 |         必須 | 部分snapshotをstageしない                           |
-| background／foreground   | 必須 |                    - |         必須 | status表示、visible復帰時に即時poll                 |
-| permission revoke        | 必須 |                 必須 |         必須 | current実行継続、candidate破棄、再選択              |
-| stop／reselect／pagehide | 必須 |                 必須 |         必須 | timer、listener、observer、pending resultが残らない |
-| flag OFF                 | 必須 |                    - |         必須 | module初期化、picker、timerが0回                    |
-| production artifact      | 必須 |                    - |         必須 | handle、timer、candidate、UI persisted fieldが0     |
-| YAML外fingerprint変更    | 必須 |                 必須 |         必須 | stageせずfull rebuild案内                           |
+| case                               | unit | protocol integration | Chromium E2E | 合否条件                                            |
+| ---------------------------------- | ---: | -------------------: | -----------: | --------------------------------------------------- |
+| unsupported／insecure              | 必須 |                    - |         必須 | pickerを呼ばずfallback表示                          |
+| picker cancel／deny                | 必須 |                    - |         必須 | 機械可読診断、再選択可能                            |
+| initial valid                      | 必須 |                 必須 |         必須 | modalなしで先頭から開始                             |
+| initial invalid                    | 必須 |                 必須 |         必須 | runtime未開始、watch継続                            |
+| automatic valid reload             | 必須 |                 必須 |         必須 | action既定、scene／story fallbackで自動commit       |
+| manual restart／preference 1／2／3 | 必須 |                 必須 |         必須 | status dialogから今回／今回＋次回／次回だけを分離   |
+| invalid candidate                  | 必須 |                 必須 |         必須 | current integrity不変、modalなし                    |
+| missing／restore                   | 必須 |                 必須 |         必須 | 同一bytesは診断解除、異なるvalid bytesは自動commit  |
+| rapid save                         | 必須 |                 必須 |         必須 | 最新integrityだけpending／commit                    |
+| overlapping poll                   | 必須 |                    - |         必須 | 同時read sequenceが最大1                            |
+| atomic replace                     | 必須 |                 必須 |         必須 | rootからhandleを再取得して変更検出                  |
+| partial／unstable read             | 必須 |                 必須 |         必須 | 部分snapshotをstageしない                           |
+| background／foreground             | 必須 |                    - |         必須 | status表示、visible復帰時に即時poll                 |
+| permission revoke                  | 必須 |                 必須 |         必須 | current実行継続、candidate破棄、再選択              |
+| stop／reselect／pagehide           | 必須 |                 必須 |         必須 | timer、listener、observer、pending resultが残らない |
+| flag OFF                           | 必須 |                    - |         必須 | module初期化、picker、timerが0回                    |
+| production artifact                | 必須 |                    - |         必須 | handle、timer、candidate、UI persisted fieldが0     |
+| YAML外fingerprint変更              | 必須 |                 必須 |         必須 | stageせずfull rebuild案内                           |
 
 latencyは外部editorから10回ずつ通常saveとatomic replaceを行い、save完了からwatch status更新までを測ります。
 foregroundは中央値1秒以下、p95 2.5秒以下をrelease gateとします。backgroundはbrowser throttlingの実測値を
@@ -336,12 +344,13 @@ Chrome／Edge、OS、version、sample数とともにIssueへ記録しますが�
 1. pure manifest／adapter portとdeterministic polling fixture
 2. File System Access handle adapter
 3. shared preview protocol接続
-4. `dsl4AppShell`と`dsl4WebPreviewAdapter`を既定OFFでUIへ接続
+4. `dsl4AppShell`、`dsl4WebPreviewAdapter`、`dsl4PreviewReloadOverlay`を既定OFFでUIへ接続
 5. Chromium fixture、作者向け手順、既存local validate／build fallback
 
 1〜5とlocal live preview commandは実装済みです。Edgeと実editorのlatency測定は一般作者向け
 既定ONのrelease gateとして追跡します。
 
-rollbackは`dsl4WebPreviewAdapter=false`だけでWeb固有UIとadapterを初期化しない状態へ戻します。共有source
-frontend、preview protocol、Node watcher、CLI validate/buildはrevertしません。handleを永続化しないため、
-rollbackにIndexedDB migrationやcleanupはありません。DSL 3.1／3.2とproduction artifactを変更しません。
+`dsl4PreviewReloadOverlay=false`は共通status buttonと自動適用方針を無効化し、legacy blocking candidate surfaceへ
+戻します。`dsl4WebPreviewAdapter=false`はWeb固有UIとadapterを初期化しない状態へ戻します。共有source frontend、
+preview protocol、Node watcher、CLI validate/buildはrevertしません。handleを永続化しないため、rollbackに
+IndexedDB migrationやcleanupはありません。DSL 3.1／3.2とproduction artifactを変更しません。
