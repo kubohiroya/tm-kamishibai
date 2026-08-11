@@ -478,6 +478,15 @@ class KamishibaiDsl4RuntimeExtension {
     if (mount?.style) mount.style.cursor = cursor;
   }
 
+  hideAllDisplayTargets() {
+    const targets = this.Scratch?.vm?.runtime?.targets;
+    if (!Array.isArray(targets)) return;
+    for (const target of targets) {
+      if (target?.isStage === true) continue;
+      if (typeof target?.setVisible === 'function') target.setVisible(false);
+    }
+  }
+
   showScratchTitle(locale) {
     const runtime = this.Scratch.vm.runtime;
     const stage = runtime.getTargetForStage();
@@ -562,6 +571,7 @@ class KamishibaiDsl4RuntimeExtension {
 
   async restart({projectOverride = null, showTitle = true, forceStory = false} = {}) {
     await this.stop('project-restart');
+    this.hideAllDisplayTargets();
     this.status = 'starting';
     this.lastError = '';
 

@@ -8,6 +8,7 @@ import {runInThisContext} from 'node:vm';
 import test from 'node:test';
 
 import {strFromU8, unzipSync} from 'fflate';
+import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {
   createDownloadableReleaseSb3,
@@ -102,22 +103,51 @@ function browserDirectoryHandle(name, entries) {
   };
 }
 
-async function buildEmbeddedStoryRelease() {
+async function buildEmbeddedStoryRelease({navigationFixture = false} = {}) {
   const result = await buildRelease();
+  const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-restart-project-'));
+  const baseSb3Path = path.join(projectDirectory, 'base.sb3');
+  const sourceDirectory = path.join(projectDirectory, 'source');
+  const projectAssetsPath = path.join(projectDirectory, 'project-assets.yml');
+  const displayAssetPath = path.join(projectDirectory, 'display.svg');
+  const projectSb3Path = path.join(projectDirectory, 'project.sb3');
+  const sceneSource = navigationFixture
+    ? `  opening:
+    actions:
+      - Actor.show:
+          skin: ActorSkin
+          x: 0
+          y: 0
+          scale: 100
+      - wait: 60
+  ending:
+    actions:
+      - Actor.show:
+          skin: ActorSkin
+          x: 123
+          y: 0
+          scale: 100
+      - wait: 60`
+    : `  opening:
+    - wait: 0.05`;
   const sourceText = `kamishibai: '4.0'
 controls:
   keymaps:
     production:
       Space: navigation.nextAction
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 assets:
   EndCover:
     kind: backdrop
     name: Menu
+  ActorSkin: costume:Actor
+actors:
+  Actor: ActorSkin
 cover:
   backdrop: EndCover
 scenes:
-  opening:
-    - wait: 0.05
+${sceneSource}
 `;
   const parsed = frontend.parse(sourceText, {sourceId: 'main'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
@@ -141,6 +171,13 @@ scenes:
         formatVersion: 1,
         assets: [
           {
+            id: 'ActorSkin',
+            kind: 'costume',
+            loading: 'eager',
+            target: 'Actor',
+            source: {type: 'project', name: 'ActorSkin'},
+          },
+          {
             id: 'EndCover',
             kind: 'backdrop',
             loading: 'eager',
@@ -158,20 +195,76 @@ scenes:
       subtleCrypto: webcrypto.subtle,
     },
   );
-  const embedded = await embedDsl4PackagedRuntimeComponentInSb3(
-    result.archive,
-    parsed.storyDocument,
-    source,
-    artifact.artifact,
-    assets,
-    {
-      channel: 'bundled',
-      ...storyComponentLimits,
-      replaceExisting: true,
-      subtleCrypto: webcrypto.subtle,
-    },
-  );
-  return embedded.bytes;
+  try {
+    await Promise.all([
+      writeFile(baseSb3Path, result.archive),
+      writeFile(
+        displayAssetPath,
+        '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#fff"/></svg>\n',
+      ),
+      writeFile(
+        projectAssetsPath,
+        `formatVersion: 1
+sprites:
+  Actor:
+    layerOrder: 1
+    visible: false
+    x: 0
+    y: 0
+    size: 100
+    direction: 90
+    draggable: false
+    rotationStyle: all around
+    volume: 100
+  Narration:
+    layerOrder: 2
+    visible: false
+    x: 0
+    y: 0
+    size: 100
+    direction: 90
+    draggable: false
+    rotationStyle: all around
+    volume: 100
+assets:
+  ActorSkin:
+    kind: costume
+    target: Actor
+    file: display.svg
+    rotationCenterX: 5
+    rotationCenterY: 5
+  NarrationText:
+    kind: costume
+    target: Narration
+    file: display.svg
+    rotationCenterX: 5
+    rotationCenterY: 5
+`,
+      ),
+    ]);
+    await importSb3({inputPath: baseSb3Path, outputDirectory: sourceDirectory});
+    await buildSb3({
+      sourceDirectory,
+      projectAssetsPath,
+      outputPath: projectSb3Path,
+    });
+    const embedded = await embedDsl4PackagedRuntimeComponentInSb3(
+      await readFile(projectSb3Path),
+      parsed.storyDocument,
+      source,
+      artifact.artifact,
+      assets,
+      {
+        channel: 'bundled',
+        ...storyComponentLimits,
+        replaceExisting: true,
+        subtleCrypto: webcrypto.subtle,
+      },
+    );
+    return embedded.bytes;
+  } finally {
+    await rm(projectDirectory, {recursive: true, force: true});
+  }
 }
 
 async function buildExternalSourceStoryRelease() {
@@ -883,7 +976,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
   }
 });
 
-async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
+async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDisplayNames = []) {
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const vm = new VirtualMachine();
   try {
@@ -934,7 +1027,11 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(titleControls.style.display, 'block');
     assert.deepEqual(
       vm.runtime.targets.map((target) => target.getName()),
-      ['Stage'],
+      ['Stage', ...expectedDisplayNames],
+    );
+    assert.equal(
+      vm.runtime.targets.filter((target) => !target.isStage).every((target) => !target.visible),
+      true,
     );
 
     await extensionReporter(vm, 'closeTitle');
@@ -1005,6 +1102,10 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(sawReloadStart, true, 'Reload must start the packaged story again.');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
 
+    for (const target of vm.runtime.targets) {
+      if (!target.isStage) target.setVisible(true);
+    }
+    vm.stopAll();
     vm.greenFlag();
     const restartDeadline = Date.now() + 5_000;
     while (Date.now() < restartDeadline) {
@@ -1016,6 +1117,13 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
     assert.equal(titleControls.style.display, 'block');
     assert.equal(applicationMenus[0].style.display, 'none');
+    assert.deepEqual(
+      vm.runtime.targets
+        .filter((target) => !target.isStage)
+        .map((target) => ({name: target.getName(), visible: target.visible})),
+      expectedDisplayNames.map((name) => ({name, visible: false})),
+      'Red stop followed by the green flag must hide every actor and text target before title.',
+    );
   } finally {
     vm.quit();
     restoreGlobals();
@@ -1023,7 +1131,79 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
 }
 
 test('returns a naturally finished embedded story to the menu and allows a restart', async () => {
-  await assertNaturallyFinishedStoryReturnsToMenu(await buildEmbeddedStoryRelease());
+  await assertNaturallyFinishedStoryReturnsToMenu(await buildEmbeddedStoryRelease(), [
+    'Actor',
+    'Narration',
+  ]);
+});
+
+test('dispatches the packaged production scene-skip key into the next scene', async () => {
+  const archive = await buildEmbeddedStoryRelease({navigationFixture: true});
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, archive);
+    let nextSkinId = 1;
+    let nextDrawableId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextDrawableId;
+      nextDrawableId += 1;
+      for (const costume of target.sprite?.costumes ?? []) {
+        costume.skinId = nextSkinId;
+        nextSkinId += 1;
+      }
+    }
+    vm.runtime.renderer = {
+      draw() {},
+      createSVGSkin() {
+        return 1;
+      },
+      destroySkin() {},
+      updateDrawableSkinId() {},
+    };
+
+    vm.greenFlag();
+    const titleDeadline = Date.now() + 5_000;
+    while (Date.now() < titleDeadline) {
+      vm.runtime._step();
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    const storyStart = extensionReporter(vm, 'closeTitle');
+    void storyStart.catch(() => {});
+    const actor = vm.runtime.targets.find((target) => target.getName() === 'Actor');
+    assert(actor, 'The packaged navigation fixture must contain Actor.');
+    const actorDeadline = Date.now() + 5_000;
+    while (Date.now() < actorDeadline && !actor.visible) {
+      vm.runtime._step();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(actor.visible, true, 'The opening scene must display Actor before navigation.');
+
+    const sceneSkipEvent = restoreGlobals.document.dispatchKey('ArrowDown');
+    assert.equal(sceneSkipEvent.defaultPrevented, true);
+    const endingDeadline = Date.now() + 5_000;
+    while (Date.now() < endingDeadline && (!actor.visible || actor.x !== 123)) {
+      vm.runtime._step();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.deepEqual(
+      {visible: actor.visible, x: actor.x},
+      {visible: true, x: 123},
+      'ArrowDown must enter the ending scene and apply its first actor action.',
+    );
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
+    vm.stopAll();
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
 });
 
 test('returns an external-source story built from the minimal SB3 to the menu', async () => {
@@ -1177,6 +1357,10 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     assert.equal(website.style.cssText.includes('top:25.5556%'), true);
     assert.equal(website.children[0].tagName, 'IMG');
     assert.match(website.children[0].src, /^data:image\/png;base64,/u);
+    assert.match(website.children[0].style.cssText, /width:10cqw;height:10cqw/u);
+    assert.match(website.children[1].style.cssText, /font-size:2\.5cqw/u);
+    assert.doesNotMatch(website.children[0].style.cssText, /clamp|px/u);
+    assert.doesNotMatch(website.children[1].style.cssText, /clamp|px/u);
     assert.equal(close.getAttribute('aria-label'), '閉じる');
     assert.equal(findByAttribute(document.body, 'data-dsl4-title-shell', 'true').length, 0);
     assert.equal(document.body.style.cursor, 'pointer');

@@ -80,27 +80,25 @@ export function createDsl4RuntimeTitleControls(options) {
   website.type = 'button';
   website.setAttribute('data-dsl4-title-action', 'website');
   website.style.cssText =
-    'position:absolute;left:33.3333%;top:25.5556%;width:33.3333%;height:17.7778%;display:flex;align-items:center;justify-content:center;gap:5%;box-sizing:border-box;border:2px solid #005f50;border-radius:12px;background:#007d66;color:#fff;box-shadow:0 3px 8px rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:inherit;';
+    'position:absolute;left:33.3333%;top:25.5556%;width:33.3333%;height:17.7778%;display:flex;align-items:center;justify-content:center;gap:5%;box-sizing:border-box;border:.4167cqw solid #005f50;border-radius:2.5cqw;background:#007d66;color:#fff;box-shadow:0 .625cqw 1.6667cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:inherit;';
   website.style.cursor = 'pointer';
   websiteIcon.setAttribute('aria-hidden', 'true');
   if (options.websiteIconUrl) {
     websiteIcon.src = options.websiteIconUrl;
     websiteIcon.alt = '';
-    websiteIcon.style.cssText =
-      'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;';
+    websiteIcon.style.cssText = 'display:block;width:10cqw;height:10cqw;object-fit:contain;';
   } else {
-    websiteIcon.style.cssText = 'font-size:clamp(18px,5.5cqw,30px);line-height:1;';
+    websiteIcon.style.cssText = 'font-size:5.5cqw;line-height:1;';
     websiteIcon.textContent = '🌐';
   }
-  websiteLabel.style.cssText =
-    'font-size:clamp(10px,2.5cqw,14px);line-height:1.15;text-align:center;';
+  websiteLabel.style.cssText = 'font-size:2.5cqw;line-height:1.15;text-align:center;';
   website.appendChild(websiteIcon);
   website.appendChild(websiteLabel);
 
   close.type = 'button';
   close.setAttribute('data-dsl4-title-action', 'close');
   close.style.cssText =
-    'position:absolute;left:92.5%;top:1.1111%;width:6.6667%;height:8.8889%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:1px solid #005f50;border-radius:50%;background:#007d66;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:700 clamp(20px,5cqw,30px)/1 sans-serif;padding:0;';
+    'position:absolute;left:92.5%;top:1.1111%;width:6.6667%;height:8.8889%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:.2083cqw solid #005f50;border-radius:50%;background:#007d66;color:#fff;box-shadow:0 .4167cqw 1.25cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:700 5cqw/1 sans-serif;padding:0;';
   close.style.cursor = 'pointer';
   close.textContent = '×';
 

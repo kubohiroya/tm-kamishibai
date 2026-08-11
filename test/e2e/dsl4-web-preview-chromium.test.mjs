@@ -474,7 +474,73 @@ test(
         ),
         false,
       );
-      await click(client, '[data-dsl4-title-action=close]');
+      const initialTitleScale = await client.evaluate(`(() => {
+        const title = document.querySelector('[data-dsl4-title-controls=true]');
+        const website = document.querySelector('[data-dsl4-title-action=website]');
+        const icon = website?.querySelector('img');
+        const label = website?.querySelector('span');
+        return {
+          titleWidth: title?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1080,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width > ${initialTitleScale.titleWidth * 1.25}`,
+        'scaled release title stage',
+      );
+      const expandedTitleScale = await client.evaluate(`(() => {
+        const title = document.querySelector('[data-dsl4-title-controls=true]');
+        const website = document.querySelector('[data-dsl4-title-action=website]');
+        const icon = website?.querySelector('img');
+        const label = website?.querySelector('span');
+        return {
+          titleWidth: title?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      assert.ok(
+        expandedTitleScale.iconWidth > initialTitleScale.iconWidth * 1.25,
+        `title website icon must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
+      );
+      assert.ok(
+        expandedTitleScale.fontSize > initialTitleScale.fontSize * 1.25,
+        `title website label must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
+      );
+      assert.ok(
+        Math.abs(
+          expandedTitleScale.iconWidth / expandedTitleScale.titleWidth -
+            initialTitleScale.iconWidth / initialTitleScale.titleWidth,
+        ) < 0.002,
+      );
+      assert.ok(
+        Math.abs(
+          expandedTitleScale.fontSize / expandedTitleScale.titleWidth -
+            initialTitleScale.fontSize / initialTitleScale.titleWidth,
+        ) < 0.002,
+      );
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 800,
+        height: 600,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width < ${expandedTitleScale.titleWidth / 1.25}`,
+        'restored release title stage',
+      );
+      await client.evaluate(
+        `document.querySelector('[data-dsl4-title-action=close]').click(); true`,
+      );
       await waitForEvaluation(
         client,
         `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
