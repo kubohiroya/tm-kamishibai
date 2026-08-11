@@ -18,6 +18,7 @@ import {
   createDsl4StandardAppShell,
   createDsl4TurboWarpPreviewSessionFactory,
   createDsl4TurboWarpRuntimeHost,
+  resolveDsl4SessionBackingConfig,
 } from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
 import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
@@ -636,6 +637,75 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
   assert.equal(result.enabled, false);
   assert.equal(result.host, null);
   assert.equal(factoryCalls, 0);
+});
+
+test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
+  const direct = resolveDsl4SessionBackingConfig(
+    {},
+    {dsl4SessionBinaryBacking: false},
+    'binary-entry',
+  );
+  assert.equal(direct.policy, 'disabled');
+  assert.equal(typeof direct.sessionId, 'string');
+  assert.equal(direct.sessionId.length > 0, true);
+  assert.deepEqual(direct.storeOptions, {});
+  assert.equal(Object.isFrozen(direct), true);
+  assert.equal(Object.isFrozen(direct.storeOptions), true);
+
+  const preferred = resolveDsl4SessionBackingConfig(
+    {sessionBacking: {sessionId: 'fixed-session', storeOptions: {maxSessionBytes: 1}}},
+    {dsl4SessionBinaryBacking: true},
+    'binary-entry',
+  );
+  assert.deepEqual(preferred, {
+    policy: 'prefer',
+    sessionId: 'fixed-session',
+    storeOptions: {maxSessionBytes: 1},
+  });
+  assert.equal(
+    resolveDsl4SessionBackingConfig(
+      {sessionBacking: {policy: 'required'}},
+      {dsl4SessionBinaryBacking: true},
+      'binary-entry',
+    ).policy,
+    'required',
+  );
+  assert.equal(
+    resolveDsl4SessionBackingConfig(
+      {sessionBacking: {policy: 'disabled'}},
+      {dsl4SessionBinaryBacking: true},
+      'binary-entry',
+    ).policy,
+    'disabled',
+  );
+
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'prefer'}},
+        {dsl4SessionBinaryBacking: false},
+        'binary-entry',
+      ),
+    /requires dsl4SessionBinaryBacking/u,
+  );
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {sessionBacking: {policy: 'disabled'}},
+        {dsl4SessionBinaryBacking: false},
+        'embedded-base64',
+      ),
+    /require assetBundleFormat binary-entry/u,
+  );
+  assert.throws(
+    () =>
+      resolveDsl4SessionBackingConfig(
+        {binaryBundleStoreOptions: {}},
+        {dsl4SessionBinaryBacking: false},
+        'binary-entry',
+      ),
+    /replaced by sessionBacking\.storeOptions/u,
+  );
 });
 
 test('creates browser preview sessions from wire StoryDocuments without parsing source again', async () => {

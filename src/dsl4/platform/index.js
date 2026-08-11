@@ -32,5 +32,8 @@ export {
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 export {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';
-export {createDsl4TurboWarpRuntimeHost} from './turbowarp-runtime-host.js';
+export {
+  createDsl4TurboWarpRuntimeHost,
+  resolveDsl4SessionBackingConfig,
+} from './turbowarp-runtime-host.js';
 export {createDsl4BrowserRemoteAssetLoader} from './browser-remote-asset-loader.js';

@@ -2,6 +2,7 @@ import {deepFreeze} from './story-document.js';
 
 const featureFlagKeys = new Set([
   'dsl4Runtime',
+  'dsl4SessionBinaryBacking',
   'dsl4SourceIncludes',
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
@@ -19,6 +20,7 @@ const featureFlagKeys = new Set([
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
+  dsl4SessionBinaryBacking: false,
   dsl4SourceIncludes: false,
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
@@ -64,6 +66,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4AppShell && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4AppShell requires dsl4Runtime');
+  }
+  if (resolved.dsl4SessionBinaryBacking && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4SessionBinaryBacking requires dsl4Runtime');
   }
   if (resolved.dsl4SourceIncludes && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SourceIncludes requires dsl4Runtime');

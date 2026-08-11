@@ -9,7 +9,7 @@ import {parse} from 'yaml';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-async-input': '0.3.0',
-  '@kubohiroya/turbowarp-asset-manager': '0.9.0',
+  '@kubohiroya/turbowarp-asset-manager': '0.10.0',
   '@kubohiroya/turbowarp-bubble': '0.4.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.3.0',
   '@kubohiroya/turbowarp-svg-text': '0.4.0',

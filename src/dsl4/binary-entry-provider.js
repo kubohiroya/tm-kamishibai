@@ -534,6 +534,107 @@ export async function createDsl4OneShotBinaryEntryProvider(
     }
   }
 
+  /**
+   * Read and validate one logical asset from the entry source.
+   *
+   * `consume` preserves the original one-shot builder contract. Direct runtime backing uses the
+   * same validation path without consuming the asset so a released scene can materialize it again.
+   *
+   * @param {string} assetId
+   * @param {{signal?: AbortSignal}} readOptions
+   * @param {boolean} consume
+   */
+  async function materializeAsset(assetId, readOptions, consume) {
+    if (released || releaseRequested) {
+      fail('K4-ASSET-ENTRY-RELEASED-001', 'Binary entry provider has been released');
+    }
+    if (pending) fail('K4-ASSET-ENTRY-BUSY-001', 'Binary entry provider is already reading');
+    const files = filesByAsset.get(assetId);
+    if (!files) fail('K4-ASSET-ENTRY-LOOKUP-001', `Binary asset not found: ${assetId}`);
+    if (consume && consumed.has(assetId)) {
+      fail('K4-ASSET-ENTRY-CONSUMED-001', `Binary asset was already consumed: ${assetId}`);
+    }
+    assertNotAborted(readOptions.signal);
+    const linkedAbort = linkAbortSignals(readOptions.signal, sourceAbort.signal);
+    const signal = linkedAbort.signal;
+    const operation = (async () => {
+      try {
+        const output = [];
+        for (const file of files) {
+          assertNotAborted(signal);
+          let loaded;
+          try {
+            loaded = await /** @type {Function} */ (reader)(file.entry, {signal});
+          } catch (error) {
+            if (signal.aborted) {
+              fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry read was aborted', error);
+            }
+            if (error instanceof Dsl4BinaryEntryError) throw error;
+            fail('K4-ASSET-ENTRY-READ-001', `Cannot read binary entry: ${file.entry}`, error);
+          }
+          if (
+            !isRecord(loaded) ||
+            !(loaded.bytes instanceof Uint8Array) ||
+            !Number.isSafeInteger(loaded.compressedSize) ||
+            Number(loaded.compressedSize) < 0
+          ) {
+            fail(
+              'K4-ASSET-ENTRY-READ-001',
+              `Binary entry reader returned invalid data: ${file.entry}`,
+            );
+          }
+          const bytes = new Uint8Array(loaded.bytes);
+          const compressedSize = Number(loaded.compressedSize);
+          if (
+            (compressedSize === 0 && bytes.length !== 0) ||
+            (compressedSize !== 0 && bytes.length / compressedSize > ratioLimit)
+          ) {
+            fail(
+              'K4-ASSET-ENTRY-COMPRESSION-001',
+              `Binary entry exceeds compression ratio: ${file.entry}`,
+            );
+          }
+          if (bytes.length !== file.size) {
+            fail('K4-ASSET-ENTRY-SIZE-001', `Binary entry size does not match: ${file.entry}`);
+          }
+          const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
+          if (integrity !== file.integrity) {
+            fail(
+              'K4-ASSET-ENTRY-INTEGRITY-001',
+              `Binary entry integrity does not match: ${file.entry}`,
+            );
+          }
+          output.push(
+            Object.freeze({
+              path: file.path,
+              size: bytes.length,
+              integrity,
+              ...(file.contentType === undefined ? {} : {contentType: file.contentType}),
+              bytes,
+            }),
+          );
+        }
+        assertNotAborted(signal);
+        if (releaseRequested) {
+          fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry read was superseded by release');
+        }
+        if (consume) {
+          consumed.add(assetId);
+          if (releaseAfterLastAsset && consumed.size === assetIds.length) await finalize();
+        }
+        return Object.freeze({assetId, files: Object.freeze(output)});
+      } finally {
+        linkedAbort.cleanup();
+      }
+    })();
+    pending = operation;
+    try {
+      return await operation;
+    } finally {
+      pending = null;
+    }
+  }
+
   const provider = {
     descriptor: validated,
     assetIds,
@@ -544,97 +645,13 @@ export async function createDsl4OneShotBinaryEntryProvider(
     get remainingAssetCount() {
       return assetIds.length - consumed.size;
     },
+    /** @param {string} assetId @param {{signal?: AbortSignal}} [readOptions] */
+    readAsset(assetId, readOptions = {}) {
+      return materializeAsset(assetId, readOptions, false);
+    },
     /** @param {string} assetId @param {{signal?: AbortSignal}} [consumeOptions] */
-    async consumeAsset(assetId, consumeOptions = {}) {
-      if (released || releaseRequested) {
-        fail('K4-ASSET-ENTRY-RELEASED-001', 'Binary entry provider has been released');
-      }
-      if (pending) fail('K4-ASSET-ENTRY-BUSY-001', 'Binary entry provider is already consuming');
-      const files = filesByAsset.get(assetId);
-      if (!files) fail('K4-ASSET-ENTRY-LOOKUP-001', `Binary asset not found: ${assetId}`);
-      if (consumed.has(assetId)) {
-        fail('K4-ASSET-ENTRY-CONSUMED-001', `Binary asset was already consumed: ${assetId}`);
-      }
-      assertNotAborted(consumeOptions.signal);
-      const linkedAbort = linkAbortSignals(consumeOptions.signal, sourceAbort.signal);
-      const signal = linkedAbort.signal;
-      const operation = (async () => {
-        try {
-          const output = [];
-          for (const file of files) {
-            assertNotAborted(signal);
-            let loaded;
-            try {
-              loaded = await /** @type {Function} */ (reader)(file.entry, {signal});
-            } catch (error) {
-              if (signal.aborted) {
-                fail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry consumption was aborted', error);
-              }
-              if (error instanceof Dsl4BinaryEntryError) throw error;
-              fail('K4-ASSET-ENTRY-READ-001', `Cannot read binary entry: ${file.entry}`, error);
-            }
-            if (
-              !isRecord(loaded) ||
-              !(loaded.bytes instanceof Uint8Array) ||
-              !Number.isSafeInteger(loaded.compressedSize) ||
-              Number(loaded.compressedSize) < 0
-            ) {
-              fail(
-                'K4-ASSET-ENTRY-READ-001',
-                `Binary entry reader returned invalid data: ${file.entry}`,
-              );
-            }
-            const bytes = new Uint8Array(loaded.bytes);
-            const compressedSize = Number(loaded.compressedSize);
-            if (
-              (compressedSize === 0 && bytes.length !== 0) ||
-              (compressedSize !== 0 && bytes.length / compressedSize > ratioLimit)
-            ) {
-              fail(
-                'K4-ASSET-ENTRY-COMPRESSION-001',
-                `Binary entry exceeds compression ratio: ${file.entry}`,
-              );
-            }
-            if (bytes.length !== file.size) {
-              fail('K4-ASSET-ENTRY-SIZE-001', `Binary entry size does not match: ${file.entry}`);
-            }
-            const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
-            if (integrity !== file.integrity) {
-              fail(
-                'K4-ASSET-ENTRY-INTEGRITY-001',
-                `Binary entry integrity does not match: ${file.entry}`,
-              );
-            }
-            output.push(
-              Object.freeze({
-                path: file.path,
-                size: bytes.length,
-                integrity,
-                ...(file.contentType === undefined ? {} : {contentType: file.contentType}),
-                bytes,
-              }),
-            );
-          }
-          assertNotAborted(signal);
-          if (releaseRequested) {
-            fail(
-              'K4-ASSET-ENTRY-ABORTED-001',
-              'Binary entry consumption was superseded by release',
-            );
-          }
-          consumed.add(assetId);
-          if (releaseAfterLastAsset && consumed.size === assetIds.length) await finalize();
-          return Object.freeze({assetId, files: Object.freeze(output)});
-        } finally {
-          linkedAbort.cleanup();
-        }
-      })();
-      pending = operation;
-      try {
-        return await operation;
-      } finally {
-        pending = null;
-      }
+    consumeAsset(assetId, consumeOptions = {}) {
+      return materializeAsset(assetId, consumeOptions, true);
     },
     async release() {
       if (released) return;

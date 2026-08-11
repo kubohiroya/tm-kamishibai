@@ -26,7 +26,7 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 | capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界         |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.9.0`      | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.10.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.4.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |

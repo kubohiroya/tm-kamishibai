@@ -16,7 +16,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Asset Manager',
     source: '@kubohiroya/turbowarp-asset-manager',
-    version: '0.9.0',
+    version: '0.10.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

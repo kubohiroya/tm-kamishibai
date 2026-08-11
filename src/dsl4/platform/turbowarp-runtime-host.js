@@ -31,6 +31,8 @@ const hostPortMethods = new Set([
 ]);
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
 const defaultCacheLeaseHeartbeatMs = 30_000;
+const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
+let fallbackSessionIdCounter = 0;
 
 /** @param {() => void} callback @param {number} milliseconds */
 function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
@@ -42,6 +44,80 @@ function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function createSessionBackingId() {
+  const cryptoObject = globalThis.crypto;
+  if (typeof cryptoObject?.randomUUID === 'function') return cryptoObject.randomUUID();
+  if (typeof cryptoObject?.getRandomValues === 'function') {
+    const bytes = cryptoObject.getRandomValues(new Uint8Array(16));
+    return `dsl4-${[...bytes].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+  }
+  fallbackSessionIdCounter += 1;
+  return `dsl4-${Date.now().toString(36)}-${fallbackSessionIdCounter.toString(36)}`;
+}
+
+/**
+ * @param {Record<string, any>} options
+ * @param {Readonly<Record<string, any>>} featureFlags
+ * @param {'embedded-base64' | 'binary-entry'} assetBundleFormat
+ */
+export function resolveDsl4SessionBackingConfig(options, featureFlags, assetBundleFormat) {
+  if (options.binaryBundleStoreOptions !== undefined) {
+    throw new TypeError('binaryBundleStoreOptions was replaced by sessionBacking.storeOptions');
+  }
+  if (options.sessionBacking !== undefined && !isRecord(options.sessionBacking)) {
+    throw new TypeError('sessionBacking must be an object');
+  }
+  if (
+    options.onSessionBackingWarning !== undefined &&
+    typeof options.onSessionBackingWarning !== 'function'
+  ) {
+    throw new TypeError('onSessionBackingWarning must be a function');
+  }
+  if (
+    options.onSessionBackingFatalError !== undefined &&
+    typeof options.onSessionBackingFatalError !== 'function'
+  ) {
+    throw new TypeError('onSessionBackingFatalError must be a function');
+  }
+  if (assetBundleFormat !== 'binary-entry') {
+    if (
+      options.sessionBacking !== undefined ||
+      options.onSessionBackingWarning !== undefined ||
+      options.onSessionBackingFatalError !== undefined
+    ) {
+      throw new TypeError('session backing options require assetBundleFormat binary-entry');
+    }
+    return null;
+  }
+  const input = isRecord(options.sessionBacking) ? options.sessionBacking : {};
+  const unknown = Object.keys(input).filter(
+    (key) => !['policy', 'sessionId', 'storeOptions'].includes(key),
+  );
+  if (unknown.length > 0) {
+    throw new TypeError(`Unknown sessionBacking option: ${unknown.sort().join(', ')}`);
+  }
+  const policy = input.policy ?? (featureFlags.dsl4SessionBinaryBacking ? 'prefer' : 'disabled');
+  if (typeof policy !== 'string' || !sessionBackingPolicies.has(policy)) {
+    throw new TypeError('sessionBacking.policy must be prefer, required, or disabled');
+  }
+  if (!featureFlags.dsl4SessionBinaryBacking && policy !== 'disabled') {
+    throw new TypeError(
+      'sessionBacking.policy prefer or required requires dsl4SessionBinaryBacking',
+    );
+  }
+  if (input.sessionId !== undefined && (typeof input.sessionId !== 'string' || !input.sessionId)) {
+    throw new TypeError('sessionBacking.sessionId must be a non-empty string');
+  }
+  if (input.storeOptions !== undefined && !isRecord(input.storeOptions)) {
+    throw new TypeError('sessionBacking.storeOptions must be an object');
+  }
+  return Object.freeze({
+    policy,
+    sessionId: input.sessionId ?? createSessionBackingId(),
+    storeOptions: Object.freeze({...input.storeOptions}),
+  });
 }
 
 /** @param {string} code @param {string} message */
@@ -241,6 +317,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {Record<string, any>} options
  * @param {Readonly<Record<string, unknown>>} runtimeComponent
  * @param {(cache: Record<string, any> | null) => void} publishVerifiedRemoteCache
+ * @param {(backing: Record<string, any> | null) => void} publishBinarySessionBacking
  * @param {(observer: ((event: Readonly<Record<string, unknown>>) => void) | null) => void} publishRuntimeLifecycleObserver
  * @param {boolean} poseFeedbackEnabled
  * @param {boolean} posePreviewMirroringEnabled
@@ -254,6 +331,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
   runtimeComponent,
   publishVerifiedRemoteCache,
+  publishBinarySessionBacking,
   publishRuntimeLifecycleObserver,
   poseFeedbackEnabled,
   posePreviewMirroringEnabled,
@@ -419,9 +497,19 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(options.binaryEntryProvider === undefined
         ? {}
         : {binaryEntryProvider: options.binaryEntryProvider}),
-      ...(options.binaryBundleStoreOptions === undefined
+      ...(options.binarySessionBackingPolicy === undefined
         ? {}
-        : {binaryBundleStoreOptions: options.binaryBundleStoreOptions}),
+        : {binarySessionBackingPolicy: options.binarySessionBackingPolicy}),
+      ...(options.binarySessionId === undefined ? {} : {binarySessionId: options.binarySessionId}),
+      ...(options.sessionBinaryBackingOptions === undefined
+        ? {}
+        : {sessionBinaryBackingOptions: options.sessionBinaryBackingOptions}),
+      ...(options.onBinarySessionBackingWarning === undefined
+        ? {}
+        : {onBinarySessionBackingWarning: options.onBinarySessionBackingWarning}),
+      ...(options.onBinarySessionBackingFatalError === undefined
+        ? {}
+        : {onBinarySessionBackingFatalError: options.onBinarySessionBackingFatalError}),
       ...(options.createTMPoseComposition === undefined
         ? {}
         : {createTMPoseComposition: options.createTMPoseComposition}),
@@ -464,6 +552,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
         : {}),
     });
+    await assetSession.binaryAssetBacking?.ready;
+    publishBinarySessionBacking(assetSession.binaryAssetBacking);
     mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
@@ -901,7 +991,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {number} [options.maxAssetBytes]
  * @param {'embedded-base64' | 'binary-entry'} [options.assetBundleFormat]
  * @param {unknown} [options.binaryEntryProvider]
- * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
+ * @param {Readonly<{policy?: 'prefer' | 'required' | 'disabled', sessionId?: string, storeOptions?: Readonly<Record<string, unknown>>}>} [options.sessionBacking]
+ * @param {(warning: Readonly<Record<string, unknown>>) => unknown} [options.onSessionBackingWarning]
+ * @param {(error: unknown) => unknown} [options.onSessionBackingFatalError]
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {unknown} [options.runtime]
@@ -960,6 +1052,11 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (assetBundleFormat === 'embedded-base64' && options.binaryEntryProvider !== undefined) {
     throw new TypeError('binaryEntryProvider requires assetBundleFormat binary-entry');
   }
+  const sessionBackingConfig = resolveDsl4SessionBackingConfig(
+    options,
+    featureFlags,
+    assetBundleFormat,
+  );
   if (options.createHostPort !== undefined && typeof options.createHostPort !== 'function') {
     throw new TypeError('createHostPort must be a function');
   }
@@ -984,6 +1081,12 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
 
   /** @type {Record<string, any> | null} */
   let verifiedRemoteCache = null;
+  /** @type {Record<string, any> | null} */
+  let binarySessionBacking = null;
+  /** @type {unknown} */
+  let sessionBackingFatalError = null;
+  /** @type {null | (() => void)} */
+  let stopForSessionBackingFatal = null;
   /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
   let runtimeLifecycleObserver = null;
   /** @type {Readonly<Record<string, Function>> | null} */
@@ -1002,6 +1105,40 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       'Provide either evaluateCondition or createRuntimeExpressionComposition, not both',
     );
   }
+
+  /** @param {unknown} error */
+  function handleSessionBackingFatalError(error) {
+    sessionBackingFatalError = error;
+    try {
+      stopForSessionBackingFatal?.();
+    } catch {
+      // The backing error remains authoritative if the runtime is already stopped or disposed.
+    }
+    try {
+      options.onSessionBackingFatalError?.(error);
+    } catch {
+      // Diagnostic presentation cannot suppress safe runtime stop.
+    }
+  }
+
+  const runtimeEnvironmentOptions =
+    sessionBackingConfig === null
+      ? options
+      : {
+          ...options,
+          binarySessionBackingPolicy: sessionBackingConfig.policy,
+          binarySessionId: sessionBackingConfig.sessionId,
+          sessionBinaryBackingOptions: sessionBackingConfig.storeOptions,
+          /** @param {Readonly<Record<string, unknown>>} warning */
+          onBinarySessionBackingWarning(warning) {
+            try {
+              options.onSessionBackingWarning?.(warning);
+            } catch {
+              // Warning presentation cannot change the fixed backing mode.
+            }
+          },
+          onBinarySessionBackingFatalError: handleSessionBackingFatalError,
+        };
 
   const startup = await createDsl4RuntimeStartup({
     featureFlags,
@@ -1030,10 +1167,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {Readonly<Record<string, any>>} */ startupContext,
     ) {
       return createDsl4TurboWarpRuntimeEnvironment(
-        options,
+        runtimeEnvironmentOptions,
         runtimeComponent,
         (/** @type {any} */ cache) => {
           verifiedRemoteCache = cache;
+        },
+        (/** @type {any} */ backing) => {
+          binarySessionBacking = backing;
         },
         (observer) => {
           runtimeLifecycleObserver = observer;
@@ -1053,12 +1193,25 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
+  stopForSessionBackingFatal = () => {
+    session.stop('session-binary-backing-fatal');
+  };
+  if (sessionBackingFatalError !== null) {
+    try {
+      stopForSessionBackingFatal();
+    } catch {
+      // Startup already owns and reports the authoritative backing failure.
+    }
+  }
   const cachePort = /** @type {Record<string, any> | null} */ (
     /** @type {unknown} */ (verifiedRemoteCache)
+  );
+  const binaryBackingPort = /** @type {Record<string, any> | null} */ (
+    /** @type {unknown} */ (binarySessionBacking)
   );
   /** @type {Promise<void> | null} */
   let disposePromise = null;
@@ -1203,6 +1356,15 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
             deleteStoryCache: cachePort.deleteStoryCache,
             getHeartbeatError() {
               return cacheLeaseError;
+            },
+          }),
+    sessionBinaryBacking:
+      binaryBackingPort === null
+        ? null
+        : Object.freeze({
+            getState: binaryBackingPort.getState,
+            getFatalError() {
+              return sessionBackingFatalError;
             },
           }),
     /** @param {string} [reason] */
