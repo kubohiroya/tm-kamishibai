@@ -81,8 +81,12 @@ test('publishes action wait ownership and one accepted touch release to the arbi
   const arbitration = createDsl4InputArbitration();
   const keyWait = deferred();
   const touchWait = deferred();
+  const cursors = [];
   const port = createDsl4AsyncInputActionPort({
     inputArbitration: arbitration,
+    setCursor(event) {
+      cursors.push(event);
+    },
     composition: {
       waitForKeyCandidate: () => keyWait.promise,
       waitForActorTouchCandidate: () => touchWait.promise,
@@ -97,11 +101,52 @@ test('publishes action wait ownership and one accepted touch release to the arbi
 
   const touchOperation = port.touchInputToChangeScene({actors: ['Hero']}, context());
   assert.equal(arbitration.getState().activeStoryInputKind, 'touch');
+  assert.deepEqual(cursors, [{visible: true, source: 'touch-input-1', cursor: 'pointer'}]);
   touchWait.resolve('Hero');
   assert.equal(await touchOperation, 'Hero');
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'touch-input-1', cursor: 'pointer'},
+    {visible: false, source: 'touch-input-1', cursor: 'pointer'},
+  ]);
   assert.equal(arbitration.getState().suppressPointerRelease, true);
   assert.equal(
     arbitration.arbitrateNavigationPointer({pointerType: 'touch', historyPaused: false}),
     'suppress',
   );
+});
+
+test('restores the cursor when an actor touch wait is cancelled', async () => {
+  const cursors = [];
+  const controller = new AbortController();
+  const port = createDsl4AsyncInputActionPort({
+    setCursor(event) {
+      cursors.push(event);
+    },
+    composition: {
+      waitForKeyCandidate() {
+        assert.fail('key input must not be used');
+      },
+      waitForActorTouchCandidate({signal}) {
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('cancelled');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            {once: true},
+          );
+        });
+      },
+    },
+  });
+
+  const pending = port.touchInputToChangeScene({actors: ['Hero']}, context(controller));
+  controller.abort();
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'touch-input-1', cursor: 'pointer'},
+    {visible: false, source: 'touch-input-1', cursor: 'pointer'},
+  ]);
 });

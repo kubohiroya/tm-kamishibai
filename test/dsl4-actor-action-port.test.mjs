@@ -610,6 +610,7 @@ test('fails closed and cleans speech presentation for invalid advance handles or
 
 test('re-arms advance input while Bubble native reveal consumes it', async () => {
   const calls = [];
+  const cursors = [];
   const presentation = deferred();
   let finishCount = 0;
   const host = fakeHost({
@@ -638,6 +639,9 @@ test('re-arms advance input while Bubble native reveal consumes it', async () =>
     host: host.host,
     resolveActor: () => ({id: 'hero-target', isStage: false}),
     speechAdvanceTypewriterEnabled: true,
+    setCursor(event) {
+      cursors.push(event);
+    },
   });
   let waitCount = 0;
   let cancelCount = 0;
@@ -667,6 +671,10 @@ test('re-arms advance input while Bubble native reveal consumes it', async () =>
 
   assert.equal(waitCount, 2);
   assert.equal(cancelCount, 2);
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'speech-advance-1', cursor: 'pointer'},
+    {visible: false, source: 'speech-advance-1', cursor: 'pointer'},
+  ]);
   assert.deepEqual(calls[0], [
     'createSay',
     {
