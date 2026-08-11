@@ -116,6 +116,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
     throw new TypeError('reloadEnabled must be a boolean');
   }
   let disposed = false;
+  const buttonShadow = '0 .625cqw 1.6667cqw rgba(0,0,0,.2)';
 
   /** @param {unknown} failure */
   const reportFailure = (failure) => {
@@ -145,14 +146,14 @@ export function createDsl4RuntimeApplicationMenu(options) {
     }
     button.type = 'button';
     button.setAttribute('data-dsl4-menu-action', definition.action);
-    button.style.cssText = `position:absolute;left:${definition.left};top:${definition.top};width:36.6667%;height:24.4444%;display:flex;min-width:0;min-height:0;align-items:center;justify-content:center;flex-direction:column;gap:2px;border:2px solid #005f50;border-radius:14px;background:#007d66;color:#fff;box-shadow:0 3px 8px rgba(0,0,0,.2);cursor:pointer;font:inherit;`;
+    button.style.cssText = `position:absolute;left:${definition.left};top:${definition.top};width:36.6667%;height:24.4444%;display:flex;min-width:0;min-height:0;align-items:center;justify-content:center;flex-direction:column;gap:.4167cqw;border:.4167cqw solid #005f50;border-radius:2.9167cqw;background:#007d66;color:#fff;box-shadow:${buttonShadow};cursor:pointer;font:inherit;`;
     button.style.cursor = 'pointer';
     icon.setAttribute('aria-hidden', 'true');
     icon.src = icons[definition.action];
     icon.alt = '';
     icon.style.cssText =
-      'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;filter:invert(1) brightness(1.7) saturate(.35);';
-    label.style.cssText = 'font-size:clamp(12px,3.8cqw,20px);line-height:1.15;text-align:center;';
+      'display:block;width:10cqw;height:10cqw;object-fit:contain;filter:invert(1) brightness(1.7) saturate(.35);';
+    label.style.cssText = 'font-size:3.8cqw;line-height:1.15;text-align:center;';
     button.appendChild(icon);
     button.appendChild(label);
     const onClick = () => {
@@ -179,7 +180,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
       value.button.setAttribute('aria-disabled', String(disabled));
       value.button.style.cursor = disabled ? 'not-allowed' : 'pointer';
       value.button.style.opacity = disabled ? '0.42' : '1';
-      value.button.style.boxShadow = disabled ? 'none' : '0 3px 8px rgba(0,0,0,.2)';
+      value.button.style.boxShadow = disabled ? 'none' : buttonShadow;
     }
   }
 

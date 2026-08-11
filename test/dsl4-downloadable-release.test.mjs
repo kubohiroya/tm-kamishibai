@@ -779,6 +779,17 @@ test('opens the non-embedded title and menu without validating a packaged story 
     assert.equal(initialReloadButton.style.cursor, 'not-allowed');
     findByAttribute(initialApplicationMenu, 'data-dsl4-menu-action', 'about')[0].click();
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    assert.equal(
+      vm.runtime.getTargetForStage().sprite.costumes[vm.runtime.getTargetForStage().currentCostume]
+        .name,
+      'Title',
+    );
+    assert.equal(titleControls.style.display, 'block');
+    assert.equal(
+      findByAttribute(restoreGlobals.document.body, 'data-dsl4-title-shell', 'true').length,
+      0,
+      'About must reuse the Stage title instead of opening a separate simplified dialog.',
+    );
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
 
@@ -909,6 +920,11 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    assert.equal(
+      restoreGlobals.document.listenerCount('keydown'),
+      1,
+      'A packaged story must attach its resolved production keymap to the document.',
+    );
     const titleControls = findByAttribute(
       restoreGlobals.document.body,
       'data-dsl4-title-controls',
@@ -940,6 +956,10 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
       assert.equal(buttons[0].children[0].src, version3MenuIconDataUrls[action]);
       assert.equal(buttons[0].children[0].alt, '');
       assert.match(buttons[0].children[0].style.cssText, /invert\(1\).*saturate\(\.35\)/u);
+      assert.match(buttons[0].children[0].style.cssText, /width:10cqw;height:10cqw/u);
+      assert.match(buttons[0].children[1].style.cssText, /font-size:3\.8cqw/u);
+      assert.doesNotMatch(buttons[0].children[0].style.cssText, /clamp|px/u);
+      assert.doesNotMatch(buttons[0].children[1].style.cssText, /clamp|px/u);
     }
 
     const languageButton = findByAttribute(
@@ -957,6 +977,10 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
     assert.equal(applicationMenus[0].style.display, 'none');
     assert.equal(titleControls.style.display, 'block');
+    assert.equal(
+      findByAttribute(restoreGlobals.document.body, 'data-dsl4-title-shell', 'true').length,
+      0,
+    );
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
@@ -1144,11 +1168,6 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
-    assert.equal(
-      document.listenerCount('keydown'),
-      1,
-      'The packaged runtime must attach its resolved production keymap to the document.',
-    );
     const titleControls = findByAttribute(document.body, 'data-dsl4-title-controls', 'true')[0];
     assert(titleControls, 'Localized title controls must be mounted above the Stage.');
     assert.equal(titleControls.style.display, 'block');

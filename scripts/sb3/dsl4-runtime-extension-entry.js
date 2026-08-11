@@ -481,6 +481,7 @@ class KamishibaiDsl4RuntimeExtension {
   showScratchTitle(locale) {
     const runtime = this.Scratch.vm.runtime;
     const stage = runtime.getTargetForStage();
+    this.shell?.hideTitle();
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
     this.ensureTitleControls()?.show(locale);

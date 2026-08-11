@@ -480,6 +480,81 @@ test(
         `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
         'non-embedded application menu',
       );
+      const initialMenuScale = await client.evaluate(`(() => {
+        const menu = document.querySelector('[data-dsl4-application-menu=true]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
+        const icon = open?.querySelector('img');
+        const label = open?.querySelector('span');
+        return {
+          menuWidth: menu?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1080,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]').getBoundingClientRect().width > ${initialMenuScale.menuWidth * 1.25}`,
+        'scaled application menu stage',
+      );
+      const expandedMenuScale = await client.evaluate(`(() => {
+        const menu = document.querySelector('[data-dsl4-application-menu=true]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
+        const icon = open?.querySelector('img');
+        const label = open?.querySelector('span');
+        return {
+          menuWidth: menu?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      assert.ok(
+        expandedMenuScale.iconWidth > initialMenuScale.iconWidth * 1.25,
+        `menu icon must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
+      );
+      assert.ok(
+        expandedMenuScale.fontSize > initialMenuScale.fontSize * 1.25,
+        `menu label must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
+      );
+      assert.ok(
+        Math.abs(
+          expandedMenuScale.iconWidth / expandedMenuScale.menuWidth -
+            initialMenuScale.iconWidth / initialMenuScale.menuWidth,
+        ) < 0.002,
+      );
+      assert.ok(
+        Math.abs(
+          expandedMenuScale.fontSize / expandedMenuScale.menuWidth -
+            initialMenuScale.fontSize / initialMenuScale.menuWidth,
+        ) < 0.002,
+      );
+      await click(client, '[data-dsl4-menu-action=about]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'none' && document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'application information title screen',
+      );
+      const aboutState = await client.evaluate(`(() => {
+        const runtime = globalThis.Scratch.vm.runtime;
+        const stage = runtime.getTargetForStage();
+        return {
+          stageCostume: stage.getCostumes()[stage.currentCostume].name,
+          simplifiedDialogCount: document.querySelectorAll('[data-dsl4-title-shell=true]').length
+        };
+      })()`);
+      assert.match(aboutState.stageCostume, /^Title(?:Runtime)?$/u);
+      assert.equal(aboutState.simplifiedDialogCount, 0);
+      await click(client, '[data-dsl4-title-action=close]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'return from application information title',
+      );
       const menu = await client.evaluate(`(() => {
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
