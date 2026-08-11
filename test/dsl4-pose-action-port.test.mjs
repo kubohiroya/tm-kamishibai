@@ -182,8 +182,8 @@ function setup(overrides = {}) {
     tmposeComposition: pose.composition,
     asyncInputComposition: asyncInput,
     getPoseModelLabels: (name) => pose.labels.get(name) ?? null,
-    playSound(sound) {
-      sounds.push(['play', sound]);
+    playSound(sound, playOptions) {
+      sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
     },
     stopSound(sound) {
       sounds.push(['stop', sound]);
@@ -224,12 +224,53 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
   assert.equal(settled, true);
   assert.deepEqual(sounds, [
     ['play', 'Tick'],
-    ['play', 'Charge'],
+    ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
   ]);
   assert.deepEqual(pose.preview, [['position', 'full-stage'], ['show'], ['hide']]);
   assert.equal(pose.composition.isPreviewVisible(), false);
   assert.equal(pose.composition.isRecognizing(), true);
+});
+
+test('waits for each charge sound before another recognition tick can play it', async () => {
+  let releaseFirstCharge = () => {};
+  const firstCharge = new Promise((resolve) => {
+    releaseFirstCharge = resolve;
+  });
+  let chargeCalls = 0;
+  const {pose, clock, sounds, port} = setup({
+    playSound(sound, playOptions) {
+      sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
+      if (sound === 'Charge' && ++chargeCalls === 1) return firstCharge;
+      return undefined;
+    },
+  });
+  pose.confidence.set('help', 1);
+  const pending = port.waitForPose(sequencePayload(), actionContext());
+  await flush();
+
+  clock.advance(500);
+  await flush();
+  assert.equal(chargeCalls, 1);
+  assert.equal(clock.size, 0, 'No recognition tick may overlap a waiting charge sound.');
+
+  clock.advance(500);
+  await flush();
+  assert.equal(chargeCalls, 1);
+
+  releaseFirstCharge();
+  await flush();
+  assert.equal(clock.size, 1);
+  clock.advance(500);
+  await pending;
+  assert.equal(chargeCalls, 2);
+  assert.deepEqual(
+    sounds.filter(([method, sound]) => method === 'play' && sound === 'Charge'),
+    [
+      ['play', 'Charge', {untilDone: true}],
+      ['play', 'Charge', {untilDone: true}],
+    ],
+  );
 });
 
 test('keeps the camera preview visible until the final pose step completes', async () => {
@@ -519,7 +560,7 @@ test('contains synchronous and asynchronous observer failures without changing p
   assert.equal(clock.size, 0);
   assert.deepEqual(sounds, [
     ['play', 'Tick'],
-    ['play', 'Charge'],
+    ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
   ]);
 });
@@ -550,7 +591,7 @@ test('applies one normalized Scratch binding snapshot before the deterministic p
   );
   assert.deepEqual(sounds, [
     ['play', 'Tick'],
-    ['play', 'Charge'],
+    ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
   ]);
 });

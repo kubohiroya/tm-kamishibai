@@ -29,8 +29,8 @@ importers:
         specifier: 0.4.0
         version: 0.4.0
       '@kubohiroya/turbowarp-tmpose':
-        specifier: 1.7.0
-        version: 1.7.0
+        specifier: 1.7.1
+        version: 1.7.1
       '@teachablemachine/pose':
         specifier: 0.8.3
         version: 0.8.3(@tensorflow/tfjs-converter@3.21.0(@tensorflow/tfjs-core@3.21.0))(@tensorflow/tfjs-core@3.21.0)(@tensorflow/tfjs@1.3.1(seedrandom@2.4.3))
@@ -376,8 +376,8 @@ packages:
   '@kubohiroya/turbowarp-svg-text@0.4.0':
     resolution: {integrity: sha512-wtdCZdAfjowJFwELKRQ3XPJjF51iatuo2k3bNdcHVy3884kqfELys6mDxOnmKnvdb1B3kbwUAusYwVPMDRqHRA==}
 
-  '@kubohiroya/turbowarp-tmpose@1.7.0':
-    resolution: {integrity: sha512-Ucyz/RbVJQ3TAs7Wex+GCHnA9LDE67HuV0gTWNzDfRYSRekdJ9DSxt+QMmqhml6WPV36CeImXnop7V9qMK2Wqw==}
+  '@kubohiroya/turbowarp-tmpose@1.7.1':
+    resolution: {integrity: sha512-rKeNW0sYd1rc4hASpKO8kJJmpLTezO/474Cj+q/SxC9xr1yUjdexqZcafr98gTY8GSjsy2hfhOCr1525y3FzzQ==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2937,7 +2937,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-svg-text@0.4.0': {}
 
-  '@kubohiroya/turbowarp-tmpose@1.7.0': {}
+  '@kubohiroya/turbowarp-tmpose@1.7.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

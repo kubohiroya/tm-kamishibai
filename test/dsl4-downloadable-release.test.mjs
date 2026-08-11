@@ -476,6 +476,48 @@ scenes:
   );
 });
 
+test('reports a missing embedded asset with its story file and source reference line', async () => {
+  const sourceText = `kamishibai: '4.0'
+assets:
+  MissingCard:
+    kind: backdrop
+    file: assets/missing-card.svg
+scenes:
+  opening:
+    - wait: 0
+`;
+
+  await assert.rejects(
+    buildDsl4BrowserSelectedStoryProject({
+      project: {},
+      entries: [
+        {
+          path: 'story-project/story.k4.yml',
+          file: browserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
+        },
+      ],
+      sourceFrontend: frontend,
+      maxSourceBytes: storyComponentLimits.maxSourceBytes,
+      maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+      maxAssetFiles: storyComponentLimits.maxAssetFiles,
+      maxAssetBytes: storyComponentLimits.maxAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    }),
+    (error) => {
+      assert.equal(error.code, 'K4-ASSET-MISSING');
+      assert.equal(
+        error.message,
+        [
+          'The asset file referenced in the story could not be found.',
+          'file: story-project/story.k4.yml',
+          '[5] MissingCard,assets/missing-card.svg',
+        ].join('\n'),
+      );
+      return true;
+    },
+  );
+});
+
 test('keeps the selected source suffix strict after the native chooser accepts YAML files', () => {
   assert.throws(
     () =>
@@ -1102,6 +1144,11 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
+    assert.equal(
+      document.listenerCount('keydown'),
+      1,
+      'The packaged runtime must attach its resolved production keymap to the document.',
+    );
     const titleControls = findByAttribute(document.body, 'data-dsl4-title-controls', 'true')[0];
     assert(titleControls, 'Localized title controls must be mounted above the Stage.');
     assert.equal(titleControls.style.display, 'block');

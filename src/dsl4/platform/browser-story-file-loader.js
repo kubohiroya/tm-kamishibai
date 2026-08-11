@@ -5,6 +5,7 @@ import {
   computeDsl4Sha256Integrity,
   createDsl4EmbeddedSourceDescriptor,
 } from '../source-descriptor.js';
+import {encodeDsl4StoryPathSegment} from '../story-path.js';
 
 const storyFilenamePattern = /\.k4\.ya?ml$/iu;
 
@@ -227,6 +228,29 @@ function decodeSource(bytes) {
   }
 }
 
+/**
+ * @param {object} options
+ * @param {string} options.assetId
+ * @param {string} options.inputPath
+ * @param {string} options.sourcePath
+ * @param {Readonly<Record<string, any>>} options.storyDocument
+ */
+function missingEmbeddedAssetError({assetId, inputPath, sourcePath, storyDocument}) {
+  const assetPath = `/assets/${encodeDsl4StoryPathSegment(assetId)}`;
+  const sourceRange =
+    storyDocument.sourceMap?.[`${assetPath}/file`] ?? storyDocument.sourceMap?.[assetPath];
+  const line = Number(sourceRange?.start?.line ?? 1);
+  const error = new TypeError(
+    [
+      'The asset file referenced in the story could not be found.',
+      `file: ${sourcePath}`,
+      `[${line}] ${assetId},${inputPath}`,
+    ].join('\n'),
+  );
+  Object.defineProperty(error, 'code', {value: 'K4-ASSET-MISSING'});
+  return error;
+}
+
 /** @param {Readonly<Record<string, any>>} asset @param {string} id */
 function commonManifestAsset(asset, id) {
   return {
@@ -326,8 +350,14 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
           ? [{path: inputPath.split('/').at(-1), file: normalizedEntries.get(inputPath)}]
           : [];
     selected.sort((left, right) => left.path.localeCompare(right.path, 'en'));
-    if (selected.length === 0)
-      throw new TypeError(`Selected project is missing asset ${id}: ${inputPath}`);
+    if (selected.length === 0) {
+      throw missingEmbeddedAssetError({
+        assetId: id,
+        inputPath,
+        sourcePath,
+        storyDocument,
+      });
+    }
     if (asset.kind === 'poseModel' && selected.length !== 3) {
       throw new TypeError(`Pose model ${id} must contain exactly three files`);
     }

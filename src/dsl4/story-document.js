@@ -409,10 +409,9 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
-      sourceMap[`/assets/${encodeDsl4StoryPathSegment(id)}`] = sourceRangeForNode(
-        document.getIn(['assets', id], true),
-        lineCounter,
-      );
+      const assetPath = `/assets/${encodeDsl4StoryPathSegment(id)}`;
+      sourceMap[assetPath] = sourceRangeForNode(document.getIn(['assets', id], true), lineCounter);
+      mapNestedSource(sourceMap, asset, document, lineCounter, ['assets', id], assetPath);
       return [id, normalizeAsset(asset, id)];
     }),
   );

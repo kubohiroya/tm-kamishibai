@@ -305,7 +305,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'setText',
       'setSkin',
       'waitForPose',
-      'sound',
+      'bgm',
       'keyInputToChangeScene',
       'touchInputToChangeScene',
       'poseInputToChangeScene',
@@ -620,7 +620,7 @@ scenes:
           actionSignal: context.actionSignal,
         });
       },
-      sound: async ({sound}) => calls.push(['sound', sound]),
+      bgm: async ({sound}) => calls.push(['bgm', sound]),
     },
   });
 
@@ -632,7 +632,7 @@ scenes:
     [
       ['skin', 'FirstSkin'],
       ['wait', 'first'],
-      ['sound', 'Effect'],
+      ['bgm', 'Effect'],
       ['wait', 'middle'],
       ['skin', 'LastSkin'],
       ['wait', 'last'],
@@ -874,7 +874,7 @@ scenes:
         return pendingPose.promise;
       },
       setSkin: async ({skin}) => effects.push(`skin:${skin}`),
-      sound: async ({sound}) => effects.push(`sound:${sound}`),
+      bgm: async ({sound}) => effects.push(`bgm:${sound}`),
     },
   });
   const run = controller.start();
@@ -1179,7 +1179,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
     port: {
       setSkin: () => skinPending.promise,
       waitForPose: async () => skinWaitCalls++,
-      sound: async () => {},
+      bgm: async () => {},
       stage: async () => skinStageCalls++,
     },
   });
@@ -1201,7 +1201,7 @@ test('unskippable pose policy does not block navigation outside waitForPose', as
     port: {
       setSkin: async () => {},
       waitForPose: async () => {},
-      sound: () => {
+      bgm: () => {
         soundCalls += 1;
         return soundPending.promise;
       },
@@ -1314,7 +1314,7 @@ scenes:
             {once: true},
           );
         }),
-      sound: async ({sound}) => events.push(['sound', sound]),
+      bgm: async ({sound}) => events.push(['bgm', sound]),
       stage: async ({backdrop}) => events.push(['stage', backdrop]),
     },
   });

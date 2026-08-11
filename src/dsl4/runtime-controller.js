@@ -1204,7 +1204,7 @@ export function createDsl4RuntimeController({
         }
         ensureActive(context);
         if (typeof step.sound === 'string') {
-          await invokePort('sound', {sound: step.sound}, context);
+          await invokePort('bgm', {sound: step.sound}, context);
           ensureActive(context);
         }
       }

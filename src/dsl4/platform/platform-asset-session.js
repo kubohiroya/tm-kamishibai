@@ -479,7 +479,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       getPoseModelLabels: (poseModel) => tmpose.adapter.getPoseModelLabels(poseModel),
-      playSound: (sound) => assetManagerComposition.playSound(sound),
+      playSound: (sound, playOptions) => assetManagerComposition.playSound(sound, playOptions),
       stopSound: (sound) => assetManagerComposition.stopSound(sound),
       ...(options.poseSchedule === undefined
         ? {}

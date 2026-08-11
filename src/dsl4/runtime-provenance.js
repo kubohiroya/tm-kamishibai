@@ -51,7 +51,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'TMPose',
     source: '@kubohiroya/turbowarp-tmpose',
-    version: '1.7.0',
+    version: '1.7.1',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },

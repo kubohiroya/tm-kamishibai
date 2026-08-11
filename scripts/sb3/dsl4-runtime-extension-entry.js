@@ -38,6 +38,7 @@ const sourceDiagnosticPrefixes = Object.freeze([
   'K4-ASSET-001',
   'K4-ASSET-IMAGE-MIME',
   'K4-ASSET-LIMIT',
+  'K4-ASSET-MISSING',
   'K4-ASSET-REMOTE-URL',
   'K4-BRANCH',
   'K4-COMMAND',
@@ -647,6 +648,7 @@ class KamishibaiDsl4RuntimeExtension {
           runtime: resolveBundledTMPoseRuntime(),
           globalObject: globalThis,
         }),
+        keySource: globalThis.document,
         setLoading() {},
         loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,
@@ -656,6 +658,7 @@ class KamishibaiDsl4RuntimeExtension {
       const diagnostic = shell.diagnostics[0];
       throw new Error(diagnostic?.message ?? 'The packaged DSL 4.0 story is invalid.');
     }
+    shell.runtimeHost.attach(globalThis.document);
 
     this.shell = shell;
     const startAfterTitle =

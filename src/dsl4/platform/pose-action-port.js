@@ -247,7 +247,7 @@ function defaultSchedule(callback, delayMilliseconds) {
  * @param {unknown} options.tmposeComposition
  * @param {unknown} options.asyncInputComposition
  * @param {(poseModel: string) => ReadonlyArray<string> | null} options.getPoseModelLabels
- * @param {(sound: string) => unknown | Promise<unknown>} [options.playSound]
+ * @param {(sound: string, options?: Readonly<{untilDone?: boolean}>) => unknown | Promise<unknown>} [options.playSound]
  * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSound]
  * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
  * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
@@ -643,7 +643,7 @@ export function createDsl4PoseActionPort(options) {
           progress = binding?.progress ?? progress;
           if (confidence >= input.confidenceThreshold) {
             progress += (confidence / input.fullConfidenceHoldSeconds) * elapsedSeconds;
-            if (input.chargeSound) await playSound(input.chargeSound);
+            if (input.chargeSound) await playSound(input.chargeSound, {untilDone: true});
             if (operation.controller.signal.aborted) {
               throw abortError('pose sequence was cancelled');
             }
