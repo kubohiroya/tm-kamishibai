@@ -1867,6 +1867,39 @@ scenes:
           ),
           'CANVAS',
         );
+        assert.deepEqual(
+          await client.evaluate(`(() => {
+            const preview = [...document.querySelectorAll('canvas')]
+              .find((canvas) => canvas.width === 320 && canvas.height === 240);
+            return preview ? {
+              display: preview.style.display,
+              left: preview.style.left,
+              right: preview.style.right,
+              top: preview.style.top,
+              bottom: preview.style.bottom,
+              width: preview.style.width,
+              height: preview.style.height,
+              objectFit: preview.style.objectFit,
+              borderRadius: preview.style.borderRadius
+            } : null;
+          })()`),
+          {
+            display: 'block',
+            left: '0px',
+            right: '',
+            top: '0px',
+            bottom: '',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: '0px',
+          },
+          'The active pose preview must cover the complete stage.',
+        );
+        const hiddenBeforeFirstSkip = await client.evaluate(
+          "globalThis.dsl4LocalPreviewCapabilityFixture.metrics.previewVisibilityChanges.filter((display) => display === 'none').length",
+        );
+        assert.equal(hiddenBeforeFirstSkip, 1, 'Story camera startup must keep preview hidden.');
         await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
         await waitForEvaluation(
           client,
@@ -1877,7 +1910,7 @@ scenes:
           await client.evaluate(
             "globalThis.dsl4LocalPreviewCapabilityFixture.metrics.previewVisibilityChanges.filter((display) => display === 'none').length",
           ),
-          0,
+          hiddenBeforeFirstSkip,
           'The camera preview must remain visible between pose steps.',
         );
         await pressKey(client, {
@@ -2086,7 +2119,7 @@ scenes:
       assert.equal(observed.metrics.modelLoads, 1);
       assert.ok(observed.metrics.predictions >= 1);
       assert.ok(observed.metrics.webcamUpdates >= 1);
-      assert.deepEqual(observed.metrics.previewVisibilityChanges, ['block', 'none']);
+      assert.deepEqual(observed.metrics.previewVisibilityChanges, ['none', 'block', 'none']);
       assert.equal(observed.canvasCount, 1);
       assert.deepEqual(observed.errors, []);
 

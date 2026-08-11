@@ -25,12 +25,13 @@ function story(...commands) {
 function cameraFixture({startGate = null} = {}) {
   const log = [];
   let cameraRunning = false;
-  let previewVisible = false;
+  let previewVisible = true;
   let recognizing = false;
   return {
     log,
     composition: {
       async startCamera() {
+        assert.equal(previewVisible, false, 'camera startup must not expose the default preview');
         log.push('camera.start');
         await startGate?.promise;
         cameraRunning = true;
@@ -45,6 +46,9 @@ function cameraFixture({startGate = null} = {}) {
         previewVisible = false;
       },
       isPreviewVisible: () => previewVisible,
+      setPreviewPosition(position) {
+        log.push(`preview.position:${position}`);
+      },
       stopRecognition() {
         log.push('recognition.stop');
         recognizing = false;
@@ -77,11 +81,16 @@ test('starts one camera without showing preview and keeps it across repeated cla
 
   assert.equal(await lifecycle.start(), true);
   assert.equal(await lifecycle.start(), true);
-  assert.deepEqual(fixture.log, ['camera.start']);
+  assert.deepEqual(fixture.log, ['preview.hide', 'preview.position:full-stage', 'camera.start']);
   assert.deepEqual(busy, [true, false]);
 
   assert.equal(await lifecycle.stop(), false);
-  assert.deepEqual(fixture.log, ['camera.start', 'camera.stop']);
+  assert.deepEqual(fixture.log, [
+    'preview.hide',
+    'preview.position:full-stage',
+    'camera.start',
+    'camera.stop',
+  ]);
 });
 
 test('stops a camera that finishes starting after the story has ended', async () => {
@@ -90,14 +99,19 @@ test('stops a camera that finishes starting after the story has ended', async ()
   const lifecycle = createDsl4StoryCameraLifecycle({composition: fixture.composition});
 
   const starting = lifecycle.start();
-  while (fixture.log.length === 0) await Promise.resolve();
-  assert.deepEqual(fixture.log, ['camera.start']);
+  while (!fixture.log.includes('camera.start')) await Promise.resolve();
+  assert.deepEqual(fixture.log, ['preview.hide', 'preview.position:full-stage', 'camera.start']);
   const stopping = lifecycle.stop();
   startGate.resolve();
 
   assert.equal(await starting, false);
   assert.equal(await stopping, false);
-  assert.deepEqual(fixture.log, ['camera.start', 'camera.stop']);
+  assert.deepEqual(fixture.log, [
+    'preview.hide',
+    'preview.position:full-stage',
+    'camera.start',
+    'camera.stop',
+  ]);
 });
 
 test('stops preview, recognition, and camera exactly once during disposal', async () => {

@@ -1238,7 +1238,8 @@ scenes:
   const log = [];
   const fixture = platformFixture(log);
   let cameraRunning = false;
-  let previewVisible = false;
+  let previewVisible = true;
+  let previewPosition = 'bottom-right';
   let recognizing = false;
   let activeModel = null;
   let now = 0;
@@ -1249,6 +1250,8 @@ scenes:
   };
   fixture.tmposeComposition.getActivePoseModelName = () => activeModel;
   fixture.tmposeComposition.startCamera = async () => {
+    assert.equal(previewVisible, false, 'story camera startup must keep preview hidden');
+    assert.equal(previewPosition, 'full-stage', 'story camera must prepare full-stage preview');
     log.push(['camera.start']);
     cameraRunning = true;
   };
@@ -1267,6 +1270,10 @@ scenes:
     previewVisible = false;
   };
   fixture.tmposeComposition.isPreviewVisible = () => previewVisible;
+  fixture.tmposeComposition.setPreviewPosition = (position) => {
+    log.push(['preview.position', position]);
+    previewPosition = position;
+  };
   fixture.tmposeComposition.startRecognition = async () => {
     assert.equal(cameraRunning, true, 'recognition must reuse the story-owned camera');
     log.push(['recognition.start']);
@@ -1307,7 +1314,7 @@ scenes:
   for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 1);
+  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 2);
   assert.equal(
     log.some(([event]) => event === 'camera.stop'),
     false,
@@ -1321,7 +1328,13 @@ scenes:
     [['camera.start'], ['camera.stop']],
   );
   assert.equal(log.filter(([event]) => event === 'preview.show').length, 2);
-  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 2);
+  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 3);
+  assert.equal(
+    log
+      .filter(([event]) => event === 'preview.position')
+      .every(([, position]) => position === 'full-stage'),
+    true,
+  );
   assert.equal(cameraRunning, false);
   assert.equal(previewVisible, false);
   assert.equal(recognizing, false);

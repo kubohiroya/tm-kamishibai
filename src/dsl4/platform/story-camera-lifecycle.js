@@ -36,6 +36,7 @@ export function createDsl4StoryCameraLifecycle(options) {
     'isCameraRunning',
     'hidePreview',
     'isPreviewVisible',
+    'setPreviewPosition',
     'stopRecognition',
     'isRecognizing',
   ];
@@ -49,6 +50,7 @@ export function createDsl4StoryCameraLifecycle(options) {
 
   let desired = false;
   let disposed = false;
+  let previewPrepared = false;
   /** @type {Promise<boolean>} */
   let queue = Promise.resolve(false);
   /** @type {Promise<boolean> | null} */
@@ -85,6 +87,7 @@ export function createDsl4StoryCameraLifecycle(options) {
         errors.push(error);
       }
     }
+    previewPrepared = false;
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) {
       throw new AggregateError(errors, 'Story camera resources could not be stopped');
@@ -94,6 +97,11 @@ export function createDsl4StoryCameraLifecycle(options) {
 
   async function reconcile() {
     if (!desired) return stopCameraResources();
+    if (!previewPrepared) {
+      composition.hidePreview();
+      composition.setPreviewPosition('full-stage');
+      previewPrepared = true;
+    }
     if (!composition.isCameraRunning()) {
       notifyBusy(true);
       try {
