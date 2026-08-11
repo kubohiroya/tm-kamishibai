@@ -1880,7 +1880,8 @@ scenes:
               width: preview.style.width,
               height: preview.style.height,
               objectFit: preview.style.objectFit,
-              borderRadius: preview.style.borderRadius
+              borderRadius: preview.style.borderRadius,
+              opacity: preview.style.opacity
             } : null;
           })()`),
           {
@@ -1893,6 +1894,7 @@ scenes:
             height: '100%',
             objectFit: 'cover',
             borderRadius: '0px',
+            opacity: '0.2',
           },
           'The active pose preview must cover the complete stage.',
         );

@@ -46,6 +46,9 @@ function cameraFixture({startGate = null} = {}) {
         previewVisible = false;
       },
       isPreviewVisible: () => previewVisible,
+      setPreviewOpacity(opacity) {
+        log.push(`preview.opacity:${opacity}`);
+      },
       setPreviewPosition(position) {
         log.push(`preview.position:${position}`);
       },
@@ -81,12 +84,18 @@ test('starts one camera without showing preview and keeps it across repeated cla
 
   assert.equal(await lifecycle.start(), true);
   assert.equal(await lifecycle.start(), true);
-  assert.deepEqual(fixture.log, ['preview.hide', 'preview.position:full-stage', 'camera.start']);
+  assert.deepEqual(fixture.log, [
+    'preview.hide',
+    'preview.opacity:0.2',
+    'preview.position:full-stage',
+    'camera.start',
+  ]);
   assert.deepEqual(busy, [true, false]);
 
   assert.equal(await lifecycle.stop(), false);
   assert.deepEqual(fixture.log, [
     'preview.hide',
+    'preview.opacity:0.2',
     'preview.position:full-stage',
     'camera.start',
     'camera.stop',
@@ -100,7 +109,12 @@ test('stops a camera that finishes starting after the story has ended', async ()
 
   const starting = lifecycle.start();
   while (!fixture.log.includes('camera.start')) await Promise.resolve();
-  assert.deepEqual(fixture.log, ['preview.hide', 'preview.position:full-stage', 'camera.start']);
+  assert.deepEqual(fixture.log, [
+    'preview.hide',
+    'preview.opacity:0.2',
+    'preview.position:full-stage',
+    'camera.start',
+  ]);
   const stopping = lifecycle.stop();
   startGate.resolve();
 
@@ -108,6 +122,7 @@ test('stops a camera that finishes starting after the story has ended', async ()
   assert.equal(await stopping, false);
   assert.deepEqual(fixture.log, [
     'preview.hide',
+    'preview.opacity:0.2',
     'preview.position:full-stage',
     'camera.start',
     'camera.stop',

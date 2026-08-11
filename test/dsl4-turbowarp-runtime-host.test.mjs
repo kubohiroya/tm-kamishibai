@@ -507,6 +507,7 @@ function platformFixture(log) {
     isPreviewVisible() {
       return false;
     },
+    setPreviewOpacity() {},
     setPreviewPosition() {},
     startCamera() {},
     stopCamera() {},
@@ -1239,6 +1240,7 @@ scenes:
   const fixture = platformFixture(log);
   let cameraRunning = false;
   let previewVisible = true;
+  let previewOpacity = 0.6;
   let previewPosition = 'bottom-right';
   let recognizing = false;
   let activeModel = null;
@@ -1251,6 +1253,7 @@ scenes:
   fixture.tmposeComposition.getActivePoseModelName = () => activeModel;
   fixture.tmposeComposition.startCamera = async () => {
     assert.equal(previewVisible, false, 'story camera startup must keep preview hidden');
+    assert.equal(previewOpacity, 0.2, 'story camera must preserve the DSL 3.2 preview opacity');
     assert.equal(previewPosition, 'full-stage', 'story camera must prepare full-stage preview');
     log.push(['camera.start']);
     cameraRunning = true;
@@ -1270,6 +1273,10 @@ scenes:
     previewVisible = false;
   };
   fixture.tmposeComposition.isPreviewVisible = () => previewVisible;
+  fixture.tmposeComposition.setPreviewOpacity = (opacity) => {
+    log.push(['preview.opacity', opacity]);
+    previewOpacity = opacity;
+  };
   fixture.tmposeComposition.setPreviewPosition = (position) => {
     log.push(['preview.position', position]);
     previewPosition = position;
@@ -1329,6 +1336,10 @@ scenes:
   );
   assert.equal(log.filter(([event]) => event === 'preview.show').length, 2);
   assert.equal(log.filter(([event]) => event === 'preview.hide').length, 3);
+  assert.deepEqual(
+    log.filter(([event]) => event === 'preview.opacity'),
+    [['preview.opacity', 0.2]],
+  );
   assert.equal(
     log
       .filter(([event]) => event === 'preview.position')
@@ -1337,6 +1348,7 @@ scenes:
   );
   assert.equal(cameraRunning, false);
   assert.equal(previewVisible, false);
+  assert.equal(previewOpacity, 0.2);
   assert.equal(recognizing, false);
   await result.host.dispose('story-camera-finished');
 });

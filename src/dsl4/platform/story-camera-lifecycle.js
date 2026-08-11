@@ -4,6 +4,7 @@ function isRecord(value) {
 }
 
 const poseRecognitionCommands = new Set(['pose', 'poseInputToChangeScene']);
+const dsl32FullStagePreviewOpacity = 0.2;
 
 /** @param {unknown} storyDocument */
 export function storyUsesPoseRecognition(storyDocument) {
@@ -36,6 +37,7 @@ export function createDsl4StoryCameraLifecycle(options) {
     'isCameraRunning',
     'hidePreview',
     'isPreviewVisible',
+    'setPreviewOpacity',
     'setPreviewPosition',
     'stopRecognition',
     'isRecognizing',
@@ -99,6 +101,7 @@ export function createDsl4StoryCameraLifecycle(options) {
     if (!desired) return stopCameraResources();
     if (!previewPrepared) {
       composition.hidePreview();
+      composition.setPreviewOpacity(dsl32FullStagePreviewOpacity);
       composition.setPreviewPosition('full-stage');
       previewPrepared = true;
     }
