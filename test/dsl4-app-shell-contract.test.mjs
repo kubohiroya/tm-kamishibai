@@ -26,13 +26,15 @@ test('freezes the #265 Standard author and template-internal palette boundary', 
     'versionReporter',
     'statusReporter',
     'lastErrorReporter',
+    'binaryBackingStatusReporter',
+    'runtimeDiagnosticsReporter',
     'setTextValue',
     'showTitle',
     'closeTitle',
     'openOfficialWebsite',
     'toggleTitleLanguage',
   ]);
-  assert.equal(new Set(contract.standardRuntime.hiddenOpcodes).size, 8);
+  assert.equal(new Set(contract.standardRuntime.hiddenOpcodes).size, 10);
 });
 
 test('specifies the app shell as a startup-fixed default-off implementation flag', () => {

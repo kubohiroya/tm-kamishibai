@@ -480,6 +480,16 @@ test('disabled policy never opens IndexedDB and re-reads a released scene from t
     failureCode: null,
   });
 
+  const concurrent = await Promise.all([
+    session.binaryAssetBacking.getAssetFiles('FirstPose'),
+    session.binaryAssetBacking.getAssetFiles('NextPose'),
+  ]);
+  assert.deepEqual(
+    concurrent.map((files) => files.length),
+    [3, 3],
+    'direct mode must serialize concurrent runtime reads through the bounded provider',
+  );
+
   await session.lifecycle.prepare({assetIds: ['FirstPose']}, context(1));
   await session.lifecycle.releaseAssets({assetIds: ['FirstPose'], reason: 'scene-transition'});
   await session.lifecycle.prepare({assetIds: ['FirstPose']}, context(2));
