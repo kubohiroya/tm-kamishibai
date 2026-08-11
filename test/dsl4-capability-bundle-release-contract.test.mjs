@@ -138,8 +138,8 @@ test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversibl
     kind: 'single-embedded-extension',
     unbundle: null,
     provenance: [
-      'release-sources/4.0.0-dev/app/project.source.json',
-      'release-sources/4.0.0-dev/app/embedded-extensions.json',
+      'release-sources/4.0.0/app/project.source.json',
+      'release-sources/4.0.0/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
