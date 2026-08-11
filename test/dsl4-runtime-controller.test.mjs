@@ -1367,6 +1367,81 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('Space skips a pose step while its skin is still being applied', async () => {
+  const events = [];
+  const abortableWait = (event, context) =>
+    new Promise((_resolve, reject) => {
+      events.push(event);
+      context.signal.addEventListener(
+        'abort',
+        () => {
+          events.push([...event, 'abort']);
+          const error = new Error('pose step operation cancelled');
+          error.name = 'AbortError';
+          reject(error);
+        },
+        {once: true},
+      );
+    });
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  HeroReady: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  navigation:
+    allowSkip: true
+scenes:
+  rescue:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+              skin: HeroReady
+            - pose: jump
+`),
+    poseNavigationPolicyEnabled: true,
+    port: {
+      setSkin: (_payload, context) => abortableWait(['skin', 0], context),
+      waitForPose: ({stepIndex}, context) => abortableWait(['pose', stepIndex], context),
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => events.length === 1, 'pose skin application did not start');
+  assert.equal(controller.canAdvance('navigation.nextAction'), true);
+
+  await controller.advance('navigation.nextAction');
+  await waitFor(
+    () => events.some(([type, index]) => type === 'pose' && index === 1),
+    'second pose step did not start',
+  );
+
+  assert.deepEqual(events.slice(0, 3), [
+    ['skin', 0],
+    ['skin', 0, 'abort'],
+    ['pose', 1],
+  ]);
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'pose.step.skip')
+      .map(({details}) => details.stepIndex),
+    [0],
+  );
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.cancel').length, 0);
+
+  controller.stop('test-complete');
+  await run;
+});
+
 test('stop wins while a skippable pose is waiting for cancellation cleanup', async () => {
   const cleanup = deferred();
   const events = [];

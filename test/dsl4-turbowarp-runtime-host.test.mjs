@@ -554,6 +554,7 @@ function platformFixture(log) {
   };
   return {
     runtime,
+    assetManagerComposition,
     tmposeComposition,
     poseConfidence,
     poseProgress,
@@ -1201,6 +1202,149 @@ scenes:
   assert.equal(document.body.children.length, 0);
 });
 
+test('owns one background camera from story start through the final pose action', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+poseRecognition:
+  sequence:
+    confidenceThreshold: 0.5
+    fullConfidenceHoldSeconds: 0.1
+    idleChargePerSecond: 0
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  first:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+  second:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+`);
+  const log = [];
+  const fixture = platformFixture(log);
+  let cameraRunning = false;
+  let previewVisible = false;
+  let recognizing = false;
+  let activeModel = null;
+  let now = 0;
+  const scheduled = [];
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmposeComposition.activatePoseModel = (name) => {
+    activeModel = name;
+  };
+  fixture.tmposeComposition.getActivePoseModelName = () => activeModel;
+  fixture.tmposeComposition.startCamera = async () => {
+    log.push(['camera.start']);
+    cameraRunning = true;
+  };
+  fixture.tmposeComposition.stopCamera = () => {
+    log.push(['camera.stop']);
+    cameraRunning = false;
+  };
+  fixture.tmposeComposition.isCameraRunning = () => cameraRunning;
+  fixture.tmposeComposition.showPreview = () => {
+    assert.equal(cameraRunning, true, 'preview must not appear before the story camera is ready');
+    log.push(['preview.show']);
+    previewVisible = true;
+  };
+  fixture.tmposeComposition.hidePreview = () => {
+    log.push(['preview.hide']);
+    previewVisible = false;
+  };
+  fixture.tmposeComposition.isPreviewVisible = () => previewVisible;
+  fixture.tmposeComposition.startRecognition = async () => {
+    assert.equal(cameraRunning, true, 'recognition must reuse the story-owned camera');
+    log.push(['recognition.start']);
+    recognizing = true;
+  };
+  fixture.tmposeComposition.stopRecognition = () => {
+    log.push(['recognition.stop']);
+    recognizing = false;
+  };
+  fixture.tmposeComposition.isRecognizing = () => recognizing;
+  fixture.tmposeComposition.confidenceOf = () => 1;
+
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      poseNow: () => now,
+      poseSchedule(callback) {
+        scheduled.push(callback);
+        return () => {
+          const index = scheduled.indexOf(callback);
+          if (index >= 0) scheduled.splice(index, 1);
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  const run = result.host.start();
+  for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(log.filter(([event]) => event === 'camera.start').length, 1);
+  assert.equal(
+    log.some(([event]) => event === 'camera.stop'),
+    false,
+  );
+  now += 1000;
+  scheduled.shift()();
+  for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 1);
+  assert.equal(
+    log.some(([event]) => event === 'camera.stop'),
+    false,
+  );
+  now += 1000;
+  scheduled.shift()();
+
+  assert.equal((await run).status, 'finished');
+  assert.deepEqual(
+    log.filter(([event]) => ['camera.start', 'camera.stop'].includes(event)),
+    [['camera.start'], ['camera.stop']],
+  );
+  assert.equal(log.filter(([event]) => event === 'preview.show').length, 2);
+  assert.equal(log.filter(([event]) => event === 'preview.hide').length, 2);
+  assert.equal(cameraRunning, false);
+  assert.equal(previewVisible, false);
+  assert.equal(recognizing, false);
+  await result.host.dispose('story-camera-finished');
+});
+
+test('does not request a camera for a story without a pose recognition action', async () => {
+  const project = await packagedProject(waitStory);
+  const log = [];
+  const fixture = platformFixture(log);
+  fixture.tmposeComposition.startCamera = async () => log.push(['camera.start']);
+  fixture.tmposeComposition.stopCamera = () => log.push(['camera.stop']);
+  const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  assert.equal((await result.host.start()).status, 'finished');
+  await result.host.dispose('story-without-pose');
+  assert.deepEqual(
+    log.filter(([event]) => event.startsWith('camera.')),
+    [],
+  );
+});
+
 test('shows Scratch pose monitors and skips one pose step per navigation command', async () => {
   const project = await packagedPoseProject(`
 kamishibai: '4.0'
@@ -1236,13 +1380,27 @@ scenes:
   const log = [];
   const events = [];
   const fixture = platformFixture(log);
+  let now = 0;
+  const scheduled = [];
+  const pendingChargeSound = new Promise(() => {});
   fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmposeComposition.confidenceOf = () => 1;
+  fixture.assetManagerComposition.playSound = (name, playOptions) => {
+    log.push(['media.play', name, playOptions]);
+    if (name === 'Charge') return pendingChargeSound;
+    return undefined;
+  };
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
       onEvent: (event) => events.push(event),
-      poseSchedule() {
-        return () => {};
+      poseNow: () => now,
+      poseSchedule(callback) {
+        scheduled.push(callback);
+        return () => {
+          const index = scheduled.indexOf(callback);
+          if (index >= 0) scheduled.splice(index, 1);
+        };
       },
     }),
   );
@@ -1258,8 +1416,24 @@ scenes:
   }
   assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
   assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
+  for (let attempts = 0; attempts < 50 && scheduled.length === 0; attempts += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  now += 100;
+  scheduled.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    log.some(([method, name]) => method === 'media.play' && name === 'Charge'),
+    true,
+  );
 
-  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  const firstSpace = {
+    code: 'Space',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {},
+  };
+  assert.equal(result.host.handleKeyDown(firstSpace), true);
   for (
     let attempts = 0;
     attempts < 50 && events.filter(({type}) => type === 'pose.step.skip').length < 1;
@@ -1271,7 +1445,13 @@ scenes:
   assert.equal(fixture.monitorRecords.get(fixture.poseConfidence.id).visible, true);
   assert.equal(fixture.monitorRecords.get(fixture.poseProgress.id).visible, true);
 
-  assert.equal(result.host.dispatchCommand('navigation.nextAction').changed, true);
+  const secondSpace = {
+    code: 'Space',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {},
+  };
+  assert.equal(result.host.handleKeyDown(secondSpace), true);
   assert.equal((await run).status, 'finished');
   assert.deepEqual(
     events.filter(({type}) => type === 'pose.step.skip').map(({details}) => details.stepIndex),

@@ -78,7 +78,7 @@
     "@kubohiroya/turbowarp-bubble": "0.4.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
     "@kubohiroya/turbowarp-svg-text": "0.4.0",
-    "@kubohiroya/turbowarp-tmpose": "1.7.2",
+    "@kubohiroya/turbowarp-tmpose": "1.7.3",
     "@teachablemachine/pose": "0.8.3",
     "@tensorflow/tfjs": "1.3.1",
     "@turbowarp/scratch-storage": "2.0.0",

@@ -13,7 +13,7 @@ const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-bubble': '0.4.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.3.0',
   '@kubohiroya/turbowarp-svg-text': '0.4.0',
-  '@kubohiroya/turbowarp-tmpose': '1.7.2',
+  '@kubohiroya/turbowarp-tmpose': '1.7.3',
 });
 
 test('pins every DSL4 extension to an exact npm release and matching lock entry', async () => {

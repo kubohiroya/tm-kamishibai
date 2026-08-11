@@ -12,6 +12,10 @@ import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
 import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
+import {
+  createDsl4StoryCameraLifecycle,
+  storyUsesPoseRecognition,
+} from './story-camera-lifecycle.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -462,6 +466,12 @@ export function createDsl4PlatformAssetSession(options) {
         ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
         : []),
     ]);
+    const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)
+      ? createDsl4StoryCameraLifecycle({
+          composition: tmposeComposition,
+          ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+        })
+      : null;
     const asyncInputCandidate = createAsyncInput({
       poseSource: tmposeComposition,
       ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
@@ -494,6 +504,9 @@ export function createDsl4PlatformAssetSession(options) {
         : {now: /** @type {() => number} */ (options.poseNow)}),
       ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
       ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
+      ...(storyCameraLifecycle === null
+        ? {}
+        : {ensureCameraStarted: () => storyCameraLifecycle.start()}),
       ...(poseFeedbackEnabled ? {onPoseState: options.onPoseState} : {}),
       ...(poseFeedbackEnabled && options.readPoseStateBinding !== undefined
         ? {readPoseStateBinding: options.readPoseStateBinding}
@@ -722,6 +735,7 @@ export function createDsl4PlatformAssetSession(options) {
         const errors = [];
         for (const release of [
           () => poseActionPort.dispose(),
+          ...(storyCameraLifecycle ? [() => storyCameraLifecycle.dispose()] : []),
           ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
           () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
@@ -750,6 +764,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       poseActionPort,
+      storyCameraLifecycle,
       posePreviewPort,
       cameraPreviewControlsPort,
       /** @param {unknown} assetId */

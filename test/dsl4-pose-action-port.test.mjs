@@ -226,13 +226,14 @@ test('charges one Actor pose from elapsed confidence and controls recognition fe
     ['play', 'Tick'],
     ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
+    ['stop', 'Charge'],
   ]);
   assert.deepEqual(pose.preview, [['position', 'full-stage'], ['show'], ['hide']]);
   assert.equal(pose.composition.isPreviewVisible(), false);
   assert.equal(pose.composition.isRecognizing(), true);
 });
 
-test('waits for each charge sound before another recognition tick can play it', async () => {
+test('keeps recognition ticks responsive while suppressing overlapping charge sounds', async () => {
   let releaseFirstCharge = () => {};
   const firstCharge = new Promise((resolve) => {
     releaseFirstCharge = resolve;
@@ -249,14 +250,15 @@ test('waits for each charge sound before another recognition tick can play it', 
   const pending = port.waitForPose(sequencePayload(), actionContext());
   await flush();
 
-  clock.advance(500);
+  clock.advance(250);
   await flush();
   assert.equal(chargeCalls, 1);
-  assert.equal(clock.size, 0, 'No recognition tick may overlap a waiting charge sound.');
+  assert.equal(clock.size, 1, 'Audio playback must not pause the recognition clock.');
 
-  clock.advance(500);
+  clock.advance(250);
   await flush();
   assert.equal(chargeCalls, 1);
+  assert.equal(clock.size, 1, 'A pending charge sound must suppress only another playback.');
 
   releaseFirstCharge();
   await flush();
@@ -271,6 +273,32 @@ test('waits for each charge sound before another recognition tick can play it', 
       ['play', 'Charge', {untilDone: true}],
     ],
   );
+});
+
+test('accepts pose-step cancellation without waiting for charge playback to finish', async () => {
+  const neverFinishes = new Promise(() => {});
+  const controller = new AbortController();
+  const {pose, clock, sounds, port} = setup({
+    playSound(sound, playOptions) {
+      sounds.push(playOptions === undefined ? ['play', sound] : ['play', sound, {...playOptions}]);
+      if (sound === 'Charge') return neverFinishes;
+      return undefined;
+    },
+  });
+  pose.confidence.set('help', 1);
+  const pending = port.waitForPose(sequencePayload(), actionContext(controller));
+  await flush();
+  clock.advance(100);
+  await flush();
+
+  controller.abort('rehearsal.skipPose');
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+
+  assert.equal(clock.size, 0);
+  assert.deepEqual(sounds.slice(-2), [
+    ['stop', 'Tick'],
+    ['stop', 'Charge'],
+  ]);
 });
 
 test('keeps the camera preview visible until the final pose step completes', async () => {
@@ -474,7 +502,7 @@ test('aborts during recognition startup and reuses the pending startup for the n
   );
 });
 
-test('publishes completed before awaiting asynchronous sound cleanup', async () => {
+test('completes without awaiting asynchronous sound cleanup', async () => {
   const states = [];
   let finishSoundCleanup = () => {};
   const soundCleanup = new Promise((resolve) => {
@@ -494,7 +522,7 @@ test('publishes completed before awaiting asynchronous sound cleanup', async () 
   clock.advance(1000);
   await flush();
 
-  assert.equal(settled, false);
+  assert.equal(settled, true);
   assert.deepEqual(
     states.map(({phase}) => phase),
     ['waiting', 'charging', 'completed'],
@@ -507,7 +535,7 @@ test('publishes completed before awaiting asynchronous sound cleanup', async () 
   assert.equal(states.filter(({phase}) => phase === 'completed').length, 1);
 });
 
-test('publishes cancelled before awaiting asynchronous sound cleanup', async () => {
+test('cancels without awaiting asynchronous sound cleanup', async () => {
   const states = [];
   let finishSoundCleanup = () => {};
   const soundCleanup = new Promise((resolve) => {
@@ -527,7 +555,7 @@ test('publishes cancelled before awaiting asynchronous sound cleanup', async () 
   controller.abort('scene-transition');
   await flush();
 
-  assert.equal(settled, false);
+  assert.equal(settled, true);
   assert.deepEqual(
     states.map(({phase}) => phase),
     ['waiting', 'cancelled'],
@@ -562,6 +590,7 @@ test('contains synchronous and asynchronous observer failures without changing p
     ['play', 'Tick'],
     ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
+    ['stop', 'Charge'],
   ]);
 });
 
@@ -593,6 +622,7 @@ test('applies one normalized Scratch binding snapshot before the deterministic p
     ['play', 'Tick'],
     ['play', 'Charge', {untilDone: true}],
     ['stop', 'Tick'],
+    ['stop', 'Charge'],
   ]);
 });
 

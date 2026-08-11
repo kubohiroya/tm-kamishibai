@@ -360,7 +360,7 @@ export function createDsl4RuntimeController({
   let runPromise = null;
   /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
   let poseAdvanceLock = null;
-  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, skipRequested: boolean, skipReason: string | null} | null} */
+  /** @type {{generation: number, stepIndex: number, controller: AbortController, completion: ReturnType<typeof deferred>, cleanup: () => void, waitingForRecognition: boolean, skipRequested: boolean, skipReason: string | null} | null} */
   let activePoseWait = null;
   /** @type {{command: 'rehearsal.skipAction' | 'rehearsal.skipScene', sceneIndex: number, actionIndex: number, completion: ReturnType<typeof deferred>, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
   let rehearsalSkipLock = null;
@@ -1138,10 +1138,6 @@ export function createDsl4RuntimeController({
       const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
       const poseModel = String(currentScene()?.poseModel ?? '');
       for (const [stepIndex, step] of steps.entries()) {
-        if (typeof step.skin === 'string') {
-          await invokePort('setSkin', {target, skin: step.skin}, context);
-          ensureActive(context);
-        }
         const stepController = new AbortController();
         const handleActionAbort = () => stepController.abort(context.signal.reason);
         if (context.signal.aborted) handleActionAbort();
@@ -1152,6 +1148,7 @@ export function createDsl4RuntimeController({
           controller: stepController,
           completion: deferred(),
           cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
+          waitingForRecognition: false,
           skipRequested: false,
           skipReason: null,
         };
@@ -1162,8 +1159,18 @@ export function createDsl4RuntimeController({
           poseAdvanceLock = null;
         }
         activePoseWait = poseWait;
+        const stepContext = {
+          ...context,
+          signal: stepController.signal,
+          actionSignal: context.signal,
+        };
         let skipped = false;
         try {
+          if (typeof step.skin === 'string') {
+            await invokePort('setSkin', {target, skin: step.skin}, stepContext);
+            ensureActive(context);
+          }
+          poseWait.waitingForRecognition = true;
           await invokePort(
             'waitForPose',
             {
@@ -1174,7 +1181,7 @@ export function createDsl4RuntimeController({
               poseModel,
               recognition: cloneValue(poseSequenceRecognition),
             },
-            {...context, signal: stepController.signal, actionSignal: context.signal},
+            stepContext,
           );
           if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
             skipped = true;
@@ -1541,8 +1548,10 @@ export function createDsl4RuntimeController({
 
   /** @param {string} reason */
   function isPoseNavigationAdvance(reason) {
+    const poseWait = activePoseWait;
     return (
       hasActivePoseWait() &&
+      (poseWait?.waitingForRecognition || poseSequenceRecognition.navigation.allowSkip) &&
       (reason === 'rehearsal.skipPose' ||
         (poseNavigationPolicyEnabled && reason === 'navigation.nextAction'))
     );

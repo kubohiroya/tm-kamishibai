@@ -325,7 +325,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} speechAdvanceTypewriterEnabled
  * @param {boolean} bubbleAdvanceIndicatorEnabled
  * @param {boolean} turboWarpBubbleEnabled
- * @param {(port: Readonly<{showCover: () => Promise<boolean>}>) => void} [publishApplicationPort]
+ * @param {(port: Readonly<{showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -864,6 +864,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         });
 
     const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
+    const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
     publishApplicationPort(
       Object.freeze({
         async showCover() {
@@ -881,10 +882,37 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
           return true;
         },
+        ...(storyCameraLifecycle
+          ? {
+              stopStoryCamera() {
+                return storyCameraLifecycle.stop();
+              },
+            }
+          : {}),
       }),
     );
 
+    /** @param {unknown} error @param {string} phase */
+    function reportStoryCameraFailure(error, phase) {
+      try {
+        void Promise.resolve(
+          options.onBackgroundActionError?.(error, {
+            command: 'camera',
+            code: `K4-STORY-CAMERA-${phase}`,
+          }),
+        ).catch(() => {});
+      } catch {
+        // A background error observer cannot change camera cleanup ownership.
+      }
+    }
+
     publishRuntimeLifecycleObserver((event) => {
+      if (event.type === 'runtime.start') {
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'START'));
+        return;
+      }
       if (
         event.type === 'runtime.finish' ||
         event.type === 'runtime.fail' ||
@@ -892,13 +920,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ) {
         mediaPort?.stopAllLoops();
         cameraPreviewControls?.stop();
+        void storyCameraLifecycle?.stop().catch((error) => reportStoryCameraFailure(error, 'STOP'));
         return;
       }
-      if (
-        hasConfiguredPreviewControls &&
-        (event.type === 'navigation.reposition' || event.type === 'runtime.resume')
-      ) {
-        cameraPreviewControls?.start();
+      if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
+        if (hasConfiguredPreviewControls) cameraPreviewControls?.start();
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'RESUME'));
       }
     });
 
@@ -1281,7 +1310,14 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           await activateCacheLease();
           if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
           ensureActive();
-          return await session.start(startOptions);
+          const result = await session.start(startOptions);
+          if (
+            applicationPort?.stopStoryCamera &&
+            ['finished', 'failed', 'stopped'].includes(String(result.status))
+          ) {
+            await applicationPort.stopStoryCamera();
+          }
+          return result;
         } finally {
           if (cacheExecutionId === activeCacheExecutionId) await deactivateCacheLease();
         }
