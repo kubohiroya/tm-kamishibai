@@ -2,7 +2,10 @@ import {randomBytes} from 'node:crypto';
 import {readFile, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
-import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
+import {
+  loadDsl4BinaryEntryRuntimeComponent,
+  loadDsl4RuntimeComponent,
+} from '../dsl4/runtime-artifact-loader.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 import {ensureDsl4ExternalSourceCacheIdentity} from './dsl4-external-source.js';
@@ -125,6 +128,8 @@ export async function buildDsl4RuntimeComponentFile(options) {
   }
   const sourceIncludesEnabled =
     isRecord(options.featureFlags) && options.featureFlags.dsl4SourceIncludes === true;
+  const rootBinaryEntriesEnabled =
+    isRecord(options.featureFlags) && options.featureFlags.dsl4RootBinaryEntryPackaging === true;
   const sourceLimits = resolveDsl4BuildSourceLimits({
     sourceIncludesEnabled,
     maxSourceBytes: options.maxSourceBytes,
@@ -175,9 +180,12 @@ export async function buildDsl4RuntimeComponentFile(options) {
         });
       }
       const {project} = readSb3(candidateBytes);
-      const loaded = await loadDsl4RuntimeComponent(project, options.sourceFrontend, {
+      const loaded = await (
+        rootBinaryEntriesEnabled ? loadDsl4BinaryEntryRuntimeComponent : loadDsl4RuntimeComponent
+      )(project, options.sourceFrontend, {
         maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
         maxAssetFiles: options.maxAssetFiles,
+        maxAssetFileBytes: options.maxAssetFileBytes,
         maxAssetBytes: options.maxTotalAssetBytes,
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),

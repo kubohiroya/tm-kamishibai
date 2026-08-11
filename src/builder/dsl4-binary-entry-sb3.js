@@ -2,7 +2,7 @@ import {unzipSync} from 'fflate';
 
 import {
   createDsl4OneShotBinaryEntryProvider,
-  dsl4BinaryEntryPrefix,
+  dsl4BinaryEntryPrefixes,
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from '../dsl4/binary-entry-provider.js';
@@ -39,6 +39,60 @@ function positiveRatio(value, name) {
 /** @param {Uint8Array} left @param {Uint8Array} right */
 function equalBytes(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** @param {string} entryName */
+function isDsl4BinaryEntryName(entryName) {
+  return dsl4BinaryEntryPrefixes.some((prefix) => entryName.startsWith(prefix));
+}
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** @param {Record<string, unknown>} project */
+function installedDsl4EntryNames(project) {
+  const extensionStorage = isRecord(project.extensionStorage) ? project.extensionStorage : {};
+  const unbundled = isRecord(extensionStorage.kubohiroyakamishibairuntime4)
+    ? extensionStorage.kubohiroyakamishibairuntime4
+    : {};
+  const bundle = isRecord(extensionStorage.kubohiroyakamishibai4)
+    ? extensionStorage.kubohiroyakamishibai4
+    : {};
+  const components = isRecord(bundle.components) ? bundle.components : {};
+  const bundled = isRecord(components.kubohiroyakamishibairuntime4)
+    ? components.kubohiroyakamishibairuntime4
+    : {};
+  const names = new Set();
+  for (const container of [unbundled, bundled]) {
+    const assets = isRecord(container.assets) ? container.assets : {};
+    if (!Array.isArray(assets.files)) continue;
+    for (const file of assets.files) {
+      if (isRecord(file) && typeof file.entry === 'string') names.add(file.entry);
+    }
+  }
+  return names;
+}
+
+/** @param {Record<string, unknown>} project */
+function scratchAssetEntryNames(project) {
+  const names = new Set();
+  const targets = Array.isArray(project.targets) ? project.targets : [];
+  for (const target of targets) {
+    if (!isRecord(target)) continue;
+    for (const collectionName of ['costumes', 'sounds']) {
+      const assets = Array.isArray(target[collectionName]) ? target[collectionName] : [];
+      for (const asset of assets) {
+        if (!isRecord(asset)) continue;
+        if (typeof asset.md5ext === 'string') names.add(asset.md5ext);
+        if (typeof asset.assetId === 'string' && typeof asset.dataFormat === 'string') {
+          names.add(`${asset.assetId}.${asset.dataFormat}`);
+        }
+      }
+    }
+  }
+  return names;
 }
 
 /** @param {string} entryName */
@@ -149,14 +203,25 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
         'binaryBundle.entryNames do not exactly match the descriptor',
       );
     }
-    const existingOwnedEntries = Object.keys(archive).filter((name) =>
-      name.startsWith(dsl4BinaryEntryPrefix),
-    );
+    const existingOwnedEntries = Object.keys(archive).filter(isDsl4BinaryEntryName);
     if (existingOwnedEntries.length > 0 && options.replaceExisting !== true) {
       entryFail(
         'K4-ASSET-ENTRY-ARCHIVE-EXISTS-001',
         'SB3 already contains reserved DSL 4.0 binary entries',
       );
+    }
+    if (existingOwnedEntries.length > 0) {
+      const installedEntries = installedDsl4EntryNames(project);
+      const scratchEntries = scratchAssetEntryNames(project);
+      const collision = existingOwnedEntries.find(
+        (entryName) => !installedEntries.has(entryName) || scratchEntries.has(entryName),
+      );
+      if (collision !== undefined) {
+        entryFail(
+          'K4-ASSET-ENTRY-ARCHIVE-COLLISION-001',
+          `Reserved DSL 4.0 entry is owned by another archive component: ${collision}`,
+        );
+      }
     }
     const candidateEntries = new Map();
     for (const assetId of provider.assetIds) {
@@ -311,7 +376,7 @@ export async function createDsl4BinaryEntryProviderFromSb3(
             compressedSize: info.size,
             originalSize: info.originalSize,
           });
-        } else if (info.name.startsWith(dsl4BinaryEntryPrefix)) {
+        } else if (isDsl4BinaryEntryName(info.name)) {
           entryFail('K4-ASSET-ENTRY-MANIFEST-001', `Unexpected reserved ZIP entry: ${info.name}`);
         }
         return false;

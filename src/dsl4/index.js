@@ -56,8 +56,12 @@ export {
 export {
   createDsl4BinaryEntryAssetBundle,
   createDsl4OneShotBinaryEntryProvider,
+  dsl4BinaryEntryContentType,
   dsl4BinaryEntryFormatVersion,
   dsl4BinaryEntryPrefix,
+  dsl4BinaryEntryPrefixes,
+  dsl4LegacyBinaryEntryFormatVersion,
+  dsl4LegacyBinaryEntryPrefix,
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';

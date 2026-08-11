@@ -54,6 +54,7 @@ DSL 3.1/3.2 build-sb3 options:
 
 DSL 4.0 build-dsl4 options:
   --enable-source-includes       Enable multi-file include processing
+  --enable-root-binary-entries  Package DSL assets as root content-addressed ZIP entries
   --max-source-files N          Maximum files in the include graph
   --max-total-source-bytes N    Maximum graph total and composed source bytes
   --max-include-depth N         Maximum include graph depth
@@ -255,6 +256,7 @@ function parseBuildDsl4Arguments(rest) {
   const flags = new Set();
   const booleanOptions = new Set([
     '--enable-source-includes',
+    '--enable-root-binary-entries',
     '--history-navigation-available',
     '--replace-existing',
   ]);
@@ -328,6 +330,7 @@ function parseBuildDsl4Arguments(rest) {
   }
   const maxSourceBytes = positiveInteger('--max-source-bytes');
   const sourceIncludesEnabled = flags.has('--enable-source-includes');
+  const rootBinaryEntriesEnabled = flags.has('--enable-root-binary-entries');
   const maxTotalSourceBytes = sourceIncludesEnabled
     ? positiveInteger('--max-total-source-bytes')
     : null;
@@ -348,12 +351,20 @@ function parseBuildDsl4Arguments(rest) {
     maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
     maxAssetFiles: positiveInteger('--max-asset-files'),
     maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
-    ...(sourceIncludesEnabled
+    ...(sourceIncludesEnabled || rootBinaryEntriesEnabled
       ? {
-          featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
-          maxSourceFiles: positiveInteger('--max-source-files'),
-          maxTotalSourceBytes: /** @type {number} */ (maxTotalSourceBytes),
-          maxIncludeDepth: positiveInteger('--max-include-depth'),
+          featureFlags: {
+            dsl4Runtime: true,
+            ...(sourceIncludesEnabled ? {dsl4SourceIncludes: true} : {}),
+            ...(rootBinaryEntriesEnabled ? {dsl4RootBinaryEntryPackaging: true} : {}),
+          },
+          ...(sourceIncludesEnabled
+            ? {
+                maxSourceFiles: positiveInteger('--max-source-files'),
+                maxTotalSourceBytes: /** @type {number} */ (maxTotalSourceBytes),
+                maxIncludeDepth: positiveInteger('--max-include-depth'),
+              }
+            : {}),
         }
       : {}),
     historyNavigationAvailable: flags.has('--history-navigation-available'),
