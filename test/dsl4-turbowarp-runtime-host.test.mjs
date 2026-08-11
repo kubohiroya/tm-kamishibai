@@ -2541,6 +2541,195 @@ scenes:
   await result.host.dispose();
 });
 
+test('publishes a finished story before a pending cache lease release completes', async () => {
+  const cacheIdentity = {
+    id: 'finishlease00001',
+    label: 'story.kamishibai.yaml',
+    databaseName: 'tw-kamishibai-assets-v1--story--finishlease00001',
+  };
+  const project = await packagedProject(
+    waitStory.replace(
+      'controls:',
+      `assets:
+  RemoteUnused:
+    kind: backdrop
+    delivery: remote
+    loading: lazy
+    source:
+      url: https://cdn.example.com/unused.svg
+      integrity: sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      contentType: image/svg+xml
+      size: 12
+controls:`,
+    ),
+    {cacheIdentity},
+  );
+  const fixture = platformFixture([]);
+  const createAssetManagerComposition = fixture.createAssetManagerComposition;
+  let finishRelease = null;
+  let releaseCalls = 0;
+  fixture.createAssetManagerComposition = (...args) => {
+    const composition = createAssetManagerComposition(...args);
+    return {
+      ...composition,
+      releaseVerifiedRemoteStoryCacheLease() {
+        releaseCalls += 1;
+        if (releaseCalls > 1) return Promise.resolve();
+        return new Promise((resolve) => {
+          finishRelease = resolve;
+        });
+      },
+    };
+  };
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      loadRemoteAsset: async () => assert.fail('unused remote asset must not load'),
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  let runSettled = false;
+  const run = result.host.start().then((state) => {
+    runSettled = true;
+    return state;
+  });
+  for (let attempt = 0; attempt < 200 && !finishRelease; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(
+    typeof finishRelease,
+    'function',
+    `cache lease release did not start: ${JSON.stringify(result.host.getState().runtime)}`,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const settledBeforeRelease = runSettled;
+  finishRelease();
+  assert.equal((await run).status, 'finished');
+  await result.host.dispose();
+
+  assert.equal(
+    settledBeforeRelease,
+    true,
+    'terminal UI must not wait for a cache lease maintenance operation',
+  );
+});
+
+test('publishes a finished story before pending background camera startup settles', async () => {
+  const project = await packagedPoseProject(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+  RescuePose:
+    kind: poseModel
+    file: pose-models/rescue
+actors:
+  Hero: HeroIdle
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - goto: ending
+  unreachablePose:
+    poseModel: RescuePose
+    actions:
+      - Hero.pose:
+          steps:
+            - pose: help
+  ending: []
+`);
+  const fixture = platformFixture([]);
+  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  let finishCameraStart = null;
+  let cameraRunning = false;
+  fixture.tmposeComposition.startCamera = () =>
+    new Promise((resolve) => {
+      finishCameraStart = () => {
+        cameraRunning = true;
+        resolve();
+      };
+    });
+  fixture.tmposeComposition.stopCamera = () => {
+    cameraRunning = false;
+  };
+  fixture.tmposeComposition.isCameraRunning = () => cameraRunning;
+  const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  let runSettled = false;
+  const run = result.host.start().then((state) => {
+    runSettled = true;
+    return state;
+  });
+  for (let attempt = 0; attempt < 200 && !finishCameraStart; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(typeof finishCameraStart, 'function', 'background camera startup did not begin');
+  await new Promise((resolve) => setImmediate(resolve));
+  const settledBeforeCamera = runSettled;
+  finishCameraStart();
+  const terminal = await run;
+  assert.equal(terminal.status, 'finished', JSON.stringify(terminal));
+  await result.host.dispose();
+
+  assert.equal(
+    settledBeforeCamera,
+    true,
+    'terminal UI must not wait for background camera startup or shutdown',
+  );
+});
+
+test('keeps the run promise pending across rehearsal scene skips until terminal state', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      ArrowDown: rehearsal.skipScene
+scenes:
+  first:
+    - wait: 3600
+  second:
+    - wait: 3600
+`);
+  const waits = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture([]), {
+      waitSchedule(callback) {
+        const wait = {callback, cancelled: false};
+        waits.push(wait);
+        return () => {
+          wait.cancelled = true;
+        };
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+
+  let runSettled = false;
+  const run = result.host.start().then((state) => {
+    runSettled = true;
+    return state;
+  });
+  for (let attempt = 0; attempt < 200 && waits.length < 1; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(waits.length, 1, 'the first scene did not start waiting');
+  assert.equal(result.host.dispatchCommand('rehearsal.skipScene').ok, true);
+  for (let attempt = 0; attempt < 200 && waits.length < 2; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(waits.length, 2, 'the second scene did not start waiting');
+  assert.equal(runSettled, false, 'the run promise settled at a non-terminal scene boundary');
+
+  assert.equal(result.host.dispatchCommand('rehearsal.skipScene').ok, true);
+  const terminal = await run;
+  assert.equal(terminal.status, 'finished', JSON.stringify(terminal));
+  assert.equal(runSettled, true);
+  await result.host.dispose();
+});
+
 test('contains a cache heartbeat cancellation failure and still releases the lease', async () => {
   const cacheIdentity = {
     id: 'cancelerror00001',

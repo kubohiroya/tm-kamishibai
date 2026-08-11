@@ -30,6 +30,8 @@ const hostPortMethods = new Set([
   'touchInputToChangeScene',
 ]);
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
+const terminalRuntimeEvents = new Set(['runtime.finish', 'runtime.fail', 'runtime.stop']);
+const terminalRuntimeStatuses = new Set(['finished', 'failed', 'stopped']);
 const defaultCacheLeaseHeartbeatMs = 30_000;
 const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
 let fallbackSessionIdCounter = 0;
@@ -1131,6 +1133,8 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   let stopForSessionBackingFatal = null;
   /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
   let runtimeLifecycleObserver = null;
+  /** @type {Set<(event: Readonly<Record<string, unknown>>) => void>} */
+  const runtimeEventListeners = new Set();
   /** @type {Readonly<Record<string, Function>> | null} */
   let applicationPort = null;
   if (
@@ -1200,6 +1204,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       } catch {
         // Internal UI observers cannot change runtime execution or suppress consumer events.
       }
+      for (const listener of runtimeEventListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Terminal result listeners cannot change runtime execution or consumer events.
+        }
+      }
       options.onEvent?.(event);
     },
     onInputError: options.onInputError,
@@ -1239,6 +1250,38 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
+
+  /** @param {{sceneId?: string}} [startOptions] */
+  function startSessionUntilTerminal(startOptions) {
+    let observedStart = false;
+    /** @type {(event: Readonly<Record<string, unknown>>) => void} */
+    let listener = () => {};
+    const terminalEvent = new Promise((resolve) => {
+      listener = (event) => {
+        if (event.type === 'runtime.start') {
+          observedStart = true;
+          return;
+        }
+        if (!observedStart || !terminalRuntimeEvents.has(String(event.type))) return;
+        resolve(session.getState().runtime);
+      };
+      runtimeEventListeners.add(listener);
+    });
+    let initialRun;
+    try {
+      initialRun = Promise.resolve(session.start(startOptions));
+    } catch (error) {
+      runtimeEventListeners.delete(listener);
+      throw error;
+    }
+    return Promise.race([
+      terminalEvent,
+      initialRun.then((result) =>
+        terminalRuntimeStatuses.has(String(result.status)) ? result : terminalEvent,
+      ),
+    ]).finally(() => runtimeEventListeners.delete(listener));
+  }
+
   stopForSessionBackingFatal = () => {
     session.stop('session-binary-backing-fatal');
   };
@@ -1323,16 +1366,18 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           await activateCacheLease();
           if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
           ensureActive();
-          const result = await session.start(startOptions);
-          if (
-            applicationPort?.stopStoryCamera &&
-            ['finished', 'failed', 'stopped'].includes(String(result.status))
-          ) {
-            await applicationPort.stopStoryCamera();
-          }
+          const result = await startSessionUntilTerminal(startOptions);
+          // The runtime lifecycle observer already starts terminal camera cleanup. Camera
+          // startup may still be pending (for example, while browser permission settles), so
+          // awaiting that cleanup here would prevent the terminal result and menu from publishing.
           return result;
         } finally {
-          if (cacheExecutionId === activeCacheExecutionId) await deactivateCacheLease();
+          if (cacheExecutionId === activeCacheExecutionId) {
+            // Releasing an IndexedDB cache lease is maintenance work. A stalled browser
+            // transaction must not keep the terminal story result — and therefore the
+            // application menu — from being published.
+            void deactivateCacheLease();
+          }
         }
       })();
     },
