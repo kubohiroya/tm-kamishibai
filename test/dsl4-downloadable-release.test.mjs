@@ -450,6 +450,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionSource, /^\/\/ ID: kubohiroyakamishibai4/mu);
   assert.match(extensionSource, /data-dsl4-title-controls/u);
   assert.match(extensionSource, /data-dsl4-title-action/u);
+  assert.match(extensionSource, /data-dsl4-close-icon/u);
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
     assert.equal(enabled, true);
