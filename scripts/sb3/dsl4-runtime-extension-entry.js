@@ -648,7 +648,6 @@ class KamishibaiDsl4RuntimeExtension {
           runtime: resolveBundledTMPoseRuntime(),
           globalObject: globalThis,
         }),
-        keySource: globalThis.document,
         setLoading() {},
         loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,
