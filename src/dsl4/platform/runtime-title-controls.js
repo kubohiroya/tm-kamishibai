@@ -72,7 +72,18 @@ export function createDsl4RuntimeTitleControls(options) {
   const websiteIcon = document.createElement(options.websiteIconUrl ? 'img' : 'span');
   const websiteLabel = document.createElement('span');
   const close = document.createElement('button');
-  for (const element of [website, websiteIcon, websiteLabel, close]) {
+  const closeIcon = document.createElement('span');
+  const closeIconForwardLine = document.createElement('span');
+  const closeIconBackwardLine = document.createElement('span');
+  for (const element of [
+    website,
+    websiteIcon,
+    websiteLabel,
+    close,
+    closeIcon,
+    closeIconForwardLine,
+    closeIconBackwardLine,
+  ]) {
     if (!isRecord(element) || typeof element.appendChild !== 'function') {
       throw new TypeError('document must create title control elements');
     }
@@ -98,9 +109,21 @@ export function createDsl4RuntimeTitleControls(options) {
   close.type = 'button';
   close.setAttribute('data-dsl4-title-action', 'close');
   close.style.cssText =
-    'position:absolute;left:92.5%;top:1.1111%;width:6.6667%;height:8.8889%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:.2083cqw solid #005f50;border-radius:50%;background:#007d66;color:#fff;box-shadow:0 .4167cqw 1.25cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:700 5cqw/1 sans-serif;padding:0;';
+    'position:absolute;left:92.5%;top:1.1111%;width:6.6667%;height:8.8889%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:.2083cqw solid #005f50;border-radius:50%;background:#007d66;color:#fff;box-shadow:0 .4167cqw 1.25cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;padding:0;';
   close.style.cursor = 'pointer';
-  close.textContent = '×';
+  closeIcon.setAttribute('data-dsl4-close-icon', 'true');
+  closeIcon.setAttribute('aria-hidden', 'true');
+  closeIcon.style.cssText =
+    'position:relative;display:block;width:4.1667cqw;height:4.1667cqw;pointer-events:none;';
+  for (const [line, rotation] of [
+    [closeIconForwardLine, '45deg'],
+    [closeIconBackwardLine, '-45deg'],
+  ]) {
+    line.setAttribute('data-dsl4-close-icon-line', 'true');
+    line.style.cssText = `position:absolute;left:50%;top:50%;display:block;width:4.1667cqw;height:.625cqw;border-radius:.3125cqw;background:currentColor;transform:translate(-50%,-50%) rotate(${rotation});transform-origin:center;`;
+    closeIcon.appendChild(line);
+  }
+  close.appendChild(closeIcon);
 
   /** @param {unknown} failure */
   const reportFailure = (failure) => {

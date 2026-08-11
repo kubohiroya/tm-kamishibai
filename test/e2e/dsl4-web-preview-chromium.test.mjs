@@ -479,12 +479,31 @@ test(
         const website = document.querySelector('[data-dsl4-title-action=website]');
         const icon = website?.querySelector('img');
         const label = website?.querySelector('span');
+        const close = document.querySelector('[data-dsl4-title-action=close]');
+        const closeRect = close?.getBoundingClientRect();
+        const closeLineCenterOffsets = closeRect
+          ? [...close.querySelectorAll('[data-dsl4-close-icon-line=true]')].map((line) => {
+              const lineRect = line.getBoundingClientRect();
+              return {
+                x: lineRect.left + lineRect.width / 2 - (closeRect.left + closeRect.width / 2),
+                y: lineRect.top + lineRect.height / 2 - (closeRect.top + closeRect.height / 2)
+              };
+            })
+          : [];
         return {
           titleWidth: title?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
-          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0,
+          closeLineCenterOffsets
         };
       })()`);
+      assert.equal(initialTitleScale.closeLineCenterOffsets.length, 2);
+      for (const offset of initialTitleScale.closeLineCenterOffsets) {
+        assert.ok(
+          Math.hypot(offset.x, offset.y) < 0.5,
+          `close icon line must stay at the button center: ${JSON.stringify(offset)}`,
+        );
+      }
       await client.send('Emulation.setDeviceMetricsOverride', {
         width: 1440,
         height: 1080,
