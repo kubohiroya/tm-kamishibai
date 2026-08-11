@@ -146,20 +146,31 @@ export function createFakeDocument() {
     createElement(tagName) {
       return new FakeElement(document, tagName);
     },
-    addEventListener(type, listener) {
+    addEventListener(type, listener, options = false) {
       const values = listeners.get(type) ?? [];
-      values.push(listener);
+      values.push({listener, capture: options === true || options?.capture === true});
       listeners.set(type, values);
     },
-    removeEventListener(type, listener) {
+    removeEventListener(type, listener, options = false) {
+      const capture = options === true || options?.capture === true;
       listeners.set(
         type,
-        (listeners.get(type) ?? []).filter((value) => value !== listener),
+        (listeners.get(type) ?? []).filter(
+          (value) => value.listener !== listener || value.capture !== capture,
+        ),
       );
     },
     dispatchKey(code, options = {}) {
-      const event = createFakeEvent({code, target: document.activeElement, ...options});
-      for (const listener of listeners.get('keydown') ?? []) listener(event);
+      const event = createFakeEvent({
+        code,
+        target: document.activeElement ?? document.body,
+        ...options,
+      });
+      const keyListeners = listeners.get('keydown') ?? [];
+      for (const {listener} of keyListeners.filter(({capture}) => capture)) listener(event);
+      if (!event.propagationStopped) {
+        for (const {listener} of keyListeners.filter(({capture}) => !capture)) listener(event);
+      }
       return event;
     },
     dispatchPointer(pointerId, options = {}) {
@@ -168,7 +179,11 @@ export function createFakeDocument() {
     dispatchPointerEvent(type, pointerId, options = {}) {
       const event = createFakeEvent({code: '', target: document.activeElement, ...options});
       event.pointerId = pointerId;
-      for (const listener of listeners.get(type) ?? []) listener(event);
+      const pointerListeners = listeners.get(type) ?? [];
+      for (const {listener} of pointerListeners.filter(({capture}) => capture)) listener(event);
+      if (!event.propagationStopped) {
+        for (const {listener} of pointerListeners.filter(({capture}) => !capture)) listener(event);
+      }
       return event;
     },
     listenerCount(type) {

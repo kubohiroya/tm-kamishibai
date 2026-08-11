@@ -1140,6 +1140,11 @@ test('returns a naturally finished embedded story to the menu and allows a resta
 test('dispatches the packaged production scene-skip key into the next scene', async () => {
   const archive = await buildEmbeddedStoryRelease({navigationFixture: true});
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  let editorKeydownCalls = 0;
+  restoreGlobals.document.addEventListener('keydown', (event) => {
+    editorKeydownCalls += 1;
+    event.preventDefault();
+  });
   const vm = new VirtualMachine();
   try {
     vm.setCompatibilityMode(false);
@@ -1188,6 +1193,11 @@ test('dispatches the packaged production scene-skip key into the next scene', as
 
     const sceneSkipEvent = restoreGlobals.document.dispatchKey('ArrowDown');
     assert.equal(sceneSkipEvent.defaultPrevented, true);
+    assert.equal(
+      editorKeydownCalls,
+      0,
+      'The runtime must capture a bound key before the TurboWarp Editor bubble handler.',
+    );
     const endingDeadline = Date.now() + 5_000;
     while (Date.now() < endingDeadline && (!actor.visible || actor.x !== 123)) {
       vm.runtime._step();
