@@ -8,8 +8,19 @@ import {fileURLToPath} from 'node:url';
 
 import {strToU8, unzipSync, zipSync} from 'fflate';
 
-import {buildDsl4RuntimeComponent, Dsl4BuildError, Sb3BuilderError} from '../src/builder/index.js';
-import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {
+  buildDsl4RuntimeComponent,
+  createDsl4BinaryEntryProviderFromSb3,
+  dsl4DefaultBuildFeatureFlags,
+  Dsl4BuildError,
+  resolveDsl4BuildFeatureFlags,
+  Sb3BuilderError,
+} from '../src/builder/index.js';
+import {
+  createDsl4SourceFrontend,
+  dsl4BinaryEntryPrefix,
+  dsl4LegacyBinaryEntryPrefix,
+} from '../src/dsl4/index.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -137,6 +148,21 @@ const buildOptions = (directory, channel, extra = {}) => ({
   ...extra,
 });
 
+test('resolves the root packaging flag once without adding it to runtime flags', () => {
+  assert.deepEqual(dsl4DefaultBuildFeatureFlags, {dsl4RootBinaryEntryPackaging: false});
+  assert.equal(Object.isFrozen(dsl4DefaultBuildFeatureFlags), true);
+  const enabled = resolveDsl4BuildFeatureFlags({
+    dsl4Runtime: true,
+    dsl4SourceIncludes: true,
+    dsl4RootBinaryEntryPackaging: true,
+  });
+  assert.equal(enabled.dsl4RootBinaryEntryPackaging, true);
+  assert.equal(enabled.runtimeFeatureFlags.dsl4SourceIncludes, true);
+  assert.equal(Object.hasOwn(enabled.runtimeFeatureFlags, 'dsl4RootBinaryEntryPackaging'), false);
+  assert.throws(() => resolveDsl4BuildFeatureFlags({dsl4RootBinaryEntryPackaging: 1}), TypeError);
+  assert.throws(() => resolveDsl4BuildFeatureFlags({unknownBuildFlag: true}), TypeError);
+});
+
 test('builds and startup-validates one deterministic self-contained component per channel', async () => {
   await withProject(validSource, async (directory) => {
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
@@ -176,6 +202,72 @@ test('builds and startup-validates one deterministic self-contained component pe
     }
     assert.deepEqual(await readFile(sourcePath), sourceBefore);
     assert.deepEqual(await readFile(assetPath), assetBefore);
+  });
+});
+
+test('builds deterministic root binary entries only when the packaging flag is enabled', async () => {
+  await withProject(validSource, async (directory) => {
+    const options = buildOptions(directory, 'bundled', {
+      featureFlags: {dsl4Runtime: true, dsl4RootBinaryEntryPackaging: true},
+    });
+    const first = await buildDsl4RuntimeComponent(options);
+    const second = await buildDsl4RuntimeComponent(options);
+    assert.deepEqual(first.bytes, second.bytes);
+    assert.equal(first.runtimeComponent.ok, true);
+    assert.equal(Object.hasOwn(first.runtimeComponent, 'getAssetFile'), false);
+    const archive = unzipSync(first.bytes);
+    const entryNames = Object.keys(archive).filter((name) =>
+      name.startsWith(dsl4BinaryEntryPrefix),
+    );
+    assert.equal(entryNames.length, 3);
+    assert.equal(
+      Object.keys(archive).some((name) => name.startsWith(dsl4LegacyBinaryEntryPrefix)),
+      false,
+    );
+    for (const entryName of entryNames) {
+      assert.match(entryName, /^k4asset-v1-[0-9a-f]{64}$/u);
+      assert.equal(entryName.includes('/'), false);
+    }
+    const provider = await createDsl4BinaryEntryProviderFromSb3(
+      first.bytes,
+      first.runtimeComponent.storyDocument,
+      first.runtimeComponent.assetBundle,
+      {
+        maxArchiveBytes: 1024 * 1024,
+        maxArchiveEntries: 32,
+        maxArchiveEntryBytes: 128 * 1024,
+        maxArchiveExpandedBytes: 512 * 1024,
+        maxAssetFiles: 10,
+        maxAssetFileBytes: 4096,
+        maxAssetBytes: 16 * 1024,
+        maxCompressionRatio: 100,
+        subtleCrypto,
+      },
+    );
+    const pose = await provider.consumeAsset('RescuePose');
+    assert.deepEqual(
+      pose.files.map(({path, contentType}) => ({path, contentType})),
+      [
+        {path: 'metadata.json', contentType: 'application/json'},
+        {path: 'model.json', contentType: 'application/json'},
+      ],
+    );
+    await provider.release();
+
+    const rollback = await buildDsl4RuntimeComponent(
+      buildOptions(directory, 'bundled', {featureFlags: {dsl4Runtime: true}}),
+    );
+    const explicitRollback = await buildDsl4RuntimeComponent(
+      buildOptions(directory, 'bundled', {
+        featureFlags: {dsl4Runtime: true, dsl4RootBinaryEntryPackaging: false},
+      }),
+    );
+    assert.deepEqual(explicitRollback.bytes, rollback.bytes);
+    assert.equal(
+      Object.keys(unzipSync(rollback.bytes)).some((name) => name.startsWith(dsl4BinaryEntryPrefix)),
+      false,
+    );
+    assert.equal(typeof rollback.runtimeComponent.getAssetFile, 'function');
   });
 });
 

@@ -74,6 +74,9 @@ importers:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.6.0
         version: 0.6.0(supports-color@7.2.0)
+      '@turbowarp/sbdl':
+        specifier: 7.0.0
+        version: 7.0.0
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -438,6 +441,10 @@ packages:
 
   '@turbowarp/nanolog@0.2.0':
     resolution: {integrity: sha512-texcM9oxfEsADVlVDR5UhLkYclPKsV9mytJh+9pHHonNcUrxRVGF6FkJTzWO/Hl5NafU1crSdw737nqKE3atSA==}
+
+  '@turbowarp/sbdl@7.0.0':
+    resolution: {integrity: sha512-NBIiKHHxgBYkgm1npUBFcgzoUw/hMcoFHhFhcM2+C20jqnbRvZTPx3p63COuKPZnW48IZmpUe+hY8ZoBLXh6ZA==}
+    hasBin: true
 
   '@turbowarp/scratch-storage@2.0.0':
     resolution: {integrity: sha512-Qi/wpKuf9Vd1FKYuwbh9NY4aB6nxh9V7ulQ03TFsWxZJfV1GOL8NiFRQMGFBDda00kUjWr5+f/eobbRAOqZpUg==}
@@ -2993,6 +3000,11 @@ snapshots:
       setimmediate: 1.0.5
 
   '@turbowarp/nanolog@0.2.0': {}
+
+  '@turbowarp/sbdl@7.0.0':
+    dependencies:
+      '@turbowarp/json': 0.1.2
+      '@turbowarp/jszip': 3.12.0
 
   '@turbowarp/scratch-storage@2.0.0(webpack@4.47.0(supports-color@7.2.0))':
     dependencies:

@@ -2,9 +2,15 @@ import {
   createDsl4EmbeddedAssetBundle,
   Dsl4AssetBundleError,
 } from '../dsl4/asset-bundle-descriptor.js';
-import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {
+  createDsl4BinaryEntryAssetBundle,
+  Dsl4BinaryEntryError,
+} from '../dsl4/binary-entry-provider.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
-import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
+import {
+  loadDsl4BinaryEntryRuntimeComponent,
+  loadDsl4RuntimeComponent,
+} from '../dsl4/runtime-artifact-loader.js';
 import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
@@ -15,6 +21,8 @@ import {loadDsl4ExternalSource} from './dsl4-external-source.js';
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
+import {embedDsl4BinaryEntryRuntimeComponentInSb3} from './dsl4-binary-entry-sb3.js';
+import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {embedDsl4PackagedRuntimeComponentInSb3} from './dsl4-source.js';
 import {Sb3BuilderError} from './errors.js';
 
@@ -110,7 +118,8 @@ export async function buildDsl4RuntimeComponent(options) {
   }
   nonEmptyString(controlProfile, 'controlProfile');
   nonEmptyString(channel, 'channel');
-  const featureFlags = resolveDsl4FeatureFlags(inputFeatureFlags);
+  const buildFeatureFlags = resolveDsl4BuildFeatureFlags(inputFeatureFlags);
+  const featureFlags = buildFeatureFlags.runtimeFeatureFlags;
   const sourceLimits = resolveDsl4BuildSourceLimits({
     sourceIncludesEnabled: featureFlags.dsl4SourceIncludes,
     maxSourceBytes,
@@ -188,13 +197,24 @@ export async function buildDsl4RuntimeComponent(options) {
   });
   let assetBundle;
   try {
-    assetBundle = await createDsl4EmbeddedAssetBundle(storyDocument, snapshot, {
-      maxFiles: maxAssetFiles,
-      maxTotalBytes: maxTotalAssetBytes,
-      subtleCrypto,
-    });
+    assetBundle = buildFeatureFlags.dsl4RootBinaryEntryPackaging
+      ? await createDsl4BinaryEntryAssetBundle(storyDocument, snapshot, {
+          maxFiles: maxAssetFiles,
+          maxFileBytes: maxAssetFileBytes,
+          maxTotalBytes: maxTotalAssetBytes,
+          subtleCrypto,
+        })
+      : await createDsl4EmbeddedAssetBundle(storyDocument, snapshot, {
+          maxFiles: maxAssetFiles,
+          maxTotalBytes: maxTotalAssetBytes,
+          subtleCrypto,
+        });
   } catch (error) {
-    if (error instanceof Dsl4AssetBundleError || error instanceof Dsl4SourceDescriptorError) {
+    if (
+      error instanceof Dsl4AssetBundleError ||
+      error instanceof Dsl4BinaryEntryError ||
+      error instanceof Dsl4SourceDescriptorError
+    ) {
       throw new Dsl4BuildError(error.message, {
         stage: 'dsl4-asset-bundle',
         code: error.code,
@@ -219,26 +239,41 @@ export async function buildDsl4RuntimeComponent(options) {
     /** @type {unknown} */ (artifactResult)
   );
   const runtimeArtifact = artifactSuccess.artifact;
-  const embedded = await embedDsl4PackagedRuntimeComponentInSb3(
-    baseSb3Bytes,
-    storyDocument,
-    sourceDescriptor,
-    runtimeArtifact,
-    assetBundle,
-    {
-      channel,
-      maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
-      maxAssetFiles,
-      maxAssetBytes: maxTotalAssetBytes,
-      historyNavigationAvailable,
-      replaceExisting,
-      subtleCrypto,
-    },
-  );
-
-  const verified = await loadDsl4RuntimeComponent(embedded.project, sourceFrontend, {
+  const componentOptions = {
+    channel,
     maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
     maxAssetFiles,
+    maxAssetBytes: maxTotalAssetBytes,
+    historyNavigationAvailable,
+    replaceExisting,
+    subtleCrypto,
+  };
+  const embedded = buildFeatureFlags.dsl4RootBinaryEntryPackaging
+    ? await embedDsl4BinaryEntryRuntimeComponentInSb3(
+        baseSb3Bytes,
+        storyDocument,
+        sourceDescriptor,
+        runtimeArtifact,
+        /** @type {Awaited<ReturnType<typeof createDsl4BinaryEntryAssetBundle>>} */ (assetBundle),
+        {...componentOptions, maxAssetFileBytes},
+      )
+    : await embedDsl4PackagedRuntimeComponentInSb3(
+        baseSb3Bytes,
+        storyDocument,
+        sourceDescriptor,
+        runtimeArtifact,
+        assetBundle,
+        componentOptions,
+      );
+
+  const verified = await (
+    buildFeatureFlags.dsl4RootBinaryEntryPackaging
+      ? loadDsl4BinaryEntryRuntimeComponent
+      : loadDsl4RuntimeComponent
+  )(embedded.project, sourceFrontend, {
+    maxSourceBytes: sourceLimits.maxPackagedSourceBytes,
+    maxAssetFiles,
+    maxAssetFileBytes,
     maxAssetBytes: maxTotalAssetBytes,
     historyNavigationAvailable,
     subtleCrypto,

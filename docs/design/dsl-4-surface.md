@@ -289,12 +289,16 @@ HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同�
 runtime／schema接続はIssue #284で実装済みです。TMPose 1.6.1の`releasePoseModel()`／`releaseAll()`は
 classifierとPoseNet双方のdispose完了を待ちます。
 
-self-contained 4.0 SB3の`binary-entry`形式は明示opt-inです。runtime startupへ渡すproviderは
+self-contained 4.0 SB3の新規`binary-entry`形式は`dsl4RootBinaryEntryPackaging`による明示opt-inです。
+descriptor format version 3はSB3 rootの`k4asset-v1-<sha256-hex>`だけを参照します。runtime startupへ渡すproviderは
 `releaseAfterLastAsset: false`で作成し、全assetのtransaction commit後にproduct backingが一度だけreleaseします。
-永続keyはstable story ID／asset ID／bundle integrityを組み合わせ、provider解放後のscene再訪はIndexedDBだけから
-再materializeします。editorは`createExportBundle()`で同一descriptor／integrityの一時entry集合を再構築でき、保存後は
-`releaseEntries()`でその参照を破棄します。cache miss、quota、unavailable、abort時にnetwork fallbackは行いません。
-互換用Base64形式とDSL 3.2は変更せず、`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+embedded assetは30日TTLのremote cacheへ保存せず、起動ごとのsession identityで分離したsession backingまたは
+個別entryを取得できるdirect sourceから再materializeします。session backing確立後の欠落／破損ではSB3から再抽出せず
+安全停止します。editorは同一descriptor／integrityの一時entry集合を再構築し、保存後は`releaseEntries()`で参照を
+破棄します。source integrity errorではpolicyにかかわらずfallbackしません。
+互換用Base64形式とDSL 3.2は変更せず、flag OFFまたは`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+旧nested format version 2は読み取り互換だけを維持し、root形式へ暗黙変換しません。詳細は
+[root binary／Packager契約](./dsl-4-root-binary-packager-contract.md)を参照してください。
 
 real Chromiumのpose memory fixtureは24回のscene再訪で最大20 logical tensors／196,608 bytes、解放後0、
 classifier／PoseNet dispose各24回を確認します。JavaScript heapのfixture上限はpeak増加32 MiB、CDP強制GC後は

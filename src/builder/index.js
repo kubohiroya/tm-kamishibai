@@ -21,6 +21,10 @@ import {validateBundle} from './validate.js';
 export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
+export {
+  dsl4DefaultBuildFeatureFlags,
+  resolveDsl4BuildFeatureFlags,
+} from './dsl4-build-feature-flags.js';
 export {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 export {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 export {
@@ -72,6 +76,7 @@ export {
   dsl4TurboWarpBrowserBundleMaximumBytes,
 } from './dsl4-turbowarp-browser-bundle.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
+export {dsl4SbdlCompatibility} from './dsl4-packager-compatibility.js';
 export {
   createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,

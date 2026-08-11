@@ -1636,18 +1636,22 @@ fail closedとします。
 
 self-contained SB3のbinary payloadは、長寿命JavaScript literal、data URL、Base64化したruntime snapshotを正本に
 せず、manifestへbindingされたZIP entryからone-shot providerで取り込みます。editor／builderは同一integrityの
-SB3を再保存できるよう、providerを破棄する前にIndexedDB backing bytesを再供給できることを確認します。
+SB3を再保存できるよう、providerを破棄する前にsession backingまたはdirect entry sourceを確立します。
 
-binary-entry経路は互換用Base64経路を置換せず、明示APIでのみ選択する既定OFFのformatとします。descriptor
-format version 2は各fileを`assetId`、台本内path、展開後size、SHA-256 integrity、content-addressed ZIP entryへ
-bindingし、payload自体を`project.json`へ格納しません。ZIP layout version 1のentry名は
-`kamishibai/assets/v1/<sha256-hex>`とし、同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+binary-entry経路は互換用Base64経路を置換しません。`dsl4RootBinaryEntryPackaging`はbuild開始時固定・既定OFFで、
+ON時だけdescriptor format version 3とSB3 rootの`k4asset-v1-<sha256-hex>`を生成します。v3の各fileは
+`assetId`、台本内logical path、展開後size、SHA-256 integrity、Content-Type、entryへbindingされ、payload自体を
+`project.json`へ格納しません。同じcontentはassetやpathをまたいで1 entryへ重複排除します。
+
+旧format version 2と`kamishibai/assets/v1/<sha256-hex>`は読み取り互換として分離し、basenameによる暗黙変換を
+行いません。Packager bridge、session backing policy、security上限、diagnosticの規範契約は
+[DSL 4.0 root binary／Packager契約](./dsl-4-root-binary-packager-contract.md)に定義します。
 
 runtimeはSB3全体を展開せず、中央directoryを走査してから要求されたassetのentryだけを展開します。providerは
 同じassetの2回目の取得と同時取得を拒否し、最後のembedded assetを渡した時点、または明示`release()`時点で
 SB3 byte snapshot、entry reader、release callbackへの参照を破棄します。`AbortSignal`による取得中断を
 machine-readable errorとして扱います。editorのpreview／再保存では破棄済みproviderを再利用せず、同じ
-snapshotまたは永続backing storeから新しいproviderを供給します。
+snapshot、session backing、または個別entryを取得できるdirect sourceから新しいproviderを供給します。
 
 この経路では呼出側がarchive byte数、archive entry数、1 entryの展開後byte数、archive全体の展開後byte数、
 asset file数、1 asset fileのbyte数、asset file合計byte数、圧縮比の上限をすべて明示します。path traversal、
@@ -1659,16 +1663,15 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
-Issue #327の製品接続では、`assetBundleFormat: binary-entry`を明示したruntime startupだけが
-deferred-release providerを受け取ります。providerは全assetをAsset Manager 0.8.0のtransactional binary storeへ
-順番にingestし、最後の`IDBTransaction.oncomplete`まで検証済みsource byte参照を保持します。全commit後にproviderと
-SB3 readerへの到達可能参照を破棄し、scene materializationとhistory再訪はstoreの`getBinaryBundle()`から供給します。
-keyはstable story ID、asset ID、descriptor全体のintegrityへbindingし、story別database名には
-`<cacheIdentity.databaseName>--binary-v1`を使用します。cache miss、IndexedDB unavailable、quota、abort、corrupt recordは
-外部URLへfallbackせず、Asset Managerの機械可読codeを維持してfail closedにします。
+`assetBundleFormat: binary-entry`を明示したruntime startupだけがdeferred-release providerを受け取ります。
+旧製品接続で用いた30日TTLのpersistent binary storeはremote cache用途と混同しないよう廃止し、embedded assetは
+起動時固定の`prefer | required | disabled` policyによりsession backingまたはdirect sourceへ接続します。
+session backingは起動ごとのidentityで分離し、全commitとread-back検証までsourceを保持します。確立後のrecord欠落、
+破損、transaction failureではSB3から再抽出せず、安全停止します。persistent remote cacheのdatabase、TTL、LRU、lease、
+clear操作は変更しません。
 
 player runtime componentはmanifestだけを保持し、ingest後のproviderやdecoded byte copyを公開snapshotへ含めません。
-editorが再保存するときだけbacking storeから全entryを一時materializeし、元descriptorと同じcontent-addressed entryを
+editorが再保存するときだけsession backingまたはdirect sourceからentryを一時materializeし、元descriptorと同じcontent-addressed entryを
 再構成します。保存処理の`releaseEntries()`後は一時copyを破棄します。互換用Base64 loader／writerは既定のままで、
 binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.6.1のrelease完了待ちと既存の
 two-phase scene retentionにより、通常時のmodel保持はcurrent、preload中はcurrent＋selected nextへ制限します。
