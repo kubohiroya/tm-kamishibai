@@ -1648,10 +1648,100 @@ scenes:
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
           'browser-owned representative capability fixture completion',
         );
+        await waitForEvaluation(
+          client,
+          `(() => {
+            const menu = document.querySelector('[data-dsl4-application-menu="true"]');
+            const buttons = [...(menu?.querySelectorAll('[data-dsl4-menu-action]') ?? [])];
+            return document.querySelectorAll('[data-dsl4-application-menu="true"]').length === 1 &&
+              menu?.style.display === 'block' &&
+              buttons.length === 4 &&
+              buttons.every((button) => getComputedStyle(button).cursor === 'pointer') &&
+              buttons.every((button) => button.querySelector('img')?.src.startsWith('data:image/svg+xml;base64,'));
+          })()`,
+          'interactive browser-owned application menu',
+        );
+        const initialMenuLocale = await client.evaluate(`(() => {
+          const open = document.querySelector('[data-dsl4-menu-action="open"]')?.textContent;
+          return open === 'ファイルを開く' ? 'ja' : 'en';
+        })()`);
+        const openClick = await client.evaluate(`(() => {
+          document.querySelector('[data-dsl4-menu-action="open"]').click();
+          return globalThis.dsl4LocalPreviewCapabilityFixture.applicationOpenRequests;
+        })()`);
+        assert.equal(openClick, 1);
+        const languageClick = await client.evaluate(`(() => {
+          const button = document.querySelector('[data-dsl4-menu-action="language"]');
+          let observed = false;
+          button.addEventListener('click', () => { observed = true; }, {once: true});
+          button.click();
+          return {
+            disabled: button.disabled,
+            observed,
+            text: button.textContent
+          };
+        })()`);
+        const toggledLocale = initialMenuLocale === 'ja' ? 'en' : 'ja';
+        assert.deepEqual(languageClick, {
+          disabled: false,
+          observed: true,
+          text: toggledLocale === 'ja' ? '言語' : 'Language',
+        });
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
+              initialMenuLocale === 'ja' ? 'Open' : 'ファイルを開く',
+            )};
+          })()`,
+          'browser-owned toggled application-menu locale',
+        );
+        await client.evaluate(`document.querySelector('[data-dsl4-menu-action="about"]').click()`);
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'none' &&
+              document.querySelector('[data-dsl4-title-controls="true"]')?.style.display === 'block';
+          })()`,
+          'browser-owned application information title',
+        );
+        await client.evaluate(`document.querySelector('[data-dsl4-title-action="close"]').click()`);
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'block' &&
+            document.querySelector('[data-dsl4-title-controls="true"]')?.style.display === 'none'`,
+          'browser-owned return from application information',
+        );
+        await client.evaluate(
+          `document.querySelector('[data-dsl4-menu-action="language"]').click()`,
+        );
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
+              initialMenuLocale === 'ja' ? 'ファイルを開く' : 'Open',
+            )};
+          })()`,
+          'browser-owned restored application-menu locale',
+        );
       } catch (error) {
         const page = await client.evaluate(`({
           body: document.body.textContent,
           fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
+          applicationMenu: (() => {
+            const button = document.querySelector('[data-dsl4-menu-action="language"]');
+            const rect = button?.getBoundingClientRect();
+            const hit = rect && document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2
+            );
+            return {
+              button: rect ? {left: rect.left, top: rect.top, width: rect.width, height: rect.height} : null,
+              display: document.querySelector('[data-dsl4-application-menu="true"]')?.style.display,
+              hitAction: hit?.closest?.('[data-dsl4-menu-action]')?.dataset.dsl4MenuAction ?? null,
+              hitTag: hit?.tagName ?? null
+            };
+          })(),
           scratch: globalThis.Scratch?.vm?.runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible}))
         })`);
         throw new Error(
@@ -1744,6 +1834,15 @@ scenes:
       testContext.diagnostic(`representative capability heap after GC: ${usedHeapBytes} bytes`);
       assert.ok(usedHeapBytes <= 192 * 1024 * 1024, `heap used ${usedHeapBytes} bytes`);
 
+      await client.evaluate(`document.querySelector('[data-dsl4-menu-action="reload"]').click()`);
+      await waitForEvaluation(
+        client,
+        `globalThis.dsl4LocalPreviewCapabilityFixture.events
+          .filter(({type}) => type === 'runtime.start').length === 2 &&
+          document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'none'`,
+        'browser-owned menu replay',
+      );
+
       const disposed = await client.evaluate(`(async () => {
         const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
         await fixture.client.dispose();
@@ -1757,9 +1856,9 @@ scenes:
       assert.equal(disposed.status, 'disposed');
       assert.equal(disposed.canvasCount, 0);
       assert.equal(disposed.hasScratch, false);
-      assert.equal(disposed.metrics.cameraTrackStops, 1);
-      assert.equal(disposed.metrics.classifierDisposals, 1);
-      assert.equal(disposed.metrics.poseNetDisposals, 1);
+      assert.equal(disposed.metrics.cameraTrackStops, disposed.metrics.cameraStarts);
+      assert.equal(disposed.metrics.classifierDisposals, disposed.metrics.modelLoads);
+      assert.equal(disposed.metrics.poseNetDisposals, disposed.metrics.modelLoads);
       await waitForEvaluation(
         client,
         'document.querySelectorAll("canvas").length === 0',

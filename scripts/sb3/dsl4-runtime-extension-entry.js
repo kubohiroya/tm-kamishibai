@@ -26,6 +26,8 @@ const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
+  maxSelectedEntries: 1024,
+  maxSelectedDirectoryDepth: 32,
 });
 const runtimeErrorTitles = Object.freeze({
   en: 'Kamishibai runtime error',
@@ -125,6 +127,8 @@ class KamishibaiDsl4RuntimeExtension {
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
     this.installDropTarget();
+    this.ensureTitleControls()?.show('en');
+    this.setStageCursor('pointer');
   }
 
   getInfo() {
@@ -225,9 +229,23 @@ class KamishibaiDsl4RuntimeExtension {
     const pendingStart = this.pendingStart;
     if (!pendingStart || pendingStart.shell !== this.shell) {
       if (this.status === 'title') this.hideScratchTitle();
+      if (this.status === 'ready') {
+        return this.enqueue(async () => {
+          await this.restart();
+          return this.pendingStart?.start();
+        }, 'initial-title-close');
+      }
       return undefined;
     }
     return pendingStart.start();
+  }
+
+  requestCloseTitle() {
+    const threads = this.Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+      BROADCAST_OPTION: 'closeTitle',
+    });
+    if (!Array.isArray(threads) || threads.length === 0) return this.closeTitle();
+    return undefined;
   }
 
   openOfficialWebsite() {
@@ -295,7 +313,7 @@ class KamishibaiDsl4RuntimeExtension {
         },
         websiteIconUrl: officialWebsiteIcon,
         onWebsite: () => this.openOfficialWebsite(),
-        onClose: () => this.closeTitle(),
+        onClose: () => this.requestCloseTitle(),
         onError: (error) => this.reportFailure(error, 'title-controls'),
       });
     } catch (error) {
@@ -322,7 +340,10 @@ class KamishibaiDsl4RuntimeExtension {
     const onDrop = (event) => {
       if (this.status !== 'menu') return;
       event.preventDefault?.();
-      const collecting = collectDsl4BrowserDroppedFiles(event.dataTransfer);
+      const collecting = collectDsl4BrowserDroppedFiles(event.dataTransfer, {
+        maxEntries: limits.maxSelectedEntries,
+        maxDepth: limits.maxSelectedDirectoryDepth,
+      });
       this.enqueue(async () => this.loadSelectedEntries(await collecting), 'file-drop');
     };
     mount.addEventListener('dragover', onDragOver);
@@ -352,15 +373,29 @@ class KamishibaiDsl4RuntimeExtension {
     input.addEventListener(
       'change',
       () => {
-        const entries = Array.from(input.files ?? []).map((file) => ({
-          path: file.webkitRelativePath || file.name,
-          file,
-        }));
+        const selectedFiles = input.files ?? [];
         input.remove?.();
         this.fileInput = null;
-        if (entries.length > 0) {
-          this.enqueue(() => this.loadSelectedEntries(entries), 'file-open');
-        }
+        if (selectedFiles.length === 0) return;
+        this.enqueue(() => {
+          if (selectedFiles.length > limits.maxSelectedEntries) {
+            throw new TypeError(
+              `Selected project exceeds the ${limits.maxSelectedEntries} entry limit`,
+            );
+          }
+          const entries = Array.from(selectedFiles).map((file) => ({
+            path: file.webkitRelativePath || file.name,
+            file,
+          }));
+          if (
+            entries.some(({path}) => path.split('/').length - 1 > limits.maxSelectedDirectoryDepth)
+          ) {
+            throw new TypeError(
+              `Selected project exceeds the ${limits.maxSelectedDirectoryDepth} directory depth limit`,
+            );
+          }
+          return this.loadSelectedEntries(entries);
+        }, 'file-open');
       },
       {once: true},
     );

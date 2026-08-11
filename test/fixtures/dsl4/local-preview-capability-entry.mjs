@@ -106,6 +106,7 @@ const tmPoseRuntime = Object.freeze({
 });
 
 const fixture = {
+  applicationOpenRequests: 0,
   client: null,
   errors: [],
   events: [],
@@ -118,6 +119,9 @@ fixture.client = createDsl4LocalPreviewBrowserBootstrap({
   globalObject: globalThis,
   sourceFrontend: createDsl4ProductionSourceFrontend(schema),
   tmPoseRuntime,
+  onApplicationOpen() {
+    fixture.applicationOpenRequests += 1;
+  },
   onRuntimeEvent(event) {
     fixture.events.push({type: event.type, actionPath: event.actionPath, details: event.details});
   },

@@ -19,6 +19,16 @@ function requireDocument(value) {
   return /** @type {Record<string, any>} */ (value);
 }
 
+export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
+  open: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8cGF0aCBkPSJNNSAxMy41aDE0bDQuNSA1SDQzdjIySDV6IiBmaWxsPSIjZDg1NjU2IiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTUgMTguNWgzOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8L3N2Zz4K',
+  reload:
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8cGF0aCBkPSJNMzguNSAxN0ExNiAxNiAwIDEgMCA0MCAyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0zOC41IDE3QTE2IDE2IDAgMSAwIDQwIDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiNkODU2NTYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTTI5IDcuNSA0MCA4bC0uNSAxMSIgZmlsbD0iI2Q4NTY1NiIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+  about:
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIxOSIgZmlsbD0iI2Q4NTY1NiIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIuNSIvPgogIDxjaXJjbGUgY3g9IjI0IiBjeT0iMTUiIHI9IjIuNSIgZmlsbD0iIzAwMCIvPgogIDxwYXRoIGQ9Ik0yNCAyMnYxMyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K',
+  language:
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIxOSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjUuNSIvPgogIDxjaXJjbGUgY3g9IjI0IiBjeT0iMjQiIHI9IjE5IiBmaWxsPSJub25lIiBzdHJva2U9IiNkODU2NTYiIHN0cm9rZS13aWR0aD0iMi41Ii8+CiAgPHBhdGggZD0iTTUuNSAyNGgzN004LjUgMTVoMzFNOC41IDMzaDMxTTI0IDVjNSA1IDcgMTEgNyAxOXMtMiAxNC03IDE5Yy01LTUtNy0xMS03LTE5czItMTQgNy0xOVoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8cGF0aCBkPSJNNS41IDI0aDM3TTguNSAxNWgzMU04LjUgMzNoMzFNMjQgNWM1IDUgNyAxMSA3IDE5cy0yIDE0LTcgMTljLTUtNS03LTExLTctMTlzMi0xNCA3LTE5WiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZDg1NjU2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+});
+
 /**
  * Render the four application actions above the stage without adding Scratch sprites or clones.
  * The overlay is owned by the stage mount, so it cannot escape into the surrounding editor UI.
@@ -27,7 +37,7 @@ function requireDocument(value) {
  * @param {unknown} options.document
  * @param {unknown} options.mount
  * @param {Readonly<Record<'en' | 'ja', Readonly<Record<string, string>>>>} options.locales
- * @param {Readonly<Record<'open' | 'reload' | 'about' | 'language', string>>} options.icons
+ * @param {Readonly<Record<'open' | 'reload' | 'about' | 'language', string>>} [options.icons]
  * @param {() => unknown | Promise<unknown>} options.onOpen
  * @param {() => unknown | Promise<unknown>} options.onReload
  * @param {() => unknown | Promise<unknown>} options.onAbout
@@ -58,8 +68,9 @@ export function createDsl4RuntimeApplicationMenu(options) {
       }
     }
   }
+  const icons = options.icons ?? dsl4RuntimeApplicationMenuDefaultIcons;
   for (const action of /** @type {const} */ (['open', 'reload', 'about', 'language'])) {
-    if (typeof options.icons?.[action] !== 'string' || options.icons[action].length === 0) {
+    if (typeof icons?.[action] !== 'string' || icons[action].length === 0) {
       throw new TypeError(`icons.${action} must be a non-empty string`);
     }
   }
@@ -132,7 +143,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
     button.style.cssText = `position:absolute;left:${definition.left};top:${definition.top};width:36.6667%;height:24.4444%;display:flex;min-width:0;min-height:0;align-items:center;justify-content:center;flex-direction:column;gap:2px;border:2px solid #005f50;border-radius:14px;background:#007d66;color:#fff;box-shadow:0 3px 8px rgba(0,0,0,.2);cursor:pointer;font:inherit;`;
     button.style.cursor = 'pointer';
     icon.setAttribute('aria-hidden', 'true');
-    icon.src = options.icons[definition.action];
+    icon.src = icons[definition.action];
     icon.alt = '';
     icon.style.cssText =
       'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;';

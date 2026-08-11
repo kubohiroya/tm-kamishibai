@@ -8,6 +8,11 @@ import {
 
 const storyFilenamePattern = /\.k4\.ya?ml$/iu;
 
+export const dsl4BrowserStorySelectionDefaults = Object.freeze({
+  maxEntries: 1024,
+  maxDepth: 32,
+});
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -78,8 +83,59 @@ export function selectDsl4BrowserStorySource(entries) {
   return candidates[0];
 }
 
-/** @param {Readonly<Record<string, any>>} handle @param {string} prefix @param {Array<{path: string, file: unknown}>} output */
-async function collectHandle(handle, prefix, output) {
+/** @param {unknown} optionsInput */
+function selectionLimits(optionsInput) {
+  const options = optionsInput === undefined ? {} : optionsInput;
+  if (!isRecord(options)) throw new TypeError('browser story selection options must be an object');
+  return {
+    maxEntries: positiveLimit(
+      options.maxEntries ?? dsl4BrowserStorySelectionDefaults.maxEntries,
+      'maxEntries',
+    ),
+    maxDepth: positiveLimit(
+      options.maxDepth ?? dsl4BrowserStorySelectionDefaults.maxDepth,
+      'maxDepth',
+    ),
+  };
+}
+
+/** @param {{count: number, maxEntries: number, maxDepth: number}} state @param {number} depth */
+function claimSelectedEntry(state, depth) {
+  if (depth > state.maxDepth) {
+    throw new TypeError(`Selected project exceeds the ${state.maxDepth} directory depth limit`);
+  }
+  state.count += 1;
+  if (state.count > state.maxEntries) {
+    throw new TypeError(`Selected project exceeds the ${state.maxEntries} entry limit`);
+  }
+}
+
+/** @param {string} path @param {{maxDepth: number}} state */
+function boundedSelectedPath(path, state) {
+  const selectedPath = safePath(path, 'dropped file path');
+  if (selectedPath.split('/').length - 1 > state.maxDepth) {
+    throw new TypeError(`Selected project exceeds the ${state.maxDepth} directory depth limit`);
+  }
+  return selectedPath;
+}
+
+/** @param {Readonly<Record<string, any>>} handle @param {{count: number, maxEntries: number}} state */
+async function collectChildren(handle, state) {
+  /** @type {Array<[string, Record<string, any>]>} */
+  const children = [];
+  for await (const entry of handle.entries()) {
+    if (state.count + children.length >= state.maxEntries) {
+      throw new TypeError(`Selected project exceeds the ${state.maxEntries} entry limit`);
+    }
+    children.push(entry);
+  }
+  children.sort(([left], [right]) => left.localeCompare(right, 'en'));
+  return children;
+}
+
+/** @param {Readonly<Record<string, any>>} handle @param {string} prefix @param {Array<{path: string, file: unknown}>} output @param {{count: number, maxEntries: number, maxDepth: number}} state @param {number} depth */
+async function collectHandle(handle, prefix, output, state, depth) {
+  claimSelectedEntry(state, depth);
   const path = prefix ? `${prefix}/${handle.name}` : handle.name;
   if (handle.kind === 'file' && typeof handle.getFile === 'function') {
     output.push({path: safePath(path, 'dropped file path'), file: await handle.getFile()});
@@ -88,34 +144,43 @@ async function collectHandle(handle, prefix, output) {
   if (handle.kind !== 'directory' || typeof handle.entries !== 'function') {
     throw new TypeError('Dropped entry must be a file or enumerable directory');
   }
-  /** @type {Array<[string, Record<string, any>]>} */
-  const children = [];
-  for await (const entry of handle.entries()) children.push(entry);
-  children.sort(([left], [right]) => left.localeCompare(right, 'en'));
-  for (const [, child] of children) await collectHandle(child, path, output);
+  const children = await collectChildren(handle, state);
+  for (const [, child] of children) await collectHandle(child, path, output, state, depth + 1);
 }
 
 /**
  * Collect files from a modern drag-and-drop payload without reading unrelated paths.
  *
  * @param {unknown} dataTransferInput
+ * @param {{maxEntries?: number, maxDepth?: number}} [optionsInput]
  */
-export async function collectDsl4BrowserDroppedFiles(dataTransferInput) {
+export async function collectDsl4BrowserDroppedFiles(dataTransferInput, optionsInput) {
   if (!isRecord(dataTransferInput)) throw new TypeError('drop payload is required');
+  const limits = selectionLimits(optionsInput);
+  const state = {count: 0, ...limits};
   const dataTransfer = /** @type {Record<string, any>} */ (dataTransferInput);
-  const items = Array.from(dataTransfer.items ?? []);
+  const transferredItems = dataTransfer.items ?? [];
+  if (Number(transferredItems.length ?? 0) > limits.maxEntries) {
+    throw new TypeError(`Selected project exceeds the ${limits.maxEntries} entry limit`);
+  }
+  const items = Array.from(transferredItems);
   /** @type {Array<{path: string, file: unknown}>} */
   const entries = [];
   if (items.some((item) => typeof item?.getAsFileSystemHandle === 'function')) {
     for (const item of items) {
       const handle = await item.getAsFileSystemHandle?.();
-      if (handle) await collectHandle(handle, '', entries);
+      if (handle) await collectHandle(handle, '', entries, state, 0);
     }
   } else {
-    for (const file of Array.from(dataTransfer.files ?? [])) {
+    const droppedFiles = dataTransfer.files ?? [];
+    if (Number(droppedFiles.length ?? 0) > limits.maxEntries) {
+      throw new TypeError(`Selected project exceeds the ${limits.maxEntries} entry limit`);
+    }
+    for (const file of Array.from(droppedFiles)) {
+      claimSelectedEntry(state, 0);
       const browserFile = requireFile(file);
       entries.push({
-        path: safePath(browserFile.webkitRelativePath || browserFile.name, 'dropped file path'),
+        path: boundedSelectedPath(browserFile.webkitRelativePath || browserFile.name, state),
         file: browserFile,
       });
     }
@@ -124,19 +189,18 @@ export async function collectDsl4BrowserDroppedFiles(dataTransferInput) {
   return entries;
 }
 
-/** @param {unknown} rootInput */
-export async function collectDsl4BrowserDirectoryFiles(rootInput) {
+/** @param {unknown} rootInput @param {{maxEntries?: number, maxDepth?: number}} [optionsInput] */
+export async function collectDsl4BrowserDirectoryFiles(rootInput, optionsInput) {
   if (!isRecord(rootInput) || rootInput.kind !== 'directory') {
     throw new TypeError('selected project root must be a directory handle');
   }
+  const limits = selectionLimits(optionsInput);
+  const state = {count: 0, ...limits};
   /** @type {Array<{path: string, file: unknown}>} */
   const entries = [];
   const root = /** @type {Record<string, any>} */ (rootInput);
-  /** @type {Array<[string, Record<string, any>]>} */
-  const children = [];
-  for await (const entry of root.entries()) children.push(entry);
-  children.sort(([left], [right]) => left.localeCompare(right, 'en'));
-  for (const [, child] of children) await collectHandle(child, '', entries);
+  const children = await collectChildren(root, state);
+  for (const [, child] of children) await collectHandle(child, '', entries, state, 0);
   entries.sort((left, right) => left.path.localeCompare(right.path, 'en'));
   return entries;
 }

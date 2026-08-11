@@ -28,6 +28,7 @@ import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
 } from '../src/dsl4/platform/browser-story-file-loader.js';
+import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
@@ -493,6 +494,100 @@ test('collects a dropped DSL 4.0 project directory without flattening asset path
   );
 });
 
+test('stops dropped-directory enumeration at the configured entry and depth boundaries', async () => {
+  let fileReads = 0;
+  const fileHandle = (name) => ({
+    kind: 'file',
+    name,
+    async getFile() {
+      fileReads += 1;
+      return browserFile(name, new Uint8Array([1]));
+    },
+  });
+  const wideRoot = {
+    kind: 'directory',
+    name: 'wide',
+    async *entries() {
+      yield ['first.k4.yml', fileHandle('first.k4.yml')];
+      yield ['second.svg', fileHandle('second.svg')];
+      assert.fail('Directory enumeration must stop at maxEntries.');
+    },
+  };
+  await assert.rejects(
+    collectDsl4BrowserDroppedFiles(
+      {
+        items: [
+          {
+            async getAsFileSystemHandle() {
+              return wideRoot;
+            },
+          },
+        ],
+      },
+      {maxEntries: 2, maxDepth: 4},
+    ),
+    /2 entry limit/u,
+  );
+  assert.equal(fileReads, 0, 'The collector must reject before reading a bounded-out file.');
+
+  const nestedRoot = browserDirectoryHandle('root', [
+    [
+      'first',
+      browserDirectoryHandle('first', [
+        [
+          'second',
+          browserDirectoryHandle('second', [['story.k4.yml', fileHandle('story.k4.yml')]]),
+        ],
+      ]),
+    ],
+  ]);
+  await assert.rejects(
+    collectDsl4BrowserDroppedFiles(
+      {
+        items: [
+          {
+            async getAsFileSystemHandle() {
+              return nestedRoot;
+            },
+          },
+        ],
+      },
+      {maxEntries: 16, maxDepth: 1},
+    ),
+    /directory depth limit/u,
+  );
+  assert.equal(fileReads, 0);
+
+  await assert.rejects(
+    collectDsl4BrowserDroppedFiles(
+      {
+        items: [{}, {}, {}],
+      },
+      {maxEntries: 2, maxDepth: 4},
+    ),
+    /2 entry limit/u,
+  );
+
+  await assert.rejects(
+    collectDsl4BrowserDroppedFiles(
+      {
+        files: [
+          {
+            ...browserFile('story.k4.yml', new Uint8Array([1])),
+            webkitRelativePath: 'root/one/two/story.k4.yml',
+          },
+        ],
+      },
+      {maxEntries: 2, maxDepth: 2},
+    ),
+    /directory depth limit/u,
+  );
+});
+
+test('uses the exact version 3 SVG bytes as the reusable DOM menu defaults', () => {
+  assert.deepEqual(dsl4RuntimeApplicationMenuDefaultIcons, version3MenuIconDataUrls);
+});
+
 test('preserves the embedded source descriptor through a pinned TurboWarp resave', async () => {
   const result = await buildRelease();
   const archive = unzipSync(result.archive);
@@ -572,6 +667,31 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
 
     assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
+    const titleControls = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-title-controls',
+      'true',
+    )[0];
+    assert(titleControls, 'English DOM title controls must exist before the green flag.');
+    assert.equal(titleControls.style.display, 'block');
+    assert.equal(
+      findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0].getAttribute(
+        'aria-label',
+      ),
+      'Official Website',
+    );
+    const initialCloseButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    assert.equal(initialCloseButton.getAttribute('aria-label'), 'Close');
+    assert.equal(restoreGlobals.document.body.style.cursor, 'pointer');
+    initialCloseButton.click();
+    const initialCloseDeadline = Date.now() + 5_000;
+    while (Date.now() < initialCloseDeadline) {
+      vm.runtime._step();
+      if ((await extensionReporter(vm, 'statusReporter')) === 'menu') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {
@@ -580,12 +700,6 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
-    const titleControls = findByAttribute(
-      restoreGlobals.document.body,
-      'data-dsl4-title-controls',
-      'true',
-    )[0];
-    assert(titleControls, 'Title controls must be mounted above the Stage.');
     assert.equal(titleControls.style.display, 'block');
     const websiteButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
     websiteButton.click();
@@ -633,6 +747,14 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(titleControls.style.display, 'block');
     const closeButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    const originalStartHats = vm.runtime.startHats.bind(vm.runtime);
+    let closeBroadcastStarts = 0;
+    vm.runtime.startHats = (opcode, fields, target) => {
+      if (opcode === 'event_whenbroadcastreceived' && fields?.BROADCAST_OPTION === 'closeTitle') {
+        closeBroadcastStarts += 1;
+      }
+      return originalStartHats(opcode, fields, target);
+    };
     closeButton.click();
     const closeDeadline = Date.now() + 5_000;
     while (Date.now() < closeDeadline) {
@@ -644,6 +766,7 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    assert.equal(closeBroadcastStarts, 1, 'The DOM close action must broadcast closeTitle once.');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(
       vm.runtime.getTargetForStage().sprite.costumes[vm.runtime.getTargetForStage().currentCostume]
