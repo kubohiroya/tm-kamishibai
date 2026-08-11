@@ -18,6 +18,7 @@ const interactiveRoles = new Set([
   'tab',
   'textbox',
 ]);
+const keyListenerCapture = true;
 
 /**
  * @param {unknown} node
@@ -306,7 +307,7 @@ export function createDsl4KeymapInputAdapter({
     }
     if (attachedTarget === target) return;
     if (attachedTarget) throw new Error('Keymap input adapter is already attached');
-    target.addEventListener('keydown', handleKeyDown);
+    target.addEventListener('keydown', handleKeyDown, keyListenerCapture);
     attachedTarget = target;
   }
 
@@ -332,7 +333,7 @@ export function createDsl4KeymapInputAdapter({
   }
 
   function detach() {
-    attachedTarget?.removeEventListener?.('keydown', handleKeyDown);
+    attachedTarget?.removeEventListener?.('keydown', handleKeyDown, keyListenerCapture);
     attachedTarget = null;
   }
 

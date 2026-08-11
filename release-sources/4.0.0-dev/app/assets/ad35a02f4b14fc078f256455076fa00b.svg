@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
-  <metadata>locale:ja</metadata>
-  <rect width="160" height="64" rx="12" fill="#007d66"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
-  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
-</svg>

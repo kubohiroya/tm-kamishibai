@@ -118,6 +118,7 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput) {
     maxAssetFiles: options.maxAssetFiles ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
     maxAssetBytes: options.maxAssetBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
     subtleCrypto: globalObject.crypto.subtle,
+    onApplicationOpen: options.onApplicationOpen,
     onRuntimeEvent: options.onRuntimeEvent,
     onError: options.onError,
   });

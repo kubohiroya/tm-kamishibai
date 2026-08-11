@@ -205,6 +205,57 @@ test('does not consume keys from interactive or explicitly ignored focus paths',
   assert.equal(calls, 0);
 });
 
+test('captures navigation keys before a TurboWarp Editor bubble handler', async () => {
+  const listeners = {capture: [], bubble: []};
+  const target = {
+    addEventListener(type, listener, capture = false) {
+      if (type === 'keydown') listeners[capture ? 'capture' : 'bubble'].push(listener);
+    },
+    removeEventListener(type, listener, capture = false) {
+      if (type !== 'keydown') return;
+      const phase = capture ? 'capture' : 'bubble';
+      listeners[phase] = listeners[phase].filter((candidate) => candidate !== listener);
+    },
+  };
+  let editorCalls = 0;
+  target.addEventListener('keydown', (event) => {
+    editorCalls += 1;
+    event.preventDefault();
+  });
+  const commands = [];
+  const adapter = createDsl4KeymapInputAdapter({
+    keymap: {
+      Space: 'rehearsal.skipPose',
+      ArrowRight: 'rehearsal.skipAction',
+      ArrowDown: 'rehearsal.skipScene',
+    },
+    dispatchCommand: async (command) => commands.push(command),
+  });
+  adapter.attach(target);
+
+  for (const code of ['Space', 'ArrowRight', 'ArrowDown']) {
+    const event = keyEvent(code);
+    let propagationStopped = false;
+    const originalStopPropagation = event.stopPropagation;
+    event.stopPropagation = function () {
+      propagationStopped = true;
+      originalStopPropagation.call(this);
+    };
+    for (const listener of listeners.capture) listener(event);
+    if (!propagationStopped) {
+      for (const listener of listeners.bubble) listener(event);
+    }
+    assert.deepEqual(event.counters, {preventDefault: 1, stopPropagation: 1});
+  }
+  await adapter.whenIdle();
+
+  assert.deepEqual(commands, ['rehearsal.skipPose', 'rehearsal.skipAction', 'rehearsal.skipScene']);
+  assert.equal(editorCalls, 0);
+  adapter.detach();
+  assert.equal(listeners.capture.length, 0);
+  assert.equal(listeners.bubble.length, 1);
+});
+
 test('routes an eligible initial key to speech advance before mapped navigation', async () => {
   const advances = [];
   const commands = [];

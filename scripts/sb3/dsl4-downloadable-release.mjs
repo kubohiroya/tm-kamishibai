@@ -23,6 +23,13 @@ const require = createRequire(import.meta.url);
 const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
 const tmPoseBrowserRuntimePath =
   require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
+const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
+const applicationMenuIconPaths = Object.freeze({
+  open: path.join(projectRoot, 'app/assets/1766a36329eca190b2b19bba53ef7d8f.svg'),
+  reload: path.join(projectRoot, 'app/assets/8cf6379b2d82bea5a39bb46757a9bd3d.svg'),
+  about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
+  language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
+});
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
@@ -80,7 +87,7 @@ function titleAssets() {
   <text x="240" y="250" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_STORY_LINE_2}}</text>
   <text x="240" y="282" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}</text>
   <text x="240" y="298" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}</text>
-  <text x="240" y="326" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_NAME}} / {{ABOUT_AUTHOR_EMAIL}}</text>
+  <text x="240" y="326" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_NAME}} &lt;{{ABOUT_AUTHOR_EMAIL}}&gt;</text>
 </svg>`,
     240,
     180,
@@ -98,7 +105,7 @@ function titleAssets() {
   <text x="240" y="250" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_LICENSE_STORY_LINE_2}}</text>
   <text x="240" y="282" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}</text>
   <text x="240" y="298" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}</text>
-  <text x="240" y="326" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_NAME}} / {{ABOUT_AUTHOR_EMAIL}}</text>
+  <text x="240" y="326" text-anchor="middle" font-family="sans-serif" font-size="12">{{ABOUT_AUTHOR_NAME}} &lt;{{ABOUT_AUTHOR_EMAIL}}&gt;</text>
 </svg>`,
     240,
     180,
@@ -108,12 +115,6 @@ function titleAssets() {
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
   <rect width="480" height="360" fill="#f4fffb"/>
   <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">Participatory AI Kamishibai</text>
-  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
-    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">Open</text>
-    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">Reload</text>
-    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">About</text>
-    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">Language</text>
-  </g>
 </svg>`,
     240,
     180,
@@ -124,55 +125,11 @@ function titleAssets() {
   <metadata>locale:ja</metadata>
   <rect width="480" height="360" fill="#f4fffb"/>
   <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">「参加型」AI紙芝居</text>
-  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
-    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">ファイルを開く</text>
-    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">もう一度</text>
-    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">アプリ情報</text>
-    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">言語</text>
-  </g>
 </svg>`,
     240,
     180,
   );
-  const websiteFallback = svgAsset(
-    'official-website-button',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
-  <rect width="160" height="64" rx="12" fill="#007d66"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
-  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
-</svg>`,
-    80,
-    32,
-  );
-  const websiteRuntime = svgAsset(
-    'official-website-button-runtime',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
-  <metadata>locale:ja</metadata>
-  <rect width="160" height="64" rx="12" fill="#007d66"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
-  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
-</svg>`,
-    80,
-    32,
-  );
-  const closeTitle = svgAsset(
-    'title-close-button',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <circle cx="16" cy="16" r="15" fill="#007d66"/>
-  <path d="M10 10L22 22M22 10L10 22" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-</svg>`,
-    16,
-    16,
-  );
-  return Object.freeze([
-    title,
-    titleRuntime,
-    menu,
-    menuRuntime,
-    websiteFallback,
-    websiteRuntime,
-    closeTitle,
-  ]);
+  return Object.freeze([title, titleRuntime, menu, menuRuntime]);
 }
 
 function stageTarget(title, titleRuntime, menu, menuRuntime) {
@@ -317,147 +274,10 @@ function poseFeedbackMonitors() {
   ];
 }
 
-function websiteTarget(websiteFallback, websiteRuntime) {
-  return {
-    isStage: false,
-    name: 'officialWebsiteButton',
-    variables: {},
-    lists: {},
-    broadcasts: {},
-    blocks: {
-      officialWebsiteFlag: {
-        opcode: 'event_whenflagclicked',
-        next: 'officialWebsiteFlagShow',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 40,
-      },
-      officialWebsiteFlagShow: {
-        opcode: 'looks_show',
-        next: null,
-        parent: 'officialWebsiteFlag',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-      officialWebsiteClick: {
-        opcode: 'event_whenthisspriteclicked',
-        next: 'officialWebsiteOpen',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 160,
-      },
-      officialWebsiteOpen: {
-        opcode: 'kubohiroyakamishibai4_openOfficialWebsite',
-        next: null,
-        parent: 'officialWebsiteClick',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-    },
-    comments: {},
-    currentCostume: 0,
-    costumes: [websiteFallback.costume, websiteRuntime.costume],
-    sounds: [],
-    volume: 100,
-    layerOrder: 1,
-    visible: true,
-    x: 0,
-    y: -16,
-    size: 100,
-    direction: 90,
-    draggable: false,
-    rotationStyle: 'all around',
-  };
-}
-
-function closeTitleTarget(closeTitle) {
-  return {
-    isStage: false,
-    name: 'closeTitleButton',
-    variables: {},
-    lists: {},
-    broadcasts: {},
-    blocks: {
-      closeTitleFlag: {
-        opcode: 'event_whenflagclicked',
-        next: 'closeTitleFlagShow',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 40,
-      },
-      closeTitleFlagShow: {
-        opcode: 'looks_show',
-        next: null,
-        parent: 'closeTitleFlag',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-      closeTitleClick: {
-        opcode: 'event_whenthisspriteclicked',
-        next: 'closeTitleBroadcast',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 160,
-      },
-      closeTitleBroadcast: {
-        opcode: 'event_broadcast',
-        next: null,
-        parent: 'closeTitleClick',
-        inputs: {
-          BROADCAST_INPUT: [1, [11, closeTitleBroadcastName, closeTitleBroadcastId]],
-        },
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-    },
-    comments: {},
-    currentCostume: 0,
-    costumes: [closeTitle.costume],
-    sounds: [],
-    volume: 100,
-    layerOrder: 2,
-    visible: true,
-    x: 220,
-    y: 160,
-    size: 100,
-    direction: 90,
-    draggable: false,
-    rotationStyle: 'all around',
-  };
-}
-
 async function createProject(assets) {
-  const [title, titleRuntime, menu, menuRuntime, websiteFallback, websiteRuntime, closeTitle] =
-    assets;
+  const [title, titleRuntime, menu, menuRuntime] = assets;
   const project = {
-    targets: [
-      stageTarget(title, titleRuntime, menu, menuRuntime),
-      websiteTarget(websiteFallback, websiteRuntime),
-      closeTitleTarget(closeTitle),
-    ],
+    targets: [stageTarget(title, titleRuntime, menu, menuRuntime)],
     monitors: poseFeedbackMonitors(),
     extensions: [extensionId],
     extensionURLs: {
@@ -516,14 +336,33 @@ async function createProject(assets) {
 }
 
 async function createRuntimeExtensionSource() {
-  const [tensorflowBrowserRuntime, tmPoseBrowserRuntime] = await Promise.all([
+  const [
+    tensorflowBrowserRuntime,
+    tmPoseBrowserRuntime,
+    officialWebsiteFavicon,
+    ...applicationMenuIconFiles
+  ] = await Promise.all([
     readFile(tensorflowBrowserRuntimePath, 'utf8'),
     readFile(tmPoseBrowserRuntimePath, 'utf8'),
+    readFile(officialWebsiteFaviconPath),
+    ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
   ]);
+  const applicationMenuIcons = Object.fromEntries(
+    Object.keys(applicationMenuIconPaths).map((action, index) => [
+      action,
+      `data:image/svg+xml;base64,${applicationMenuIconFiles[index].toString('base64')}`,
+    ]),
+  );
   const result = await build({
     entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
     bundle: true,
     charset: 'utf8',
+    define: {
+      DSL4_APPLICATION_MENU_ICONS: JSON.stringify(applicationMenuIcons),
+      DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
+        `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
+      ),
+    },
     format: 'iife',
     banner: {
       js:

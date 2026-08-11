@@ -422,6 +422,39 @@ export function createDsl4BrowserTurboWarpStage(options) {
     return canvas;
   }
 
+  /** @param {'en' | 'ja'} locale */
+  function showApplicationMenu(locale) {
+    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
+    const runtime = vm.runtime;
+    const stage = runtime.getTargetForStage?.();
+    const costumeName = locale === 'ja' ? 'MenuRuntime' : 'Menu';
+    const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
+    const stageIndex = stageCostumes.findIndex(
+      /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
+    );
+    if (stageIndex >= 0) stage.setCostume?.(stageIndex);
+    canvas.style.cursor = 'pointer';
+  }
+
+  /** @param {'en' | 'ja'} locale */
+  function showApplicationTitle(locale) {
+    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
+    const runtime = vm.runtime;
+    const stage = runtime.getTargetForStage?.();
+    const costumeName = locale === 'ja' ? 'TitleRuntime' : 'Title';
+    const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
+    const stageIndex = stageCostumes.findIndex(
+      /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
+    );
+    if (stageIndex >= 0) stage.setCostume?.(stageIndex);
+    canvas.style.cursor = 'pointer';
+  }
+
+  function hideApplicationOverlay() {
+    if (status !== 'ready') throw new TypeError('TurboWarp browser stage is not ready');
+    canvas.style.cursor = 'auto';
+  }
+
   function dispose() {
     if (disposePromise) return disposePromise;
     if (disposed) return Promise.resolve(snapshot());
@@ -456,6 +489,9 @@ export function createDsl4BrowserTurboWarpStage(options) {
     dispose,
     getRuntime,
     getCanvas,
+    showApplicationMenu,
+    showApplicationTitle,
+    hideApplicationOverlay,
     getState: snapshot,
   });
 }

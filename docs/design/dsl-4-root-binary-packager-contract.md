@@ -62,6 +62,10 @@ CLIでは`build-dsl4 --enable-root-binary-entries`がONにします。
 - 同じ入力、flag、上限から2回生成したSB3はbyte-identicalである
 - root-entryだけを持つ既存成果物をruntime flagだけでBase64へ変換しない
 
+TurboWarpエディターへSB3を直接読み込むsurfaceはv3の対象外です。エディターのVMは`project.json`を読み込んだ後に
+元のZIP entry sourceをKamishibai拡張へ公開しないため、直接実行用SB3はflagをOFFにしてBase64 descriptorを生成します。
+v3成果物は本書の正式Packager adapterまたはbinary entry providerを注入する対応surfaceだけで実行します。
+
 ロールバックはflagをOFFにしてSB3／Packager成果物を再build・再配布します。DSL 3.1／3.2とScratch project assetの
 writerは変更しません。SB3は引き続きsb3-toolchainを正式な組立経路とし、ZIPの手作業更新を導入しません。
 

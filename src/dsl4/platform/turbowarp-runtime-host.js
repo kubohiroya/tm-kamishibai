@@ -31,6 +31,8 @@ const hostPortMethods = new Set([
   'touchInputToChangeScene',
 ]);
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
+const terminalRuntimeEvents = new Set(['runtime.finish', 'runtime.fail', 'runtime.stop']);
+const terminalRuntimeStatuses = new Set(['finished', 'failed', 'stopped']);
 const defaultCacheLeaseHeartbeatMs = 30_000;
 const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
 let fallbackSessionIdCounter = 0;
@@ -340,7 +342,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} speechAdvanceTypewriterEnabled
  * @param {boolean} bubbleAdvanceIndicatorEnabled
  * @param {boolean} turboWarpBubbleEnabled
- * @param {(port: Readonly<{showCover: () => Promise<boolean>}>) => void} [publishApplicationPort]
+ * @param {(port: Readonly<{prepareMenu: () => Promise<boolean>, showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
  * @param {(port: Readonly<{getState: () => Readonly<Record<string, number>>}>) => void} [publishRuntimeDiagnostics]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
@@ -915,15 +917,29 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         });
 
     const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
+    const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
+    async function resetStoryPresentation() {
+      actorPlatform?.finishTransparencyTransitions();
+      hideStoryActors();
+      await assetSession?.assetManagerComposition.stopAllSounds();
+    }
     publishApplicationPort(
       Object.freeze({
+        async prepareMenu() {
+          await resetStoryPresentation();
+          if (typeof cover?.bgm === 'string') {
+            await mediaPort?.bgm(
+              {sound: cover.bgm},
+              Object.freeze({signal: new AbortController().signal}),
+            );
+          }
+          return true;
+        },
         async showCover() {
           if (!cover) return false;
           const abortController = new AbortController();
           const coverContext = Object.freeze({signal: abortController.signal});
-          actorPlatform?.finishTransparencyTransitions();
-          hideStoryActors();
-          await assetSession?.assetManagerComposition.stopAllSounds();
+          await resetStoryPresentation();
           if (typeof cover.backdrop === 'string') {
             await mediaPort?.stage({backdrop: cover.backdrop}, coverContext);
           }
@@ -932,10 +948,37 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           }
           return true;
         },
+        ...(storyCameraLifecycle
+          ? {
+              stopStoryCamera() {
+                return storyCameraLifecycle.stop();
+              },
+            }
+          : {}),
       }),
     );
 
+    /** @param {unknown} error @param {string} phase */
+    function reportStoryCameraFailure(error, phase) {
+      try {
+        void Promise.resolve(
+          options.onBackgroundActionError?.(error, {
+            command: 'camera',
+            code: `K4-STORY-CAMERA-${phase}`,
+          }),
+        ).catch(() => {});
+      } catch {
+        // A background error observer cannot change camera cleanup ownership.
+      }
+    }
+
     publishRuntimeLifecycleObserver((event) => {
+      if (event.type === 'runtime.start') {
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'START'));
+        return;
+      }
       if (
         event.type === 'runtime.finish' ||
         event.type === 'runtime.fail' ||
@@ -943,13 +986,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ) {
         mediaPort?.stopAllLoops();
         cameraPreviewControls?.stop();
+        void storyCameraLifecycle?.stop().catch((error) => reportStoryCameraFailure(error, 'STOP'));
         return;
       }
-      if (
-        hasConfiguredPreviewControls &&
-        (event.type === 'navigation.reposition' || event.type === 'runtime.resume')
-      ) {
-        cameraPreviewControls?.start();
+      if (event.type === 'navigation.reposition' || event.type === 'runtime.resume') {
+        if (hasConfiguredPreviewControls) cameraPreviewControls?.start();
+        void storyCameraLifecycle
+          ?.start()
+          .catch((error) => reportStoryCameraFailure(error, 'RESUME'));
       }
     });
 
@@ -1142,6 +1186,8 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   let stopForSessionBackingFatal = null;
   /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
   let runtimeLifecycleObserver = null;
+  /** @type {Set<(event: Readonly<Record<string, unknown>>) => void>} */
+  const runtimeEventListeners = new Set();
   /** @type {Readonly<Record<string, Function>> | null} */
   let applicationPort = null;
   /** @type {Readonly<{getState: () => Readonly<Record<string, number>>}> | null} */
@@ -1213,6 +1259,13 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       } catch {
         // Internal UI observers cannot change runtime execution or suppress consumer events.
       }
+      for (const listener of runtimeEventListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Terminal result listeners cannot change runtime execution or consumer events.
+        }
+      }
       options.onEvent?.(event);
     },
     onInputError: options.onInputError,
@@ -1255,6 +1308,38 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
+
+  /** @param {{sceneId?: string}} [startOptions] */
+  function startSessionUntilTerminal(startOptions) {
+    let observedStart = false;
+    /** @type {(event: Readonly<Record<string, unknown>>) => void} */
+    let listener = () => {};
+    const terminalEvent = new Promise((resolve) => {
+      listener = (event) => {
+        if (event.type === 'runtime.start') {
+          observedStart = true;
+          return;
+        }
+        if (!observedStart || !terminalRuntimeEvents.has(String(event.type))) return;
+        resolve(session.getState().runtime);
+      };
+      runtimeEventListeners.add(listener);
+    });
+    let initialRun;
+    try {
+      initialRun = Promise.resolve(session.start(startOptions));
+    } catch (error) {
+      runtimeEventListeners.delete(listener);
+      throw error;
+    }
+    return Promise.race([
+      terminalEvent,
+      initialRun.then((result) =>
+        terminalRuntimeStatuses.has(String(result.status)) ? result : terminalEvent,
+      ),
+    ]).finally(() => runtimeEventListeners.delete(listener));
+  }
+
   stopForSessionBackingFatal = () => {
     session.stop('session-binary-backing-fatal');
   };
@@ -1339,9 +1424,18 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           await activateCacheLease();
           if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
           ensureActive();
-          return await session.start(startOptions);
+          const result = await startSessionUntilTerminal(startOptions);
+          // The runtime lifecycle observer already starts terminal camera cleanup. Camera
+          // startup may still be pending (for example, while browser permission settles), so
+          // awaiting that cleanup here would prevent the terminal result and menu from publishing.
+          return result;
         } finally {
-          if (cacheExecutionId === activeCacheExecutionId) await deactivateCacheLease();
+          if (cacheExecutionId === activeCacheExecutionId) {
+            // Releasing an IndexedDB cache lease is maintenance work. A stalled browser
+            // transaction must not keep the terminal story result — and therefore the
+            // application menu — from being published.
+            void deactivateCacheLease();
+          }
         }
       })();
     },
@@ -1398,6 +1492,10 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     async showCover() {
       ensureActive();
       return applicationPort?.showCover?.() ?? false;
+    },
+    async prepareMenu() {
+      ensureActive();
+      return applicationPort?.prepareMenu?.() ?? false;
     },
     verifiedRemoteCache:
       cachePort === null

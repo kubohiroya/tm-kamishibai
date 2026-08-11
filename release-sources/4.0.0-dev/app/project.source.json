@@ -123,38 +123,38 @@
       "currentCostume": 0,
       "costumes": [
         {
-          "assetId": "e37ddc2ce796bdd7f4409cc75d606162",
+          "assetId": "812248d06815a5467b8c6966cb2e18bf",
           "name": "Title",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "e37ddc2ce796bdd7f4409cc75d606162.svg",
+          "md5ext": "812248d06815a5467b8c6966cb2e18bf.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "013b87ea76970af6fe5d3b4186e2cbfe",
+          "assetId": "3714ae8d8ff44f82a232cd489c412369",
           "name": "TitleRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "013b87ea76970af6fe5d3b4186e2cbfe.svg",
+          "md5ext": "3714ae8d8ff44f82a232cd489c412369.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "99e35e453bf725181412c7c63c528dc0",
+          "assetId": "8abd76def4a84e4516163f956cdcfc83",
           "name": "Menu",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "99e35e453bf725181412c7c63c528dc0.svg",
+          "md5ext": "8abd76def4a84e4516163f956cdcfc83.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "6183360146c4bcb3e7885ad02aaa2586",
+          "assetId": "25e75263647cc980ff37773a95d9dad1",
           "name": "MenuRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "6183360146c4bcb3e7885ad02aaa2586.svg",
+          "md5ext": "25e75263647cc980ff37773a95d9dad1.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         }
@@ -166,168 +166,6 @@
       "videoTransparency": 50,
       "videoState": "on",
       "textToSpeechLanguage": null
-    },
-    {
-      "isStage": false,
-      "name": "officialWebsiteButton",
-      "variables": {},
-      "lists": {},
-      "broadcasts": {},
-      "blocks": {
-        "officialWebsiteFlag": {
-          "opcode": "event_whenflagclicked",
-          "next": "officialWebsiteFlagShow",
-          "parent": null,
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": true,
-          "x": 40,
-          "y": 40
-        },
-        "officialWebsiteFlagShow": {
-          "opcode": "looks_show",
-          "next": null,
-          "parent": "officialWebsiteFlag",
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "officialWebsiteClick": {
-          "opcode": "event_whenthisspriteclicked",
-          "next": "officialWebsiteOpen",
-          "parent": null,
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": true,
-          "x": 40,
-          "y": 160
-        },
-        "officialWebsiteOpen": {
-          "opcode": "kubohiroyakamishibai4_openOfficialWebsite",
-          "next": null,
-          "parent": "officialWebsiteClick",
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        }
-      },
-      "comments": {},
-      "currentCostume": 0,
-      "costumes": [
-        {
-          "assetId": "d6f7f3387ffb150b0f5bf4f7e3609679",
-          "name": "official-website-button",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "md5ext": "d6f7f3387ffb150b0f5bf4f7e3609679.svg",
-          "rotationCenterX": 80,
-          "rotationCenterY": 32
-        },
-        {
-          "assetId": "ad35a02f4b14fc078f256455076fa00b",
-          "name": "official-website-button-runtime",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "md5ext": "ad35a02f4b14fc078f256455076fa00b.svg",
-          "rotationCenterX": 80,
-          "rotationCenterY": 32
-        }
-      ],
-      "sounds": [],
-      "volume": 100,
-      "layerOrder": 1,
-      "visible": true,
-      "x": 0,
-      "y": -16,
-      "size": 100,
-      "direction": 90,
-      "draggable": false,
-      "rotationStyle": "all around"
-    },
-    {
-      "isStage": false,
-      "name": "closeTitleButton",
-      "variables": {},
-      "lists": {},
-      "broadcasts": {},
-      "blocks": {
-        "closeTitleFlag": {
-          "opcode": "event_whenflagclicked",
-          "next": "closeTitleFlagShow",
-          "parent": null,
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": true,
-          "x": 40,
-          "y": 40
-        },
-        "closeTitleFlagShow": {
-          "opcode": "looks_show",
-          "next": null,
-          "parent": "closeTitleFlag",
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        },
-        "closeTitleClick": {
-          "opcode": "event_whenthisspriteclicked",
-          "next": "closeTitleBroadcast",
-          "parent": null,
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": true,
-          "x": 40,
-          "y": 160
-        },
-        "closeTitleBroadcast": {
-          "opcode": "event_broadcast",
-          "next": null,
-          "parent": "closeTitleClick",
-          "inputs": {
-            "BROADCAST_INPUT": [
-              1,
-              [
-                11,
-                "closeTitle",
-                "closeTitleMessage"
-              ]
-            ]
-          },
-          "fields": {},
-          "shadow": false,
-          "topLevel": false
-        }
-      },
-      "comments": {},
-      "currentCostume": 0,
-      "costumes": [
-        {
-          "assetId": "ae88f8d94b468addbf3ea689cf162511",
-          "name": "title-close-button",
-          "bitmapResolution": 1,
-          "dataFormat": "svg",
-          "md5ext": "ae88f8d94b468addbf3ea689cf162511.svg",
-          "rotationCenterX": 16,
-          "rotationCenterY": 16
-        }
-      ],
-      "sounds": [],
-      "volume": 100,
-      "layerOrder": 2,
-      "visible": true,
-      "x": 220,
-      "y": 160,
-      "size": 100,
-      "direction": 90,
-      "draggable": false,
-      "rotationStyle": "all around"
     }
   ],
   "monitors": [

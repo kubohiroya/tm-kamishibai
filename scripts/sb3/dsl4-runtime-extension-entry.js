@@ -3,9 +3,15 @@ import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from '../../src/dsl4/feature-flags.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
+import {
+  buildDsl4BrowserSelectedStoryProject,
+  collectDsl4BrowserDroppedFiles,
+} from '../../src/dsl4/platform/browser-story-file-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../src/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
+import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
+import {createDsl4RuntimeTitleControls} from '../../src/dsl4/platform/runtime-title-controls.js';
 import {createDsl4RuntimeWarningIndicator} from '../../src/dsl4/platform/runtime-warning-indicator.js';
 import {
   createDsl4SessionBackingFatalDiagnostic,
@@ -16,14 +22,18 @@ import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowa
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
-/* global Scratch, tmPose */
+/* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
 const extensionVersion = '4.0.0-dev';
+const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
+const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
+  maxSelectedEntries: 1024,
+  maxSelectedDirectoryDepth: 32,
 });
 const runtimeErrorTitles = Object.freeze({
   en: 'Kamishibai runtime error',
@@ -34,6 +44,7 @@ const sourceDiagnosticPrefixes = Object.freeze([
   'K4-ASSET-001',
   'K4-ASSET-IMAGE-MIME',
   'K4-ASSET-LIMIT',
+  'K4-ASSET-MISSING',
   'K4-ASSET-REMOTE-URL',
   'K4-BRANCH',
   'K4-COMMAND',
@@ -78,10 +89,13 @@ function browserLocale() {
 }
 
 /** @param {Record<string, any>} project */
+function packagedRuntimeComponent(project) {
+  return project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4;
+}
+
+/** @param {Record<string, any>} project */
 function packagedApplicationMode(project) {
-  const mode =
-    project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4
-      ?.application?.mode;
+  const mode = packagedRuntimeComponent(project)?.application?.mode;
   return mode === 'menu' ? 'menu' : 'story';
 }
 
@@ -115,11 +129,18 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'ready';
     this.lastError = '';
     this.titleLocale = 'en';
+    this.selectedProject = null;
+    this.fileInput = null;
+    this.applicationMenu = null;
+    this.titleControls = null;
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
+    this.installDropTarget();
+    this.ensureTitleControls()?.show('en');
+    this.setStageCursor('pointer');
   }
 
   getInfo() {
@@ -253,9 +274,23 @@ class KamishibaiDsl4RuntimeExtension {
     const pendingStart = this.pendingStart;
     if (!pendingStart || pendingStart.shell !== this.shell) {
       if (this.status === 'title') this.hideScratchTitle();
+      if (this.status === 'ready') {
+        return this.enqueue(async () => {
+          await this.restart();
+          return this.pendingStart?.start();
+        }, 'initial-title-close');
+      }
       return undefined;
     }
     return pendingStart.start();
+  }
+
+  requestCloseTitle() {
+    const threads = this.Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+      BROADCAST_OPTION: 'closeTitle',
+    });
+    if (!Array.isArray(threads) || threads.length === 0) return this.closeTitle();
+    return undefined;
   }
 
   openOfficialWebsite() {
@@ -272,6 +307,198 @@ class KamishibaiDsl4RuntimeExtension {
   toggleTitleLanguage() {
     this.titleLocale = this.titleLocale === 'ja' ? 'en' : 'ja';
     this.showScratchTitle(this.titleLocale);
+  }
+
+  ensureApplicationMenu() {
+    if (this.applicationMenu) return this.applicationMenu;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    try {
+      this.applicationMenu = createDsl4RuntimeApplicationMenu({
+        document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: appShellLocales.en.ui,
+          ja: appShellLocales.ja.ui,
+        },
+        icons: applicationMenuIcons,
+        onOpen: () => this.openStoryFile(),
+        onReload: () => this.reloadStory(),
+        onAbout: () => this.showAbout(),
+        onLocaleChange: (locale) => {
+          this.titleLocale = locale;
+          this.showScratchMenu(locale);
+        },
+        onError: (error) => this.reportFailure(error, 'application-menu'),
+        reloadEnabled: this.selectedProject !== null || this.shell !== null,
+      });
+    } catch (error) {
+      console.error('[Kamishibai DSL 4.0] application-menu failed.', loggedError(error));
+      return null;
+    }
+    return this.applicationMenu;
+  }
+
+  ensureTitleControls() {
+    if (this.titleControls) return this.titleControls;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    try {
+      this.titleControls = createDsl4RuntimeTitleControls({
+        document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: {
+            website: appShellLocales.en.about.officialWebsite.name,
+            close: appShellLocales.en.ui.close,
+          },
+          ja: {
+            website: appShellLocales.ja.about.officialWebsite.name,
+            close: appShellLocales.ja.ui.close,
+          },
+        },
+        websiteIconUrl: officialWebsiteIcon,
+        onWebsite: () => this.openOfficialWebsite(),
+        onClose: () => this.requestCloseTitle(),
+        onError: (error) => this.reportFailure(error, 'title-controls'),
+      });
+    } catch (error) {
+      console.error('[Kamishibai DSL 4.0] title-controls failed.', loggedError(error));
+      return null;
+    }
+    return this.titleControls;
+  }
+
+  installDropTarget() {
+    const mount = resolveRuntimeMount(this.Scratch);
+    if (
+      !mount ||
+      typeof mount.addEventListener !== 'function' ||
+      typeof mount.removeEventListener !== 'function'
+    ) {
+      return;
+    }
+    const onDragOver = (event) => {
+      if (this.status !== 'menu') return;
+      event.preventDefault?.();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (event) => {
+      if (this.status !== 'menu') return;
+      event.preventDefault?.();
+      const collecting = collectDsl4BrowserDroppedFiles(event.dataTransfer, {
+        maxEntries: limits.maxSelectedEntries,
+        maxDepth: limits.maxSelectedDirectoryDepth,
+      });
+      this.enqueue(async () => this.loadSelectedEntries(await collecting), 'file-drop');
+    };
+    mount.addEventListener('dragover', onDragOver);
+    mount.addEventListener('drop', onDrop);
+  }
+
+  openStoryFile() {
+    if (this.status !== 'menu') return undefined;
+    const document = globalThis.document;
+    if (!document || typeof document.createElement !== 'function') {
+      throw new Error('This browser cannot open a DSL 4.0 story file.');
+    }
+    const input = document.createElement('input');
+    if (
+      !input ||
+      typeof input.addEventListener !== 'function' ||
+      typeof input.click !== 'function'
+    ) {
+      throw new Error('This browser cannot open a DSL 4.0 story file.');
+    }
+    input.type = 'file';
+    input.accept = '.yml,.yaml';
+    input.multiple = false;
+    if (input.style) input.style.display = 'none';
+    input.addEventListener(
+      'change',
+      () => {
+        const selectedFiles = input.files ?? [];
+        input.remove?.();
+        this.fileInput = null;
+        if (selectedFiles.length === 0) return;
+        this.enqueue(() => {
+          if (selectedFiles.length > limits.maxSelectedEntries) {
+            throw new TypeError(
+              `Selected project exceeds the ${limits.maxSelectedEntries} entry limit`,
+            );
+          }
+          const entries = Array.from(selectedFiles).map((file) => ({
+            path: file.webkitRelativePath || file.name,
+            file,
+          }));
+          if (
+            entries.some(({path}) => path.split('/').length - 1 > limits.maxSelectedDirectoryDepth)
+          ) {
+            throw new TypeError(
+              `Selected project exceeds the ${limits.maxSelectedDirectoryDepth} directory depth limit`,
+            );
+          }
+          return this.loadSelectedEntries(entries);
+        }, 'file-open');
+      },
+      {once: true},
+    );
+    this.fileInput?.remove?.();
+    this.fileInput = input;
+    document.body?.appendChild?.(input);
+    input.click();
+    return undefined;
+  }
+
+  async loadSelectedEntries(entries) {
+    this.status = 'starting';
+    this.hideScratchMenu();
+    this.setStageCursor('wait');
+    const baseProject = JSON.parse(this.Scratch.vm.toJSON());
+    const selected = await buildDsl4BrowserSelectedStoryProject({
+      project: baseProject,
+      entries,
+      sourceFrontend: this.frontend,
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFileBytes: limits.maxAssetBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetBytes: limits.maxAssetBytes,
+      subtleCrypto: globalThis.crypto?.subtle,
+    });
+    this.selectedProject = selected.project;
+    await this.restart({projectOverride: selected.project, showTitle: false, forceStory: true});
+  }
+
+  reloadStory() {
+    if (this.status !== 'menu') return undefined;
+    const packagedProject = JSON.parse(this.Scratch.vm.toJSON());
+    const project =
+      this.selectedProject ??
+      (packagedApplicationMode(packagedProject) === 'story' ? packagedProject : null);
+    if (!project) return undefined;
+    return this.enqueue(
+      () => this.restart({projectOverride: project, showTitle: false, forceStory: true}),
+      'story-reload',
+    );
+  }
+
+  showAbout() {
+    if (this.status !== 'menu') return undefined;
+    const shell = this.shell;
+    this.hideScratchMenu();
+    this.pendingStart = {
+      shell,
+      start: async () => {
+        if (this.shell !== shell) return;
+        this.pendingStart = null;
+        this.hideScratchTitle();
+        this.showScratchMenu(this.titleLocale);
+        this.status = 'menu';
+      },
+    };
+    this.status = 'title';
+    this.showScratchTitle(this.titleLocale);
+    return undefined;
   }
 
   setTargetCostume(target, costumeName) {
@@ -292,32 +519,44 @@ class KamishibaiDsl4RuntimeExtension {
     if (mount?.style) mount.style.cursor = cursor;
   }
 
+  hideAllDisplayTargets() {
+    const targets = this.Scratch?.vm?.runtime?.targets;
+    if (!Array.isArray(targets)) return;
+    for (const target of targets) {
+      if (target?.isStage === true) continue;
+      if (typeof target?.setVisible === 'function') target.setVisible(false);
+    }
+  }
+
   showScratchTitle(locale) {
     const runtime = this.Scratch.vm.runtime;
     const stage = runtime.getTargetForStage();
-    const website = runtime.getSpriteTargetByName('officialWebsiteButton');
-    const close = runtime.getSpriteTargetByName('closeTitleButton');
+    this.shell?.hideTitle();
+    this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
-    this.setTargetCostume(
-      website,
-      locale === 'ja' ? 'official-website-button-runtime' : 'official-website-button',
-    );
-    website?.setVisible?.(true);
-    close?.setVisible?.(true);
+    this.ensureTitleControls()?.show(locale);
     this.setStageCursor('pointer');
   }
 
   hideScratchTitle() {
-    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-      this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
-    }
-    this.setStageCursor('');
+    this.titleControls?.hide();
+    this.setStageCursor('auto');
   }
 
   showScratchMenu(locale) {
-    const stage = this.Scratch.vm.runtime.getTargetForStage();
+    const runtime = this.Scratch.vm.runtime;
+    const stage = runtime.getTargetForStage();
+    this.hideScratchTitle();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
+    const menu = this.ensureApplicationMenu();
+    menu?.setReloadEnabled(this.selectedProject !== null || this.shell !== null);
+    menu?.show(locale);
     this.setStageCursor('pointer');
+  }
+
+  hideScratchMenu() {
+    this.applicationMenu?.hide();
+    this.setStageCursor('auto');
   }
 
   enqueue(operation, phase = 'operation') {
@@ -362,6 +601,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'error';
     this.lastError = message;
     this.hideScratchTitle();
+    this.hideScratchMenu();
     try {
       this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
         document: globalThis.document,
@@ -380,6 +620,7 @@ class KamishibaiDsl4RuntimeExtension {
   async stop(reason) {
     this.pendingStart = null;
     this.hideScratchTitle();
+    this.hideScratchMenu();
     const errorIndicator = this.errorIndicator;
     this.errorIndicator = null;
     errorIndicator?.dispose();
@@ -393,14 +634,38 @@ class KamishibaiDsl4RuntimeExtension {
     if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
 
-  async restart() {
+  async restart({projectOverride = null, showTitle = true, forceStory = false} = {}) {
     await this.stop('project-restart');
+    this.hideAllDisplayTargets();
     this.status = 'starting';
     this.lastError = '';
 
     const Scratch = this.Scratch;
-    const project = JSON.parse(Scratch.vm.toJSON());
-    const applicationMode = packagedApplicationMode(project);
+    const packagedProject = JSON.parse(Scratch.vm.toJSON());
+    const project = projectOverride ?? this.selectedProject ?? packagedProject;
+    const applicationMode =
+      forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
+    this.titleLocale = browserLocale();
+    if (applicationMode === 'menu') {
+      const showMenu = async () => {
+        if (this.shell !== null) return;
+        this.pendingStart = null;
+        this.hideScratchTitle();
+        this.showScratchMenu(this.titleLocale);
+        Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+          BROADCAST_OPTION: 'showMenu',
+        });
+        this.status = 'menu';
+      };
+      if (showTitle) {
+        this.pendingStart = {shell: null, start: showMenu};
+        this.status = 'title';
+        this.showScratchTitle(this.titleLocale);
+      } else {
+        await showMenu();
+      }
+      return;
+    }
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     let binaryRuntime = await createDsl4PackagedBinaryRuntimeBridge({
       project,
@@ -431,14 +696,15 @@ class KamishibaiDsl4RuntimeExtension {
           return;
         }
         if (result.status === 'finished') {
-          const covered = await shell.runtimeHost.showCover();
+          await shell.runtimeHost.prepareMenu();
           Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showCover',
           });
+          this.showScratchMenu(this.titleLocale);
           Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showMenu',
           });
-          this.status = covered ? 'cover' : 'menu';
+          this.status = 'menu';
           return;
         }
         this.status = result.status;
@@ -507,6 +773,7 @@ class KamishibaiDsl4RuntimeExtension {
       }
       throw error;
     }
+    shell.runtimeHost.attach(globalThis.document);
 
     this.shell = shell;
     this.binaryRuntimeSurface = binaryRuntime?.surface ?? null;
@@ -523,10 +790,13 @@ class KamishibaiDsl4RuntimeExtension {
             });
             this.status = 'menu';
           };
-    this.pendingStart = {shell, start: startAfterTitle};
-    this.status = 'title';
-    this.titleLocale = browserLocale();
-    this.showScratchTitle(this.titleLocale);
+    if (showTitle) {
+      this.pendingStart = {shell, start: startAfterTitle};
+      this.status = 'title';
+      this.showScratchTitle(this.titleLocale);
+    } else {
+      await startAfterTitle();
+    }
   }
 }
 

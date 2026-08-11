@@ -16,6 +16,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
 } from '../src/dsl4/index.js';
+import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -78,48 +79,45 @@ async function packagedProject() {
 }
 
 function domFixture() {
-  const listeners = new Map();
-  const canvas = {
-    dataset: {},
-    style: {},
-    addEventListener(type, listener) {
-      const values = listeners.get(type) ?? new Set();
-      values.add(listener);
-      listeners.set(type, values);
-    },
-    removeEventListener(type, listener) {
-      listeners.get(type)?.delete(listener);
-    },
-    getBoundingClientRect() {
-      return {left: 0, top: 0, width: 480, height: 360};
-    },
-    setAttribute() {},
-    focus() {},
+  const document = createFakeDocument();
+  const mount = document.createElement('div');
+  mount.removeChild = function removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index < 0) throw new TypeError('child is not mounted');
+    this.children.splice(index, 1);
+    child.parentNode = null;
   };
-  const children = [];
   return {
-    canvas,
-    document: {createElement: () => canvas},
-    mount: {
-      appendChild(child) {
-        children.push(child);
-      },
-      removeChild(child) {
-        assert.equal(children.pop(), child);
-      },
+    document,
+    mount,
+    get children() {
+      return mount.children;
     },
-    children,
     listenerCount(type) {
-      return listeners.get(type)?.size ?? 0;
+      const canvas = mount.children.find((child) => child.dataset.dsl4TurboWarpStage === 'true');
+      return canvas?.listeners.get(type)?.length ?? 0;
     },
   };
 }
 
 /** @param {unknown[]} log @param {Promise<void>} [loadGate] */
 function platformFixture(log, loadGate = Promise.resolve()) {
+  const stage = {
+    isStage: true,
+    currentCostume: 0,
+    sprite: {
+      costumes: ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'].map((name) => ({name})),
+    },
+    setCostume(index) {
+      this.currentCostume = index;
+    },
+  };
   const runtime = {
-    targets: [{isStage: true}],
+    targets: [stage],
     securityManager: {},
+    getTargetForStage() {
+      return stage;
+    },
   };
   const vm = {
     runtime,
@@ -257,14 +255,17 @@ test('starts one validated stage and bridge, then disposes bridge ownership befo
   assert.equal(started.stage.hasStage, true);
   assert.equal(started.bridge.status, 'waiting');
   assert.equal(parseCount, 1);
-  assert.equal(options.dom.children.length, 1);
+  assert.equal(options.dom.children.length, 3);
+  assert.equal(findByAttribute(options.dom.mount, 'data-dsl4-application-menu', 'true').length, 1);
+  assert.equal(findByAttribute(options.dom.mount, 'data-dsl4-title-controls', 'true').length, 1);
   assert.equal(log.filter((entry) => entry === 'vm.loadProject').length, 1);
   assert.equal(
     log.filter((entry) => entry === 'vm.addBuiltinExtension:kubohiroyakamishibai4').length,
     1,
   );
   assert.equal(globalObject.Scratch.legacyHost, true);
-  assert.deepEqual(globalObject.Scratch.vm.runtime.targets, [{isStage: true}]);
+  assert.equal(globalObject.Scratch.vm.runtime.targets.length, 1);
+  assert.equal(globalObject.Scratch.vm.runtime.targets[0].isStage, true);
   assert.equal(globalObject.Scratch.Cast.toString('value'), 'cast:value');
   assert.equal(globalObject.Scratch.translate('value'), 'translate:value');
 

@@ -4,6 +4,7 @@ import {createHash, webcrypto} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
+import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -11,6 +12,10 @@ import test from 'node:test';
 
 import {strToU8, zipSync} from 'fflate';
 
+import {
+  createDownloadableReleaseSb3,
+  downloadableReleases,
+} from '../../scripts/sb3/downloadable-releases.mjs';
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
@@ -27,6 +32,10 @@ import {
 } from '../../src/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const require = createRequire(import.meta.url);
+const TurboWarpPackager = require('@turbowarp/packager');
+const dsl4Release = downloadableReleases.find(({series}) => series === '4.0');
+assert(dsl4Release, 'The DSL 4.0 downloadable release is unavailable.');
 
 function createPoseFeedbackVariables() {
   return {
@@ -399,6 +408,265 @@ async function stopChrome(child) {
   child.kill('SIGKILL');
   await waitForExit(child, 5_000);
 }
+
+test(
+  'opens the non-embedded release title and disabled Reload menu without loading its story bundle',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-package-'));
+    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const loadedProject = await TurboWarpPackager.loadProject(release.archive);
+    const packager = new TurboWarpPackager.Packager();
+    packager.project = loadedProject;
+    packager.options.autoplay = true;
+    packager.options.app.title = 'DSL 4.0 non-embedded release E2E';
+    const packaged = await packager.package();
+    assert.equal(packaged.type, 'text/html');
+    await writeFile(path.join(fixtureDirectory, 'index.html'), packaged.data);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      assert.equal(
+        await client.evaluate(`(() => {
+          const vm = globalThis.Scratch.vm;
+          const originalToJSON = vm.toJSON.bind(vm);
+          vm.toJSON = () => {
+            const project = JSON.parse(originalToJSON());
+            project.extensionStorage.kubohiroyakamishibai4.components
+              .kubohiroyakamishibairuntime4.assets = {formatVersion: 0};
+            return JSON.stringify(project);
+          };
+          vm.greenFlag();
+          return true;
+        })()`),
+        true,
+      );
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'localized release title',
+      );
+      assert.equal(
+        await client.evaluate(
+          `document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex'`,
+        ),
+        false,
+      );
+      const initialTitleScale = await client.evaluate(`(() => {
+        const title = document.querySelector('[data-dsl4-title-controls=true]');
+        const website = document.querySelector('[data-dsl4-title-action=website]');
+        const icon = website?.querySelector('img');
+        const label = website?.querySelector('span');
+        return {
+          titleWidth: title?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1080,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width > ${initialTitleScale.titleWidth * 1.25}`,
+        'scaled release title stage',
+      );
+      const expandedTitleScale = await client.evaluate(`(() => {
+        const title = document.querySelector('[data-dsl4-title-controls=true]');
+        const website = document.querySelector('[data-dsl4-title-action=website]');
+        const icon = website?.querySelector('img');
+        const label = website?.querySelector('span');
+        return {
+          titleWidth: title?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      assert.ok(
+        expandedTitleScale.iconWidth > initialTitleScale.iconWidth * 1.25,
+        `title website icon must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
+      );
+      assert.ok(
+        expandedTitleScale.fontSize > initialTitleScale.fontSize * 1.25,
+        `title website label must scale with the Stage: ${JSON.stringify({initialTitleScale, expandedTitleScale})}`,
+      );
+      assert.ok(
+        Math.abs(
+          expandedTitleScale.iconWidth / expandedTitleScale.titleWidth -
+            initialTitleScale.iconWidth / initialTitleScale.titleWidth,
+        ) < 0.002,
+      );
+      assert.ok(
+        Math.abs(
+          expandedTitleScale.fontSize / expandedTitleScale.titleWidth -
+            initialTitleScale.fontSize / initialTitleScale.titleWidth,
+        ) < 0.002,
+      );
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 800,
+        height: 600,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]').getBoundingClientRect().width < ${expandedTitleScale.titleWidth / 1.25}`,
+        'restored release title stage',
+      );
+      await client.evaluate(
+        `document.querySelector('[data-dsl4-title-action=close]').click(); true`,
+      );
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'non-embedded application menu',
+      );
+      const initialMenuScale = await client.evaluate(`(() => {
+        const menu = document.querySelector('[data-dsl4-application-menu=true]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
+        const icon = open?.querySelector('img');
+        const label = open?.querySelector('span');
+        return {
+          menuWidth: menu?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1080,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]').getBoundingClientRect().width > ${initialMenuScale.menuWidth * 1.25}`,
+        'scaled application menu stage',
+      );
+      const expandedMenuScale = await client.evaluate(`(() => {
+        const menu = document.querySelector('[data-dsl4-application-menu=true]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
+        const icon = open?.querySelector('img');
+        const label = open?.querySelector('span');
+        return {
+          menuWidth: menu?.getBoundingClientRect().width ?? 0,
+          iconWidth: icon?.getBoundingClientRect().width ?? 0,
+          fontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0
+        };
+      })()`);
+      assert.ok(
+        expandedMenuScale.iconWidth > initialMenuScale.iconWidth * 1.25,
+        `menu icon must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
+      );
+      assert.ok(
+        expandedMenuScale.fontSize > initialMenuScale.fontSize * 1.25,
+        `menu label must scale with the Stage: ${JSON.stringify({initialMenuScale, expandedMenuScale})}`,
+      );
+      assert.ok(
+        Math.abs(
+          expandedMenuScale.iconWidth / expandedMenuScale.menuWidth -
+            initialMenuScale.iconWidth / initialMenuScale.menuWidth,
+        ) < 0.002,
+      );
+      assert.ok(
+        Math.abs(
+          expandedMenuScale.fontSize / expandedMenuScale.menuWidth -
+            initialMenuScale.fontSize / initialMenuScale.menuWidth,
+        ) < 0.002,
+      );
+      await click(client, '[data-dsl4-menu-action=about]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'none' && document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'application information title screen',
+      );
+      const aboutState = await client.evaluate(`(() => {
+        const runtime = globalThis.Scratch.vm.runtime;
+        const stage = runtime.getTargetForStage();
+        return {
+          stageCostume: stage.getCostumes()[stage.currentCostume].name,
+          simplifiedDialogCount: document.querySelectorAll('[data-dsl4-title-shell=true]').length
+        };
+      })()`);
+      assert.match(aboutState.stageCostume, /^Title(?:Runtime)?$/u);
+      assert.equal(aboutState.simplifiedDialogCount, 0);
+      await click(client, '[data-dsl4-title-action=close]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'return from application information title',
+      );
+      const menu = await client.evaluate(`(() => {
+        const reload = document.querySelector('[data-dsl4-menu-action=reload]');
+        const open = document.querySelector('[data-dsl4-menu-action=open]');
+        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
+        const runtime = globalThis.Scratch.vm.runtime;
+        const stage = runtime.getTargetForStage();
+        open.click();
+        const input = document.querySelector('input[type=file]');
+        return {
+          reloadDisabled: reload?.disabled,
+          reloadAriaDisabled: reload?.getAttribute('aria-disabled'),
+          reloadCursor: reload ? getComputedStyle(reload).cursor : null,
+          inputAccept: input?.accept,
+          inputMultiple: input?.multiple,
+          inputWebkitDirectory: input?.webkitdirectory,
+          iconFilters: icons.map((icon) => getComputedStyle(icon).filter),
+          stageCostume: stage.getCostumes()[stage.currentCostume].name,
+          errorVisible:
+            document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex',
+        };
+      })()`);
+      assert.equal(menu.reloadDisabled, true);
+      assert.equal(menu.reloadAriaDisabled, 'true');
+      assert.equal(menu.reloadCursor, 'not-allowed');
+      assert.equal(menu.inputAccept, '.yml,.yaml');
+      assert.equal(menu.inputMultiple, false);
+      assert.equal(menu.inputWebkitDirectory, false);
+      assert.equal(menu.iconFilters.length, 4);
+      assert.equal(
+        menu.iconFilters.every((filter) => filter !== 'none'),
+        true,
+      );
+      assert.match(menu.stageCostume, /^Menu(?:Runtime)?$/u);
+      assert.equal(menu.errorVisible, false);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
 
 function createLocalPreviewRuntimeProtocol() {
   const liveReload = createDsl4LiveReloadSession({
@@ -1174,58 +1442,14 @@ test(
     const sourceFilename = 'command.k4.yml';
     const sourcePath = path.join(projectDirectory, sourceFilename);
     const baseSb3Path = path.join(projectDirectory, 'base.sb3');
-    const backdropAssetId = '00000000000000000000000000000000';
-    const backdropFilename = `${backdropAssetId}.svg`;
     const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
     const source =
       "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening: []\n";
-    const baseProject = {
-      extensionStorage: {},
-      targets: [
-        {
-          isStage: true,
-          name: 'Stage',
-          variables: {},
-          lists: {},
-          broadcasts: {},
-          blocks: {},
-          comments: {},
-          currentCostume: 0,
-          costumes: [
-            {
-              name: 'backdrop1',
-              assetId: backdropAssetId,
-              dataFormat: 'svg',
-              md5ext: backdropFilename,
-              rotationCenterX: 240,
-              rotationCenterY: 180,
-            },
-          ],
-          sounds: [],
-          volume: 100,
-          layerOrder: 0,
-          tempo: 60,
-          videoTransparency: 50,
-          videoState: 'on',
-          textToSpeechLanguage: null,
-        },
-      ],
-      monitors: [],
-      extensions: [],
-      meta: {semver: '3.0.0'},
-    };
+    const baseRelease = await createDownloadableReleaseSb3(dsl4Release);
     await Promise.all([
       writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
       writeFile(sourcePath, source),
-      writeFile(
-        baseSb3Path,
-        zipSync({
-          'project.json': strToU8(`${JSON.stringify(baseProject)}\n`),
-          [backdropFilename]: strToU8(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
-          ),
-        }),
-      ),
+      writeFile(baseSb3Path, baseRelease.archive),
     ]);
     const schema = JSON.parse(
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
@@ -1249,7 +1473,7 @@ test(
         maxAssetFileBytes: 1024 * 1024,
         maxAssetFiles: 64,
         maxTotalAssetBytes: 64 * 1024 * 1024,
-        replaceExisting: false,
+        replaceExisting: true,
         port: 0,
       },
       {
@@ -1294,6 +1518,38 @@ test(
       );
       assert.equal(new URL(launchUrl).hostname, '127.0.0.1');
       assert.equal(stdout.includes(new URL(launchUrl).hash.slice(1)), false);
+      try {
+        await waitForEvaluation(
+          client,
+          `(() => {
+            const runtime = globalThis.Scratch?.vm?.runtime;
+            const stage = runtime?.getTargetForStage?.();
+            return /^Menu(?:Runtime)?$/.test(
+              stage?.getCostumes?.()[stage.currentCostume]?.name ?? '',
+            );
+          })()`,
+          'external-source story completion menu',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`(() => {
+          const runtime = globalThis.Scratch?.vm?.runtime;
+          const stage = runtime?.getTargetForStage?.();
+          return {
+            costume: stage?.getCostumes?.()[stage.currentCostume]?.name,
+            status: document.querySelector('#dsl4-preview-status')?.textContent,
+            targets: runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible})),
+          };
+        })()`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, stderr, exceptions: client.exceptions})}`,
+        );
+      }
+      assert.deepEqual(
+        await client.evaluate(
+          'globalThis.Scratch.vm.runtime.targets.map((target) => target.getName?.())',
+        ),
+        ['Stage'],
+      );
       assert.deepEqual(client.exceptions, []);
 
       await client.send('Page.navigate', {url: 'about:blank'});
@@ -1611,11 +1867,53 @@ scenes:
           ),
           'CANVAS',
         );
+        assert.deepEqual(
+          await client.evaluate(`(() => {
+            const preview = [...document.querySelectorAll('canvas')]
+              .find((canvas) => canvas.width === 320 && canvas.height === 240);
+            return preview ? {
+              display: preview.style.display,
+              left: preview.style.left,
+              right: preview.style.right,
+              top: preview.style.top,
+              bottom: preview.style.bottom,
+              width: preview.style.width,
+              height: preview.style.height,
+              objectFit: preview.style.objectFit,
+              borderRadius: preview.style.borderRadius,
+              opacity: preview.style.opacity
+            } : null;
+          })()`),
+          {
+            display: 'block',
+            left: '0px',
+            right: '',
+            top: '0px',
+            bottom: '',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: '0px',
+            opacity: '0.2',
+          },
+          'The active pose preview must cover the complete stage.',
+        );
+        const hiddenBeforeFirstSkip = await client.evaluate(
+          "globalThis.dsl4LocalPreviewCapabilityFixture.metrics.previewVisibilityChanges.filter((display) => display === 'none').length",
+        );
+        assert.equal(hiddenBeforeFirstSkip, 1, 'Story camera startup must keep preview hidden.');
         await pressKey(client, {key: ' ', code: 'Space', windowsVirtualKeyCode: 32});
         await waitForEvaluation(
           client,
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.filter(({type}) => type === 'pose.step.skip').length === 1",
           'browser-owned pose-step rehearsal skip',
+        );
+        assert.equal(
+          await client.evaluate(
+            "globalThis.dsl4LocalPreviewCapabilityFixture.metrics.previewVisibilityChanges.filter((display) => display === 'none').length",
+          ),
+          hiddenBeforeFirstSkip,
+          'The camera preview must remain visible between pose steps.',
         );
         await pressKey(client, {
           key: 'ArrowRight',
@@ -1647,10 +1945,100 @@ scenes:
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type}) => type === 'runtime.finish')",
           'browser-owned representative capability fixture completion',
         );
+        await waitForEvaluation(
+          client,
+          `(() => {
+            const menu = document.querySelector('[data-dsl4-application-menu="true"]');
+            const buttons = [...(menu?.querySelectorAll('[data-dsl4-menu-action]') ?? [])];
+            return document.querySelectorAll('[data-dsl4-application-menu="true"]').length === 1 &&
+              menu?.style.display === 'block' &&
+              buttons.length === 4 &&
+              buttons.every((button) => getComputedStyle(button).cursor === 'pointer') &&
+              buttons.every((button) => button.querySelector('img')?.src.startsWith('data:image/svg+xml;base64,'));
+          })()`,
+          'interactive browser-owned application menu',
+        );
+        const initialMenuLocale = await client.evaluate(`(() => {
+          const open = document.querySelector('[data-dsl4-menu-action="open"]')?.textContent;
+          return open === 'ファイルを開く' ? 'ja' : 'en';
+        })()`);
+        const openClick = await client.evaluate(`(() => {
+          document.querySelector('[data-dsl4-menu-action="open"]').click();
+          return globalThis.dsl4LocalPreviewCapabilityFixture.applicationOpenRequests;
+        })()`);
+        assert.equal(openClick, 1);
+        const languageClick = await client.evaluate(`(() => {
+          const button = document.querySelector('[data-dsl4-menu-action="language"]');
+          let observed = false;
+          button.addEventListener('click', () => { observed = true; }, {once: true});
+          button.click();
+          return {
+            disabled: button.disabled,
+            observed,
+            text: button.textContent
+          };
+        })()`);
+        const toggledLocale = initialMenuLocale === 'ja' ? 'en' : 'ja';
+        assert.deepEqual(languageClick, {
+          disabled: false,
+          observed: true,
+          text: toggledLocale === 'ja' ? '言語' : 'Language',
+        });
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
+              initialMenuLocale === 'ja' ? 'Open' : 'ファイルを開く',
+            )};
+          })()`,
+          'browser-owned toggled application-menu locale',
+        );
+        await client.evaluate(`document.querySelector('[data-dsl4-menu-action="about"]').click()`);
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'none' &&
+              document.querySelector('[data-dsl4-title-controls="true"]')?.style.display === 'block';
+          })()`,
+          'browser-owned application information title',
+        );
+        await client.evaluate(`document.querySelector('[data-dsl4-title-action="close"]').click()`);
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'block' &&
+            document.querySelector('[data-dsl4-title-controls="true"]')?.style.display === 'none'`,
+          'browser-owned return from application information',
+        );
+        await client.evaluate(
+          `document.querySelector('[data-dsl4-menu-action="language"]').click()`,
+        );
+        await waitForEvaluation(
+          client,
+          `(() => {
+            return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
+              initialMenuLocale === 'ja' ? 'ファイルを開く' : 'Open',
+            )};
+          })()`,
+          'browser-owned restored application-menu locale',
+        );
       } catch (error) {
         const page = await client.evaluate(`({
           body: document.body.textContent,
           fixture: globalThis.dsl4LocalPreviewCapabilityFixture,
+          applicationMenu: (() => {
+            const button = document.querySelector('[data-dsl4-menu-action="language"]');
+            const rect = button?.getBoundingClientRect();
+            const hit = rect && document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2
+            );
+            return {
+              button: rect ? {left: rect.left, top: rect.top, width: rect.width, height: rect.height} : null,
+              display: document.querySelector('[data-dsl4-application-menu="true"]')?.style.display,
+              hitAction: hit?.closest?.('[data-dsl4-menu-action]')?.dataset.dsl4MenuAction ?? null,
+              hitTag: hit?.tagName ?? null
+            };
+          })(),
           scratch: globalThis.Scratch?.vm?.runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible}))
         })`);
         throw new Error(
@@ -1733,6 +2121,7 @@ scenes:
       assert.equal(observed.metrics.modelLoads, 1);
       assert.ok(observed.metrics.predictions >= 1);
       assert.ok(observed.metrics.webcamUpdates >= 1);
+      assert.deepEqual(observed.metrics.previewVisibilityChanges, ['none', 'block', 'none']);
       assert.equal(observed.canvasCount, 1);
       assert.deepEqual(observed.errors, []);
 
@@ -1741,6 +2130,15 @@ scenes:
       const usedHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
       testContext.diagnostic(`representative capability heap after GC: ${usedHeapBytes} bytes`);
       assert.ok(usedHeapBytes <= 192 * 1024 * 1024, `heap used ${usedHeapBytes} bytes`);
+
+      await client.evaluate(`document.querySelector('[data-dsl4-menu-action="reload"]').click()`);
+      await waitForEvaluation(
+        client,
+        `globalThis.dsl4LocalPreviewCapabilityFixture.events
+          .filter(({type}) => type === 'runtime.start').length === 2 &&
+          document.querySelector('[data-dsl4-application-menu="true"]')?.style.display === 'none'`,
+        'browser-owned menu replay',
+      );
 
       const disposed = await client.evaluate(`(async () => {
         const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
@@ -1755,9 +2153,9 @@ scenes:
       assert.equal(disposed.status, 'disposed');
       assert.equal(disposed.canvasCount, 0);
       assert.equal(disposed.hasScratch, false);
-      assert.equal(disposed.metrics.cameraTrackStops, 1);
-      assert.equal(disposed.metrics.classifierDisposals, 1);
-      assert.equal(disposed.metrics.poseNetDisposals, 1);
+      assert.equal(disposed.metrics.cameraTrackStops, disposed.metrics.cameraStarts);
+      assert.equal(disposed.metrics.classifierDisposals, disposed.metrics.modelLoads);
+      assert.equal(disposed.metrics.poseNetDisposals, disposed.metrics.modelLoads);
       await waitForEvaluation(
         client,
         'document.querySelectorAll("canvas").length === 0',
