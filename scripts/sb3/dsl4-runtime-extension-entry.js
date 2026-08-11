@@ -195,30 +195,6 @@ class KamishibaiDsl4RuntimeExtension {
           text: 'toggle title language',
           hideFromPalette: true,
         },
-        {
-          opcode: 'openStoryFile',
-          blockType: BlockType.COMMAND,
-          text: 'open a DSL 4.0 story file',
-          hideFromPalette: true,
-        },
-        {
-          opcode: 'reloadStory',
-          blockType: BlockType.COMMAND,
-          text: 'play the current story again',
-          hideFromPalette: true,
-        },
-        {
-          opcode: 'showAbout',
-          blockType: BlockType.COMMAND,
-          text: 'show application information',
-          hideFromPalette: true,
-        },
-        {
-          opcode: 'toggleMenuLanguage',
-          blockType: BlockType.COMMAND,
-          text: 'change menu language',
-          hideFromPalette: true,
-        },
       ],
     };
   }
@@ -409,12 +385,6 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'title';
     this.showScratchTitle(this.titleLocale);
     return undefined;
-  }
-
-  toggleMenuLanguage() {
-    if (this.status !== 'menu') return;
-    this.titleLocale = this.titleLocale === 'ja' ? 'en' : 'ja';
-    this.showScratchMenu(this.titleLocale);
   }
 
   setTargetCostume(target, costumeName) {
