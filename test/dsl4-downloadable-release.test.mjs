@@ -303,25 +303,10 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     stage.costumes.map(({name}) => name),
     ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'],
   );
-  const websiteTarget = project.targets.find(({name}) => name === 'officialWebsiteButton');
-  const localizedWebsite = websiteTarget.costumes.find(
-    ({name}) => name === 'official-website-button-runtime',
-  );
-  const localizedWebsiteSvg = strFromU8(archive[localizedWebsite.md5ext]);
-  assert.match(localizedWebsiteSvg, /width="160" height="64"/u);
-  assert.match(localizedWebsiteSvg, />公式Webサイト</u);
-  assert.equal(websiteTarget.visible, true);
-  assert.equal(websiteTarget.y, -16);
-  assert.equal(project.targets.find(({name}) => name === 'closeTitleButton')?.visible, true);
   assert.deepEqual(
     project.targets.map(({name}) => name),
-    ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
-    'The four menu actions must not add button sprites to the Scratch project.',
-  );
-  assert.equal(
-    project.targets.find(({name}) => name === 'officialWebsiteButton')?.blocks?.officialWebsiteOpen
-      ?.opcode,
-    `${bundleExtensionId}_openOfficialWebsite`,
+    ['Stage'],
+    'Title and menu actions must not add button sprites to the Scratch project.',
   );
   assert.equal(stage.blocks.titleFlag?.opcode, 'event_whenflagclicked');
   assert.equal(stage.blocks.titleFlag?.next, 'titleFlagShow');
@@ -337,11 +322,6 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     'closeTitleMessage',
   ]);
   assert.equal(stage.blocks.titleCloseStart?.opcode, `${bundleExtensionId}_closeTitle`);
-  assert.deepEqual(
-    project.targets.find(({name}) => name === 'closeTitleButton')?.blocks?.closeTitleBroadcast
-      ?.inputs?.BROADCAST_INPUT,
-    [1, [11, 'closeTitle', 'closeTitleMessage']],
-  );
 
   assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
   assert.deepEqual(project.extensions, [bundleExtensionId]);
@@ -349,6 +329,8 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
   assert.match(extensionSource, /^\/\/ Name: Kamishibai DSL 4\.0 Runtime/mu);
   assert.match(extensionSource, /^\/\/ ID: kubohiroyakamishibai4/mu);
+  assert.match(extensionSource, /data-dsl4-title-controls/u);
+  assert.match(extensionSource, /data-dsl4-title-action/u);
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
     assert.equal(enabled, true);
@@ -549,9 +531,12 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   }
 });
 
-test('waits at the title and opens the non-embedded menu from Stage and close-button clicks', async () => {
+test('waits at the title and opens the non-embedded menu from Stage and DOM title controls', async () => {
   const result = await buildRelease();
-  const restoreGlobals = installUnsandboxedScriptDom();
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const previousOpen = globalThis.open;
+  const opened = [];
+  globalThis.open = (...args) => opened.push(args);
   const vm = new VirtualMachine();
   try {
     vm.setCompatibilityMode(false);
@@ -578,6 +563,19 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
       if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    const titleControls = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-title-controls',
+      'true',
+    )[0];
+    assert(titleControls, 'Title controls must be mounted above the Stage.');
+    assert.equal(titleControls.style.display, 'block');
+    const websiteButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
+    websiteButton.click();
+    assert.deepEqual(opened, [
+      ['https://kubohiroya.github.io/tmpose-kamishibai/', '_blank', 'noopener,noreferrer'],
+    ]);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(
       vm.runtime.getTargetForStage().lookupBroadcastMsg('closeTitleMessage', 'closeTitle')?.name,
@@ -613,20 +611,13 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
     const secondTitleDeadline = Date.now() + 5_000;
     while (Date.now() < secondTitleDeadline) {
       vm.runtime._step();
-      if (
-        (await extensionReporter(vm, 'statusReporter')) === 'title' &&
-        vm.runtime.getSpriteTargetByName('closeTitleButton')?.visible === true
-      ) {
-        break;
-      }
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
-    const closeTarget = vm.runtime.getSpriteTargetByName('closeTitleButton');
-    assert(closeTarget, 'The Scratch title close button must exist.');
-    assert.equal(closeTarget.visible, true);
-    const closeThreads = vm.runtime.startHats('event_whenthisspriteclicked', null, closeTarget);
-    assert.equal(closeThreads.length, 1, 'The close button must start its closeTitle stack.');
+    assert.equal(titleControls.style.display, 'block');
+    const closeButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    closeButton.click();
     const closeDeadline = Date.now() + 5_000;
     while (Date.now() < closeDeadline) {
       vm.runtime._step();
@@ -643,10 +634,12 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
         .name,
       'Menu',
     );
-    assert.equal(closeTarget.visible, false);
+    assert.equal(titleControls.style.display, 'none');
   } finally {
     vm.quit();
     restoreGlobals();
+    if (previousOpen === undefined) Reflect.deleteProperty(globalThis, 'open');
+    else globalThis.open = previousOpen;
   }
 });
 
@@ -687,13 +680,23 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    const titleControls = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-title-controls',
+      'true',
+    )[0];
+    assert(titleControls, 'Title controls must be mounted above the Stage.');
+    assert.equal(titleControls.style.display, 'block');
+    assert.deepEqual(
+      vm.runtime.targets.map((target) => target.getName()),
+      ['Stage'],
+    );
 
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     const stage = vm.runtime.getTargetForStage();
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Menu');
-    assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, false);
-    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, false);
+    assert.equal(titleControls.style.display, 'none');
     const applicationMenus = findByAttribute(
       restoreGlobals.document.body,
       'data-dsl4-application-menu',
@@ -719,6 +722,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
     assert.equal(applicationMenus[0].style.display, 'none');
+    assert.equal(titleControls.style.display, 'block');
     await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
@@ -750,8 +754,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
-    assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, true);
-    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, true);
+    assert.equal(titleControls.style.display, 'block');
     assert.equal(applicationMenus[0].style.display, 'none');
   } finally {
     vm.quit();
@@ -870,7 +873,7 @@ scenes:
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.deepEqual(
       vm.runtime.targets.map((target) => target.getName()),
-      ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
+      ['Stage'],
     );
   } finally {
     vm.quit();
@@ -895,9 +898,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     vm.securityManager.getSandboxMode = () => 'unsandboxed';
     await loadProjectQuietly(vm, result.archive);
     const stage = vm.runtime.getTargetForStage();
-    const website = vm.runtime.getSpriteTargetByName('officialWebsiteButton');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
-    assert.equal(website.sprite.costumes[website.currentCostume].name, 'official-website-button');
     vm.runtime.renderer = {
       draw() {},
       createSVGSkin() {
@@ -917,12 +918,16 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
-    assert.equal(
-      website.sprite.costumes[website.currentCostume].name,
-      'official-website-button-runtime',
-    );
-    assert.equal(website.visible, true);
-    assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, true);
+    const titleControls = findByAttribute(document.body, 'data-dsl4-title-controls', 'true')[0];
+    assert(titleControls, 'Localized title controls must be mounted above the Stage.');
+    assert.equal(titleControls.style.display, 'block');
+    const website = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
+    const close = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
+    assert.equal(website.getAttribute('aria-label'), '公式Webサイト');
+    assert.equal(website.style.cssText.includes('top:25.5556%'), true);
+    assert.equal(website.children[0].tagName, 'IMG');
+    assert.match(website.children[0].src, /^data:image\/png;base64,/u);
+    assert.equal(close.getAttribute('aria-label'), '閉じる');
     assert.equal(findByAttribute(document.body, 'data-dsl4-title-shell', 'true').length, 0);
     assert.equal(document.body.style.cursor, 'pointer');
 
@@ -939,7 +944,7 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     }
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
-    assert.equal(website.visible, false);
+    assert.equal(titleControls.style.display, 'none');
     assert.equal(document.body.style.cursor, 'pointer');
   } finally {
     vm.quit();

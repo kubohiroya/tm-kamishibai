@@ -264,28 +264,30 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   const officialWebsiteTargets = project.targets.filter(
     (target) => target.name === 'officialWebsiteButton',
   );
-  assert.equal(
-    officialWebsiteTargets.length,
-    1,
-    'The app source must contain exactly one officialWebsiteButton target.',
+  assert(
+    officialWebsiteTargets.length <= 1,
+    'The app source must contain at most one officialWebsiteButton target.',
   );
-  const officialWebsiteCostumes = officialWebsiteTargets[0].costumes.filter(
-    (costume) => costume.name === 'official-website-button',
-  );
-  assert.equal(
-    officialWebsiteCostumes.length,
-    1,
-    'officialWebsiteButton must contain exactly one locale-independent costume.',
-  );
-  const officialWebsiteRuntimeCostumes = officialWebsiteTargets[0].costumes.filter(
-    (costume) => costume.name === 'official-website-button-runtime',
-  );
-  assert.equal(
-    officialWebsiteRuntimeCostumes.length,
-    1,
-    'officialWebsiteButton must contain exactly one runtime costume.',
-  );
-  const favicon = await readFile(faviconPath);
+  const officialWebsiteCostumes =
+    officialWebsiteTargets[0]?.costumes.filter(
+      (costume) => costume.name === 'official-website-button',
+    ) ?? [];
+  const officialWebsiteRuntimeCostumes =
+    officialWebsiteTargets[0]?.costumes.filter(
+      (costume) => costume.name === 'official-website-button-runtime',
+    ) ?? [];
+  if (officialWebsiteTargets.length === 1) {
+    assert.equal(
+      officialWebsiteCostumes.length,
+      1,
+      'officialWebsiteButton must contain exactly one locale-independent costume.',
+    );
+    assert.equal(
+      officialWebsiteRuntimeCostumes.length,
+      1,
+      'officialWebsiteButton must contain exactly one runtime costume.',
+    );
+  }
   const localized = appShellLocales.en;
   const titleReplacements = [
     [titleVersionPlaceholder, metadata.label],
@@ -352,49 +354,54 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
       });
     }
   }
-  let officialWebsiteFallbackAsset = await stampSvgAsset({
-    assetsDirectory,
-    costume: officialWebsiteCostumes[0],
-    description: 'The initial official-website-button fallback SVG',
-    placeholder: officialWebsiteFaviconPlaceholder,
-    project,
-    replacement: favicon.toString('base64'),
-    sourceManifest,
-  });
-  officialWebsiteFallbackAsset = await stampSvgAsset({
-    assetsDirectory,
-    costume: officialWebsiteCostumes[0],
-    description: 'The initial official-website-button fallback SVG',
-    placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
-    project,
-    replacement: escapeXml(localized.about.officialWebsite.name),
-    sourceManifest,
-  });
-  let officialWebsiteAsset = await stampSvgAsset({
-    assetsDirectory,
-    costume: officialWebsiteRuntimeCostumes[0],
-    description: 'The runtime official-website-button SVG',
-    placeholder: officialWebsiteFaviconPlaceholder,
-    project,
-    replacement: favicon.toString('base64'),
-    sourceManifest,
-  });
-  if (
-    await svgAssetContainsPlaceholder(
+  let officialWebsiteFallbackAsset = null;
+  let officialWebsiteAsset = null;
+  if (officialWebsiteTargets.length === 1) {
+    const favicon = await readFile(faviconPath);
+    officialWebsiteFallbackAsset = await stampSvgAsset({
       assetsDirectory,
-      officialWebsiteRuntimeCostumes[0],
-      '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
-    )
-  ) {
+      costume: officialWebsiteCostumes[0],
+      description: 'The initial official-website-button fallback SVG',
+      placeholder: officialWebsiteFaviconPlaceholder,
+      project,
+      replacement: favicon.toString('base64'),
+      sourceManifest,
+    });
+    officialWebsiteFallbackAsset = await stampSvgAsset({
+      assetsDirectory,
+      costume: officialWebsiteCostumes[0],
+      description: 'The initial official-website-button fallback SVG',
+      placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+      project,
+      replacement: escapeXml(localized.about.officialWebsite.name),
+      sourceManifest,
+    });
     officialWebsiteAsset = await stampSvgAsset({
       assetsDirectory,
       costume: officialWebsiteRuntimeCostumes[0],
-      description: 'The localized runtime official-website-button SVG',
-      placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+      description: 'The runtime official-website-button SVG',
+      placeholder: officialWebsiteFaviconPlaceholder,
       project,
-      replacement: escapeXml(appShellLocales.ja.about.officialWebsite.name),
+      replacement: favicon.toString('base64'),
       sourceManifest,
     });
+    if (
+      await svgAssetContainsPlaceholder(
+        assetsDirectory,
+        officialWebsiteRuntimeCostumes[0],
+        '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+      )
+    ) {
+      officialWebsiteAsset = await stampSvgAsset({
+        assetsDirectory,
+        costume: officialWebsiteRuntimeCostumes[0],
+        description: 'The localized runtime official-website-button SVG',
+        placeholder: '{{ABOUT_OFFICIAL_WEBSITE_NAME}}',
+        project,
+        replacement: escapeXml(appShellLocales.ja.about.officialWebsite.name),
+        sourceManifest,
+      });
+    }
   }
 
   const resolvedProjectSource = `${JSON.stringify(project, null, 2)}\n`;

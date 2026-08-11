@@ -1283,19 +1283,10 @@ test(
         );
       }
       assert.deepEqual(
-        await client.evaluate(`(() => {
-          const runtime = globalThis.Scratch.vm.runtime;
-          return ['officialWebsiteButton', 'closeTitleButton'].map(
-            (name) => runtime.getSpriteTargetByName(name)?.visible,
-          );
-        })()`),
-        [false, false],
-      );
-      assert.deepEqual(
         await client.evaluate(
           'globalThis.Scratch.vm.runtime.targets.map((target) => target.getName?.())',
         ),
-        ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
+        ['Stage'],
       );
       assert.deepEqual(client.exceptions, []);
 

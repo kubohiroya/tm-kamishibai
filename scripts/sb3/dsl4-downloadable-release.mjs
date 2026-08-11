@@ -23,6 +23,7 @@ const require = createRequire(import.meta.url);
 const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
 const tmPoseBrowserRuntimePath =
   require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
+const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
 const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-dev', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
@@ -134,45 +135,7 @@ function titleAssets() {
     240,
     180,
   );
-  const websiteFallback = svgAsset(
-    'official-website-button',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
-  <rect width="160" height="64" rx="12" fill="#007d66"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
-  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
-</svg>`,
-    80,
-    32,
-  );
-  const websiteRuntime = svgAsset(
-    'official-website-button-runtime',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="64" viewBox="0 0 160 64">
-  <metadata>locale:ja</metadata>
-  <rect width="160" height="64" rx="12" fill="#007d66"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="8" y="8" width="48" height="48"/>
-  <text x="104" y="38" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">{{ABOUT_OFFICIAL_WEBSITE_NAME}}</text>
-</svg>`,
-    80,
-    32,
-  );
-  const closeTitle = svgAsset(
-    'title-close-button',
-    `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <circle cx="16" cy="16" r="15" fill="#007d66"/>
-  <path d="M10 10L22 22M22 10L10 22" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-</svg>`,
-    16,
-    16,
-  );
-  return Object.freeze([
-    title,
-    titleRuntime,
-    menu,
-    menuRuntime,
-    websiteFallback,
-    websiteRuntime,
-    closeTitle,
-  ]);
+  return Object.freeze([title, titleRuntime, menu, menuRuntime]);
 }
 
 function stageTarget(title, titleRuntime, menu, menuRuntime) {
@@ -317,147 +280,10 @@ function poseFeedbackMonitors() {
   ];
 }
 
-function websiteTarget(websiteFallback, websiteRuntime) {
-  return {
-    isStage: false,
-    name: 'officialWebsiteButton',
-    variables: {},
-    lists: {},
-    broadcasts: {},
-    blocks: {
-      officialWebsiteFlag: {
-        opcode: 'event_whenflagclicked',
-        next: 'officialWebsiteFlagShow',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 40,
-      },
-      officialWebsiteFlagShow: {
-        opcode: 'looks_show',
-        next: null,
-        parent: 'officialWebsiteFlag',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-      officialWebsiteClick: {
-        opcode: 'event_whenthisspriteclicked',
-        next: 'officialWebsiteOpen',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 160,
-      },
-      officialWebsiteOpen: {
-        opcode: 'kubohiroyakamishibai4_openOfficialWebsite',
-        next: null,
-        parent: 'officialWebsiteClick',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-    },
-    comments: {},
-    currentCostume: 0,
-    costumes: [websiteFallback.costume, websiteRuntime.costume],
-    sounds: [],
-    volume: 100,
-    layerOrder: 1,
-    visible: true,
-    x: 0,
-    y: -16,
-    size: 100,
-    direction: 90,
-    draggable: false,
-    rotationStyle: 'all around',
-  };
-}
-
-function closeTitleTarget(closeTitle) {
-  return {
-    isStage: false,
-    name: 'closeTitleButton',
-    variables: {},
-    lists: {},
-    broadcasts: {},
-    blocks: {
-      closeTitleFlag: {
-        opcode: 'event_whenflagclicked',
-        next: 'closeTitleFlagShow',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 40,
-      },
-      closeTitleFlagShow: {
-        opcode: 'looks_show',
-        next: null,
-        parent: 'closeTitleFlag',
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-      closeTitleClick: {
-        opcode: 'event_whenthisspriteclicked',
-        next: 'closeTitleBroadcast',
-        parent: null,
-        inputs: {},
-        fields: {},
-        shadow: false,
-        topLevel: true,
-        x: 40,
-        y: 160,
-      },
-      closeTitleBroadcast: {
-        opcode: 'event_broadcast',
-        next: null,
-        parent: 'closeTitleClick',
-        inputs: {
-          BROADCAST_INPUT: [1, [11, closeTitleBroadcastName, closeTitleBroadcastId]],
-        },
-        fields: {},
-        shadow: false,
-        topLevel: false,
-      },
-    },
-    comments: {},
-    currentCostume: 0,
-    costumes: [closeTitle.costume],
-    sounds: [],
-    volume: 100,
-    layerOrder: 2,
-    visible: true,
-    x: 220,
-    y: 160,
-    size: 100,
-    direction: 90,
-    draggable: false,
-    rotationStyle: 'all around',
-  };
-}
-
 async function createProject(assets) {
-  const [title, titleRuntime, menu, menuRuntime, websiteFallback, websiteRuntime, closeTitle] =
-    assets;
+  const [title, titleRuntime, menu, menuRuntime] = assets;
   const project = {
-    targets: [
-      stageTarget(title, titleRuntime, menu, menuRuntime),
-      websiteTarget(websiteFallback, websiteRuntime),
-      closeTitleTarget(closeTitle),
-    ],
+    targets: [stageTarget(title, titleRuntime, menu, menuRuntime)],
     monitors: poseFeedbackMonitors(),
     extensions: [extensionId],
     extensionURLs: {
@@ -516,14 +342,21 @@ async function createProject(assets) {
 }
 
 async function createRuntimeExtensionSource() {
-  const [tensorflowBrowserRuntime, tmPoseBrowserRuntime] = await Promise.all([
-    readFile(tensorflowBrowserRuntimePath, 'utf8'),
-    readFile(tmPoseBrowserRuntimePath, 'utf8'),
-  ]);
+  const [tensorflowBrowserRuntime, tmPoseBrowserRuntime, officialWebsiteFavicon] =
+    await Promise.all([
+      readFile(tensorflowBrowserRuntimePath, 'utf8'),
+      readFile(tmPoseBrowserRuntimePath, 'utf8'),
+      readFile(officialWebsiteFaviconPath),
+    ]);
   const result = await build({
     entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
     bundle: true,
     charset: 'utf8',
+    define: {
+      DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
+        `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
+      ),
+    },
     format: 'iife',
     banner: {
       js:

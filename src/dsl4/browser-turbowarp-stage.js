@@ -433,9 +433,6 @@ export function createDsl4BrowserTurboWarpStage(options) {
       /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
     );
     if (stageIndex >= 0) stage.setCostume?.(stageIndex);
-    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-      runtime.getSpriteTargetByName?.(name)?.setVisible?.(false);
-    }
     canvas.style.cursor = 'pointer';
   }
 

@@ -10,15 +10,17 @@ import {
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
+import {createDsl4RuntimeTitleControls} from '../../src/dsl4/platform/runtime-title-controls.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
-/* global Scratch, tmPose */
+/* global DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
 const extensionVersion = '4.0.0-dev';
+const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
@@ -115,6 +117,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.selectedProject = null;
     this.fileInput = null;
     this.applicationMenu = null;
+    this.titleControls = null;
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
@@ -270,6 +273,36 @@ class KamishibaiDsl4RuntimeExtension {
     return this.applicationMenu;
   }
 
+  ensureTitleControls() {
+    if (this.titleControls) return this.titleControls;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    try {
+      this.titleControls = createDsl4RuntimeTitleControls({
+        document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: {
+            website: appShellLocales.en.about.officialWebsite.name,
+            close: appShellLocales.en.ui.close,
+          },
+          ja: {
+            website: appShellLocales.ja.about.officialWebsite.name,
+            close: appShellLocales.ja.ui.close,
+          },
+        },
+        websiteIconUrl: officialWebsiteIcon,
+        onWebsite: () => this.openOfficialWebsite(),
+        onClose: () => this.closeTitle(),
+        onError: (error) => this.reportFailure(error, 'title-controls'),
+      });
+    } catch (error) {
+      console.error('[Kamishibai DSL 4.0] title-controls failed.', loggedError(error));
+      return null;
+    }
+    return this.titleControls;
+  }
+
   installDropTarget() {
     const mount = resolveRuntimeMount(this.Scratch);
     if (
@@ -408,23 +441,14 @@ class KamishibaiDsl4RuntimeExtension {
   showScratchTitle(locale) {
     const runtime = this.Scratch.vm.runtime;
     const stage = runtime.getTargetForStage();
-    const website = runtime.getSpriteTargetByName('officialWebsiteButton');
-    const close = runtime.getSpriteTargetByName('closeTitleButton');
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
-    this.setTargetCostume(
-      website,
-      locale === 'ja' ? 'official-website-button-runtime' : 'official-website-button',
-    );
-    website?.setVisible?.(true);
-    close?.setVisible?.(true);
+    this.ensureTitleControls()?.show(locale);
     this.setStageCursor('pointer');
   }
 
   hideScratchTitle() {
-    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
-      this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
-    }
+    this.titleControls?.hide();
     this.setStageCursor('auto');
   }
 
