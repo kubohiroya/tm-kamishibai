@@ -141,20 +141,20 @@
           "rotationCenterY": 180
         },
         {
-          "assetId": "99e35e453bf725181412c7c63c528dc0",
+          "assetId": "8abd76def4a84e4516163f956cdcfc83",
           "name": "Menu",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "99e35e453bf725181412c7c63c528dc0.svg",
+          "md5ext": "8abd76def4a84e4516163f956cdcfc83.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         },
         {
-          "assetId": "6183360146c4bcb3e7885ad02aaa2586",
+          "assetId": "25e75263647cc980ff37773a95d9dad1",
           "name": "MenuRuntime",
           "bitmapResolution": 1,
           "dataFormat": "svg",
-          "md5ext": "6183360146c4bcb3e7885ad02aaa2586.svg",
+          "md5ext": "25e75263647cc980ff37773a95d9dad1.svg",
           "rotationCenterX": 240,
           "rotationCenterY": 180
         }

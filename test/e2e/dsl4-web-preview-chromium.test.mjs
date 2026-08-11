@@ -4,6 +4,7 @@ import {createHash, webcrypto} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
+import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -31,6 +32,8 @@ import {
 } from '../../src/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const require = createRequire(import.meta.url);
+const TurboWarpPackager = require('@turbowarp/packager');
 const dsl4Release = downloadableReleases.find(({series}) => series === '4.0');
 assert(dsl4Release, 'The DSL 4.0 downloadable release is unavailable.');
 
@@ -405,6 +408,115 @@ async function stopChrome(child) {
   child.kill('SIGKILL');
   await waitForExit(child, 5_000);
 }
+
+test(
+  'opens the non-embedded release title and disabled Reload menu without loading its story bundle',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-package-'));
+    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const loadedProject = await TurboWarpPackager.loadProject(release.archive);
+    const packager = new TurboWarpPackager.Packager();
+    packager.project = loadedProject;
+    packager.options.autoplay = true;
+    packager.options.app.title = 'DSL 4.0 non-embedded release E2E';
+    const packaged = await packager.package();
+    assert.equal(packaged.type, 'text/html');
+    await writeFile(path.join(fixtureDirectory, 'index.html'), packaged.data);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      assert.equal(
+        await client.evaluate(`(() => {
+          const vm = globalThis.Scratch.vm;
+          const originalToJSON = vm.toJSON.bind(vm);
+          vm.toJSON = () => {
+            const project = JSON.parse(originalToJSON());
+            project.extensionStorage.kubohiroyakamishibai4.components
+              .kubohiroyakamishibairuntime4.assets = {formatVersion: 0};
+            return JSON.stringify(project);
+          };
+          vm.greenFlag();
+          return true;
+        })()`),
+        true,
+      );
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'localized release title',
+      );
+      assert.equal(
+        await client.evaluate(
+          `document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex'`,
+        ),
+        false,
+      );
+      await click(client, '[data-dsl4-title-action=close]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'non-embedded application menu',
+      );
+      const menu = await client.evaluate(`(() => {
+        const reload = document.querySelector('[data-dsl4-menu-action=reload]');
+        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
+        const runtime = globalThis.Scratch.vm.runtime;
+        const stage = runtime.getTargetForStage();
+        return {
+          reloadDisabled: reload?.disabled,
+          reloadAriaDisabled: reload?.getAttribute('aria-disabled'),
+          reloadCursor: reload ? getComputedStyle(reload).cursor : null,
+          iconFilters: icons.map((icon) => getComputedStyle(icon).filter),
+          stageCostume: stage.getCostumes()[stage.currentCostume].name,
+          errorVisible:
+            document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex',
+        };
+      })()`);
+      assert.equal(menu.reloadDisabled, true);
+      assert.equal(menu.reloadAriaDisabled, 'true');
+      assert.equal(menu.reloadCursor, 'not-allowed');
+      assert.equal(menu.iconFilters.length, 4);
+      assert.equal(
+        menu.iconFilters.every((filter) => filter !== 'none'),
+        true,
+      );
+      assert.match(menu.stageCostume, /^Menu(?:Runtime)?$/u);
+      assert.equal(menu.errorVisible, false);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
 
 function createLocalPreviewRuntimeProtocol() {
   const liveReload = createDsl4LiveReloadSession({

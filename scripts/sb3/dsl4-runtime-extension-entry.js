@@ -285,6 +285,7 @@ class KamishibaiDsl4RuntimeExtension {
           this.showScratchMenu(locale);
         },
         onError: (error) => this.reportFailure(error, 'application-menu'),
+        reloadEnabled: this.selectedProject !== null || this.shell !== null,
       });
     } catch (error) {
       console.error('[Kamishibai DSL 4.0] application-menu failed.', loggedError(error));
@@ -439,7 +440,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showAbout() {
-    if (this.status !== 'menu' || !this.shell) return undefined;
+    if (this.status !== 'menu') return undefined;
     const shell = this.shell;
     this.hideScratchMenu();
     this.pendingStart = {
@@ -494,7 +495,9 @@ class KamishibaiDsl4RuntimeExtension {
     const stage = runtime.getTargetForStage();
     this.hideScratchTitle();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
-    this.ensureApplicationMenu()?.show(locale);
+    const menu = this.ensureApplicationMenu();
+    menu?.setReloadEnabled(this.selectedProject !== null || this.shell !== null);
+    menu?.show(locale);
     this.setStageCursor('pointer');
   }
 
@@ -564,6 +567,27 @@ class KamishibaiDsl4RuntimeExtension {
     const project = projectOverride ?? this.selectedProject ?? packagedProject;
     const applicationMode =
       forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
+    this.titleLocale = browserLocale();
+    if (applicationMode === 'menu') {
+      const showMenu = async () => {
+        if (this.shell !== null) return;
+        this.pendingStart = null;
+        this.hideScratchTitle();
+        this.showScratchMenu(this.titleLocale);
+        Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+          BROADCAST_OPTION: 'showMenu',
+        });
+        this.status = 'menu';
+      };
+      if (showTitle) {
+        this.pendingStart = {shell: null, start: showMenu};
+        this.status = 'title';
+        this.showScratchTitle(this.titleLocale);
+      } else {
+        await showMenu();
+      }
+      return;
+    }
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     let shell;
     let started = false;
@@ -646,7 +670,6 @@ class KamishibaiDsl4RuntimeExtension {
             });
             this.status = 'menu';
           };
-    this.titleLocale = browserLocale();
     if (showTitle) {
       this.pendingStart = {shell, start: startAfterTitle};
       this.status = 'title';

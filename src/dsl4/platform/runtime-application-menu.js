@@ -43,6 +43,7 @@ export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
  * @param {() => unknown | Promise<unknown>} options.onAbout
  * @param {(locale: 'en' | 'ja') => unknown | Promise<unknown>} options.onLocaleChange
  * @param {(error: unknown) => unknown} [options.onError]
+ * @param {boolean} [options.reloadEnabled]
  */
 export function createDsl4RuntimeApplicationMenu(options) {
   if (!isRecord(options)) throw new TypeError('application menu options are required');
@@ -110,6 +111,10 @@ export function createDsl4RuntimeApplicationMenu(options) {
   const buttons = new Map();
   /** @type {'en' | 'ja'} */
   let locale = 'en';
+  let reloadEnabled = options.reloadEnabled ?? true;
+  if (typeof reloadEnabled !== 'boolean') {
+    throw new TypeError('reloadEnabled must be a boolean');
+  }
   let disposed = false;
 
   /** @param {unknown} failure */
@@ -146,7 +151,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
     icon.src = icons[definition.action];
     icon.alt = '';
     icon.style.cssText =
-      'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;';
+      'display:block;width:clamp(24px,10cqw,48px);height:clamp(24px,10cqw,48px);object-fit:contain;filter:invert(1) brightness(1.7) saturate(.35);';
     label.style.cssText = 'font-size:clamp(12px,3.8cqw,20px);line-height:1.15;text-align:center;';
     button.appendChild(icon);
     button.appendChild(label);
@@ -169,7 +174,21 @@ export function createDsl4RuntimeApplicationMenu(options) {
     for (const [action, value] of buttons) {
       value.label.textContent = options.locales[locale][action];
       value.button.setAttribute('aria-label', options.locales[locale][action]);
+      const disabled = action === 'reload' && !reloadEnabled;
+      value.button.disabled = disabled;
+      value.button.setAttribute('aria-disabled', String(disabled));
+      value.button.style.cursor = disabled ? 'not-allowed' : 'pointer';
+      value.button.style.opacity = disabled ? '0.42' : '1';
+      value.button.style.boxShadow = disabled ? 'none' : '0 3px 8px rgba(0,0,0,.2)';
     }
+  }
+
+  /** @param {boolean} enabled */
+  function setReloadEnabled(enabled) {
+    if (disposed) throw new TypeError('application menu is disposed');
+    if (typeof enabled !== 'boolean') throw new TypeError('reload enabled state must be a boolean');
+    reloadEnabled = enabled;
+    render();
   }
 
   function show(nextLocale = locale) {
@@ -196,5 +215,5 @@ export function createDsl4RuntimeApplicationMenu(options) {
   }
 
   render();
-  return Object.freeze({element: root, show, hide, dispose});
+  return Object.freeze({element: root, show, hide, setReloadEnabled, dispose});
 }

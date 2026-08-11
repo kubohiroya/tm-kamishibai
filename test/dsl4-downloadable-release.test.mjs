@@ -316,6 +316,12 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
   assert.match(localizedTitleSvg, />久保 裕也 \/ hiroya@cuc\.ac\.jp</u);
   assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
+  const menuSvg = strFromU8(archive[stage.costumes.find(({name}) => name === 'Menu').md5ext]);
+  const localizedMenuSvg = strFromU8(
+    archive[stage.costumes.find(({name}) => name === 'MenuRuntime').md5ext],
+  );
+  assert.doesNotMatch(menuSvg, />Open|>Reload|>About|>Language/u);
+  assert.doesNotMatch(localizedMenuSvg, />ファイルを開く|>もう一度|>アプリ情報|>言語/u);
   assert.deepEqual(
     stage.costumes.map(({name}) => name),
     ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'],
@@ -642,7 +648,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   }
 });
 
-test('waits at the title and opens the non-embedded menu from Stage and DOM title controls', async () => {
+test('opens the non-embedded title and menu without validating a packaged story bundle', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const previousOpen = globalThis.open;
@@ -663,6 +669,13 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
       },
       destroySkin() {},
       updateDrawableSkinId() {},
+    };
+    const originalToJSON = vm.toJSON.bind(vm);
+    vm.toJSON = () => {
+      const project = JSON.parse(originalToJSON());
+      const component = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
+      component.assets = {formatVersion: 0};
+      return JSON.stringify(project);
     };
 
     assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
@@ -690,6 +703,24 @@ test('waits at the title and opens the non-embedded menu from Stage and DOM titl
       if ((await extensionReporter(vm, 'statusReporter')) === 'menu') break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    const initialApplicationMenu = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-application-menu',
+      'true',
+    )[0];
+    assert(initialApplicationMenu, 'The menu must not depend on a packaged story runtime.');
+    const initialReloadButton = findByAttribute(
+      initialApplicationMenu,
+      'data-dsl4-menu-action',
+      'reload',
+    )[0];
+    assert.equal(initialReloadButton.disabled, true);
+    assert.equal(initialReloadButton.getAttribute('aria-disabled'), 'true');
+    assert.equal(initialReloadButton.style.cursor, 'not-allowed');
+    findByAttribute(initialApplicationMenu, 'data-dsl4-menu-action', 'about')[0].click();
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    await extensionReporter(vm, 'closeTitle');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
 
     vm.greenFlag();
@@ -849,6 +880,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
       assert.equal(buttons[0].children[0].tagName, 'IMG');
       assert.equal(buttons[0].children[0].src, version3MenuIconDataUrls[action]);
       assert.equal(buttons[0].children[0].alt, '');
+      assert.match(buttons[0].children[0].style.cssText, /invert\(1\).*saturate\(\.35\)/u);
     }
 
     const languageButton = findByAttribute(
@@ -872,6 +904,8 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
     assert.equal(applicationMenus[0].style.display, 'block');
 
     const reloadButton = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', 'reload')[0];
+    assert.equal(reloadButton.disabled, false);
+    assert.equal(reloadButton.getAttribute('aria-disabled'), 'false');
     reloadButton.click();
     let sawReloadStart = false;
     const reloadDeadline = Date.now() + 5_000;
@@ -1014,6 +1048,9 @@ scenes:
     }
     assert.equal(sawSelectedStory, true);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    const reloadButton = findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload')[0];
+    assert.equal(reloadButton.disabled, false);
+    assert.equal(reloadButton.getAttribute('aria-disabled'), 'false');
     assert.deepEqual(
       vm.runtime.targets.map((target) => target.getName()),
       ['Stage'],

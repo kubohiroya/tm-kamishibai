@@ -115,12 +115,6 @@ function titleAssets() {
     `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
   <rect width="480" height="360" fill="#f4fffb"/>
   <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">Participatory AI Kamishibai</text>
-  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
-    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">Open</text>
-    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">Reload</text>
-    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">About</text>
-    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">Language</text>
-  </g>
 </svg>`,
     240,
     180,
@@ -131,12 +125,6 @@ function titleAssets() {
   <metadata>locale:ja</metadata>
   <rect width="480" height="360" fill="#f4fffb"/>
   <text x="240" y="52" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#007d66">「参加型」AI紙芝居</text>
-  <g font-family="sans-serif" font-size="20" text-anchor="middle" fill="#ffffff">
-    <rect x="48" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="143">ファイルを開く</text>
-    <rect x="256" y="92" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="143">もう一度</text>
-    <rect x="48" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="136" y="263">アプリ情報</text>
-    <rect x="256" y="212" width="176" height="88" rx="14" fill="#007d66"/><text x="344" y="263">言語</text>
-  </g>
 </svg>`,
     240,
     180,
