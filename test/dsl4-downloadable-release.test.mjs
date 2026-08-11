@@ -305,6 +305,17 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
 
     assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-dev');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
+    assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
+      surface: null,
+      backing: null,
+    });
+    assert.deepEqual(JSON.parse(await extensionReporter(vm, 'runtimeDiagnosticsReporter')), {
+      status: 'ready',
+      surface: null,
+      runtime: null,
+      resources: null,
+      backing: null,
+    });
     vm.greenFlag();
     const titleDeadline = Date.now() + 5_000;
     while (Date.now() < titleDeadline) {

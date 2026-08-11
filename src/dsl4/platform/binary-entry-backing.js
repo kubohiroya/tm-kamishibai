@@ -170,6 +170,17 @@ export function createDsl4BinaryEntryBacking({
   /** @type {Readonly<Record<string, unknown>> | null} */
   let warning = null;
   let fatalNotified = false;
+  let providerReadQueue = Promise.resolve();
+
+  /** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+  function enqueueProviderRead(operation) {
+    const result = providerReadQueue.then(operation, operation);
+    providerReadQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   /** @param {string} assetId */
   function key(assetId) {
@@ -231,29 +242,33 @@ export function createDsl4BinaryEntryBacking({
 
   const source = Object.freeze({
     /** @param {Readonly<Record<string, any>>} asset @param {{signal?: AbortSignal}} [readOptions] */
-    async read(asset, readOptions = {}) {
-      const activeProvider = provider;
-      if (!activeProvider) {
-        throw backingError(
-          'K4-BINARY-BACKING-RELEASED-001',
-          'Binary entry source has been released',
-        );
-      }
-      const loaded = await /** @type {Function} */ (activeProvider.readAsset)(asset.name, {
-        signal: readOptions.signal,
+    read(asset, readOptions = {}) {
+      return enqueueProviderRead(async () => {
+        const activeProvider = provider;
+        if (!activeProvider) {
+          throw backingError(
+            'K4-BINARY-BACKING-RELEASED-001',
+            'Binary entry source has been released',
+          );
+        }
+        const loaded = await /** @type {Function} */ (activeProvider.readAsset)(asset.name, {
+          signal: readOptions.signal,
+        });
+        if (!isRecord(loaded) || loaded.assetId !== asset.name || !Array.isArray(loaded.files)) {
+          throw backingError(
+            'K4-BINARY-BACKING-PROVIDER-001',
+            `Binary provider returned an invalid asset: ${asset.name}`,
+          );
+        }
+        return Object.freeze({...key(asset.name), files: loaded.files});
       });
-      if (!isRecord(loaded) || loaded.assetId !== asset.name || !Array.isArray(loaded.files)) {
-        throw backingError(
-          'K4-BINARY-BACKING-PROVIDER-001',
-          `Binary provider returned an invalid asset: ${asset.name}`,
-        );
-      }
-      return Object.freeze({...key(asset.name), files: loaded.files});
     },
-    async release() {
-      const activeProvider = provider;
-      provider = null;
-      if (activeProvider) await /** @type {Function} */ (activeProvider.release)();
+    release() {
+      return enqueueProviderRead(async () => {
+        const activeProvider = provider;
+        provider = null;
+        if (activeProvider) await /** @type {Function} */ (activeProvider.release)();
+      });
     },
   });
 

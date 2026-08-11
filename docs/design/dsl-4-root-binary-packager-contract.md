@@ -215,3 +215,58 @@ bounded cleanupし、別tabのactive sessionを削除しません。remote persi
 | image／Audio／TMPose materialize失敗 | storage errorと区別して安全停止                      | 対象asset形式と実行環境を確認                                 |
 
 診断は安定したcode、asset label、failure分類を持ちます。binary本文や機密になり得るsource pathは表示しません。
+
+Packager実行時は警告をScratch stage内の非modal表示として出し、物語を続行します。確立後のfatal failureは
+既存のruntime error表示へ渡して物語を安全停止します。どちらの表示にもbinary本文、Base64、model内容、
+absolute pathを含めません。
+
+## 9. 実Packager／offline smoke
+
+浦島太郎の正本台本とassetは、隣接する`tmpose-kamishibai-samples/stories/urashima`を使用します。
+smokeは次の正式経路だけで一時成果物を作成します。
+
+1. `scripts/sb3/build.mjs`でDSL 4 release sourceから基礎SB3を作る
+2. sb3-toolchainで基礎SB3を展開し、`project-assets-dsl4.yml`を適用して決定的に再構築する
+3. `build-dsl4 --enable-root-binary-entries`で正本`urashima.k4.yml`と全assetを埋め込む
+4. 固定したTurboWarp Packager adapterで各surfaceを生成する
+
+手作業でSB3 ZIPを更新する経路は含みません。実行例は次のとおりです。
+
+```sh
+pnpm smoke:dsl4-packager-binary-memory -- \
+  --output-directory /tmp/dsl4-packager-smoke \
+  --target html \
+  --target zip \
+  --target zip-one-asset \
+  --measure-browser
+
+pnpm smoke:dsl4-packager-binary-memory -- \
+  --output-directory /tmp/dsl4-packager-electron \
+  --target electron-linux64
+```
+
+samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/tmpose-kamishibai-samples`を指定します。
+`--measure-browser`はChrome／Chromiumを使用し、必要なら`CHROME_BIN`で実行ファイルを指定します。ローカルorigin以外の
+名前解決をloopbackへ固定し、観測したrequest URLにも外部originがないことを検証します。
+
+各成果物について、54件のroot binary entryと55件のlogical file（3 poseModel、合計9 model file）の
+entry名、size、SHA-256、bytesを検証します。ブラウザ計測は次を確認します。
+
+- Plain HTMLの`prefer`がsession backingを確立し、元providerを解放する
+- IndexedDBを利用不能にしたPlain HTMLが同じ未解放sourceからdirectへfallbackし、警告を表示する
+- 通常ZIPがIndexedDBを開かずdirect sourceを使用する
+- タイトルを閉じて最初の`pose`待機まで進み、「ポーズ認識」「チャージ」を表示する
+- poseModelの登録／active数が場面に必要な範囲へ留まり、外部network requestを発生させない
+
+2026-08-11、Chrome 151、samples commit `c2497f301423a1196131041c4e80bafd7c623ce8`での浦島太郎計測値は
+次のとおりです。byte値は`performance.memory.usedJSHeapSize`で、GC後値は明示的GC直後を記録しています。
+
+| surface／mode                         | startup peak | title GC後 | 最初のpose GC後 | provider保持 | pose model registered／active |
+| ------------------------------------ | -----------: | ---------: | --------------: | ------------ | ----------------------------- |
+| Plain HTML／session                  | 229,921,692  | 70,195,311 | 102,925,929     | なし         | 1／1                          |
+| Plain HTML／direct fallback          | 187,301,476  | 110,556,719 | 143,397,300     | あり         | 1／1                          |
+| 通常ZIP／direct                      | 113,924,786  | 69,708,627 | 102,559,028     | あり         | 1／1                          |
+
+Plain HTMLは起動時にSB3全体をBase85 decode／ZIP展開するため、一時peakを避けられません。大容量assetでは、
+起動時peakと元archive保持を抑えられる通常ZIPまたはElectronを推奨します。`report.json`には成果物hash、起動時間、
+全計測値、外部request、使用Chromeを機械可読形式で保存します。

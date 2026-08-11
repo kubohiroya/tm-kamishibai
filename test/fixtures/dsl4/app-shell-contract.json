@@ -9,6 +9,8 @@
       "versionReporter",
       "statusReporter",
       "lastErrorReporter",
+      "binaryBackingStatusReporter",
+      "runtimeDiagnosticsReporter",
       "setTextValue",
       "showTitle",
       "closeTitle",
