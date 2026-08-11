@@ -12,6 +12,10 @@ import test from 'node:test';
 import {strToU8, zipSync} from 'fflate';
 
 import {
+  createDownloadableReleaseSb3,
+  downloadableReleases,
+} from '../../scripts/sb3/downloadable-releases.mjs';
+import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
   createDsl4ProductionSourceFrontend,
@@ -27,6 +31,8 @@ import {
 } from '../../src/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const dsl4Release = downloadableReleases.find(({series}) => series === '4.0');
+assert(dsl4Release, 'The DSL 4.0 downloadable release is unavailable.');
 
 function createPoseFeedbackVariables() {
   return {
@@ -1174,58 +1180,14 @@ test(
     const sourceFilename = 'command.k4.yml';
     const sourcePath = path.join(projectDirectory, sourceFilename);
     const baseSb3Path = path.join(projectDirectory, 'base.sb3');
-    const backdropAssetId = '00000000000000000000000000000000';
-    const backdropFilename = `${backdropAssetId}.svg`;
     const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
     const source =
       "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening: []\n";
-    const baseProject = {
-      extensionStorage: {},
-      targets: [
-        {
-          isStage: true,
-          name: 'Stage',
-          variables: {},
-          lists: {},
-          broadcasts: {},
-          blocks: {},
-          comments: {},
-          currentCostume: 0,
-          costumes: [
-            {
-              name: 'backdrop1',
-              assetId: backdropAssetId,
-              dataFormat: 'svg',
-              md5ext: backdropFilename,
-              rotationCenterX: 240,
-              rotationCenterY: 180,
-            },
-          ],
-          sounds: [],
-          volume: 100,
-          layerOrder: 0,
-          tempo: 60,
-          videoTransparency: 50,
-          videoState: 'on',
-          textToSpeechLanguage: null,
-        },
-      ],
-      monitors: [],
-      extensions: [],
-      meta: {semver: '3.0.0'},
-    };
+    const baseRelease = await createDownloadableReleaseSb3(dsl4Release);
     await Promise.all([
       writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
       writeFile(sourcePath, source),
-      writeFile(
-        baseSb3Path,
-        zipSync({
-          'project.json': strToU8(`${JSON.stringify(baseProject)}\n`),
-          [backdropFilename]: strToU8(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
-          ),
-        }),
-      ),
+      writeFile(baseSb3Path, baseRelease.archive),
     ]);
     const schema = JSON.parse(
       await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
@@ -1249,7 +1211,7 @@ test(
         maxAssetFileBytes: 1024 * 1024,
         maxAssetFiles: 64,
         maxTotalAssetBytes: 64 * 1024 * 1024,
-        replaceExisting: false,
+        replaceExisting: true,
         port: 0,
       },
       {
@@ -1294,6 +1256,47 @@ test(
       );
       assert.equal(new URL(launchUrl).hostname, '127.0.0.1');
       assert.equal(stdout.includes(new URL(launchUrl).hash.slice(1)), false);
+      try {
+        await waitForEvaluation(
+          client,
+          `(() => {
+            const runtime = globalThis.Scratch?.vm?.runtime;
+            const stage = runtime?.getTargetForStage?.();
+            return /^Menu(?:Runtime)?$/.test(
+              stage?.getCostumes?.()[stage.currentCostume]?.name ?? '',
+            );
+          })()`,
+          'external-source story completion menu',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`(() => {
+          const runtime = globalThis.Scratch?.vm?.runtime;
+          const stage = runtime?.getTargetForStage?.();
+          return {
+            costume: stage?.getCostumes?.()[stage.currentCostume]?.name,
+            status: document.querySelector('#dsl4-preview-status')?.textContent,
+            targets: runtime?.targets?.map((target) => ({name: target.getName?.(), visible: target.visible})),
+          };
+        })()`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, stderr, exceptions: client.exceptions})}`,
+        );
+      }
+      assert.deepEqual(
+        await client.evaluate(`(() => {
+          const runtime = globalThis.Scratch.vm.runtime;
+          return ['officialWebsiteButton', 'closeTitleButton'].map(
+            (name) => runtime.getSpriteTargetByName(name)?.visible,
+          );
+        })()`),
+        [false, false],
+      );
+      assert.deepEqual(
+        await client.evaluate(
+          'globalThis.Scratch.vm.runtime.targets.map((target) => target.getName?.())',
+        ),
+        ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
+      );
       assert.deepEqual(client.exceptions, []);
 
       await client.send('Page.navigate', {url: 'about:blank'});

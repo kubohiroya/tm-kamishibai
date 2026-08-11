@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {runInThisContext} from 'node:vm';
 import test from 'node:test';
 
@@ -12,6 +14,7 @@ import {
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.mjs';
 import {
+  buildDsl4RuntimeComponent,
   createDsl4ProductionSourceFrontend,
   embedDsl4PackagedRuntimeComponentInSb3,
 } from '../src/builder/index.js';
@@ -21,6 +24,10 @@ import {
   createDsl4RuntimeArtifactDescriptor,
 } from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
+import {
+  buildDsl4BrowserSelectedStoryProject,
+  collectDsl4BrowserDroppedFiles,
+} from '../src/dsl4/platform/browser-story-file-loader.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
@@ -46,6 +53,37 @@ async function buildRelease() {
   return createDownloadableReleaseSb3(release);
 }
 
+function browserFile(name, contents) {
+  const bytes = new Uint8Array(contents);
+  return {
+    name,
+    size: bytes.byteLength,
+    async arrayBuffer() {
+      return bytes.slice().buffer;
+    },
+  };
+}
+
+function browserFileHandle(name, file) {
+  return {
+    kind: 'file',
+    name,
+    async getFile() {
+      return file;
+    },
+  };
+}
+
+function browserDirectoryHandle(name, entries) {
+  return {
+    kind: 'directory',
+    name,
+    async *entries() {
+      for (const entry of entries) yield entry;
+    },
+  };
+}
+
 async function buildEmbeddedStoryRelease() {
   const result = await buildRelease();
   const sourceText = `kamishibai: '4.0'
@@ -61,7 +99,7 @@ cover:
   backdrop: EndCover
 scenes:
   opening:
-    - wait: 0
+    - wait: 0.05
 `;
   const parsed = frontend.parse(sourceText, {sourceId: 'main'});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
@@ -116,6 +154,57 @@ scenes:
     },
   );
   return embedded.bytes;
+}
+
+async function buildExternalSourceStoryRelease() {
+  const result = await buildRelease();
+  const projectRoot = await mkdtemp(path.join(tmpdir(), 'dsl4-external-finish-'));
+  const sourceFilename = 'story.k4.yml';
+  const sourceText = `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  EndCover:
+    kind: backdrop
+    name: Menu
+cover:
+  backdrop: EndCover
+scenes:
+  opening:
+    - wait: 0.05
+`;
+  const sourceManifest = {
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+    path: sourceFilename,
+  };
+  try {
+    await writeFile(path.join(projectRoot, sourceFilename), sourceText);
+    const built = await buildDsl4RuntimeComponent({
+      baseSb3Bytes: result.archive,
+      projectRoot,
+      sourceManifest,
+      sourceFrontend: frontend,
+      controlProfile: 'production',
+      channel: 'bundled',
+      maxSourceBytes: storyComponentLimits.maxSourceBytes,
+      maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+      maxAssetFiles: storyComponentLimits.maxAssetFiles,
+      maxTotalAssetBytes: storyComponentLimits.maxAssetBytes,
+      replaceExisting: true,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.deepEqual(
+      built.project.extensionStorage[bundleExtensionId].components[runtimeExtensionId].application,
+      {mode: 'story'},
+    );
+    return built.bytes;
+  } finally {
+    await rm(projectRoot, {recursive: true, force: true});
+  }
 }
 
 function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
@@ -224,6 +313,11 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.equal(websiteTarget.visible, true);
   assert.equal(websiteTarget.y, -16);
   assert.equal(project.targets.find(({name}) => name === 'closeTitleButton')?.visible, true);
+  assert.deepEqual(
+    project.targets.map(({name}) => name),
+    ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
+    'The four menu actions must not add button sprites to the Scratch project.',
+  );
   assert.equal(
     project.targets.find(({name}) => name === 'officialWebsiteButton')?.blocks?.officialWebsiteOpen
       ?.opcode,
@@ -318,6 +412,87 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     ],
   );
   assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
+});
+
+test('builds a browser-selected YAML story and only its declared local assets in memory', async () => {
+  const result = await buildRelease();
+  const archive = unzipSync(result.archive);
+  const project = JSON.parse(strFromU8(archive['project.json']));
+  const sourceText = `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  Card:
+    kind: backdrop
+    file: assets/card.svg
+cover:
+  backdrop: Card
+scenes:
+  opening:
+    - wait: 0
+`;
+  const card = new TextEncoder().encode(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+  );
+  const built = await buildDsl4BrowserSelectedStoryProject({
+    project,
+    entries: [
+      {
+        path: 'story-project/story.k4.yml',
+        file: browserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
+      },
+      {path: 'story-project/assets/card.svg', file: browserFile('card.svg', card)},
+      {
+        path: 'story-project/private.txt',
+        file: browserFile('private.txt', new Uint8Array([1, 2, 3])),
+      },
+    ],
+    sourceFrontend: frontend,
+    maxSourceBytes: storyComponentLimits.maxSourceBytes,
+    maxAssetFileBytes: storyComponentLimits.maxAssetBytes,
+    maxAssetFiles: storyComponentLimits.maxAssetFiles,
+    maxAssetBytes: storyComponentLimits.maxAssetBytes,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const component =
+    built.project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
+  assert.deepEqual(component.application, {mode: 'story'});
+  assert.equal(component.source.text, sourceText);
+  assert.deepEqual(
+    component.assets.files.map(({assetId, path: filePath, size}) => ({
+      assetId,
+      path: filePath,
+      size,
+    })),
+    [{assetId: 'Card', path: 'card.svg', size: card.byteLength}],
+  );
+});
+
+test('collects a dropped DSL 4.0 project directory without flattening asset paths', async () => {
+  const source = browserFile('story.k4.yml', new TextEncoder().encode("kamishibai: '4.0'\n"));
+  const card = browserFile('card.svg', new TextEncoder().encode('<svg/>'));
+  const root = browserDirectoryHandle('story-project', [
+    ['story.k4.yml', browserFileHandle('story.k4.yml', source)],
+    [
+      'assets',
+      browserDirectoryHandle('assets', [['card.svg', browserFileHandle('card.svg', card)]]),
+    ],
+  ]);
+  const entries = await collectDsl4BrowserDroppedFiles({
+    items: [
+      {
+        async getAsFileSystemHandle() {
+          return root;
+        },
+      },
+    ],
+  });
+  assert.deepEqual(
+    entries.map(({path: filePath}) => filePath),
+    ['story-project/assets/card.svg', 'story-project/story.k4.yml'],
+  );
 });
 
 test('preserves the embedded source descriptor through a pinned TurboWarp resave', async () => {
@@ -475,8 +650,7 @@ test('waits at the title and opens the non-embedded menu from Stage and close-bu
   }
 });
 
-test('returns a naturally finished embedded story to the menu and allows a restart', async () => {
-  const archive = await buildEmbeddedStoryRelease();
+async function assertNaturallyFinishedStoryReturnsToMenu(archive) {
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
   const vm = new VirtualMachine();
   try {
@@ -520,6 +694,52 @@ test('returns a naturally finished embedded story to the menu and allows a resta
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Menu');
     assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, false);
     assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, false);
+    const applicationMenus = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-application-menu',
+      'true',
+    );
+    assert.equal(applicationMenus.length, 1);
+    assert.equal(applicationMenus[0].style.display, 'block');
+    for (const action of ['open', 'reload', 'about', 'language']) {
+      assert.equal(findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action).length, 1);
+    }
+
+    const languageButton = findByAttribute(
+      applicationMenus[0],
+      'data-dsl4-menu-action',
+      'language',
+    )[0];
+    languageButton.click();
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
+    assert.equal(languageButton.children[1].textContent, '言語');
+
+    const aboutButton = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', 'about')[0];
+    aboutButton.click();
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'TitleRuntime');
+    assert.equal(applicationMenus[0].style.display, 'none');
+    await extensionReporter(vm, 'closeTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'MenuRuntime');
+    assert.equal(applicationMenus[0].style.display, 'block');
+
+    const reloadButton = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', 'reload')[0];
+    reloadButton.click();
+    let sawReloadStart = false;
+    const reloadDeadline = Date.now() + 5_000;
+    while (Date.now() < reloadDeadline) {
+      vm.runtime._step();
+      const status = await extensionReporter(vm, 'statusReporter');
+      if (status === 'starting' || status === 'running') sawReloadStart = true;
+      if (sawReloadStart && status === 'menu') break;
+      if (status === 'error') {
+        assert.fail(`DSL 4.0 reload failed: ${await extensionReporter(vm, 'lastErrorReporter')}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(sawReloadStart, true, 'Reload must start the packaged story again.');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
 
     vm.greenFlag();
     const restartDeadline = Date.now() + 5_000;
@@ -532,6 +752,126 @@ test('returns a naturally finished embedded story to the menu and allows a resta
     assert.equal(stage.sprite.costumes[stage.currentCostume].name, 'Title');
     assert.equal(vm.runtime.getSpriteTargetByName('officialWebsiteButton').visible, true);
     assert.equal(vm.runtime.getSpriteTargetByName('closeTitleButton').visible, true);
+    assert.equal(applicationMenus[0].style.display, 'none');
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
+}
+
+test('returns a naturally finished embedded story to the menu and allows a restart', async () => {
+  await assertNaturallyFinishedStoryReturnsToMenu(await buildEmbeddedStoryRelease());
+});
+
+test('returns an external-source story built from the minimal SB3 to the menu', async () => {
+  await assertNaturallyFinishedStoryReturnsToMenu(await buildExternalSourceStoryRelease());
+});
+
+test('opens a selected .k4.yml project from the menu without adding Scratch targets', async () => {
+  const result = await buildRelease();
+  const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+  const source = browserFile(
+    'selected.k4.yml',
+    new TextEncoder().encode(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  Card:
+    kind: backdrop
+    file: assets/card.svg
+    loading: lazy
+scenes:
+  selected:
+    - wait: 0.1
+`),
+  );
+  const card = browserFile(
+    'card.svg',
+    new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
+    ),
+  );
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+    let nextSkinId = 1;
+    for (const target of vm.runtime.targets) {
+      target.drawableID = nextSkinId;
+      for (const costume of target.sprite?.costumes ?? []) {
+        costume.skinId = nextSkinId;
+        nextSkinId += 1;
+      }
+    }
+    vm.runtime.renderer = {
+      draw() {},
+      createSVGSkin() {
+        return 1;
+      },
+      destroySkin() {},
+      updateDrawableSkinId() {},
+    };
+
+    vm.greenFlag();
+    const titleDeadline = Date.now() + 5_000;
+    while (Date.now() < titleDeadline) {
+      vm.runtime._step();
+      if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await extensionReporter(vm, 'closeTitle');
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    const applicationMenu = findByAttribute(
+      restoreGlobals.document.body,
+      'data-dsl4-application-menu',
+      'true',
+    )[0];
+    assert(applicationMenu, 'The application menu must be mounted above the Stage.');
+    findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
+    const input = restoreGlobals.document.body.children.find(
+      (element) => element.tagName === 'INPUT' && element.type === 'file',
+    );
+    assert(input, 'Open must create a browser directory input.');
+    assert.equal(input.multiple, true);
+    assert.equal(input.webkitdirectory, true);
+    input.files = [
+      {
+        ...source,
+        webkitRelativePath: 'selected-project/selected.k4.yml',
+      },
+      {
+        ...card,
+        webkitRelativePath: 'selected-project/assets/card.svg',
+      },
+    ];
+    input.dispatch('change');
+
+    let sawSelectedStory = false;
+    const storyDeadline = Date.now() + 5_000;
+    while (Date.now() < storyDeadline) {
+      vm.runtime._step();
+      const status = await extensionReporter(vm, 'statusReporter');
+      if (status === 'starting' || status === 'running') sawSelectedStory = true;
+      if (sawSelectedStory && status === 'menu') break;
+      if (status === 'error') {
+        assert.fail(
+          `Selected DSL 4.0 story failed: ${await extensionReporter(vm, 'lastErrorReporter')}`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(sawSelectedStory, true);
+    assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+    assert.deepEqual(
+      vm.runtime.targets.map((target) => target.getName()),
+      ['Stage', 'officialWebsiteButton', 'closeTitleButton'],
+    );
   } finally {
     vm.quit();
     restoreGlobals();

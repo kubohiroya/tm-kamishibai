@@ -422,6 +422,23 @@ export function createDsl4BrowserTurboWarpStage(options) {
     return canvas;
   }
 
+  /** @param {'en' | 'ja'} locale */
+  function showApplicationMenu(locale) {
+    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
+    const runtime = vm.runtime;
+    const stage = runtime.getTargetForStage?.();
+    const costumeName = locale === 'ja' ? 'MenuRuntime' : 'Menu';
+    const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
+    const stageIndex = stageCostumes.findIndex(
+      /** @param {Record<string, any>} costume */ (costume) => costume?.name === costumeName,
+    );
+    if (stageIndex >= 0) stage.setCostume?.(stageIndex);
+    for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
+      runtime.getSpriteTargetByName?.(name)?.setVisible?.(false);
+    }
+    canvas.style.cursor = 'pointer';
+  }
+
   function dispose() {
     if (disposePromise) return disposePromise;
     if (disposed) return Promise.resolve(snapshot());
@@ -456,6 +473,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
     dispose,
     getRuntime,
     getCanvas,
+    showApplicationMenu,
     getState: snapshot,
   });
 }

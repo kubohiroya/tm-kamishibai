@@ -318,7 +318,16 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
           inputTarget: canvas,
           stagePointerTarget: canvas,
           historyNavigationAvailable: options.historyNavigationAvailable,
-          onEvent: options.onRuntimeEvent,
+          /** @param {Readonly<Record<string, any>>} event */
+          onEvent(event) {
+            if (event?.type === 'runtime.finish') {
+              const locale = /^ja(?:-|$)/iu.test(globalObject.navigator?.language ?? '')
+                ? 'ja'
+                : 'en';
+              activeStage.showApplicationMenu(locale);
+            }
+            options.onRuntimeEvent?.(event);
+          },
         });
         const activeBridge = createDsl4BrowserPreviewRuntimeBridge({
           createSession,

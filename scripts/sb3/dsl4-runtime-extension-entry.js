@@ -3,8 +3,13 @@ import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from '../../src/dsl4/feature-flags.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
+import {
+  buildDsl4BrowserSelectedStoryProject,
+  collectDsl4BrowserDroppedFiles,
+} from '../../src/dsl4/platform/browser-story-file-loader.js';
 import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
+import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
@@ -107,11 +112,15 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'ready';
     this.lastError = '';
     this.titleLocale = 'en';
+    this.selectedProject = null;
+    this.fileInput = null;
+    this.applicationMenu = null;
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
+    this.installDropTarget();
   }
 
   getInfo() {
@@ -186,6 +195,30 @@ class KamishibaiDsl4RuntimeExtension {
           text: 'toggle title language',
           hideFromPalette: true,
         },
+        {
+          opcode: 'openStoryFile',
+          blockType: BlockType.COMMAND,
+          text: 'open a DSL 4.0 story file',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'reloadStory',
+          blockType: BlockType.COMMAND,
+          text: 'play the current story again',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'showAbout',
+          blockType: BlockType.COMMAND,
+          text: 'show application information',
+          hideFromPalette: true,
+        },
+        {
+          opcode: 'toggleMenuLanguage',
+          blockType: BlockType.COMMAND,
+          text: 'change menu language',
+          hideFromPalette: true,
+        },
       ],
     };
   }
@@ -233,6 +266,157 @@ class KamishibaiDsl4RuntimeExtension {
     this.showScratchTitle(this.titleLocale);
   }
 
+  ensureApplicationMenu() {
+    if (this.applicationMenu) return this.applicationMenu;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    try {
+      this.applicationMenu = createDsl4RuntimeApplicationMenu({
+        document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: appShellLocales.en.ui,
+          ja: appShellLocales.ja.ui,
+        },
+        onOpen: () => this.openStoryFile(),
+        onReload: () => this.reloadStory(),
+        onAbout: () => this.showAbout(),
+        onLocaleChange: (locale) => {
+          this.titleLocale = locale;
+          this.showScratchMenu(locale);
+        },
+        onError: (error) => this.reportFailure(error, 'application-menu'),
+      });
+    } catch (error) {
+      console.error('[Kamishibai DSL 4.0] application-menu failed.', loggedError(error));
+      return null;
+    }
+    return this.applicationMenu;
+  }
+
+  installDropTarget() {
+    const mount = resolveRuntimeMount(this.Scratch);
+    if (
+      !mount ||
+      typeof mount.addEventListener !== 'function' ||
+      typeof mount.removeEventListener !== 'function'
+    ) {
+      return;
+    }
+    const onDragOver = (event) => {
+      if (this.status !== 'menu') return;
+      event.preventDefault?.();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (event) => {
+      if (this.status !== 'menu') return;
+      event.preventDefault?.();
+      const collecting = collectDsl4BrowserDroppedFiles(event.dataTransfer);
+      this.enqueue(async () => this.loadSelectedEntries(await collecting), 'file-drop');
+    };
+    mount.addEventListener('dragover', onDragOver);
+    mount.addEventListener('drop', onDrop);
+  }
+
+  openStoryFile() {
+    if (this.status !== 'menu') return undefined;
+    const document = globalThis.document;
+    if (!document || typeof document.createElement !== 'function') {
+      throw new Error('This browser cannot open a DSL 4.0 story file.');
+    }
+    const input = document.createElement('input');
+    if (
+      !input ||
+      typeof input.addEventListener !== 'function' ||
+      typeof input.click !== 'function'
+    ) {
+      throw new Error('This browser cannot open a DSL 4.0 story file.');
+    }
+    input.type = 'file';
+    input.accept = '.k4.yml,.k4.yaml,application/yaml,text/yaml,text/plain';
+    input.multiple = true;
+    input.webkitdirectory = true;
+    input.setAttribute?.('webkitdirectory', '');
+    if (input.style) input.style.display = 'none';
+    input.addEventListener(
+      'change',
+      () => {
+        const entries = Array.from(input.files ?? []).map((file) => ({
+          path: file.webkitRelativePath || file.name,
+          file,
+        }));
+        input.remove?.();
+        this.fileInput = null;
+        if (entries.length > 0) {
+          this.enqueue(() => this.loadSelectedEntries(entries), 'file-open');
+        }
+      },
+      {once: true},
+    );
+    this.fileInput?.remove?.();
+    this.fileInput = input;
+    document.body?.appendChild?.(input);
+    input.click();
+    return undefined;
+  }
+
+  async loadSelectedEntries(entries) {
+    this.status = 'starting';
+    this.hideScratchMenu();
+    this.setStageCursor('wait');
+    const baseProject = JSON.parse(this.Scratch.vm.toJSON());
+    const selected = await buildDsl4BrowserSelectedStoryProject({
+      project: baseProject,
+      entries,
+      sourceFrontend: this.frontend,
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFileBytes: limits.maxAssetBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetBytes: limits.maxAssetBytes,
+      subtleCrypto: globalThis.crypto?.subtle,
+    });
+    this.selectedProject = selected.project;
+    await this.restart({projectOverride: selected.project, showTitle: false, forceStory: true});
+  }
+
+  reloadStory() {
+    if (this.status !== 'menu') return undefined;
+    const packagedProject = JSON.parse(this.Scratch.vm.toJSON());
+    const project =
+      this.selectedProject ??
+      (packagedApplicationMode(packagedProject) === 'story' ? packagedProject : null);
+    if (!project) return undefined;
+    return this.enqueue(
+      () => this.restart({projectOverride: project, showTitle: false, forceStory: true}),
+      'story-reload',
+    );
+  }
+
+  showAbout() {
+    if (this.status !== 'menu' || !this.shell) return undefined;
+    const shell = this.shell;
+    this.hideScratchMenu();
+    this.pendingStart = {
+      shell,
+      start: async () => {
+        if (this.shell !== shell) return;
+        this.pendingStart = null;
+        this.hideScratchTitle();
+        this.showScratchMenu(this.titleLocale);
+        this.status = 'menu';
+      },
+    };
+    this.status = 'title';
+    this.showScratchTitle(this.titleLocale);
+    return undefined;
+  }
+
+  toggleMenuLanguage() {
+    if (this.status !== 'menu') return;
+    this.titleLocale = this.titleLocale === 'ja' ? 'en' : 'ja';
+    this.showScratchMenu(this.titleLocale);
+  }
+
   setTargetCostume(target, costumeName) {
     const costumes = target?.sprite?.costumes;
     const index = Array.isArray(costumes)
@@ -256,6 +440,7 @@ class KamishibaiDsl4RuntimeExtension {
     const stage = runtime.getTargetForStage();
     const website = runtime.getSpriteTargetByName('officialWebsiteButton');
     const close = runtime.getSpriteTargetByName('closeTitleButton');
+    this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
     this.setTargetCostume(
       website,
@@ -270,13 +455,21 @@ class KamishibaiDsl4RuntimeExtension {
     for (const name of ['officialWebsiteButton', 'closeTitleButton']) {
       this.Scratch.vm.runtime.getSpriteTargetByName(name)?.setVisible?.(false);
     }
-    this.setStageCursor('');
+    this.setStageCursor('auto');
   }
 
   showScratchMenu(locale) {
-    const stage = this.Scratch.vm.runtime.getTargetForStage();
+    const runtime = this.Scratch.vm.runtime;
+    const stage = runtime.getTargetForStage();
+    this.hideScratchTitle();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
+    this.ensureApplicationMenu()?.show(locale);
     this.setStageCursor('pointer');
+  }
+
+  hideScratchMenu() {
+    this.applicationMenu?.hide();
+    this.setStageCursor('auto');
   }
 
   enqueue(operation, phase = 'operation') {
@@ -301,6 +494,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.status = 'error';
     this.lastError = message;
     this.hideScratchTitle();
+    this.hideScratchMenu();
     try {
       this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
         document: globalThis.document,
@@ -319,6 +513,7 @@ class KamishibaiDsl4RuntimeExtension {
   async stop(reason) {
     this.pendingStart = null;
     this.hideScratchTitle();
+    this.hideScratchMenu();
     const errorIndicator = this.errorIndicator;
     this.errorIndicator = null;
     errorIndicator?.dispose();
@@ -328,14 +523,16 @@ class KamishibaiDsl4RuntimeExtension {
     if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
 
-  async restart() {
+  async restart({projectOverride = null, showTitle = true, forceStory = false} = {}) {
     await this.stop('project-restart');
     this.status = 'starting';
     this.lastError = '';
 
     const Scratch = this.Scratch;
-    const project = JSON.parse(Scratch.vm.toJSON());
-    const applicationMode = packagedApplicationMode(project);
+    const packagedProject = JSON.parse(Scratch.vm.toJSON());
+    const project = projectOverride ?? this.selectedProject ?? packagedProject;
+    const applicationMode =
+      forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
     const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
     let shell;
     let started = false;
@@ -418,10 +615,14 @@ class KamishibaiDsl4RuntimeExtension {
             });
             this.status = 'menu';
           };
-    this.pendingStart = {shell, start: startAfterTitle};
-    this.status = 'title';
     this.titleLocale = browserLocale();
-    this.showScratchTitle(this.titleLocale);
+    if (showTitle) {
+      this.pendingStart = {shell, start: startAfterTitle};
+      this.status = 'title';
+      this.showScratchTitle(this.titleLocale);
+    } else {
+      await startAfterTitle();
+    }
   }
 }
 
