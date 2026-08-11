@@ -1796,6 +1796,108 @@ scenes:
   );
 });
 
+test('3.2 rehearsal scene skip stops the active sound and applies only stateful tail actions', async () => {
+  const activeSound = deferred();
+  const followingWait = deferred();
+  const calls = [];
+  const playingBgm = new Set();
+  const stoppedSounds = [];
+  let brightness = 0;
+  const controller = createDsl4RuntimeController({
+    storyDocument: parseStory(`
+kamishibai: '4.0'
+assets:
+  Hidden: backdrop
+  Music: sound
+  NextMusic: sound
+  Effect: sound
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+scenes:
+  opening:
+    - bgm: Music
+    - sound: Effect
+    - stage: Hidden
+    - wait: 30
+    - bgm: NextMusic
+    - transition: {effect: fadeOut, seconds: 30}
+    - Hero.show: {skin: HeroIdle, x: 0, y: 0, scale: 100}
+    - stage: Hidden
+  following:
+    - wait: 30
+`),
+    port: {
+      async bgm({sound}) {
+        calls.push(['bgm', sound]);
+        playingBgm.add(sound);
+      },
+      sound({sound}, context) {
+        calls.push(['sound', sound]);
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            stoppedSounds.push(sound);
+            const error = new Error('sound cancelled');
+            error.name = 'AbortError';
+            activeSound.reject(error);
+          },
+          {once: true},
+        );
+        return activeSound.promise;
+      },
+      async stage({backdrop}) {
+        calls.push(['stage', backdrop]);
+      },
+      wait(_payload, context) {
+        calls.push(['wait']);
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('wait cancelled');
+            error.name = 'AbortError';
+            followingWait.reject(error);
+          },
+          {once: true},
+        );
+        return followingWait.promise;
+      },
+      async transition({effect, seconds}) {
+        calls.push(['transition', effect, seconds]);
+        brightness = effect === 'fadeOut' ? -100 : 0;
+      },
+      async show(payload) {
+        calls.push(['show', payload.target]);
+      },
+    },
+  });
+
+  const staleRun = controller.start();
+  await waitFor(
+    () => calls.some(([type]) => type === 'sound'),
+    'active sound did not start before scene skip',
+  );
+  assert.equal(controller.canRehearsalSkip('rehearsal.skipScene'), true);
+  const skipped = await controller.skipScene();
+
+  assert.equal(skipped.sceneId, 'following');
+  assert.equal(skipped.status, 'running');
+  assert.deepEqual(stoppedSounds, ['Effect']);
+  assert.deepEqual([...playingBgm], ['Music', 'NextMusic']);
+  assert.equal(brightness, -100);
+  assert.deepEqual(calls, [
+    ['bgm', 'Music'],
+    ['sound', 'Effect'],
+    ['bgm', 'NextMusic'],
+    ['transition', 'fadeOut', 0],
+    ['wait'],
+  ]);
+  assert.equal(controller.getTrace().filter(({type}) => type === 'action.skip').length, 4);
+  assert.equal(controller.canRehearsalSkip('rehearsal.skipScene'), true);
+
+  controller.stop('test-cleanup');
+  await Promise.allSettled([staleRun, controller.getRunPromise()]);
+});
+
 test('reposition pauses without presentation effects and resume starts at the selected action', async () => {
   const pending = deferred();
   const effects = [];

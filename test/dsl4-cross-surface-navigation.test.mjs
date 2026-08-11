@@ -54,10 +54,12 @@ function projectFromSb3(bytes) {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((resolvePromise) => {
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return {promise, resolve};
+  return {promise, reject, resolve};
 }
 
 function keyEvent(code) {
@@ -113,6 +115,54 @@ async function packagedComponent() {
       manifest: {formatVersion: 1, assets: []},
       getFile() {
         assert.fail('the cross-surface fixture has no binary assets');
+      },
+    },
+    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
+  );
+  return Object.freeze({
+    storyDocument: parsed.storyDocument,
+    sourceDescriptor,
+    runtimeArtifact: artifactResult.artifact,
+    assetBundle,
+  });
+}
+
+async function rehearsalPackagedComponent() {
+  const source = `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
+scenes:
+  opening:
+    - wait: 60
+    - wait: 60
+    - wait: 60
+  ending:
+    - wait: 60
+`;
+  const parsed = frontend.parse(source, {sourceId: 'cross-surface-rehearsal.k4.yml'});
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
+    sourceId: 'cross-surface-rehearsal.k4.yml',
+    displayName: 'cross-surface-rehearsal.k4.yml',
+    maxSourceBytes: limits.maxSourceBytes,
+    subtleCrypto,
+  });
+  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
+    parsed.storyDocument,
+    sourceDescriptor,
+    'production',
+    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
+  );
+  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const assetBundle = await createDsl4EmbeddedAssetBundle(
+    parsed.storyDocument,
+    {
+      manifest: {formatVersion: 1, assets: []},
+      getFile() {
+        assert.fail('the cross-surface rehearsal fixture has no binary assets');
       },
     },
     {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
@@ -272,6 +322,58 @@ test('runs one immutable keymap and chronological history contract on every deli
   );
   assert.deepEqual(semanticResults[1], semanticResults[0]);
   assert.deepEqual(semanticResults[2], semanticResults[0]);
+});
+
+test('reproduces rehearsal action and scene skips on every delivery surface', async () => {
+  const component = await rehearsalPackagedComponent();
+  for (const surface of contract.surfaces) {
+    const waits = [];
+    const project = await projectForSurface(component, surface);
+    const startup = await createDsl4RuntimeStartup({
+      featureFlags: {dsl4Runtime: true},
+      project,
+      sourceFrontend: frontend,
+      ...limits,
+      subtleCrypto,
+      port: {
+        wait(_payload, context) {
+          const pending = deferred();
+          waits.push(pending);
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('rehearsal wait cancelled');
+              error.name = 'AbortError';
+              pending.reject(error);
+            },
+            {once: true},
+          );
+          return pending.promise;
+        },
+      },
+    });
+    assert.equal(startup.ok, true, `${surface.label}: ${JSON.stringify(startup.diagnostics)}`);
+    const run = startup.session.start();
+    await waitFor(() => waits.length === 1, `${surface.label}: first wait did not start`);
+
+    const right = keyEvent('ArrowRight');
+    assert.equal(startup.session.handleKeyDown(right), true);
+    assert.deepEqual(right.counters, {preventDefault: 1, stopPropagation: 1});
+    await waitFor(() => waits.length === 2, `${surface.label}: action skip did not advance`);
+    assert.equal(startup.session.getState().runtime.actionIndex, 1);
+
+    const down = keyEvent('ArrowDown');
+    assert.equal(startup.session.handleKeyDown(down), true);
+    assert.deepEqual(down.counters, {preventDefault: 1, stopPropagation: 1});
+    await waitFor(
+      () => startup.session.getState().runtime.sceneId === 'ending' && waits.length === 3,
+      `${surface.label}: scene skip did not enter ending`,
+    );
+    assert.equal(startup.session.getState().runtime.actionIndex, 0);
+
+    startup.session.stop('cross-surface-rehearsal-complete');
+    await Promise.allSettled([run, startup.session.getRunPromise()]);
+  }
 });
 
 test('keeps the shared runtime composition root inert on every surface while the flag is OFF', async () => {

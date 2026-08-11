@@ -78,7 +78,7 @@ const tmPoseRuntime = Object.freeze({
       },
       async predict() {
         metrics.predictions += 1;
-        return [{className: 'help', probability: 1}];
+        return [{className: 'help', probability: 0}];
       },
     };
   },
@@ -98,7 +98,7 @@ fixture.client = createDsl4LocalPreviewBrowserBootstrap({
   sourceFrontend: createDsl4ProductionSourceFrontend(schema),
   tmPoseRuntime,
   onRuntimeEvent(event) {
-    fixture.events.push({type: event.type, actionPath: event.actionPath});
+    fixture.events.push({type: event.type, actionPath: event.actionPath, details: event.details});
   },
   onError(error) {
     fixture.errors.push(String(error?.message ?? error));

@@ -28,11 +28,11 @@ controls:
       ArrowUp: history.previousScene
       ArrowDown: history.nextScene
     production:
-      Space: navigation.nextAction
+      Space: rehearsal.skipPose
     rehearsal:
-      Space: navigation.nextAction
-      ArrowRight: navigation.nextAction
-      ArrowDown: navigation.nextScene
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 scenes:
   opening: []
 `;
@@ -68,7 +68,7 @@ test('resolves only the selected complete profile without inheritance or fallbac
   const story = parseStory(profileStorySource);
   const production = resolveDsl4ControlProfile(story, 'production');
   assert.equal(production.ok, true);
-  assert.deepEqual(production.keymap, {Space: 'navigation.nextAction'});
+  assert.deepEqual(production.keymap, {Space: 'rehearsal.skipPose'});
   assert.equal(production.historyEnabled, false);
   assert.equal(Object.hasOwn(production.keymap, 'ArrowLeft'), false);
 
@@ -76,9 +76,9 @@ test('resolves only the selected complete profile without inheritance or fallbac
   assert.equal(rehearsal.ok, true);
   assert.equal(rehearsal.historyEnabled, false);
   assert.deepEqual(rehearsal.keymap, {
-    ArrowDown: 'navigation.nextScene',
-    ArrowRight: 'navigation.nextAction',
-    Space: 'navigation.nextAction',
+    ArrowDown: 'rehearsal.skipScene',
+    ArrowRight: 'rehearsal.skipAction',
+    Space: 'rehearsal.skipPose',
   });
 
   const development = resolveDsl4ControlProfile(story, 'development', {
@@ -131,7 +131,7 @@ test('returns frozen copies without changing StoryDocument', () => {
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.keymap), true);
   assert.notStrictEqual(result.keymap, originalKeymap);
-  assert.deepEqual(story.controls.keymaps.production, {Space: 'navigation.nextAction'});
+  assert.deepEqual(story.controls.keymaps.production, {Space: 'rehearsal.skipPose'});
 });
 
 test('fails closed when the selected profile needs unavailable history navigation', () => {

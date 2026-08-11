@@ -706,6 +706,9 @@
       "enum": [
         "navigation.nextAction",
         "navigation.nextScene",
+        "rehearsal.skipPose",
+        "rehearsal.skipAction",
+        "rehearsal.skipScene",
         "history.previousAction",
         "history.previousScene",
         "history.nextScene"

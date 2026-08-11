@@ -51,7 +51,7 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
 | `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
-| 3.2標準の実行／リハーサル操作             | `controls.keymaps.production/rehearsal`    | 自動            | Space／→の次actionと↓の次sceneを別profileとして保持               |
+| 3.2標準の実行／リハーサル操作             | `controls.keymaps.production/rehearsal`    | 自動            | Spaceのpose step、→のaction、↓のscene skipを別profileとして保持    |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
 `TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
@@ -59,8 +59,8 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 embedded化します。converter自身はnetwork取得やcache lookupを行いません。
 
 3.2には4.0の名前付きcontrol profile宣言がないため、converterは二つの完全profileを生成します。
-`production`はSpaceを`navigation.nextAction`へ割り当てます。`rehearsal`はSpaceと→を
-`navigation.nextAction`、↓を履歴とは独立した`navigation.nextScene`へ割り当てます。通常配布は
+`production`はSpaceを`rehearsal.skipPose`へ割り当てます。`rehearsal`はSpaceを
+`rehearsal.skipPose`、→を`rehearsal.skipAction`、↓を`rehearsal.skipScene`へ割り当てます。通常配布は
 `build-dsl4 --control-profile production`、通し稽古版は`--control-profile rehearsal`を選択します。
 
 `asset`のID、project asset名、`sceneLabel`は別名へ置換せず、その文字列を4.0へ保持します。空白、`.`、`/`、

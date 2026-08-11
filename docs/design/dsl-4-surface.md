@@ -50,7 +50,7 @@ Copyright © 2026 Hiroya Kubo.
 | `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定   |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定  |
 | `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
@@ -391,15 +391,21 @@ bubbleStyles:
 controls:
   keymaps:
     production:
-      Space: navigation.nextAction
+      Space: rehearsal.skipPose
     rehearsal:
-      Space: navigation.nextAction
-      ArrowRight: navigation.nextAction
-      ArrowDown: navigation.nextScene
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
 ```
 
-`navigation.nextScene`は`history.nextScene`と異なり、まだ訪問していない次のsceneへ進む通し稽古用commandです。
-現在sceneの残りactionをcancelし、次sceneのlazy asset準備と通常のscene境界処理を行います。
+`rehearsal.skipPose`はactive pose stepだけを完了し、同じpose actionの次stepへ進みます。
+`rehearsal.skipAction`はactive actionを3.2と同じ最終状態へ完了し、次actionへ進みます。pose中に受理した場合は
+pose action全体を終了します。`rehearsal.skipScene`はactive actionを完了した後、現在sceneの残りから`bgm`と
+`transition`だけを最終状態で適用し、stage、actor、wait、input等を実行せず次sceneへ進みます。既存BGMは停止せず、
+activeな`sound`だけを停止します。三commandは最初に受理した入力のcleanupと境界到達が完了するまで後続入力を受理しません。
+
+これらは`history.nextScene`と異なり実行履歴を移動しません。選択するprofile名に特別な意味はなく、たとえば
+`controls.keymaps.production`へ三commandを明示すれば本番buildでも有効です。keymapに記述しなければ無効です。
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 

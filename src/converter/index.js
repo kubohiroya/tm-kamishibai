@@ -1382,11 +1382,11 @@ class Converter {
       kamishibai: '4.0',
       controls: {
         keymaps: {
-          production: {Space: 'navigation.nextAction'},
+          production: {Space: 'rehearsal.skipPose'},
           rehearsal: {
-            Space: 'navigation.nextAction',
-            ArrowRight: 'navigation.nextAction',
-            ArrowDown: 'navigation.nextScene',
+            Space: 'rehearsal.skipPose',
+            ArrowRight: 'rehearsal.skipAction',
+            ArrowDown: 'rehearsal.skipScene',
           },
         },
       },
