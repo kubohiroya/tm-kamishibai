@@ -15,22 +15,6 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
-      buildDate: '2026-08-06',
-      filename: 'kamishibai-3.2.sb3',
-      faviconPath: 'release-sources/3.2.3/site/favicon.png',
-      sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
-      sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
-      sourceDirectory: 'release-sources/3.2.3/app',
-    },
-    description:
-      '3.1と3.2の既存作品を扱うための最終安定版です。新しく作品を作る場合は4.0を利用してください。',
-    series: '3.2',
-    status: '過去の安定版',
-    statusKind: 'past',
-    version: '3.2.3',
-  },
-  {
-    artifact: {
       buildDate: '2026-08-11',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
@@ -46,6 +30,22 @@ export const downloadCatalog = deepFreeze([
     status: '安定版',
     statusKind: 'stable',
     version: '4.0.0',
+  },
+  {
+    artifact: {
+      buildDate: '2026-08-06',
+      filename: 'kamishibai-3.2.sb3',
+      faviconPath: 'release-sources/3.2.3/site/favicon.png',
+      sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
+      sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
+      sourceDirectory: 'release-sources/3.2.3/app',
+    },
+    description:
+      '3.1と3.2の既存作品を扱うための最終安定版です。新しく作品を作る場合は4.0を利用してください。',
+    series: '3.2',
+    status: '過去の安定版',
+    statusKind: 'past',
+    version: '3.2.3',
   },
   {
     artifact: {
