@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
+export const dsl4DocsUrl =
+  'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
