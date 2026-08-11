@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kubohiroya/tmpose-kamishibai/schema/dsl-4-asset-config.schema.json",
+  "title": "TMPose Kamishibai DSL 4.0 asset distribution configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "profiles", "providers"],
+  "properties": {
+    "formatVersion": {"const": 1},
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"},
+      "additionalProperties": {"$ref": "#/$defs/profile"}
+    },
+    "providers": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/assetId"},
+      "additionalProperties": {"$ref": "#/$defs/providerSet"}
+    }
+  },
+  "$defs": {
+    "assetId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "delivery": {"type": "string", "enum": ["embedded", "remote"]},
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["network"],
+      "properties": {
+        "network": {"type": "string", "enum": ["allowed", "forbidden"]},
+        "defaultDelivery": {"$ref": "#/$defs/delivery"},
+        "kinds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "backdrop": {"$ref": "#/$defs/delivery"},
+            "costume": {"$ref": "#/$defs/delivery"},
+            "image": {"$ref": "#/$defs/delivery"},
+            "poseModel": {"$ref": "#/$defs/delivery"},
+            "sound": {"$ref": "#/$defs/delivery"}
+          }
+        },
+        "assets": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/assetId"},
+          "additionalProperties": {"$ref": "#/$defs/delivery"}
+        }
+      }
+    },
+    "filePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?![A-Za-z][A-Za-z0-9+.-]*:)[^\\\\\\u0000-\\u001f\\u007f]+$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "pattern": "^https://(?![^/@\\s]+@)[^\\s#]+$"
+    },
+    "embeddedProvider": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {"file": {"$ref": "#/$defs/filePath"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {"name": {"$ref": "#/$defs/assetId"}}
+        }
+      ]
+    },
+    "remoteProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {"url": {"$ref": "#/$defs/httpsUrl"}}
+    },
+    "providerSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "embedded": {"$ref": "#/$defs/embeddedProvider"},
+        "remote": {"$ref": "#/$defs/remoteProvider"}
+      }
+    }
+  }
+}

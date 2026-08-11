@@ -12,9 +12,11 @@ import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {
   createDsl4SourceFrontend,
   dsl4BinaryEntryPrefix,
+  loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {readSb3} from '../src/builder/sb3.js';
+import {sha256} from '../src/builder/hash.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -263,6 +265,67 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
   });
 });
 
+test('connects an explicit asset distribution profile through build and runtime loading', async () => {
+  await withFixture(async (fixture) => {
+    const openingBytes = Buffer.from('<svg/>');
+    const integrity = `sha256-${sha256(openingBytes)}`;
+    const assetConfig = {
+      formatVersion: 1,
+      profiles: {offline: {network: 'forbidden', defaultDelivery: 'embedded'}},
+      providers: {OpeningImage: {remote: {url: 'https://cdn.example.com/opening.svg'}}},
+    };
+    const assetLock = {
+      formatVersion: 1,
+      assets: {
+        OpeningImage: {
+          kind: 'backdrop',
+          contentIntegrity: integrity,
+          contentType: 'image/svg+xml',
+          size: openingBytes.length,
+          providers: {
+            embedded: {file: 'opening.svg'},
+            remote: {
+              url: 'https://cdn.example.com/opening.svg',
+              transportIntegrity: integrity,
+              contentType: 'image/svg+xml',
+              size: openingBytes.length,
+            },
+          },
+        },
+      },
+    };
+    const assetConfigPath = path.join(fixture.directory, 'project.assets.json');
+    const assetLockPath = path.join(fixture.directory, 'project.assets.lock.json');
+    await writeFile(assetConfigPath, `${JSON.stringify(assetConfig)}\n`);
+    await writeFile(assetLockPath, `${JSON.stringify(assetLock)}\n`);
+    const result = await runCli(
+      cliArguments(fixture, 'offline.sb3', [
+        '--asset-config',
+        assetConfigPath,
+        '--asset-lock',
+        assetLockPath,
+        '--asset-profile',
+        'offline',
+        '--max-asset-config-bytes',
+        '16384',
+        '--max-asset-lock-bytes',
+        '16384',
+      ]),
+      {stdout: {write() {}}},
+    );
+    const {project} = readSb3(await readFile(result.outputPath));
+    const loaded = await loadDsl4RuntimeComponent(project, frontend, {
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetBytes: limits.maxTotalAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+    assert.equal(loaded.storyDocument.assets.OpeningImage.delivery, 'embedded');
+    assert.equal(loaded.storyDocument.assets.OpeningImage.file, 'opening.svg');
+  });
+});
+
 test('enables root binary entry packaging explicitly from the CLI', async () => {
   await withFixture(async (fixture) => {
     const result = await runCli(
@@ -273,6 +336,78 @@ test('enables root binary entry packaging explicitly from the CLI', async () => 
     const entries = Object.keys(archive).filter((name) => name.startsWith(dsl4BinaryEntryPrefix));
     assert.equal(entries.length, 1);
     assert.match(entries[0], /^k4asset-v1-[0-9a-f]{64}$/u);
+  });
+});
+
+test('preserves an explicit asset distribution through root binary entry packaging', async () => {
+  await withFixture(async (fixture) => {
+    const openingBytes = Buffer.from('<svg/>');
+    const integrity = 'sha256-' + sha256(openingBytes);
+    const assetConfigPath = path.join(fixture.directory, 'project.assets.json');
+    const assetLockPath = path.join(fixture.directory, 'project.assets.lock.json');
+    await writeFile(
+      assetConfigPath,
+      JSON.stringify({
+        formatVersion: 1,
+        profiles: {offline: {network: 'forbidden', defaultDelivery: 'embedded'}},
+        providers: {OpeningImage: {remote: {url: 'https://cdn.example.com/opening.svg'}}},
+      }) + '\n',
+    );
+    await writeFile(
+      assetLockPath,
+      JSON.stringify({
+        formatVersion: 1,
+        assets: {
+          OpeningImage: {
+            kind: 'backdrop',
+            contentIntegrity: integrity,
+            contentType: 'image/svg+xml',
+            size: openingBytes.length,
+            providers: {
+              embedded: {file: 'opening.svg'},
+              remote: {
+                url: 'https://cdn.example.com/opening.svg',
+                transportIntegrity: integrity,
+                contentType: 'image/svg+xml',
+                size: openingBytes.length,
+              },
+            },
+          },
+        },
+      }) + '\n',
+    );
+    const result = await runCli(
+      cliArguments(fixture, 'offline-root.sb3', [
+        '--asset-config',
+        assetConfigPath,
+        '--asset-lock',
+        assetLockPath,
+        '--asset-profile',
+        'offline',
+        '--max-asset-config-bytes',
+        '16384',
+        '--max-asset-lock-bytes',
+        '16384',
+        '--enable-root-binary-entries',
+      ]),
+      {stdout: {write() {}}},
+    );
+    const bytes = await readFile(result.outputPath);
+    const archive = unzipSync(bytes);
+    const entries = Object.keys(archive).filter((name) => name.startsWith(dsl4BinaryEntryPrefix));
+    assert.equal(entries.length, 1);
+
+    const {project} = readSb3(bytes);
+    const loaded = await loadDsl4BinaryEntryRuntimeComponent(project, frontend, {
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetFileBytes: limits.maxAssetFileBytes,
+      maxAssetBytes: limits.maxTotalAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+    assert.equal(loaded.storyDocument.assets.OpeningImage.delivery, 'embedded');
+    assert.equal(loaded.storyDocument.assets.OpeningImage.file, 'opening.svg');
   });
 });
 

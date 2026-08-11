@@ -17,7 +17,15 @@ import {
   validateDsl4SourceFile,
 } from './dsl4-validate.js';
 import {Sb3BuilderError} from './errors.js';
-import {buildDsl4RuntimeComponentFile, buildSb3Bundle} from './index.js';
+import {
+  auditDsl4AssetDistribution,
+  buildDsl4RuntimeComponentFile,
+  buildSb3Bundle,
+  formatDsl4AssetDistributionAudit,
+  generateDsl4AssetDistributionLockFile,
+  serializeDsl4AssetDistributionAudit,
+  vendorDsl4AssetDistribution,
+} from './index.js';
 
 const dsl4SchemaUrl = new URL('../../schema/dsl-4.schema.json', import.meta.url);
 
@@ -30,7 +38,9 @@ export function usage() {
     --source-manifest project.source.json --output dist/story.sb3 \\
     --control-profile production --channel bundled \\
     --max-source-bytes N --max-asset-file-bytes N \\
-    --max-asset-files N --max-total-asset-bytes N \
+    --max-asset-files N --max-total-asset-bytes N \\
+    [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
+     --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] [options]
 
   tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
@@ -38,6 +48,22 @@ export function usage() {
 
   tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
     --max-source-bytes N [--format pretty|json]
+
+  tmpose-kamishibai audit-dsl4-assets --project-root DIR \\
+    --source-manifest project.source.json \\
+    --asset-config project.assets.json --asset-lock project.assets.lock.json \\
+    --asset-profile PROFILE --max-source-bytes N \\
+    --max-source-manifest-bytes N --max-asset-config-bytes N \\
+    --max-asset-lock-bytes N [--format pretty|json] [options]
+
+  tmpose-kamishibai lock-dsl4-assets --project-root DIR \\
+    --source-manifest project.source.json --asset-config project.assets.json \\
+    --output project.assets.lock.json --allow-host HOST [options]
+
+  tmpose-kamishibai vendor-dsl4-assets --project-root DIR \\
+    --asset-config project.assets.json --asset-lock project.assets.lock.json \\
+    --output-config project.assets.offline.json --output-lock project.assets.offline.lock.json \\
+    --allow-host HOST [options]
 
   tmpose-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
     --source-manifest project.source.json --control-profile production \\
@@ -60,6 +86,11 @@ DSL 4.0 build-dsl4 options:
   --max-include-depth N         Maximum include graph depth
   --history-navigation-available  Permit a selected history.* keymap
   --replace-existing              Replace a same-channel component in the base SB3
+  --asset-config FILE             Asset distribution config (requires lock and profile)
+  --asset-lock FILE               Asset distribution lock (requires config and profile)
+  --asset-profile PROFILE         Explicit asset distribution profile
+  --max-asset-config-bytes N      Maximum asset config bytes
+  --max-asset-lock-bytes N        Maximum asset lock bytes
 
 DSL 4.0 preview-dsl4 options:
   --watch                         Keep watching the selected source (required)
@@ -79,6 +110,32 @@ convert-dsl4 options:
 validate-dsl4 options:
   --format FORMAT         Diagnostic output: pretty (default) or json
 
+audit-dsl4-assets options:
+  --enable-source-includes       Enable multi-file include processing
+  --max-source-files N          Maximum files in the include graph
+  --max-total-source-bytes N    Maximum total bytes in the include graph
+  --max-include-depth N         Maximum include graph depth
+  --format FORMAT               Audit output: pretty (default) or json
+
+lock-dsl4-assets options:
+  --allow-host HOST             Allowed HTTPS remote hostname (repeatable)
+  --timeout-ms N                Per-request timeout in milliseconds
+  --max-redirects N             Maximum HTTPS redirects
+  --max-asset-file-bytes N      Maximum bytes per local or remote asset
+  --max-asset-files N           Maximum local/expanded pose entries
+  --max-total-asset-bytes N     Maximum total inspected bytes
+
+vendor-dsl4-assets options:
+  --vendor-dir DIR              Project-relative content-addressed mirror root
+  --allow-host HOST             Allowed HTTPS remote hostname (repeatable)
+  --timeout-ms N                Per-request timeout in milliseconds
+  --max-redirects N             Maximum HTTPS redirects
+  --max-asset-config-bytes N    Maximum input config bytes
+  --max-asset-lock-bytes N      Maximum input lock bytes
+  --max-asset-file-bytes N      Maximum bytes per remote asset
+  --max-asset-files N           Maximum vendored files/pose entries
+  --max-total-asset-bytes N     Maximum total downloaded bytes
+
 General options:
   --help                  Show this help
   --version               Show the package version
@@ -88,6 +145,10 @@ build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
 preview-dsl4 builds a development-only browser runtime in memory, opens the system
 browser, and reports success only after the authenticated runtime-ready acknowledgement.
 validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics.
+audit-dsl4-assets resolves a frozen asset lock without network access or file writes.
+lock-dsl4-assets fetches only allowlisted HTTPS providers and atomically writes a canonical lock.
+vendor-dsl4-assets fetches and verifies lock providers, then atomically installs a content-addressed
+mirror and generated config/lock files for offline resolution.
 convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
 explicitly selected YAML output.`;
 }
@@ -130,6 +191,409 @@ function parseValidateDsl4Arguments(arguments_) {
     input: path.resolve(/** @type {string} */ (values.get('--input'))),
     format,
     maxSourceBytes,
+  };
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{
+ *   projectRoot: string,
+ *   sourceManifest: string,
+ *   assetConfig: string,
+ *   assetLock: string,
+ *   assetProfile: string,
+ *   format: 'pretty' | 'json',
+ *   maxSourceBytes: number,
+ *   maxSourceManifestBytes: number,
+ *   maxAssetConfigBytes: number,
+ *   maxAssetLockBytes: number,
+ *   sourceIncludesEnabled: boolean,
+ *   maxSourceFiles?: number,
+ *   maxTotalSourceBytes?: number,
+ *   maxIncludeDepth?: number,
+ * }}
+ */
+function parseAuditDsl4AssetArguments(arguments_) {
+  const values = new Map();
+  const flags = new Set();
+  const flagOptions = new Set(['--enable-source-includes']);
+  const allowedValueOptions = new Set([
+    '--project-root',
+    '--source-manifest',
+    '--asset-config',
+    '--asset-lock',
+    '--asset-profile',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-asset-config-bytes',
+    '--max-asset-lock-bytes',
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
+    '--format',
+  ]);
+
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const option = arguments_[index];
+    if (flagOptions.has(option)) {
+      if (flags.has(option)) {
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
+      flags.add(option);
+      continue;
+    }
+    if (!allowedValueOptions.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    const value = arguments_[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+    index += 1;
+  }
+
+  for (const required of [
+    '--project-root',
+    '--source-manifest',
+    '--asset-config',
+    '--asset-lock',
+    '--asset-profile',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-asset-config-bytes',
+    '--max-asset-lock-bytes',
+  ]) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+
+  /** @param {string} option */
+  const positiveInteger = (option) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceManifestBytes = positiveInteger('--max-source-manifest-bytes');
+  const maxAssetConfigBytes = positiveInteger('--max-asset-config-bytes');
+  const maxAssetLockBytes = positiveInteger('--max-asset-lock-bytes');
+  const format = values.get('--format') ?? 'pretty';
+  if (format !== 'pretty' && format !== 'json') {
+    throw new Sb3BuilderError('--format must be either pretty or json.', {stage: 'cli'});
+  }
+
+  const sourceIncludesEnabled = flags.has('--enable-source-includes');
+  const sourceGraphOptions = [
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
+  ];
+  if (!sourceIncludesEnabled) {
+    const unexpected = sourceGraphOptions.find((option) => values.has(option));
+    if (unexpected) {
+      throw new Sb3BuilderError(`${unexpected} requires --enable-source-includes.`, {stage: 'cli'});
+    }
+  } else {
+    const missing = sourceGraphOptions.find((option) => !values.has(option));
+    if (missing) {
+      throw new Sb3BuilderError(`${missing} is required with --enable-source-includes.`, {
+        stage: 'cli',
+      });
+    }
+  }
+
+  const maxTotalSourceBytes = sourceIncludesEnabled
+    ? positiveInteger('--max-total-source-bytes')
+    : undefined;
+  if (maxTotalSourceBytes !== undefined && maxTotalSourceBytes < maxSourceBytes) {
+    throw new Sb3BuilderError(
+      '--max-total-source-bytes must be greater than or equal to --max-source-bytes.',
+      {stage: 'cli'},
+    );
+  }
+
+  return {
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
+    assetLock: path.resolve(/** @type {string} */ (values.get('--asset-lock'))),
+    assetProfile: /** @type {string} */ (values.get('--asset-profile')),
+    format,
+    maxSourceBytes,
+    maxSourceManifestBytes,
+    maxAssetConfigBytes,
+    maxAssetLockBytes,
+    sourceIncludesEnabled,
+    ...(sourceIncludesEnabled
+      ? {
+          maxSourceFiles: positiveInteger('--max-source-files'),
+          maxTotalSourceBytes,
+          maxIncludeDepth: positiveInteger('--max-include-depth'),
+        }
+      : {}),
+  };
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{
+ *   projectRoot: string,
+ *   sourceManifest: string,
+ *   assetConfig: string,
+ *   output: string,
+ *   maxSourceBytes: number,
+ *   maxSourceManifestBytes: number,
+ *   maxAssetFileBytes: number,
+ *   maxAssetFiles: number,
+ *   maxTotalAssetBytes: number,
+ *   timeoutMs: number,
+ *   maxRedirects: number,
+ *   allowedHosts: string[],
+ *   sourceIncludesEnabled: boolean,
+ *   maxSourceFiles?: number,
+ *   maxTotalSourceBytes?: number,
+ *   maxIncludeDepth?: number,
+ * }}
+ */
+function parseLockDsl4AssetArguments(arguments_) {
+  const values = new Map();
+  const allowedHosts = [];
+  const flags = new Set();
+  const flagOptions = new Set(['--enable-source-includes']);
+  const allowedValueOptions = new Set([
+    '--project-root',
+    '--source-manifest',
+    '--asset-config',
+    '--output',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
+    '--allow-host',
+  ]);
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const option = arguments_[index];
+    if (flagOptions.has(option)) {
+      if (flags.has(option))
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      flags.add(option);
+      continue;
+    }
+    if (!allowedValueOptions.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    const value = arguments_[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (option === '--allow-host') {
+      allowedHosts.push(value);
+    } else {
+      if (values.has(option))
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      values.set(option, value);
+    }
+    index += 1;
+  }
+  for (const required of [
+    '--project-root',
+    '--source-manifest',
+    '--asset-config',
+    '--output',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+  ]) {
+    if (!values.has(required))
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+  }
+  if (allowedHosts.length === 0) {
+    throw new Sb3BuilderError('Missing required option: --allow-host', {stage: 'cli'});
+  }
+  /** @param {string} option */
+  const positiveInteger = (option) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  /** @param {string} option */
+  const nonNegativeInteger = (option) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Sb3BuilderError(`${option} must be an integer >= 0.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceManifestBytes = positiveInteger('--max-source-manifest-bytes');
+  const maxAssetFileBytes = positiveInteger('--max-asset-file-bytes');
+  const maxAssetFiles = positiveInteger('--max-asset-files');
+  const maxTotalAssetBytes = positiveInteger('--max-total-asset-bytes');
+  const timeoutMs = positiveInteger('--timeout-ms');
+  const maxRedirects = nonNegativeInteger('--max-redirects');
+  if (maxAssetFileBytes > maxTotalAssetBytes) {
+    throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
+      stage: 'cli',
+    });
+  }
+  const sourceIncludesEnabled = flags.has('--enable-source-includes');
+  const sourceGraphOptions = [
+    '--max-source-files',
+    '--max-total-source-bytes',
+    '--max-include-depth',
+  ];
+  if (!sourceIncludesEnabled) {
+    const unexpected = sourceGraphOptions.find((option) => values.has(option));
+    if (unexpected)
+      throw new Sb3BuilderError(`${unexpected} requires --enable-source-includes.`, {stage: 'cli'});
+  } else {
+    const missing = sourceGraphOptions.find((option) => !values.has(option));
+    if (missing)
+      throw new Sb3BuilderError(`${missing} is required with --enable-source-includes.`, {
+        stage: 'cli',
+      });
+  }
+  const maxTotalSourceBytes = sourceIncludesEnabled
+    ? positiveInteger('--max-total-source-bytes')
+    : undefined;
+  if (maxTotalSourceBytes !== undefined && maxTotalSourceBytes < maxSourceBytes) {
+    throw new Sb3BuilderError(
+      '--max-total-source-bytes must be greater than or equal to --max-source-bytes.',
+      {stage: 'cli'},
+    );
+  }
+  return {
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
+    output: path.resolve(/** @type {string} */ (values.get('--output'))),
+    maxSourceBytes,
+    maxSourceManifestBytes,
+    maxAssetFileBytes,
+    maxAssetFiles,
+    maxTotalAssetBytes,
+    timeoutMs,
+    maxRedirects,
+    allowedHosts,
+    sourceIncludesEnabled,
+    ...(sourceIncludesEnabled
+      ? {
+          maxSourceFiles: positiveInteger('--max-source-files'),
+          maxTotalSourceBytes,
+          maxIncludeDepth: positiveInteger('--max-include-depth'),
+        }
+      : {}),
+  };
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{projectRoot: string, assetConfig: string, assetLock: string, outputConfig: string, outputLock: string, vendorDirectory?: string, maxAssetConfigBytes: number, maxAssetLockBytes: number, maxAssetFileBytes: number, maxAssetFiles: number, maxTotalAssetBytes: number, timeoutMs: number, maxRedirects: number, allowedHosts: string[]}}
+ */
+function parseVendorDsl4AssetArguments(arguments_) {
+  const values = new Map();
+  const allowedHosts = [];
+  const allowed = new Set([
+    '--project-root',
+    '--asset-config',
+    '--asset-lock',
+    '--output-config',
+    '--output-lock',
+    '--vendor-dir',
+    '--max-asset-config-bytes',
+    '--max-asset-lock-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+    '--allow-host',
+  ]);
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!allowed.has(option))
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    if (!value || value.startsWith('--'))
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    if (option === '--allow-host') {
+      allowedHosts.push(value);
+    } else {
+      if (values.has(option))
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      values.set(option, value);
+    }
+  }
+  for (const required of [
+    '--project-root',
+    '--asset-config',
+    '--asset-lock',
+    '--output-config',
+    '--output-lock',
+    '--max-asset-config-bytes',
+    '--max-asset-lock-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+  ]) {
+    if (!values.has(required))
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+  }
+  if (allowedHosts.length === 0)
+    throw new Sb3BuilderError('Missing required option: --allow-host', {stage: 'cli'});
+  /** @param {string} option @param {number} minimum */
+  const integer = (option, minimum) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < minimum) {
+      throw new Sb3BuilderError(`${option} must be an integer >= ${minimum}.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const maxAssetConfigBytes = integer('--max-asset-config-bytes', 1);
+  const maxAssetLockBytes = integer('--max-asset-lock-bytes', 1);
+  const maxAssetFileBytes = integer('--max-asset-file-bytes', 1);
+  const maxTotalAssetBytes = integer('--max-total-asset-bytes', 1);
+  if (maxAssetFileBytes > maxTotalAssetBytes) {
+    throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
+      stage: 'cli',
+    });
+  }
+  return {
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
+    assetLock: path.resolve(/** @type {string} */ (values.get('--asset-lock'))),
+    outputConfig: path.resolve(/** @type {string} */ (values.get('--output-config'))),
+    outputLock: path.resolve(/** @type {string} */ (values.get('--output-lock'))),
+    ...(values.has('--vendor-dir') ? {vendorDirectory: values.get('--vendor-dir')} : {}),
+    maxAssetConfigBytes,
+    maxAssetLockBytes,
+    maxAssetFileBytes,
+    maxAssetFiles: integer('--max-asset-files', 1),
+    maxTotalAssetBytes,
+    timeoutMs: integer('--timeout-ms', 1),
+    maxRedirects: integer('--max-redirects', 0),
+    allowedHosts,
   };
 }
 
@@ -277,6 +741,11 @@ function parseBuildDsl4Arguments(rest) {
     '--max-source-files',
     '--max-total-source-bytes',
     '--max-include-depth',
+    '--asset-config',
+    '--asset-lock',
+    '--asset-profile',
+    '--max-asset-config-bytes',
+    '--max-asset-lock-bytes',
   ]);
   for (let index = 0; index < rest.length; index += 1) {
     const option = rest[index];
@@ -340,6 +809,26 @@ function parseBuildDsl4Arguments(rest) {
       {stage: 'cli'},
     );
   }
+  const distributionOptions = ['--asset-config', '--asset-lock', '--asset-profile'];
+  const distributionSelected = distributionOptions.some((option) => values.has(option));
+  if (distributionSelected) {
+    for (const required of [
+      ...distributionOptions,
+      '--max-asset-config-bytes',
+      '--max-asset-lock-bytes',
+    ]) {
+      if (!values.has(required)) {
+        throw new Sb3BuilderError(`${required} is required with asset distribution options.`, {
+          stage: 'cli',
+        });
+      }
+    }
+  } else if (values.has('--max-asset-config-bytes') || values.has('--max-asset-lock-bytes')) {
+    throw new Sb3BuilderError(
+      '--max-asset-config-bytes and --max-asset-lock-bytes require asset distribution options.',
+      {stage: 'cli'},
+    );
+  }
   return {
     baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
@@ -351,6 +840,15 @@ function parseBuildDsl4Arguments(rest) {
     maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
     maxAssetFiles: positiveInteger('--max-asset-files'),
     maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
+    ...(distributionSelected
+      ? {
+          assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
+          assetLock: path.resolve(/** @type {string} */ (values.get('--asset-lock'))),
+          assetProfile: /** @type {string} */ (values.get('--asset-profile')),
+          maxAssetConfigBytes: positiveInteger('--max-asset-config-bytes'),
+          maxAssetLockBytes: positiveInteger('--max-asset-lock-bytes'),
+        }
+      : {}),
     ...(sourceIncludesEnabled || rootBinaryEntriesEnabled
       ? {
           featureFlags: {
@@ -583,7 +1081,7 @@ function parsePreviewDsl4Arguments(rest) {
 
 /**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>} | {action: 'audit-dsl4-assets', options: ReturnType<typeof parseAuditDsl4AssetArguments>} | {action: 'lock-dsl4-assets', options: ReturnType<typeof parseLockDsl4AssetArguments>} | {action: 'vendor-dsl4-assets', options: ReturnType<typeof parseVendorDsl4AssetArguments>}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -601,11 +1099,20 @@ export function parseCliArguments(arguments_) {
   if (command === 'validate-dsl4') {
     return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
   }
+  if (command === 'audit-dsl4-assets') {
+    return {action: 'audit-dsl4-assets', options: parseAuditDsl4AssetArguments(rest)};
+  }
+  if (command === 'lock-dsl4-assets') {
+    return {action: 'lock-dsl4-assets', options: parseLockDsl4AssetArguments(rest)};
+  }
+  if (command === 'vendor-dsl4-assets') {
+    return {action: 'vendor-dsl4-assets', options: parseVendorDsl4AssetArguments(rest)};
+  }
   if (command === 'preview-dsl4') {
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the build-sb3, build-dsl4, convert-dsl4, preview-dsl4, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -613,7 +1120,7 @@ export function parseCliArguments(arguments_) {
 /**
  * @param {string[]} arguments_
  * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>, stderr?: Pick<NodeJS.WriteStream, 'write'>}} [io]
- * @param {{runPreview?: typeof runDsl4LocalPreviewCommand}} [dependencies]
+ * @param {{runPreview?: typeof runDsl4LocalPreviewCommand, runAssetAudit?: typeof auditDsl4AssetDistribution, runAssetLock?: typeof generateDsl4AssetDistributionLockFile, runAssetVendor?: typeof vendorDsl4AssetDistribution}} [dependencies]
  */
 export async function runCli(arguments_, io = {}, dependencies = {}) {
   const stdout = io.stdout ?? process.stdout;
@@ -670,6 +1177,50 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
       }
     }
     return {...result, exitCode: result.ok ? 0 : 1};
+  }
+  if (parsed.action === 'audit-dsl4-assets') {
+    const runAssetAudit = dependencies.runAssetAudit ?? auditDsl4AssetDistribution;
+    if (typeof runAssetAudit !== 'function') {
+      throw new TypeError('runAssetAudit must be a function');
+    }
+    const result = await runAssetAudit({
+      ...parsed.options,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        limits: {
+          maxCanonicalSourceBytes:
+            parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
+        },
+      }),
+    });
+    stdout.write(
+      parsed.options.format === 'json'
+        ? serializeDsl4AssetDistributionAudit(result)
+        : formatDsl4AssetDistributionAudit(result),
+    );
+    return {...result, exitCode: 0};
+  }
+  if (parsed.action === 'lock-dsl4-assets') {
+    const runAssetLock = dependencies.runAssetLock ?? generateDsl4AssetDistributionLockFile;
+    if (typeof runAssetLock !== 'function') throw new TypeError('runAssetLock must be a function');
+    const result = await runAssetLock({
+      ...parsed.options,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        limits: {
+          maxCanonicalSourceBytes:
+            parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
+        },
+      }),
+    });
+    stdout.write(`Locked ${path.basename(result.outputPath)}\n`);
+    return result;
+  }
+  if (parsed.action === 'vendor-dsl4-assets') {
+    const runAssetVendor = dependencies.runAssetVendor ?? vendorDsl4AssetDistribution;
+    if (typeof runAssetVendor !== 'function')
+      throw new TypeError('runAssetVendor must be a function');
+    const result = await runAssetVendor(parsed.options);
+    stdout.write(`Vendored ${result.vendoredAssets.length} asset(s)\n`);
+    return result;
   }
   if (parsed.action === 'preview-dsl4') {
     const runPreview = dependencies.runPreview ?? runDsl4LocalPreviewCommand;
