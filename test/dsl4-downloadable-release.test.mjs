@@ -408,7 +408,9 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   const localizedTitleSvg = strFromU8(archive[localizedTitle.md5ext]);
   assert.match(localizedTitleSvg, />「参加型」AI紙芝居</u);
   assert.match(localizedTitleSvg, /Mozilla Public License 2\.0/u);
-  assert.match(localizedTitleSvg, />久保 裕也 \/ hiroya@cuc\.ac\.jp</u);
+  assert.match(localizedTitleSvg, />千葉商科大学　総合政策学部</u);
+  assert.match(localizedTitleSvg, />久保 裕也 &lt;hiroya@cuc\.ac\.jp&gt;</u);
+  assert.doesNotMatch(localizedTitleSvg, />千葉商科大学<\/text>\s*<text[^>]*>総合政策学部</u);
   assert.doesNotMatch(localizedTitleSvg, /\{\{/u);
   const menuSvg = strFromU8(archive[stage.costumes.find(({name}) => name === 'Menu').md5ext]);
   const localizedMenuSvg = strFromU8(

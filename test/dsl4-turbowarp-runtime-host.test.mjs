@@ -2794,6 +2794,12 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   const finished = await result.host.start();
   assert.equal(finished.status, 'finished');
+  assert.equal(await result.host.prepareMenu(), true);
+  assert.equal(
+    log.some((entry) => JSON.stringify(entry) === JSON.stringify(['media.stage', 'Cover'])),
+    false,
+    'Menu preparation must not wait for a cover backdrop that is immediately replaced by Menu.',
+  );
   assert.equal(await result.host.showCover(), true);
   assert.equal(clock.pendingCount(), 0);
   for (const event of [

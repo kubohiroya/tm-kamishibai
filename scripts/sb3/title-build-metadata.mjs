@@ -11,6 +11,7 @@ import {
   appShellLocales,
   appShellProjectPlaceholders,
   appShellTitleLines,
+  appShellVersion4TitleLines,
 } from './app-shell-locales.mjs';
 
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
@@ -288,22 +289,19 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
       'officialWebsiteButton must contain exactly one runtime costume.',
     );
   }
+  const titleLines = metadata.version.startsWith('4.')
+    ? appShellVersion4TitleLines
+    : appShellTitleLines;
   const localized = appShellLocales.en;
   const titleReplacements = [
     [titleVersionPlaceholder, metadata.label],
     ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
-    ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(appShellTitleLines.en.licenseApp[0])],
-    ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(appShellTitleLines.en.licenseApp[1])],
-    ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(appShellTitleLines.en.licenseStory[0])],
-    ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(appShellTitleLines.en.licenseStory[1])],
-    [
-      '{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}',
-      escapeXml(appShellTitleLines.en.authorOrganization[0]),
-    ],
-    [
-      '{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}',
-      escapeXml(appShellTitleLines.en.authorOrganization[1]),
-    ],
+    ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(titleLines.en.licenseApp[0])],
+    ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(titleLines.en.licenseApp[1])],
+    ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(titleLines.en.licenseStory[0])],
+    ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(titleLines.en.licenseStory[1])],
+    ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}', escapeXml(titleLines.en.authorOrganization[0])],
+    ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}', escapeXml(titleLines.en.authorOrganization[1])],
     ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
     ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
   ];
@@ -327,18 +325,12 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     const localizedTitleReplacements = [
       [titleVersionPlaceholder, metadata.label],
       ['{{ABOUT_TITLE}}', escapeXml(localized.about.title)],
-      ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(appShellTitleLines.ja.licenseApp[0])],
-      ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(appShellTitleLines.ja.licenseApp[1])],
-      ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(appShellTitleLines.ja.licenseStory[0])],
-      ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(appShellTitleLines.ja.licenseStory[1])],
-      [
-        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}',
-        escapeXml(appShellTitleLines.ja.authorOrganization[0]),
-      ],
-      [
-        '{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}',
-        escapeXml(appShellTitleLines.ja.authorOrganization[1]),
-      ],
+      ['{{ABOUT_LICENSE_APP_LINE_1}}', escapeXml(titleLines.ja.licenseApp[0])],
+      ['{{ABOUT_LICENSE_APP_LINE_2}}', escapeXml(titleLines.ja.licenseApp[1])],
+      ['{{ABOUT_LICENSE_STORY_LINE_1}}', escapeXml(titleLines.ja.licenseStory[0])],
+      ['{{ABOUT_LICENSE_STORY_LINE_2}}', escapeXml(titleLines.ja.licenseStory[1])],
+      ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_1}}', escapeXml(titleLines.ja.authorOrganization[0])],
+      ['{{ABOUT_AUTHOR_ORGANIZATION_LINE_2}}', escapeXml(titleLines.ja.authorOrganization[1])],
       ['{{ABOUT_AUTHOR_NAME}}', escapeXml(localized.about.author.name)],
       ['{{ABOUT_AUTHOR_EMAIL}}', escapeXml(appShellCommon.about.author.email)],
     ];

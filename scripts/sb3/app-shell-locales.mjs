@@ -82,6 +82,14 @@ export const appShellLocales = Object.freeze({
   }),
 });
 
+export const appShellVersion4TitleLines = Object.freeze({
+  en: appShellTitleLines.en,
+  ja: Object.freeze({
+    ...appShellTitleLines.ja,
+    authorOrganization: Object.freeze(['千葉商科大学　総合政策学部', '']),
+  }),
+});
+
 export const appShellLanguageNames = Object.freeze({
   en: 'English',
   ja: '日本語',

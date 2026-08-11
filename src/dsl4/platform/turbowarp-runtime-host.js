@@ -325,7 +325,7 @@ function resolvePoseFeedbackMode(storyDocument) {
  * @param {boolean} speechAdvanceTypewriterEnabled
  * @param {boolean} bubbleAdvanceIndicatorEnabled
  * @param {boolean} turboWarpBubbleEnabled
- * @param {(port: Readonly<{showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
+ * @param {(port: Readonly<{prepareMenu: () => Promise<boolean>, showCover: () => Promise<boolean>, stopStoryCamera?: () => Promise<boolean>}>) => void} [publishApplicationPort]
  */
 export async function createDsl4TurboWarpRuntimeEnvironment(
   options,
@@ -865,15 +865,28 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
 
     const cover = isRecord(component.storyDocument.cover) ? component.storyDocument.cover : null;
     const storyCameraLifecycle = activeAssetSession.storyCameraLifecycle;
+    async function resetStoryPresentation() {
+      actorPlatform?.finishTransparencyTransitions();
+      hideStoryActors();
+      await assetSession?.assetManagerComposition.stopAllSounds();
+    }
     publishApplicationPort(
       Object.freeze({
+        async prepareMenu() {
+          await resetStoryPresentation();
+          if (typeof cover?.bgm === 'string') {
+            await mediaPort?.bgm(
+              {sound: cover.bgm},
+              Object.freeze({signal: new AbortController().signal}),
+            );
+          }
+          return true;
+        },
         async showCover() {
           if (!cover) return false;
           const abortController = new AbortController();
           const coverContext = Object.freeze({signal: abortController.signal});
-          actorPlatform?.finishTransparencyTransitions();
-          hideStoryActors();
-          await assetSession?.assetManagerComposition.stopAllSounds();
+          await resetStoryPresentation();
           if (typeof cover.backdrop === 'string') {
             await mediaPort?.stage({backdrop: cover.backdrop}, coverContext);
           }
@@ -1376,6 +1389,10 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     async showCover() {
       ensureActive();
       return applicationPort?.showCover?.() ?? false;
+    },
+    async prepareMenu() {
+      ensureActive();
+      return applicationPort?.prepareMenu?.() ?? false;
     },
     verifiedRemoteCache:
       cachePort === null

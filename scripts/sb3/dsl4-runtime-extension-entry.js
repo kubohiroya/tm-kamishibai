@@ -622,7 +622,7 @@ class KamishibaiDsl4RuntimeExtension {
           return;
         }
         if (result.status === 'finished') {
-          await shell.runtimeHost.showCover();
+          await shell.runtimeHost.prepareMenu();
           Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showCover',
           });
