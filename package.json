@@ -95,6 +95,7 @@
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.6.0",
+    "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",
     "@types/node": "^26.1.2",
     "ajv": "8.20.0",

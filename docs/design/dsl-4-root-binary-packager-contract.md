@@ -74,6 +74,10 @@ sbdlはnested fileをbasenameでSB3 rootへ移し、directory entryを削除し�
 正規化後もentry名とbytesが変わりません。回帰testはnested fixtureを併置してsbdlの再ZIPを必ず発生させ、v3 descriptor参照と
 全root entry bytesの一致を検証します。v2 nested entryをこの正規化に依存してv3として扱うことは禁止します。
 
+Packager側の対応基準は`@turbowarp/packager` **3.13.0**、upstream commit
+`ca5decb80e8870160425e84f0b6c575879bc6dd0`です。npm packageとlockfileをexact versionで固定し、version不一致は
+成果物生成前に`K4-PACKAGER-COMPATIBILITY-001`で拒否します。
+
 ## 5. archive readerのsecurity契約
 
 readerの呼出側は次の有限上限をすべて指定します。
@@ -100,6 +104,52 @@ Plain HTMLでは、Base85から戻した正規化済みSB3をPackagerがZIP展�
 非公開objectへの場当たり的なmonkey patchは製品契約にしません。固定Packager versionの生成templateまたは正式adapterを使い、
 Plain HTML、通常ZIP、`zip-one-asset`、Electronを別surfaceとして検証します。通常ZIP／Electronのようにentryを個別取得できる
 surfaceはdirect sourceを選択でき、IndexedDBを必須にしません。
+
+正式adapterは`packageDsl4WithTurboWarpPackager()`です。入力は、sbdlが返した`type: sb3`の正規化済みproject、検証済み
+StoryDocument／v3 descriptor、全archive／asset上限、Packager package metadataです。adapterは次の順序を固定します。
+
+1. 正規化済みSB3の中央directoryをentry非展開で走査し、unsafe path、duplicate、missing／extra reserved entry、size、圧縮方式、
+   圧縮比、全上限を検査する
+2. asset本文を含まないarchive集計値とroot entry metadataだけを、Packagerの公開`options.custom.js`へ追加する
+3. Packager 3.13.0の生成結果を、固定template文字列がちょうど1箇所にある場合だけ接続する
+4. Plain HTML／`zip-one-asset`では`JSZip.loadAsync(data)`の直後に同じZIP closureを登録し、その後で
+   `project.json`を取得して`scaffolding.loadProject()`へ渡す
+5. 通常ZIP／Electronでは、Packagerが出力した`assets/k4asset-v1-...`を個別fetchするdirect sourceを登録する
+
+実行時の`JSZip.loadAsync`、storage helper、VM、scaffolding methodは差し替えません。templateが変化した場合は推測して続行せず
+`K4-PACKAGER-TEMPLATE-001`でbuildを失敗させます。`zip-one-asset`で再構築するのはPackagerの外側の配布ZIPだけであり、
+内側の`project.zip`／SB3は変更しません。SB3を構成・更新する正式経路は引き続きsb3-toolchainだけです。
+
+登録先は`Symbol.for('@kubohiroya/tmpose-kamishibai/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
+Kamishibai側は`claimDsl4PackagerEntrySource()`で一度だけsourceを取得し、
+`createDsl4BinaryEntryProviderFromPackagerSource()`でdescriptor、archive集計、entry metadata、展開後size、SHA-256を再検証します。
+claim時にglobal slotを削除し、providerの明示releaseまでZIP closureを保持します。現在の30日persistent backingへは接続せず、
+後続のsession／direct policyが所有権を引き継ぎます。
+
+作者用の最小接続は次の形です。`runtimeComponent`はroot-entry flagをONにしたDSL 4 builder結果です。
+
+```js
+const packager = new TurboWarpPackager.Packager();
+packager.project = await TurboWarpPackager.loadProject(runtimeComponent.bytes);
+packager.options.target = 'html';
+
+const result = await packageDsl4WithTurboWarpPackager({
+  packager,
+  packagerPackage: installedPackagerPackage,
+  storyDocument: runtimeComponent.runtimeComponent.storyDocument,
+  descriptor: runtimeComponent.runtimeComponent.assetBundle,
+  limits: {
+    maxArchiveBytes,
+    maxArchiveEntries,
+    maxArchiveEntryBytes,
+    maxArchiveExpandedBytes,
+    maxAssetFiles,
+    maxAssetFileBytes,
+    maxAssetBytes,
+    maxCompressionRatio,
+  },
+});
+```
 
 ## 7. session backing policy
 

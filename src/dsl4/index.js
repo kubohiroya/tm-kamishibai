@@ -66,6 +66,13 @@ export {
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';
 export {
+  claimDsl4PackagerEntrySource,
+  createDsl4BinaryEntryProviderFromPackagerSource,
+  dsl4PackagerEntrySourceContractVersion,
+  dsl4PackagerEntrySourceRegistryName,
+  Dsl4PackagerEntrySourceError,
+} from './packager-entry-source.js';
+export {
   createDsl4BrowserPreviewSourceAdapter,
   dsl4BrowserPreviewSourceDefaults,
   Dsl4BrowserPreviewSourceError,

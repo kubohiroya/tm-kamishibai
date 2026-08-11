@@ -34,7 +34,14 @@ export {
 export {
   createDsl4BinaryEntryProviderFromSb3,
   embedDsl4BinaryEntryRuntimeComponentInSb3,
+  inspectDsl4BinaryEntryArchive,
 } from './dsl4-binary-entry-sb3.js';
+export {
+  Dsl4PackagerAdapterError,
+  dsl4PackagerEntrySourceTemplateContract,
+  packageDsl4WithTurboWarpPackager,
+  resolveDsl4PackagerEntrySourceSurface,
+} from './dsl4-packager-entry-source.js';
 export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
@@ -76,7 +83,7 @@ export {
   dsl4TurboWarpBrowserBundleMaximumBytes,
 } from './dsl4-turbowarp-browser-bundle.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
-export {dsl4SbdlCompatibility} from './dsl4-packager-compatibility.js';
+export {dsl4PackagerCompatibility, dsl4SbdlCompatibility} from './dsl4-packager-compatibility.js';
 export {
   createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,
