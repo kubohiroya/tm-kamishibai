@@ -6,10 +6,15 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {strToU8, zipSync} from 'fflate';
+import {strToU8, unzipSync, zipSync} from 'fflate';
 
 import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
-import {createDsl4SourceFrontend, loadDsl4RuntimeComponent} from '../src/dsl4/index.js';
+import {
+  createDsl4SourceFrontend,
+  dsl4BinaryEntryPrefix,
+  loadDsl4BinaryEntryRuntimeComponent,
+  loadDsl4RuntimeComponent,
+} from '../src/dsl4/index.js';
 import {readSb3} from '../src/builder/sb3.js';
 import {sha256} from '../src/builder/hash.js';
 
@@ -140,6 +145,15 @@ test('parses a complete build-dsl4 contract and rejects incomplete or unbounded 
   assert.equal(parsed.options.replaceExisting, false);
   assert.match(usage(), /build-dsl4/u);
   assert.match(usage(), /--enable-source-includes/u);
+  assert.match(usage(), /--enable-root-binary-entries/u);
+
+  const rootBinary = parseCliArguments(
+    cliArguments(fixture, 'story.sb3', ['--enable-root-binary-entries']),
+  );
+  assert.deepEqual(rootBinary.options.featureFlags, {
+    dsl4Runtime: true,
+    dsl4RootBinaryEntryPackaging: true,
+  });
 
   const includes = parseCliArguments(
     cliArguments(fixture, 'story.sb3', [
@@ -312,6 +326,91 @@ test('connects an explicit asset distribution profile through build and runtime 
   });
 });
 
+test('enables root binary entry packaging explicitly from the CLI', async () => {
+  await withFixture(async (fixture) => {
+    const result = await runCli(
+      cliArguments(fixture, 'root.sb3', ['--enable-root-binary-entries']),
+      {stdout: {write() {}}},
+    );
+    const archive = unzipSync(await readFile(result.outputPath));
+    const entries = Object.keys(archive).filter((name) => name.startsWith(dsl4BinaryEntryPrefix));
+    assert.equal(entries.length, 1);
+    assert.match(entries[0], /^k4asset-v1-[0-9a-f]{64}$/u);
+  });
+});
+
+test('preserves an explicit asset distribution through root binary entry packaging', async () => {
+  await withFixture(async (fixture) => {
+    const openingBytes = Buffer.from('<svg/>');
+    const integrity = 'sha256-' + sha256(openingBytes);
+    const assetConfigPath = path.join(fixture.directory, 'project.assets.json');
+    const assetLockPath = path.join(fixture.directory, 'project.assets.lock.json');
+    await writeFile(
+      assetConfigPath,
+      JSON.stringify({
+        formatVersion: 1,
+        profiles: {offline: {network: 'forbidden', defaultDelivery: 'embedded'}},
+        providers: {OpeningImage: {remote: {url: 'https://cdn.example.com/opening.svg'}}},
+      }) + '\n',
+    );
+    await writeFile(
+      assetLockPath,
+      JSON.stringify({
+        formatVersion: 1,
+        assets: {
+          OpeningImage: {
+            kind: 'backdrop',
+            contentIntegrity: integrity,
+            contentType: 'image/svg+xml',
+            size: openingBytes.length,
+            providers: {
+              embedded: {file: 'opening.svg'},
+              remote: {
+                url: 'https://cdn.example.com/opening.svg',
+                transportIntegrity: integrity,
+                contentType: 'image/svg+xml',
+                size: openingBytes.length,
+              },
+            },
+          },
+        },
+      }) + '\n',
+    );
+    const result = await runCli(
+      cliArguments(fixture, 'offline-root.sb3', [
+        '--asset-config',
+        assetConfigPath,
+        '--asset-lock',
+        assetLockPath,
+        '--asset-profile',
+        'offline',
+        '--max-asset-config-bytes',
+        '16384',
+        '--max-asset-lock-bytes',
+        '16384',
+        '--enable-root-binary-entries',
+      ]),
+      {stdout: {write() {}}},
+    );
+    const bytes = await readFile(result.outputPath);
+    const archive = unzipSync(bytes);
+    const entries = Object.keys(archive).filter((name) => name.startsWith(dsl4BinaryEntryPrefix));
+    assert.equal(entries.length, 1);
+
+    const {project} = readSb3(bytes);
+    const loaded = await loadDsl4BinaryEntryRuntimeComponent(project, frontend, {
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetFileBytes: limits.maxAssetFileBytes,
+      maxAssetBytes: limits.maxTotalAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
+    assert.equal(loaded.storyDocument.assets.OpeningImage.delivery, 'embedded');
+    assert.equal(loaded.storyDocument.assets.OpeningImage.file, 'opening.svg');
+  });
+});
+
 test('builds included sources only with the explicit CLI feature flag and graph limits', async () => {
   await withFixture(async (fixture) => {
     const chapterDirectory = path.join(fixture.directory, 'chapters', 'chapter1');
@@ -451,6 +550,6 @@ scenes:
 test('ships the DSL 4.0 implementation and schema required by the installed CLI', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.files.includes('src/builder/'), true);
-  assert.equal(packageJson.files.includes('src/dsl4/*.js'), true);
+  assert.equal(packageJson.files.includes('src/dsl4/'), true);
   assert.equal(packageJson.files.includes('schema/dsl-4.schema.json'), true);
 });

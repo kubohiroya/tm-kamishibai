@@ -9,6 +9,15 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** @param {unknown} target */
+function projectTargetName(target) {
+  if (!isRecord(target)) return null;
+  if (isRecord(target.sprite) && typeof target.sprite.name === 'string') {
+    return target.sprite.name.length > 0 ? target.sprite.name : null;
+  }
+  return typeof target.name === 'string' && target.name.length > 0 ? target.name : null;
+}
+
 /** @param {string} code @param {string} message */
 function adapterError(code, message) {
   const error = new Error(message);
@@ -306,12 +315,24 @@ export function createDsl4TurboWarpActorPlatform(options) {
     if (typeof actorId !== 'string' || actorId.length === 0) {
       throw adapterError('K4-TW-ACTOR-001', 'actorId must be a non-empty string');
     }
-    const matches = runtime.targets.filter((candidate) => {
+    const actorNameMatches = runtime.targets.filter((candidate) => {
       if (!isRecord(candidate) || candidate.isStage !== false) return false;
       if (typeof candidate.lookupVariableByNameAndType !== 'function') return false;
       const variable = candidate.lookupVariableByNameAndType('actorName', '');
       return isRecord(variable) && variable.value === actorId;
     });
+    // DSL 4.0 projects may use one physical sprite per logical actor and therefore omit the
+    // 3.2 compatibility actorName variable. Prefer the explicit variable when present, then
+    // fall back to the target's project name for standalone 4.0 SB3 projects.
+    const matches =
+      actorNameMatches.length > 0
+        ? actorNameMatches
+        : runtime.targets.filter(
+            (candidate) =>
+              isRecord(candidate) &&
+              candidate.isStage === false &&
+              projectTargetName(candidate) === actorId,
+          );
     if (matches.length === 0) return null;
     if (matches.length > 1) {
       throw adapterError('K4-TW-ACTOR-001', `TurboWarp actor is ambiguous: ${actorId}`);
@@ -776,6 +797,48 @@ export function createDsl4TurboWarpActorPlatform(options) {
       actor.setXY(x, y);
       actor.setSize(scale);
       actor.setVisible(true);
+    },
+
+    /** @param {unknown} target */
+    hideActor(target) {
+      ensureActive();
+      validateActor(target).setVisible(false);
+    },
+
+    /** @param {unknown} target @param {unknown} scale */
+    setActorScale(target, scale) {
+      ensureActive();
+      const value = finiteNumber(scale, 'setActorScale.scale');
+      if (value <= 0) {
+        throw adapterError('K4-TW-ACTOR-002', 'setActorScale.scale must be positive');
+      }
+      validateActor(target).setSize(value);
+    },
+
+    /** @param {unknown} target @param {unknown} layer */
+    setActorLayer(target, layer) {
+      ensureActive();
+      const actor = validateActor(target);
+      if (layer === 'front') {
+        if (typeof actor.goToFront !== 'function') {
+          throw adapterError('K4-TW-ACTOR-002', 'TurboWarp actor must provide goToFront');
+        }
+        actor.goToFront();
+        return;
+      }
+      if (layer === 'back') {
+        if (typeof actor.goToBack !== 'function') {
+          throw adapterError('K4-TW-ACTOR-002', 'TurboWarp actor must provide goToBack');
+        }
+        actor.goToBack();
+        return;
+      }
+      const count = finiteNumber(layer, 'setActorLayer.layer');
+      const method = count >= 0 ? 'goForwardLayers' : 'goBackwardLayers';
+      if (typeof actor[method] !== 'function') {
+        throw adapterError('K4-TW-ACTOR-002', `TurboWarp actor must provide ${method}`);
+      }
+      actor[method](Math.abs(count));
     },
 
     /** @param {unknown} target @param {unknown} effect */

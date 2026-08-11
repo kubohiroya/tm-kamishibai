@@ -213,7 +213,7 @@ class Converter {
     this.cover = null;
     /** @type {{backdrop?: string, costumes?: string[]} | null} */
     this.loading = null;
-    /** @type {{idleSound: string, chargeSound: string, sequence?: Record<string, number>} | null} */
+    /** @type {{idleSound?: string, chargeSound?: string, sequence?: Record<string, number>} | null} */
     this.poseRecognition = null;
     /** @type {string | null} */
     this.currentScene = null;
@@ -521,17 +521,7 @@ class Converter {
     }
     if (!valid) return;
 
-    const differsFromDefaults = confidenceThreshold !== 0.5 || poseCharge !== 10 || poseIdle !== 0;
-    if (!this.poseRecognition) {
-      if (differsFromDefaults) {
-        this.error(
-          'K4-CONVERT-POSE-CONFIG',
-          'Custom pose recognition values require setPoseRecognitionSound with both sounds so DSL 4.0 can carry sequence configuration.',
-          this.variableCommands.get(configuredNames[0]) ?? null,
-        );
-      }
-      return;
-    }
+    this.poseRecognition ??= {};
 
     /** @type {Record<string, number>} */
     const sequence = {};
@@ -584,10 +574,10 @@ class Converter {
   /** @param {Dsl32Command} command */
   parsePoseRecognition(command) {
     const ids = splitList(command.value);
-    if (ids.length !== 2 || ids.some((id) => !id)) {
+    if (ids.length < 1 || ids.length > 2 || ids.some((id) => !id)) {
       this.error(
         'K4-CONVERT-POSE-SOUND-001',
-        'DSL 4.0 requires both idle and charge sounds; setPoseRecognitionSound must contain exactly two asset IDs.',
+        'setPoseRecognitionSound must contain one idle sound and an optional charge sound.',
         command,
       );
       return;
@@ -600,7 +590,10 @@ class Converter {
       );
       return;
     }
-    this.poseRecognition = {idleSound: ids[0], chargeSound: ids[1]};
+    this.poseRecognition = {
+      idleSound: ids[0],
+      ...(ids[1] ? {chargeSound: ids[1]} : {}),
+    };
     for (const id of ids) this.addReference('asset', id, command, {expectedKind: 'sound'});
   }
 
@@ -914,13 +907,22 @@ class Converter {
         );
         return null;
       }
-      this.warning(
-        'K4-CONVERT-TRANSITION-DURATION',
-        'DSL 3.1/3.2 transition has no duration argument; the DSL 4.0 transition duration is set to 0 seconds.',
-        command,
-      );
       this.validateIdentifier(parts[1], 'Transition effect', command);
-      return {transition: {effect: parts[1], seconds: 0}};
+      const legacyDurations = {fadeOut: 1, fadeUp: 1, fadeToWhite: 1, fadeFromWhite: 1, reset: 0};
+      if (!Object.hasOwn(legacyDurations, parts[1])) {
+        this.error(
+          'K4-CONVERT-TRANSITION-UNSUPPORTED',
+          `Unsupported DSL 3.1/3.2 transition effect: ${parts[1]}.`,
+          command,
+        );
+        return null;
+      }
+      return {
+        transition: {
+          effect: parts[1],
+          seconds: legacyDurations[/** @type {keyof typeof legacyDurations} */ (parts[1])],
+        },
+      };
     }
     if (actionName === 'keyInputToChangeScene' || actionName === 'touchInputToChangeScene') {
       if (parts.length !== 3) {
@@ -1016,6 +1018,9 @@ class Converter {
     }
     if (actionName === 'say' || actionName === 'think') {
       if (parts.length === 3) {
+        if (parts[2] === '') {
+          return {[key]: {text: '', seconds: 0}};
+        }
         this.error(
           'K4-CONVERT-PERSISTENT-SPEECH',
           `A DSL 3.1/3.2 ${actionName} action without seconds is persistent and has no equivalent DSL 4.0 core action.`,
@@ -1055,13 +1060,86 @@ class Converter {
       return seconds === null ? null : {[key]: {text: parts[2].replaceAll('\\n', '\n'), seconds}};
     }
     if (actionName === 'setSkin') {
-      if (parts.length !== 3 || !parts[2]) {
-        this.error('K4-CONVERT-ACTION-ARGS', 'setSkin requires one costume asset ID.', command);
+      if ((parts.length !== 3 && parts.length !== 4) || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setSkin requires SKIN with an optional positive SCALE.',
+          command,
+        );
         return null;
       }
+      const scale =
+        parts.length === 4
+          ? this.parseNumber(parts[3], 'setSkin scale', command, {exclusiveMinimum: 0})
+          : null;
+      if (parts.length === 4 && scale === null) return null;
       this.addReference('asset', parts[2], command, {expectedKind: 'costume', actor: target});
       this.addCostumeUse(parts[2], target);
-      return {[key]: parts[2]};
+      return {[key]: scale === null ? parts[2] : {skin: parts[2], scale}};
+    }
+    if (actionName === 'hide') {
+      if (parts.length !== 2) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'hide does not accept arguments.', command);
+        return null;
+      }
+      return {[key]: {}};
+    }
+    if (actionName === 'setLayer') {
+      if (parts.length !== 3 || !parts[2]) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'setLayer requires front, back, or a finite relative layer count.',
+          command,
+        );
+        return null;
+      }
+      if (parts[2] === 'front' || parts[2] === 'back') return {[key]: parts[2]};
+      const layer = this.parseNumber(parts[2], 'setLayer count', command);
+      return layer === null ? null : {[key]: layer};
+    }
+    if (actionName === 'loop') {
+      if (parts.length !== 4) {
+        this.error('K4-CONVERT-ACTION-ARGS', 'loop requires SKINS:DURATIONS.', command);
+        return null;
+      }
+      const skins = splitList(parts[2]);
+      const rawDurations = splitList(parts[3]);
+      if (
+        skins.length === 0 ||
+        skins.length !== rawDurations.length ||
+        skins.some((skin) => !skin)
+      ) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop skin and duration lists must have the same non-zero length.',
+          command,
+        );
+        return null;
+      }
+      const durations = rawDurations.map((raw) =>
+        this.parseNumber(raw, 'loop duration', command, {minimum: 0}),
+      );
+      if (durations.some((duration) => duration === null)) return null;
+      if (!durations.some((duration) => /** @type {number} */ (duration) > 0)) {
+        this.error(
+          'K4-CONVERT-ACTION-ARGS',
+          'loop requires at least one positive duration.',
+          command,
+        );
+        return null;
+      }
+      for (const skin of skins) {
+        this.addReference('asset', skin, command, {expectedKind: 'costume', actor: target});
+        this.addCostumeUse(skin, target);
+      }
+      return {
+        [key]: {
+          steps: skins.map((skin, index) => ({
+            skin,
+            seconds: /** @type {number} */ (durations[index]),
+          })),
+        },
+      };
     }
     if (actionName === 'setText') {
       if (parts.length !== 4 || !parts[3]) {
@@ -1300,7 +1378,19 @@ class Converter {
 
   buildDocument() {
     /** @type {Record<string, any>} */
-    const document = {kamishibai: '4.0'};
+    const document = {
+      kamishibai: '4.0',
+      controls: {
+        keymaps: {
+          production: {Space: 'rehearsal.skipPose'},
+          rehearsal: {
+            Space: 'rehearsal.skipPose',
+            ArrowRight: 'rehearsal.skipAction',
+            ArrowDown: 'rehearsal.skipScene',
+          },
+        },
+      },
+    };
     if (this.assets.size > 0) document.assets = this.renderAssets();
     if (this.actors.size > 0) document.actors = ownObject(this.actors);
     if (this.cover) document.cover = this.cover;
@@ -1325,7 +1415,12 @@ class Converter {
     if (this.loading?.backdrop && this.loading.costumes) {
       document.loading = {backdrop: this.loading.backdrop, costumes: this.loading.costumes};
     }
-    if (this.poseRecognition) document.poseRecognition = this.poseRecognition;
+    if (this.poseRecognition || this.scenesUsingPose.size > 0) {
+      document.poseRecognition = {
+        ...(this.poseRecognition ?? {}),
+        ...(this.scenesUsingPose.size > 0 ? {navigation: {allowSkip: true}} : {}),
+      };
+    }
     if (this.branches.size > 0) document.branches = ownObject(this.branches);
     document.scenes = this.renderScenes();
     return document;

@@ -1,6 +1,7 @@
 import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 
 const supportedKinds = new Set(['backdrop', 'costume', 'image', 'sound']);
+const bitmapFilePattern = /\.(?:png|jpe?g|webp)(?:[?#].*)?$/iu;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -28,8 +29,44 @@ function requireNonEmptyString(value, label) {
   return value;
 }
 
-/** @param {Record<string, unknown>} asset @param {Record<string, unknown>} source */
-function projectAssetLocator(asset, source) {
+/** @param {Record<string, unknown>} asset @param {string} label */
+function declaredBitmapResolution(asset, label) {
+  if (asset.kind !== 'backdrop' && asset.kind !== 'costume') {
+    if (Object.hasOwn(asset, 'bitmapResolution')) {
+      throw adapterError(
+        'K4-ASSET-ADAPTER-001',
+        `${label} bitmapResolution is only valid for backdrop and costume assets`,
+      );
+    }
+    return undefined;
+  }
+  const value = asset.bitmapResolution ?? 1;
+  if (value !== 1 && value !== 2) {
+    throw adapterError('K4-ASSET-ADAPTER-001', `${label} bitmapResolution must be 1 or 2`);
+  }
+  return /** @type {1 | 2} */ (value);
+}
+
+/**
+ * Keep SVG and project assets on their existing registration path. The upstream composition
+ * accepts bitmapResolution only for raster MIME types; file-backed assets expose their MIME
+ * through the source filename, while verified remote assets provide Content-Type directly.
+ *
+ * @param {Record<string, unknown>} asset
+ * @param {string} sourceName
+ * @param {string} mimeType
+ */
+function embeddedBitmapResolution(asset, sourceName, mimeType) {
+  const resolution = declaredBitmapResolution(asset, `Asset ${String(asset.id)}`);
+  if (resolution === undefined) return undefined;
+  const mediaType = mimeType.split(';', 1)[0].trim().toLowerCase();
+  const isRasterMime = mediaType.startsWith('image/') && mediaType !== 'image/svg+xml';
+  const isRasterPath = mediaType.length === 0 && bitmapFilePattern.test(sourceName);
+  return isRasterMime || isRasterPath ? resolution : undefined;
+}
+
+/** @param {Record<string, unknown>} asset @param {Record<string, unknown>} source @param {unknown} runtime */
+function projectAssetLocator(asset, source, runtime) {
   const name = requireNonEmptyString(source.name, 'project asset name');
   if (asset.kind === 'backdrop') return Object.freeze({kind: 'backdrop', name});
   if (asset.kind === 'sound') return Object.freeze({kind: 'sound', name});
@@ -39,8 +76,87 @@ function projectAssetLocator(asset, source) {
       'Target-independent image assets must use embedded or remote delivery',
     );
   }
-  const target = requireNonEmptyString(asset.target, 'costume target');
+  const logicalTarget = requireNonEmptyString(asset.target, 'costume target');
+  const target = resolveProjectTargetName(runtime, logicalTarget);
   return Object.freeze({kind: 'costume', target, name});
+}
+
+/** @param {unknown} target */
+function projectSpriteName(target) {
+  if (!isRecord(target) || !isRecord(target.sprite)) return null;
+  return typeof target.sprite.name === 'string' && target.sprite.name.length > 0
+    ? target.sprite.name
+    : null;
+}
+
+/** @param {unknown} target @param {string} actorId */
+function actorVariableMatches(target, actorId) {
+  if (!isRecord(target) || typeof target.lookupVariableByNameAndType !== 'function') return false;
+  const variable = target.lookupVariableByNameAndType('actorName', '');
+  return isRecord(variable) && variable.value === actorId;
+}
+
+/**
+ * Resolve a DSL actor ID to the physical project sprite name used by project assets.
+ *
+ * The 3.2 base project keeps all story actors on a physical `Actor` sprite and stores the
+ * logical actor ID in its `actorName` variable. Asset Manager resolves project costumes by
+ * physical sprite name, so passing the logical ID directly produces a missing-source error.
+ *
+ * @param {unknown} runtime
+ * @param {string} logicalTarget
+ */
+function resolveProjectTargetName(runtime, logicalTarget) {
+  if (!isRecord(runtime) || !Array.isArray(runtime.targets)) return logicalTarget;
+  const targets = runtime.targets.filter((target) => isRecord(target) && target.isStage !== true);
+  if (targets.some((target) => projectSpriteName(target) === logicalTarget)) return logicalTarget;
+  const actorMatches = targets.filter((target) => actorVariableMatches(target, logicalTarget));
+  const actorTarget =
+    actorMatches.find((target) => target.isOriginal === true) ?? actorMatches[0] ?? null;
+  const resolvedName = projectSpriteName(actorTarget);
+  if (resolvedName !== null) return resolvedName;
+  const templateNames = new Set(
+    targets
+      .filter((target) => actorVariableMatches(target, '_template_'))
+      .map(projectSpriteName)
+      .filter((name) => name !== null),
+  );
+  return templateNames.size === 1 ? [...templateNames][0] : logicalTarget;
+}
+
+/** @param {Record<string, unknown>} locator @param {unknown} runtime */
+function projectAssetReadiness(locator, runtime) {
+  if (!isRecord(runtime) || !Array.isArray(runtime.targets)) return 'unknown';
+  let target = null;
+  if (locator.kind === 'backdrop' || !Object.hasOwn(locator, 'target')) {
+    target = runtime.targets.find((candidate) => isRecord(candidate) && candidate.isStage === true);
+  } else {
+    target = runtime.targets.find(
+      (candidate) => isRecord(candidate) && projectSpriteName(candidate) === locator.target,
+    );
+  }
+  if (!isRecord(target) || !isRecord(target.sprite)) return 'unknown';
+  const collection = locator.kind === 'sound' ? target.sprite.sounds : target.sprite.costumes;
+  if (!Array.isArray(collection)) return 'unknown';
+  const source = collection.find(
+    (candidate) => isRecord(candidate) && candidate.name === locator.name,
+  );
+  if (!source) return 'missing';
+  if (locator.kind === 'sound') return source.soundId ? 'ready' : 'pending';
+  return typeof source.skinId === 'number' ? 'ready' : 'pending';
+}
+
+/** @param {Record<string, unknown>} locator @param {unknown} runtime @param {AbortSignal | null} signal */
+async function waitForProjectAsset(locator, runtime, signal) {
+  const timeoutMilliseconds = 15_000;
+  const pollMilliseconds = 50;
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (true) {
+    if (signal?.aborted) throw abortError();
+    const readiness = projectAssetReadiness(locator, runtime);
+    if (readiness !== 'pending' || Date.now() >= deadline) return;
+    await new Promise((resolve) => setTimeout(resolve, pollMilliseconds));
+  }
 }
 
 /** @param {unknown} value */
@@ -81,6 +197,7 @@ function validateSignal(value) {
  * @param {object} [options]
  * @param {unknown} [options.composition]
  * @param {() => unknown} [options.createComposition]
+ * @param {unknown} [options.runtime]
  * @param {(blob: Blob) => string} [options.createObjectURL]
  * @param {(url: string) => void} [options.revokeObjectURL]
  */
@@ -144,6 +261,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
       const asset = payload.asset;
       const assetId = requireNonEmptyString(asset.id, 'asset id');
       const assetKind = requireNonEmptyString(asset.kind, 'asset kind');
+      declaredBitmapResolution(asset, `Asset ${assetId}`);
       if (!supportedKinds.has(assetKind)) {
         throw adapterError(
           'K4-ASSET-ADAPTER-002',
@@ -173,7 +291,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
         projectRegistration = Object.freeze({
           name: assetId,
           nameMode: 'literal',
-          locator: projectAssetLocator(asset, source),
+          locator: projectAssetLocator(asset, source, options.runtime),
         });
       } else if (source.type === 'file' || source.type === 'remote') {
         if (payload.files.length !== 1 || !isRecord(payload.files[0])) {
@@ -190,6 +308,11 @@ export function createDsl4AssetManagerAdapter(options = {}) {
             `Embedded asset ${assetId} bytes must be a non-empty Uint8Array`,
           );
         }
+        const bitmapResolution = embeddedBitmapResolution(
+          asset,
+          sourceName,
+          source.type === 'remote' ? String(file.contentType ?? '') : '',
+        );
         embeddedRegistration = Object.freeze({
           name: assetId,
           nameMode: 'literal',
@@ -199,6 +322,7 @@ export function createDsl4AssetManagerAdapter(options = {}) {
               ? requireNonEmptyString(file.contentType, 'remote asset Content-Type')
               : '',
           bytes: file.bytes,
+          ...(bitmapResolution === undefined ? {} : {bitmapResolution}),
         });
         if (assetKind === 'image') imageBytes = new Uint8Array(file.bytes);
       } else {
@@ -227,6 +351,12 @@ export function createDsl4AssetManagerAdapter(options = {}) {
         if (signal?.aborted) {
           cancelRegistration();
           throw abortError();
+        }
+        if (projectRegistration) {
+          const locator = /** @type {Record<string, unknown>} */ (projectRegistration.locator);
+          if (projectAssetReadiness(locator, options.runtime) === 'pending') {
+            await waitForProjectAsset(locator, options.runtime, signal);
+          }
         }
         const registration = await (projectRegistration
           ? composition.registerProjectAsset(projectRegistration)

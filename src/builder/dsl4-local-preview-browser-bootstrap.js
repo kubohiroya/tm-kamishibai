@@ -1,11 +1,19 @@
 import {loadDsl4BrowserTurboWarpPlatform} from '../dsl4/browser-turbowarp-platform.js';
+import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
+import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4LocalPreviewBrowserClient} from './dsl4-local-preview-browser-client.js';
 
 export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
   maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
-  maxAssetBytes: 64 * 1024 * 1024,
+  maxAssetBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxAssetBytes,
+});
+
+export const dsl4LocalPreviewBrowserBootstrapMaximums = deepFreeze({
+  maxSourceBytes: dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
+  maxAssetFiles: dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
+  maxAssetBytes: dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -102,12 +110,15 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput) {
       setLoading() {},
     },
     sessionId,
-    featureFlags: options.featureFlags ?? {dsl4Runtime: true},
+    featureFlags: {...dsl4StandardProductionFeatureFlags, ...(options.featureFlags ?? {})},
+    maxProjectBytes: options.maxProjectBytes,
+    maxProjectJsonBytes: options.maxProjectJsonBytes,
     maxSourceBytes:
       options.maxSourceBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
     maxAssetFiles: options.maxAssetFiles ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
     maxAssetBytes: options.maxAssetBytes ?? dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetBytes,
     subtleCrypto: globalObject.crypto.subtle,
+    onApplicationOpen: options.onApplicationOpen,
     onRuntimeEvent: options.onRuntimeEvent,
     onError: options.onError,
   });

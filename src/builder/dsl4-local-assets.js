@@ -277,6 +277,9 @@ export async function loadDsl4LocalAssetSnapshot(
       kind: asset.kind,
       loading: asset.loading,
       ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
+      ...(asset.kind === 'backdrop' || asset.kind === 'costume'
+        ? {bitmapResolution: asset.bitmapResolution ?? 1}
+        : {}),
     };
     if (asset.delivery === 'remote') {
       const source = /** @type {Readonly<Record<string, unknown>>} */ (asset.source);

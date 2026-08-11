@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {createDsl4PreviewSourceProtocolPort} from '../dsl4/preview-source-protocol-port.js';
+import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {
   createDsl4PreviewSourceGenerationWire,
   dsl4PreviewSourceGenerationWireDefaults,
@@ -228,8 +229,12 @@ function modulePath(requestPath) {
   return candidate;
 }
 
-/** @param {string} sourceDisplayName @param {'protocol' | 'browser'} runtimeOwner */
-function previewHtml(sourceDisplayName, runtimeOwner) {
+/**
+ * @param {string} sourceDisplayName
+ * @param {'protocol' | 'browser'} runtimeOwner
+ * @param {{maxProjectBytes: number, maxProjectJsonBytes: number, maxAssetFiles: number, maxAssetBytes: number}} runtimeLimits
+ */
+function previewHtml(sourceDisplayName, runtimeOwner, runtimeLimits) {
   const safeName = sourceDisplayName.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
   const runtimeDescription =
     runtimeOwner === 'browser'
@@ -240,7 +245,7 @@ function previewHtml(sourceDisplayName, runtimeOwner) {
       ? '/runtime/browser.js'
       : '/modules/builder/dsl4-local-preview-client.js';
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-dsl4-max-project-bytes="${runtimeLimits.maxProjectBytes}" data-dsl4-max-project-json-bytes="${runtimeLimits.maxProjectJsonBytes}" data-dsl4-max-asset-files="${runtimeLimits.maxAssetFiles}" data-dsl4-max-asset-bytes="${runtimeLimits.maxAssetBytes}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -293,6 +298,7 @@ function previewHtml(sourceDisplayName, runtimeOwner) {
  * @param {Uint8Array} [options.projectBytes]
  * @param {Uint8Array} [options.browserBundleBytes]
  * @param {number} [options.maxProjectBytes]
+ * @param {number} [options.maxProjectJsonBytes]
  * @param {number} [options.maxBrowserBundleBytes]
  * @param {(directory: string, listener: (eventType: string, filename: string | Buffer | null) => void) => {close: Function, on: Function}} [options.structureWatchFactory]
  * @param {Record<string, unknown>} [options.watcherOptions]
@@ -378,6 +384,27 @@ export function createDsl4LocalPreviewHost(options) {
   if (maxProjectBytes > dsl4BrowserTurboWarpStageMaximumProjectBytes) {
     throw new TypeError(
       `maxProjectBytes must be <= ${dsl4BrowserTurboWarpStageMaximumProjectBytes}`,
+    );
+  }
+  const maxProjectJsonBytes = safeInteger(
+    options.maxProjectJsonBytes ?? dsl4BrowserPreviewArtifactLimits.defaults.maxProjectJsonBytes,
+    'maxProjectJsonBytes',
+    1,
+  );
+  if (maxProjectJsonBytes > dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes) {
+    throw new TypeError(
+      `maxProjectJsonBytes must be <= ${dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes}`,
+    );
+  }
+  const runtimeMaxAssetFiles = safeInteger(options.maxAssetFiles ?? 64, 'maxAssetFiles', 1);
+  const runtimeMaxAssetBytes = safeInteger(
+    options.maxTotalAssetBytes ?? dsl4BrowserPreviewArtifactLimits.defaults.maxAssetBytes,
+    'maxTotalAssetBytes',
+    1,
+  );
+  if (runtimeMaxAssetBytes > dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes) {
+    throw new TypeError(
+      `maxTotalAssetBytes must be <= ${dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes}`,
     );
   }
   const maxBrowserBundleBytes = safeInteger(
@@ -950,13 +977,20 @@ export function createDsl4LocalPreviewHost(options) {
         const body = previewHtml(
           sourceManifest.path,
           /** @type {'protocol' | 'browser'} */ (runtimeOwner),
+          {
+            maxProjectBytes,
+            maxProjectJsonBytes,
+            maxAssetFiles: runtimeMaxAssetFiles,
+            maxAssetBytes: runtimeMaxAssetBytes,
+          },
         );
         const browserRuntimeSources =
           runtimeOwner === 'browser' ? "; worker-src 'self' blob:; font-src 'self' data:" : '';
+        const mediaSources = runtimeOwner === 'browser' ? "'self' blob:" : "'self'";
         response.writeHead(200, {
           'cache-control': 'no-store',
           'content-length': Buffer.byteLength(body),
-          'content-security-policy': `default-src 'none'; script-src 'self'${runtimeOwner === 'browser' ? " 'unsafe-eval'" : ''}${browserRuntimeSources}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+          'content-security-policy': `default-src 'none'; script-src 'self'${runtimeOwner === 'browser' ? " 'unsafe-eval'" : ''}${browserRuntimeSources}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src ${mediaSources}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
           'content-type': 'text/html; charset=utf-8',
           'referrer-policy': 'no-referrer',
           'x-content-type-options': 'nosniff',

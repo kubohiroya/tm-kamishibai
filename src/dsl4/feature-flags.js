@@ -2,6 +2,8 @@ import {deepFreeze} from './story-document.js';
 
 const featureFlagKeys = new Set([
   'dsl4Runtime',
+  'dsl4BroadcastMessageAndWait',
+  'dsl4SessionBinaryBacking',
   'dsl4SourceIncludes',
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
@@ -19,6 +21,8 @@ const featureFlagKeys = new Set([
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
+  dsl4BroadcastMessageAndWait: false,
+  dsl4SessionBinaryBacking: false,
   dsl4SourceIncludes: false,
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
@@ -32,6 +36,14 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4TurboWarpBubble: false,
   dsl4TurboWarpBubbleAdvancedPresentation: false,
   structuredDataIntegrationEnabled: false,
+});
+
+// Standard release capabilities are explicit and independent from the default-off rollout policy.
+export const dsl4StandardProductionFeatureFlags = deepFreeze({
+  dsl4Runtime: true,
+  dsl4AppShell: true,
+  dsl4PoseFeedbackModes: true,
+  dsl4SpeechAdvanceTypewriter: true,
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -56,6 +68,12 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4AppShell && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4AppShell requires dsl4Runtime');
+  }
+  if (resolved.dsl4BroadcastMessageAndWait && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4BroadcastMessageAndWait requires dsl4Runtime');
+  }
+  if (resolved.dsl4SessionBinaryBacking && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4SessionBinaryBacking requires dsl4Runtime');
   }
   if (resolved.dsl4SourceIncludes && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SourceIncludes requires dsl4Runtime');

@@ -205,6 +205,12 @@ function factories(log, overrides = {}) {
     getActivePoseModelName() {
       return null;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     async startCamera() {},
     stopCamera() {},
     isCameraRunning() {
@@ -495,6 +501,7 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   await mirroringOnly.dispose('mirroring-only');
 
   const log = [];
+  const busy = [];
   let selection = 'default';
   const revoked = [];
   const enabledSetup = options(runtimeComponent(), log, {
@@ -518,6 +525,9 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   });
   const enabled = createDsl4PlatformAssetSession({
     ...enabledSetup.value,
+    setBusy(event) {
+      busy.push(event);
+    },
     cameraPreviewControlsEnabled: true,
     createObjectURL: () => 'blob:control-icon',
     revokeObjectURL: (url) => revoked.push(url),
@@ -537,6 +547,15 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   ]);
   await enabled.cameraPreviewControlsPort.selectCamera({deviceId: 'opaque'});
   assert.deepEqual(enabled.cameraPreviewControlsPort.getCameraSelection(), {deviceId: 'opaque'});
+  assert.deepEqual(
+    busy.map(({visible, source}) => ({visible, source})),
+    [
+      {visible: true, source: 'camera'},
+      {visible: false, source: 'camera'},
+      {visible: true, source: 'camera'},
+      {visible: false, source: 'camera'},
+    ],
+  );
   await enabled.dispose('camera-preview-controls-enabled');
   assert.deepEqual(revoked, ['blob:control-icon']);
 });

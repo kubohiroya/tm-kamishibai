@@ -65,11 +65,22 @@ export {
 export {
   createDsl4BinaryEntryAssetBundle,
   createDsl4OneShotBinaryEntryProvider,
+  dsl4BinaryEntryContentType,
   dsl4BinaryEntryFormatVersion,
   dsl4BinaryEntryPrefix,
+  dsl4BinaryEntryPrefixes,
+  dsl4LegacyBinaryEntryFormatVersion,
+  dsl4LegacyBinaryEntryPrefix,
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';
+export {
+  claimDsl4PackagerEntrySource,
+  createDsl4BinaryEntryProviderFromPackagerSource,
+  dsl4PackagerEntrySourceContractVersion,
+  dsl4PackagerEntrySourceRegistryName,
+  Dsl4PackagerEntrySourceError,
+} from './packager-entry-source.js';
 export {
   createDsl4BrowserPreviewSourceAdapter,
   dsl4BrowserPreviewSourceDefaults,
@@ -88,6 +99,7 @@ export {
   dsl4BrowserTurboWarpStageDefaults,
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from './browser-turbowarp-stage.js';
+export {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 export {
   createDsl4BrowserTurboWarpPlatform,
   loadDsl4BrowserTurboWarpPlatform,
@@ -164,6 +176,7 @@ export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime
 export {
   createDsl4RuntimeStartup,
   dsl4DefaultFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
   resolveDsl4FeatureFlags,
 } from './runtime-startup.js';
 export {

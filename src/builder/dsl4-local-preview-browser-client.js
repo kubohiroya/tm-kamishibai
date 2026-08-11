@@ -130,6 +130,9 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
   if (options.onRuntimeEvent !== undefined && typeof options.onRuntimeEvent !== 'function') {
     throw new TypeError('onRuntimeEvent must be a function when provided');
   }
+  if (options.onApplicationOpen !== undefined && typeof options.onApplicationOpen !== 'function') {
+    throw new TypeError('onApplicationOpen must be a function when provided');
+  }
   const maxProjectBytes = boundedInteger(
     options.maxProjectBytes ?? dsl4LocalPreviewBrowserClientDefaults.maxProjectBytes,
     'maxProjectBytes',
@@ -610,12 +613,14 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput) {
           sessionId: options.sessionId,
           featureFlags: options.featureFlags,
           maxProjectBytes,
+          maxProjectJsonBytes: options.maxProjectJsonBytes,
           maxGenerationMessageBytes,
           maxSourceBytes: options.maxSourceBytes,
           maxAssetFiles: options.maxAssetFiles,
           maxAssetBytes: options.maxAssetBytes,
           historyNavigationAvailable: options.historyNavigationAvailable,
           subtleCrypto: options.subtleCrypto,
+          onApplicationOpen: options.onApplicationOpen,
           onRuntimeEvent: options.onRuntimeEvent,
           onError: reportError,
         });

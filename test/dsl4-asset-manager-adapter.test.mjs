@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {createAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
+
 import {createDsl4AssetManagerAdapter} from '../src/dsl4/platform/index.js';
 
 function mimeType(sourceName) {
@@ -29,6 +31,17 @@ function fakeComposition(overrides = {}) {
       ...overrides,
     }),
   };
+}
+
+function productionComposition(runtime) {
+  const previousScratch = globalThis.Scratch;
+  globalThis.Scratch = {vm: {runtime}};
+  try {
+    return createAssetManagerComposition();
+  } finally {
+    if (previousScratch === undefined) Reflect.deleteProperty(globalThis, 'Scratch');
+    else globalThis.Scratch = previousScratch;
+  }
 }
 
 function projectAsset(id, kind, name, target) {
@@ -96,6 +109,138 @@ test('maps project backdrop, costume, and stage sound references deterministical
   assert.deepEqual(fake.calls.release, ['HeroHappy']);
 });
 
+test('maps logical actor IDs to the physical sprite used by 3.2 project costumes', async () => {
+  const fake = fakeComposition();
+  const actorTarget = {
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Actor', costumes: [{name: 'Urashima-walk-1', skinId: 1}]},
+    lookupVariableByNameAndType(name, type) {
+      assert.equal(name, 'actorName');
+      assert.equal(type, '');
+      return {value: 'Urashima'};
+    },
+  };
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    runtime: {targets: [{isStage: true, sprite: {name: 'Stage'}}, actorTarget]},
+  });
+
+  await adapter.prepare(projectAsset('UrashimaWalk', 'costume', 'Urashima-walk-1', 'Urashima'));
+
+  assert.deepEqual(fake.calls.project, [
+    {
+      name: 'UrashimaWalk',
+      nameMode: 'literal',
+      locator: {kind: 'costume', target: 'Actor', name: 'Urashima-walk-1'},
+    },
+  ]);
+});
+
+test('uses the 3.2 actor template before logical actor clones are created', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({
+    composition: fake.composition,
+    runtime: {
+      targets: [
+        {
+          isStage: false,
+          isOriginal: true,
+          sprite: {name: 'Actor'},
+          lookupVariableByNameAndType() {
+            return {value: '_template_'};
+          },
+        },
+      ],
+    },
+  });
+
+  await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
+
+  assert.equal(fake.calls.project[0].locator.target, 'Actor');
+});
+
+test('waits for a project costume skin before registering its project reference', async () => {
+  const costume = {name: 'Princess', skinId: undefined};
+  const projectCalls = [];
+  const runtime = {
+    targets: [
+      {
+        isStage: false,
+        isOriginal: true,
+        sprite: {name: 'Actor', costumes: [costume]},
+        lookupVariableByNameAndType() {
+          return {value: 'Princess'};
+        },
+      },
+    ],
+  };
+  const composition = {
+    async registerProjectAsset(input) {
+      assert.equal(costume.skinId, 1);
+      projectCalls.push(input);
+      return {name: input.name, mimeType: 'image/svg+xml'};
+    },
+    async registerEmbeddedAsset() {
+      throw new Error('embedded registration is not expected');
+    },
+    releaseAsset() {},
+  };
+  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  setTimeout(() => {
+    costume.skinId = 1;
+  }, 10);
+
+  await adapter.prepare(projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'));
+  assert.equal(projectCalls.length, 1);
+});
+
+test('prevents SOURCE_ASSET_NOT_FOUND with the production Asset Manager composition', async () => {
+  const costume = {name: 'Princess', skinId: undefined};
+  const actorTarget = {
+    id: 'actor-target',
+    isStage: false,
+    isOriginal: true,
+    sprite: {name: 'Actor', costumes: [costume], sounds: []},
+    lookupVariableByNameAndType() {
+      return {value: 'Princess'};
+    },
+  };
+  const runtime = {
+    targets: [
+      {id: 'stage-target', isStage: true, sprite: {name: 'Stage', costumes: [], sounds: []}},
+      actorTarget,
+    ],
+    on() {},
+  };
+  const composition = productionComposition(runtime);
+
+  await assert.rejects(
+    composition.registerProjectAsset({
+      name: 'RawPrincessSkin',
+      nameMode: 'literal',
+      locator: {kind: 'costume', target: 'Actor', name: 'Princess'},
+    }),
+    (error) => error?.code === 'SOURCE_ASSET_NOT_FOUND',
+  );
+
+  const adapter = createDsl4AssetManagerAdapter({composition, runtime});
+  let resource;
+  setTimeout(() => {
+    costume.skinId = 1;
+  }, 10);
+  try {
+    resource = await adapter.prepare(
+      projectAsset('PrincessSkin', 'costume', 'Princess', 'Princess'),
+    );
+    assert.equal(resource.mimeType, 'image/x-scratch-costume');
+    assert.equal(composition.isRegistered('PrincessSkin'), true);
+  } finally {
+    if (resource) adapter.release(resource);
+    composition.releaseAll();
+  }
+});
+
 test('registers one embedded image or audio file with path-derived MIME normalization', async () => {
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
@@ -114,6 +259,39 @@ test('registers one embedded image or audio file with path-derived MIME normaliz
   assert.equal(svg.mimeType, 'image/svg+xml');
   assert.equal(bitmap.mimeType, 'image/png');
   assert.equal(audio.mimeType, 'audio/wav');
+});
+
+test('passes bitmapResolution only for raster costume and backdrop registrations', async () => {
+  const fake = fakeComposition();
+  const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
+  const costume = embeddedAsset('HighDensityCostume', 'costume', 'assets/hero.png');
+  costume.asset.bitmapResolution = 2;
+  await adapter.prepare(costume);
+  const svg = embeddedAsset('VectorBackdrop', 'backdrop', 'assets/ocean.svg');
+  svg.asset.bitmapResolution = 2;
+  await adapter.prepare(svg);
+  const jpeg = remoteAsset(
+    'RemoteBackdrop',
+    'backdrop',
+    'https://cdn.example.com/backdrop.jpg',
+    'image/jpeg',
+  );
+  jpeg.asset.bitmapResolution = 1;
+  await adapter.prepare(jpeg);
+
+  assert.equal(fake.calls.embedded[0].bitmapResolution, 2);
+  assert.equal(Object.hasOwn(fake.calls.embedded[1], 'bitmapResolution'), false);
+  assert.equal(fake.calls.embedded[2].bitmapResolution, 1);
+
+  const project = projectAsset('ProjectCostume', 'costume', 'hero', 'Hero');
+  project.asset.bitmapResolution = 2;
+  await adapter.prepare(project);
+  assert.equal(Object.hasOwn(fake.calls.project[0].locator, 'bitmapResolution'), false);
+
+  const invalid = embeddedAsset('InvalidResolution', 'costume', 'assets/hero.png');
+  invalid.asset.bitmapResolution = 3;
+  await assert.rejects(adapter.prepare(invalid), (error) => error.code === 'K4-ASSET-ADAPTER-001');
+  assert.equal(fake.calls.embedded.length, 3);
 });
 
 test('preserves literal DSL and Scratch names through structured project locators', async () => {

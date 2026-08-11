@@ -12,6 +12,10 @@ import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
 import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
+import {
+  createDsl4StoryCameraLifecycle,
+  storyUsesPoseRecognition,
+} from './story-camera-lifecycle.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -113,10 +117,17 @@ function disposedError() {
  *
  * @param {object} options
  * @param {unknown} options.runtimeComponent
+ * @param {unknown} [options.runtime]
  * @param {unknown} [options.binaryEntryProvider]
- * @param {Readonly<Record<string, unknown>>} [options.binaryBundleStoreOptions]
+ * @param {'prefer' | 'required' | 'disabled'} [options.binarySessionBackingPolicy]
+ * @param {string} [options.binarySessionId]
+ * @param {Readonly<Record<string, unknown>>} [options.sessionBinaryBackingOptions]
+ * @param {(warning: Readonly<Record<string, unknown>>) => unknown} [options.onBinarySessionBackingWarning]
+ * @param {(error: unknown) => unknown} [options.onBinarySessionBackingFatalError]
  * @param {unknown} options.tmPoseRuntime
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} options.setLoading
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
  * @param {(payload: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.loadRemoteAsset]
  * @param {unknown} [options.cacheIdentity]
  * @param {Readonly<Record<string, unknown>>} [options.verifiedRemoteCacheOptions]
@@ -148,6 +159,12 @@ export function createDsl4PlatformAssetSession(options) {
   const tmPoseRuntime = validateTMPoseRuntime(options.tmPoseRuntime);
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
+  }
+  if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (options.setCursor !== undefined && typeof options.setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
   }
   if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
     throw new TypeError('loadRemoteAsset must be a function');
@@ -195,10 +212,35 @@ export function createDsl4PlatformAssetSession(options) {
     throw new TypeError('verifiedRemoteCacheOptions must be an object');
   }
   if (
-    options.binaryBundleStoreOptions !== undefined &&
-    !isRecord(options.binaryBundleStoreOptions)
+    options.sessionBinaryBackingOptions !== undefined &&
+    !isRecord(options.sessionBinaryBackingOptions)
   ) {
-    throw new TypeError('binaryBundleStoreOptions must be an object');
+    throw new TypeError('sessionBinaryBackingOptions must be an object');
+  }
+  if (binaryEntryEnabled) {
+    if (
+      typeof options.binarySessionBackingPolicy !== 'string' ||
+      !['prefer', 'required', 'disabled'].includes(options.binarySessionBackingPolicy)
+    ) {
+      throw new TypeError(
+        'binarySessionBackingPolicy must be prefer, required, or disabled for binary-entry loading',
+      );
+    }
+    if (typeof options.binarySessionId !== 'string' || options.binarySessionId.length === 0) {
+      throw new TypeError('binarySessionId must be a non-empty string for binary-entry loading');
+    }
+  }
+  if (
+    options.onBinarySessionBackingWarning !== undefined &&
+    typeof options.onBinarySessionBackingWarning !== 'function'
+  ) {
+    throw new TypeError('onBinarySessionBackingWarning must be a function');
+  }
+  if (
+    options.onBinarySessionBackingFatalError !== undefined &&
+    typeof options.onBinarySessionBackingFatalError !== 'function'
+  ) {
+    throw new TypeError('onBinarySessionBackingFatalError must be a function');
   }
   if (options.createFile !== undefined && typeof options.createFile !== 'function') {
     throw new TypeError('createFile must be a function');
@@ -272,6 +314,35 @@ export function createDsl4PlatformAssetSession(options) {
     }
   }
 
+  /** @param {boolean} visible */
+  function notifyCameraBusy(visible) {
+    if (typeof options.setBusy !== 'function') return;
+    try {
+      void Promise.resolve(
+        options.setBusy(
+          Object.freeze({
+            visible,
+            source: 'camera',
+            label: 'Starting camera',
+            cursor: 'wait',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Busy indicators are non-authoritative and cannot change camera selection semantics.
+    }
+  }
+
+  /** @template T @param {() => Promise<T> | T} operation */
+  async function withCameraBusy(operation) {
+    notifyCameraBusy(true);
+    try {
+      return await operation();
+    } finally {
+      notifyCameraBusy(false);
+    }
+  }
+
   const created = [];
   try {
     const compositionOptions = {
@@ -285,9 +356,8 @@ export function createDsl4PlatformAssetSession(options) {
         : {}),
       ...(binaryEntryEnabled
         ? {
-            binaryBundleStore: {
-              ...options.binaryBundleStoreOptions,
-              databaseName: `${/** @type {Record<string, any>} */ (cacheIdentity).databaseName}--binary-v1`,
+            sessionBinaryBacking: {
+              ...options.sessionBinaryBackingOptions,
               ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
             },
           }
@@ -323,9 +393,7 @@ export function createDsl4PlatformAssetSession(options) {
             'releaseVerifiedRemoteStoryCacheLease',
           ]
         : []),
-      ...(binaryEntryEnabled
-        ? ['putBinaryBundle', 'getBinaryBundle', 'deleteBinaryBundle', 'releaseBinaryStore']
-        : []),
+      ...(binaryEntryEnabled ? ['createSessionBinaryBacking'] : []),
     ];
     const assetManagerComposition = validateCompositionMethods(
       assetManagerCandidate,
@@ -338,6 +406,16 @@ export function createDsl4PlatformAssetSession(options) {
           provider: options.binaryEntryProvider,
           composition: assetManagerComposition,
           namespace: /** @type {Record<string, any>} */ (cacheIdentity).id,
+          policy: /** @type {'prefer' | 'required' | 'disabled'} */ (
+            options.binarySessionBackingPolicy
+          ),
+          sessionId: /** @type {string} */ (options.binarySessionId),
+          ...(options.onBinarySessionBackingWarning === undefined
+            ? {}
+            : {onWarning: options.onBinarySessionBackingWarning}),
+          ...(options.onBinarySessionBackingFatalError === undefined
+            ? {}
+            : {onFatalError: options.onBinarySessionBackingFatalError}),
         })
       : null;
     if (binaryAssetBacking) {
@@ -345,6 +423,7 @@ export function createDsl4PlatformAssetSession(options) {
     }
     const mediaAdapter = createDsl4AssetManagerAdapter({
       composition: assetManagerComposition,
+      ...(options.runtime === undefined ? {} : {runtime: options.runtime}),
       ...(options.createObjectURL === undefined ? {} : {createObjectURL: options.createObjectURL}),
       ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
     });
@@ -364,6 +443,10 @@ export function createDsl4PlatformAssetSession(options) {
       'releaseAll',
       'isPoseModelRegistered',
       'getActivePoseModelName',
+      'showPreview',
+      'hidePreview',
+      'isPreviewVisible',
+      'setPreviewPosition',
       'startCamera',
       'stopCamera',
       'isCameraRunning',
@@ -383,6 +466,12 @@ export function createDsl4PlatformAssetSession(options) {
         ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
         : []),
     ]);
+    const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)
+      ? createDsl4StoryCameraLifecycle({
+          composition: tmposeComposition,
+          ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+        })
+      : null;
     const asyncInputCandidate = createAsyncInput({
       poseSource: tmposeComposition,
       ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
@@ -400,7 +489,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       getPoseModelLabels: (poseModel) => tmpose.adapter.getPoseModelLabels(poseModel),
-      playSound: (sound) => assetManagerComposition.playSound(sound),
+      playSound: (sound, playOptions) => assetManagerComposition.playSound(sound, playOptions),
       stopSound: (sound) => assetManagerComposition.stopSound(sound),
       ...(options.poseSchedule === undefined
         ? {}
@@ -413,6 +502,11 @@ export function createDsl4PlatformAssetSession(options) {
       ...(options.poseNow === undefined
         ? {}
         : {now: /** @type {() => number} */ (options.poseNow)}),
+      ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
+      ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
+      ...(storyCameraLifecycle === null
+        ? {}
+        : {ensureCameraStarted: () => storyCameraLifecycle.start()}),
       ...(poseFeedbackEnabled ? {onPoseState: options.onPoseState} : {}),
       ...(poseFeedbackEnabled && options.readPoseStateBinding !== undefined
         ? {readPoseStateBinding: options.readPoseStateBinding}
@@ -539,12 +633,12 @@ export function createDsl4PlatformAssetSession(options) {
             ? {
                 listCameraDevices() {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.listCameraDevices();
+                  return withCameraBusy(() => tmposeComposition.listCameraDevices());
                 },
                 /** @param {unknown} selection */
                 selectCamera(selection) {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.selectCamera(selection);
+                  return withCameraBusy(() => tmposeComposition.selectCamera(selection));
                 },
                 getCameraSelection() {
                   if (disposePromise) throw disposedError();
@@ -641,6 +735,7 @@ export function createDsl4PlatformAssetSession(options) {
         const errors = [];
         for (const release of [
           () => poseActionPort.dispose(),
+          ...(storyCameraLifecycle ? [() => storyCameraLifecycle.dispose()] : []),
           ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
           () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
@@ -669,6 +764,7 @@ export function createDsl4PlatformAssetSession(options) {
       tmposeComposition,
       asyncInputComposition,
       poseActionPort,
+      storyCameraLifecycle,
       posePreviewPort,
       cameraPreviewControlsPort,
       /** @param {unknown} assetId */

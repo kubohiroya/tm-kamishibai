@@ -17,6 +17,13 @@
       }
     },
     {
+      "id": "strings",
+      "path": "extensions/strings.js",
+      "mediaType": "text/javascript",
+      "parameters": [],
+      "encoding": "base64"
+    },
+    {
       "id": "text",
       "path": "extensions/text.js",
       "mediaType": "text/javascript",

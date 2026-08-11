@@ -46,7 +46,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
         maxSourceBytes: 1_048_576,
         channel: 'bundled',
       },
-      version: '3.2.3',
+      version: '4.0.0',
       package: '@kubohiroya/tmpose-kamishibai',
     },
     extensionBundle: {

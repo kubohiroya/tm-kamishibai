@@ -47,8 +47,10 @@ JavaScript runtimeが所有し、Scratch variable、list、broadcastを保存形
 
 | 配布面                     | 拡張ID                               | 標準作品           | palette                   | 用途                                                   |
 | -------------------------- | ------------------------------------ | ------------------ | ------------------------- | ------------------------------------------------------ |
-| Standard Runtime           | `kubohiroyakamishibairuntime4`       | 読み込み済み       | DSL 4.0 blockは0          | 台本の検証、実行、asset制御と固定shell                 |
-| template内部control        | Standard Runtime内                   | 保存済み           | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
+| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み       | DSL 4.0 blockは0          | RuntimeとWeb Linkを一つの権限単位として登録            |
+| Runtime member             | `kubohiroyakamishibairuntime4`       | Composite内        | `hideFromPalette: true`   | 台本の検証、実行、asset制御と固定shell                 |
+| Web Link member            | `kubohiroyaweblink`                  | Composite内        | `hideFromPalette: true`   | 公式Webサイトの固定HTTPS URLを開く                     |
+| template内部control        | Runtime member内                     | 保存済み           | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
 | Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない       | 8 opcode                  | 作品固有custom actionをScratchで実装するcustomizer向け |
 | Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない       | Store／Iterator／JSONPath | 汎用データ処理を使う開発者向け                         |
 | Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない       | 診断opcode                | capability開発者向け                                   |
@@ -60,7 +62,7 @@ Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個で�
 
 ### 3.1 template内部control
 
-4.0.0-devの内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
+4.0.0の内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
 `hideFromPalette: true`にします。
 
 - `versionReporter`

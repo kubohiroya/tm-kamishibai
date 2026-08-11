@@ -14,12 +14,12 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 
 ## npmパッケージ
 
-[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai)は、外部の画像・音声をベースSB3へ組み込み、台本の`asset=`行をプロジェクト内参照へ変換するCLIとJavaScript APIを提供します。
+[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai)は、DSL 4.0 YAMLの検証、local preview、自己完結SB3の生成と、3.1／3.2台本の変換を行うCLI／JavaScript APIを提供します。
 
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@3.2.3
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0
 ```
 
 ```bash
@@ -31,7 +31,7 @@ pnpm exec tmpose-kamishibai build-sb3 \
   --profile editor
 ```
 
-開発中のDSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
+DSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
 
 ```json
 {
@@ -70,11 +70,27 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
+DSL embedded assetをBase64本文ではなくSB3 rootのcontent-addressed entryとして試す場合は、build開始時に
+`--enable-root-binary-entries`を明示します。これは既定OFFです。OFFでは従来のBase64形式を生成するため、
+ロールバック時はflagを外して成果物を再buildします。entry形式、対応sbdl version、Packager／session backingの契約は
+[DSL 4.0 root binary／Packager契約](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-root-binary-packager-contract.md)を参照してください。
+
+root-entry SB3をTurboWarp Packagerへ渡す場合は、固定`@turbowarp/packager` 3.13.0とbuilder exportの
+`packageDsl4WithTurboWarpPackager()`を使用します。Plain HTML／`zip-one-asset`は同じPackager ZIP closureを
+`scaffolding.loadProject()`前に登録し、通常ZIP／Electronは`assets/`配下の個別entryをdirect sourceとして登録します。
+実行時のPackager objectを差し替えたり、生成HTMLを任意の文字列置換で更新したりしないでください。対応templateが変化した場合、
+adapterはbuildをfail closedにします。必要な引数とsurface別の所有権は上記契約書を参照してください。
+
+TurboWarpエディターでSB3を直接開いて実行する成果物は、`--enable-root-binary-entries`を指定せずBase64形式でbuildしてください。
+エディターは読み込み後にSB3 ZIP entry sourceを保持しないため、v3 root-entry descriptorだけを持つSB3は直接実行できません。
+
 `project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込みます。`delivery: remote`のpose modelは通常のTMPoseディレクトリURLだけでも指定でき、内容を固定したい場合は`file`へローカル化して埋め込みます。integrity／Content-Type／sizeをすべて指定したremote assetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
 
 `--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
 
 local previewでも同じflagとgraph上限を指定できます。ON時はincluded sourceとlocal assetを含む全体を二回取得し、同じgeneration keyになった場合だけruntimeへstageします。新規sourceは任意のbasename／directoryで`.k4.yml` suffixを使用できます（entry sourceだけはmanifestのroot-level basenameです）。途中保存や一部assetだけが新しい状態は公開しません。詳細は[DSL 4.0 Source Graph Preview](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-source-include-preview.md)を参照してください。
+
+実カメラを使う最終確認は、[DSL 4.0 実Chrome・実カメラ Smoke 手順](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-physical-camera-smoke.md)に従います。自動E2Eはカメラをスタブ化しているため、実機確認の代替にはなりません。
 
 台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
 
@@ -88,8 +104,15 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes 65536 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --max-total-asset-bytes 67108864 \
+  --max-project-bytes 201326592 \
+  --max-project-json-bytes 201326592
 ```
+
+`--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
+展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
+`--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
+絶対上限を適用します。
 
 Source Graphを監視する場合は、上のcommandへ次を追加します。
 
@@ -352,7 +375,7 @@ pnpm install
 新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
-`pnpm sb3:*`は`devDependencies`へcommit固定した`@kubohiroya/sb3-toolchain`を使用します。
+`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.6.0`を使用します。
 CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として

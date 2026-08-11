@@ -84,7 +84,19 @@ function validateContext(value) {
   ) {
     throw portError('K4-POSE-PORT-001', 'pose action signal is invalid');
   }
-  return /** @type {AbortSignal} */ (/** @type {unknown} */ (signal));
+  const actionSignal = isRecord(value) ? (value.actionSignal ?? signal) : null;
+  if (
+    !isRecord(actionSignal) ||
+    typeof actionSignal.aborted !== 'boolean' ||
+    typeof actionSignal.addEventListener !== 'function' ||
+    typeof actionSignal.removeEventListener !== 'function'
+  ) {
+    throw portError('K4-POSE-PORT-001', 'pose action owner signal is invalid');
+  }
+  return {
+    signal: /** @type {AbortSignal} */ (/** @type {unknown} */ (signal)),
+    actionSignal: /** @type {AbortSignal} */ (/** @type {unknown} */ (actionSignal)),
+  };
 }
 
 /** @param {unknown} value */
@@ -93,6 +105,10 @@ function validateTMPoseComposition(value) {
     'activatePoseModel',
     'isPoseModelRegistered',
     'getActivePoseModelName',
+    'showPreview',
+    'hidePreview',
+    'isPreviewVisible',
+    'setPreviewPosition',
     'startRecognition',
     'stopRecognition',
     'isRecognizing',
@@ -139,14 +155,24 @@ function validateSequencePayload(value) {
   if (!feedbackModes.has(feedbackMode)) {
     throw portError('K4-POSE-PORT-001', 'feedback.mode is unsupported');
   }
+  const stepIndex = requireNumber(
+    value.stepIndex ?? 0,
+    'stepIndex',
+    (number) => Number.isSafeInteger(number) && number >= 0,
+  );
+  const stepCount = requireNumber(
+    value.stepCount ?? 1,
+    'stepCount',
+    (number) => Number.isSafeInteger(number) && number >= 1,
+  );
+  if (stepIndex >= stepCount) {
+    throw portError('K4-POSE-PORT-001', 'stepIndex must be less than stepCount');
+  }
   return {
     target: requireString(value.target, 'target'),
     pose: requireString(value.pose, 'pose'),
-    stepIndex: requireNumber(
-      value.stepIndex ?? 0,
-      'stepIndex',
-      (number) => Number.isSafeInteger(number) && number >= 0,
-    ),
+    stepIndex,
+    stepCount,
     poseModel: requireString(value.poseModel, 'poseModel'),
     confidenceThreshold: requireNumber(
       recognition.confidenceThreshold,
@@ -221,8 +247,11 @@ function defaultSchedule(callback, delayMilliseconds) {
  * @param {unknown} options.tmposeComposition
  * @param {unknown} options.asyncInputComposition
  * @param {(poseModel: string) => ReadonlyArray<string> | null} options.getPoseModelLabels
- * @param {(sound: string) => unknown | Promise<unknown>} [options.playSound]
+ * @param {(sound: string, options?: Readonly<{untilDone?: boolean}>) => unknown | Promise<unknown>} [options.playSound]
  * @param {(sound: string) => unknown | Promise<unknown>} [options.stopSound]
+ * @param {(payload: Readonly<{visible: boolean, source: string, label: string, cursor?: string}>) => unknown | Promise<unknown>} [options.setBusy]
+ * @param {(payload: Readonly<{visible: boolean, source: string, cursor: string}>) => unknown | Promise<unknown>} [options.setCursor]
+ * @param {() => Promise<unknown>} [options.ensureCameraStarted]
  * @param {(event: Readonly<{phase: 'waiting' | 'charging' | 'completed' | 'cancelled', target: string, pose: string, stepIndex: number, confidence: number, progress: number}>) => unknown} [options.onPoseState]
  * @param {() => Readonly<{confidence?: number, progress?: number}> | null} [options.readPoseStateBinding]
  * @param {(callback: () => void, delayMilliseconds: number) => () => void} [options.schedule]
@@ -238,6 +267,9 @@ export function createDsl4PoseActionPort(options) {
   const getPoseModelLabels = options.getPoseModelLabels;
   const playSound = options.playSound ?? (() => undefined);
   const stopSound = options.stopSound ?? (() => undefined);
+  const setBusy = options.setBusy;
+  const setCursor = options.setCursor;
+  const ensureCameraStarted = options.ensureCameraStarted;
   const onPoseState = options.onPoseState;
   const readPoseStateBinding = options.readPoseStateBinding;
   const schedule = options.schedule ?? defaultSchedule;
@@ -252,6 +284,16 @@ export function createDsl4PoseActionPort(options) {
     throw new TypeError('readPoseStateBinding must be a function');
   }
 
+  if (setBusy !== undefined && typeof setBusy !== 'function') {
+    throw new TypeError('setBusy must be a function');
+  }
+  if (setCursor !== undefined && typeof setCursor !== 'function') {
+    throw new TypeError('setCursor must be a function');
+  }
+  if (ensureCameraStarted !== undefined && typeof ensureCameraStarted !== 'function') {
+    throw new TypeError('ensureCameraStarted must be a function');
+  }
+
   let released = false;
   /** @type {null | {controller: AbortController, done: Promise<void>, finish: () => void}} */
   let activeSequence = null;
@@ -259,9 +301,56 @@ export function createDsl4PoseActionPort(options) {
   let currentSelection = null;
   /** @type {Promise<void> | null} */
   let disposePromise = null;
+  /** @type {Promise<void>} */
+  let recognitionQueue = Promise.resolve();
+  /** @type {null | {sound: string, operation: Promise<unknown>}} */
+  let chargePlayback = null;
+  let poseCursorId = 0;
+  const previewOwners = new Set();
+  /** @type {null | {signal: AbortSignal, owner: object, handleAbort: () => void}} */
+  let sequencePreview = null;
 
   function ensureAvailable() {
     if (released) throw portError('K4-POSE-PORT-005', 'pose action port has been released');
+  }
+
+  /** @param {unknown} owner */
+  function claimPreview(owner) {
+    previewOwners.add(owner);
+    tmpose.setPreviewPosition('full-stage');
+  }
+
+  /** @param {unknown} owner */
+  function showClaimedPreview(owner) {
+    if (previewOwners.has(owner)) tmpose.showPreview();
+  }
+
+  /** @param {unknown} owner */
+  function releasePreview(owner) {
+    previewOwners.delete(owner);
+    if (previewOwners.size === 0) tmpose.hidePreview();
+  }
+
+  /** @param {object} owner */
+  function releaseSequencePreview(owner) {
+    const lease = sequencePreview;
+    if (!lease || lease.owner !== owner) return;
+    sequencePreview = null;
+    lease.signal.removeEventListener('abort', lease.handleAbort);
+    releasePreview(owner);
+  }
+
+  /** @param {AbortSignal} signal */
+  function claimSequencePreview(signal) {
+    if (sequencePreview?.signal === signal) return sequencePreview.owner;
+    if (sequencePreview) releaseSequencePreview(sequencePreview.owner);
+    const owner = {};
+    const handleAbort = () => releaseSequencePreview(owner);
+    sequencePreview = {signal, owner, handleAbort};
+    claimPreview(owner);
+    signal.addEventListener('abort', handleAbort, {once: true});
+    if (signal.aborted) handleAbort();
+    return owner;
   }
 
   /**
@@ -297,6 +386,98 @@ export function createDsl4PoseActionPort(options) {
     }
   }
 
+  /** @param {boolean} visible */
+  function notifyCameraBusy(visible) {
+    if (!setBusy) return;
+    try {
+      void Promise.resolve(
+        setBusy(
+          Object.freeze({
+            visible,
+            source: 'camera',
+            label: 'Starting camera',
+            cursor: 'wait',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Busy indicators are non-authoritative and cannot change pose execution semantics.
+    }
+  }
+
+  /** @param {boolean} visible @param {string} [source] */
+  function notifyPoseCursor(visible, source = 'pose') {
+    if (!setCursor) return;
+    try {
+      void Promise.resolve(
+        setCursor(
+          Object.freeze({
+            visible,
+            source,
+            cursor: 'progress',
+          }),
+        ),
+      ).catch(() => {});
+    } catch {
+      // Cursor styling is non-authoritative and cannot change pose execution semantics.
+    }
+  }
+
+  /**
+   * Start a sound without making pose recognition or input cancellation wait for audio playback.
+   * Synchronous startup failures remain authoritative; later playback failures are contained because
+   * an already-running pose step cannot safely be rolled back from an audio callback.
+   *
+   * @param {string} sound
+   * @param {Readonly<{untilDone?: boolean}>} [playOptions]
+   */
+  function startBackgroundSound(sound, playOptions) {
+    const operation = Promise.resolve(playSound(sound, playOptions));
+    void operation.catch(() => {});
+    return operation;
+  }
+
+  /** @param {string} sound */
+  function requestSoundStop(sound) {
+    try {
+      void Promise.resolve(stopSound(sound)).catch(() => {});
+    } catch {
+      // Sound cleanup cannot delay or replace the pose action's terminal result.
+    }
+  }
+
+  /** @param {string} sound */
+  function startChargeSound(sound) {
+    if (chargePlayback) return;
+    const playback = {sound, operation: startBackgroundSound(sound, {untilDone: true})};
+    chargePlayback = playback;
+    void playback.operation.then(
+      () => {
+        if (chargePlayback === playback) chargePlayback = null;
+      },
+      () => {
+        if (chargePlayback === playback) chargePlayback = null;
+      },
+    );
+  }
+
+  function stopChargeSound() {
+    const playback = chargePlayback;
+    if (!playback) return;
+    chargePlayback = null;
+    requestSoundStop(playback.sound);
+  }
+
+  /** @template T @param {() => Promise<T>} operation */
+  async function withCameraBusy(operation) {
+    notifyCameraBusy(true);
+    try {
+      return await operation();
+    } finally {
+      notifyCameraBusy(false);
+    }
+  }
+
   /** @param {string} poseModel @param {ReadonlyArray<string>} poses */
   function requireKnownPoses(poseModel, poses) {
     if (!tmpose.isPoseModelRegistered(poseModel)) {
@@ -313,31 +494,100 @@ export function createDsl4PoseActionPort(options) {
     }
   }
 
+  /**
+   * @param {Promise<void>} operation
+   * @param {AbortSignal} signal
+   * @param {string} message
+   */
+  function waitForAbortableOperation(operation, signal, message) {
+    if (signal.aborted) return Promise.reject(abortError(message));
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => signal.removeEventListener('abort', handleAbort);
+      const handleAbort = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(abortError(message));
+      };
+      signal.addEventListener('abort', handleAbort, {once: true});
+      operation.then(
+        () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(undefined);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        },
+      );
+      if (signal.aborted) handleAbort();
+    });
+  }
+
+  /**
+   * Serialize camera/model startup because TMPose does not accept an AbortSignal. Each caller may
+   * stop waiting immediately while an already-started camera request remains shared by later steps.
+   *
+   * @param {string} poseModel
+   * @param {AbortSignal} signal
+   * @param {object} options
+   * @param {boolean} [options.restart]
+   * @param {() => void} [options.configure]
+   * @param {string} options.cancelMessage
+   */
+  function queueRecognition(
+    poseModel,
+    signal,
+    {restart = false, configure = () => {}, cancelMessage},
+  ) {
+    const operation = recognitionQueue
+      .catch(() => {})
+      .then(async () => {
+        if (signal.aborted) throw abortError(cancelMessage);
+        if (restart && tmpose.isRecognizing()) tmpose.stopRecognition();
+        if (tmpose.getActivePoseModelName() !== poseModel) {
+          if (tmpose.isRecognizing()) tmpose.stopRecognition();
+          tmpose.activatePoseModel(poseModel);
+        }
+        configure();
+        if (signal.aborted) throw abortError(cancelMessage);
+        if (!tmpose.isRecognizing()) {
+          if (ensureCameraStarted) {
+            await ensureCameraStarted();
+            await tmpose.startRecognition();
+          } else {
+            await withCameraBusy(() => tmpose.startRecognition());
+          }
+        }
+        if (signal.aborted) throw abortError(cancelMessage);
+      });
+    recognitionQueue = operation;
+    return waitForAbortableOperation(operation, signal, cancelMessage);
+  }
+
   /** @param {string} poseModel @param {AbortSignal} signal */
-  async function ensureRecognition(poseModel, signal) {
-    if (signal.aborted) throw abortError('pose action was cancelled');
-    if (tmpose.getActivePoseModelName() !== poseModel) {
-      if (tmpose.isRecognizing()) tmpose.stopRecognition();
-      tmpose.activatePoseModel(poseModel);
-    }
-    if (!tmpose.isRecognizing()) await tmpose.startRecognition();
-    if (signal.aborted) throw abortError('pose action was cancelled');
+  function ensureRecognition(poseModel, signal) {
+    return queueRecognition(poseModel, signal, {cancelMessage: 'pose action was cancelled'});
   }
 
   /** @param {ReturnType<typeof validateSelectionPayload>} input @param {AbortSignal} signal */
-  async function startSelectionRecognition(input, signal) {
-    if (signal.aborted) throw abortError('pose candidate wait was cancelled');
-    if (tmpose.isRecognizing()) tmpose.stopRecognition();
-    if (tmpose.getActivePoseModelName() !== input.poseModel) {
-      tmpose.activatePoseModel(input.poseModel);
-    }
-    tmpose.configureAccumulatedPose({
-      accumulationPerSecond: input.accumulationPerSecond,
-      decayPerSecond: input.decayPerSecond,
-      scoreThreshold: input.scoreThreshold,
+  function startSelectionRecognition(input, signal) {
+    return queueRecognition(input.poseModel, signal, {
+      restart: true,
+      cancelMessage: 'pose candidate wait was cancelled',
+      configure() {
+        tmpose.configureAccumulatedPose({
+          accumulationPerSecond: input.accumulationPerSecond,
+          decayPerSecond: input.decayPerSecond,
+          scoreThreshold: input.scoreThreshold,
+        });
+      },
     });
-    await tmpose.startRecognition();
-    if (signal.aborted) throw abortError('pose candidate wait was cancelled');
   }
 
   /** @param {AbortSignal} signal */
@@ -407,8 +657,10 @@ export function createDsl4PoseActionPort(options) {
     async waitForPose(payload, context) {
       ensureAvailable();
       const input = validateSequencePayload(payload);
-      const externalSignal = validateContext(context);
-      if (externalSignal.aborted) throw abortError('pose sequence was cancelled');
+      const {signal: externalSignal, actionSignal} = validateContext(context);
+      if (externalSignal.aborted || actionSignal.aborted) {
+        throw abortError('pose sequence was cancelled');
+      }
       requireKnownPoses(input.poseModel, [input.pose]);
       if (activeSequence) {
         throw portError('K4-POSE-PORT-006', 'another Actor pose sequence is already active');
@@ -416,6 +668,7 @@ export function createDsl4PoseActionPort(options) {
 
       const operation = createOperation(externalSignal);
       activeSequence = operation;
+      const previewOwner = claimSequencePreview(actionSignal);
       const displacedSelection = currentSelection;
       displacedSelection?.controller.abort('actor-sequence-priority');
       let confidence = 0;
@@ -425,9 +678,11 @@ export function createDsl4PoseActionPort(options) {
       try {
         publishPoseState(input, 'waiting', confidence, progress);
         statePublished = true;
+        notifyPoseCursor(true, 'pose-sequence');
         if (displacedSelection) await displacedSelection.done;
         await ensureRecognition(input.poseModel, operation.controller.signal);
-        if (input.idleSound) await playSound(input.idleSound);
+        showClaimedPreview(previewOwner);
+        if (input.idleSound) startBackgroundSound(input.idleSound);
         if (operation.controller.signal.aborted) throw abortError('pose sequence was cancelled');
         let previousTime = now();
         while (progress < 1) {
@@ -447,10 +702,7 @@ export function createDsl4PoseActionPort(options) {
           progress = binding?.progress ?? progress;
           if (confidence >= input.confidenceThreshold) {
             progress += (confidence / input.fullConfidenceHoldSeconds) * elapsedSeconds;
-            if (input.chargeSound) await playSound(input.chargeSound);
-            if (operation.controller.signal.aborted) {
-              throw abortError('pose sequence was cancelled');
-            }
+            if (input.chargeSound) startChargeSound(input.chargeSound);
           } else {
             progress += input.idleChargePerSecond * elapsedSeconds;
           }
@@ -464,18 +716,21 @@ export function createDsl4PoseActionPort(options) {
         }
         terminalPhase = 'completed';
       } finally {
+        const continuesToNextStep =
+          input.stepIndex + 1 < input.stepCount &&
+          (terminalPhase === 'completed' || (externalSignal.aborted && !actionSignal.aborted));
+        if (!continuesToNextStep) releaseSequencePreview(previewOwner);
         if (statePublished) {
           statePublished = false;
           publishPoseState(input, terminalPhase, confidence, progress);
+          notifyPoseCursor(false, 'pose-sequence');
         }
-        try {
-          if (input.idleSound) await stopSound(input.idleSound);
-        } finally {
-          operation.detach();
-          if (activeSequence === operation) activeSequence = null;
-          operation.finish();
-          currentSelection?.wake?.();
-        }
+        if (input.idleSound) requestSoundStop(input.idleSound);
+        if (!continuesToNextStep) stopChargeSound();
+        operation.detach();
+        if (activeSequence === operation) activeSequence = null;
+        operation.finish();
+        currentSelection?.wake?.();
       }
     },
 
@@ -483,7 +738,7 @@ export function createDsl4PoseActionPort(options) {
     async poseInputToChangeScene(payload, context) {
       ensureAvailable();
       const input = validateSelectionPayload(payload);
-      const externalSignal = validateContext(context);
+      const {signal: externalSignal} = validateContext(context);
       if (externalSignal.aborted) throw abortError('pose candidate wait was cancelled');
       requireKnownPoses(input.poseModel, input.poses);
 
@@ -492,8 +747,12 @@ export function createDsl4PoseActionPort(options) {
           Object.assign(createOperation(externalSignal), {wake: null})
         );
       const previousSelection = currentSelection;
+      claimPreview(operation);
       previousSelection?.controller.abort('newer-pose-candidate-wait');
       currentSelection = operation;
+      poseCursorId += 1;
+      const cursorSource = `pose-selection-${poseCursorId}`;
+      notifyPoseCursor(true, cursorSource);
       try {
         if (previousSelection) await previousSelection.done;
         await waitForSequenceEnd(operation);
@@ -501,6 +760,7 @@ export function createDsl4PoseActionPort(options) {
           throw abortError('pose candidate wait was cancelled');
         }
         await startSelectionRecognition(input, operation.controller.signal);
+        showClaimedPreview(operation);
         const selected = await asyncInput.waitForPoseCandidate({
           candidates: input.poses,
           signal: operation.controller.signal,
@@ -513,6 +773,8 @@ export function createDsl4PoseActionPort(options) {
         }
         return selected;
       } finally {
+        releasePreview(operation);
+        notifyPoseCursor(false, cursorSource);
         operation.detach();
         operation.wake = null;
         if (currentSelection === operation) currentSelection = null;
@@ -528,6 +790,8 @@ export function createDsl4PoseActionPort(options) {
       sequence?.controller.abort('pose-port-dispose');
       selection?.controller.abort('pose-port-dispose');
       selection?.wake?.();
+      stopChargeSound();
+      if (sequencePreview) releaseSequencePreview(sequencePreview.owner);
       disposePromise = Promise.all([sequence?.done, selection?.done].filter(Boolean)).then(
         () => undefined,
       );

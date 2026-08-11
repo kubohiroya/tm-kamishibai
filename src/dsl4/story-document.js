@@ -139,6 +139,7 @@ function normalizeAsset(asset, id) {
       id,
       kind,
       name: id,
+      ...(kind === 'backdrop' || kind === 'costume' ? {bitmapResolution: 1} : {}),
       delivery: 'embedded',
       loading: 'eager',
       retention: kind === 'poseModel' ? 'scene' : 'story',
@@ -151,6 +152,9 @@ function normalizeAsset(asset, id) {
     delivery: 'embedded',
     loading: 'eager',
     retention: sourceAsset.kind === 'poseModel' ? 'scene' : 'story',
+    ...(sourceAsset.kind === 'backdrop' || sourceAsset.kind === 'costume'
+      ? {bitmapResolution: sourceAsset.bitmapResolution ?? 1}
+      : {}),
     ...sourceAsset,
   };
 }
@@ -329,10 +333,12 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       branch: 'branch',
       goto: 'scene',
       setSkin: 'skin',
+      setLayer: 'layer',
       setTransparency: 'transparency',
       sound: 'sound',
       stage: 'backdrop',
       wait: 'seconds',
+      broadcastMessageAndWait: 'message',
     }[command];
     if (!argumentName) throw new Error(`Cannot normalize scalar arguments for ${command}`);
     args = {[argumentName]: sourceArguments};
@@ -404,10 +410,9 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
   const assets = Object.fromEntries(
     Object.entries(sourceAssets).map(([id, asset]) => {
-      sourceMap[`/assets/${encodeDsl4StoryPathSegment(id)}`] = sourceRangeForNode(
-        document.getIn(['assets', id], true),
-        lineCounter,
-      );
+      const assetPath = `/assets/${encodeDsl4StoryPathSegment(id)}`;
+      sourceMap[assetPath] = sourceRangeForNode(document.getIn(['assets', id], true), lineCounter);
+      mapNestedSource(sourceMap, asset, document, lineCounter, ['assets', id], assetPath);
       return [id, normalizeAsset(asset, id)];
     }),
   );

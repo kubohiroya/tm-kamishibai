@@ -44,18 +44,24 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | `cover`                                   | `cover.backdrop`／`cover.bgm`              | 自動            | positional listを名前付きfieldへ変換                               |
 | `setRuntimeVariable`                      | `variables.<id>`                           | warning付き自動 | scalar型推論を`K4-CONVERT-VARIABLE-TYPE`で通知                     |
 | `setLoadingBackdrop`／`setLoadingCostume` | `loading`                                  | 自動            | 両方が必要。片方だけなら手動修正                                   |
-| `setPoseRecognitionSound`                 | `poseRecognition.idleSound`／`chargeSound` | 自動            | 2 sound必須。単一soundは手動修正                                   |
+| `setPoseRecognitionSound`                 | `poseRecognition.idleSound`／`chargeSound` | 自動            | 省略、idle 1音、idle＋charge 2音を保持                             |
 | `svgTextStyle`                            | `textStyles.<id>`                          | 自動            | 4.0のfont／align／direction制約を検証                              |
 | style付き`Actor.say`／`think`             | `bubbleStyles`＋`Actor.say/think.style`    | 自動            | 元styleを本文styleと配置へ写像し、say／think外形を保持             |
 | `text`／`textStyle`                       | なし                                       | 手動            | app shell `ui.*`だけwarning付きで省略。それ以外は旧Text Asset移行  |
 | `registerBranch`                          | `branches.<id>[]`                          | 自動            | 条件／遷移先数とRuntime Expressionを検証                           |
 | `sceneLabel`／`---`                       | `scenes.<id>`／scene終端                   | 自動            | actionを宣言順に保持                                               |
 | `TMPoseURL`                               | scene `poseModel`＋`assets` poseModel      | 自動            | 既定はlazy remote。`--pose-models`指定時だけexact local embedded化 |
+| 3.2標準の実行／リハーサル操作             | `controls.keymaps.production/rehearsal`    | 自動            | Spaceのpose step、→のaction、↓のscene skipを別profileとして保持    |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
 `TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
 必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
 embedded化します。converter自身はnetwork取得やcache lookupを行いません。
+
+3.2には4.0の名前付きcontrol profile宣言がないため、converterは二つの完全profileを生成します。
+`production`はSpaceを`rehearsal.skipPose`へ割り当てます。`rehearsal`はSpaceを
+`rehearsal.skipPose`、→を`rehearsal.skipAction`、↓を`rehearsal.skipScene`へ割り当てます。通常配布は
+`build-dsl4 --control-profile production`、通し稽古版は`--control-profile rehearsal`を選択します。
 
 `asset`のID、project asset名、`sceneLabel`は別名へ置換せず、その文字列を4.0へ保持します。空白、`.`、`/`、
 制御文字を含む場合、生成YAMLは必要なquoted scalar escapeを自動で使用します。actor名などaction構文の
@@ -72,7 +78,8 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 | `bgm`                          | `bgm`                                       | 自動                                                                  |
 | `sound`                        | `sound`                                     | 自動                                                                  |
 | `wait`                         | `wait`                                      | 自動                                                                  |
-| `transition`                   | `transition: {effect, seconds}`             | warning付き自動。時間を0秒へ明示化                                    |
+| TurboWarp broadcast and wait   | `broadcastMessageAndWait`                   | 手動。message名を完全一致で指定し、receiverへの引数・結果伝播はしない |
+| `transition`                   | `transition: {effect, seconds}`             | 自動。3.2のfade系は固定1秒、resetは0秒を保持                          |
 | Actor `show`                   | `Actor.show: {skin, x, y, scale}`           | 自動。costume target補正時はwarning                                   |
 | Actor `setSkin`                | `Actor.setSkin`                             | 自動。3.2のscale指定も`{skin, scale}`として保持                       |
 | Actor `hide`                   | `Actor.hide: {}`                            | 自動                                                                  |
@@ -95,8 +102,11 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 決定的に変換します。
 
 custom Scratch block、Scratch variable／broadcastへ直接依存する作品固有code、block順に依存する副作用は台本
-sourceだけから検出できません。converter成功後も作品固有blockをレビューし、必要ならDSL4 custom actionとして
-明示登録します。
+sourceだけから検出できません。converter成功後も作品固有blockをレビューします。引数・結果・DSL4 contextを
+渡さず、単一messageを送信して全receiverの完了を待つだけでよい処理は、起動時固定・既定OFFの
+`dsl4BroadcastMessageAndWait`を有効にして`broadcastMessageAndWait`へ手動移行できます。typed argument、
+scene遷移結果、DSL4 context、登録時のparameter検証が必要な場合はDSL4 Custom actionとして明示登録します。
+converterはproject内broadcastの意図や安全な待機境界を推測せず、このactionを自動生成しません。
 
 ## 5. 旧Text AssetからSVG Textへの手動移行
 

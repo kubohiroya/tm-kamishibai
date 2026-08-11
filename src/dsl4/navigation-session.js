@@ -74,6 +74,7 @@ function historyFailure(result) {
  * @param {boolean} [options.bubbleAdvanceIndicatorEnabled]
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
+ * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -99,6 +100,7 @@ export function createDsl4NavigationSession({
   bubbleAdvanceIndicatorEnabled = false,
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
+  broadcastMessageAndWaitEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -139,6 +141,9 @@ export function createDsl4NavigationSession({
     throw new TypeError(
       'turboWarpBubbleAdvancedPresentationEnabled requires turboWarpBubbleEnabled',
     );
+  }
+  if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
+    throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
   }
   if (
     inputArbitration !== undefined &&
@@ -271,6 +276,7 @@ export function createDsl4NavigationSession({
       bubbleAdvanceIndicatorEnabled,
       turboWarpBubbleEnabled,
       turboWarpBubbleAdvancedPresentationEnabled,
+      broadcastMessageAndWaitEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });
@@ -341,6 +347,25 @@ export function createDsl4NavigationSession({
       return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
     }
 
+    if (command === 'navigation.nextScene') {
+      void controller.advanceScene(command);
+      return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
+    }
+
+    if (
+      command === 'rehearsal.skipPose' ||
+      command === 'rehearsal.skipAction' ||
+      command === 'rehearsal.skipScene'
+    ) {
+      if (!controller.canRehearsalSkip(command)) {
+        return deepFreeze({ok: true, changed: false, state: snapshot(), diagnostics: []});
+      }
+      if (command === 'rehearsal.skipPose') void controller.skipPose();
+      else if (command === 'rehearsal.skipAction') void controller.skipAction();
+      else void controller.skipScene();
+      return deepFreeze({ok: true, changed: true, state: snapshot(), diagnostics: []});
+    }
+
     if (!historyReducer || !historyState) {
       return commandFailure(
         'K4-HISTORY-DISABLED',
@@ -399,20 +424,19 @@ export function createDsl4NavigationSession({
             : {}),
         }
       : {}),
-    ...(poseNavigationPolicyEnabled
-      ? {
-          shouldConsumeCommand(command) {
-            if (
-              command !== 'navigation.nextAction' ||
-              (historyReducer && historyState?.mode === 'history')
-            ) {
-              return true;
-            }
-            return controller.canAdvance(command);
-          },
-          dispatchImmediately: true,
-        }
-      : {}),
+    shouldConsumeCommand(command) {
+      if (command.startsWith('rehearsal.')) return controller.canRehearsalSkip(command);
+      if (
+        poseNavigationPolicyEnabled &&
+        command === 'navigation.nextAction' &&
+        !(historyReducer && historyState?.mode === 'history')
+      ) {
+        return controller.canAdvance(command);
+      }
+      if (poseNavigationPolicyEnabled) return true;
+      return undefined;
+    },
+    dispatchImmediately: true,
     onError: onInputError,
   });
 

@@ -67,6 +67,7 @@ assets:
     kind: costume
     target: Actor
     file: assets/hero.png
+    bitmapResolution: 2
   Effect:
     kind: sound
     file: assets/effect.wav
@@ -101,6 +102,7 @@ test('snapshots project refs, image, sound, and a poseModel directory determinis
   const byId = Object.fromEntries(snapshot.manifest.assets.map((asset) => [asset.id, asset]));
   assert.deepEqual(byId.ProjectBackdrop.source, {type: 'project', name: 'ProjectBackdrop'});
   assert.deepEqual(byId.NamedSound.source, {type: 'project', name: 'Existing Sound'});
+  assert.equal(byId.Hero.bitmapResolution, 2);
   assert.deepEqual(byId.Ocean.source, {
     type: 'file',
     inputPath: 'assets/ocean.svg',
@@ -159,6 +161,7 @@ scenes:
       id: 'Remote',
       kind: 'backdrop',
       loading: 'lazy',
+      bitmapResolution: 1,
       source: {
         type: 'remote',
         url: 'https://cdn.example.com/remote.svg',

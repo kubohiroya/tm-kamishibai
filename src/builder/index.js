@@ -21,6 +21,10 @@ import {validateBundle} from './validate.js';
 export {Sb3BuilderError} from './errors.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
+export {
+  dsl4DefaultBuildFeatureFlags,
+  resolveDsl4BuildFeatureFlags,
+} from './dsl4-build-feature-flags.js';
 export {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 export {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 export {
@@ -30,7 +34,14 @@ export {
 export {
   createDsl4BinaryEntryProviderFromSb3,
   embedDsl4BinaryEntryRuntimeComponentInSb3,
+  inspectDsl4BinaryEntryArchive,
 } from './dsl4-binary-entry-sb3.js';
+export {
+  Dsl4PackagerAdapterError,
+  dsl4PackagerEntrySourceTemplateContract,
+  packageDsl4WithTurboWarpPackager,
+  resolveDsl4PackagerEntrySourceSurface,
+} from './dsl4-packager-entry-source.js';
 export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
@@ -76,13 +87,16 @@ export {
 export {
   createDsl4LocalPreviewBrowserBootstrap,
   dsl4LocalPreviewBrowserBootstrapDefaults,
+  dsl4LocalPreviewBrowserBootstrapMaximums,
 } from './dsl4-local-preview-browser-bootstrap.js';
+export {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 export {
   buildDsl4TurboWarpBrowserBundle,
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,
 } from './dsl4-turbowarp-browser-bundle.js';
 export {createDsl4PreviewSourceWatcher, dsl4PreviewWatchDefaults} from './dsl4-preview-watch.js';
+export {dsl4PackagerCompatibility, dsl4SbdlCompatibility} from './dsl4-packager-compatibility.js';
 export {
   createDsl4CliPreviewShell,
   createDsl4DevelopmentPreviewShell,

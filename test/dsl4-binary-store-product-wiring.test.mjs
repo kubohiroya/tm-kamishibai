@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {createBinaryBundleStore} from '@kubohiroya/turbowarp-asset-manager/composition';
+import {createSessionBinaryBacking} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {IDBFactory} from 'fake-indexeddb';
 import {strToU8, zipSync} from 'fflate';
 
@@ -188,17 +188,17 @@ async function providerFor(component) {
   );
 }
 
-function storeComposition(databaseName) {
-  const store = createBinaryBundleStore({
-    indexedDB: new IDBFactory(),
+function sessionComposition(databaseName, indexedDB = new IDBFactory()) {
+  const backingOptions = {
+    indexedDB,
     subtleCrypto,
     databaseName,
-  });
+    heartbeatIntervalMs: 60_000,
+  };
   return Object.freeze({
-    putBinaryBundle: store.put,
-    getBinaryBundle: store.get,
-    deleteBinaryBundle: store.delete,
-    releaseBinaryStore: store.release,
+    createSessionBinaryBacking(input, operationOptions) {
+      return createSessionBinaryBacking(input, backingOptions, operationOptions);
+    },
   });
 }
 
@@ -251,6 +251,12 @@ function completeTMPoseComposition(calls) {
     getActivePoseModelName() {
       return active;
     },
+    showPreview() {},
+    hidePreview() {},
+    isPreviewVisible() {
+      return false;
+    },
+    setPreviewPosition() {},
     async startCamera() {},
     stopCamera() {},
     isCameraRunning() {
@@ -332,17 +338,22 @@ test('loads binary-entry metadata through the explicit default-compatible startu
   await startup.session.dispose('test-complete');
 });
 
-test('ingests once, bounds alternating scene models, and re-exports identical editor entries', async () => {
+test('establishes one session, bounds alternating scene models, and re-exports identical entries', async () => {
   const component = await fixture();
   const provider = await providerFor(component);
-  const binary = storeComposition('dsl4-binary-product-wiring');
+  const binary = sessionComposition('dsl4-binary-product-wiring');
   const assetManager = completeAssetManagerComposition(binary);
   const poseCalls = [];
   const session = createDsl4PlatformAssetSession({
     runtimeComponent: component.runtimeComponent,
     binaryEntryProvider: provider,
     cacheIdentity,
-    binaryBundleStoreOptions: {indexedDB: new IDBFactory()},
+    binarySessionBackingPolicy: 'required',
+    binarySessionId: 'product-wiring-session',
+    sessionBinaryBackingOptions: {
+      indexedDB: new IDBFactory(),
+      databaseName: 'ignored-by-injected-composition',
+    },
     tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
     setLoading() {},
     createAssetManagerComposition() {
@@ -356,8 +367,11 @@ test('ingests once, bounds alternating scene models, and re-exports identical ed
   await session.binaryAssetBacking.ready;
   assert.deepEqual(session.binaryAssetBacking.getState(), {
     state: 'ready',
+    mode: 'session',
+    sessionId: 'product-wiring-session',
     disposed: false,
     providerRetained: false,
+    warning: null,
     failureCode: null,
   });
   assert.equal(provider.released, true);
@@ -424,79 +438,207 @@ test('ingests once, bounds alternating scene models, and re-exports identical ed
   await session.dispose('test-complete');
 });
 
-test('fails closed on a post-ingest cache miss without retaining the provider', async () => {
+test('disabled policy never opens IndexedDB and re-reads a released scene from the direct source', async () => {
   const component = await fixture();
   const provider = await providerFor(component);
-  const composition = storeComposition('dsl4-binary-cache-miss');
+  const forbiddenIndexedDB = new Proxy(
+    {},
+    {
+      get() {
+        assert.fail('disabled session backing must not inspect IndexedDB');
+      },
+    },
+  );
+  const assetManager = completeAssetManagerComposition(
+    sessionComposition('dsl4-binary-direct-source', forbiddenIndexedDB),
+  );
+  const poseCalls = [];
+  const session = createDsl4PlatformAssetSession({
+    runtimeComponent: component.runtimeComponent,
+    binaryEntryProvider: provider,
+    cacheIdentity,
+    binarySessionBackingPolicy: 'disabled',
+    binarySessionId: 'direct-source-session',
+    tmPoseRuntime: {Webcam: class {}, async loadFromFiles() {}},
+    setLoading() {},
+    createAssetManagerComposition() {
+      return assetManager;
+    },
+    createTMPoseComposition() {
+      return completeTMPoseComposition(poseCalls);
+    },
+  });
+
+  await session.binaryAssetBacking.ready;
+  assert.deepEqual(session.binaryAssetBacking.getState(), {
+    state: 'ready',
+    mode: 'direct',
+    sessionId: 'direct-source-session',
+    disposed: false,
+    providerRetained: true,
+    warning: null,
+    failureCode: null,
+  });
+
+  const concurrent = await Promise.all([
+    session.binaryAssetBacking.getAssetFiles('FirstPose'),
+    session.binaryAssetBacking.getAssetFiles('NextPose'),
+  ]);
+  assert.deepEqual(
+    concurrent.map((files) => files.length),
+    [3, 3],
+    'direct mode must serialize concurrent runtime reads through the bounded provider',
+  );
+
+  await session.lifecycle.prepare({assetIds: ['FirstPose']}, context(1));
+  await session.lifecycle.releaseAssets({assetIds: ['FirstPose'], reason: 'scene-transition'});
+  await session.lifecycle.prepare({assetIds: ['FirstPose']}, context(2));
+  assert.deepEqual(
+    poseCalls.filter(([operation]) => operation === 'register').map(([, name]) => name),
+    ['FirstPose', 'FirstPose'],
+  );
+  assert.equal(provider.released, false);
+
+  await session.dispose('test-complete');
+  assert.equal(provider.released, true);
+});
+
+test('publishes one prefer fallback warning and fixes the returned backing to direct mode', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  const warnings = [];
+  const warning = Object.freeze({
+    code: 'ASSET_SESSION_BINARY_DIRECT_FALLBACK',
+    causeCode: 'ASSET_SESSION_BINARY_UNAVAILABLE',
+  });
+  const composition = Object.freeze({
+    async createSessionBinaryBacking(input) {
+      assert.equal(input.policy, 'prefer');
+      return Object.freeze({
+        sessionId: input.sessionId,
+        mode: 'direct',
+        warning,
+        get(asset, operationOptions) {
+          return input.source.read(asset, operationOptions);
+        },
+        async dispose() {
+          await input.source.release();
+        },
+      });
+    },
+  });
   const backing = createDsl4BinaryEntryBacking({
     runtimeComponent: component.runtimeComponent,
     provider,
     composition,
     namespace: cacheIdentity.id,
+    policy: 'prefer',
+    sessionId: 'prefer-fallback-session',
+    onWarning(value) {
+      warnings.push(value);
+    },
+  });
+
+  await backing.ready;
+  assert.deepEqual(warnings, [warning]);
+  assert.equal(backing.getState().mode, 'direct');
+  assert.deepEqual(backing.getState().warning, warning);
+  assert.equal((await backing.getAssetFiles('FirstPose')).length, 3);
+  assert.equal((await backing.getAssetFiles('FirstPose')).length, 3);
+  assert.equal(provider.released, false);
+
+  await backing.dispose();
+  assert.equal(provider.released, true);
+});
+
+test('fails closed on a post-establishment session read without retaining the provider', async () => {
+  const component = await fixture();
+  const provider = await providerFor(component);
+  const realComposition = sessionComposition('dsl4-binary-session-read-failure');
+  let failRead = false;
+  const fatalErrors = [];
+  const composition = Object.freeze({
+    async createSessionBinaryBacking(input, options) {
+      const established = await realComposition.createSessionBinaryBacking(input, options);
+      return Object.freeze({
+        ...established,
+        get(key, operationOptions) {
+          if (!failRead) return established.get(key, operationOptions);
+          const error = new Error('session record missing');
+          Object.defineProperty(error, 'code', {value: 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND'});
+          throw error;
+        },
+      });
+    },
+  });
+  const backing = createDsl4BinaryEntryBacking({
+    runtimeComponent: component.runtimeComponent,
+    provider,
+    composition,
+    namespace: cacheIdentity.id,
+    policy: 'required',
+    sessionId: 'post-establishment-failure',
+    onFatalError(error) {
+      fatalErrors.push(error);
+    },
   });
   await backing.ready;
-  await composition.deleteBinaryBundle({
-    namespace: cacheIdentity.id,
-    name: 'FirstPose',
-    integrity: component.binaryBundle.descriptor.integrity,
-  });
+  failRead = true;
   await assert.rejects(backing.getAssetFiles('FirstPose'), (error) => {
-    assert.equal(error.code, 'ASSET_BINARY_BUNDLE_NOT_FOUND');
+    assert.equal(error.code, 'ASSET_SESSION_BINARY_BUNDLE_NOT_FOUND');
     return true;
   });
   assert.equal(backing.getState().providerRetained, false);
+  assert.equal(backing.getState().mode, 'session');
+  assert.equal(backing.getState().state, 'failed');
+  assert.equal(fatalErrors.length, 1);
   await backing.dispose();
 });
 
-test('keeps the provider until an aborted transaction is diagnosed, then releases on dispose', async () => {
+test('keeps the provider until aborted establishment releases the source and fails startup', async () => {
   const component = await fixture();
   const provider = await providerFor(component);
   let putStarted = false;
-  let storeReleased = 0;
   const composition = Object.freeze({
-    async getBinaryBundle() {
-      const error = new Error('not found');
-      Object.defineProperty(error, 'code', {value: 'ASSET_BINARY_BUNDLE_NOT_FOUND'});
-      throw error;
-    },
-    putBinaryBundle(_input, {signal}) {
+    createSessionBinaryBacking(input, {signal}) {
       putStarted = true;
       return new Promise((_resolve, reject) => {
         signal.addEventListener(
           'abort',
-          () => {
-            const error = new Error('aborted');
-            Object.defineProperty(error, 'code', {value: 'ASSET_BINARY_BUNDLE_ABORTED'});
+          async () => {
+            await input.source.release();
+            const error = new Error('session establishment aborted');
+            Object.defineProperty(error, 'code', {value: 'ASSET_SESSION_BINARY_ABORTED'});
             reject(error);
           },
           {once: true},
         );
       });
     },
-    async deleteBinaryBundle() {},
-    async releaseBinaryStore() {
-      storeReleased += 1;
-    },
   });
   const backing = createDsl4BinaryEntryBacking({
     runtimeComponent: component.runtimeComponent,
     provider,
     composition,
     namespace: cacheIdentity.id,
+    policy: 'required',
+    sessionId: 'aborted-establishment',
   });
   while (!putStarted) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(backing.getState().providerRetained, true);
   await backing.dispose();
   await assert.rejects(backing.ready, (error) => {
-    assert.equal(error.code, 'ASSET_BINARY_BUNDLE_ABORTED');
+    assert.equal(error.code, 'ASSET_SESSION_BINARY_ABORTED');
     return true;
   });
   assert.deepEqual(backing.getState(), {
     state: 'failed',
+    mode: null,
+    sessionId: 'aborted-establishment',
     disposed: true,
     providerRetained: false,
-    failureCode: 'ASSET_BINARY_BUNDLE_ABORTED',
+    warning: null,
+    failureCode: 'ASSET_SESSION_BINARY_ABORTED',
   });
   assert.equal(provider.released, true);
-  assert.equal(storeReleased, 1);
 });

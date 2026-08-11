@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
+export const dsl4DocsUrl =
+  'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -13,18 +15,21 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
-      buildDate: '2026-08-09',
+      buildDate: '2026-08-11',
       filename: 'kamishibai-4.0.sb3',
       faviconPath: 'site/favicon.png',
-      sha256: '085fe9e65adf3e8ae56553f3bcf40dffed672678aa995ad0e7db943673c23da5',
-      sourceCommit: '4109b0009da37573ec7743118e480a2ca54cb3ed',
-      sourceDirectory: 'release-sources/4.0.0-dev/app',
+      sha256: 'fc2b1dc0896febfe7786bb1bacb25e437a587cabf07bce672b799422cfa2ed3e',
+      sourceCommit: '23739cc102a8afaaba713b0c92adb4c1c236aaee',
+      sourceDirectory: 'release-sources/4.0.0/app',
     },
-    description: 'YAMLを採用する次期版です。実行可能な開発版SB3をTurboWarpで試せます。',
+    description:
+      'YAML、local preview、自己完結SB3を提供する現在の安定版です。新しい作品には4.0を推奨します。',
+    docsUrl: dsl4DocsUrl,
     series: '4.0',
-    status: '開発版',
-    statusKind: 'development',
-    version: '4.0.0-dev',
+    recommended: true,
+    status: '安定版',
+    statusKind: 'stable',
+    version: '4.0.0',
   },
   {
     artifact: {
@@ -36,11 +41,10 @@ export const downloadCatalog = deepFreeze([
       sourceDirectory: 'release-sources/3.2.3/app',
     },
     description:
-      '現在おすすめしている安定版です。3.1と3.2の台本を読み込み、TurboWarpで編集・実行できます。',
-    recommended: true,
+      '3.1と3.2の既存作品を扱うための最終安定版です。新しく作品を作る場合は4.0を利用してください。',
     series: '3.2',
-    status: '安定版',
-    statusKind: 'stable',
+    status: '過去の安定版',
+    statusKind: 'past',
     version: '3.2.3',
   },
   {

@@ -16,6 +16,8 @@ app/extensions/tmpose.js
 
 # Binary assets and package-manager output.
 app/assets/
+src/dsl4/platform/posenet-bundle-assets.js
+assets/posenet/
 docs/images/
 pnpm-lock.yaml
 site/favicon.png

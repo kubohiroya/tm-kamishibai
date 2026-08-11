@@ -5,7 +5,7 @@ import {deepFreeze} from './story-document.js';
 
 const bundleKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const manifestKeys = new Set(['assets', 'formatVersion']);
-const assetKeys = new Set(['id', 'kind', 'loading', 'source', 'target']);
+const assetKeys = new Set(['bitmapResolution', 'id', 'kind', 'loading', 'source', 'target']);
 const projectSourceKeys = new Set(['name', 'type']);
 const fileSourceKeys = new Set(['files', 'inputPath', 'mode', 'type']);
 const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'url']);
@@ -59,11 +59,24 @@ function exactKeys(value, keys, name) {
   }
 }
 
-/** @param {Record<string, unknown>} value @param {Set<string>} keys @param {string} name */
-function exactOptionalTargetKeys(value, keys, name) {
-  const expected = new Set(keys);
+/** @param {Record<string, unknown>} value @param {Readonly<Record<string, unknown>>} storyAsset @param {string} name */
+function exactAssetKeys(value, storyAsset, name) {
+  const expected = new Set(assetKeys);
   if (!Object.hasOwn(value, 'target')) expected.delete('target');
+  // Resolution 1 is the compatibility default for pre-metadata manifests. A high-density
+  // declaration is always explicit so that a tampered bundle cannot silently fall back to 1.
+  if (!Object.hasOwn(value, 'bitmapResolution') && storyAsset.bitmapResolution !== 2) {
+    expected.delete('bitmapResolution');
+  }
   exactKeys(value, expected, name);
+}
+
+/** @param {unknown} value @param {string} name */
+function bitmapResolution(value, name) {
+  if (value !== 1 && value !== 2) {
+    fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', `${name} must be 1 or 2`);
+  }
+  return /** @type {1 | 2} */ (value);
 }
 
 /** @param {Record<string, unknown>} value @param {string} name @param {boolean} allowBare */
@@ -165,18 +178,33 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
       if (!isRecord(candidate)) {
         fail('K4-ASSET-BUNDLE-DESCRIPTOR-001', `manifest.assets[${index}] must be an object`);
       }
-      exactOptionalTargetKeys(candidate, assetKeys, `manifest.assets[${index}]`);
       const id = nonEmptyString(candidate.id, `manifest.assets[${index}].id`);
       if (seenIds.has(id)) fail('K4-ASSET-BUNDLE-DUPLICATE-001', `Duplicate asset ID: ${id}`);
       seenIds.add(id);
       const storyAsset = storyAssets[id];
       if (!storyAsset) fail('K4-ASSET-BUNDLE-MANIFEST-001', `Unknown asset in bundle: ${id}`);
+      exactAssetKeys(candidate, storyAsset, `manifest.assets[${index}]`);
+      const storyResolution =
+        storyAsset.kind === 'backdrop' || storyAsset.kind === 'costume'
+          ? bitmapResolution(
+              storyAsset.bitmapResolution ?? 1,
+              `StoryDocument asset ${id}.bitmapResolution`,
+            )
+          : undefined;
+      const candidateResolution = Object.hasOwn(candidate, 'bitmapResolution')
+        ? bitmapResolution(candidate.bitmapResolution, `manifest.assets[${index}].bitmapResolution`)
+        : undefined;
       if (
         !assetKinds.has(String(candidate.kind)) ||
         candidate.kind !== storyAsset.kind ||
         candidate.loading !== storyAsset.loading ||
         Object.hasOwn(candidate, 'target') !== (storyAsset.target !== undefined) ||
-        candidate.target !== storyAsset.target
+        candidate.target !== storyAsset.target ||
+        (storyResolution !== undefined &&
+          (candidateResolution === undefined
+            ? storyResolution !== 1
+            : candidateResolution !== storyResolution)) ||
+        (storyResolution === undefined && candidateResolution !== undefined)
       ) {
         fail('K4-ASSET-BUNDLE-MANIFEST-001', `Asset metadata does not match StoryDocument: ${id}`);
       }

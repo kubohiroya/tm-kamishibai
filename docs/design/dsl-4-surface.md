@@ -50,7 +50,7 @@ Copyright © 2026 Hiroya Kubo.
 | `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
 | `variables`       | 任意 | string、number、booleanの初期値   |
 | `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音            |
+| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定  |
 | `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`        | 任意 | 順序付き条件分岐                  |
 | `scenes`          | 必須 | 一つ以上のscene                   |
@@ -179,6 +179,11 @@ assetは起動時に必要となるため、`lazy`でもentry sceneより前に�
 保持するとは限りません。`retention: story`は停止、再起動、session disposeまで保持し、
 `retention: scene`はcurrent sceneまたは実際に選択されたnext sceneが必要とする間だけ保持します。
 
+起動時は`loading`から参照されるassetだけを先にmaterializeし、その間は汎用indeterminate indicatorを
+Scratch stage領域の中央・最前面に表示します。準備後は指定backdropを全面表示し、`costumes`を宣言順に
+循環表示しながら残りのstartup assetを準備します。scene間のlazy loadingにも同じLoading宣言を使い、
+設定がない場合は汎用indicatorへfallbackします。indicatorは`circular`／`bar`をapp-shell APIで選択できます。
+
 scene遷移は二段階でcommitします。controllerは遷移先を一つに確定してから、そのsceneが必要とするlazy
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
 準備に成功した場合はcurrent／nextのdependencyを比較し、nextでも必要なresourceは再登録せず、
@@ -284,12 +289,16 @@ HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同�
 runtime／schema接続はIssue #284で実装済みです。TMPose 1.6.1の`releasePoseModel()`／`releaseAll()`は
 classifierとPoseNet双方のdispose完了を待ちます。
 
-self-contained 4.0 SB3の`binary-entry`形式は明示opt-inです。runtime startupへ渡すproviderは
+self-contained 4.0 SB3の新規`binary-entry`形式は`dsl4RootBinaryEntryPackaging`による明示opt-inです。
+descriptor format version 3はSB3 rootの`k4asset-v1-<sha256-hex>`だけを参照します。runtime startupへ渡すproviderは
 `releaseAfterLastAsset: false`で作成し、全assetのtransaction commit後にproduct backingが一度だけreleaseします。
-永続keyはstable story ID／asset ID／bundle integrityを組み合わせ、provider解放後のscene再訪はIndexedDBだけから
-再materializeします。editorは`createExportBundle()`で同一descriptor／integrityの一時entry集合を再構築でき、保存後は
-`releaseEntries()`でその参照を破棄します。cache miss、quota、unavailable、abort時にnetwork fallbackは行いません。
-互換用Base64形式とDSL 3.2は変更せず、`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+embedded assetは30日TTLのremote cacheへ保存せず、起動ごとのsession identityで分離したsession backingまたは
+個別entryを取得できるdirect sourceから再materializeします。session backing確立後の欠落／破損ではSB3から再抽出せず
+安全停止します。editorは同一descriptor／integrityの一時entry集合を再構築し、保存後は`releaseEntries()`で参照を
+破棄します。source integrity errorではpolicyにかかわらずfallbackしません。
+互換用Base64形式とDSL 3.2は変更せず、flag OFFまたは`assetBundleFormat`省略時は従来どおりBase64 loaderを使用します。
+旧nested format version 2は読み取り互換だけを維持し、root形式へ暗黙変換しません。詳細は
+[root binary／Packager契約](./dsl-4-root-binary-packager-contract.md)を参照してください。
 
 real Chromiumのpose memory fixtureは24回のscene再訪で最大20 logical tensors／196,608 bytes、解放後0、
 classifier／PoseNet dispose各24回を確認します。JavaScript heapのfixture上限はpeak増加32 MiB、CDP強制GC後は
@@ -370,6 +379,37 @@ bubbleStyles:
       - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
     hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
 ```
+
+`poseRecognition.idleSound`と`chargeSound`はそれぞれ任意です。両方を省略した無音、`idleSound`だけの
+3.2互換設定、両方を指定した設定を受理します。音を指定しなくても`sequence`、`selection`、`feedback`、
+`navigation`、`preview`は独立して設定できます。
+
+`cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
+3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
+非埋め込み版は`showMenu`へ遷移します。言語の初期値はブラウザ言語から毎回決定し、localStorage保存を
+互換要件にはしません。
+
+### 4.1 control profile
+
+```yaml
+controls:
+  keymaps:
+    production:
+      Space: rehearsal.skipPose
+    rehearsal:
+      Space: rehearsal.skipPose
+      ArrowRight: rehearsal.skipAction
+      ArrowDown: rehearsal.skipScene
+```
+
+`rehearsal.skipPose`はactive pose stepだけを完了し、同じpose actionの次stepへ進みます。
+`rehearsal.skipAction`はactive actionを3.2と同じ最終状態へ完了し、次actionへ進みます。pose中に受理した場合は
+pose action全体を終了します。`rehearsal.skipScene`はactive actionを完了した後、現在sceneの残りから`bgm`と
+`transition`だけを最終状態で適用し、stage、actor、wait、input等を実行せず次sceneへ進みます。既存BGMは停止せず、
+activeな`sound`だけを停止します。三commandは最初に受理した入力のcleanupと境界到達が完了するまで後続入力を受理しません。
+
+これらは`history.nextScene`と異なり実行履歴を移動しません。選択するprofile名に特別な意味はなく、たとえば
+`controls.keymaps.production`へ三commandを明示すれば本番buildでも有効です。keymapに記述しなければ無効です。
 
 `variables`の初期値はstring、number、booleanだけです。object、array、nullは認めません。
 
@@ -495,12 +535,16 @@ container／localeを検査せず、DOMを生成しません。shell disposeはr
 通知して一時状態を残しません。
 
 `navigation.allowSkip`はfeedback方式と独立し、省略時は`false`です。`false`ではpose待機中の
-`navigation.nextAction`で成立を迂回せず、`true`では待機をcancelしてcleanup後に次actionへ進みます。
+`navigation.nextAction`で成立を迂回せず、`true`では現在の`waitForPose`だけをcancelし、cleanup後に同じ
+`Actor.pose` actionの次stepへ進みます。skipしたstepの成立soundは再生せず、最終stepのskipはactionを
+正常完了して次actionへ進みます。step skipでは`action.cancel`を発火しません。
 `false`で拒否されたkeymap入力はDOM eventを消費せず、`setSkin`やstep soundなどpose待機外の処理は
 従来どおりnavigation可能です。policy有効時の受理commandは同じ同期dispatch境界で処理し、historyと
 `navigation.nextAction`の混在連打でも到着順を変更しません。
 停止、close、runtime dispose等のlifecycle操作はどちらでも妨げません。初版のstate eventとconsumerは
-起動時固定・既定OFFの`dsl4PoseFeedbackModes`配下で段階導入し、OFFでは現行sound-only動作を維持します。
+`dsl4PoseFeedbackModes`のprogrammatic既定値はOFFのまま維持します。配布Standard 4.0 runtimeはこのflagを
+明示的にONにし、起動時にconsumerとmonitor境界を検証・初期化します。OFFの独自compositionでは
+sound-only動作を維持します。
 
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`の二値です。
 省略時は`mirrored`として従来の表示を維持します。scene固有の上書きは長形式sceneの
@@ -622,6 +666,7 @@ iconへ反映します。
 | `stage`                   | backdrop ID、または`{backdrop, stableId?}`  |
 | `bgm` / `sound`           | sound ID、または`{sound, stableId?}`        |
 | `wait`                    | 秒数、または`{seconds, stableId?}`          |
+| `broadcastMessageAndWait` | message名、または`{message, stableId?}`     |
 | `transition`              | `{effect, seconds, stableId?}`              |
 | `goto`                    | scene ID、または`{scene, stableId?}`        |
 | `branch`                  | branch ID、または`{branch, stableId?}`      |
@@ -631,16 +676,63 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
+Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
+
+`broadcastMessageAndWait`は、通常ならsceneのaction列に直接書く処理をTurboWarp project側へ委譲するための
+core actionです。`broadcastMessageAndWait: "message"`は、Stageに宣言されたbroadcast名と大文字小文字・空白を
+含めて完全一致する`message`を一度送信し、そのmessageで開始されたStage、sprite、cloneの全receiver threadが
+終了してから次のactionへ進みます。完全一致するbroadcastまたはreceiverがない場合は何もせず直ちに完了します。
+
+DSL4の`broadcastMessageAndWait`は、Scratchの「メッセージを送って待つ」（broadcast and wait）に相当します。
+たとえば、紙芝居のsceneの途中にScratchで作成したミニゲームを挟み、ゲーム終了後に台本の次actionへ戻る用途に
+使えます。また、コスチュームの切り替えを多用するアニメーションsequenceをScratch側のblockで作成し、その演出が
+すべて終わるまで台本を待機させる用途にも使えます。台本から独立してScratch editor上で調整した方が扱いやすい処理を、
+一つのmessageを境界としてsceneへ組み込むための機能です。
+
+```yaml
+- Narrator.say:
+    text: ミニゲームに挑戦しよう
+    seconds: 2
+- broadcastMessageAndWait: playMiniGame
+- broadcastMessageAndWait: playCostumeAnimation
+- Narrator.say:
+    text: お話に戻ります
+    seconds: 2
+```
+
+Scratch側では`playMiniGame`や`playCostumeAnimation`の「メッセージを受け取ったとき」scriptが終了した時点を、
+それぞれミニゲームやアニメーションsequenceの完了境界にします。receiverが`forever` blockなどで終了しない場合、
+台本も次のactionへ進みません。常駐処理を開始する用途ではなく、有限時間で完了する一連の処理に使用します。
+
+```yaml
+- broadcastMessageAndWait: showEndingEffects
+- broadcastMessageAndWait:
+    message: showEndingEffects
+    stableId: endingEffects
+```
+
+同じmessageを待つsessionが複数あっても、各actionは自身の送信で返されたthread identityだけを所有します。
+skip、stop、scene再開始、live reload、host破棄ではそのactionが所有する未完了threadだけを停止し、別sessionや
+project内の無関係なthreadは停止しません。DSL4の`ActionContext`、変数、遷移結果はreceiverへ暗黙伝播せず、
+引数や遷移結果が必要な作品固有処理はCustom actionを使います。
+
+このactionはTurboWarp host capabilityで、起動時固定・既定OFFの`dsl4BroadcastMessageAndWait`を必要とし、
+同flagは`dsl4Runtime`を必要とします。OFFではactionを含む台本を実行前に拒否します。ロールバックはflagを
+OFFに戻し、台本を標準core actionまたはCustom actionへ戻します。
 
 ### 7.2 Actor action
 
 | action                     | 引数                                                                                                                                                                          |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
 | `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
 | `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
 | `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, stableId?}`                                                                                                                                            |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
 | `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
 | `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
 
@@ -751,6 +843,14 @@ foreground・backgroundのどちらも、途中でスキップ、停止、再開
 同期適用してtimerを回収してから処理を続けます。同じactorへ新しい透明度変化を開始する場合も、
 先の変化をその`to`へ確定してから新しい`from`を適用します。`to`の適用に失敗した場合は
 進行中の変化を保持してスキップを行わず、次のスキップまたはlifecycle境界で適用を再試行します。
+
+`Actor.hide`はScratch／TurboWarpのvisible stateを`false`にし、透明度effectとは混同しません。次の
+`Actor.show`は同じactorを再表示します。`Actor.setSkin.scale`はskin適用後に正のサイズ百分率を設定します。
+`Actor.setLayer`の`front`／`back`は絶対位置、数値は正なら前方、負なら後方への相対移動です。
+
+`Actor.loop.steps`は先頭skinを直ちに適用し、各`seconds`後に次のskinへ進むbackground loopです。step数と
+duration数を同じ構造に固定し、少なくとも一つのdurationを正数にします。同じactorの`setSkin`、runtime停止、
+またはenvironment破棄でloop timerを回収します。
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。
