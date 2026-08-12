@@ -434,3 +434,67 @@ scenes:
   });
   await validateDsl4EmbeddedAssetBundle(parsed.storyDocument, descriptor, options);
 });
+
+test('stores URL-only remote image and sound sources without inventing metadata', async () => {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteImage:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/image.svg
+  RemoteSound:
+    kind: sound
+    delivery: remote
+    source:
+      url: https://cdn.example.com/sound.wav
+scenes:
+  opening: []
+`,
+    {sourceId: 'bare-remote-media-bundle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  const sources = {
+    RemoteImage: {type: 'remote', url: 'https://cdn.example.com/image.svg'},
+    RemoteSound: {type: 'remote', url: 'https://cdn.example.com/sound.wav'},
+  };
+  const snapshot = {
+    manifest: {
+      formatVersion: 1,
+      assets: Object.entries(sources).map(([id, source]) => ({
+        id,
+        kind: id === 'RemoteImage' ? 'image' : 'sound',
+        loading: 'eager',
+        source,
+      })),
+    },
+    getFile() {
+      assert.fail('remote assets must not request local bytes');
+    },
+  };
+  const descriptor = await createDsl4EmbeddedAssetBundle(parsed.storyDocument, snapshot, options);
+  assert.deepEqual(
+    Object.fromEntries(descriptor.manifest.assets.map((asset) => [asset.id, asset.source])),
+    sources,
+  );
+  await validateDsl4EmbeddedAssetBundle(parsed.storyDocument, descriptor, options);
+
+  const partial = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  RemoteImage:
+    kind: image
+    delivery: remote
+    source:
+      url: https://cdn.example.com/image.svg
+      contentType: image/svg+xml
+scenes:
+  opening: []
+`,
+    {sourceId: 'partial-remote-media-bundle-test'},
+  );
+  assert.equal(partial.ok, false);
+});

@@ -214,6 +214,7 @@ export function validateDsl4Semantics(
       }
       if (
         assetRecord.kind === 'image' &&
+        source.contentType !== undefined &&
         (typeof source.contentType !== 'string' || !source.contentType.startsWith('image/'))
       ) {
         issues.push({

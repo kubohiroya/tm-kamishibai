@@ -110,6 +110,44 @@ scenes:
   };
 }
 
+function bareSingleFileComponent(kind, url) {
+  const parsed = frontend.parse(
+    `
+kamishibai: '4.0'
+assets:
+  Remote:
+    kind: ${kind}
+    delivery: remote
+    loading: lazy
+    source:
+      url: ${url}
+scenes:
+  opening: []
+`,
+    {sourceId: 'bare-remote-single-file-lifecycle-test'},
+  );
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  return {
+    storyDocument: parsed.storyDocument,
+    assetBundle: {
+      manifest: {
+        formatVersion: 1,
+        assets: [
+          {
+            id: 'Remote',
+            kind,
+            loading: 'lazy',
+            source: {type: 'remote', url},
+          },
+        ],
+      },
+    },
+    getAssetFile() {
+      assert.fail('remote assets must not read an embedded payload');
+    },
+  };
+}
+
 function context(controller = new AbortController(), generation = 1) {
   return Object.freeze({signal: controller.signal, generation, sceneId: 'opening'});
 }
@@ -262,6 +300,47 @@ test('loads and extracts an unpinned TMPose zip URL as one bounded archive', asy
   );
   assert.equal(prepared[0].archiveBinding.extractorFormat, 'tmpose-zip-v1');
   await lifecycle.release({reason: 'stop'});
+});
+
+test('loads URL-only remote images and sounds without inventing verification metadata', async () => {
+  const cases = [
+    {
+      kind: 'image',
+      url: 'https://cdn.example.com/image.svg',
+      bytes,
+      contentType: 'image/svg+xml; charset=utf-8',
+    },
+    {
+      kind: 'sound',
+      url: 'https://cdn.example.com/sound.wav',
+      bytes: new Uint8Array([82, 73, 70, 70]),
+      contentType: 'audio/wav',
+    },
+  ];
+  for (const fixture of cases) {
+    const loads = [];
+    const prepared = [];
+    const lifecycle = createDsl4RemoteAssetLifecycle({
+      runtimeComponent: bareSingleFileComponent(fixture.kind, fixture.url),
+      async loadRemoteAsset(payload) {
+        loads.push(payload);
+        return {bytes: fixture.bytes, contentType: fixture.contentType};
+      },
+      adapter: {
+        prepare(payload) {
+          prepared.push(payload);
+          return {id: payload.asset.id};
+        },
+        release() {},
+      },
+      setLoading() {},
+    });
+    await lifecycle.prepare({assetIds: ['Remote']}, context());
+    assert.deepEqual(loads, [{assetId: 'Remote', url: fixture.url}]);
+    assert.equal(prepared[0].files[0].contentType, fixture.contentType.split(';', 1)[0]);
+    assert.equal(Object.hasOwn(prepared[0].files[0], 'integrity'), false);
+    await lifecycle.release({reason: 'stop'});
+  }
 });
 
 test('keeps remote loading disabled unless the host injects a loader', async () => {
