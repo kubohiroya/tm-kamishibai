@@ -502,23 +502,30 @@ function readLocalMaterial(snapshot, assetId, asset) {
     fail(`Local asset snapshot is missing ${assetId}`, 'K4-ASSET-CONVERT-LOCAL-001');
   }
   const sourceFiles = /** @type {Readonly<Record<string, any>>[]} */ (manifestAsset.source.files);
-  const opaquePoseArchive = asset.kind === 'poseModel' && manifestAsset.source.mode === 'file';
+  const opaquePoseArchive = asset.kind === 'poseModel' && manifestAsset.source.mode === 'archive';
+  if (opaquePoseArchive) {
+    return Object.freeze({
+      opaquePoseArchive: true,
+      files: Object.freeze([
+        Object.freeze({
+          path: path.posix.basename(manifestAsset.source.inputPath),
+          bytes: snapshot.getPoseArchive(assetId),
+          contentType: 'application/zip',
+        }),
+      ]),
+    });
+  }
   const files = sourceFiles.map((file) => {
     const bytes = snapshot.getFile(assetId, file.path);
     return Object.freeze({
       path: file.path,
       bytes,
-      ...(asset.kind === 'poseModel' && !opaquePoseArchive
+      ...(asset.kind === 'poseModel'
         ? {}
-        : asset.kind === 'poseModel'
-          ? {contentType: 'application/zip'}
-          : {contentType: contentTypeFor(bytes, file.path, asset.kind)}),
+        : {contentType: contentTypeFor(bytes, file.path, asset.kind)}),
     });
   });
-  return Object.freeze({
-    files: Object.freeze(files),
-    ...(opaquePoseArchive ? {opaquePoseArchive: true} : {}),
-  });
+  return Object.freeze({files: Object.freeze(files)});
 }
 
 /** @param {Buffer} bytes */
@@ -1250,6 +1257,7 @@ export async function convertDsl4ProjectAssets(options) {
     maxFiles: maxAssetFiles,
     maxTotalBytes: maxTotalAssetBytes,
     subtleCrypto: options.subtleCrypto,
+    retainPoseArchives: true,
   });
   let downloadedBytes = 0;
   let inspectedFiles = 0;
@@ -1548,6 +1556,10 @@ export async function convertDsl4ProjectAssets(options) {
       fail(`Local asset snapshot is missing ${assetId}`, 'K4-ASSET-CONVERT-LOCAL-001');
     }
     const directoryMode = snapshotSource.mode === 'directory';
+    if (snapshotSource.mode === 'archive') {
+      addSharedOutputFile(outputFiles, asset.file, localSnapshot.getPoseArchive(assetId));
+      continue;
+    }
     for (const file of /** @type {Readonly<Record<string, any>>[]} */ (snapshotSource.files)) {
       const relativePath = directoryMode ? `${asset.file}/${file.path}` : asset.file;
       addSharedOutputFile(outputFiles, relativePath, localSnapshot.getFile(assetId, file.path));

@@ -222,6 +222,7 @@ function directorySignature(files) {
  * @param {number} options.maxFiles
  * @param {number} options.maxTotalBytes
  * @param {{digest: Function}} [options.subtleCrypto]
+ * @param {boolean} [options.retainPoseArchives]
  * @param {{realpath: Function, lstat: Function, open: Function, readdir: Function}} [options.fileSystem]
  * @param {(filePath: string, limit: number) => Promise<Buffer | Uint8Array>} [options.readFile]
  */
@@ -233,6 +234,7 @@ export async function loadDsl4LocalAssetSnapshot(
     maxFiles,
     maxTotalBytes,
     subtleCrypto = globalThis.crypto?.subtle,
+    retainPoseArchives = false,
     fileSystem = defaultFileSystem,
     readFile,
   },
@@ -250,6 +252,9 @@ export async function loadDsl4LocalAssetSnapshot(
   if (readFile !== undefined && typeof readFile !== 'function') {
     throw new TypeError('readFile must be a function');
   }
+  if (typeof retainPoseArchives !== 'boolean') {
+    throw new TypeError('retainPoseArchives must be a boolean');
+  }
   const readSnapshot = readFile ?? ((filePath, limit) => readBoundedFile(filePath, limit, fs));
 
   let canonicalRoot;
@@ -264,6 +269,8 @@ export async function loadDsl4LocalAssetSnapshot(
 
   /** @type {Map<string, Buffer>} */
   const blobs = new Map();
+  /** @type {Map<string, Buffer>} */
+  const poseArchives = new Map();
   /** @type {Record<string, unknown>[]} */
   const manifestAssets = [];
   let fileCount = 0;
@@ -356,6 +363,7 @@ export async function loadDsl4LocalAssetSnapshot(
           error,
         );
       }
+      if (retainPoseArchives) poseArchives.set(assetId, Buffer.from(archiveBytes));
       fileCount += extracted.files.length;
       if (fileCount > fileCountLimit) fail('Asset snapshot exceeds maxFiles', 'K4-ASSET-COUNT-001');
       const manifestFiles = [];
@@ -442,6 +450,17 @@ export async function loadDsl4LocalAssetSnapshot(
       const contents = blobs.get(`${assetId}\0${filePath}`);
       if (!contents) {
         throw new Sb3BuilderError(`Asset snapshot file not found: ${assetId}/${filePath}`, {
+          stage: 'dsl4-local-assets',
+          code: 'K4-ASSET-LOOKUP-001',
+        });
+      }
+      return Buffer.from(contents);
+    },
+    /** @param {string} assetId */
+    getPoseArchive(assetId) {
+      const contents = poseArchives.get(assetId);
+      if (!contents) {
+        throw new Sb3BuilderError(`Pose archive snapshot not found: ${assetId}`, {
           stage: 'dsl4-local-assets',
           code: 'K4-ASSET-LOOKUP-001',
         });

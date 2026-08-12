@@ -37,12 +37,7 @@ const poseFiles = {
   'metadata.json': Buffer.from('{"labels":["help"]}'),
   'weights.bin': Buffer.from([1, 2, 3, 4]),
 };
-const opaquePoseZip = Buffer.from(
-  zipSync({
-    'vendor/private.data': strToU8('opaque vendor payload'),
-    'vendor/version.txt': strToU8('future-format'),
-  }),
-);
+const opaquePoseZip = Buffer.from(zipSync(poseFiles, {level: 0}));
 
 function wavBytes() {
   const bytes = Buffer.alloc(48);
@@ -488,8 +483,8 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
     },
   );
   const poseSnapshot = localSnapshot.manifest.assets.find(({id}) => id === 'OpaquePose');
-  assert.equal(poseSnapshot.source.mode, 'file');
-  assert.equal(poseSnapshot.source.files.length, 1);
+  assert.equal(poseSnapshot.source.mode, 'archive');
+  assert.equal(poseSnapshot.source.files.length, 3);
 
   let synchronizedPose;
   const remote = await convertDsl4ProjectAssets(
