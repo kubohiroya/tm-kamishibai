@@ -134,8 +134,9 @@ pnpm dsl4:assets:convert -- \
 
 rsync方式では、SSH同期先と、それに対応して外部公開されるHTTPS directory URLを両方指定します。
 local／project／既存remoteの選択assetをcontent-addressed filenameへ変換し、一時directoryから
-`rsync --archive --checksum --protect-args`で同期します。directory形式のlocal pose modelだけは固定timestamp・
-固定順序のZIPにし、既存のlocal／remote pose ZIPは再圧縮しません。同期後は公開URLから全fileを再取得して
+`rsync --archive --checksum --protect-args`で同期します。directory形式のlocal／remote pose modelは
+固定timestamp・固定順序のZIPにし、既存のlocal／remote pose ZIPは再圧縮しません。URL-onlyの従来TMPose
+directoryは`model.json`、`metadata.json`、`weightsManifest`が指す単一weights fileを取得します。同期後は公開URLから全fileを再取得して
 metadataと元のbyte列を検証し、成功した場合だけ
 変換済みsource manifest／YAML／SB3のlocal出力projectを確定します。
 

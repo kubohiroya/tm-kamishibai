@@ -38,6 +38,12 @@ const poseFiles = {
   'weights.bin': Buffer.from([1, 2, 3, 4]),
 };
 const opaquePoseZip = Buffer.from(zipSync(poseFiles, {level: 0}));
+/** @type {Record<string, Buffer>} */
+const remotePoseDirectoryFiles = {
+  'model.json': Buffer.from('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+  'metadata.json': Buffer.from('{"labels":["help"]}'),
+  'weights.bin': Buffer.from([5, 6, 7, 8]),
+};
 
 function wavBytes() {
   const bytes = Buffer.alloc(48);
@@ -60,6 +66,17 @@ function wavBytes() {
 }
 
 const soundBytes = wavBytes();
+
+function mp3Bytes(frameCount = 2) {
+  const frameLength = Math.floor((144 * 128_000) / 44_100);
+  const bytes = Buffer.alloc(frameLength * frameCount);
+  for (let index = 0; index < frameCount; index += 1) {
+    bytes.writeUInt32BE(0xfffb9000, index * frameLength);
+  }
+  return bytes;
+}
+
+const mpegSoundBytes = mp3Bytes();
 
 function integrity(bytes) {
   return `sha256-${sha256(bytes)}`;
@@ -130,7 +147,20 @@ scenes:
 `;
 }
 
-function baseSb3() {
+function remotePoseDirectorySourceText() {
+  return `kamishibai: '4.0'
+assets:
+  DirectoryPose:
+    kind: poseModel
+    delivery: remote
+    source:
+      url: https://cdn.example.com/pose?revision=1
+scenes:
+  opening: []
+`;
+}
+
+function baseSb3({includeProjectAsset = true, includeProjectBytes = true} = {}) {
   const assetId = md5(projectBytes);
   const filename = `${assetId}.svg`;
   const project = {
@@ -142,17 +172,19 @@ function baseSb3() {
         lists: {},
         broadcasts: {},
         blocks: {},
-        costumes: [
-          {
-            name: 'Existing',
-            bitmapResolution: 1,
-            dataFormat: 'svg',
-            assetId,
-            md5ext: filename,
-            rotationCenterX: 160,
-            rotationCenterY: 120,
-          },
-        ],
+        costumes: includeProjectAsset
+          ? [
+              {
+                name: 'Existing',
+                bitmapResolution: 1,
+                dataFormat: 'svg',
+                assetId,
+                md5ext: filename,
+                rotationCenterX: 160,
+                rotationCenterY: 120,
+              },
+            ]
+          : [],
         sounds: [],
       },
     ],
@@ -160,12 +192,10 @@ function baseSb3() {
     extensions: [],
     meta: {semver: '3.0.0'},
   };
-  return Buffer.from(
-    zipSync({
-      'project.json': strToU8(`${JSON.stringify(project)}\n`),
-      [filename]: new Uint8Array(projectBytes),
-    }),
-  );
+  /** @type {Record<string, Uint8Array>} */
+  const entries = {'project.json': strToU8(`${JSON.stringify(project)}\n`)};
+  if (includeProjectBytes) entries[filename] = new Uint8Array(projectBytes);
+  return Buffer.from(zipSync(entries));
 }
 
 async function fixture(t) {
@@ -300,6 +330,102 @@ test('derives Scratch sound metadata while converting a local sound to project f
   assert.equal(sound.rate, 8000);
   assert.equal(sound.sampleCount, 2);
   assert.deepEqual(Buffer.from(archive[sound.md5ext]), soundBytes);
+});
+
+test('derives MPEG-1 Layer III metadata while converting MP3 sound to project form', async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, 'assets', 'effect.mp3'), mpegSoundBytes);
+  await writeFile(
+    path.join(root, 'story.k4.yml'),
+    `kamishibai: '4.0'
+assets:
+  Mp3Sound:
+    kind: sound
+    file: assets/effect.mp3
+scenes:
+  opening: []
+`,
+  );
+  const result = await convertDsl4ProjectAssets(
+    options(root, 'mp3-project-output', {
+      to: 'project',
+      assets: ['Mp3Sound'],
+    }),
+  );
+  const {archive, project} = readSb3(await readFile(result.sb3Path));
+  const sound = project.targets[0].sounds.find(({name}) => name === 'Mp3Sound');
+  assert(sound);
+  assert.equal(sound.rate, 44_100);
+  assert.equal(sound.sampleCount, 2304);
+  assert.deepEqual(Buffer.from(archive[sound.md5ext]), mpegSoundBytes);
+});
+
+test('uses SVG viewBox dimensions and accepts exact px dimensions for project assets', async (t) => {
+  const root = await fixture(t);
+  const percentageSvg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 480 360"></svg>',
+  );
+  const pixelSvg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320px" height="200px"></svg>',
+  );
+  await writeFile(path.join(root, 'assets', 'percentage.svg'), percentageSvg);
+  await writeFile(path.join(root, 'assets', 'pixels.svg'), pixelSvg);
+  await writeFile(
+    path.join(root, 'story.k4.yml'),
+    `kamishibai: '4.0'
+assets:
+  PercentageBackdrop:
+    kind: backdrop
+    file: assets/percentage.svg
+  PixelBackdrop:
+    kind: backdrop
+    file: assets/pixels.svg
+scenes:
+  opening: []
+`,
+  );
+  const result = await convertDsl4ProjectAssets(
+    options(root, 'svg-dimensions-project-output', {to: 'project'}),
+  );
+  const {project} = readSb3(await readFile(result.sb3Path));
+  const percentage = project.targets[0].costumes.find(({name}) => name === 'PercentageBackdrop');
+  const pixels = project.targets[0].costumes.find(({name}) => name === 'PixelBackdrop');
+  assert(percentage);
+  assert(pixels);
+  assert.deepEqual([percentage.rotationCenterX, percentage.rotationCenterY], [240, 180]);
+  assert.deepEqual([pixels.rotationCenterX, pixels.rotationCenterY], [160, 100]);
+
+  for (const invalid of [
+    {
+      id: 'PercentageOnly',
+      filename: 'percentage-only.svg',
+      source: '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"></svg>',
+    },
+    {
+      id: 'MissingWidth',
+      filename: 'missing-width.svg',
+      source: '<svg xmlns="http://www.w3.org/2000/svg" stroke-width="320" height="200px"></svg>',
+    },
+  ]) {
+    await writeFile(path.join(root, 'assets', invalid.filename), invalid.source);
+    await writeFile(
+      path.join(root, 'story.k4.yml'),
+      `kamishibai: '4.0'
+assets:
+  ${invalid.id}:
+    kind: backdrop
+    file: assets/${invalid.filename}
+scenes:
+  opening: []
+`,
+    );
+    const output = `invalid-${invalid.id.toLowerCase()}-project-output`;
+    await assert.rejects(
+      convertDsl4ProjectAssets(options(root, output, {to: 'project'})),
+      (error) => error.code === 'K4-ASSET-CONVERT-METADATA-001',
+    );
+    await assert.rejects(stat(path.join(root, output)), {code: 'ENOENT'});
+  }
 });
 
 test('verifies and embeds a remote asset while converting it to project form', async (t) => {
@@ -497,6 +623,7 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
   assert.equal(poseSnapshot.source.mode, 'archive');
   assert.equal(poseSnapshot.source.files.length, 3);
 
+  /** @type {Buffer | undefined} */
   let synchronizedPose;
   const remote = await convertDsl4ProjectAssets(
     options(local.outputDirectory, 'opaque-pose-rsync-output', {
@@ -521,6 +648,119 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
   const remoteSource = (await outputSource(remote)).assets.OpaquePose.source;
   assert.equal(remoteSource.integrity, integrity(opaquePoseZip));
   assert.equal(remoteSource.size, opaquePoseZip.length);
+});
+
+test('converts a URL-only TMPose directory to local and rsync forms', async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
+  const requests = [];
+  /** @param {URL} url */
+  const directoryResponse = (url) => {
+    requests.push(url.href);
+    const filename = path.posix.basename(url.pathname);
+    const bytes = remotePoseDirectoryFiles[filename];
+    assert(bytes, `unexpected pose directory request: ${url.href}`);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        'content-type': filename.endsWith('.json')
+          ? 'application/json'
+          : 'application/octet-stream',
+      },
+    });
+  };
+  const local = await convertDsl4ProjectAssets(
+    options(root, 'remote-pose-directory-local-output', {
+      to: 'local',
+      fetchImplementation: directoryResponse,
+    }),
+  );
+  const localSource = await outputSource(local);
+  assert.match(localSource.assets.DirectoryPose.file, /^assets\//u);
+  for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
+    assert.deepEqual(
+      await readFile(
+        path.join(local.outputDirectory, localSource.assets.DirectoryPose.file, filename),
+      ),
+      bytes,
+    );
+  }
+  assert.deepEqual(requests.sort(), [
+    'https://cdn.example.com/pose/metadata.json?revision=1',
+    'https://cdn.example.com/pose/model.json?revision=1',
+    'https://cdn.example.com/pose/weights.bin?revision=1',
+  ]);
+
+  let synchronizedPose;
+  const remote = await convertDsl4ProjectAssets(
+    options(root, 'remote-pose-directory-rsync-output', {
+      to: 'remote',
+      rsyncDestination: 'author@assets.example.com:/srv/www/k4-assets',
+      remoteBaseUrl: 'https://cdn.example.com/k4-assets/',
+      runRsync: async (command) => {
+        const sourceDirectory = command.arguments.at(-2).slice(0, -path.sep.length);
+        const [filename] = await readdir(sourceDirectory);
+        synchronizedPose = await readFile(path.join(sourceDirectory, filename));
+      },
+      fetchImplementation: async (url) => {
+        if (url.pathname.startsWith('/pose/')) return directoryResponse(url);
+        assert(synchronizedPose);
+        return new Response(synchronizedPose, {
+          status: 200,
+          headers: {'content-type': 'application/zip'},
+        });
+      },
+    }),
+  );
+  assert(synchronizedPose);
+  const remoteSource = (await outputSource(remote)).assets.DirectoryPose.source;
+  assert.equal(remoteSource.contentType, 'application/zip');
+  assert.equal(remoteSource.integrity, integrity(synchronizedPose));
+  const archive = unzipSync(synchronizedPose);
+  assert.deepEqual(Object.keys(archive).sort(), Object.keys(remotePoseDirectoryFiles).sort());
+  for (const [filename, bytes] of Object.entries(remotePoseDirectoryFiles)) {
+    assert.deepEqual(Buffer.from(archive[filename]), bytes);
+  }
+});
+
+test('rejects malformed URL-only TMPose directories without output', async (t) => {
+  const cases = [
+    {
+      output: 'remote-pose-invalid-json-output',
+      model: Buffer.from('{'),
+    },
+    {
+      output: 'remote-pose-multiple-weights-output',
+      model: Buffer.from('{"weightsManifest":[{"paths":["weights.bin","weights-2.bin"]}]}'),
+    },
+    {
+      output: 'remote-pose-unsafe-weights-output',
+      model: Buffer.from('{"weightsManifest":[{"paths":["../weights.bin"]}]}'),
+    },
+  ];
+  for (const fixtureCase of cases) {
+    const root = await fixture(t);
+    await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
+    await assert.rejects(
+      convertDsl4ProjectAssets(
+        options(root, fixtureCase.output, {
+          to: 'local',
+          fetchImplementation: async (url) => {
+            const filename = path.posix.basename(url.pathname);
+            const bytes =
+              filename === 'model.json' ? fixtureCase.model : remotePoseDirectoryFiles[filename];
+            assert(bytes);
+            return new Response(bytes, {
+              status: 200,
+              headers: {'content-type': 'application/octet-stream'},
+            });
+          },
+        }),
+      ),
+      (error) => error.code === 'K4-ASSET-CONVERT-REMOTE-POSE-001',
+    );
+    await assert.rejects(stat(path.join(root, fixtureCase.output)), {code: 'ENOENT'});
+  }
 });
 
 test('converts all local, project, and remote assets to a local output tree', async (t) => {
@@ -627,6 +867,52 @@ test('makes a selective local conversion a reusable standalone project', async (
     snapshot.manifest.assets.find(({id}) => id === 'ProjectBackdrop').source.type,
     'file',
   );
+});
+
+test('validates every final project asset reference before committing output', async (t) => {
+  const cases = [
+    {
+      output: 'missing-selected-project-output',
+      base: baseSb3({includeProjectAsset: false, includeProjectBytes: false}),
+      to: 'project',
+      assets: ['ProjectBackdrop'],
+    },
+    {
+      output: 'missing-unselected-project-output',
+      base: baseSb3({includeProjectAsset: false, includeProjectBytes: false}),
+      to: 'local',
+      assets: ['LocalBackdrop'],
+    },
+    {
+      output: 'missing-project-archive-output',
+      base: baseSb3({includeProjectBytes: false}),
+      to: 'project',
+      assets: ['ProjectBackdrop'],
+    },
+  ];
+  for (const fixtureCase of cases) {
+    const root = await fixture(t);
+    await writeFile(path.join(root, 'base.sb3'), fixtureCase.base);
+    await assert.rejects(
+      convertDsl4ProjectAssets(
+        options(root, fixtureCase.output, {
+          to: fixtureCase.to,
+          assets: fixtureCase.assets,
+        }),
+      ),
+      (error) => error.code === 'K4-ASSET-CONVERT-PROJECT-001',
+    );
+    await assert.rejects(stat(path.join(root, fixtureCase.output)), {code: 'ENOENT'});
+  }
+
+  const root = await fixture(t);
+  const result = await convertDsl4ProjectAssets(
+    options(root, 'valid-project-noop-output', {
+      to: 'project',
+      assets: ['ProjectBackdrop'],
+    }),
+  );
+  assert.equal(result.converted.ProjectBackdrop, 'project');
 });
 
 test('verifies matching destinations before converting local and project assets to remote', async (t) => {

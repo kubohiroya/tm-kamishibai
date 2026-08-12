@@ -5,6 +5,12 @@ import path from 'node:path';
 import {zipSync} from 'fflate';
 import {parseDocument} from 'yaml';
 
+import {isDsl4RemotePoseArchiveUrl} from '../dsl4/pose-archive-locator.js';
+import {
+  dsl4RemotePoseFileUrl,
+  parseDsl4RemotePoseJson,
+  resolveDsl4RemotePoseWeightsPath,
+} from '../dsl4/remote-pose-directory.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {fetchDsl4AssetRemote} from './dsl4-asset-lock.js';
@@ -579,23 +585,28 @@ function svgDimensions(bytes) {
   }
   const opening = source.match(/<svg\b[^>]*>/iu)?.[0];
   if (!opening) return null;
+  const viewBox = opening.match(/\sviewBox\s*=\s*["']([^"']+)["']/iu)?.[1];
+  if (viewBox) {
+    const values = viewBox
+      .trim()
+      .split(/[\s,]+/u)
+      .map(Number);
+    if (values.length === 4 && values.every(Number.isFinite) && values[2] > 0 && values[3] > 0) {
+      return {width: values[2], height: values[3]};
+    }
+  }
   /** @param {string} name */
   const numeric = (name) => {
-    const match = opening.match(new RegExp(`\\b${name}\\s*=\\s*["']([0-9]+(?:\\.[0-9]+)?)`, 'iu'));
+    const numberPattern = '[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?';
+    const match = opening.match(
+      new RegExp(`\\s${name}\\s*=\\s*["']\\s*(${numberPattern})(?:px)?\\s*["']`, 'iu'),
+    );
     return match ? Number(match[1]) : null;
   };
   const width = numeric('width');
   const height = numeric('height');
   if (width && height) return {width, height};
-  const viewBox = opening.match(/\bviewBox\s*=\s*["']([^"']+)["']/iu)?.[1];
-  if (!viewBox) return null;
-  const values = viewBox
-    .trim()
-    .split(/[\s,]+/u)
-    .map(Number);
-  return values.length === 4 && values.every(Number.isFinite) && values[2] > 0 && values[3] > 0
-    ? {width: values[2], height: values[3]}
-    : null;
+  return null;
 }
 
 /** @param {Buffer} bytes @param {string} contentType */
@@ -683,10 +694,10 @@ function mp3Metadata(bytes) {
     offset = 10 + size;
   }
   const bitrates = /** @type {Record<string, number[]>} */ ({
-    '1-1': [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+    '1-1': [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
     '1-2': [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
-    '1-3': [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
-    '2-1': [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    '1-3': [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+    '2-1': [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
     '2-2': [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
     '2-3': [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
   });
@@ -695,7 +706,7 @@ function mp3Metadata(bytes) {
   let sampleCount = 0;
   while (offset + 4 <= bytes.length) {
     const header = bytes.readUInt32BE(offset);
-    if ((header & 0xffe00000) !== 0xffe00000) {
+    if (header >>> 21 !== 0x7ff) {
       offset += 1;
       continue;
     }
@@ -1290,7 +1301,7 @@ export async function convertDsl4ProjectAssets(options) {
   /** @param {string} assetId @param {Readonly<Record<string, any>>} asset @param {Readonly<Record<string, any>>} remote */
   async function readRemoteMaterial(assetId, asset, remote) {
     const sourceValue = validateRemoteSource(remote, {
-      allowBare: asset.kind !== 'poseModel',
+      allowBare: true,
       label: `Remote asset ${assetId} source`,
     });
     const cacheKey = `${asset.kind}\0${JSON.stringify(sourceValue)}`;
@@ -1303,19 +1314,55 @@ export async function convertDsl4ProjectAssets(options) {
             'K4-ASSET-REMOTE-HOST-001',
           );
         }
-        const response = await fetchDsl4AssetRemote(sourceValue.url, {
-          allowedHosts,
-          timeoutMs,
-          maxRedirects,
-          maxBytes: maxAssetFileBytes,
-          fetchImplementation,
-        });
-        downloadedBytes += response.bytes.length;
-        if (downloadedBytes > maxTotalAssetBytes) {
-          fail('Remote conversion exceeds maxTotalAssetBytes', 'K4-ASSET-CONVERT-SIZE-001');
+        /** @param {string} url */
+        const fetchFile = async (url) => {
+          const response = await fetchDsl4AssetRemote(url, {
+            allowedHosts,
+            timeoutMs,
+            maxRedirects,
+            maxBytes: maxAssetFileBytes,
+            fetchImplementation,
+          });
+          downloadedBytes += response.bytes.length;
+          if (downloadedBytes > maxTotalAssetBytes) {
+            fail('Remote conversion exceeds maxTotalAssetBytes', 'K4-ASSET-CONVERT-SIZE-001');
+          }
+          return response;
+        };
+        const verified = sourceValue.integrity !== undefined;
+        const poseArchive =
+          asset.kind === 'poseModel' && (verified || isDsl4RemotePoseArchiveUrl(sourceValue.url));
+        if (asset.kind === 'poseModel' && !poseArchive) {
+          try {
+            const [modelResponse, metadataResponse] = await Promise.all([
+              fetchFile(dsl4RemotePoseFileUrl(sourceValue.url, 'model.json')),
+              fetchFile(dsl4RemotePoseFileUrl(sourceValue.url, 'metadata.json')),
+            ]);
+            const model = parseDsl4RemotePoseJson(modelResponse.bytes, 'model.json');
+            const weightsPath = resolveDsl4RemotePoseWeightsPath(model);
+            parseDsl4RemotePoseJson(metadataResponse.bytes, 'metadata.json');
+            const weightsResponse = await fetchFile(
+              dsl4RemotePoseFileUrl(sourceValue.url, weightsPath),
+            );
+            return Object.freeze({
+              files: Object.freeze([
+                Object.freeze({path: 'model.json', bytes: modelResponse.bytes}),
+                Object.freeze({path: 'metadata.json', bytes: metadataResponse.bytes}),
+                Object.freeze({path: weightsPath, bytes: weightsResponse.bytes}),
+              ]),
+            });
+          } catch (error) {
+            if (error instanceof Sb3BuilderError) throw error;
+            fail(
+              `Remote pose directory is invalid for ${assetId}`,
+              'K4-ASSET-CONVERT-REMOTE-POSE-001',
+              error,
+            );
+          }
         }
+        const response = await fetchFile(sourceValue.url);
         if (
-          sourceValue.integrity !== undefined &&
+          verified &&
           (`sha256-${sha256(response.bytes)}` !== sourceValue.integrity ||
             response.bytes.length !== sourceValue.size ||
             response.contentType !== sourceValue.contentType)
@@ -1325,7 +1372,7 @@ export async function convertDsl4ProjectAssets(options) {
             'K4-ASSET-CONVERT-REMOTE-INTEGRITY-001',
           );
         }
-        if (asset.kind === 'poseModel') {
+        if (poseArchive) {
           return Object.freeze({
             opaquePoseArchive: true,
             files: Object.freeze([
@@ -1602,6 +1649,11 @@ export async function convertDsl4ProjectAssets(options) {
       return candidate.kind !== 'costume' || candidate.target === asset.target;
     });
     if (!retained) removeProjectAsset(archive, project, assetId, asset);
+  }
+  for (const [assetId, asset] of Object.entries(verifiedAssets)) {
+    if (asset.delivery !== 'remote' && typeof asset.file !== 'string') {
+      readProjectMaterial(archive, project, assetId, asset);
+    }
   }
   const name = outputName(options.outputName, sourceStem(source.descriptor.displayName));
   const sourceFilename = `${name}.k4.yml`;

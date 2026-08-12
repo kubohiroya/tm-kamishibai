@@ -1,5 +1,10 @@
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {isDsl4RemotePoseArchiveUrl} from './pose-archive-locator.js';
+import {
+  dsl4RemotePoseFileUrl,
+  parseDsl4RemotePoseJson,
+  resolveDsl4RemotePoseWeightsPath,
+} from './remote-pose-directory.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -39,21 +44,6 @@ function isVerifiedRemoteSource(source) {
     typeof source.contentType === 'string' &&
     Number.isSafeInteger(source.size)
   );
-}
-
-/** @param {string} baseUrl @param {string} fileName */
-function remotePoseFileUrl(baseUrl, fileName) {
-  const directoryUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return new URL(fileName, directoryUrl).href;
-}
-
-/** @param {Uint8Array} bytes @param {string} name */
-function parseRemotePoseJson(bytes, name) {
-  try {
-    return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
-  } catch (error) {
-    throw new Error(`Remote pose model ${name} is not valid UTF-8 JSON`, {cause: error});
-  }
 }
 
 /** @param {Uint8Array} bytes @param {{digest: Function}} subtleCrypto */
@@ -322,7 +312,7 @@ export function createDsl4EmbeddedAssetLifecycle({
             }
             /** @param {string} path */
             const loadFile = async (path) => {
-              const url = remotePoseFileUrl(source.url, path);
+              const url = dsl4RemotePoseFileUrl(source.url, path);
               const loaded = await unverifiedRemoteLoader(
                 Object.freeze({assetId: asset.id, url}),
                 context,
@@ -342,24 +332,10 @@ export function createDsl4EmbeddedAssetLifecycle({
               loadFile('metadata.json'),
             ]);
             if (context.signal?.aborted) throw abortError();
-            const model = parseRemotePoseJson(modelFile.bytes, 'model.json');
-            const declaredWeights =
-              isRecord(model) && Array.isArray(model.weightsManifest)
-                ? model.weightsManifest.flatMap((entry) =>
-                    isRecord(entry) && Array.isArray(entry.paths) ? entry.paths : [],
-                  )
-                : [];
-            if (
-              declaredWeights.length !== 1 ||
-              typeof declaredWeights[0] !== 'string' ||
-              !/^[A-Za-z0-9._-]+\.bin$/u.test(declaredWeights[0])
-            ) {
-              throw new TypeError(
-                'Remote pose model.json must declare exactly one root-level .bin weights file',
-              );
-            }
-            parseRemotePoseJson(metadataFile.bytes, 'metadata.json');
-            const weightsFile = await loadFile(declaredWeights[0]);
+            const model = parseDsl4RemotePoseJson(modelFile.bytes, 'model.json');
+            const weightsPath = resolveDsl4RemotePoseWeightsPath(model);
+            parseDsl4RemotePoseJson(metadataFile.bytes, 'metadata.json');
+            const weightsFile = await loadFile(weightsPath);
             if (context.signal?.aborted) throw abortError();
             return Object.freeze({
               asset,
