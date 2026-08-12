@@ -7,14 +7,15 @@ Copyright © 2026 Hiroya Kubo.
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)
+[#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)、
+[#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
 
 ## 1. 結論
 
-4.0.0のStandard成果物は、`kubohiroyakamishibai4`一件をembedded extensionとして生成します。
+4.0.0-rc.1のStandard成果物は、`kubohiroyakamishibai4`一件をembedded extensionとして生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
 組み込みません。生成SB3がTurboWarpへ登録する拡張とdata URLはこの一件だけです。
 
@@ -61,7 +62,8 @@ managed external memberを追加するときは、artifact integrityに加えて
 互換versionを持つAPI manifestを必須にします。
 
 配布SBOMの入力は`package.json`と`pnpm-lock.yaml`、attributionの正本は`LICENSES.md`です。Standard成果物を
-生成するlocal source、release source directory、download catalogのSHA-256とsource commitを合わせて、
+生成するlocal source、version付きrelease source directory、そのpathとbyte列から求めたsource identity、
+download catalogのSHA-256を合わせて、
 「どのsourceとpackageからどのSB3を作ったか」を追跡します。
 
 ## 4. 成果物とpalette
@@ -128,25 +130,25 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-releaseは必ず次の順で行います。
+4.0.0-rc.1 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
 3. package、runtime reporter、release catalogを同じrelease versionへ更新する
-4. `pnpm verify:full`を実行する
-5. version付き`release-sources/<version>/app`を書き出す
-6. `pnpm sb3:dsl4-release:check`でSB3の決定性と実行を検証する
-7. download catalogのSHA-256、source commit、build dateを更新する
-8. source commitを保持するmerge strategyでrelease PRをmainへ統合する
-9. mainで`pnpm verify:full && pnpm release:check`を再実行する
-10. version tagを作成する
-11. npm packageを公開する
-12. GitHub Releaseを公開する
-13. siteをbuildして公開する
+4. candidate状態で`pnpm release:dsl4:update`を実行し、version付きsource、SB3 hash、metadataを一括更新する
+5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
+6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
+7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
+8. frozen commitへannotated `v4.0.0-rc.1` tagを作成する
+9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
+10. GitHub prereleaseを公開する
+11. 3.2.3を推奨安定版に維持したままsiteをbuildして公開する
+12. 外部URLをmetadataへ記録してpublishedへ遷移し、version／hash／dist-tagを照合する
 
 更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release、
-version付きrelease sourceを差し替えません。既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、
-GitHub Releaseへ注記し、直前の推奨downloadへsiteを戻してから修正版を次のpatch versionで公開します。
+version付きrelease sourceを差し替えません。`frozen`または`published`ではupdateをfail closedにし、修正は
+4.0.0-rc.2、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 3.2の`extensionBundles` member更新は一件ずつ行い、recovery capsuleを保ったままmember単位で戻します。
 
 ## 8. 受け入れ基準

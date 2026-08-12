@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
+const dsl4ReleaseMetadata = JSON.parse(
+  readFileSync(new URL('../release-sources/4.0.0-rc.1/release.json', import.meta.url), 'utf8'),
+);
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -15,21 +19,20 @@ function deepFreeze(value) {
 export const downloadCatalog = deepFreeze([
   {
     artifact: {
-      buildDate: '2026-08-12',
-      filename: 'kamishibai-4.0.sb3',
+      buildDate: dsl4ReleaseMetadata.buildDate,
+      filename: dsl4ReleaseMetadata.artifact.filename,
       faviconPath: 'site/favicon.png',
-      sha256: '555dd264428b660ed8390d8acb3cbade535b783731026373baf689593a1bfd6b',
-      sourceCommit: '0460c95ed40517e62a8a80bad0f86601cf5d06f3',
-      sourceDirectory: 'release-sources/4.0.0/app',
+      sha256: dsl4ReleaseMetadata.artifact.sha256,
+      sourceIdentity: dsl4ReleaseMetadata.sourceIdentity,
+      sourceDirectory: dsl4ReleaseMetadata.sourceDirectory,
     },
     description:
-      'YAML、local preview、自己完結SB3を提供する現在の安定版です。新しい作品には4.0を推奨します。',
+      'YAML、local preview、自己完結SB3を先行検証する公開候補です。安定運用には3.2.3を利用してください。',
     docsUrl: dsl4DocsUrl,
     series: '4.0',
-    recommended: true,
-    status: '安定版',
-    statusKind: 'stable',
-    version: '4.0.0',
+    status: 'リリース候補',
+    statusKind: 'development',
+    version: dsl4ReleaseMetadata.version,
   },
   {
     artifact: {
@@ -41,10 +44,11 @@ export const downloadCatalog = deepFreeze([
       sourceDirectory: 'release-sources/3.2.3/app',
     },
     description:
-      '3.1と3.2の既存作品を扱うための最終安定版です。新しく作品を作る場合は4.0を利用してください。',
+      '3.1と3.2の既存作品を扱う現在の推奨安定版です。4.0はリリース候補として先行検証できます。',
+    recommended: true,
     series: '3.2',
-    status: '過去の安定版',
-    statusKind: 'past',
+    status: '安定版',
+    statusKind: 'stable',
     version: '3.2.3',
   },
   {
@@ -86,11 +90,19 @@ for (const entry of downloadCatalog) {
   );
   if (entry.artifact) {
     assert.match(entry.artifact.sha256, /^[0-9a-f]{64}$/u, `${entry.series} SHA-256 is invalid.`);
-    assert.match(
-      entry.artifact.sourceCommit,
-      /^[0-9a-f]{40}$/u,
-      `${entry.series} source commit is invalid.`,
-    );
+    if (entry.artifact.sourceIdentity) {
+      assert.match(
+        entry.artifact.sourceIdentity,
+        /^sha256:[0-9a-f]{64}$/u,
+        `${entry.series} source identity is invalid.`,
+      );
+    } else {
+      assert.match(
+        entry.artifact.sourceCommit,
+        /^[0-9a-f]{40}$/u,
+        `${entry.series} source commit is invalid.`,
+      );
+    }
   } else {
     assert(
       entry.unavailableLabel && entry.unavailableNote,

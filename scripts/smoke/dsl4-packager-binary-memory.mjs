@@ -630,9 +630,9 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   const actorBasePath = path.join(temporaryDirectory, 'urashima-actor-base.sb3');
   const rootEntryPath = path.join(temporaryDirectory, 'urashima-root-entry.sb3');
   const release = await createKamishibaiSb3({
-    sourceDirectory: path.join(repositoryRoot, 'release-sources/4.0.0/app'),
-    version: '4.0.0',
-    buildDate: '2026-08-11',
+    sourceDirectory: path.join(repositoryRoot, 'release-sources/4.0.0-rc.1/app'),
+    version: '4.0.0-rc.1',
+    buildDate: '2026-08-12',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
   });
   await writeFile(basePath, release.archive);
