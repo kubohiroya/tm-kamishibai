@@ -9,6 +9,7 @@ const featureFlagKeys = new Set([
   'dsl4WebPreviewAdapter',
   'dsl4WebPreviewAssetLiveReload',
   'dsl4PreviewReloadOverlay',
+  'dsl4Debugger',
   'dsl4PoseFeedbackModes',
   'dsl4PosePreviewMirroring',
   'dsl4CameraPreviewControls',
@@ -28,6 +29,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4WebPreviewAdapter: false,
   dsl4WebPreviewAssetLiveReload: false,
   dsl4PreviewReloadOverlay: false,
+  dsl4Debugger: false,
   dsl4PoseFeedbackModes: false,
   dsl4PosePreviewMirroring: false,
   dsl4CameraPreviewControls: false,
@@ -51,6 +53,7 @@ export const dsl4NonEmbeddedDevelopmentFeatureFlags = deepFreeze({
   ...dsl4StandardProductionFeatureFlags,
   dsl4WebPreviewAdapter: true,
   dsl4PreviewReloadOverlay: true,
+  dsl4Debugger: true,
 });
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -98,6 +101,17 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4PreviewReloadOverlay && (!resolved.dsl4Runtime || !resolved.dsl4AppShell)) {
     throw new TypeError('dsl4PreviewReloadOverlay requires dsl4Runtime and dsl4AppShell');
+  }
+  if (
+    resolved.dsl4Debugger &&
+    (!resolved.dsl4Runtime ||
+      !resolved.dsl4AppShell ||
+      !resolved.dsl4WebPreviewAdapter ||
+      !resolved.dsl4PreviewReloadOverlay)
+  ) {
+    throw new TypeError(
+      'dsl4Debugger requires dsl4Runtime, dsl4AppShell, dsl4WebPreviewAdapter, and dsl4PreviewReloadOverlay',
+    );
   }
   if (resolved.dsl4SpeechAdvanceTypewriter && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SpeechAdvanceTypewriter requires dsl4Runtime');

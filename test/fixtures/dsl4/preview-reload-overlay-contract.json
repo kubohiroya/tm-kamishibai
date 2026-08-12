@@ -52,7 +52,10 @@
     "reloadTimestamp",
     "reloadDialogState",
     "reloadLayoutState",
-    "reloadCandidateRevision"
+    "reloadCandidateRevision",
+    "debugExecutionMode",
+    "debugPauseState",
+    "debugPauseLocation"
   ],
   "rollbackFlag": "dsl4PreviewReloadOverlay"
 }

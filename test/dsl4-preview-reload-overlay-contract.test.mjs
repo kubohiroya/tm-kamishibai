@@ -80,6 +80,9 @@ test('keeps every transient overlay field out of production artifacts', () => {
     'reloadDialogState',
     'reloadLayoutState',
     'reloadCandidateRevision',
+    'debugExecutionMode',
+    'debugPauseState',
+    'debugPauseLocation',
   ]);
   for (const field of contract.productionExclusions) assert.match(design, new RegExp(field, 'u'));
 });

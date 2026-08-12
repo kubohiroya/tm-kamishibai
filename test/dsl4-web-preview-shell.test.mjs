@@ -247,6 +247,7 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'dsl4WebPreviewAdapter',
       'dsl4WebPreviewAssetLiveReload',
       'dsl4PreviewReloadOverlay',
+      'dsl4Debugger',
     ],
     fallbackCommands: [
       'tmpose-kamishibai preview-dsl4 --watch',

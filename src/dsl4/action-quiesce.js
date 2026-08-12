@@ -9,6 +9,7 @@ export const dsl4CoreActionQuiesceModes = Object.freeze({
   bgm: 'finish-only',
   sound: 'finish-only',
   wait: 'cancel-replay-safe',
+  debugger: 'cancel-replay-safe',
   broadcastMessageAndWait: 'finish-only',
   transition: 'cancel-replay-safe',
   goto: 'finish-only',

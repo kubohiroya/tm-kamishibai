@@ -2,7 +2,7 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #390／#394／#538実装済み
+文書状態: Issue #390／#394／#538／#541実装済み
 
 ## 1. 利用条件
 
@@ -16,6 +16,7 @@ const featureFlags = {
   dsl4AppShell: true,
   dsl4WebPreviewAdapter: true,
   dsl4PreviewReloadOverlay: true,
+  dsl4Debugger: true,
 };
 ```
 
@@ -78,6 +79,29 @@ TurboWarp Editorへimageをドロップしてcostume／backdropを追加した�
 `loadProject()`し直さないため追加素材を削除せず、次のvalid YAML generationの`name`から再解決します。
 ただし、project assetの追加そのものはfilesystem watch対象ではありません。参照を追加・変更した
 YAMLを保存したときにlive reloadされます。
+
+### 3.2 debuggerとステップ実行
+
+非埋め込み Standard SB3のdevelopment runnerでは、引数なしの`debugger` actionを台本の任意位置へ
+置けます。既定の「debuggerで停止」modeでは、そのactionを実行する直前に停止します。
+
+```yaml
+scenes:
+  opening:
+    - stage: Intro
+    - debugger:
+    - wait: 1
+```
+
+reload status buttonを押して設定dialogを開くと、「debuggerで停止」と「1 actionずつ実行」を選べます。
+後者では`debugger`の有無にかかわらず各actionの直前で停止し、「次のactionを実行」を押すたびに
+現在actionを一つ実行して次のaction直前で停止します。buttonは停止理由、scene、1始まりのaction番号、
+commandを表示します。
+
+実行modeと停止位置はbrowser sessionだけの値です。YAML、project manifest、SB3、runtime variable、
+localStorageへ保存しません。埋め込み作品SB3はproduction profileなので設定UIを作らず、`debugger`を
+副作用なしで通過します。stop、dispose、live reloadは未解放のdebug停止をcancelし、live reloadでは
+同じactionを再実行できるsafe boundaryへ戻します。
 
 foregroundでは読込完了後500 msで次回pollを予約します。通常保存とatomic replaceのどちらも、同じcanonical
 integrityを二回読めた時だけstageします。連続保存や重複pollが起きても同時readは一つで、古い結果は採用しません。
@@ -154,6 +178,6 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 ## 6. rollback
 
 非埋め込みentrypointのprofileを`dsl4StandardProductionFeatureFlags`へ戻すと、picker、watcher、
-reload overlay、source-generation asset準備をまとめて無効化できます。埋め込み作品SB3は常にその
+reload overlay、debugger停止、source-generation asset準備をまとめて無効化できます。埋め込み作品SB3は常にその
 production profileなので影響を受けません。共有source frontend、Node watcher、preview protocol、
 `validate-dsl4`、`build-dsl4`はそのまま利用でき、handleを永続化しないためdata migrationは不要です。

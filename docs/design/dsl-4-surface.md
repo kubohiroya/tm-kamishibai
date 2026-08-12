@@ -666,6 +666,7 @@ iconへ反映します。
 | `stage`                   | backdrop ID、または`{backdrop, stableId?}`  |
 | `bgm` / `sound`           | sound ID、または`{sound, stableId?}`        |
 | `wait`                    | 秒数、または`{seconds, stableId?}`          |
+| `debugger`                | 引数なし（`debugger:`）                     |
 | `broadcastMessageAndWait` | message名、または`{message, stableId?}`     |
 | `transition`              | `{effect, seconds, stableId?}`              |
 | `goto`                    | scene ID、または`{scene, stableId?}`        |
@@ -676,6 +677,11 @@ iconへ反映します。
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
+
+`debugger`はdevelopment debug executionの停止境界です。`dsl4Debugger`が有効な非埋め込み
+Standard SB3ではaction実行直前に停止し、production／埋め込み作品では副作用なしのno-opとして
+直ちに完了します。引数、`stableId`、actor prefixは受理しません。実行modeとUI契約は
+[`DSL 4.0 debug execution`](dsl-4-debug-execution.md)を正本とします。
 Standard TurboWarp surfaceは3.2互換の`fadeOut`、`fadeUp`、`fadeToWhite`、`fadeFromWhite`、`reset`を
 Stageのbrightness効果として描画します。actionのskip／cancel時は効果の終端値を同期的に確定してから次へ進みます。
 

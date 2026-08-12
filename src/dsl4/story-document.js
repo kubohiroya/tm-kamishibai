@@ -318,6 +318,8 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
     args = /** @type {Record<string, unknown>} */ (
       cloneValue(/** @type {Record<string, unknown>} */ (argumentRecord?.arguments ?? {}))
     );
+  } else if (command === 'debugger' && sourceArguments === null) {
+    args = {};
   } else if (argumentRecord) {
     const routeCommand = [
       'keyInputToChangeScene',

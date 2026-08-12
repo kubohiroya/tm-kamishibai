@@ -415,6 +415,9 @@ test('is development-only and scans production projects for preview persistence'
   invalid.reloadDialogState = {open: false};
   invalid.reloadLayoutState = {resolvedAnchor: 'top-right'};
   invalid.reloadCandidateRevision = 3;
+  invalid.debugExecutionMode = 'step';
+  invalid.debugPauseState = {paused: true};
+  invalid.debugPauseLocation = {sceneId: 'opening', actionIndex: 1};
   const result = inspectDsl4ProductionPreviewExclusion(invalid);
   assert.equal(result.ok, false);
   assert.ok(result.violations.some((violation) => violation.includes('extensions')));
@@ -436,6 +439,9 @@ test('is development-only and scans production projects for preview persistence'
     'reloadDialogState',
     'reloadLayoutState',
     'reloadCandidateRevision',
+    'debugExecutionMode',
+    'debugPauseState',
+    'debugPauseLocation',
   ]) {
     assert.ok(
       result.violations.some((violation) => violation.includes(field)),

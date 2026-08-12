@@ -6,6 +6,7 @@ import {
   dsl4PreviewReloadOverlayManifest,
 } from '../src/builder/index.js';
 import {
+  createDsl4DebugExecutionCoordinator,
   createDsl4PreviewLayoutCoordinator,
   createDsl4PreviewReloadPolicy,
 } from '../src/dsl4/index.js';
@@ -25,7 +26,7 @@ function candidate(revision, overrides = {}) {
   };
 }
 
-function createSetup({surface = 'web', storage, reducedMotion = false} = {}) {
+function createSetup({surface = 'web', storage, reducedMotion = false, debugExecution} = {}) {
   const document = createFakeDocument();
   const before = document.createElement('button');
   before.id = 'preview-content-control';
@@ -61,12 +62,13 @@ function createSetup({surface = 'web', storage, reducedMotion = false} = {}) {
     mount: document.body,
     policy,
     layoutCoordinator: layout,
+    debugExecution,
     storage,
     reducedMotion,
     formatTime: (timestamp) => `time:${timestamp}`,
     onError: (error) => errors.push(error),
   });
-  return {applies, before, document, errors, layout, overlay, policy, restarts};
+  return {applies, before, debugExecution, document, errors, layout, overlay, policy, restarts};
 }
 
 test('uses one non-blocking 44px status component for Web and CLI browser surfaces', () => {
@@ -125,6 +127,51 @@ test('announces commit acknowledgement without stealing focus and keeps diagnost
   await setup.policy.acknowledge({inputId: 'ordinary-key'});
   assert.equal(setup.overlay.statusButton.getAttribute('data-reload-state'), 'diagnostic');
   setup.overlay.dispose();
+});
+
+test('selects a session-only step mode and resumes a debugger pause from the settings dialog', async () => {
+  const writes = [];
+  const debugExecution = createDsl4DebugExecutionCoordinator({enabled: true});
+  const setup = createSetup({
+    debugExecution,
+    storage: {setItem: (...entry) => writes.push(entry)},
+  });
+  const controller = new AbortController();
+  const paused = debugExecution.beforeAction({
+    command: 'debugger',
+    sceneId: 'opening',
+    actionIndex: 2,
+    actionPath: '/scenes/opening/actions/2',
+    signal: controller.signal,
+  });
+  assert.equal(setup.overlay.statusButton.getAttribute('data-debug-state'), 'paused');
+  assert.equal(
+    findById(setup.overlay.element, 'dsl4-preview-reload-status-badge').textContent,
+    'Debug',
+  );
+
+  await setup.policy.submitCandidate(candidate(1));
+  setup.overlay.statusButton.click();
+  await setup.overlay.whenIdle();
+  const step = findById(setup.overlay.element, 'dsl4-preview-debug-mode-step');
+  step.click();
+  assert.equal(debugExecution.getState().mode, 'step');
+  assert.equal(step.getAttribute('aria-checked'), 'true');
+  assert.match(
+    findById(setup.overlay.element, 'dsl4-preview-debug-summary').textContent,
+    /opening/u,
+  );
+  assert.deepEqual(writes, []);
+
+  const resume = findById(setup.overlay.element, 'dsl4-preview-debug-resume');
+  assert.equal(resume.hidden, false);
+  resume.click();
+  await paused;
+  assert.equal(debugExecution.getState().paused, false);
+  assert.equal(resume.hidden, true);
+  assert.equal(setup.overlay.getSnapshot().debug.mode, 'step');
+  setup.overlay.dispose();
+  debugExecution.dispose();
 });
 
 test('acknowledges a later meaningful preview touch but ignores the initiating pointer', async () => {

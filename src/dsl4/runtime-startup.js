@@ -15,7 +15,7 @@ export {
 
 /**
  * @typedef {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} RuntimeAssetLifecycle
- * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
+ * @typedef {Readonly<{channel: 'bundled' | 'unbundled', featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4Debugger: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>}>} RuntimeStartupContext
  * @typedef {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} RuntimeConditionEvaluator
  * @typedef {{port: Record<string, Function>, assetLifecycle?: RuntimeAssetLifecycle, evaluateCondition?: RuntimeConditionEvaluator, inputArbitration?: Record<string, Function>, dispose: (reason?: string) => unknown | Promise<unknown>}} RuntimeEnvironment
  */
@@ -101,6 +101,7 @@ function ownRuntimeEnvironment(session, environment) {
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: Readonly<Record<string, unknown>>) => void} [options.onEvent]
  * @param {(error: unknown, context: Readonly<{command: string, code: string}>) => unknown | Promise<unknown>} [options.onInputError]
+ * @param {{beforeAction: Function, getState: Function}} [options.debugExecution]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function createDsl4RuntimeStartup(options = {}) {
@@ -114,6 +115,14 @@ export async function createDsl4RuntimeStartup(options = {}) {
       session: null,
       diagnostics: [],
     });
+  }
+  if (
+    featureFlags.dsl4Debugger &&
+    (!isRecord(options.debugExecution) ||
+      typeof options.debugExecution.beforeAction !== 'function' ||
+      typeof options.debugExecution.getState !== 'function')
+  ) {
+    throw new TypeError('debugExecution is required when dsl4Debugger is enabled');
   }
   if (options.assetLifecycle !== undefined && options.createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
@@ -261,6 +270,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       historyNavigationAvailable: options.historyNavigationAvailable ?? false,
       historyLimits: options.historyLimits,
       port: runtimeEnvironment?.port ?? /** @type {Record<string, Function>} */ (options.port),
+      debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
       assetLifecycle: runtimeEnvironment?.assetLifecycle ?? options.assetLifecycle,
       createAssetLifecycle: createAssetLifecycle
         ? () => createAssetLifecycle(component, startupContext)

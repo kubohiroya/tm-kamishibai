@@ -144,6 +144,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: ActionContext) => boolean | Promise<boolean>} [options.evaluateCondition]
  * @param {(event: RuntimeEvent) => void} [options.onEvent]
  * @param {Record<string, Function>} [options.structuredDataIntegration]
+ * @param {{beforeAction: Function, getState: Function}} [options.debugExecution]
  * @param {boolean} [options.posePreviewMirroringEnabled]
  * @param {boolean} [options.cameraPreviewControlsEnabled]
  * @param {boolean} [options.poseNavigationPolicyEnabled]
@@ -162,6 +163,7 @@ export function createDsl4RuntimeController({
   evaluateCondition,
   onEvent,
   structuredDataIntegration,
+  debugExecution,
   posePreviewMirroringEnabled = false,
   cameraPreviewControlsEnabled = false,
   poseNavigationPolicyEnabled = false,
@@ -175,6 +177,14 @@ export function createDsl4RuntimeController({
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 runtime requires a StoryDocument version 4.0');
+  }
+  if (
+    debugExecution !== undefined &&
+    (!isRecord(debugExecution) ||
+      typeof debugExecution.beforeAction !== 'function' ||
+      typeof debugExecution.getState !== 'function')
+  ) {
+    throw new TypeError('debugExecution must provide beforeAction and getState');
   }
   if (typeof posePreviewMirroringEnabled !== 'boolean') {
     throw new TypeError('posePreviewMirroringEnabled must be boolean');
@@ -1089,6 +1099,7 @@ export function createDsl4RuntimeController({
     const command = String(action.command);
     const target = action.target === null ? null : String(action.target);
     const args = /** @type {Record<string, unknown>} */ (action.args);
+    if (command === 'debugger') return null;
     if (action.handler === 'custom') {
       const outcome = await invokePort(
         'customAction',
@@ -1415,6 +1426,22 @@ export function createDsl4RuntimeController({
         const actionGeneration = generation;
         actionAbortController = new AbortController();
         const context = actionContext(actionGeneration, actionAbortController.signal);
+        if (debugExecution) {
+          try {
+            await debugExecution.beforeAction({
+              command: String(currentAction()?.command ?? ''),
+              sceneId: context.sceneId,
+              actionIndex: currentActionIndex,
+              actionPath: context.actionPath,
+              signal: context.signal,
+            });
+          } catch (error) {
+            if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
+            fail(error);
+            break;
+          }
+          if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
+        }
         emit('action.start');
         let transition = null;
         try {
@@ -2075,7 +2102,8 @@ export function createDsl4RuntimeController({
       return completion.promise;
     }
     const hasActiveAction = actionAbortController !== null && currentAction() !== null;
-    if (hasActiveAction && mode === 'cancel-replay-safe') {
+    const debugPaused = debugExecution?.getState().paused === true;
+    if (hasActiveAction && (mode === 'cancel-replay-safe' || debugPaused)) {
       const sceneId = String(currentScene()?.id ?? '');
       const actionIndex = currentActionIndex;
       reposition(sceneId, {actionIndex, reason: 'live-reload-quiesce'});

@@ -12,6 +12,7 @@ const optionKeys = new Set([
   'createCoordinator',
   'createReloadSurface',
   'document',
+  'debugExecution',
   'environment',
   'featureFlags',
   'maxSourceBytes',
@@ -71,6 +72,7 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
     'dsl4WebPreviewAdapter',
     'dsl4WebPreviewAssetLiveReload',
     'dsl4PreviewReloadOverlay',
+    'dsl4Debugger',
   ],
   fallbackCommands: [
     'tmpose-kamishibai preview-dsl4 --watch',
@@ -319,6 +321,17 @@ export function createDsl4WebPreviewShell(input = {}) {
   }
   if (input.prepareSourceResult !== undefined && typeof input.prepareSourceResult !== 'function') {
     throw new TypeError('prepareSourceResult must be a function');
+  }
+  if (
+    featureFlags.dsl4Debugger &&
+    (!isRecord(input.debugExecution) ||
+      typeof input.debugExecution.beforeAction !== 'function' ||
+      typeof input.debugExecution.getState !== 'function' ||
+      typeof input.debugExecution.subscribe !== 'function' ||
+      typeof input.debugExecution.setMode !== 'function' ||
+      typeof input.debugExecution.resume !== 'function')
+  ) {
+    throw new TypeError('Web Preview requires debugExecution when dsl4Debugger is enabled');
   }
   const prepareSourceResult = input.prepareSourceResult;
   const projectRootObserver = input.onProjectRoot;
@@ -776,6 +789,7 @@ export function createDsl4WebPreviewShell(input = {}) {
           storage: input.previewStorage,
           reducedMotion: input.previewReducedMotion,
           formatTime: input.previewFormatTime,
+          debugExecution: featureFlags.dsl4Debugger ? input.debugExecution : undefined,
           onError: reportError,
         }),
       );

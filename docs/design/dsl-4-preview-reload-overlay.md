@@ -19,7 +19,14 @@ non-embedded Standard SB3 development runner, but this state cannot enter YAML, 
 SB3 persistence, an embedded-story production run, Web player, or Packager output.
 Production exclusion checks reject the persisted field names `previewReloadOverlay`,
 `reloadPreference`, `reloadTimestamp`, `reloadDialogState`, `reloadLayoutState`, and
-`reloadCandidateRevision`.
+`reloadCandidateRevision`, plus `debugExecutionMode`, `debugPauseState`, and `debugPauseLocation`.
+
+When the non-embedded development runner also enables `dsl4Debugger`, this same dialog includes a
+session-only debug execution section. It selects breakpoint or step execution, reports the current
+scene/action/reason, and exposes Resume while paused. The status button displays the debug pause ahead
+of ordinary reload status without changing reload policy state. Debug mode and pause data do not use
+the overlay storage key; only the preferred anchor is persisted. The debug execution contract is
+defined in [`DSL 4.0 debug execution`](dsl-4-debug-execution.md).
 
 ## State and priority
 

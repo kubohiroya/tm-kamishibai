@@ -124,6 +124,14 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
   if (options.onEvent !== undefined && typeof options.onEvent !== 'function') {
     throw new TypeError('onEvent must be a function');
   }
+  if (
+    featureFlags.dsl4Debugger &&
+    (!isRecord(options.debugExecution) ||
+      typeof options.debugExecution.beforeAction !== 'function' ||
+      typeof options.debugExecution.getState !== 'function')
+  ) {
+    throw new TypeError('debugExecution is required when dsl4Debugger is enabled');
+  }
 
   /** @param {Readonly<Record<string, unknown>>} storyDocument */
   async function createConcreteSession(storyDocument) {
@@ -176,6 +184,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         historyNavigationAvailable: options.historyNavigationAvailable ?? false,
         historyLimits: options.historyLimits,
         port: environment.port,
+        debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
         assetLifecycle: environment.assetLifecycle,
         evaluateCondition: environment.evaluateCondition,
         onEvent(event) {
