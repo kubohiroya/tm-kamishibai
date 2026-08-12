@@ -184,7 +184,7 @@ function createAssetPipelineFixture({transactionStatus} = {}) {
   };
 }
 
-function createShell({featureFlags = enabledFlags, presentation} = {}) {
+function createShell({featureFlags = enabledFlags, presentation, onDiagnostic} = {}) {
   const document = createFakeDocument();
   const fixture = createCoordinatorFixture();
   const errors = [];
@@ -199,6 +199,7 @@ function createShell({featureFlags = enabledFlags, presentation} = {}) {
     maxSourceBytes: 8192,
     ...(presentation === undefined ? {} : {presentation}),
     createCoordinator: fixture.createCoordinator,
+    ...(onDiagnostic === undefined ? {} : {onDiagnostic}),
     onError: (error) => errors.push(error),
   });
   return {document, errors, fixture, shell};
@@ -620,7 +621,10 @@ test('auto-applies source updates through the shared non-blocking Web/CLI reload
 });
 
 test('shows recoverable diagnostics and explicit CLI fallback without retaining source text', async () => {
-  const {fixture, shell} = createShell();
+  const diagnostics = [];
+  const {fixture, shell} = createShell({
+    onDiagnostic: (diagnostic, channel) => diagnostics.push({diagnostic, channel}),
+  });
   fixture.options.onSourceDiagnostic({
     code: 'K4-WEB-PREVIEW-UNSUPPORTED',
     severity: 'error',
@@ -640,6 +644,35 @@ test('shows recoverable diagnostics and explicit CLI fallback without retaining 
     message: 'Source is temporarily missing.',
   });
   assert.equal(shell.getSnapshot().preview.validationStatus, 'missing');
+  fixture.options.onSourceResult({
+    ok: false,
+    canonicalSource: "kamishibai: '4.0'\nunknownField: true\n",
+    sourceSnapshot: {
+      integrity: sri('invalid-source'),
+      displayName: 'story.kamishibai.yaml',
+    },
+    diagnostics: [
+      {
+        version: 1,
+        code: 'K4-SCHEMA-001',
+        severity: 'error',
+        message: 'must NOT have additional properties',
+        sourceId: 'main',
+        range: {
+          start: {line: 2, column: 1, offset: 19},
+          end: {line: 2, column: 13, offset: 31},
+        },
+        path: '$.unknownField',
+        related: [],
+      },
+    ],
+  });
+  const projected = diagnostics.at(-1);
+  assert.equal(projected.channel, 'source');
+  assert.equal(projected.diagnostic.displayName, 'story.kamishibai.yaml');
+  assert.deepEqual(projected.diagnostic.range.start, {line: 2, column: 1, offset: 19});
+  assert.equal(projected.diagnostic.path, '$.unknownField');
+  assert.equal(projected.diagnostic.excerpt, 'unknownField: true');
   assert.equal(JSON.stringify(shell.getSnapshot()).includes('must not escape'), false);
   await shell.dispose();
   assert.equal(fixture.disposed, true);

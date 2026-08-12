@@ -81,7 +81,19 @@ function safeDiagnostic(error) {
     isRecord(error) && typeof error.message === 'string'
       ? error.message.replace(/[\u0000-\u001f\u007f]/gu, ' ').slice(0, 300)
       : 'Asset snapshot could not be prepared';
-  return deepFreeze({formatVersion: 1, code, severity: 'error', message});
+  return deepFreeze({
+    formatVersion: 1,
+    code,
+    severity: 'error',
+    message,
+    ...(isRecord(error) && typeof error.displayName === 'string'
+      ? {displayName: error.displayName.slice(0, 500)}
+      : {}),
+    ...(isRecord(error) && typeof error.sourceId === 'string'
+      ? {sourceId: error.sourceId.slice(0, 200)}
+      : {}),
+    ...(isRecord(error) && typeof error.path === 'string' ? {path: error.path.slice(0, 500)} : {}),
+  });
 }
 
 /**

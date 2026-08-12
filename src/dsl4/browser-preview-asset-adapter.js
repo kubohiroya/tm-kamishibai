@@ -20,11 +20,19 @@ export const dsl4BrowserPreviewAssetDefaults = deepFreeze({
 });
 
 export class Dsl4BrowserPreviewAssetError extends Error {
-  /** @param {string} code @param {string} message @param {unknown} [cause] */
-  constructor(code, message, cause) {
+  /**
+   * @param {string} code
+   * @param {string} message
+   * @param {unknown} [cause]
+   * @param {Readonly<Record<string, unknown>>} [details]
+   */
+  constructor(code, message, cause, details = {}) {
     super(message, cause === undefined ? undefined : {cause});
     this.name = 'Dsl4BrowserPreviewAssetError';
     this.code = code;
+    if (typeof details.displayName === 'string') this.displayName = details.displayName;
+    if (typeof details.path === 'string') this.path = details.path;
+    if (typeof details.sourceId === 'string') this.sourceId = details.sourceId;
   }
 }
 
@@ -350,6 +358,9 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
   async function read(inputContext, readOptions) {
     if (!root) throw new TypeError('asset adapter has no project root');
     const context = sourceContext(inputContext);
+    const sourceSnapshot = /** @type {Readonly<Record<string, unknown>>} */ (
+      context.sourceResult.sourceSnapshot
+    );
     let permission;
     try {
       permission = await root.queryPermission({mode: 'read'});
@@ -400,18 +411,36 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
           manifestAssets.push({...common, source: {type: 'project', name: asset.name}});
           continue;
         }
-        const files =
-          asset.kind === 'poseModel'
-            ? await readPoseBundle(
-                root,
-                id,
-                asset.file,
-                limits.maxFileBytes,
-                limits.maxTotalBytes,
-                subtleCrypto,
-                readOptions.signal,
-              )
-            : await readSingleFile(root, asset.file, limits.maxFileBytes, readOptions.signal);
+        let files;
+        try {
+          files =
+            asset.kind === 'poseModel'
+              ? await readPoseBundle(
+                  root,
+                  id,
+                  asset.file,
+                  limits.maxFileBytes,
+                  limits.maxTotalBytes,
+                  subtleCrypto,
+                  readOptions.signal,
+                )
+              : await readSingleFile(root, asset.file, limits.maxFileBytes, readOptions.signal);
+        } catch (error) {
+          const mapped = mapFileError(error);
+          throw new Dsl4BrowserPreviewAssetError(
+            mapped.code,
+            mapped.code === 'K4-ASSET-MISSING'
+              ? `Referenced asset is missing: ${asset.file}`
+              : mapped.message,
+            mapped,
+            {
+              displayName: asset.file,
+              path: `$.assets[${JSON.stringify(id)}].file`,
+              sourceId:
+                typeof sourceSnapshot.sourceId === 'string' ? sourceSnapshot.sourceId : 'main',
+            },
+          );
+        }
         fileCount += files.length;
         if (fileCount > limits.maxFiles)
           fail('K4-ASSET-LIMIT-001', 'Asset snapshot exceeds maxFiles');
