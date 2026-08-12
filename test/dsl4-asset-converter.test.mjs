@@ -411,17 +411,28 @@ test('bounds and media-validates URL-only remote downloads without committing ou
     },
     'K4-ASSET-REMOTE-HOST-001',
   );
+  let timeoutSignalAborted = false;
   await attempt(
     'url-only-timeout',
     {
       timeoutMs: 1,
       fetchImplementation: async (_url, {signal}) =>
         new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(new Error('timed out')), {once: true});
+          const guard = setTimeout(() => reject(new Error('timeout signal did not abort')), 1000);
+          signal.addEventListener(
+            'abort',
+            () => {
+              timeoutSignalAborted = true;
+              clearTimeout(guard);
+              reject(new Error('timed out'));
+            },
+            {once: true},
+          );
         }),
     },
     'K4-ASSET-REMOTE-REQUEST-001',
   );
+  assert.equal(timeoutSignalAborted, true);
   await attempt(
     'url-only-oversized',
     {
