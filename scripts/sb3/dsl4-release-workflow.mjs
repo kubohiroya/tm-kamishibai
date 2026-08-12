@@ -157,6 +157,14 @@ async function listFiles(directory, relative = '') {
   return files;
 }
 
+async function readSourceFiles(directory) {
+  const files = new Map();
+  for (const relativePath of await listFiles(directory)) {
+    files.set(relativePath, await readFile(path.join(directory, relativePath)));
+  }
+  return files;
+}
+
 async function assertSourceFiles(directory, expectedFiles, repairGuidance) {
   const expectedNames = normalizedSourceFiles(expectedFiles).map(([relativePath]) => relativePath);
   assert.deepEqual(
@@ -237,8 +245,7 @@ export async function checkDsl4Release({
   verifyCatalog = true,
   verifyPackageVersion = true,
 } = {}) {
-  const metadata = await readMetadata(root);
-  assert(metadata, `Missing ${dsl4ReleaseMetadataPath}. Run pnpm release:dsl4:update.`);
+  const metadata = await verifyDsl4ReleaseSnapshot({root, verifyCatalog});
   const repairGuidance =
     metadata.state === 'candidate'
       ? `Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}; do not edit hashes by hand.`
@@ -270,6 +277,22 @@ export async function checkDsl4Release({
     const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.equal(packageJson.version, dsl4ReleaseVersion, 'package.json release version is stale.');
   }
+  return metadata;
+}
+
+export async function verifyDsl4ReleaseSnapshot({
+  root = repositoryRoot,
+  verifyCatalog = true,
+} = {}) {
+  const metadata = await readMetadata(root);
+  assert(metadata, `Missing ${dsl4ReleaseMetadataPath}. Run pnpm release:dsl4:update.`);
+  const sourceDirectory = path.join(root, dsl4ReleaseSourceDirectory);
+  const snapshotFiles = await readSourceFiles(sourceDirectory);
+  assert.equal(
+    createDsl4ReleaseSourceIdentity(snapshotFiles),
+    metadata.sourceIdentity,
+    `DSL 4 release snapshot identity is invalid. Restore ${dsl4ReleaseRoot} from version control.`,
+  );
   if (verifyCatalog) {
     const {downloadCatalog} = await import('../download-catalog.mjs');
     const catalogEntry = downloadCatalog.find(({series}) => series === dsl4ReleaseSeries);
@@ -283,6 +306,16 @@ export async function checkDsl4Release({
       '3.2.3 must remain the recommended stable release while 4.0 is a release candidate.',
     );
   }
+  return metadata;
+}
+
+export async function verifyDsl4PublishedReleaseSnapshot(options = {}) {
+  const metadata = await verifyDsl4ReleaseSnapshot(options);
+  assert.equal(
+    metadata.state,
+    'published',
+    `${dsl4ReleaseVersion} snapshot must remain published.`,
+  );
   return metadata;
 }
 
@@ -360,6 +393,13 @@ async function main() {
     );
     return;
   }
+  if (command === 'verify-published-snapshot') {
+    const metadata = await verifyDsl4PublishedReleaseSnapshot();
+    process.stdout.write(
+      `Verified ${metadata.version} ${metadata.state} snapshot: ${metadata.artifact.sha256}\n`,
+    );
+    return;
+  }
   if (command === 'freeze') {
     const metadata = await freezeDsl4Release();
     process.stdout.write(
@@ -376,7 +416,9 @@ async function main() {
     process.stdout.write(`Recorded ${metadata.version} as published.\n`);
     return;
   }
-  throw new Error('Usage: dsl4-release-workflow.mjs <update|check|freeze|record-publication>');
+  throw new Error(
+    'Usage: dsl4-release-workflow.mjs <update|check|verify-published-snapshot|freeze|record-publication>',
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
