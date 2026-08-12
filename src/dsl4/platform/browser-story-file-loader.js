@@ -7,7 +7,7 @@ import {
 } from '../source-descriptor.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
 
-const storyFilenamePattern = /\.k4\.ya?ml$/iu;
+const storyFilenamePattern = /\.(?:k4|kamishibai)\.ya?ml$/iu;
 
 export const dsl4BrowserStorySelectionDefaults = Object.freeze({
   maxEntries: 1024,

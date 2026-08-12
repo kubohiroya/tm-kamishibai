@@ -2,13 +2,14 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #390実装済み（起動時flagは既定OFF）
+文書状態: Issue #390／#538実装済み
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#262](https://github.com/kubohiroya/tmpose-kamishibai/issues/262)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#390](https://github.com/kubohiroya/tmpose-kamishibai/issues/390)
+[#390](https://github.com/kubohiroya/tmpose-kamishibai/issues/390)、
+[#538](https://github.com/kubohiroya/tmpose-kamishibai/issues/538)
 
 機械可読な契約:
 [`web-preview-adapter-contract.json`](../../test/fixtures/dsl4/web-preview-adapter-contract.json)
@@ -18,13 +19,16 @@ Copyright © 2026 Hiroya Kubo.
 
 ## 1. 結論
 
-一般作者向けの既定preview導線は、HTTPSのtop-level pageでproject rootをread-only選択するWeb
-Previewとします。初版はChromium系desktop browserをTier 1とし、`FileSystemObserver`には依存せず、
-`FileSystemDirectoryHandle`からmanifest指定fileを再取得するpollingを正本とします。
+一般作者向けの既定preview導線は、HTTPSのtop-level pageで非埋め込み Standard SB3を開き、
+メニューから台本ファイルまたはproject rootをread-only選択するWeb Previewとします。初版は
+Chromium系desktop browserをTier 1とし、`FileSystemObserver`には依存せず、File System Access handleから
+対象fileを再取得するpollingを正本とします。
 
 browser adapter、Node watcher、runtimeは別々のlive reloadを実装しません。両adapterは同じsource frontendの
 結果をversion 1 preview protocolへ渡し、runtimeはpath、URL、filesystem handle、permission、poll timerを
-受け取りません。Web Previewは台本editorでもbuilderでもなく、YAML以外の変更はlocal full rebuildへ案内します。
+受け取りません。Web Previewは台本editorでもbuilderでもありません。非埋め込みSB3では
+次のvalid YAML generationを作る際に宣言済みlocal／remote／SB3内project assetを再準備しますが、
+assetだけの変更を独立に検出する取引は`dsl4WebPreviewAssetLiveReload`の別契約です。
 
 ## 2. 現行実装と前提
 
@@ -37,6 +41,8 @@ browser adapter、Node watcher、runtimeは別々のlive reloadを実装しま�
 - `createDsl4PreviewSourceProtocolPort`: browser／Node共通のrevision、stage、commit、defer
 - `createDsl4BrowserPreviewCoordinator`: source adapterとprotocolのsession接続
 - `createDsl4WebPreviewShell`: project open、watch status、診断、reload UI、CLI fallback
+- `createDsl4BrowserPreviewRuntimeComponent`: source generation単位のlocal／remote／project asset準備
+- 非埋め込み Standard SB3: 台本file／project directory選択、既定development profile
 - `createDsl4PreviewReloadSurface`: valid generationの非blocking自動reload、status button、手動再開方針
 - `dsl4AppShell`、`dsl4WebPreviewAdapter`、`dsl4PreviewReloadOverlay`: 起動時固定、既定OFFのflag
 - `validate-dsl4`と`build-dsl4`: local検証とfull rebuild
@@ -76,13 +82,19 @@ Tier 1でもprivate browsing、enterprise policy、OS picker制限、permission�
 adapterはbrowser familyをallowlistにせず、APIの存在、secure context、実際のpicker結果、handle操作結果を順に
 判定します。
 
-## 4. project openとpath境界
+## 4. story file／project openとpath境界
 
-「プロジェクトを開く」buttonの同期click handlerからだけ次を開始します。
+非埋め込みSB3の「Open」は台本file／project directory／キャンセルのchooserを開きます。
+pickerはそれぞれのbuttonの同期click handlerから直接開始し、user activationを失いません。
 
 ```js
+await globalThis.showOpenFilePicker({multiple: false, types: yamlTypes});
 await globalThis.showDirectoryPicker({mode: 'read'});
 ```
+
+台本file選択は選択済みfile handleとsession-only manifestをsynthetic project rootにまとめ、同じ
+adapterで監視します。そのfile以外のhandleを持たないため、SB3内project assetとremote assetは
+利用できますが、local `file` assetは`K4-ASSET-PROJECT-DIRECTORY-REQUIRED`として拒否します。
 
 adapterは選択されたroot直下の`project.source.json`だけを最初に読みます。manifestは既存
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
@@ -115,7 +127,9 @@ YAML内のlocal asset pathはproject root基準です。YAML自体をroot直下�
 
 manifestのraw上限は32 KiBです。UTF-8をfatal decodeし、JSON objectと既存manifest schemaを検証します。
 初版session中にmanifestが変更された場合はadapter設定を暗黙更新せず、project再選択またはlocal full rebuildを
-要求します。YAML以外のasset、base SB3、app shell、extension、builder設定、`controlProfile`も読みません。
+要求します。base SB3、app shell、extension、builder設定、`controlProfile`は読みません。YAMLが
+宣言したlocal asset pathだけを毎generation二重読込し、remote metadataと現在のTurboWarp VM内project
+asset referenceと一緒にsession-only runtime componentへ固定します。
 
 ## 5. pollingと安定読込
 
@@ -209,6 +223,9 @@ exception messageを作者向けmessageやtelemetryへ含めません。
 | `K4-SOURCE-SIZE-001`                   | error    | source上限超過                         | sourceを縮小                      |
 | `K4-SOURCE-UTF8-001`                   | error    | sourceがvalid UTF-8ではない            | encodingを修正                    |
 | `K4-PREVIEW-SOURCE-UNSTABLE`           | warning  | timeout内に同じintegrityを二回読めない | 現在実行を継続し次pollでretry     |
+| `K4-ASSET-PROJECT-DIRECTORY-REQUIRED`  | error    | 台本file単体でlocal assetを宣言        | project directoryを再選択         |
+| `K4-ASSET-MISSING`                     | error    | 宣言したlocal assetがない              | 現在実行を継続しretry             |
+| `K4-ASSET-UNSTABLE-001`                | warning  | assetが二重読込中に変更された          | 現在実行を継続しretry             |
 | `K4-WEB-PREVIEW-FULL-REBUILD-REQUIRED` | warning  | YAML以外のfingerprintが変化            | local `build-dsl4`                |
 | `K4-WEB-PREVIEW-PROTOCOL-001`          | error    | protocol接続／capabilityが不正         | adapterをstopしlocal fallback     |
 
@@ -231,8 +248,9 @@ dsl4Runtime=true
        └─ dsl4PreviewReloadOverlay=true
 ```
 
-四つとも起動時固定、既定OFFです。`dsl4PreviewReloadOverlay`はWeb／CLI共通なのでWeb adapterの子ではありませんが、
-Web Previewで現行の非blocking auto reload UXを使う場合は両方をONにします。依存先がOFFのまま子flagだけをONにした
+四つとも起動時固定で、共通defaultはOFFです。非埋め込み Standard SB3のentrypointは制作・debug
+runnerとして専用の`dsl4NonEmbeddedDevelopmentFeatureFlags`からWeb adapterとreload overlayをONにします。
+埋め込み台本はproduction profileを使い、初期化しません。依存先がOFFのまま子flagだけをONにした
 設定は起動前に拒否し、暗黙に親flagをONにしません。`dsl4WebPreviewAdapter=false`ではproject open button、
 feature detection、permission request、visibility listener、poll timer、observer、browser adapterを初期化しません。
 
@@ -257,8 +275,11 @@ stop、project再選択、`pagehide`、shell disposeは同じidempotent cleanup�
 5. pending readの完了を待たずstale扱いにし、結果をpublishしない
 6. handle、bytes、candidate、modalへのapplication referenceを破棄する
 
-production SB3、通常のTurboWarp editor読込、Web player、PackagerはWeb Preview moduleをimport、登録、保存しません。
-既存production exclusion fixtureへ`browserPreviewHandle`、`browserPreviewTimer`、
+配布Standard SB3のextension sourceはWeb Preview moduleを含みますが、非埋め込み
+`application.mode=menu`でだけ初期化します。埋め込み`application.mode=story`、Web player、
+Packagerのproduction実行ではpicker、watcher、preview sessionを初期化しません。directory／file handle、
+candidate、reload preference、dialog stateはどのSB3にも保存しません。既存production exclusion fixtureへ
+`browserPreviewHandle`、`browserPreviewTimer`、
 `browserPreviewCandidate`、`browserPreviewModalState`を追加して検査します。
 
 ## 10. fallback文言と実在command
@@ -347,10 +368,10 @@ Chrome／Edge、OS、version、sample数とともにIssueへ記録しますが�
 4. `dsl4AppShell`、`dsl4WebPreviewAdapter`、`dsl4PreviewReloadOverlay`を既定OFFでUIへ接続
 5. Chromium fixture、作者向け手順、既存local validate／build fallback
 
-1〜5とlocal live preview commandは実装済みです。Edgeと実editorのlatency測定は一般作者向け
-既定ONのrelease gateとして追跡します。
+1〜5、local live preview command、非埋め込みSB3の既定development profileは実装済みです。
+Edgeと実editorのlatency測定はTier 1品質確認として追跡します。
 
-`dsl4PreviewReloadOverlay=false`は共通status buttonと自動適用方針を無効化し、legacy blocking candidate surfaceへ
-戻します。`dsl4WebPreviewAdapter=false`はWeb固有UIとadapterを初期化しない状態へ戻します。共有source frontend、
+非埋め込みentrypointのprofileを`dsl4StandardProductionFeatureFlags`へ戻すとWeb固有UI、adapter、
+reload overlayを初期化しない状態へ戻します。共有source frontend、
 preview protocol、Node watcher、CLI validate/buildはrevertしません。handleを永続化しないため、rollbackに
 IndexedDB migrationやcleanupはありません。DSL 3.1／3.2とproduction artifactを変更しません。

@@ -20,12 +20,15 @@ const optionKeys = new Set([
   'maxIncludeDepth',
   'mount',
   'onError',
+  'onProjectRoot',
+  'prepareSourceResult',
   'protocolSession',
   'previewFormatTime',
   'previewReducedMotion',
   'previewSafeArea',
   'previewStorage',
   'previewViewport',
+  'presentation',
   'sessionId',
   'sourceFrontend',
   'sourceOptions',
@@ -304,9 +307,21 @@ export function createDsl4WebPreviewShell(input = {}) {
   }
   const document = requireDocument(input.document);
   const mount = requireElement(input.mount, 'mount');
+  const presentation = input.presentation ?? 'full';
+  if (!['full', 'runtime'].includes(String(presentation))) {
+    throw new TypeError('Web Preview presentation must be full or runtime');
+  }
   if (input.onError !== undefined && typeof input.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
+  if (input.onProjectRoot !== undefined && typeof input.onProjectRoot !== 'function') {
+    throw new TypeError('onProjectRoot must be a function');
+  }
+  if (input.prepareSourceResult !== undefined && typeof input.prepareSourceResult !== 'function') {
+    throw new TypeError('prepareSourceResult must be a function');
+  }
+  const prepareSourceResult = input.prepareSourceResult;
+  const projectRootObserver = input.onProjectRoot;
   const errorObserver = /** @type {Function | undefined} */ (input.onError);
   const createCoordinator = input.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
   if (typeof createCoordinator !== 'function') {
@@ -334,6 +349,7 @@ export function createDsl4WebPreviewShell(input = {}) {
   const host = element(document, 'section');
   host.id = 'dsl4-web-preview-shell';
   host.setAttribute('data-dsl4-development-only', 'true');
+  host.setAttribute('data-preview-presentation', String(presentation));
   host.setAttribute('aria-labelledby', 'dsl4-web-preview-title');
   const title = element(document, 'h1', 'DSL 4.0 Web Preview');
   title.id = 'dsl4-web-preview-title';
@@ -369,6 +385,19 @@ export function createDsl4WebPreviewShell(input = {}) {
   host.appendChild(diagnosticStatus);
   host.appendChild(fallback);
   host.appendChild(reloadMount);
+  if (presentation === 'runtime') {
+    for (const element of [
+      title,
+      introduction,
+      openButton,
+      watchStatus,
+      diagnosticStatus,
+      fallback,
+    ]) {
+      element.hidden = true;
+    }
+    reloadMount.hidden = true;
+  }
   mount.appendChild(host);
 
   let disposed = false;
@@ -450,6 +479,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       !featureFlags.dsl4SourceIncludes ||
       !featureFlags.dsl4WebPreviewAssetLiveReload
     ) {
+      await prepareSourceResult?.(result);
       return;
     }
     await queueAssetSource(result);
@@ -457,11 +487,13 @@ export function createDsl4WebPreviewShell(input = {}) {
     if (!transaction || !['ready', 'active'].includes(transaction.status)) {
       throw new TypeError('Source Graph assets must be stable before source candidate staging');
     }
+    await prepareSourceResult?.(result);
   }
 
   /** @param {Readonly<Record<string, any>>} projectRoot */
-  function setProjectRoot(projectRoot) {
+  async function setProjectRoot(projectRoot) {
     selectedProjectRoot = projectRoot;
+    await projectRootObserver?.(projectRoot);
     if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
   }
 
@@ -874,6 +906,11 @@ export function createDsl4WebPreviewShell(input = {}) {
       await assetSourceQueue;
       if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
       return snapshot();
+    },
+    /** @param {'storyStart' | 'currentScene' | 'currentAction'} choice */
+    restart(choice) {
+      if (disposed) throw new TypeError('Web Preview shell is disposed');
+      return coordinator.restart(choice);
     },
     async whenIdle() {
       await coordinator.whenIdle();

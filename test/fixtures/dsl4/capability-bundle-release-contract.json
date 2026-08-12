@@ -25,7 +25,9 @@
     "bundleManifest": "release-sources/4.0.0/app/embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
-    "includesPreviewSurface": false
+    "includesPreviewSurface": true,
+    "previewActivation": "nonembedded-menu-default",
+    "embeddedStoryPreview": false
   },
   "capabilities": [
     {
@@ -170,7 +172,9 @@
     "remotePreview": "forbidden",
     "transport": "loopback-origin-token-root-restricted",
     "productionPersistence": "forbidden",
-    "localPreviewHost": "tracked-by-issue-258"
+    "localPreviewHost": "tracked-by-issue-258",
+    "nonembeddedStandard": "development-by-default",
+    "embeddedStory": "production-no-preview"
   },
   "titleLifecycle": {
     "reference": "https://kubohiroya.github.io/tmpose-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
@@ -213,6 +217,8 @@
     "test/dsl4-preview-transport-policy.test.mjs",
     "test/dsl4-preview-protocol.test.mjs",
     "test/dsl4-live-reload-session.test.mjs",
+    "test/dsl4-browser-preview-runtime-component.test.mjs",
+    "test/dsl4-runtime-source-chooser.test.mjs",
     "test/dsl4-embedded-asset-lifecycle.test.mjs",
     "test/dsl4-pose-action-port.test.mjs",
     "test/dsl4-bubble-platform.test.mjs",

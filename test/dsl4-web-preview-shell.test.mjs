@@ -175,7 +175,7 @@ function createAssetPipelineFixture({transactionStatus} = {}) {
   };
 }
 
-function createShell({featureFlags = enabledFlags} = {}) {
+function createShell({featureFlags = enabledFlags, presentation} = {}) {
   const document = createFakeDocument();
   const fixture = createCoordinatorFixture();
   const errors = [];
@@ -188,6 +188,7 @@ function createShell({featureFlags = enabledFlags} = {}) {
     sessionId: 'web-preview-test',
     sourceFrontend: {parse() {}},
     maxSourceBytes: 8192,
+    ...(presentation === undefined ? {} : {presentation}),
     createCoordinator: fixture.createCoordinator,
     onError: (error) => errors.push(error),
   });
@@ -423,6 +424,28 @@ test('opens the picker directly from a button activation and renders watch statu
   assert.equal(button.disabled, true);
   assert.match(status.textContent, /Watching/u);
   await shell.whenIdle();
+});
+
+test('hides host chrome while retaining the reload overlay for the non-embedded runtime', async () => {
+  const {fixture, shell} = createShell({
+    featureFlags: {...enabledFlags, dsl4PreviewReloadOverlay: true},
+    presentation: 'runtime',
+  });
+  assert.equal(shell.element.getAttribute('data-preview-presentation'), 'runtime');
+  for (const id of [
+    'dsl4-web-preview-title',
+    'dsl4-web-preview-open-project',
+    'dsl4-web-preview-watch-status',
+    'dsl4-web-preview-diagnostic',
+    'dsl4-web-preview-fallback',
+    'dsl4-web-preview-reload-mount',
+  ]) {
+    assert.equal(findById(shell.element, id).hidden, true, `${id} must remain hidden`);
+  }
+  assert(findById(shell.element, 'dsl4-preview-reload-status-button'));
+  await shell.restart('storyStart');
+  assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
+  await shell.dispose();
 });
 
 test('maps staged sources and reload choices onto the existing accessible shell', async () => {

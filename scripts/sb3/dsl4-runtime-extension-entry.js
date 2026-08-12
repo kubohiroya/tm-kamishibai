@@ -1,8 +1,18 @@
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
-import {dsl4StandardProductionFeatureFlags} from '../../src/dsl4/feature-flags.js';
+import {createDsl4WebPreviewShell} from '../../src/builder/dsl4-web-preview-shell.js';
+import {
+  createDsl4BrowserPreviewStoryFileProject,
+  inspectDsl4BrowserPreviewSupport,
+} from '../../src/dsl4/browser-preview-source-adapter.js';
+import {
+  dsl4NonEmbeddedDevelopmentFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
+} from '../../src/dsl4/feature-flags.js';
+import {createDsl4LiveReloadSession} from '../../src/dsl4/live-reload-session.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
+import {createDsl4BrowserPreviewRuntimeComponent} from '../../src/dsl4/platform/browser-preview-runtime-component.js';
 import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
@@ -11,6 +21,7 @@ import {createDsl4BundledTMPoseRuntime} from '../../src/dsl4/platform/posenet-bu
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../src/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
+import {createDsl4RuntimeSourceChooser} from '../../src/dsl4/platform/runtime-source-chooser.js';
 import {createDsl4RuntimeTitleControls} from '../../src/dsl4/platform/runtime-title-controls.js';
 import {createDsl4RuntimeWarningIndicator} from '../../src/dsl4/platform/runtime-warning-indicator.js';
 import {
@@ -18,7 +29,10 @@ import {
   createDsl4SessionBackingWarningDiagnostic,
 } from '../../src/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
+import {createDsl4TurboWarpPreviewSessionFactory} from '../../src/dsl4/platform/turbowarp-preview-session.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
+import {createDsl4PreviewProtocolSession} from '../../src/dsl4/preview-protocol.js';
+import {loadDsl4RuntimeComponent} from '../../src/dsl4/runtime-artifact-loader.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
@@ -45,7 +59,13 @@ const sourceDiagnosticPrefixes = Object.freeze([
   'K4-ASSET-IMAGE-MIME',
   'K4-ASSET-LIMIT',
   'K4-ASSET-MISSING',
+  'K4-ASSET-PATH',
+  'K4-ASSET-PERMISSION',
+  'K4-ASSET-POSE',
+  'K4-ASSET-PREPARE',
+  'K4-ASSET-PROJECT',
   'K4-ASSET-REMOTE-URL',
+  'K4-ASSET-UNSTABLE',
   'K4-BRANCH',
   'K4-COMMAND',
   'K4-EXPRESSION',
@@ -86,6 +106,26 @@ function resolveBundledTMPoseRuntime() {
 
 function browserLocale() {
   return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
+}
+
+/** @param {unknown} error */
+function pickerWasCancelled(error) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    /** @type {{name?: unknown}} */ (error).name === 'AbortError'
+  );
+}
+
+function filePickerSupported() {
+  if (globalThis.isSecureContext !== true || typeof globalThis.showOpenFilePicker !== 'function') {
+    return false;
+  }
+  try {
+    return globalThis.self === globalThis.top;
+  } catch {
+    return false;
+  }
 }
 
 /** @param {Record<string, any>} project */
@@ -130,9 +170,13 @@ class KamishibaiDsl4RuntimeExtension {
     this.lastError = '';
     this.titleLocale = 'en';
     this.selectedProject = null;
+    this.previewShell = null;
+    this.previewLiveReload = null;
+    this.previewHasCurrent = false;
     this.fileInput = null;
     this.applicationMenu = null;
     this.titleControls = null;
+    this.sourceChooser = null;
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
@@ -369,6 +413,30 @@ class KamishibaiDsl4RuntimeExtension {
     return this.titleControls;
   }
 
+  ensureSourceChooser() {
+    if (this.sourceChooser) return this.sourceChooser;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    try {
+      this.sourceChooser = createDsl4RuntimeSourceChooser({
+        document,
+        mount: resolveRuntimeMount(this.Scratch),
+        locales: {
+          en: appShellLocales.en.ui,
+          ja: appShellLocales.ja.ui,
+        },
+        onFile: () => this.openWatchedStoryFile(),
+        onProject: () => this.openWatchedProjectDirectory(),
+        onCancel: () => this.cancelSourceChoice(),
+        onError: (error) => this.reportFailure(error, 'source-chooser'),
+      });
+    } catch (error) {
+      console.error('[Kamishibai DSL 4.0] source chooser failed.', loggedError(error));
+      return null;
+    }
+    return this.sourceChooser;
+  }
+
   installDropTarget() {
     const mount = resolveRuntimeMount(this.Scratch);
     if (
@@ -396,8 +464,215 @@ class KamishibaiDsl4RuntimeExtension {
     mount.addEventListener('drop', onDrop);
   }
 
+  async initializeNonEmbeddedPreview(project) {
+    if (this.previewShell) return this.previewShell;
+    const document = globalThis.document;
+    if (!document || Array.isArray(document.scripts)) return null;
+    const component = await loadDsl4RuntimeComponent(project, this.frontend, {
+      ...limits,
+      subtleCrypto: globalThis.crypto?.subtle,
+    });
+    if (!component.ok) {
+      const diagnostic = component.diagnostics?.[0];
+      const error = new Error(
+        diagnostic?.message ?? 'The non-embedded DSL 4.0 preview component is invalid.',
+      );
+      if (typeof diagnostic?.code === 'string') {
+        Object.defineProperty(error, 'code', {value: diagnostic.code});
+      }
+      throw error;
+    }
+
+    const Scratch = this.Scratch;
+    const mount = resolveRuntimeMount(Scratch);
+    const loadRemoteAsset = createDsl4BrowserRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
+    /** @type {Record<string, any> | null} */
+    let previewProjectRoot = null;
+    const generationComponents = new WeakMap();
+    let liveReload;
+    const createSession = createDsl4TurboWarpPreviewSessionFactory({
+      featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
+      runtimeComponent: component,
+      resolveRuntimeComponent({storyDocument}) {
+        const generation = generationComponents.get(storyDocument);
+        if (!generation) {
+          throw new TypeError('The preview source generation has no prepared runtime component');
+        }
+        return generation;
+      },
+      runtime: Scratch.vm.runtime,
+      resetManagedPresentation: () => {
+        this.hideScratchTitle();
+        this.hideScratchMenu();
+        this.hideAllDisplayTargets();
+      },
+      inputTarget: Scratch.vm.renderer?.canvas,
+      stagePointerTarget: Scratch.vm.renderer?.canvas,
+      createHostPort: async ({runtime}) => createDsl4TurboWarpTransitionPort({runtime}),
+      tmPoseRuntime: createDsl4BundledTMPoseRuntime({
+        runtime: resolveBundledTMPoseRuntime(),
+        globalObject: globalThis,
+      }),
+      setLoading() {},
+      loadRemoteAsset,
+      subtleCrypto: globalThis.crypto?.subtle,
+      onEvent: (event) => {
+        if (this.previewLiveReload !== liveReload) return;
+        if (event.type === 'runtime.start' || event.type === 'runtime.resume') {
+          this.previewHasCurrent = true;
+          this.hideScratchTitle();
+          this.hideScratchMenu();
+          this.status = 'running';
+          return;
+        }
+        if (event.type === 'runtime.finish') {
+          this.status = 'menu';
+          this.showScratchMenu(this.titleLocale);
+          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            BROADCAST_OPTION: 'showMenu',
+          });
+          return;
+        }
+        if (event.type === 'runtime.fail') {
+          this.reportFailure(event.diagnostic ?? 'DSL 4.0 preview execution failed.', 'preview');
+        }
+      },
+    });
+    liveReload = createDsl4LiveReloadSession({
+      createSession,
+      onRunError: (error) => this.reportFailure(error, 'preview-runtime'),
+    });
+    const protocolSession = createDsl4PreviewProtocolSession({liveReloadSession: liveReload});
+    let previewStorage;
+    try {
+      previewStorage = globalThis.localStorage;
+    } catch {
+      previewStorage = undefined;
+    }
+    let previewShell;
+    try {
+      previewShell = createDsl4WebPreviewShell({
+        environment: 'development',
+        presentation: 'runtime',
+        document,
+        mount,
+        featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
+        protocolSession,
+        sessionId: 'nonembedded-sb3',
+        sourceFrontend: this.frontend,
+        maxSourceBytes: limits.maxSourceBytes,
+        onProjectRoot: (projectRoot) => {
+          previewProjectRoot = projectRoot;
+        },
+        prepareSourceResult: async (result) => {
+          if (result.ok !== true) return;
+          const generation = await createDsl4BrowserPreviewRuntimeComponent({
+            baseComponent: component,
+            sourceResult: result,
+            projectRoot: previewProjectRoot,
+            maxAssetFileBytes: limits.maxAssetBytes,
+            maxAssetFiles: limits.maxAssetFiles,
+            maxAssetBytes: limits.maxAssetBytes,
+            subtleCrypto: globalThis.crypto?.subtle,
+          });
+          generationComponents.set(result.storyDocument, generation);
+        },
+        ...(previewStorage === undefined ? {} : {previewStorage}),
+        onError: (error) => this.reportFailure(error, 'preview-shell'),
+      });
+    } catch (error) {
+      await liveReload.dispose();
+      throw error;
+    }
+    this.previewLiveReload = liveReload;
+    this.previewShell = previewShell;
+    this.previewHasCurrent = false;
+    return previewShell;
+  }
+
   openStoryFile() {
     if (this.status !== 'menu') return undefined;
+    const projectSupported = inspectDsl4BrowserPreviewSupport({globalObject: globalThis}).supported;
+    const storyFileSupported = filePickerSupported();
+    if (this.previewShell && (storyFileSupported || projectSupported)) {
+      this.hideScratchMenu();
+      const chooser = this.ensureSourceChooser();
+      if (chooser) {
+        chooser.show(this.titleLocale, {
+          fileEnabled: storyFileSupported,
+          projectEnabled: projectSupported,
+        });
+        return undefined;
+      }
+      this.showScratchMenu(this.titleLocale);
+    }
+    return this.openOneShotStoryFile();
+  }
+
+  async completeWatchedSourceOpen(opening) {
+    try {
+      const state = await opening;
+      if (state?.source?.started !== true && this.status !== 'error') {
+        this.cancelSourceChoice();
+      }
+      return state;
+    } catch (error) {
+      if (pickerWasCancelled(error)) {
+        this.cancelSourceChoice();
+        return undefined;
+      }
+      if (this.status !== 'error') this.cancelSourceChoice();
+      throw error;
+    }
+  }
+
+  openWatchedProjectDirectory() {
+    if (this.status !== 'menu' || !this.previewShell) return undefined;
+    this.sourceChooser?.hide();
+    this.status = 'starting';
+    return this.completeWatchedSourceOpen(this.previewShell.openProject());
+  }
+
+  async openWatchedStoryFile() {
+    if (this.status !== 'menu' || !this.previewShell) return undefined;
+    const picker = globalThis.showOpenFilePicker;
+    if (typeof picker !== 'function') throw new Error('This browser cannot watch a story file.');
+    this.sourceChooser?.hide();
+    this.status = 'starting';
+    let handles;
+    try {
+      handles = await picker({
+        multiple: false,
+        types: [
+          {
+            description: 'Kamishibai DSL 4.0 YAML',
+            accept: {'application/yaml': ['.yml', '.yaml']},
+          },
+        ],
+      });
+    } catch (error) {
+      if (pickerWasCancelled(error)) {
+        this.cancelSourceChoice();
+        return undefined;
+      }
+      throw error;
+    }
+    if (!Array.isArray(handles) || handles.length !== 1) {
+      throw new TypeError('Select exactly one DSL 4.0 story file');
+    }
+    const projectRoot = createDsl4BrowserPreviewStoryFileProject(handles[0]);
+    return this.completeWatchedSourceOpen(this.previewShell.start(projectRoot));
+  }
+
+  cancelSourceChoice() {
+    this.sourceChooser?.hide();
+    if (this.status !== 'error') {
+      this.status = 'menu';
+      this.showScratchMenu(this.titleLocale);
+    }
+  }
+
+  openOneShotStoryFile() {
     const document = globalThis.document;
     if (!document || typeof document.createElement !== 'function') {
       throw new Error('This browser cannot open a DSL 4.0 story file.');
@@ -471,6 +746,22 @@ class KamishibaiDsl4RuntimeExtension {
 
   reloadStory() {
     if (this.status !== 'menu') return undefined;
+    if (this.previewShell && this.previewHasCurrent) {
+      const previewShell = this.previewShell;
+      this.hideScratchMenu();
+      this.status = 'starting';
+      return this.enqueue(async () => {
+        try {
+          await previewShell.restart('storyStart');
+        } catch (error) {
+          if (this.status !== 'error') {
+            this.status = 'menu';
+            this.showScratchMenu(this.titleLocale);
+          }
+          throw error;
+        }
+      }, 'story-reload');
+    }
     const packagedProject = JSON.parse(this.Scratch.vm.toJSON());
     const project =
       this.selectedProject ??
@@ -547,9 +838,12 @@ class KamishibaiDsl4RuntimeExtension {
     const runtime = this.Scratch.vm.runtime;
     const stage = runtime.getTargetForStage();
     this.hideScratchTitle();
+    this.sourceChooser?.hide();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
     const menu = this.ensureApplicationMenu();
-    menu?.setReloadEnabled(this.selectedProject !== null || this.shell !== null);
+    menu?.setReloadEnabled(
+      this.selectedProject !== null || this.shell !== null || this.previewHasCurrent,
+    );
     menu?.show(locale);
     this.setStageCursor('pointer');
   }
@@ -602,6 +896,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.lastError = message;
     this.hideScratchTitle();
     this.hideScratchMenu();
+    this.sourceChooser?.hide();
     try {
       this.errorIndicator ??= createDsl4RuntimeErrorIndicator({
         document: globalThis.document,
@@ -621,6 +916,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.pendingStart = null;
     this.hideScratchTitle();
     this.hideScratchMenu();
+    this.sourceChooser?.hide();
     const errorIndicator = this.errorIndicator;
     this.errorIndicator = null;
     errorIndicator?.dispose();
@@ -630,7 +926,28 @@ class KamishibaiDsl4RuntimeExtension {
     const shell = this.shell;
     this.shell = null;
     this.binaryRuntimeSurface = null;
-    if (shell) await shell.dispose(reason);
+    const previewShell = this.previewShell;
+    const previewLiveReload = this.previewLiveReload;
+    this.previewShell = null;
+    this.previewLiveReload = null;
+    this.previewHasCurrent = false;
+    const failures = [];
+    for (const dispose of [
+      shell ? () => shell.dispose(reason) : null,
+      previewShell ? () => previewShell.dispose() : null,
+      previewLiveReload ? () => previewLiveReload.dispose() : null,
+    ]) {
+      if (!dispose) continue;
+      try {
+        await dispose();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'DSL 4.0 runtime cleanup failed');
+    }
     if (['running', 'starting', 'title'].includes(this.status)) this.status = 'stopped';
   }
 
@@ -647,6 +964,14 @@ class KamishibaiDsl4RuntimeExtension {
       forceStory || this.selectedProject ? 'story' : packagedApplicationMode(project);
     this.titleLocale = browserLocale();
     if (applicationMode === 'menu') {
+      try {
+        await this.initializeNonEmbeddedPreview(project);
+      } catch (error) {
+        console.warn(
+          '[Kamishibai DSL 4.0] development preview is unavailable; using one-shot file loading.',
+          loggedError(error),
+        );
+      }
       const showMenu = async () => {
         if (this.shell !== null) return;
         this.pendingStart = null;

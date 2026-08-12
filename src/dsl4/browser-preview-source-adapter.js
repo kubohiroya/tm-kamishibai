@@ -63,6 +63,15 @@ const diagnosticMessages = Object.freeze({
   'K4-SOURCE-UTF8-001': 'The DSL 4.0 source is not valid UTF-8',
   'K4-PREVIEW-SOURCE-UNSTABLE':
     'The DSL 4.0 source did not become stable before the preview retry limit',
+  'K4-ASSET-MISSING': 'A local asset declared by the DSL 4.0 source is missing',
+  'K4-ASSET-PATH-001': 'A local asset path is outside the selected project directory',
+  'K4-ASSET-PERMISSION-001': 'Read access to a declared local asset was denied or revoked',
+  'K4-ASSET-POSE-BUNDLE-001': 'A declared pose model directory is incomplete or invalid',
+  'K4-ASSET-PREPARE-001': 'A declared preview asset could not be prepared',
+  'K4-ASSET-PROJECT-DIRECTORY-REQUIRED':
+    'Local file assets require opening a project directory instead of one story file',
+  'K4-ASSET-LIMIT-001': 'Declared preview assets exceed a configured resource limit',
+  'K4-ASSET-UNSTABLE-001': 'Declared preview assets did not become stable before the retry limit',
   'K4-INCLUDE-CYCLE': 'The DSL 4.0 source includes contain a cycle',
   'K4-INCLUDE-LIMIT-001': 'The DSL 4.0 source includes exceed a configured limit',
   'K4-INCLUDE-READ-001': 'An included DSL 4.0 source could not be read',
@@ -70,6 +79,17 @@ const diagnosticMessages = Object.freeze({
   'K4-INCLUDE-SOURCE-001': 'An included DSL 4.0 source must be a mapping',
   'K4-DECLARATION-DUPLICATE': 'A DSL 4.0 declaration is duplicated across sources',
 });
+
+const sourcePreparationDiagnosticCodes = new Set([
+  'K4-ASSET-LIMIT-001',
+  'K4-ASSET-MISSING',
+  'K4-ASSET-PATH-001',
+  'K4-ASSET-PERMISSION-001',
+  'K4-ASSET-POSE-BUNDLE-001',
+  'K4-ASSET-PREPARE-001',
+  'K4-ASSET-PROJECT-DIRECTORY-REQUIRED',
+  'K4-ASSET-UNSTABLE-001',
+]);
 
 export class Dsl4BrowserPreviewSourceError extends Error {
   /** @param {string} code @param {string} message @param {unknown} [cause] */
@@ -151,7 +171,12 @@ function errorName(error) {
 
 /** @param {unknown} error */
 function expectedError(error) {
-  return error instanceof Dsl4BrowserPreviewSourceError;
+  return (
+    error instanceof Dsl4BrowserPreviewSourceError ||
+    (isRecord(error) &&
+      typeof error.code === 'string' &&
+      sourcePreparationDiagnosticCodes.has(error.code))
+  );
 }
 
 /** @param {string} code @param {'error' | 'warning'} severity @param {string} sourceId */
@@ -331,6 +356,58 @@ export function inspectDsl4BrowserPreviewSupport({globalObject = globalThis} = {
     secureContext: true,
     topLevel,
     directoryPicker,
+  });
+}
+
+/**
+ * Adapt one File System Access file handle to the project-root contract used by the watched source
+ * adapter. The synthetic root deliberately cannot resolve sibling local assets.
+ *
+ * @param {unknown} fileHandleInput
+ */
+export function createDsl4BrowserPreviewStoryFileProject(fileHandleInput) {
+  const fileHandle = requireFileHandle(fileHandleInput);
+  const sourceName = typeof fileHandle.name === 'string' ? fileHandle.name : '';
+  const manifest = validateDsl4ExternalSourceManifestContract({
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+    path: sourceName,
+  });
+  const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
+  const notFound = () => {
+    const error = new Error('The requested file does not exist in this source-only project');
+    error.name = 'NotFoundError';
+    return error;
+  };
+  const manifestHandle = Object.freeze({
+    kind: 'file',
+    name: dsl4BrowserPreviewSourceDefaults.manifestFilename,
+    async getFile() {
+      return {
+        name: dsl4BrowserPreviewSourceDefaults.manifestFilename,
+        size: manifestBytes.byteLength,
+        async arrayBuffer() {
+          return manifestBytes.slice().buffer;
+        },
+      };
+    },
+  });
+  return Object.freeze({
+    kind: 'directory',
+    name: sourceName,
+    dsl4SourceOnly: true,
+    async queryPermission(options = {mode: 'read'}) {
+      return typeof fileHandle.queryPermission === 'function'
+        ? fileHandle.queryPermission(options)
+        : 'granted';
+    },
+    /** @param {string} name */
+    async getFileHandle(name) {
+      if (name === dsl4BrowserPreviewSourceDefaults.manifestFilename) return manifestHandle;
+      if (name === sourceName) return fileHandle;
+      throw notFound();
+    },
   });
 }
 
@@ -603,6 +680,10 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
       },
       hidden ? backgroundIntervalMs : foregroundIntervalMs,
     );
+    if (isRecord(pollTimer) && typeof pollTimer.unref === 'function') {
+      // Browser timers are numeric; Node preview tests must not keep the process alive by polling.
+      pollTimer.unref();
+    }
   }
 
   async function verifyPermission() {
@@ -841,9 +922,15 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
           }
           break;
         } catch (error) {
+          const transientCode = isRecord(error) && typeof error.code === 'string' ? error.code : '';
           if (
             !expectedError(error) ||
-            !['K4-SOURCE-MISSING', 'K4-PREVIEW-SOURCE-UNSTABLE'].includes(error.code)
+            ![
+              'K4-ASSET-MISSING',
+              'K4-ASSET-UNSTABLE-001',
+              'K4-SOURCE-MISSING',
+              'K4-PREVIEW-SOURCE-UNSTABLE',
+            ].includes(transientCode)
           ) {
             throw error;
           }
@@ -882,8 +969,11 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     } catch (error) {
       if (disposed || requestedGeneration !== generation) return snapshot();
       if (!expectedError(error)) throw error;
-      const code = error.code;
-      const severity = code === 'K4-PREVIEW-SOURCE-UNSTABLE' ? 'warning' : 'error';
+      const code = isRecord(error) && typeof error.code === 'string' ? error.code : '';
+      const severity =
+        code === 'K4-PREVIEW-SOURCE-UNSTABLE' || code === 'K4-ASSET-UNSTABLE-001'
+          ? 'warning'
+          : 'error';
       const stage = ![
         'K4-WEB-PREVIEW-MANIFEST-MISSING',
         'K4-WEB-PREVIEW-MANIFEST-READ-001',

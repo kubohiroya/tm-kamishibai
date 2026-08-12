@@ -101,6 +101,9 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
   const {extensionId} = contract.standardArtifact;
 
   assert.equal(contract.standardArtifact.integration, 'single-embedded-extension');
+  assert.equal(contract.standardArtifact.includesPreviewSurface, true);
+  assert.equal(contract.standardArtifact.previewActivation, 'nonembedded-menu-default');
+  assert.equal(contract.standardArtifact.embeddedStoryPreview, false);
   assert.deepEqual(project.extensions, [extensionId]);
   assert.deepEqual(project.extensionURLs, {
     [extensionId]: `embedded-extension:extensions/${extensionId}.js`,
@@ -113,6 +116,9 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
   );
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
   assert.match(entrypoint, new RegExp(`const extensionId = '${extensionId}'`));
+  assert.match(entrypoint, /dsl4NonEmbeddedDevelopmentFeatureFlags/u);
+  assert.match(entrypoint, /createDsl4RuntimeSourceChooser/u);
+  assert.match(entrypoint, /createDsl4BrowserPreviewRuntimeComponent/u);
   assert.doesNotMatch(entrypoint, /kubohiroyaweblink/u);
 
   const opcodes = [...entrypoint.matchAll(/opcode: '([^']+)'/gu)].map((match) => match[1]);
@@ -158,6 +164,8 @@ test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversibl
   ]);
   assert.equal(contract.previewPolicy.remotePreview, 'forbidden');
   assert.equal(contract.previewPolicy.localPreviewHost, 'tracked-by-issue-258');
+  assert.equal(contract.previewPolicy.nonembeddedStandard, 'development-by-default');
+  assert.equal(contract.previewPolicy.embeddedStory, 'production-no-preview');
 });
 
 test('keeps the 3.2 title state transition for Standard 4.0', () => {

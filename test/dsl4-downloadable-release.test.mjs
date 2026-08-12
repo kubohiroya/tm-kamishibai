@@ -7,13 +7,14 @@ import path from 'node:path';
 import {runInThisContext} from 'node:vm';
 import test from 'node:test';
 
-import {strFromU8, unzipSync} from 'fflate';
+import {strFromU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../scripts/sb3/downloadable-releases.mjs';
+import {createDsl4RuntimeExtensionSource} from '../scripts/sb3/dsl4-downloadable-release.mjs';
 import {
   buildDsl4RuntimeComponent,
   createDsl4ProductionSourceFrontend,
@@ -31,7 +32,7 @@ import {
   selectDsl4BrowserStorySource,
 } from '../src/dsl4/platform/browser-story-file-loader.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
-import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
+import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const require = createRequire(import.meta.url);
@@ -72,6 +73,17 @@ async function buildRelease() {
   return createDownloadableReleaseSb3(release);
 }
 
+async function buildCurrentRuntimeRelease() {
+  const released = await buildRelease();
+  const archive = unzipSync(released.archive);
+  const project = JSON.parse(strFromU8(archive['project.json']));
+  const extensionSource = await createDsl4RuntimeExtensionSource();
+  project.extensionURLs[bundleExtensionId] =
+    `data:text/javascript;base64,${extensionSource.toString('base64')}`;
+  archive['project.json'] = new TextEncoder().encode(JSON.stringify(project));
+  return {archive: Buffer.from(zipSync(archive))};
+}
+
 function browserFile(name, contents) {
   const bytes = new Uint8Array(contents);
   return {
@@ -100,6 +112,92 @@ function browserDirectoryHandle(name, entries) {
     async *entries() {
       for (const entry of entries) yield entry;
     },
+  };
+}
+
+function mutablePreviewProject(initialSource) {
+  const encoder = new TextEncoder();
+  let source = initialSource;
+  const manifest = JSON.stringify({
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+    path: 'story.kamishibai.yaml',
+  });
+  const fileHandle = (read) => ({
+    kind: 'file',
+    async getFile() {
+      const bytes = encoder.encode(read());
+      return {
+        size: bytes.byteLength,
+        async arrayBuffer() {
+          return bytes.slice().buffer;
+        },
+      };
+    },
+  });
+  return {
+    root: {
+      kind: 'directory',
+      async queryPermission() {
+        return 'granted';
+      },
+      async getFileHandle(name) {
+        if (name === 'project.source.json') return fileHandle(() => manifest);
+        if (name === 'story.kamishibai.yaml') return fileHandle(() => source);
+        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+      },
+      async getDirectoryHandle() {
+        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+      },
+    },
+    setSource(value) {
+      source = value;
+    },
+  };
+}
+
+function installPreviewBrowserGlobals(projectRoot, {storyFileHandle} = {}) {
+  const names = ['isSecureContext', 'self', 'top', 'showDirectoryPicker', 'showOpenFilePicker'];
+  const previous = new Map(
+    names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
+  );
+  Object.defineProperties(globalThis, {
+    isSecureContext: {configurable: true, value: true},
+    self: {configurable: true, value: globalThis},
+    top: {configurable: true, value: globalThis},
+    showDirectoryPicker: {
+      configurable: true,
+      value: async (options) => {
+        assert.deepEqual(options, {mode: 'read'});
+        return projectRoot;
+      },
+    },
+    ...(storyFileHandle === undefined
+      ? {}
+      : {
+          showOpenFilePicker: {
+            configurable: true,
+            value: async (options) => {
+              assert.deepEqual(options, {
+                multiple: false,
+                types: [
+                  {
+                    description: 'Kamishibai DSL 4.0 YAML',
+                    accept: {'application/yaml': ['.yml', '.yaml']},
+                  },
+                ],
+              });
+              return [storyFileHandle];
+            },
+          },
+        }),
+  });
+  return () => {
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
   };
 }
 
@@ -627,6 +725,15 @@ test('keeps the selected source suffix strict after the native chooser accepts Y
       {path: 'story.k4.yml', file: browserFile('story.k4.yml', new Uint8Array())},
     ]).path,
     'story.k4.yml',
+  );
+  assert.equal(
+    selectDsl4BrowserStorySource([
+      {
+        path: 'story.kamishibai.yaml',
+        file: browserFile('story.kamishibai.yaml', new Uint8Array()),
+      },
+    ]).path,
+    'story.kamishibai.yaml',
   );
 });
 
@@ -1333,6 +1440,260 @@ scenes:
     restoreGlobals();
   }
 });
+
+test(
+  'watches and auto-reloads a project directory in the non-embedded release by default',
+  {timeout: 20_000},
+  async () => {
+    const result = await buildCurrentRuntimeRelease();
+    const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+    restoreGlobals.document.visibilityState = 'visible';
+    const project = mutablePreviewProject(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 60
+`);
+    const restorePreviewGlobals = installPreviewBrowserGlobals(project.root);
+    const vm = new VirtualMachine();
+    try {
+      vm.setCompatibilityMode(false);
+      vm.setTurboMode(false);
+      vm.setCompilerOptions({enabled: false});
+      vm.securityManager.canLoadExtensionFromProject = () => true;
+      vm.securityManager.getSandboxMode = () => 'unsandboxed';
+      await loadProjectQuietly(vm, result.archive);
+      vm.runtime.renderer = {
+        draw() {},
+        createSVGSkin() {
+          return 1;
+        },
+        destroySkin() {},
+        updateDrawableSkinId() {},
+      };
+      vm.greenFlag();
+      const titleDeadline = Date.now() + 5_000;
+      while (Date.now() < titleDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      await extensionReporter(vm, 'closeTitle');
+      assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+      const applicationMenu = findByAttribute(
+        restoreGlobals.document.body,
+        'data-dsl4-application-menu',
+        'true',
+      )[0];
+      const previewHost = findById(restoreGlobals.document.body, 'dsl4-web-preview-shell');
+      assert(
+        previewHost,
+        `The non-embedded release must mount the development preview host: ${restoreGlobals.document.body.children.map(({id, tagName}) => `${tagName}#${id}`).join(', ')}`,
+      );
+      assert.equal(previewHost.getAttribute('data-preview-presentation'), 'runtime');
+      assert(findById(previewHost, 'dsl4-preview-reload-status-button'));
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
+      const chooser = findByAttribute(
+        restoreGlobals.document.body,
+        'data-dsl4-source-chooser',
+        'true',
+      )[0];
+      assert(chooser, 'Open must offer a story file or project directory.');
+      findByAttribute(chooser, 'data-dsl4-source-choice', 'project')[0].click();
+      assert.equal(
+        restoreGlobals.document.body.children.some(
+          (element) => element.tagName === 'INPUT' && element.type === 'file',
+        ),
+        false,
+        'A supported browser must use the watched directory picker instead of one-shot input.',
+      );
+
+      const runningDeadline = Date.now() + 5_000;
+      while (Date.now() < runningDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(
+        await extensionReporter(vm, 'statusReporter'),
+        'running',
+        await extensionReporter(vm, 'runtimeDiagnosticsReporter'),
+      );
+      const stage = vm.runtime.getTargetForStage();
+      const droppedBackdrop = {
+        ...stage.sprite.costumes.find(({name}) => name === 'Menu'),
+        name: 'DroppedBackdrop',
+        assetId: 'dropped-backdrop',
+        skinId: 1001,
+      };
+      stage.sprite.costumes.push(droppedBackdrop);
+      stage.sprite.sounds.push({
+        name: 'DroppedSound',
+        soundId: 1002,
+        assetId: 'dropped-sound',
+        dataFormat: 'wav',
+        rate: 48_000,
+        sampleCount: 1,
+      });
+      stage.sprite.soundBank = {
+        playSound: async () => {},
+        stop() {},
+        stopAllSounds() {},
+      };
+      project.setSource(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  DroppedBackdrop:
+    kind: backdrop
+    name: DroppedBackdrop
+  DroppedSound:
+    kind: sound
+    name: DroppedSound
+scenes:
+  opening:
+    - wait: 30
+`);
+
+      const reloadButton = findById(previewHost, 'dsl4-preview-reload-status-button');
+      const reloadDeadline = Date.now() + 7_000;
+      while (Date.now() < reloadDeadline) {
+        vm.runtime._step();
+        if (reloadButton.getAttribute('data-reload-state') === 'reloaded') break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(
+        reloadButton.getAttribute('data-reload-state'),
+        'reloaded',
+        findById(previewHost, 'dsl4-web-preview-diagnostic')?.textContent,
+      );
+      assert.equal(findById(previewHost, 'dsl4-preview-reload-dialog').hidden, true);
+      assert.equal(
+        await extensionReporter(vm, 'statusReporter'),
+        'running',
+        `${await extensionReporter(vm, 'runtimeDiagnosticsReporter')} ${JSON.stringify(
+          stage.sprite.costumes.map(({name, skinId}) => ({name, skinId})),
+        )}`,
+      );
+      assert.equal(stage.sprite.costumes.includes(droppedBackdrop), true);
+      assert.equal(
+        stage.sprite.sounds.some(({name}) => name === 'DroppedSound'),
+        true,
+        'TurboWarp-owned sounds must remain in the project after a source reload.',
+      );
+    } finally {
+      vm.quit();
+      restorePreviewGlobals();
+      restoreGlobals();
+    }
+  },
+);
+
+test(
+  'watches a story file selected from the non-embedded Open chooser',
+  {timeout: 20_000},
+  async () => {
+    const result = await buildCurrentRuntimeRelease();
+    const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
+    restoreGlobals.document.visibilityState = 'visible';
+    let source = `kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 60
+`;
+    const sourceHandle = {
+      kind: 'file',
+      name: 'story.kamishibai.yaml',
+      async queryPermission() {
+        return 'granted';
+      },
+      async getFile() {
+        const bytes = new TextEncoder().encode(source);
+        return {
+          name: this.name,
+          size: bytes.byteLength,
+          async arrayBuffer() {
+            return bytes.slice().buffer;
+          },
+        };
+      },
+    };
+    const restorePreviewGlobals = installPreviewBrowserGlobals(
+      {kind: 'directory'},
+      {storyFileHandle: sourceHandle},
+    );
+    const vm = new VirtualMachine();
+    try {
+      vm.setCompatibilityMode(false);
+      vm.setTurboMode(false);
+      vm.setCompilerOptions({enabled: false});
+      vm.securityManager.canLoadExtensionFromProject = () => true;
+      vm.securityManager.getSandboxMode = () => 'unsandboxed';
+      await loadProjectQuietly(vm, result.archive);
+      vm.runtime.renderer = {
+        draw() {},
+        createSVGSkin() {
+          return 1;
+        },
+        destroySkin() {},
+        updateDrawableSkinId() {},
+      };
+
+      vm.greenFlag();
+      const titleDeadline = Date.now() + 5_000;
+      while (Date.now() < titleDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'title') break;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      await extensionReporter(vm, 'closeTitle');
+      const applicationMenu = findByAttribute(
+        restoreGlobals.document.body,
+        'data-dsl4-application-menu',
+        'true',
+      )[0];
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'open')[0].click();
+      const chooser = findByAttribute(
+        restoreGlobals.document.body,
+        'data-dsl4-source-chooser',
+        'true',
+      )[0];
+      findByAttribute(chooser, 'data-dsl4-source-choice', 'file')[0].click();
+
+      const runningDeadline = Date.now() + 5_000;
+      while (Date.now() < runningDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
+      source = source.replace('wait: 60', 'wait: 30');
+      const previewHost = findById(restoreGlobals.document.body, 'dsl4-web-preview-shell');
+      const reloadButton = findById(previewHost, 'dsl4-preview-reload-status-button');
+      const reloadDeadline = Date.now() + 7_000;
+      while (Date.now() < reloadDeadline) {
+        vm.runtime._step();
+        if (reloadButton.getAttribute('data-reload-state') === 'reloaded') break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(reloadButton.getAttribute('data-reload-state'), 'reloaded');
+      assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
+    } finally {
+      vm.quit();
+      restorePreviewGlobals();
+      restoreGlobals();
+    }
+  },
+);
 
 test('localizes the existing Stage title without creating a DOM dialog', async () => {
   const result = await buildRelease();
