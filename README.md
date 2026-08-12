@@ -19,7 +19,7 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.1
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.2
 ```
 
 ```bash

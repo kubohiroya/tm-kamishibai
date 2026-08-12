@@ -11,6 +11,12 @@ import {
   dsl4StandardProductionFeatureFlags,
 } from '../../src/dsl4/feature-flags.js';
 import {createDsl4DebugExecutionCoordinator} from '../../src/dsl4/debug-execution.js';
+import {
+  createDsl4BrowserDistributionFilename,
+  createDsl4BrowserDistributionSb3,
+  requestDsl4BrowserDistributionSaveTarget,
+  saveDsl4BrowserDistributionSb3,
+} from '../../src/dsl4/platform/browser-distribution-build.js';
 import {createDsl4LiveReloadSession} from '../../src/dsl4/live-reload-session.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4BrowserPreviewRuntimeComponent} from '../../src/dsl4/platform/browser-preview-runtime-component.js';
@@ -40,7 +46,7 @@ import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibai4';
-const extensionVersion = '4.0.0-rc.1';
+const extensionVersion = '4.0.0-rc.2';
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
@@ -174,7 +180,9 @@ class KamishibaiDsl4RuntimeExtension {
     this.previewShell = null;
     this.previewLiveReload = null;
     this.previewDebugExecution = null;
+    this.previewGenerationComponents = null;
     this.previewHasCurrent = false;
+    this.distributionBuildStatus = '';
     this.fileInput = null;
     this.applicationMenu = null;
     this.titleControls = null;
@@ -370,6 +378,7 @@ class KamishibaiDsl4RuntimeExtension {
         icons: applicationMenuIcons,
         onOpen: () => this.openStoryFile(),
         onReload: () => this.reloadStory(),
+        onBuild: () => this.buildDistributionSb3(),
         onAbout: () => this.showAbout(),
         onLocaleChange: (locale) => {
           this.titleLocale = locale;
@@ -377,6 +386,8 @@ class KamishibaiDsl4RuntimeExtension {
         },
         onError: (error) => this.reportFailure(error, 'application-menu'),
         reloadEnabled: this.selectedProject !== null || this.shell !== null,
+        buildVisible: false,
+        buildEnabled: false,
       });
     } catch (error) {
       console.error('[Kamishibai DSL 4.0] application-menu failed.', loggedError(error));
@@ -584,6 +595,16 @@ class KamishibaiDsl4RuntimeExtension {
           });
           generationComponents.set(result.storyDocument, generation);
         },
+        onDistributionBuildState: (state) => {
+          if (this.status !== 'menu' || !this.applicationMenu) return;
+          this.distributionBuildStatus =
+            state.enabled === true ? '' : appShellLocales[this.titleLocale].ui.buildUnavailable;
+          this.applicationMenu.setBuildState({
+            visible: true,
+            enabled: state.enabled === true,
+            status: this.distributionBuildStatus,
+          });
+        },
         ...(previewStorage === undefined ? {} : {previewStorage}),
         onError: (error) => this.reportFailure(error, 'preview-shell'),
       });
@@ -594,6 +615,7 @@ class KamishibaiDsl4RuntimeExtension {
     }
     this.previewLiveReload = liveReload;
     this.previewDebugExecution = debugExecution;
+    this.previewGenerationComponents = generationComponents;
     this.previewShell = previewShell;
     this.previewHasCurrent = false;
     return previewShell;
@@ -782,6 +804,111 @@ class KamishibaiDsl4RuntimeExtension {
     );
   }
 
+  async buildDistributionSb3() {
+    if (this.status !== 'menu' || !this.previewShell || !this.previewGenerationComponents) {
+      return undefined;
+    }
+    const menu = this.ensureApplicationMenu();
+    const ui = appShellLocales[this.titleLocale].ui;
+    this.status = 'building';
+    this.distributionBuildStatus = ui.buildPreparing;
+    menu?.setBuildState({visible: true, enabled: false, status: this.distributionBuildStatus});
+    this.setStageCursor('wait');
+    try {
+      const suggestedFilename = createDsl4BrowserDistributionFilename(
+        this.previewShell.getSnapshot().sourceDisplayName,
+      );
+      const saveTargetPromise = requestDsl4BrowserDistributionSaveTarget({
+        filename: suggestedFilename,
+        globalObject: globalThis,
+      });
+      const saveTarget = await saveTargetPromise;
+      if (saveTarget?.method === 'cancelled') {
+        this.status = 'menu';
+        this.distributionBuildStatus = ui.buildCancelled;
+        this.showScratchMenu(this.titleLocale);
+        return saveTarget;
+      }
+      const prepared = await this.previewShell.prepareDistributionBuild();
+      this.distributionBuildStatus = ui.buildVerifying;
+      menu?.setBuildState({visible: true, enabled: false, status: this.distributionBuildStatus});
+      const initialRuntimeComponent = await createDsl4BrowserPreviewRuntimeComponent({
+        baseComponent: this.previewGenerationComponents.get(prepared.sourceResult.storyDocument),
+        sourceResult: prepared.sourceResult,
+        projectRoot: prepared.projectRoot,
+        maxAssetFileBytes: limits.maxAssetBytes,
+        maxAssetFiles: limits.maxAssetFiles,
+        maxAssetBytes: limits.maxAssetBytes,
+        subtleCrypto: globalThis.crypto?.subtle,
+      });
+      const projectFiles = await this.Scratch.vm.saveProjectSb3DontZip();
+      const confirmedBeforeBuild = await this.previewShell.prepareDistributionBuild();
+      if (confirmedBeforeBuild.integrity !== prepared.integrity) {
+        const error = new Error('Project files changed during the distribution build. Try again.');
+        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-GENERATION-CHANGED'});
+        throw error;
+      }
+      const runtimeComponent = await createDsl4BrowserPreviewRuntimeComponent({
+        baseComponent: this.previewGenerationComponents.get(
+          confirmedBeforeBuild.sourceResult.storyDocument,
+        ),
+        sourceResult: confirmedBeforeBuild.sourceResult,
+        projectRoot: confirmedBeforeBuild.projectRoot,
+        maxAssetFileBytes: limits.maxAssetBytes,
+        maxAssetFiles: limits.maxAssetFiles,
+        maxAssetBytes: limits.maxAssetBytes,
+        subtleCrypto: globalThis.crypto?.subtle,
+      });
+      if (
+        runtimeComponent.assetBundle.integrity !== initialRuntimeComponent.assetBundle.integrity
+      ) {
+        const error = new Error('Project assets changed during the distribution build. Try again.');
+        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-GENERATION-CHANGED'});
+        throw error;
+      }
+      const built = await createDsl4BrowserDistributionSb3({
+        projectFiles,
+        runtimeComponent,
+        sourceFrontend: this.frontend,
+        maxSourceBytes: limits.maxSourceBytes,
+        maxAssetFiles: limits.maxAssetFiles,
+        maxAssetBytes: limits.maxAssetBytes,
+        subtleCrypto: globalThis.crypto?.subtle,
+      });
+      const confirmed = await this.previewShell.prepareDistributionBuild();
+      if (confirmed.integrity !== prepared.integrity) {
+        const error = new Error('Project files changed during the distribution build. Try again.');
+        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-GENERATION-CHANGED'});
+        throw error;
+      }
+      this.distributionBuildStatus = built.delivery.networkRequired
+        ? ui.buildSavingRemote
+        : ui.buildSaving;
+      menu?.setBuildState({visible: true, enabled: false, status: this.distributionBuildStatus});
+      const saved = await saveDsl4BrowserDistributionSb3({
+        bytes: built.bytes,
+        filename: built.filename,
+        target: saveTarget,
+        globalObject: globalThis,
+      });
+      this.status = 'menu';
+      this.distributionBuildStatus = built.delivery.networkRequired
+        ? saved.method === 'file-system'
+          ? ui.buildSavedRemote
+          : ui.buildDoneRemote
+        : saved.method === 'file-system'
+          ? ui.buildSaved
+          : ui.buildDone;
+      this.showScratchMenu(this.titleLocale);
+      return built;
+    } catch (error) {
+      if (this.status !== 'error') this.status = 'menu';
+      throw error;
+    } finally {
+      if (this.status === 'menu') this.setStageCursor('pointer');
+    }
+  }
+
   showAbout() {
     if (this.status !== 'menu') return undefined;
     const shell = this.shell;
@@ -853,6 +980,21 @@ class KamishibaiDsl4RuntimeExtension {
     menu?.setReloadEnabled(
       this.selectedProject !== null || this.shell !== null || this.previewHasCurrent,
     );
+    const buildVisible =
+      this.previewShell !== null &&
+      dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4BrowserDistributionBuild;
+    const buildState = buildVisible
+      ? this.previewShell.getDistributionBuildState()
+      : {enabled: false, reason: null};
+    menu?.setBuildState({
+      visible: buildVisible,
+      enabled: buildState.enabled === true,
+      status:
+        this.distributionBuildStatus ||
+        (buildVisible && buildState.enabled !== true
+          ? appShellLocales[locale].ui.buildUnavailable
+          : ''),
+    });
     menu?.show(locale);
     this.setStageCursor('pointer');
   }
@@ -941,7 +1083,9 @@ class KamishibaiDsl4RuntimeExtension {
     this.previewShell = null;
     this.previewLiveReload = null;
     this.previewDebugExecution = null;
+    this.previewGenerationComponents = null;
     this.previewHasCurrent = false;
+    this.distributionBuildStatus = '';
     const failures = [];
     for (const dispose of [
       shell ? () => shell.dispose(reason) : null,

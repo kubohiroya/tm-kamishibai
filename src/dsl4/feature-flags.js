@@ -7,6 +7,7 @@ const featureFlagKeys = new Set([
   'dsl4SourceIncludes',
   'dsl4AppShell',
   'dsl4WebPreviewAdapter',
+  'dsl4BrowserDistributionBuild',
   'dsl4WebPreviewAssetLiveReload',
   'dsl4PreviewReloadOverlay',
   'dsl4Debugger',
@@ -27,6 +28,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4SourceIncludes: false,
   dsl4AppShell: false,
   dsl4WebPreviewAdapter: false,
+  dsl4BrowserDistributionBuild: false,
   dsl4WebPreviewAssetLiveReload: false,
   dsl4PreviewReloadOverlay: false,
   dsl4Debugger: false,
@@ -52,6 +54,7 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
 export const dsl4NonEmbeddedDevelopmentFeatureFlags = deepFreeze({
   ...dsl4StandardProductionFeatureFlags,
   dsl4WebPreviewAdapter: true,
+  dsl4BrowserDistributionBuild: true,
   dsl4PreviewReloadOverlay: true,
   dsl4Debugger: true,
 });
@@ -90,6 +93,14 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4WebPreviewAdapter && (!resolved.dsl4Runtime || !resolved.dsl4AppShell)) {
     throw new TypeError('dsl4WebPreviewAdapter requires dsl4Runtime and dsl4AppShell');
+  }
+  if (
+    resolved.dsl4BrowserDistributionBuild &&
+    (!resolved.dsl4Runtime || !resolved.dsl4AppShell || !resolved.dsl4WebPreviewAdapter)
+  ) {
+    throw new TypeError(
+      'dsl4BrowserDistributionBuild requires dsl4Runtime, dsl4AppShell, and dsl4WebPreviewAdapter',
+    );
   }
   if (
     resolved.dsl4WebPreviewAssetLiveReload &&

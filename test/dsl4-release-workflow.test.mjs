@@ -71,12 +71,12 @@ test('updates atomically, remains idempotent, and preserves the candidate on fai
     assert.deepEqual(await releaseSnapshot(root), firstSnapshot);
 
     await writeFile(
-      path.join(root, 'release-sources/4.0.0-rc.1/release.json'),
+      path.join(root, 'release-sources/4.0.0-rc.2/release.json'),
       '{"invalid":true}\n',
     );
     await assert.rejects(updateDsl4Release(options), /metadata format is invalid/u);
     assert.equal(
-      await readFile(path.join(root, 'release-sources/4.0.0-rc.1/app/project.source.json'), 'utf8'),
+      await readFile(path.join(root, 'release-sources/4.0.0-rc.2/app/project.source.json'), 'utf8'),
       '{"targets":[]}\n',
     );
   } finally {
@@ -117,8 +117,8 @@ test('checks without mutation and rejects same-version updates after freeze', as
 
     const published = await recordDsl4Publication(
       {
-        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.1',
-        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.1',
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.2',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.2',
         pagesUrl: 'https://example.github.io/project/downloads/',
       },
       {root},

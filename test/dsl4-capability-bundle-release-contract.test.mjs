@@ -149,8 +149,8 @@ test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversibl
     kind: 'single-embedded-extension',
     unbundle: null,
     provenance: [
-      'release-sources/4.0.0-rc.1/app/project.source.json',
-      'release-sources/4.0.0-rc.1/app/embedded-extensions.json',
+      'release-sources/4.0.0-rc.2/app/project.source.json',
+      'release-sources/4.0.0-rc.2/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -214,21 +214,21 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.1/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.2/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-sources/4.0.0-rc.1/release.json',
+    metadata: 'release-sources/4.0.0-rc.2/release.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.2',
+    nextCandidateVersion: '4.0.0-rc.3',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.1',
+    gitTag: 'v4.0.0-rc.2',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });
