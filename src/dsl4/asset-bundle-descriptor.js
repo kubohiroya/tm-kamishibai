@@ -243,8 +243,9 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
       const inputPath = safeRelativePath(candidate.source.inputPath, `Asset ${id} inputPath`);
       if (
         inputPath !== storyAsset.file ||
-        !['file', 'directory'].includes(String(candidate.source.mode)) ||
+        !['file', 'directory', 'archive'].includes(String(candidate.source.mode)) ||
         (storyAsset.kind !== 'poseModel' && candidate.source.mode !== 'file') ||
+        (candidate.source.mode === 'archive' && !/\.zip$/iu.test(inputPath)) ||
         !Array.isArray(candidate.source.files) ||
         candidate.source.files.length === 0
       ) {

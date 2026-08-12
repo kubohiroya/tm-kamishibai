@@ -6,6 +6,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
 } from '../source-descriptor.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
+import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
 
 const storyFilenamePattern = /\.(?:k4|kamishibai)\.ya?ml$/iu;
 
@@ -338,8 +339,9 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
       continue;
     }
     const inputPath = safePath(asset.file, `asset ${id} file`);
+    const archiveMode = asset.kind === 'poseModel' && isDsl4PoseArchivePath(inputPath);
     const selected =
-      asset.kind === 'poseModel'
+      asset.kind === 'poseModel' && !archiveMode
         ? [...normalizedEntries]
             .filter(
               ([path]) =>
@@ -358,27 +360,48 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
         storyDocument,
       });
     }
-    if (asset.kind === 'poseModel' && selected.length !== 3) {
+    if (asset.kind === 'poseModel' && !archiveMode && selected.length !== 3) {
       throw new TypeError(`Pose model ${id} must contain exactly three files`);
     }
-    fileCount += selected.length;
+    const materialized = [];
+    if (archiveMode) {
+      const archiveFile = requireFile(selected[0].file);
+      const archiveBytes = await readFile(archiveFile, maxAssetFileBytes, `${id}/${inputPath}`);
+      const extracted = await extractDsl4PoseArchive({
+        assetId: id,
+        bytes: archiveBytes,
+        maxArchiveBytes: maxAssetFileBytes,
+        maxFileBytes: maxAssetFileBytes,
+        maxTotalBytes: maxAssetBytes,
+        subtleCrypto,
+      });
+      materialized.push(...extracted.files);
+    } else {
+      for (const selectedFile of selected) {
+        const file = requireFile(selectedFile.file);
+        materialized.push({
+          path: selectedFile.path,
+          bytes: await readFile(file, maxAssetFileBytes, `${id}/${selectedFile.path}`),
+        });
+      }
+    }
+    fileCount += materialized.length;
     if (fileCount > maxAssetFiles) throw new TypeError('Selected project exceeds maxAssetFiles');
     const files = [];
-    for (const selectedFile of selected) {
-      const file = requireFile(selectedFile.file);
-      const bytes = await readFile(file, maxAssetFileBytes, `${id}/${selectedFile.path}`);
+    for (const materializedFile of materialized) {
+      const bytes = new Uint8Array(materializedFile.bytes);
       totalBytes += bytes.byteLength;
       if (totalBytes > maxAssetBytes) throw new TypeError('Selected project exceeds maxAssetBytes');
       const integrity = await computeDsl4Sha256Integrity(bytes, subtleCrypto);
-      files.push({path: selectedFile.path, size: bytes.byteLength, integrity});
-      blobs.set(`${id}\0${selectedFile.path}`, bytes);
+      files.push({path: materializedFile.path, size: bytes.byteLength, integrity});
+      blobs.set(`${id}\0${materializedFile.path}`, bytes);
     }
     manifestAssets.push({
       ...common,
       source: {
         type: 'file',
         inputPath,
-        mode: asset.kind === 'poseModel' ? 'directory' : 'file',
+        mode: archiveMode ? 'archive' : asset.kind === 'poseModel' ? 'directory' : 'file',
         files,
       },
     });

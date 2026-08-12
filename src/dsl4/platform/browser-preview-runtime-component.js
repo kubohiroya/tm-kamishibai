@@ -1,5 +1,6 @@
 import {createDsl4EmbeddedAssetBundle} from '../asset-bundle-descriptor.js';
 import {computeDsl4Sha256Integrity} from '../source-descriptor.js';
+import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
 
 const defaultQuietWindowMs = 100;
 
@@ -202,6 +203,30 @@ async function readPoseDirectory(root, directoryPath, maxFileBytes) {
   }
 }
 
+/** @param {Record<string, any>} root @param {string} assetId @param {string} sourcePath @param {number} maxFileBytes @param {number} maxTotalBytes @param {{digest: Function}} subtleCrypto */
+async function readPoseSource(
+  root,
+  assetId,
+  sourcePath,
+  maxFileBytes,
+  maxTotalBytes,
+  subtleCrypto,
+) {
+  if (!isDsl4PoseArchivePath(sourcePath)) {
+    return readPoseDirectory(root, sourcePath, maxFileBytes);
+  }
+  const [archive] = await readSingleFile(root, sourcePath, maxFileBytes);
+  const extracted = await extractDsl4PoseArchive({
+    assetId,
+    bytes: archive.bytes,
+    maxArchiveBytes: maxFileBytes,
+    maxFileBytes,
+    maxTotalBytes,
+    subtleCrypto,
+  });
+  return extracted.files.map((file) => ({path: file.path, bytes: file.bytes}));
+}
+
 /** @param {Readonly<Record<string, any>>} asset @param {string} id */
 function commonManifestAsset(asset, id) {
   return {
@@ -257,7 +282,14 @@ async function captureAssetSnapshot(storyDocument, projectRoot, options) {
     }
     const files =
       asset.kind === 'poseModel'
-        ? await readPoseDirectory(projectRoot, asset.file, options.maxAssetFileBytes)
+        ? await readPoseSource(
+            projectRoot,
+            id,
+            asset.file,
+            options.maxAssetFileBytes,
+            options.maxAssetBytes,
+            options.subtleCrypto,
+          )
         : await readSingleFile(projectRoot, asset.file, options.maxAssetFileBytes);
     fileCount += files.length;
     if (fileCount > options.maxAssetFiles) {
@@ -279,7 +311,12 @@ async function captureAssetSnapshot(storyDocument, projectRoot, options) {
       source: {
         type: 'file',
         inputPath: asset.file,
-        mode: asset.kind === 'poseModel' ? 'directory' : 'file',
+        mode:
+          asset.kind === 'poseModel' && isDsl4PoseArchivePath(asset.file)
+            ? 'archive'
+            : asset.kind === 'poseModel'
+              ? 'directory'
+              : 'file',
         files: metadata,
       },
     });

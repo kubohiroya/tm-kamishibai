@@ -3,6 +3,8 @@ import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {createDsl4ProductionSourceFrontend} from '../src/builder/dsl4-source-frontend.js';
 import {createDsl4BrowserPreviewStoryFileProject} from '../src/dsl4/browser-preview-source-adapter.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../src/dsl4/source-descriptor.js';
@@ -162,6 +164,62 @@ test('rejects local sibling assets when the author opens only a story file', asy
     }),
     (error) => error.code === 'K4-ASSET-PROJECT-DIRECTORY-REQUIRED',
   );
+});
+
+test('extracts a local pose archive during watched browser preview capture', async () => {
+  const archive = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+    'weights.bin': new Uint8Array([1, 2, 3]),
+  });
+  let reads = 0;
+  const modelsDirectory = {
+    kind: 'directory',
+    async getFileHandle(name) {
+      assert.equal(name, 'rescue.ZIP');
+      return fileHandle(name, () => {
+        reads += 1;
+        return archive;
+      });
+    },
+  };
+  const projectRoot = {
+    kind: 'directory',
+    async getDirectoryHandle(name) {
+      assert.equal(name, 'models');
+      return modelsDirectory;
+    },
+  };
+  const result = await sourceResult(`kamishibai: '4.0'
+assets:
+  Rescue:
+    kind: poseModel
+    file: models/rescue.ZIP
+scenes:
+  opening:
+    poseModel: Rescue
+    actions: []
+`);
+  const component = await createDsl4BrowserPreviewRuntimeComponent({
+    baseComponent: {runtimeArtifact: {formatVersion: 1}},
+    sourceResult: result,
+    projectRoot,
+    maxAssetFileBytes: 4096,
+    maxAssetFiles: 8,
+    maxAssetBytes: 8192,
+    quietWindowMs: 0,
+    sleep: async () => {},
+    subtleCrypto: webcrypto.subtle,
+  });
+
+  assert.equal(reads, 2, 'pose archives must participate in stable double-read capture');
+  const pose = component.assetBundle.manifest.assets[0];
+  assert.equal(pose.source.mode, 'archive');
+  assert.deepEqual(
+    pose.source.files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  assert.deepEqual(component.getAssetFile('Rescue', 'weights.bin'), new Uint8Array([1, 2, 3]));
 });
 
 test('rejects an asset generation that changes between the two stable reads', async () => {

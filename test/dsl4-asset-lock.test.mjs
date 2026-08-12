@@ -83,6 +83,7 @@ async function withProject(callback) {
       ...Object.entries(poseFiles).map(([name, bytes]) =>
         writeFile(path.join(root, 'models', 'rescue', name), bytes),
       ),
+      writeFile(path.join(root, 'models', 'rescue.zip'), poseArchive),
     ]);
     return await callback(root);
   } finally {
@@ -198,5 +199,31 @@ test('fails closed for unallowlisted hosts, redirects, and local/remote mismatch
       }),
       (error) => error.code === 'K4-ASSET-CONTENT-MISMATCH-001',
     );
+  });
+});
+
+test('locks a local pose archive against the same remote archive content', async () => {
+  await withProject(async (root) => {
+    await writeFile(
+      path.join(root, 'story.kamishibai.yaml'),
+      source.replace('file: models/rescue', 'file: models/rescue.zip'),
+    );
+    const result = await generateDsl4AssetDistributionLock(
+      options(root, async (url) => {
+        const body = url.pathname.endsWith('logo.svg')
+          ? localBytes.logo
+          : url.pathname.endsWith('narration.mp3')
+            ? localBytes.narration
+            : poseArchive;
+        const contentType = url.pathname.endsWith('logo.svg')
+          ? 'image/svg+xml'
+          : url.pathname.endsWith('narration.mp3')
+            ? 'audio/mpeg'
+            : 'application/zip';
+        return new Response(body, {status: 200, headers: {'content-type': contentType}});
+      }),
+    );
+    assert.equal(result.lock.assets.RescuePose.providers.embedded.file, 'models/rescue.zip');
+    assert.equal(result.lock.assets.RescuePose.providers.remote.url.endsWith('rescue.zip'), true);
   });
 });

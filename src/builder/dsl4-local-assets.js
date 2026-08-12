@@ -2,6 +2,10 @@ import {lstat, open, readdir, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
 import {computeDsl4Sha256Integrity, Dsl4SourceDescriptorError} from '../dsl4/source-descriptor.js';
+import {
+  extractDsl4PoseArchive,
+  isDsl4PoseArchivePath,
+} from '../dsl4/platform/pose-archive-extractor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {Sb3BuilderError} from './errors.js';
 
@@ -323,6 +327,52 @@ export async function loadDsl4LocalAssetSnapshot(
     }
     if (asset.kind === 'poseModel' && !requestedState.isFile() && !requestedState.isDirectory()) {
       fail(`PoseModel ${assetId} must be a file or directory`, 'K4-ASSET-FILE-001');
+    }
+
+    const archiveMode =
+      asset.kind === 'poseModel' && requestedState.isFile() && isDsl4PoseArchivePath(inputPath);
+    if (archiveMode) {
+      const archiveBytes = await readStableFile(
+        canonicalPath,
+        assetId,
+        fileLimit,
+        fs,
+        readSnapshot,
+      );
+      let extracted;
+      try {
+        extracted = await extractDsl4PoseArchive({
+          assetId,
+          bytes: new Uint8Array(archiveBytes),
+          maxArchiveBytes: fileLimit,
+          maxFileBytes: fileLimit,
+          maxTotalBytes: totalLimit,
+          subtleCrypto,
+        });
+      } catch (error) {
+        fail(
+          `Cannot extract poseModel archive ${assetId}`,
+          errorCode(error) || 'K4-ASSET-ARCHIVE-001',
+          error,
+        );
+      }
+      fileCount += extracted.files.length;
+      if (fileCount > fileCountLimit) fail('Asset snapshot exceeds maxFiles', 'K4-ASSET-COUNT-001');
+      const manifestFiles = [];
+      for (const file of extracted.files) {
+        totalBytes += file.bytes.byteLength;
+        if (totalBytes > totalLimit) {
+          fail('Asset snapshot exceeds maxTotalBytes', 'K4-ASSET-TOTAL-SIZE-001');
+        }
+        const integrity = await computeDsl4Sha256Integrity(file.bytes, subtleCrypto);
+        blobs.set(`${assetId}\0${file.path}`, Buffer.from(file.bytes));
+        manifestFiles.push({path: file.path, size: file.bytes.byteLength, integrity});
+      }
+      manifestAssets.push({
+        ...common,
+        source: {type: 'file', inputPath, mode: 'archive', files: manifestFiles},
+      });
+      continue;
     }
 
     const directoryMode = requestedState.isDirectory();

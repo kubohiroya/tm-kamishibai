@@ -1,7 +1,10 @@
 import {lstat, open, readFile, readdir, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
-import {createDsl4PoseArchiveExtractor} from '../dsl4/platform/pose-archive-extractor.js';
+import {
+  createDsl4PoseArchiveExtractor,
+  isDsl4PoseArchivePath,
+} from '../dsl4/platform/pose-archive-extractor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
   serializeDsl4AssetDistributionLock,
@@ -448,6 +451,35 @@ async function inspectLocalProvider(asset, provider, options) {
     fail(`Asset ${asset.id} must be a regular file`, 'K4-ASSET-FILE-001');
   if (asset.kind === 'poseModel' && !state.isFile() && !state.isDirectory())
     fail(`PoseModel ${asset.id} must be a file or directory`, 'K4-ASSET-FILE-001');
+  if (asset.kind === 'poseModel' && state.isFile() && isDsl4PoseArchivePath(inputPath)) {
+    const archiveBytes = await readStableFile(
+      canonicalPath,
+      options.maxFileBytes,
+      options.fileSystem,
+    );
+    options.totalBytes += archiveBytes.length;
+    if (options.totalBytes > options.maxTotalBytes)
+      fail('Asset lock exceeds maxTotalAssetBytes', 'K4-ASSET-TOTAL-SIZE-001');
+    const archiveIntegrity = `sha256-${sha256(archiveBytes)}`;
+    let extracted;
+    try {
+      extracted = await options.poseArchiveExtractor(
+        {assetId: asset.id, archiveIntegrity, bytes: new Uint8Array(archiveBytes)},
+        {},
+      );
+    } catch (error) {
+      fail(`Local pose archive failed validation for ${asset.id}`, 'K4-ASSET-ARCHIVE-001', error);
+    }
+    options.fileCount += extracted.files.length;
+    if (options.fileCount > options.maxFiles)
+      fail('Asset lock exceeds maxAssetFiles', 'K4-ASSET-COUNT-001');
+    const files = extracted.files.map((/** @type {any} */ file) => ({
+      path: file.path,
+      size: file.size,
+      integrity: `sha256-${sha256(file.bytes)}`,
+    }));
+    return {provider: {file: inputPath}, logical: logicalBundle(files)};
+  }
   const entries = state.isDirectory()
     ? await enumerateLocalFiles(canonicalPath, asset.id, options.fileSystem)
     : [{path: path.posix.basename(inputPath), absolutePath: canonicalPath}];

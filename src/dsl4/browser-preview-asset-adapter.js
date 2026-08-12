@@ -3,6 +3,8 @@ import {classifyDsl4AssetReload, createDsl4AssetReloadSnapshot} from './asset-re
 import {createDsl4AssetSnapshotWatch} from './asset-snapshot-watch.js';
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import {extractDsl4PoseArchive} from './pose-archive-extractor.js';
+import {isDsl4PoseArchivePath} from './pose-archive-locator.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 
@@ -189,8 +191,31 @@ async function readSingleFile(root, filePath, limit, signal) {
   }
 }
 
-/** @param {Record<string, any>} root @param {string} directoryPath @param {number} limit @param {AbortSignal} signal */
-async function readPoseBundle(root, directoryPath, limit, signal) {
+/** @param {Record<string, any>} root @param {string} assetId @param {string} directoryPath @param {number} limit @param {number} totalLimit @param {{digest: Function}} subtleCrypto @param {AbortSignal} signal */
+async function readPoseBundle(
+  root,
+  assetId,
+  directoryPath,
+  limit,
+  totalLimit,
+  subtleCrypto,
+  signal,
+) {
+  if (isDsl4PoseArchivePath(directoryPath)) {
+    const [archive] = await readSingleFile(root, directoryPath, limit, signal);
+    const extracted = await extractDsl4PoseArchive(
+      {
+        assetId,
+        bytes: archive.bytes,
+        maxArchiveBytes: limit,
+        maxFileBytes: limit,
+        maxTotalBytes: totalLimit,
+        subtleCrypto,
+      },
+      {signal},
+    );
+    return extracted.files.map((file) => ({path: file.path, bytes: file.bytes}));
+  }
   const segments = relativePath(directoryPath, 'pose model directory');
   const directoryName = /** @type {string} */ (segments.at(-1));
   try {
@@ -377,7 +402,15 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
         }
         const files =
           asset.kind === 'poseModel'
-            ? await readPoseBundle(root, asset.file, limits.maxFileBytes, readOptions.signal)
+            ? await readPoseBundle(
+                root,
+                id,
+                asset.file,
+                limits.maxFileBytes,
+                limits.maxTotalBytes,
+                subtleCrypto,
+                readOptions.signal,
+              )
             : await readSingleFile(root, asset.file, limits.maxFileBytes, readOptions.signal);
         fileCount += files.length;
         if (fileCount > limits.maxFiles)
@@ -408,7 +441,12 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
           source: {
             type: 'file',
             inputPath: asset.file,
-            mode: asset.kind === 'poseModel' ? 'directory' : 'file',
+            mode:
+              asset.kind === 'poseModel' && isDsl4PoseArchivePath(asset.file)
+                ? 'archive'
+                : asset.kind === 'poseModel'
+                  ? 'directory'
+                  : 'file',
             files: metadata,
           },
         });

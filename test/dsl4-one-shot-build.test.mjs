@@ -76,6 +76,10 @@ scenes:
   opening:
     - stage: RemoteOpening
 `;
+const localPoseArchiveSource = validSource.replace(
+  'file: pose-models/rescue',
+  'file: pose-models/rescue.ZIP',
+);
 
 function baseProject() {
   return {
@@ -127,6 +131,14 @@ async function withProject(source, callback) {
       '{"labels":["rescue"]}',
     );
     await writeFile(path.join(directory, 'pose-models', 'rescue', 'model.json'), '{"model":true}');
+    await writeFile(
+      path.join(directory, 'pose-models', 'rescue.ZIP'),
+      zipSync({
+        'metadata.json': strToU8('{"labels":["rescue"]}'),
+        'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+        'weights.bin': new Uint8Array([1, 2, 3]),
+      }),
+    );
     return await callback(directory);
   } finally {
     await rm(directory, {recursive: true, force: true});
@@ -202,6 +214,24 @@ test('builds and startup-validates one deterministic self-contained component pe
     }
     assert.deepEqual(await readFile(sourcePath), sourceBefore);
     assert.deepEqual(await readFile(assetPath), assetBefore);
+  });
+});
+
+test('builds a local poseModel zip into the same three-file runtime bundle', async () => {
+  await withProject(localPoseArchiveSource, async (directory) => {
+    const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
+    const pose = built.runtimeComponent.assetBundle.manifest.assets.find(
+      (asset) => asset.id === 'RescuePose',
+    );
+    assert.equal(pose.source.mode, 'archive');
+    assert.deepEqual(
+      pose.source.files.map((file) => file.path),
+      ['metadata.json', 'model.json', 'weights.bin'],
+    );
+    assert.deepEqual(
+      built.runtimeComponent.getAssetFile('RescuePose', 'weights.bin'),
+      new Uint8Array([1, 2, 3]),
+    );
   });
 });
 

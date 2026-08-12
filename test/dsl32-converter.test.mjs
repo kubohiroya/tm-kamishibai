@@ -375,19 +375,27 @@ test('preserves TMPoseURL as a lazy remote pose model unless an embedded replace
   });
   assert.equal(remote.document?.scenes.rescue.poseModel, 'PoseModel1');
 
+  const zipUrl = 'https://example.com/models/rescue.ZIP?download=1';
+  const remoteZip = convertDsl32ToDsl4(
+    source.toString().replace('https://example.com/models/rescue/', zipUrl),
+    {sourceId: 'full-zip.dsl32.txt'},
+  );
+  assert.equal(remoteZip.ok, true, JSON.stringify(remoteZip.diagnostics));
+  assert.equal(remoteZip.document?.assets.PoseModel1.source.url, zipUrl);
+
   const literalId = ' Rescue.pose/\u0001 model ';
   const embedded = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',
     poseModels: {
       'https://example.com/models/rescue/': {
         id: literalId,
-        file: 'pose-models/rescue',
+        file: 'pose-models/rescue.zip',
       },
     },
   });
   assert.equal(embedded.ok, true, JSON.stringify(embedded.diagnostics));
   assert.equal(embedded.document?.scenes.rescue.poseModel, literalId);
-  assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue');
+  assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue.zip');
 
   const malformed = convertDsl32ToDsl4(source, {
     sourceId: 'full.dsl32.txt',

@@ -5,6 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {createDsl4BrowserPreviewAssetAdapter, createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -115,7 +117,7 @@ function wav(marker = 0) {
   return bytes;
 }
 
-function source({extra = false} = {}) {
+function source({extra = false, poseFile = 'rescue'} = {}) {
   return `
 kamishibai: '4.0'
 assets:
@@ -127,7 +129,7 @@ assets:
     file: bell.wav
   Rescue:
     kind: poseModel
-    file: rescue
+    file: ${poseFile}
   Skin: costume:Hero
 ${extra ? '  Extra:\n    kind: image\n    file: extra.svg\n' : ''}actors:
   Hero: Skin
@@ -216,6 +218,30 @@ test('reads only allowlisted local assets and owns immutable providers until ack
   await adapter.dispose();
   assert.equal(adapter.getState().providerCount, 0);
   assert.equal(releases.length > 0, true);
+});
+
+test('extracts a local pose zip before publishing the preview asset provider', async () => {
+  const events = [];
+  const assets = project({
+    'picture.svg': encoder.encode('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    'bell.wav': wav(),
+    'rescue.ZIP': zipSync({
+      'metadata.json': strToU8('{"labels":["help"]}'),
+      'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+      'weights.bin': new Uint8Array([1, 2, 3]),
+    }),
+  });
+  const sourceText = source({poseFile: 'rescue.ZIP'});
+  const adapter = createAdapter(events);
+
+  await adapter.start(assets.root, context(sourceText));
+  const provider = adapter.getCandidateProvider(events[0].revision);
+  assert.deepEqual(provider.getFile('Rescue', 'weights.bin'), new Uint8Array([1, 2, 3]));
+  assert.equal(
+    provider.manifest.assets.find((asset) => asset.id === 'Rescue').source.mode,
+    'archive',
+  );
+  await adapter.dispose();
 });
 
 test('classifies content changes and releases the old provider only after accept', async () => {

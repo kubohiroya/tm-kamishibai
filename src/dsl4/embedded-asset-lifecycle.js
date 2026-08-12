@@ -1,4 +1,5 @@
 import {encodeDsl4StoryPathSegment} from './story-path.js';
+import {isDsl4RemotePoseArchiveUrl} from './pose-archive-locator.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -152,6 +153,74 @@ export function createDsl4EmbeddedAssetLifecycle({
   /** @type {Promise<void> | null} */
   let releaseAllLock = null;
 
+  /**
+   * @param {Record<string, any>} asset
+   * @param {Uint8Array} bytes
+   * @param {string} integrity
+   * @param {string} contentType
+   * @param {Readonly<Record<string, any>>} context
+   */
+  async function materializePoseArchive(asset, bytes, integrity, contentType, context) {
+    if (!poseArchiveExtractor) {
+      throw assetError(
+        asset.id,
+        'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
+        `Remote pose model loading requires a trusted archive extractor: ${asset.id}`,
+      );
+    }
+    let extracted;
+    try {
+      extracted = await poseArchiveExtractor(
+        Object.freeze({
+          assetId: asset.id,
+          bytes,
+          archiveIntegrity: integrity,
+          contentType,
+        }),
+        context,
+      );
+    } catch (error) {
+      if (context.signal?.aborted) throw abortError();
+      if (isRecord(error) && typeof error.code === 'string') throw error;
+      throw assetError(
+        asset.id,
+        'K4-ASSET-REMOTE-POSE-EXTRACTOR-002',
+        `Remote pose archive extraction failed: ${asset.id}`,
+        error,
+      );
+    }
+    if (context.signal?.aborted) throw abortError();
+    if (
+      !isRecord(extracted) ||
+      extracted.archiveIntegrity !== integrity ||
+      typeof extracted.extractorFormat !== 'string' ||
+      extracted.extractorFormat.length === 0 ||
+      !Array.isArray(extracted.files) ||
+      extracted.files.some(
+        (file) =>
+          !isRecord(file) ||
+          !(file.bytes instanceof Uint8Array) ||
+          file.archiveIntegrity !== integrity ||
+          file.extractorFormat !== extracted.extractorFormat ||
+          typeof file.integrity !== 'string',
+      )
+    ) {
+      throw assetError(
+        asset.id,
+        'K4-ASSET-REMOTE-POSE-BINDING-001',
+        `Remote pose archive extraction is not bound to the loaded archive: ${asset.id}`,
+      );
+    }
+    return Object.freeze({
+      asset,
+      archiveBinding: Object.freeze({
+        integrity,
+        extractorFormat: extracted.extractorFormat,
+      }),
+      files: Object.freeze([...extracted.files]),
+    });
+  }
+
   /** @param {Record<string, any>} asset @param {Readonly<Record<string, any>>} context */
   function materialize(asset, context) {
     const source = /** @type {Record<string, any>} */ (asset.source);
@@ -159,6 +228,7 @@ export function createDsl4EmbeddedAssetLifecycle({
       return (async () => {
         const verified = isVerifiedRemoteSource(source);
         const usesVerifiedResolver = verified && verifiedRemoteResolver !== null;
+        const archiveUrl = asset.kind === 'poseModel' && isDsl4RemotePoseArchiveUrl(source.url);
         if (!usesVerifiedResolver && remoteLoader === null) {
           throw assetError(
             asset.id,
@@ -167,8 +237,7 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (
-          verified &&
-          !usesVerifiedResolver &&
+          ((verified && !usesVerifiedResolver) || (!verified && archiveUrl)) &&
           (!subtleCrypto || typeof subtleCrypto.digest !== 'function')
         ) {
           throw assetError(
@@ -187,6 +256,24 @@ export function createDsl4EmbeddedAssetLifecycle({
           }
           const unverifiedRemoteLoader = /** @type {Function} */ (remoteLoader);
           try {
+            if (archiveUrl) {
+              const loaded = await unverifiedRemoteLoader(
+                Object.freeze({assetId: asset.id, url: source.url}),
+                context,
+              );
+              if (!isRecord(loaded) || !(loaded.bytes instanceof Uint8Array)) {
+                throw new TypeError('Remote pose archive payload is invalid');
+              }
+              const bytes = new Uint8Array(loaded.bytes);
+              const integrity = `sha256-${await sha256Hex(bytes, subtleCrypto)}`;
+              return await materializePoseArchive(
+                asset,
+                bytes,
+                integrity,
+                mediaType(loaded.contentType),
+                context,
+              );
+            }
             /** @param {string} path */
             const loadFile = async (path) => {
               const url = remotePoseFileUrl(source.url, path);
@@ -310,64 +397,13 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (asset.kind === 'poseModel') {
-          if (!poseArchiveExtractor) {
-            throw assetError(
-              asset.id,
-              'K4-ASSET-REMOTE-POSE-EXTRACTOR-001',
-              `Remote pose model loading requires a trusted archive extractor: ${asset.id}`,
-            );
-          }
-          let extracted;
-          try {
-            extracted = await poseArchiveExtractor(
-              Object.freeze({
-                assetId: asset.id,
-                bytes,
-                archiveIntegrity: integrity,
-                contentType: source.contentType,
-              }),
-              context,
-            );
-          } catch (error) {
-            if (context.signal?.aborted) throw abortError();
-            if (isRecord(error) && typeof error.code === 'string') throw error;
-            throw assetError(
-              asset.id,
-              'K4-ASSET-REMOTE-POSE-EXTRACTOR-002',
-              `Remote pose archive extraction failed: ${asset.id}`,
-              error,
-            );
-          }
-          if (context.signal?.aborted) throw abortError();
-          if (
-            !isRecord(extracted) ||
-            extracted.archiveIntegrity !== integrity ||
-            typeof extracted.extractorFormat !== 'string' ||
-            extracted.extractorFormat.length === 0 ||
-            !Array.isArray(extracted.files) ||
-            extracted.files.some(
-              (file) =>
-                !isRecord(file) ||
-                !(file.bytes instanceof Uint8Array) ||
-                file.archiveIntegrity !== integrity ||
-                file.extractorFormat !== extracted.extractorFormat ||
-                typeof file.integrity !== 'string',
-            )
-          ) {
-            throw assetError(
-              asset.id,
-              'K4-ASSET-REMOTE-POSE-BINDING-001',
-              `Remote pose archive extraction is not bound to the verified archive: ${asset.id}`,
-            );
-          }
-          return Object.freeze({
+          return materializePoseArchive(
             asset,
-            archiveBinding: Object.freeze({
-              integrity,
-              extractorFormat: extracted.extractorFormat,
-            }),
-            files: Object.freeze([...extracted.files]),
-          });
+            bytes,
+            String(integrity),
+            String(source.contentType),
+            context,
+          );
         }
         return Object.freeze({
           asset,

@@ -54,7 +54,9 @@ warningが変わる場合は、生成物を上書きせずdiff／preview後に�
 | 3.2標準の実行／リハーサル操作             | `controls.keymaps.production/rehearsal`    | 自動            | Spaceのpose step、→のaction、↓のscene skipを別profileとして保持    |
 | unknown top-level command                 | なし                                       | 変換不能        | `K4-CONVERT-COMMAND-UNSUPPORTED`                                   |
 
-`TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。内容固定やoffline実行が
+`TMPoseURL`はnetwork取得せず、そのURLを通常のremote poseModelとして保持します。URL pathnameが
+`.zip`で終わる場合はruntimeがZIPを取得して展開し、それ以外は従来どおり展開済みdirectory URLとして
+扱います。local poseModelの`file`も同様に`.zip`を直接指定できます。内容固定やoffline実行が
 必要な場合だけ、別途localへ取得したmodel directoryを`--pose-models`でexact replacementし、SB3へ
 embedded化します。converter自身はnetwork取得やcache lookupを行いません。
 
