@@ -51,6 +51,7 @@ test('renders an indeterminate progressbar while asset and camera waits overlap'
     cursorStyle.textContent,
     /data-dsl4-cursor="pointer"\] canvas\{cursor:pointer!important\}/u,
   );
+  assert.doesNotMatch(cursorStyle.textContent, /data-dsl4-cursor="auto"\] canvas/u);
   assert.match(cursorStyle.textContent, /button:not\(:disabled\):not\(\[aria-disabled="true"\]\)/u);
   assert.match(cursorStyle.textContent, /button:disabled.*cursor:not-allowed/u);
   indicator.setCursor({visible: true, source: 'camera', cursor: 'wait'});

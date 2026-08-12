@@ -1,3 +1,5 @@
+import {createDsl4OrderedCursorNotifier} from './ordered-cursor-notifier.js';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -82,23 +84,11 @@ export function createDsl4AsyncInputActionPort(options) {
     throw new TypeError('setCursor must be a function');
   }
   let touchCursorId = 0;
+  const publishCursor = setCursor ? createDsl4OrderedCursorNotifier(setCursor) : null;
 
   /** @param {boolean} visible @param {string} source */
   function notifyTouchCursor(visible, source) {
-    if (!setCursor) return;
-    try {
-      void Promise.resolve(
-        setCursor(
-          Object.freeze({
-            visible,
-            source,
-            cursor: 'pointer',
-          }),
-        ),
-      ).catch(() => {});
-    } catch {
-      // Cursor styling is non-authoritative and cannot change input semantics.
-    }
+    publishCursor?.(Object.freeze({visible, source, cursor: 'pointer'}));
   }
 
   /**
