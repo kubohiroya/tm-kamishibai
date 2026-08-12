@@ -3,7 +3,7 @@
   "series": "4.0",
   "version": "4.0.0-rc.2",
   "channel": "next",
-  "state": "candidate",
+  "state": "frozen",
   "buildDate": "2026-08-12",
   "sourceDirectory": "release-sources/4.0.0-rc.2/app",
   "sourceIdentity": "sha256:70dfcb7dfc391e9f8c576976d810a55656c8cab09c0c729cc685d20e02140991",
