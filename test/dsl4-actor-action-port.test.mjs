@@ -611,6 +611,8 @@ test('fails closed and cleans speech presentation for invalid advance handles or
 test('re-arms advance input while Bubble native reveal consumes it', async () => {
   const calls = [];
   const cursors = [];
+  const releaseCursorStart = deferred();
+  const cursorNotificationsDone = deferred();
   const presentation = deferred();
   let finishCount = 0;
   const host = fakeHost({
@@ -639,8 +641,10 @@ test('re-arms advance input while Bubble native reveal consumes it', async () =>
     host: host.host,
     resolveActor: () => ({id: 'hero-target', isStage: false}),
     speechAdvanceTypewriterEnabled: true,
-    setCursor(event) {
+    async setCursor(event) {
+      if (event.visible) await releaseCursorStart.promise;
       cursors.push(event);
+      if (cursors.length === 2) cursorNotificationsDone.resolve();
     },
   });
   let waitCount = 0;
@@ -671,6 +675,9 @@ test('re-arms advance input while Bubble native reveal consumes it', async () =>
 
   assert.equal(waitCount, 2);
   assert.equal(cancelCount, 2);
+  assert.deepEqual(cursors, []);
+  releaseCursorStart.resolve();
+  await cursorNotificationsDone.promise;
   assert.deepEqual(cursors, [
     {visible: true, source: 'speech-advance-1', cursor: 'pointer'},
     {visible: false, source: 'speech-advance-1', cursor: 'pointer'},

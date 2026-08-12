@@ -184,7 +184,6 @@ export function createDsl4IndeterminateProgressIndicator(options) {
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="wait"]{cursor:wait}',
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="progress"]{cursor:progress}',
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="pointer"]{cursor:pointer}',
-      '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="auto"] canvas{cursor:auto!important}',
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="wait"] canvas{cursor:wait!important}',
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="progress"] canvas{cursor:progress!important}',
       '[data-dsl4-cursor-surface="true"][data-dsl4-cursor="pointer"] canvas{cursor:pointer!important}',

@@ -153,6 +153,72 @@ async function startFixtureServer(
 }
 
 test(
+  'preserves explicit canvas pointers when the runtime cursor returns to auto in Chromium',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-cursor-style-chromium-'));
+    const {server, url} = await startFixtureServer(
+      '/test/fixtures/dsl4/cursor-computed-style.html',
+    );
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.dsl4CursorComputedStyleFixture?.ready === true',
+        'cursor computed style fixture',
+      );
+      const snapshot = () =>
+        client.evaluate('globalThis.dsl4CursorComputedStyleFixture.snapshot()');
+
+      assert.deepEqual(await snapshot(), {
+        surface: 'auto',
+        canvas: 'pointer',
+        enabled: 'pointer',
+        disabled: 'not-allowed',
+      });
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: true, cursor: "wait"})',
+      );
+      assert.equal((await snapshot()).canvas, 'wait');
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: true, cursor: "progress"})',
+      );
+      assert.equal((await snapshot()).canvas, 'progress');
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: false, cursor: "progress"})',
+      );
+      assert.equal((await snapshot()).canvas, 'pointer');
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
   'loads the pinned TurboWarp browser platform bundle in real Chromium',
   {timeout: 30_000},
   async () => {
