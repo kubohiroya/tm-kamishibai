@@ -70,6 +70,108 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
+### 台本作者向けアセット変換
+
+単一fileのDSL 4 projectでは、個別アセットまたは全アセットを`local`、`remote`、SB3内の
+`project` assetへ変換し、`project.source.json`、変換済み`.k4.yml`、作者用`.sb3`を一組で保存できます。
+入力YAML／SB3は変更せず、未存在の`--output-dir`を独立した新しいproject rootとして検証後に一括作成
+します。生成YAML内のlocal参照はこの新しいrootからの相対pathになり、個別変換で未選択のまま残る
+local assetも同じrootへcopyされます。`--asset`は反復指定でき、省略すると全アセットが対象です。
+
+```bash
+pnpm dsl4:assets:convert -- \
+  --project-root . \
+  --source-manifest project.source.json \
+  --base kamishibai-4-base.sb3 \
+  --output-dir converted-local \
+  --to local \
+  --max-source-bytes 262144 \
+  --max-source-manifest-bytes 16384 \
+  --max-remote-map-bytes 65536 \
+  --max-base-sb3-bytes 268435456 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 \
+  --max-total-asset-bytes 134217728 \
+  --timeout-ms 10000 \
+  --max-redirects 3 \
+  --allow-host cdn.example.com
+```
+
+`remote`への変換は、アップロード済み実体を記述したmappingを検証する方法と、content-addressed
+fileをrsync over SSHで同期する方法を選べます。mapping方式ではtoolはuploadやmetadataの推測を
+行わず、allowlist内HTTPSから実体を取得して、SHA-256、Content-Type、size、および変換元と同じ
+byte列であることを確認します。Teachable Machineのpose ZIPは内部構造を検証せず、有限サイズの
+不透明な1 fileとしてZIP全体のbyte列だけを比較します。
+
+入力台本のremote画像（backdrop／costume／image）とremote音声は、`source.url`だけの指定にも対応します。
+local／project変換時は同じHTTPS allowlist、redirect上限、timeout、byte上限を適用して取得し、応答の
+Content-Typeと実byte列のmedia形式が一致する場合だけ変換します。URL-only参照は内容を固定しないため、
+継続利用するremote成果物にはintegrity／Content-Type／sizeをすべて指定するか、rsync方式で検証metadataを
+生成することを推奨します。remote mapping fileは引き続き4項目すべてが必須です。
+
+```json
+{
+  "Opening": {
+    "url": "https://cdn.example.com/opening.svg",
+    "integrity": "sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "contentType": "image/svg+xml",
+    "size": 1234
+  }
+}
+```
+
+```bash
+pnpm dsl4:assets:convert -- \
+  --project-root . --source-manifest project.source.json \
+  --base kamishibai-4-base.sb3 --output-dir converted-remote \
+  --to remote --asset Opening --remote-map remote-assets.json \
+  --allow-host cdn.example.com \
+  --max-source-bytes 262144 --max-source-manifest-bytes 16384 \
+  --max-remote-map-bytes 65536 --max-base-sb3-bytes 268435456 \
+  --max-asset-file-bytes 16777216 --max-asset-files 256 \
+  --max-total-asset-bytes 134217728 --timeout-ms 10000 --max-redirects 3
+```
+
+rsync方式では、SSH同期先と、それに対応して外部公開されるHTTPS directory URLを両方指定します。
+local／project／既存remoteの選択assetをcontent-addressed filenameへ変換し、一時directoryから
+`rsync --archive --checksum --protect-args`で同期します。directory形式のlocal pose modelだけは固定timestamp・
+固定順序のZIPにし、既存のlocal／remote pose ZIPは再圧縮しません。同期後は公開URLから全fileを再取得して
+metadataと元のbyte列を検証し、成功した場合だけ
+変換済みsource manifest／YAML／SB3のlocal出力projectを確定します。
+
+```bash
+pnpm dsl4:assets:convert -- \
+  --project-root . --source-manifest project.source.json \
+  --base kamishibai-4-base.sb3 --output-dir converted-remote \
+  --to remote --asset Opening --asset RescuePose \
+  --rsync-destination author@assets.example.com:/srv/www/k4-assets \
+  --remote-base-url https://cdn.example.com/k4-assets/ \
+  --rsync-ssh-port 22 --rsync-timeout-ms 30000 \
+  --allow-host cdn.example.com \
+  --max-source-bytes 262144 --max-source-manifest-bytes 16384 \
+  --max-remote-map-bytes 65536 --max-base-sb3-bytes 268435456 \
+  --max-asset-file-bytes 16777216 --max-asset-files 256 \
+  --max-total-asset-bytes 134217728 --timeout-ms 10000 --max-redirects 3
+```
+
+rsyncはshellを介さず、`BatchMode=yes`と`StrictHostKeyChecking=yes`を付けて実行します。事前に
+SSH agent／SSH config／`known_hosts`と書き込み可能な同期先directoryを準備してください。remote pathは安全な
+`[user@]host:/absolute/path`形式に限定されます。`--delete`は使わず、content-addressed filename以外を
+変更しません。同期に成功してもHTTPS公開が直ちに反映されなければ検証失敗となり、local成果物は
+作成されません。CDN cacheを利用する場合は、新しいhash filenameがoriginから即時取得できる構成が
+必要です。
+
+`project`化できるのはScratchがtarget上で保持できるbackdrop／costume／soundです。target非依存の
+`image`と複数fileの`poseModel`はproject assetへ変換できないため、診断付きで停止します。
+backdrop／costumeをproject化するとSB3側のbitmapResolutionによって表示scaleが変わり得るため、元画像の
+byte列も出力projectへ保全します。local元画像は元と同じproject相対path、remote元画像は
+`assets/originals/`以下へ保存し、builder APIの`preservedOriginals`でasset IDから保全pathを取得できます。
+`local`化では選択assetを出力directoryの`assets/`へcopyまたはmaterializeし、project assetから
+移した未共有entryは出力SB3から除きます。remote pose ZIPは展開せず、同じbyte列のlocal ZIP fileとして
+保存します。生成SB3は作者用baseなので、配布用の自己完結SB3は生成された
+出力directoryを`--project-root`、その`project.source.json`を`--source-manifest`、生成SB3を`--base`として
+`build-dsl4`で作成してください。Source Graphの複数file編集はこのcommandの対象外です。
+
 DSL embedded assetをBase64本文ではなくSB3 rootのcontent-addressed entryとして試す場合は、build開始時に
 `--enable-root-binary-entries`を明示します。これは既定OFFです。OFFでは従来のBase64形式を生成するため、
 ロールバック時はflagを外して成果物を再buildします。entry形式、対応sbdl version、Packager／session backingの契約は

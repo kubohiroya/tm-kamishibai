@@ -247,14 +247,60 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (!verified) {
-          if (asset.kind !== 'poseModel') {
-            throw assetError(
-              asset.id,
-              'K4-ASSET-REMOTE-METADATA-001',
-              `Only pose models may use an unverified remote URL: ${asset.id}`,
-            );
-          }
           const unverifiedRemoteLoader = /** @type {Function} */ (remoteLoader);
+          if (asset.kind !== 'poseModel') {
+            try {
+              const loaded = await unverifiedRemoteLoader(
+                Object.freeze({assetId: asset.id, url: source.url}),
+                context,
+              );
+              if (
+                !isRecord(loaded) ||
+                !(loaded.bytes instanceof Uint8Array) ||
+                loaded.bytes.byteLength === 0
+              ) {
+                throw new TypeError(`Remote asset payload is invalid: ${asset.id}`);
+              }
+              const contentType = mediaType(loaded.contentType);
+              const requiredPrefix = asset.kind === 'sound' ? 'audio/' : 'image/';
+              if (!contentType.startsWith(requiredPrefix)) {
+                throw assetError(
+                  asset.id,
+                  'K4-ASSET-REMOTE-CONTENT-TYPE-001',
+                  `Remote asset Content-Type does not match its kind: ${asset.id}`,
+                );
+              }
+              if (context.signal?.aborted) throw abortError();
+              const bytes = new Uint8Array(loaded.bytes);
+              return Object.freeze({
+                asset,
+                files: Object.freeze([
+                  Object.freeze({
+                    path: source.url,
+                    size: bytes.byteLength,
+                    contentType,
+                    bytes,
+                  }),
+                ]),
+              });
+            } catch (error) {
+              if (
+                context.signal?.aborted ||
+                (error instanceof Error && error.name === 'AbortError')
+              ) {
+                throw abortError();
+              }
+              if (isRecord(error) && typeof error.code === 'string') throw error;
+              throw assetError(
+                asset.id,
+                'K4-ASSET-REMOTE-LOAD-001',
+                error instanceof Error && error.message
+                  ? error.message
+                  : `Remote asset loading failed: ${asset.id}`,
+                error,
+              );
+            }
+          }
           try {
             if (archiveUrl) {
               const loaded = await unverifiedRemoteLoader(

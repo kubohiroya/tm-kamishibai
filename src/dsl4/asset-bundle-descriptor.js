@@ -219,11 +219,7 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
         return deepFreeze({...candidate, source: {...candidate.source}});
       }
       if (candidate.source.type === 'remote') {
-        exactRemoteSourceKeys(
-          candidate.source,
-          `Asset ${id} remote source`,
-          storyAsset.kind === 'poseModel',
-        );
+        exactRemoteSourceKeys(candidate.source, `Asset ${id} remote source`, true);
         const storySource = isRecord(storyAsset.source) ? storyAsset.source : {};
         if (
           storyAsset.delivery !== 'remote' ||

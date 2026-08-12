@@ -21,6 +21,7 @@ import {
   auditDsl4AssetDistribution,
   buildDsl4RuntimeComponentFile,
   buildSb3Bundle,
+  convertDsl4ProjectAssets,
   formatDsl4AssetDistributionAudit,
   generateDsl4AssetDistributionLockFile,
   serializeDsl4AssetDistributionAudit,
@@ -45,6 +46,18 @@ export function usage() {
 
   tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
+
+  tmpose-kamishibai convert-dsl4-assets --project-root DIR \\
+    --source-manifest project.source.json --base BASE.sb3 \\
+    --output-dir converted --to local|remote|project \\
+    --max-source-bytes N --max-source-manifest-bytes N \\
+    --max-remote-map-bytes N --max-base-sb3-bytes N \\
+    --max-asset-file-bytes N --max-asset-files N \\
+    --max-total-asset-bytes N --timeout-ms N --max-redirects N \\
+    [--asset ASSET_ID] [--remote-map FILE | \\
+     --rsync-destination USER@HOST:/PATH --remote-base-url HTTPS_URL] \\
+    [--rsync-ssh-port N] [--rsync-timeout-ms N] \\
+    [--allow-host HOST] [--output-name NAME]
 
   tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
     --max-source-bytes N [--format pretty|json]
@@ -107,6 +120,20 @@ DSL 4.0 preview-dsl4 options:
 convert-dsl4 options:
   --pose-models FILE      Optionally embed exact TMPoseURL values as local poseModel assets
 
+convert-dsl4-assets options:
+  --asset ASSET_ID             Convert one asset (repeatable; omitted means all assets)
+  --to local|remote|project    Destination representation
+  --remote-map FILE            JSON map of asset IDs to verified remote source metadata
+  --rsync-destination TARGET   rsync SSH target in safe [user@]host:/absolute/path form
+  --remote-base-url URL        Public HTTPS directory URL corresponding to the rsync target
+  --rsync-ssh-port N           SSH port for rsync (default: 22)
+  --rsync-timeout-ms N         Overall rsync timeout (default: --timeout-ms)
+  --allow-host HOST            Allowed HTTPS hostname for downloads (repeatable)
+  --output-dir DIR             New reusable project root with manifest, YAML, SB3, and assets
+  --output-name NAME           Output filename stem (defaults to the input story name)
+  --max-remote-map-bytes N     Maximum remote mapping JSON bytes
+  --max-base-sb3-bytes N       Maximum input SB3 bytes
+
 validate-dsl4 options:
   --format FORMAT         Diagnostic output: pretty (default) or json
 
@@ -149,6 +176,8 @@ audit-dsl4-assets resolves a frozen asset lock without network access or file wr
 lock-dsl4-assets fetches only allowlisted HTTPS providers and atomically writes a canonical lock.
 vendor-dsl4-assets fetches and verifies lock providers, then atomically installs a content-addressed
 mirror and generated config/lock files for offline resolution.
+convert-dsl4-assets writes one new authoring directory and never overwrites inputs or remote files
+outside its content-addressed rsync payload names. It never performs remote deletion.
 convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
 explicitly selected YAML output.`;
 }
@@ -632,6 +661,155 @@ function parseConvertDsl4Arguments(arguments_) {
 }
 
 /**
+ * @param {string[]} arguments_
+ * @returns {Omit<Parameters<typeof convertDsl4ProjectAssets>[0], 'sourceFrontend'>}
+ */
+function parseConvertDsl4AssetsArguments(arguments_) {
+  const values = new Map();
+  const assets = [];
+  const allowedHosts = [];
+  const allowed = new Set([
+    '--project-root',
+    '--source-manifest',
+    '--base',
+    '--output-dir',
+    '--output-name',
+    '--to',
+    '--asset',
+    '--remote-map',
+    '--rsync-destination',
+    '--remote-base-url',
+    '--rsync-ssh-port',
+    '--rsync-timeout-ms',
+    '--allow-host',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-remote-map-bytes',
+    '--max-base-sb3-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+  ]);
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!allowed.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (option === '--asset') assets.push(value);
+    else if (option === '--allow-host') allowedHosts.push(value);
+    else {
+      if (values.has(option)) {
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
+      values.set(option, value);
+    }
+  }
+  const required = [
+    '--project-root',
+    '--source-manifest',
+    '--base',
+    '--output-dir',
+    '--to',
+    '--max-source-bytes',
+    '--max-source-manifest-bytes',
+    '--max-remote-map-bytes',
+    '--max-base-sb3-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+    '--timeout-ms',
+    '--max-redirects',
+  ];
+  for (const option of required) {
+    if (!values.has(option)) {
+      throw new Sb3BuilderError(`Missing required option: ${option}`, {stage: 'cli'});
+    }
+  }
+  /** @param {string} option @param {number} minimum */
+  const integer = (option, minimum) => {
+    const value = Number(values.get(option));
+    if (!Number.isSafeInteger(value) || value < minimum) {
+      throw new Sb3BuilderError(`${option} must be an integer >= ${minimum}.`, {stage: 'cli'});
+    }
+    return value;
+  };
+  const to = values.get('--to');
+  if (to !== 'local' && to !== 'project' && to !== 'remote') {
+    throw new Sb3BuilderError('--to must be local, project, or remote.', {stage: 'cli'});
+  }
+  const maxAssetFileBytes = integer('--max-asset-file-bytes', 1);
+  const maxTotalAssetBytes = integer('--max-total-asset-bytes', 1);
+  if (maxAssetFileBytes > maxTotalAssetBytes) {
+    throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
+      stage: 'cli',
+    });
+  }
+  const hasRsyncDestination = values.has('--rsync-destination');
+  const hasRemoteBaseUrl = values.has('--remote-base-url');
+  const hasRsyncOption =
+    hasRsyncDestination ||
+    hasRemoteBaseUrl ||
+    values.has('--rsync-ssh-port') ||
+    values.has('--rsync-timeout-ms');
+  if (hasRsyncOption && (!hasRsyncDestination || !hasRemoteBaseUrl)) {
+    throw new Sb3BuilderError(
+      '--rsync-destination and --remote-base-url must be specified together.',
+      {stage: 'cli'},
+    );
+  }
+  if (hasRsyncOption && to !== 'remote') {
+    throw new Sb3BuilderError('rsync options require --to remote.', {stage: 'cli'});
+  }
+  if (hasRsyncOption && values.has('--remote-map')) {
+    throw new Sb3BuilderError('--remote-map cannot be combined with rsync options.', {
+      stage: 'cli',
+    });
+  }
+  const rsyncSshPort = values.has('--rsync-ssh-port') ? integer('--rsync-ssh-port', 1) : 22;
+  if (rsyncSshPort > 65_535) {
+    throw new Sb3BuilderError('--rsync-ssh-port must be <= 65535.', {stage: 'cli'});
+  }
+  return {
+    projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
+    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
+    outputDirectory: path.resolve(/** @type {string} */ (values.get('--output-dir'))),
+    to,
+    assets,
+    allowedHosts,
+    maxSourceBytes: integer('--max-source-bytes', 1),
+    maxSourceManifestBytes: integer('--max-source-manifest-bytes', 1),
+    maxRemoteMapBytes: integer('--max-remote-map-bytes', 1),
+    maxBaseSb3Bytes: integer('--max-base-sb3-bytes', 1),
+    maxAssetFileBytes,
+    maxAssetFiles: integer('--max-asset-files', 1),
+    maxTotalAssetBytes,
+    timeoutMs: integer('--timeout-ms', 1),
+    maxRedirects: integer('--max-redirects', 0),
+    ...(values.has('--remote-map')
+      ? {remoteMap: path.resolve(/** @type {string} */ (values.get('--remote-map')))}
+      : {}),
+    ...(hasRsyncOption
+      ? {
+          rsyncDestination: values.get('--rsync-destination'),
+          remoteBaseUrl: values.get('--remote-base-url'),
+          rsyncSshPort,
+          rsyncTimeoutMs: values.has('--rsync-timeout-ms')
+            ? integer('--rsync-timeout-ms', 1)
+            : integer('--timeout-ms', 1),
+        }
+      : {}),
+    ...(values.has('--output-name') ? {outputName: values.get('--output-name')} : {}),
+  };
+}
+
+/**
  * @param {string[]} rest
  * @returns {Parameters<typeof buildSb3Bundle>[0]}
  */
@@ -1081,7 +1259,7 @@ function parsePreviewDsl4Arguments(rest) {
 
 /**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>} | {action: 'audit-dsl4-assets', options: ReturnType<typeof parseAuditDsl4AssetArguments>} | {action: 'lock-dsl4-assets', options: ReturnType<typeof parseLockDsl4AssetArguments>} | {action: 'vendor-dsl4-assets', options: ReturnType<typeof parseVendorDsl4AssetArguments>}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'convert-dsl4-assets', options: ReturnType<typeof parseConvertDsl4AssetsArguments>} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>} | {action: 'audit-dsl4-assets', options: ReturnType<typeof parseAuditDsl4AssetArguments>} | {action: 'lock-dsl4-assets', options: ReturnType<typeof parseLockDsl4AssetArguments>} | {action: 'vendor-dsl4-assets', options: ReturnType<typeof parseVendorDsl4AssetArguments>}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -1095,6 +1273,9 @@ export function parseCliArguments(arguments_) {
   }
   if (command === 'convert-dsl4') {
     return {action: 'convert', options: parseConvertDsl4Arguments(rest)};
+  }
+  if (command === 'convert-dsl4-assets') {
+    return {action: 'convert-dsl4-assets', options: parseConvertDsl4AssetsArguments(rest)};
   }
   if (command === 'validate-dsl4') {
     return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
@@ -1112,7 +1293,7 @@ export function parseCliArguments(arguments_) {
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -1120,7 +1301,7 @@ export function parseCliArguments(arguments_) {
 /**
  * @param {string[]} arguments_
  * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>, stderr?: Pick<NodeJS.WriteStream, 'write'>}} [io]
- * @param {{runPreview?: typeof runDsl4LocalPreviewCommand, runAssetAudit?: typeof auditDsl4AssetDistribution, runAssetLock?: typeof generateDsl4AssetDistributionLockFile, runAssetVendor?: typeof vendorDsl4AssetDistribution}} [dependencies]
+ * @param {{runPreview?: typeof runDsl4LocalPreviewCommand, runAssetAudit?: typeof auditDsl4AssetDistribution, runAssetConverter?: typeof convertDsl4ProjectAssets, runAssetLock?: typeof generateDsl4AssetDistributionLockFile, runAssetVendor?: typeof vendorDsl4AssetDistribution}} [dependencies]
  */
 export async function runCli(arguments_, io = {}, dependencies = {}) {
   const stdout = io.stdout ?? process.stdout;
@@ -1160,6 +1341,23 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
     return result;
   }
   const schema = JSON.parse(await readFile(dsl4SchemaUrl, 'utf8'));
+  if (parsed.action === 'convert-dsl4-assets') {
+    const runAssetConverter = dependencies.runAssetConverter ?? convertDsl4ProjectAssets;
+    if (typeof runAssetConverter !== 'function') {
+      throw new TypeError('runAssetConverter must be a function');
+    }
+    const result = await runAssetConverter({
+      ...parsed.options,
+      sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+        limits: {maxCanonicalSourceBytes: parsed.options.maxSourceBytes},
+      }),
+    });
+    stdout.write(`Converted ${Object.keys(result.converted).length} asset(s)\n`);
+    stdout.write(`Saved ${path.basename(result.sourceManifestPath)}\n`);
+    stdout.write(`Saved ${path.basename(result.sourcePath)}\n`);
+    stdout.write(`Saved ${path.basename(result.sb3Path)}\n`);
+    return result;
+  }
   if (parsed.action === 'validate-dsl4') {
     const result = await validateDsl4SourceFile({
       ...parsed.options,

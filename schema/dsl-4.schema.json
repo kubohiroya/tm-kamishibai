@@ -46,7 +46,7 @@
     "remoteAssetSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "integrity", "contentType", "size"],
+      "required": ["url"],
       "properties": {
         "url": {
           "type": "string",
@@ -61,6 +61,11 @@
           "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
         },
         "size": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "integrity": ["contentType", "size"],
+        "contentType": ["integrity", "size"],
+        "size": ["integrity", "contentType"]
       }
     },
     "remotePoseModelSource": {
