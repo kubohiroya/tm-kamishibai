@@ -72,6 +72,7 @@ function diagnosticInput(value) {
  * @param {unknown} options.mount
  * @param {unknown} options.viewport
  * @param {unknown} [options.safeArea]
+ * @param {Record<string, Function>} [options.debugExecution]
  * @param {Readonly<Record<string, Function>>} [options.clock]
  * @param {{getItem?: Function, setItem?: Function}} [options.storage]
  * @param {boolean} [options.reducedMotion]
@@ -136,6 +137,7 @@ export function createDsl4PreviewReloadSurface(options) {
     mount: options.mount,
     policy,
     layoutCoordinator,
+    debugExecution: options.debugExecution,
     storage: options.storage,
     formatTime: options.formatTime,
     reducedMotion: options.reducedMotion,

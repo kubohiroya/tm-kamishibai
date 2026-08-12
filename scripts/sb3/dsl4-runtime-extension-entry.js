@@ -10,6 +10,7 @@ import {
   dsl4NonEmbeddedDevelopmentFeatureFlags,
   dsl4StandardProductionFeatureFlags,
 } from '../../src/dsl4/feature-flags.js';
+import {createDsl4DebugExecutionCoordinator} from '../../src/dsl4/debug-execution.js';
 import {createDsl4LiveReloadSession} from '../../src/dsl4/live-reload-session.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
 import {createDsl4BrowserPreviewRuntimeComponent} from '../../src/dsl4/platform/browser-preview-runtime-component.js';
@@ -172,6 +173,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.selectedProject = null;
     this.previewShell = null;
     this.previewLiveReload = null;
+    this.previewDebugExecution = null;
     this.previewHasCurrent = false;
     this.fileInput = null;
     this.applicationMenu = null;
@@ -489,10 +491,14 @@ class KamishibaiDsl4RuntimeExtension {
     /** @type {Record<string, any> | null} */
     let previewProjectRoot = null;
     const generationComponents = new WeakMap();
+    const debugExecution = createDsl4DebugExecutionCoordinator({
+      enabled: dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4Debugger,
+    });
     let liveReload;
     const createSession = createDsl4TurboWarpPreviewSessionFactory({
       featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
       runtimeComponent: component,
+      debugExecution,
       resolveRuntimeComponent({storyDocument}) {
         const generation = generationComponents.get(storyDocument);
         if (!generation) {
@@ -560,6 +566,7 @@ class KamishibaiDsl4RuntimeExtension {
         protocolSession,
         sessionId: 'nonembedded-sb3',
         sourceFrontend: this.frontend,
+        debugExecution,
         maxSourceBytes: limits.maxSourceBytes,
         onProjectRoot: (projectRoot) => {
           previewProjectRoot = projectRoot;
@@ -582,9 +589,11 @@ class KamishibaiDsl4RuntimeExtension {
       });
     } catch (error) {
       await liveReload.dispose();
+      debugExecution.dispose();
       throw error;
     }
     this.previewLiveReload = liveReload;
+    this.previewDebugExecution = debugExecution;
     this.previewShell = previewShell;
     this.previewHasCurrent = false;
     return previewShell;
@@ -928,14 +937,17 @@ class KamishibaiDsl4RuntimeExtension {
     this.binaryRuntimeSurface = null;
     const previewShell = this.previewShell;
     const previewLiveReload = this.previewLiveReload;
+    const previewDebugExecution = this.previewDebugExecution;
     this.previewShell = null;
     this.previewLiveReload = null;
+    this.previewDebugExecution = null;
     this.previewHasCurrent = false;
     const failures = [];
     for (const dispose of [
       shell ? () => shell.dispose(reason) : null,
       previewShell ? () => previewShell.dispose() : null,
       previewLiveReload ? () => previewLiveReload.dispose() : null,
+      previewDebugExecution ? () => previewDebugExecution.dispose() : null,
     ]) {
       if (!dispose) continue;
       try {

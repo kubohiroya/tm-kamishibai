@@ -121,6 +121,28 @@ scenes:
   }
 });
 
+test('normalizes the argument-free debugger action and rejects supplied arguments', () => {
+  const result = frontend.parse(
+    "kamishibai: '4.0'\nscenes:\n  opening:\n    - debugger:\n    - wait: 0\n",
+    {sourceId: 'debugger.kamishibai.yaml'},
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(semanticProjection(result.storyDocument).scenes[0].actions[0], {
+    command: 'debugger',
+    target: null,
+    args: {},
+  });
+
+  for (const sourceArguments of ['true', '{}', 'stop']) {
+    const invalid = frontend.parse(
+      `kamishibai: '4.0'\nscenes:\n  opening:\n    - debugger: ${sourceArguments}\n`,
+      {sourceId: 'invalid-debugger.kamishibai.yaml'},
+    );
+    assert.equal(invalid.ok, false, sourceArguments);
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('normalizes say and think completion, typewriter, start sound, and source positions', () => {
   const source = `
 kamishibai: '4.0'

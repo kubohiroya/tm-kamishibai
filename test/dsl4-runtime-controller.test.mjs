@@ -165,6 +165,7 @@ scenes:
       - bgm: Music
       - sound: Effect
       - wait: 0
+      - debugger:
       - broadcastMessageAndWait: opening-effect
       - transition:
           effect: fadeOut
@@ -367,8 +368,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 22);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 22);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 23);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 23);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')

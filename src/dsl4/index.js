@@ -117,6 +117,7 @@ export {
 } from './preview-layout-coordinator.js';
 export {createDsl4BrowserPreviewCoordinator} from './browser-preview-coordinator.js';
 export {resolveDsl4ControlProfile} from './control-profile-resolver.js';
+export {createDsl4DebugExecutionCoordinator} from './debug-execution.js';
 export {
   dsl4DiagnosticTruncationCode,
   Dsl4DiagnosticPolicyError,

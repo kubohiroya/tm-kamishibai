@@ -61,6 +61,7 @@ function historyFailure(result) {
  * @param {boolean} [options.historyNavigationAvailable]
  * @param {{maxActionEntries: number, maxSceneVisits: number}} [options.historyLimits]
  * @param {Record<string, Function>} options.port
+ * @param {{beforeAction: Function, getState: Function}} [options.debugExecution]
  * @param {{prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.assetLifecycle]
  * @param {() => {prepare: Function, setLoading: Function, releaseAssets: Function, release: Function}} [options.createAssetLifecycle]
  * @param {(expression: string, variables: Readonly<Record<string, string | number | boolean>>, context: Record<string, unknown>) => boolean | Promise<boolean>} [options.evaluateCondition]
@@ -87,6 +88,7 @@ export function createDsl4NavigationSession({
   historyNavigationAvailable = false,
   historyLimits,
   port,
+  debugExecution,
   assetLifecycle,
   createAssetLifecycle,
   evaluateCondition,
@@ -265,6 +267,7 @@ export function createDsl4NavigationSession({
     controller = createDsl4RuntimeController({
       storyDocument,
       port,
+      debugExecution,
       assetLifecycle: resolvedAssetLifecycle,
       evaluateCondition,
       onEvent: handleRuntimeEvent,

@@ -99,6 +99,12 @@ YAML保存を500 ms間隔で監視します。validな保存は
 確認ダイアログを出さず、既定の現在actionから自動reloadし、安全に再開できなければscene、台本先頭へ
 fallbackします。reload status buttonを押した場合だけ、次回以降の再開位置を変更できます。
 
+同じ非埋め込みランナーでは、台本中の引数なし`debugger` actionで実行直前に停止できます。
+reload status buttonの設定画面から「debuggerで停止」または「1 actionずつ実行」を選び、停止中は
+「次のactionを実行」で再開します。debug mode、停止位置、選択した実行modeはsessionだけに保持し、
+YAML、SB3、project、localStorageへ保存しません。台本埋め込みproduction SB3では`debugger`はno-opです。
+詳細は[DSL 4.0 debug execution](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-debug-execution.md)を参照してください。
+
 project directoryを開いた場合は、YAMLが宣言するlocal file assetを同じrootから安定読込し、
 remote assetとSB3内のproject assetも同じgenerationで再解決します。TurboWarp Editorにドロップして
 追加したコスチューや音声はSB3側が所有したままで、YAMLの`name`参照から利用できます。

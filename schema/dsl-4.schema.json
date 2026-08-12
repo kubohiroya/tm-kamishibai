@@ -1126,6 +1126,12 @@
       "required": ["wait"],
       "properties": {"wait": {"$ref": "#/$defs/waitArgs"}}
     },
+    "debuggerAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["debugger"],
+      "properties": {"debugger": {"type": "null"}}
+    },
     "broadcastMessageAndWaitAction": {
       "type": "object",
       "additionalProperties": false,
@@ -1294,6 +1300,7 @@
         {"$ref": "#/$defs/bgmAction"},
         {"$ref": "#/$defs/soundAction"},
         {"$ref": "#/$defs/waitAction"},
+        {"$ref": "#/$defs/debuggerAction"},
         {"$ref": "#/$defs/broadcastMessageAndWaitAction"},
         {"$ref": "#/$defs/transitionAction"},
         {"$ref": "#/$defs/gotoAction"},

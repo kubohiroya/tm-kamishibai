@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 import {installDsl4PackagedRuntimeComponent} from '../src/builder/index.js';
 import {
+  createDsl4DebugExecutionCoordinator,
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
@@ -822,6 +823,49 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   await third.dispose('preview-test');
   assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 3);
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
+});
+
+test('requires and wires one shared debug coordinator for flagged preview sessions', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const featureFlags = {
+    dsl4Runtime: true,
+    dsl4AppShell: true,
+    dsl4WebPreviewAdapter: true,
+    dsl4PreviewReloadOverlay: true,
+    dsl4Debugger: true,
+  };
+  assert.throws(
+    () =>
+      createDsl4TurboWarpPreviewSessionFactory({
+        featureFlags,
+        runtimeComponent,
+        ...platformFixture([]),
+        resetManagedPresentation() {},
+      }),
+    /debugExecution is required/u,
+  );
+
+  const debugExecution = createDsl4DebugExecutionCoordinator({enabled: true});
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags,
+    debugExecution,
+    runtimeComponent,
+    ...platformFixture([]),
+    resetManagedPresentation() {},
+  });
+  const session = await createSession({
+    storyDocument: runtimeComponent.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  assert.equal((await session.start()).status, 'finished');
+  await session.dispose('debug-preview-test');
+  debugExecution.dispose();
 });
 
 test('resolves a generation-specific runtime component before creating a preview session', async () => {

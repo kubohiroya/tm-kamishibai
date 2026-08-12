@@ -67,6 +67,9 @@ export const dsl4DevelopmentPreviewShellManifest = deepFreeze({
     'reloadDialogState',
     'reloadLayoutState',
     'reloadCandidateRevision',
+    'debugExecutionMode',
+    'debugPauseState',
+    'debugPauseLocation',
   ],
 });
 

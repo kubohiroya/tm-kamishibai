@@ -134,6 +134,9 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
     'reloadCandidate',
     'reloadModalState',
     'reloadPreference',
+    'debugExecutionMode',
+    'debugPauseState',
+    'debugPauseLocation',
   ]) {
     assert.equal(persisted.includes(field), false, field);
   }
