@@ -566,6 +566,30 @@ async function assertFreshBrowserBuiltStoryRuns(archive) {
   }
 }
 
+test('builds the current DSL 4.0 runtime with one TensorFlow.js registry', async () => {
+  const extensionSource = (await createDsl4RuntimeExtensionSource()).toString('utf8');
+  assert.match(extensionSource, /var tmPose=/u);
+  assert.match(
+    extensionSource,
+    /TensorFlow\.js — Google LLC — Apache-2\.0 — @tensorflow\/tfjs@1\.3\.1/u,
+  );
+  assert.doesNotMatch(
+    extensionSource,
+    /@tensorflow\/tfjs Copyright 2019 Google/u,
+    'The Teachable Machine browser bundle already contains TensorFlow.js.',
+  );
+  assert.equal(
+    extensionSource.split('Reusing existing backend factory').length - 1,
+    1,
+    'The release extension must contain only one TensorFlow.js backend registry.',
+  );
+  assert.equal(
+    extensionSource.split('Overwriting the platform').length - 1,
+    1,
+    'The release extension must contain only one TensorFlow.js platform registry.',
+  );
+});
+
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
   const result = await buildRelease();
   const archive = unzipSync(result.archive);

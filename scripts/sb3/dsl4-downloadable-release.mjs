@@ -20,7 +20,6 @@ import {
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const require = createRequire(import.meta.url);
-const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
 const tmPoseBrowserRuntimePath =
   require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
@@ -336,17 +335,12 @@ async function createProject(assets) {
 }
 
 export async function createDsl4RuntimeExtensionSource() {
-  const [
-    tensorflowBrowserRuntime,
-    tmPoseBrowserRuntime,
-    officialWebsiteFavicon,
-    ...applicationMenuIconFiles
-  ] = await Promise.all([
-    readFile(tensorflowBrowserRuntimePath, 'utf8'),
-    readFile(tmPoseBrowserRuntimePath, 'utf8'),
-    readFile(officialWebsiteFaviconPath),
-    ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
-  ]);
+  const [tmPoseBrowserRuntime, officialWebsiteFavicon, ...applicationMenuIconFiles] =
+    await Promise.all([
+      readFile(tmPoseBrowserRuntimePath, 'utf8'),
+      readFile(officialWebsiteFaviconPath),
+      ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
+    ]);
   const applicationMenuIcons = Object.fromEntries(
     Object.keys(applicationMenuIconPaths).map((action, index) => [
       action,
@@ -365,10 +359,9 @@ export async function createDsl4RuntimeExtensionSource() {
     },
     format: 'iife',
     banner: {
-      js:
-        `${formatDsl4RuntimeExtensionHeader()}\n` +
-        `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
-        `}).call(globalThis);\n${tmPoseBrowserRuntime}\n`,
+      // The Teachable Machine browser bundle already contains its compatible TensorFlow.js
+      // runtime. Loading tf.min.js first would register the same backends and platform twice.
+      js: `${formatDsl4RuntimeExtensionHeader()}\n${tmPoseBrowserRuntime}\n`,
     },
     legalComments: 'eof',
     logLevel: 'silent',
