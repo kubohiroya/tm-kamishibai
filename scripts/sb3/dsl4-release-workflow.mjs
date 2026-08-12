@@ -245,44 +245,29 @@ export async function checkDsl4Release({
   verifyCatalog = true,
   verifyPackageVersion = true,
 } = {}) {
-  const metadata = await verifyDsl4ReleaseSnapshot({root, verifyCatalog});
+  const metadata = await verifyDsl4ReleaseSnapshot({
+    root,
+    createSb3,
+    verifyCatalog,
+    verifyPackageVersion,
+  });
   const repairGuidance =
     metadata.state === 'candidate'
       ? `Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}; do not edit hashes by hand.`
-      : `${dsl4ReleaseVersion} is ${metadata.state} and immutable. Create ${dsl4NextReleaseVersion} instead.`;
-  const expectedFiles = await createSourceFiles();
+      : `Restore ${dsl4ReleaseRoot} from ${dsl4ReleaseTag}; versioned release snapshots are immutable.`;
   const sourceDirectory = path.join(root, dsl4ReleaseSourceDirectory);
-  await assertSourceFiles(sourceDirectory, expectedFiles, repairGuidance);
-  assert.equal(
-    createDsl4ReleaseSourceIdentity(expectedFiles),
-    metadata.sourceIdentity,
-    `DSL 4 release source identity is stale. ${repairGuidance}`,
-  );
-
-  const [first, second] = await Promise.all([
-    createSb3(sb3Options(root, sourceDirectory)),
-    createSb3(sb3Options(root, sourceDirectory)),
-  ]);
-  assert(
-    Buffer.from(first.archive).equals(Buffer.from(second.archive)),
-    `${dsl4ReleaseVersion} SB3 generation is not deterministic.`,
-  );
-  assert.equal(
-    sha256(first.archive),
-    metadata.artifact.sha256,
-    `DSL 4 release artifact hash is stale. ${repairGuidance}`,
-  );
-
-  if (verifyPackageVersion) {
-    const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-    assert.equal(packageJson.version, dsl4ReleaseVersion, 'package.json release version is stale.');
+  if (metadata.state === 'candidate') {
+    const expectedFiles = await createSourceFiles();
+    await assertSourceFiles(sourceDirectory, expectedFiles, repairGuidance);
   }
   return metadata;
 }
 
 export async function verifyDsl4ReleaseSnapshot({
   root = repositoryRoot,
+  createSb3 = createKamishibaiSb3,
   verifyCatalog = true,
+  verifyPackageVersion = true,
 } = {}) {
   const metadata = await readMetadata(root);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}. Run pnpm release:dsl4:update.`);
@@ -293,6 +278,23 @@ export async function verifyDsl4ReleaseSnapshot({
     metadata.sourceIdentity,
     `DSL 4 release snapshot identity is invalid. Restore ${dsl4ReleaseRoot} from version control.`,
   );
+  const [first, second] = await Promise.all([
+    createSb3(sb3Options(root, sourceDirectory)),
+    createSb3(sb3Options(root, sourceDirectory)),
+  ]);
+  assert(
+    Buffer.from(first.archive).equals(Buffer.from(second.archive)),
+    `${dsl4ReleaseVersion} snapshot SB3 generation is not deterministic.`,
+  );
+  assert.equal(
+    sha256(first.archive),
+    metadata.artifact.sha256,
+    `DSL 4 release snapshot artifact hash is invalid. Restore ${dsl4ReleaseRoot} from version control.`,
+  );
+  if (verifyPackageVersion) {
+    const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    assert.equal(packageJson.version, dsl4ReleaseVersion, 'package.json release version is stale.');
+  }
   if (verifyCatalog) {
     const {downloadCatalog} = await import('../download-catalog.mjs');
     const catalogEntry = downloadCatalog.find(({series}) => series === dsl4ReleaseSeries);

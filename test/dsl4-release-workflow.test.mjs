@@ -86,7 +86,7 @@ test('updates atomically, remains idempotent, and preserves the candidate on fai
   }
 });
 
-test('checks without mutation and rejects same-version updates after freeze', async () => {
+test('checks candidates against the generator and frozen releases against their snapshot', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'dsl4-release-freeze-'));
   const options = {
     root,
@@ -100,6 +100,14 @@ test('checks without mutation and rejects same-version updates after freeze', as
     const beforeCheck = await releaseSnapshot(root);
     assert.equal((await checkDsl4Release(options)).state, 'candidate');
     assert.deepEqual(await releaseSnapshot(root), beforeCheck);
+    await assert.rejects(
+      checkDsl4Release({
+        ...options,
+        createSourceFiles: async () =>
+          new Map([...sourceFiles(), ['candidate-change', Buffer.from('update required')]]),
+      }),
+      /release source file set is stale/u,
+    );
 
     const frozen = await freezeDsl4Release(options);
     assert.equal(frozen.state, 'frozen');
@@ -108,14 +116,13 @@ test('checks without mutation and rejects same-version updates after freeze', as
       new RegExp(`${dsl4NextReleaseVersion.replaceAll('.', '\\.')}`),
     );
     await assert.rejects(updateDsl4Release(options), /immutable/u);
-    await assert.rejects(
-      checkDsl4Release({
-        ...options,
-        createSourceFiles: async () =>
-          new Map([...sourceFiles(), ['post-freeze-change', Buffer.from('not allowed')]]),
-      }),
-      new RegExp(`${dsl4NextReleaseVersion.replaceAll('.', '\\.')}`),
-    );
+    const snapshotOptions = {
+      ...options,
+      createSourceFiles: async () => {
+        throw new Error('Frozen and published checks must not regenerate the next candidate.');
+      },
+    };
+    assert.equal((await checkDsl4Release(snapshotOptions)).state, 'frozen');
     assert.equal((await verifyDsl4ReleaseSnapshot(options)).state, 'frozen');
     await assert.rejects(
       verifyDsl4PublishedReleaseSnapshot(options),
@@ -136,7 +143,8 @@ test('checks without mutation and rejects same-version updates after freeze', as
       'npm',
       'pages',
     ]);
-    assert.equal((await checkDsl4Release(options)).state, 'published');
+    assert.equal((await checkDsl4Release(snapshotOptions)).state, 'published');
+    assert.equal((await verifyDsl4PublishedReleaseSnapshot(snapshotOptions)).state, 'published');
   } finally {
     await rm(root, {force: true, recursive: true});
   }
@@ -169,14 +177,16 @@ test('verifies only the stored release snapshot and rejects snapshot mutation', 
       (
         await verifyDsl4PublishedReleaseSnapshot({
           root,
+          createSb3,
           verifyCatalog: false,
+          verifyPackageVersion: false,
         })
       ).state,
       'published',
     );
-    await assert.rejects(
-      checkDsl4Release({...options, createSourceFiles: changedWorkingSource}),
-      /release source file set is stale/u,
+    assert.equal(
+      (await checkDsl4Release({...options, createSourceFiles: changedWorkingSource})).state,
+      'published',
     );
 
     await writeFile(
