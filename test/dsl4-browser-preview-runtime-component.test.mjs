@@ -144,6 +144,36 @@ test('prepares project, local-directory, and remote assets for one watched sourc
   assert.deepEqual(component.getAssetFile('LocalImage', 'card.svg'), localBytes);
 });
 
+test('reports the exact missing project asset path to the author UI boundary', async () => {
+  const projectRoot = {
+    kind: 'directory',
+    async getDirectoryHandle() {
+      throw notFound();
+    },
+  };
+
+  await assert.rejects(
+    createDsl4BrowserPreviewRuntimeComponent({
+      baseComponent: {},
+      sourceResult: await sourceResult(storyWithEveryDelivery),
+      projectRoot,
+      maxAssetFileBytes: 1024,
+      maxAssetFiles: 8,
+      maxAssetBytes: 4096,
+      quietWindowMs: 0,
+      sleep: async () => {},
+      subtleCrypto: webcrypto.subtle,
+    }),
+    (error) => {
+      assert.equal(error.code, 'K4-ASSET-MISSING');
+      assert.equal(error.displayName, 'assets/card.svg');
+      assert.equal(error.path, '$.assets["LocalImage"].file');
+      assert.match(error.message, /assets\/card\.svg/u);
+      return true;
+    },
+  );
+});
+
 test('rejects local sibling assets when the author opens only a story file', async () => {
   const sourceHandle = fileHandle('story.kamishibai.yaml', () =>
     new TextEncoder().encode(storyWithEveryDelivery),

@@ -179,29 +179,41 @@ function expectedError(error) {
   );
 }
 
-/** @param {string} code @param {'error' | 'warning'} severity @param {string} sourceId */
-function sourceDiagnostic(code, severity, sourceId) {
+/**
+ * @param {string} code
+ * @param {'error' | 'warning'} severity
+ * @param {string} sourceId
+ * @param {Readonly<Record<string, unknown>>} [details]
+ */
+function sourceDiagnostic(code, severity, sourceId, details = {}) {
   return deepFreeze({
     version: 1,
     code,
     severity,
-    message: diagnosticMessages[code] ?? 'The Web Preview source could not be prepared',
+    message:
+      typeof details.message === 'string'
+        ? details.message
+        : (diagnosticMessages[code] ?? 'The Web Preview source could not be prepared'),
     sourceId,
+    ...(typeof details.displayName === 'string' ? {displayName: details.displayName} : {}),
     range: {
       start: {line: 1, column: 1, offset: 0},
       end: {line: 1, column: 1, offset: 0},
     },
-    path: '$',
+    path: typeof details.path === 'string' ? details.path : '$',
     related: [],
   });
 }
 
-/** @param {string} code @param {'error' | 'warning'} severity @param {string} sourceId */
-function sourceFailure(code, severity, sourceId) {
+/** @param {Readonly<Record<string, unknown>>} diagnostic */
+function sourceFailure(diagnostic) {
+  const protocolDiagnostic = Object.fromEntries(
+    Object.entries(diagnostic).filter(([key]) => key !== 'displayName'),
+  );
   return deepFreeze({
     ok: false,
     canonicalSource: '',
-    diagnostics: [sourceDiagnostic(code, severity, sourceId)],
+    diagnostics: [protocolDiagnostic],
     sourceSnapshot: null,
   });
 }
@@ -652,15 +664,40 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     );
   }
 
-  /** @param {string} code @param {'error' | 'warning'} severity @param {boolean} stage */
-  async function publishDiagnostic(code, severity, stage) {
-    const diagnostic = sourceDiagnostic(code, severity, manifest?.sourceId ?? 'main');
+  /**
+   * @param {string} code
+   * @param {'error' | 'warning'} severity
+   * @param {boolean} stage
+   * @param {unknown} [failure]
+   */
+  async function publishDiagnostic(code, severity, stage, failure) {
+    const manifestFilename = dsl4BrowserPreviewSourceDefaults.manifestFilename;
+    const sourceFile = manifest?.path ?? null;
+    const manifestDiagnostic = code.includes('MANIFEST');
+    const displayName =
+      isRecord(failure) && typeof failure.displayName === 'string'
+        ? failure.displayName
+        : manifestDiagnostic || sourceFile === null
+          ? manifestFilename
+          : sourceFile;
+    const missingMessage =
+      code === 'K4-WEB-PREVIEW-MANIFEST-MISSING'
+        ? `Required project file is missing: ${manifestFilename}`
+        : code === 'K4-SOURCE-MISSING' && sourceFile
+          ? `Required story file is missing: ${sourceFile}`
+          : null;
+    const diagnostic = sourceDiagnostic(code, severity, manifest?.sourceId ?? 'main', {
+      displayName,
+      ...(isRecord(failure) && typeof failure.path === 'string' ? {path: failure.path} : {}),
+      ...(isRecord(failure) && typeof failure.message === 'string' && code.startsWith('K4-ASSET-')
+        ? {message: failure.message}
+        : missingMessage === null
+          ? {}
+          : {message: missingMessage}),
+    });
     await setDiagnostic(diagnostic);
     if (stage) {
-      await publish(
-        sourceFailure(code, severity, manifest?.sourceId ?? 'main'),
-        `diagnostic:${code}`,
-      );
+      await publish(sourceFailure(diagnostic), `diagnostic:${code}`);
     }
   }
 
@@ -934,6 +971,12 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
           ) {
             throw error;
           }
+          if (
+            lastPublication === null &&
+            ['K4-ASSET-MISSING', 'K4-SOURCE-MISSING'].includes(transientCode)
+          ) {
+            throw error;
+          }
           lastTransient = error;
         }
         const elapsed = Number(clock.now()) - startedAt;
@@ -982,7 +1025,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
         'K4-SOURCE-PATH-001',
         'K4-WEB-PREVIEW-PERMISSION-DENIED',
       ].includes(code);
-      await publishDiagnostic(code, severity, stage);
+      await publishDiagnostic(code, severity, stage, error);
       await setStatus('diagnostic');
       return snapshot();
     } finally {

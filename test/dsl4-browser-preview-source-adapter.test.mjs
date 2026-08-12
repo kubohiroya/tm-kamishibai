@@ -445,7 +445,18 @@ test('keeps invalid or missing source immutable and recovers on a later poll', a
     retryIntervalMs: 50,
   });
   await missing.adapter.start(missingProject.root);
-  assert.equal(missing.results.at(-1).diagnostics[0].code, 'K4-SOURCE-MISSING');
+  assert.deepEqual(
+    {
+      code: missing.results.at(-1).diagnostics[0].code,
+      message: missing.results.at(-1).diagnostics[0].message,
+      displayName: missing.diagnostics.find((diagnostic) => diagnostic !== null)?.displayName,
+    },
+    {
+      code: 'K4-SOURCE-MISSING',
+      message: 'Required story file is missing: story.kamishibai.yaml',
+      displayName: 'story.kamishibai.yaml',
+    },
+  );
   assert.equal(missing.results.at(-1).sourceSnapshot, null);
   missingProject.setMissing(false);
   await missing.adapter.pollNow();

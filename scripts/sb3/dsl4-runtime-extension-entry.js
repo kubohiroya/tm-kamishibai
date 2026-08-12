@@ -605,6 +605,11 @@ class KamishibaiDsl4RuntimeExtension {
             status: this.distributionBuildStatus,
           });
         },
+        onDiagnostic: (diagnostic) => {
+          if (diagnostic?.severity === 'error' && this.status === 'starting') {
+            this.showFailure(diagnostic, {returnToMenu: true});
+          }
+        },
         ...(previewStorage === undefined ? {} : {previewStorage}),
         onError: (error) => this.reportFailure(error, 'preview-shell'),
       });
@@ -659,9 +664,37 @@ class KamishibaiDsl4RuntimeExtension {
 
   openWatchedProjectDirectory() {
     if (this.status !== 'menu' || !this.previewShell) return undefined;
+    const picker = globalThis.showDirectoryPicker;
+    if (typeof picker !== 'function') throw new Error('This browser cannot open a project folder.');
     this.sourceChooser?.hide();
     this.status = 'starting';
-    return this.completeWatchedSourceOpen(this.previewShell.openProject());
+    let selection;
+    try {
+      selection = Promise.resolve(picker.call(globalThis, {mode: 'read'}));
+    } catch (error) {
+      selection = Promise.reject(error);
+    }
+    return selection.then(
+      (projectRoot) => this.startNewWatchedSource(projectRoot),
+      (error) => {
+        if (pickerWasCancelled(error)) {
+          this.cancelSourceChoice();
+          return undefined;
+        }
+        this.cancelSourceChoice();
+        throw error;
+      },
+    );
+  }
+
+  async startNewWatchedSource(projectRoot) {
+    if (this.previewShell?.getSnapshot()?.coordinator?.source?.started === true) {
+      await this.restart({showTitle: false});
+    }
+    if (!this.previewShell) throw new Error('The watched story preview is unavailable.');
+    this.hideScratchMenu();
+    this.status = 'starting';
+    return this.completeWatchedSourceOpen(this.previewShell.start(projectRoot));
   }
 
   async openWatchedStoryFile() {
@@ -692,7 +725,7 @@ class KamishibaiDsl4RuntimeExtension {
       throw new TypeError('Select exactly one DSL 4.0 story file');
     }
     const projectRoot = createDsl4BrowserPreviewStoryFileProject(handles[0]);
-    return this.completeWatchedSourceOpen(this.previewShell.start(projectRoot));
+    return this.startNewWatchedSource(projectRoot);
   }
 
   cancelSourceChoice() {
@@ -1036,7 +1069,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.reportFailure(diagnostic, 'session-binary-backing');
   }
 
-  showFailure(failure) {
+  showFailure(failure, {returnToMenu = false} = {}) {
     const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
     const code = typeof failure?.code === 'string' ? failure.code : '';
     const locale = browserLocale();
@@ -1056,8 +1089,11 @@ class KamishibaiDsl4RuntimeExtension {
           en: {title: appShellLocales.en.ui.invalidScript},
           ja: {title: appShellLocales.ja.ui.invalidScript},
         },
+        onReturnToMenu: () =>
+          this.enqueue(() => this.restart({showTitle: false}), 'project-diagnostic-menu'),
       });
-      this.errorIndicator.show({message, code, title});
+      const details = typeof failure === 'object' && failure !== null ? failure : {};
+      this.errorIndicator.show({...details, message, code, title}, {returnToMenu});
     } catch (indicatorError) {
       console.error('Kamishibai DSL 4.0 error indicator failed.', indicatorError);
     }

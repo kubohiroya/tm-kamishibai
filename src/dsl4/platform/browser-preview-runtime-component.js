@@ -10,11 +10,18 @@ function isRecord(value) {
 }
 
 export class Dsl4BrowserPreviewRuntimeAssetError extends Error {
-  /** @param {string} code @param {string} message @param {unknown} [cause] */
-  constructor(code, message, cause) {
+  /**
+   * @param {string} code
+   * @param {string} message
+   * @param {unknown} [cause]
+   * @param {Readonly<Record<string, unknown>>} [details]
+   */
+  constructor(code, message, cause, details = {}) {
     super(message, cause === undefined ? undefined : {cause});
     this.name = 'Dsl4BrowserPreviewRuntimeAssetError';
     this.code = code;
+    if (typeof details.displayName === 'string') this.displayName = details.displayName;
+    if (typeof details.path === 'string') this.path = details.path;
   }
 }
 
@@ -280,17 +287,33 @@ async function captureAssetSnapshot(storyDocument, projectRoot, options) {
         `Local asset ${id} requires opening a project directory`,
       );
     }
-    const files =
-      asset.kind === 'poseModel'
-        ? await readPoseSource(
-            projectRoot,
-            id,
-            asset.file,
-            options.maxAssetFileBytes,
-            options.maxAssetBytes,
-            options.subtleCrypto,
-          )
-        : await readSingleFile(projectRoot, asset.file, options.maxAssetFileBytes);
+    let files;
+    try {
+      files =
+        asset.kind === 'poseModel'
+          ? await readPoseSource(
+              projectRoot,
+              id,
+              asset.file,
+              options.maxAssetFileBytes,
+              options.maxAssetBytes,
+              options.subtleCrypto,
+            )
+          : await readSingleFile(projectRoot, asset.file, options.maxAssetFileBytes);
+    } catch (error) {
+      const failure =
+        error instanceof Dsl4BrowserPreviewRuntimeAssetError
+          ? error
+          : new Dsl4BrowserPreviewRuntimeAssetError(
+              'K4-ASSET-PREPARE-001',
+              `The preview asset could not be prepared: ${asset.file}`,
+              error,
+            );
+      throw new Dsl4BrowserPreviewRuntimeAssetError(failure.code, failure.message, failure, {
+        displayName: asset.file,
+        path: `$.assets[${JSON.stringify(id)}].file`,
+      });
+    }
     fileCount += files.length;
     if (fileCount > options.maxAssetFiles) {
       fail('K4-ASSET-LIMIT-001', 'Preview assets exceed maxAssetFiles');
