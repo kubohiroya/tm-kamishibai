@@ -14,6 +14,8 @@ import {
   freezeDsl4Release,
   recordDsl4Publication,
   updateDsl4Release,
+  verifyDsl4PublishedReleaseSnapshot,
+  verifyDsl4ReleaseSnapshot,
 } from '../scripts/sb3/dsl4-release-workflow.mjs';
 
 const sourceFiles = () =>
@@ -84,7 +86,7 @@ test('updates atomically, remains idempotent, and preserves the candidate on fai
   }
 });
 
-test('checks without mutation and rejects same-version updates after freeze', async () => {
+test('checks candidates against the generator and frozen releases against their snapshot', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'dsl4-release-freeze-'));
   const options = {
     root,
@@ -98,6 +100,14 @@ test('checks without mutation and rejects same-version updates after freeze', as
     const beforeCheck = await releaseSnapshot(root);
     assert.equal((await checkDsl4Release(options)).state, 'candidate');
     assert.deepEqual(await releaseSnapshot(root), beforeCheck);
+    await assert.rejects(
+      checkDsl4Release({
+        ...options,
+        createSourceFiles: async () =>
+          new Map([...sourceFiles(), ['candidate-change', Buffer.from('update required')]]),
+      }),
+      /release source file set is stale/u,
+    );
 
     const frozen = await freezeDsl4Release(options);
     assert.equal(frozen.state, 'frozen');
@@ -106,13 +116,17 @@ test('checks without mutation and rejects same-version updates after freeze', as
       new RegExp(`${dsl4NextReleaseVersion.replaceAll('.', '\\.')}`),
     );
     await assert.rejects(updateDsl4Release(options), /immutable/u);
+    const snapshotOptions = {
+      ...options,
+      createSourceFiles: async () => {
+        throw new Error('Frozen and published checks must not regenerate the next candidate.');
+      },
+    };
+    assert.equal((await checkDsl4Release(snapshotOptions)).state, 'frozen');
+    assert.equal((await verifyDsl4ReleaseSnapshot(options)).state, 'frozen');
     await assert.rejects(
-      checkDsl4Release({
-        ...options,
-        createSourceFiles: async () =>
-          new Map([...sourceFiles(), ['post-freeze-change', Buffer.from('not allowed')]]),
-      }),
-      new RegExp(`${dsl4NextReleaseVersion.replaceAll('.', '\\.')}`),
+      verifyDsl4PublishedReleaseSnapshot(options),
+      /snapshot must remain published/u,
     );
 
     const published = await recordDsl4Publication(
@@ -129,7 +143,60 @@ test('checks without mutation and rejects same-version updates after freeze', as
       'npm',
       'pages',
     ]);
-    assert.equal((await checkDsl4Release(options)).state, 'published');
+    assert.equal((await checkDsl4Release(snapshotOptions)).state, 'published');
+    assert.equal((await verifyDsl4PublishedReleaseSnapshot(snapshotOptions)).state, 'published');
+  } finally {
+    await rm(root, {force: true, recursive: true});
+  }
+});
+
+test('verifies only the stored release snapshot and rejects snapshot mutation', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dsl4-release-snapshot-'));
+  const options = {
+    root,
+    createSourceFiles: async () => sourceFiles(),
+    createSb3,
+    verifyCatalog: false,
+    verifyPackageVersion: false,
+  };
+  try {
+    await updateDsl4Release(options);
+    await freezeDsl4Release(options);
+    await recordDsl4Publication(
+      {
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.2',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.2',
+        pagesUrl: 'https://example.github.io/project/downloads/',
+      },
+      {root},
+    );
+    const changedWorkingSource = async () =>
+      new Map([...sourceFiles(), ['new-working-source.js', Buffer.from('new source')]]);
+
+    assert.equal(
+      (
+        await verifyDsl4PublishedReleaseSnapshot({
+          root,
+          createSb3,
+          verifyCatalog: false,
+          verifyPackageVersion: false,
+        })
+      ).state,
+      'published',
+    );
+    assert.equal(
+      (await checkDsl4Release({...options, createSourceFiles: changedWorkingSource})).state,
+      'published',
+    );
+
+    await writeFile(
+      path.join(root, dsl4ReleaseSourceDirectory, 'project.source.json'),
+      '{"targets":["tampered"]}\n',
+    );
+    await assert.rejects(
+      verifyDsl4ReleaseSnapshot(options),
+      /release snapshot identity is invalid/u,
+    );
   } finally {
     await rm(root, {force: true, recursive: true});
   }

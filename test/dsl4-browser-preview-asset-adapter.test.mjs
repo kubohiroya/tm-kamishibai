@@ -171,7 +171,7 @@ function fixtureProject() {
   });
 }
 
-function createAdapter(events, diagnostics = [], releases = []) {
+function createAdapter(events, diagnostics = [], releases = [], fullDiagnostics = false) {
   return createDsl4BrowserPreviewAssetAdapter({
     subtleCrypto: webcrypto.subtle,
     inspectImage() {
@@ -186,7 +186,8 @@ function createAdapter(events, diagnostics = [], releases = []) {
       };
     },
     onCandidate: (event) => events.push(event),
-    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic?.code ?? null),
+    onDiagnostic: (diagnostic) =>
+      diagnostics.push(fullDiagnostics ? diagnostic : (diagnostic?.code ?? null)),
     watchOptions: {clock: clock()},
   });
 }
@@ -273,7 +274,7 @@ test('keeps the active generation through YAML-first missing files and then acce
   const events = [];
   const diagnostics = [];
   const assets = fixtureProject();
-  const adapter = createAdapter(events, diagnostics);
+  const adapter = createAdapter(events, diagnostics, [], true);
 
   await adapter.start(assets.root, context(source()));
   await adapter.accept(events[0].revision);
@@ -281,6 +282,12 @@ test('keeps the active generation through YAML-first missing files and then acce
   await adapter.updateSource(context(source({extra: true})));
   assert.equal(adapter.getState().watch.status, 'diagnostic');
   assert.equal(adapter.getState().watch.diagnostic.code, 'K4-ASSET-MISSING');
+  assert.equal(
+    adapter.getState().watch.diagnostic.message,
+    'Referenced asset is missing: extra.svg',
+  );
+  assert.equal(adapter.getState().watch.diagnostic.displayName, 'extra.svg');
+  assert.equal(adapter.getState().watch.diagnostic.path, '$.assets["Extra"].file');
   assert.equal(adapter.getActiveProvider(), activeProvider);
 
   assets.set('extra.svg', encoder.encode('<svg xmlns="http://www.w3.org/2000/svg"/>'));
@@ -291,7 +298,10 @@ test('keeps the active generation through YAML-first missing files and then acce
     [['Extra', 'added']],
   );
   await adapter.accept(events[1].revision);
-  assert.deepEqual(diagnostics, ['K4-ASSET-MISSING', null]);
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic?.code ?? null),
+    ['K4-ASSET-MISSING', null],
+  );
   await adapter.dispose();
 });
 

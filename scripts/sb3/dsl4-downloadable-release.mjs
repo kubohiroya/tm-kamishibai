@@ -20,8 +20,12 @@ import {
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const require = createRequire(import.meta.url);
+const tensorflowBrowserRuntimePath = require.resolve('@tensorflow/tfjs/dist/tf.min.js');
 const tmPoseBrowserRuntimePath =
   require.resolve('@teachablemachine/pose/dist/teachablemachine-pose.min.js');
+const tmPoseWebpackLoader = 'function n(r){if(e[r])';
+const tmPoseWebpackLoaderWithSharedTensorflow =
+  'function n(r){if(0===r)return globalThis.tf;if(e[r])';
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
 const applicationMenuIconPaths = Object.freeze({
   open: path.join(projectRoot, 'app/assets/1766a36329eca190b2b19bba53ef7d8f.svg'),
@@ -335,17 +339,31 @@ async function createProject(assets) {
 }
 
 export async function createDsl4RuntimeExtensionSource() {
-  const [tmPoseBrowserRuntime, officialWebsiteFavicon, ...applicationMenuIconFiles] =
-    await Promise.all([
-      readFile(tmPoseBrowserRuntimePath, 'utf8'),
-      readFile(officialWebsiteFaviconPath),
-      ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
-    ]);
+  const [
+    tensorflowBrowserRuntime,
+    tmPoseBrowserRuntime,
+    officialWebsiteFavicon,
+    ...applicationMenuIconFiles
+  ] = await Promise.all([
+    readFile(tensorflowBrowserRuntimePath, 'utf8'),
+    readFile(tmPoseBrowserRuntimePath, 'utf8'),
+    readFile(officialWebsiteFaviconPath),
+    ...Object.values(applicationMenuIconPaths).map((filename) => readFile(filename)),
+  ]);
   const applicationMenuIcons = Object.fromEntries(
     Object.keys(applicationMenuIconPaths).map((action, index) => [
       action,
       `data:image/svg+xml;base64,${applicationMenuIconFiles[index].toString('base64')}`,
     ]),
+  );
+  const tmPoseRuntimeWithSharedTensorflow = tmPoseBrowserRuntime.replace(
+    tmPoseWebpackLoader,
+    tmPoseWebpackLoaderWithSharedTensorflow,
+  );
+  assert.notEqual(
+    tmPoseRuntimeWithSharedTensorflow,
+    tmPoseBrowserRuntime,
+    'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
   const result = await build({
     entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
@@ -359,9 +377,12 @@ export async function createDsl4RuntimeExtensionSource() {
     },
     format: 'iife',
     banner: {
-      // The Teachable Machine browser bundle already contains its compatible TensorFlow.js
-      // runtime. Loading tf.min.js first would register the same backends and platform twice.
-      js: `${formatDsl4RuntimeExtensionHeader()}\n${tmPoseBrowserRuntime}\n`,
+      // Initialize one global TensorFlow.js runtime, then route Teachable Machine's bundled
+      // module reference to the same instance so it cannot register a second backend factory.
+      js:
+        `${formatDsl4RuntimeExtensionHeader()}\n` +
+        `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
+        `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}\n`,
     },
     legalComments: 'eof',
     logLevel: 'silent',

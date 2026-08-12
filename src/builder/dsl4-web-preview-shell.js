@@ -1,5 +1,6 @@
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
+import {createDsl4DiagnosticUiProjection} from '../dsl4/diagnostic-projection.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {createDsl4PreviewReloadSurface} from './dsl4-preview-reload-surface.js';
@@ -21,6 +22,7 @@ const optionKeys = new Set([
   'maxIncludeDepth',
   'mount',
   'onError',
+  'onDiagnostic',
   'onDistributionBuildState',
   'onProjectRoot',
   'prepareSourceResult',
@@ -130,6 +132,28 @@ function warningCount(value) {
 function collectionSize(value) {
   if (Array.isArray(value)) return value.length;
   return isRecord(value) ? Object.keys(value).length : 0;
+}
+
+/** @param {Readonly<Record<string, any>>} diagnostic */
+function reloadDiagnostic(diagnostic) {
+  return deepFreeze(
+    Object.fromEntries(
+      [
+        'formatVersion',
+        'version',
+        'code',
+        'severity',
+        'message',
+        'sourceId',
+        'range',
+        'storyPath',
+        'path',
+        'related',
+      ]
+        .filter((key) => Object.hasOwn(diagnostic, key))
+        .map((key) => [key, diagnostic[key]]),
+    ),
+  );
 }
 
 /** @param {unknown} result */
@@ -318,6 +342,9 @@ export function createDsl4WebPreviewShell(input = {}) {
   if (input.onError !== undefined && typeof input.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
+  if (input.onDiagnostic !== undefined && typeof input.onDiagnostic !== 'function') {
+    throw new TypeError('onDiagnostic must be a function');
+  }
   if (
     input.onDistributionBuildState !== undefined &&
     typeof input.onDistributionBuildState !== 'function'
@@ -345,6 +372,7 @@ export function createDsl4WebPreviewShell(input = {}) {
   const projectRootObserver = input.onProjectRoot;
   const distributionBuildObserver = input.onDistributionBuildState;
   const errorObserver = /** @type {Function | undefined} */ (input.onError);
+  const diagnosticObserver = /** @type {Function | undefined} */ (input.onDiagnostic);
   const createCoordinator = input.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
   if (typeof createCoordinator !== 'function') {
     throw new TypeError('createCoordinator must be a function');
@@ -532,16 +560,28 @@ export function createDsl4WebPreviewShell(input = {}) {
 
   /** @param {Record<string, any>} diagnostic @param {'source' | 'asset'} [channel] */
   function renderDiagnostic(diagnostic, channel = 'source') {
-    diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code : null;
+    const visibleDiagnostic = /** @type {Readonly<Record<string, any>>} */ (
+      deepFreeze({
+        ...diagnostic,
+        channel,
+        ...(typeof diagnostic.displayName === 'string' ? {} : {displayName: sourceDisplayName}),
+      })
+    );
+    diagnosticCode = typeof visibleDiagnostic.code === 'string' ? visibleDiagnostic.code : null;
     const message = safeMessage(
       diagnosticCode
-        ? `${diagnosticCode}: ${String(diagnostic.message ?? 'Web Preview failed')}`
-        : diagnostic.message,
+        ? `${diagnosticCode}: ${String(visibleDiagnostic.message ?? 'Web Preview failed')}`
+        : visibleDiagnostic.message,
     );
     diagnosticStatus.textContent = message;
-    if (reloadSurface) observe(reloadSurface.setDiagnostic(channel, diagnostic));
+    try {
+      diagnosticObserver?.(visibleDiagnostic, channel);
+    } catch (error) {
+      reportError(error);
+    }
+    if (reloadSurface) observe(reloadSurface.setDiagnostic(channel, reloadDiagnostic(diagnostic)));
     fallback.hidden = !diagnosticCode || !fallbackDiagnosticCodes.has(diagnosticCode);
-    if (diagnostic.severity !== 'error') return;
+    if (visibleDiagnostic.severity !== 'error') return;
     const currentIntegrity = coordinator?.getState()?.protocol?.current?.integrity ?? null;
     render({
       formatVersion: 1,
@@ -554,7 +594,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       counts: null,
       anchor: null,
       choices: null,
-      warningCount: diagnostic.severity === 'warning' ? 1 : 0,
+      warningCount: visibleDiagnostic.severity === 'warning' ? 1 : 0,
       changeCategories: [],
       safeStatusMessage: message,
     });
@@ -757,11 +797,28 @@ export function createDsl4WebPreviewShell(input = {}) {
         onProjectRoot: setProjectRoot,
         beforeSourceStage: prepareIncludedSourceAssets,
         onSourceResult(/** @type {Readonly<Record<string, unknown>>} */ result) {
+          const snapshot = isRecord(result.sourceSnapshot) ? result.sourceSnapshot : null;
+          if (typeof snapshot?.displayName === 'string') {
+            sourceDisplayName = snapshot.displayName;
+          }
           const details = sourceDetails(result);
           if (details) detailsByIntegrity.set(details.integrity, details);
           if (result.ok === true) {
             latestValidSourceResult = /** @type {Readonly<Record<string, any>>} */ (result);
             if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
+          } else if (
+            typeof result.canonicalSource === 'string' &&
+            Array.isArray(result.diagnostics) &&
+            result.diagnostics.length > 0
+          ) {
+            const projection = createDsl4DiagnosticUiProjection(result.diagnostics, {
+              canonicalSource: result.canonicalSource,
+              displayName: sourceDisplayName,
+            });
+            const blocking = projection.diagnostics.find(
+              (diagnostic) => diagnostic.severity === 'error',
+            );
+            if (blocking) renderDiagnostic(blocking);
           }
           notifyDistributionBuildState();
         },
@@ -774,6 +831,11 @@ export function createDsl4WebPreviewShell(input = {}) {
             diagnosticStatus.textContent = '';
             fallback.hidden = true;
             if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
+            try {
+              diagnosticObserver?.(null, 'source');
+            } catch (error) {
+              reportError(error);
+            }
             notifyDistributionBuildState();
             return;
           }
@@ -838,6 +900,11 @@ export function createDsl4WebPreviewShell(input = {}) {
                 diagnosticStatus.textContent = '';
               }
               if (reloadSurface) observe(reloadSurface.setDiagnostic('asset', null));
+              try {
+                diagnosticObserver?.(null, 'asset');
+              } catch (error) {
+                reportError(error);
+              }
               return;
             }
             renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic), 'asset');

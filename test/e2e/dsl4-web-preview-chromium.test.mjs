@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash, webcrypto} from 'node:crypto';
 import {EventEmitter} from 'node:events';
-import {access, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
+import {access, mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
@@ -16,7 +16,11 @@ import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../../scripts/sb3/downloadable-releases.mjs';
-import {createDsl4RuntimeExtensionSource} from '../../scripts/sb3/dsl4-downloadable-release.mjs';
+import {createKamishibaiSb3} from '../../scripts/sb3/build.mjs';
+import {
+  createDsl4ReleaseSourceFiles,
+  createDsl4RuntimeExtensionSource,
+} from '../../scripts/sb3/dsl4-downloadable-release.mjs';
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
@@ -1024,6 +1028,242 @@ test(
     } finally {
       client?.close();
       await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
+
+test(
+  'shows concrete project-folder diagnostics on screen and returns to the application menu',
+  {timeout: 90_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-diagnostic-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-diagnostic-package-'));
+    const sourceDirectory = path.join(fixtureDirectory, 'source');
+    const sourceFiles = await createDsl4ReleaseSourceFiles();
+    await Promise.all(
+      [...sourceFiles].map(async ([relativePath, bytes]) => {
+        const filename = path.join(sourceDirectory, relativePath);
+        await mkdir(path.dirname(filename), {recursive: true});
+        await writeFile(filename, bytes);
+      }),
+    );
+    const release = await createKamishibaiSb3({sourceDirectory});
+    const loadedProject = await TurboWarpPackager.loadProject(release.archive);
+    const packager = new TurboWarpPackager.Packager();
+    packager.project = loadedProject;
+    packager.options.autoplay = true;
+    packager.options.app.title = 'DSL 4.0 project diagnostic E2E';
+    const packaged = await packager.package();
+    assert.equal(packaged.type, 'text/html');
+    await writeFile(path.join(fixtureDirectory, 'index.html'), packaged.data);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      await client.evaluate(`(() => {
+        const encoder = new TextEncoder();
+        const manifest = JSON.stringify({
+          formatVersion: 1,
+          mode: 'external',
+          sourceId: 'main',
+          path: 'story.kamishibai.yaml'
+        });
+        const cases = [
+          new Map([
+            ['project.source.json', manifest],
+            ['story.kamishibai.yaml', "kamishibai: '4.0'\\ncontrols:\\n  keymaps:\\n    production:\\n      Space: navigation.nextAction\\nscenes:\\n  opening:\\n    - wait: 0.05\\n"]
+          ]),
+          new Map(),
+          new Map([
+            ['project.source.json', manifest],
+            ['story.kamishibai.yaml', "kamishibai: '4.0'\\nscenes:\\n  opening: [\\n"]
+          ]),
+          new Map([['project.source.json', manifest]]),
+          new Map([
+            ['project.source.json', manifest],
+            ['story.kamishibai.yaml', "kamishibai: '4.0'\\nunknownField: true\\nscenes: {}\\n"]
+          ]),
+          new Map([
+            ['project.source.json', manifest],
+            ['story.kamishibai.yaml', "kamishibai: '4.0'\\nassets:\\n  Extra:\\n    kind: image\\n    file: assets/missing-extra-image-with-a-very-long-name.svg\\nscenes:\\n  opening: []\\n"]
+          ])
+        ];
+        const notFound = () => Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        function root(files, index) {
+          return {
+            kind: 'directory',
+            name: 'invalid-project-' + index,
+            async queryPermission() { return 'granted'; },
+            async requestPermission() { return 'granted'; },
+            async getFileHandle(name) {
+              if (!files.has(name)) throw notFound();
+              return {
+                kind: 'file',
+                name,
+                async getFile() {
+                  const bytes = encoder.encode(files.get(name));
+                  return {
+                    name,
+                    size: bytes.byteLength,
+                    async arrayBuffer() { return bytes.slice().buffer; }
+                  };
+                }
+              };
+            },
+            async getDirectoryHandle() { throw notFound(); }
+          };
+        }
+        globalThis.__dsl4DiagnosticRoots = cases.map(root);
+        globalThis.__dsl4DiagnosticPickerCalls = 0;
+        globalThis.showDirectoryPicker = async () => {
+          const index = globalThis.__dsl4DiagnosticPickerCalls++;
+          return globalThis.__dsl4DiagnosticRoots[index];
+        };
+        return true;
+      })()`);
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'diagnostic release title',
+      );
+      await click(client, '[data-dsl4-title-action=close]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'diagnostic application menu',
+      );
+
+      await click(client, '[data-dsl4-menu-action=open]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-source-chooser=true]')?.style.display === 'flex'`,
+        'valid project source chooser',
+      );
+      await click(client, '[data-dsl4-source-choice=project]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block' &&
+          document.querySelector('[data-dsl4-menu-action=reload]')?.disabled === false`,
+        'menu after the valid project finished',
+      );
+
+      const cases = [
+        {
+          code: 'K4-WEB-PREVIEW-MANIFEST-MISSING',
+          message: /project\.source\.json/u,
+          source: 'project.source.json',
+        },
+        {
+          code: /^K4-YAML/u,
+          message: /flow sequence|YAML|end/u,
+          source: 'story.kamishibai.yaml',
+          position: true,
+        },
+        {
+          code: 'K4-SOURCE-MISSING',
+          message: /story\.kamishibai\.yaml/u,
+          source: 'story.kamishibai.yaml',
+        },
+        {
+          code: /^K4-SCHEMA/u,
+          message: /additional propert/u,
+          source: 'story.kamishibai.yaml',
+          position: true,
+          excerpt: true,
+        },
+        {
+          code: 'K4-ASSET-MISSING',
+          message: /assets\/missing-extra-image-with-a-very-long-name\.svg/u,
+          source: 'assets/missing-extra-image-with-a-very-long-name.svg',
+          path: /assets.*Extra.*file/u,
+        },
+      ];
+
+      for (const [index, expectation] of cases.entries()) {
+        await click(client, '[data-dsl4-menu-action=open]');
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-dsl4-source-chooser=true]')?.style.display === 'flex'`,
+          `project source chooser ${index + 1}`,
+        );
+        await click(client, '[data-dsl4-source-choice=project]');
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-dsl4-runtime-error=true]')?.style.display === 'flex'`,
+          `visible project diagnostic ${index + 1}`,
+        );
+        const diagnostic = await client.evaluate(`(() => {
+          const text = (selector) => document.querySelector(selector)?.textContent ?? '';
+          const message = document.querySelector('[data-dsl4-runtime-error-message=true]');
+          const content = message?.parentElement;
+          return {
+            code: text('[data-dsl4-runtime-error-code=true]'),
+            message: text('[data-dsl4-runtime-error-message=true]'),
+            source: text('[data-dsl4-runtime-error-source=true]'),
+            location: text('[data-dsl4-runtime-error-location=true]'),
+            path: text('[data-dsl4-runtime-error-path=true]'),
+            excerpt: text('[data-dsl4-runtime-error-excerpt=true]'),
+            action: text('[data-dsl4-runtime-error-action=menu]'),
+            messageOverflowWrap: message ? getComputedStyle(message).overflowWrap : '',
+            contentOverflowY: content ? getComputedStyle(content).overflowY : '',
+            menuHidden:
+              document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'none'
+          };
+        })()`);
+        if (typeof expectation.code === 'string') assert.equal(diagnostic.code, expectation.code);
+        else assert.match(diagnostic.code, expectation.code);
+        assert.match(diagnostic.message, expectation.message);
+        assert.equal(diagnostic.source, expectation.source);
+        if (expectation.position) assert.match(diagnostic.location, /^\d+:\d+$/u);
+        if (expectation.path) assert.match(diagnostic.path, expectation.path);
+        if (expectation.excerpt) assert.notEqual(diagnostic.excerpt, '');
+        assert.match(diagnostic.action, /Back to menu|メニューに戻る/u);
+        assert.equal(diagnostic.messageOverflowWrap, 'anywhere');
+        assert.equal(diagnostic.contentOverflowY, 'auto');
+        assert.equal(diagnostic.menuHidden, true);
+
+        await click(client, '[data-dsl4-runtime-error-action=menu]');
+        await waitForEvaluation(
+          client,
+          `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block' &&
+            !document.querySelector('[data-dsl4-runtime-error=true]')`,
+          `return to application menu ${index + 1}`,
+        );
+      }
+      assert.equal(
+        await client.evaluate('globalThis.__dsl4DiagnosticPickerCalls'),
+        cases.length + 1,
+      );
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      server.closeAllConnections?.();
       await new Promise((resolve) => server.close(resolve));
       await Promise.all([
         rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),

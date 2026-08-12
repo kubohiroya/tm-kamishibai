@@ -42,7 +42,8 @@
   "scripts": {
     "build": "node scripts/build-site.mjs",
     "sb3:build": "node scripts/sb3/build.mjs",
-    "sb3:check": "sb3-toolchain check app && pnpm sb3:dsl4-release:check",
+    "sb3:check": "sb3-toolchain check app && pnpm sb3:dsl4-published-snapshot:check",
+    "sb3:dsl4-published-snapshot:check": "pnpm release:dsl4:verify-published-snapshot",
     "sb3:dsl4-release:check": "pnpm release:dsl4:check",
     "sb3:dsl4-release:write": "pnpm release:dsl4:update",
     "sb3:import": "sb3-toolchain import --output app",
@@ -67,6 +68,7 @@
     "release:check": "npm publish --dry-run --access public --tag next",
     "release:dsl4:update": "node scripts/sb3/dsl4-release-workflow.mjs update",
     "release:dsl4:check": "node scripts/sb3/dsl4-release-workflow.mjs check",
+    "release:dsl4:verify-published-snapshot": "node scripts/sb3/dsl4-release-workflow.mjs verify-published-snapshot",
     "release:dsl4:freeze": "node scripts/sb3/dsl4-release-workflow.mjs freeze",
     "release:dsl4:record-publication": "node scripts/sb3/dsl4-release-workflow.mjs record-publication",
     "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
