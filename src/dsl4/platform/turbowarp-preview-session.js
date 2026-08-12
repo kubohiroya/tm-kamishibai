@@ -99,6 +99,7 @@ function createDefaultHostPort(context) {
  * supplies its already-validated StoryDocument and is never parsed again in the browser.
  *
  * @param {object} optionsInput
+ * @param {(context: Readonly<{storyDocument: Readonly<Record<string, unknown>>, baseComponent: Readonly<Record<string, unknown>>}>) => Readonly<Record<string, unknown>> | Promise<Readonly<Record<string, unknown>>>} [optionsInput.resolveRuntimeComponent]
  * @returns {(context: Readonly<{storyDocument: Readonly<Record<string, unknown>>, previousSession: Record<string, Function> | null, preserveManagedPresentation: boolean}>) => Promise<Record<string, Function>>}
  */
 export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
@@ -114,16 +115,30 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
   if (typeof options.resetManagedPresentation !== 'function') {
     throw new TypeError('resetManagedPresentation must be a function');
   }
+  if (
+    options.resolveRuntimeComponent !== undefined &&
+    typeof options.resolveRuntimeComponent !== 'function'
+  ) {
+    throw new TypeError('resolveRuntimeComponent must be a function');
+  }
   if (options.onEvent !== undefined && typeof options.onEvent !== 'function') {
     throw new TypeError('onEvent must be a function');
   }
 
   /** @param {Readonly<Record<string, unknown>>} storyDocument */
   async function createConcreteSession(storyDocument) {
-    const generationComponent = Object.freeze({
-      ...runtimeComponent,
-      storyDocument,
-    });
+    const generationComponent = validateRuntimeComponent(
+      options.resolveRuntimeComponent
+        ? await options.resolveRuntimeComponent(
+            Object.freeze({storyDocument, baseComponent: runtimeComponent}),
+          )
+        : Object.freeze({...runtimeComponent, storyDocument}),
+    );
+    if (generationComponent.storyDocument !== storyDocument) {
+      throw new TypeError(
+        'resolved preview runtime component must use the requested StoryDocument',
+      );
+    }
     /** @type {((event: Readonly<Record<string, unknown>>) => void) | null} */
     let runtimeLifecycleObserver = null;
     const environment = await createDsl4TurboWarpRuntimeEnvironment(
@@ -145,6 +160,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
       featureFlags.dsl4TurboWarpBubble,
     );
 
+    /** @type {Record<string, any>} */
     let created;
     try {
       const poseRecognition = isRecord(storyDocument.poseRecognition)
@@ -167,6 +183,12 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
             runtimeLifecycleObserver?.(event);
           } catch {
             // Internal UI observers cannot change runtime execution or suppress consumer events.
+          }
+          if (event.type === 'runtime.fail') {
+            const state = created?.session?.getState?.();
+            const diagnostic = state?.runtime?.diagnostic ?? state?.diagnostic;
+            options.onEvent?.(diagnostic ? {...event, diagnostic} : event);
+            return;
           }
           options.onEvent?.(event);
         },

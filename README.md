@@ -92,6 +92,23 @@ local previewでも同じflagとgraph上限を指定できます。ON時はinclu
 
 実カメラを使う最終確認は、[DSL 4.0 実Chrome・実カメラ Smoke 手順](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-physical-camera-smoke.md)に従います。自動E2Eはカメラをスタブ化しているため、実機確認の代替にはなりません。
 
+配布用の非埋め込み Standard SB3は、制作・デバッグ用ランナーとして起動します。HTTPSのtop-level
+desktop Chrome／Edgeに開き、メニューの「Open」から台本ファイル、または
+`project.source.json`を持つproject directoryをread-only選択すると、サーバーを起動せずに
+YAML保存を500 ms間隔で監視します。validな保存は
+確認ダイアログを出さず、既定の現在actionから自動reloadし、安全に再開できなければscene、台本先頭へ
+fallbackします。reload status buttonを押した場合だけ、次回以降の再開位置を変更できます。
+
+project directoryを開いた場合は、YAMLが宣言するlocal file assetを同じrootから安定読込し、
+remote assetとSB3内のproject assetも同じgenerationで再解決します。TurboWarp Editorにドロップして
+追加したコスチューや音声はSB3側が所有したままで、YAMLの`name`参照から利用できます。
+台本ファイル単体でもSB3内project assetとremote assetは利用できますが、隣接local file assetは
+読めないためproject directoryを選択します。
+
+`build-dsl4`が台本を埋め込んだ作品SB3は従来どおりproduction modeで起動し、filesystem pickerや
+watcherを初期化しません。非対応browserでは、非埋め込みSB3も従来の単発YAML file pickerへ
+fallbackします。その場合やasset-only更新まで独立に監視する場合は、次のlocal previewを使用します。
+
 台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
 
 ```bash

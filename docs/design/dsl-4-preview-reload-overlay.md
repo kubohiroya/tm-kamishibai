@@ -14,8 +14,9 @@ candidate dialog remains available. Rollback sets `dsl4PreviewReloadOverlay=fals
 adapters remain unchanged.
 
 The overlay, policy, preference, successful reload time, layout rectangles, dialog state, candidate
-revision, and browser storage key are development-session data. They cannot enter YAML, project
-settings, SB3, Web player, Packager output, or the ordinary TurboWarp editor.
+revision, and browser storage key are development-session data. The implementation is bundled for the
+non-embedded Standard SB3 development runner, but this state cannot enter YAML, project settings,
+SB3 persistence, an embedded-story production run, Web player, or Packager output.
 Production exclusion checks reject the persisted field names `previewReloadOverlay`,
 `reloadPreference`, `reloadTimestamp`, `reloadDialogState`, `reloadLayoutState`, and
 `reloadCandidateRevision`.

@@ -45,17 +45,17 @@ JavaScript runtimeが所有し、Scratch variable、list、broadcastを保存形
 
 ## 3. 配布面
 
-| 配布面                     | 拡張ID                               | 標準作品           | palette                   | 用途                                                   |
-| -------------------------- | ------------------------------------ | ------------------ | ------------------------- | ------------------------------------------------------ |
-| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み       | DSL 4.0 blockは0          | RuntimeとWeb Linkを一つの権限単位として登録            |
-| Runtime member             | `kubohiroyakamishibairuntime4`       | Composite内        | `hideFromPalette: true`   | 台本の検証、実行、asset制御と固定shell                 |
-| Web Link member            | `kubohiroyaweblink`                  | Composite内        | `hideFromPalette: true`   | 公式Webサイトの固定HTTPS URLを開く                     |
-| template内部control        | Runtime member内                     | 保存済み           | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
-| Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない       | 8 opcode                  | 作品固有custom actionをScratchで実装するcustomizer向け |
-| Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない       | Store／Iterator／JSONPath | 汎用データ処理を使う開発者向け                         |
-| Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない       | 診断opcode                | capability開発者向け                                   |
-| app shell debug（予定）    | `kubohiroyakamishibai4debug`         | 読み込まない       | shell診断opcode           | template／runtime開発者向け                            |
-| development preview host   | 拡張IDなし                           | productionから除外 | DOM／CLI UI               | source watch、reload選択、診断表示                     |
+| 配布面                     | 拡張ID                               | 標準作品         | palette                   | 用途                                                   |
+| -------------------------- | ------------------------------------ | ---------------- | ------------------------- | ------------------------------------------------------ |
+| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み     | DSL 4.0 blockは0          | RuntimeとWeb Linkを一つの権限単位として登録            |
+| Runtime member             | `kubohiroyakamishibairuntime4`       | Composite内      | `hideFromPalette: true`   | 台本の検証、実行、asset制御と固定shell                 |
+| Web Link member            | `kubohiroyaweblink`                  | Composite内      | `hideFromPalette: true`   | 公式Webサイトの固定HTTPS URLを開く                     |
+| template内部control        | Runtime member内                     | 保存済み         | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
+| Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない     | 8 opcode                  | 作品固有custom actionをScratchで実装するcustomizer向け |
+| Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない     | Store／Iterator／JSONPath | 汎用データ処理を使う開発者向け                         |
+| Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない     | 診断opcode                | capability開発者向け                                   |
+| app shell debug（予定）    | `kubohiroyakamishibai4debug`         | 読み込まない     | shell診断opcode           | template／runtime開発者向け                            |
+| development preview host   | 拡張IDなし                           | 非埋め込みで有効 | DOM／CLI UI               | source watch、reload方針、診断表示                     |
 
 Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個です。機能拡張がTurboWarpの
 「拡張を追加」画面に現れるかどうかと、作品内paletteへ個別blockを表示するかどうかは別の契約です。
@@ -189,13 +189,12 @@ Object Store referenceをScratch variableやbroadcastへ符号化した実装は
 
 ## 6. Web、editor、Packager、previewの差
 
-| surface                              | source             | watch／reload UI | 保存成果物                                      |
-| ------------------------------------ | ------------------ | ---------------- | ----------------------------------------------- |
-| local development preview            | 外部sourceを許可   | あり             | production artifactではない                     |
-| TurboWarp editor（preview host経由） | hostが一時的に接続 | 一時的にあり     | bridge、token、candidate、modal状態を保存しない |
-| TurboWarp editor（通常読込）         | build済みsnapshot  | なし             | productionと同じ契約                            |
-| Web player                           | build済みsnapshot  | なし             | preview codeを含めない                          |
-| Packager                             | build済みsnapshot  | なし             | preview codeを含めない                          |
+| surface                                     | source                      | watch／reload UI | 保存成果物                                            |
+| ------------------------------------------- | --------------------------- | ---------------- | ----------------------------------------------------- |
+| local development preview                   | 外部sourceを許可            | あり             | production artifactではない                           |
+| TurboWarp editor（非埋め込み Standard SB3） | 台本file／project directory | 既定であり       | handle、candidate、reload方針、dialog状態を保存しない |
+| TurboWarp editor（埋め込み作品SB3）         | build済みsnapshot           | なし             | production契約                                        |
+| Web player／Packager（埋め込み作品）        | build済みsnapshot           | なし             | preview状態を初期化・保存しない                       |
 
 development previewでは、最初に取得した台本がvalidなら確認modalなしで自動起動します。最初の台本が
 missingまたはinvalidならruntimeを開始せず、preview shellを残してwatch状態と診断を表示します。
@@ -250,7 +249,7 @@ builderは作品ごとのScratch block graphを生成しません。version付�
 2. target別／project全体のblock、variable、list、broadcast budgetを満たす
 3. Standard Runtimeのvisible DSL 4.0 opcodeが0である
 4. template内部controlが許可listだけで、すべてpalette非表示である
-5. Standard artifactがAction Context、Structured Data、debug、preview ID／opcodeを含まない
+5. Standard artifactがAction Context、Structured Data debug、preview専用opcodeをpaletteに含まない
 6. sourceだけを変更したbuildで`targets[].blocks`がbyte-equivalentなcanonical JSONになる
 7. production artifactにwatch bridge、preview token、reload candidate、modal状態を保存しない
 
@@ -262,10 +261,11 @@ sourceとtemplateのfingerprint、incremental buildとfull rebuildを切り替�
 - 最小台本と全core action台本のどちらも作者追加blockが0になる
 - Standard Runtimeのvisible DSL 4.0 blockが0になる
 - Action Contextの8 opcodeと各default-OFF flagが機械可読契約と実装manifestで一致する
-- Web、通常editor、Packager成果物からpreview shellとdebug surfaceが除外される
+- 非埋め込みeditorだけがpreview shellを初期化し、埋め込みproductionでは初期化しない
+- どのSB3にもfilesystem handle、candidate、reload preference、dialog状態を保存しない
 - block、variable、list、broadcast budgetをbuild errorとして検出できる
 - keyboardだけでreload modalを操作でき、focus、disabled理由、live regionを検証できる
 - app shell実装前、または`dsl4AppShell=false`で現行3.2のbuildと実行が変化しない
 
-rollbackは`dsl4AppShell`をOFFにして現行3.2 shellへ戻します。Action Context、Structured Data、debug、
-previewはそれぞれ独立した既定OFF surfaceであり、Standard Runtimeのrollback条件へ混在させません。
+非埋め込みpreviewだけをrollbackする場合はentrypointをproduction profileへ戻します。App Shell全体の
+rollbackは`dsl4AppShell`をOFFにして現行3.2 shellへ戻します。

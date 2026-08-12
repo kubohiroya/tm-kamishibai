@@ -66,18 +66,19 @@ managed external memberを追加するときは、artifact integrityに加えて
 
 ## 4. 成果物とpalette
 
-| surface                    | extension ID                         | 登録 |           palette | preview UI |
-| -------------------------- | ------------------------------------ | ---: | ----------------: | ---------: |
-| Standard 4.0 Runtime       | `kubohiroyakamishibai4`              |    1 |     hidden facade |       なし |
-| Action Context             | `kubohiroyakamishibai4actioncontext` |    0 |          8 opcode |       なし |
-| Structured Data Standalone | `kubohiroyastructdata1`              |    0 | developer surface |       なし |
-| Structured Data debug      | `kubohiroyastructdata1debug`         |    0 |     debug surface |       なし |
-| development preview host   | なし                                 |    0 |          DOM／CLI | 開発時のみ |
+| surface                    | extension ID                         | 登録 |           palette |     preview UI |
+| -------------------------- | ------------------------------------ | ---: | ----------------: | -------------: |
+| Standard 4.0 Runtime       | `kubohiroyakamishibai4`              |    1 |     hidden facade | 非埋め込みのみ |
+| Action Context             | `kubohiroyakamishibai4actioncontext` |    0 |          8 opcode |           なし |
+| Structured Data Standalone | `kubohiroyastructdata1`              |    0 | developer surface |           なし |
+| Structured Data debug      | `kubohiroyastructdata1debug`         |    0 |     debug surface |           なし |
+| development preview host   | なし                                 |    0 |          DOM／CLI |     開発時のみ |
 
 Runtime memberのopcodeはcanonical templateの内部接続・状態確認用で、すべて`hideFromPalette: true`です。
-Standard SB3は両member source、YAML source descriptor、runtime artifact、asset bundle bytesを内包し、
+Standard SB3はruntime source、YAML source descriptor、runtime artifact、asset bundle bytesを内包し、
 実行時にextension codeをremote取得しません。preview token、candidate、modal、reload preferenceなどの
-transient stateも保存しません。
+transient stateも保存しません。非埋め込み`application.mode=menu`は制作・debug runnerとして
+preview UIを初期化し、埋め込み`application.mode=story`はproduction実行として初期化しません。
 
 ## 5. asset、preview、security境界
 
@@ -99,12 +100,12 @@ fingerprintにもproduction artifactにも含めません。
 
 ### 5.1 sourceの読込・保存sequence
 
-| surface              | 作者入力                                                          | 読込sequence                                                                                                     | 保存／再読込                                                                       |
-| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Web Preview          | read-onlyに選択したproject rootの`project.source.json`と`.k4.yml` | browser adapterの安定読込 → production source frontend → 共有preview protocol → browser runtime                  | 台本は外部editorが保存し、Web PreviewはfileやSB3を書き込まない                     |
-| local development    | `preview-dsl4 --watch`に渡すbase SB3、project root、manifest      | Node安定読込 → production source frontend → 認証済みgeneration → browser-owned実TurboWarp runtime                | YAML-only保存はruntime generationだけを更新し、SB3を再buildしない                  |
-| TurboWarp editor     | `sb3-toolchain build`で生成したStandard SB3                       | editorがRuntime一件を読み、runtimeは`kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.source`を読む | TurboWarp再保存後もdescriptorを保持し、再読込で同じintegrityを検証する             |
-| Web player／Packager | 同じStandard SB3                                                  | production shellはruntime componentのembedded descriptorだけを読み、external pathやpreview bridgeを読まない      | playerは保存せず、Packagerは検証済みSB3のsource／artifact／asset storageを保持する |
+| surface              | 作者入力                                                     | 読込sequence                                                                                                | 保存／再読込                                                                       |
+| -------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Web Preview          | 非埋め込みSB3で選択した台本fileまたはproject root            | browser安定読込 → production frontend → 宣言asset準備 → 共有preview protocol → runtime                      | 台本は外部editorが保存し、handleやpreview stateはSB3へ書き込まない                 |
+| local development    | `preview-dsl4 --watch`に渡すbase SB3、project root、manifest | Node安定読込 → production source frontend → 認証済みgeneration → browser-owned実TurboWarp runtime           | YAML-only保存はruntime generationだけを更新し、SB3を再buildしない                  |
+| TurboWarp editor     | Standard SB3、または台本埋め込みSB3                          | 非埋め込みはOpen後にwatch、埋め込みはcomponent descriptorをproduction再生                                   | Editorで追加したcostume／soundを保持し、非埋め込みのYAML更新時に`name`から再解決   |
+| Web player／Packager | 同じStandard SB3                                             | production shellはruntime componentのembedded descriptorだけを読み、external pathやpreview bridgeを読まない | playerは保存せず、Packagerは検証済みSB3のsource／artifact／asset storageを保持する |
 
 4.0 StandardはRuntime内部のsource compositionを行い、SB3生成時には一件のembedded extensionとして格納します。
 source descriptorの可逆性は、Runtime component storage pathの検証と、固定TurboWarp VMの実際の
@@ -154,7 +155,9 @@ GitHub Releaseへ注記し、直前の推奨downloadへsiteを戻してから修
 - Standard展開ソースがRuntime 4一件を管理し、Web Linkを含まない
 - Standard SB3が`kubohiroyakamishibai4`一件だけをembedded URLから読み込む
 - runtime source先頭にheader、全構成要素のprovenanceが残る
-- Standard paletteのvisible DSL 4.0 blockが0で、developer／debug／preview surfaceを含まない
+- Standard paletteのvisible DSL 4.0 blockが0で、preview専用opcodeを含まない
+- 非埋め込みだけがpreviewを初期化し、埋め込みproductionは初期化しない
+- preview handle、candidate、reload preference、dialog stateをSB3に保存しない
 - exact dependency、lock integrity、license attributionが回帰testで検証される
 - YAML-only変更と構造変更の分岐、transient state除外がfixtureで固定される
 - 緑の旗、タイトル背景／閉じるボタン、台本有無、物語終了の遷移が3.2の状態遷移と一致する

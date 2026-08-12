@@ -335,7 +335,7 @@ async function createProject(assets) {
   return installed;
 }
 
-async function createRuntimeExtensionSource() {
+export async function createDsl4RuntimeExtensionSource() {
   const [
     tensorflowBrowserRuntime,
     tmPoseBrowserRuntime,
@@ -381,7 +381,7 @@ async function createRuntimeExtensionSource() {
   return Buffer.from(result.outputFiles[0].contents);
 }
 
-async function expectedFiles() {
+export async function createDsl4ReleaseSourceFiles() {
   const assets = titleAssets();
   const project = await createProject(assets);
   const archiveEntries = ['project.json', ...assets.map(({filename}) => filename)];
@@ -425,7 +425,7 @@ async function expectedFiles() {
         )}\n`,
       ),
     ],
-    [extensionPath, await createRuntimeExtensionSource()],
+    [extensionPath, await createDsl4RuntimeExtensionSource()],
   ]);
   for (const asset of assets) files.set(`assets/${asset.filename}`, asset.bytes);
   return files;
@@ -467,6 +467,8 @@ async function checkRelease(files) {
   process.stdout.write(`Verified ${files.size} DSL 4.0 release source file(s).\n`);
 }
 
-const files = await expectedFiles();
-if (process.argv.includes('--write')) await writeRelease(files);
-else await checkRelease(files);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const files = await createDsl4ReleaseSourceFiles();
+  if (process.argv.includes('--write')) await writeRelease(files);
+  else await checkRelease(files);
+}

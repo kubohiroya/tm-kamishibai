@@ -46,6 +46,13 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4SpeechAdvanceTypewriter: true,
 });
 
+// The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.
+export const dsl4NonEmbeddedDevelopmentFeatureFlags = deepFreeze({
+  ...dsl4StandardProductionFeatureFlags,
+  dsl4WebPreviewAdapter: true,
+  dsl4PreviewReloadOverlay: true,
+});
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

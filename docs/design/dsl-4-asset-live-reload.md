@@ -22,9 +22,15 @@ and passes that same instance to the asset pipeline. Asset candidates, diagnosti
 therefore share one revision order and overlay with source candidates; `restartGeneration` is
 required for manual asset reload from the shared dialog.
 
-The feature is part of the development preview shell. A production SB3, ordinary TurboWarp editor,
-Web player, or Packager output must not contain a directory handle, file/blob/array-buffer, candidate,
+The feature is part of the development preview shell. An embedded-story production run, Web player,
+or Packager must not initialize it. The non-embedded TurboWarp editor may own transient preview state
+in memory, but no saved SB3 may contain a directory handle, file/blob/array-buffer, candidate,
 revision, preview token, decoded resource, reload UI state, preference, or reload timestamp.
+
+Issue #538 adds a narrower path to the non-embedded Standard SB3. Each valid YAML generation
+re-captures its declared local files and re-resolves remote and VM-owned project assets before source
+staging. This does not enable `dsl4WebPreviewAssetLiveReload`: changing only an asset without a YAML
+generation is still outside that path. An embedded-story production run remains unchanged.
 
 ## Ownership and security
 
@@ -56,7 +62,9 @@ and file/bundle content integrity. `lastModified`, size, and filesystem events a
 An addition is safe only when every active asset entry is byte-for-byte graph-equivalent, every new
 ID is unique and file-backed, all referenced files are stable and validated, and the candidate source
 changed. Project-owned TurboWarp assets have no filesystem content integrity and their same-VM native
-updates remain outside this transaction.
+updates remain outside this transaction. In the non-embedded #538 path, a later valid source
+generation may nevertheless refer to the current VM costume, backdrop, or sound by name; reload does
+not call `loadProject()` and therefore does not remove editor-added assets.
 
 ## Stable read and limits
 
@@ -128,6 +136,7 @@ the effective decode concurrency is one and stays below the contract ceiling of 
 The initial finite ceilings are 128 files, 20 MiB per file, 64 MiB total, 16,777,216 image pixels,
 1,800 audio seconds, 8 channels, and 192 kHz. A pose bundle is currently an unpacked directory with
 exactly `model.json`, `metadata.json`, and one weights `.bin`. The adapter does not persist directory
-handles, scan for undeclared files, watch VM-owned project assets, or live-reload removals, renames,
-kind/path changes, and bundle-shape changes. Those changes retain the active generation and require a
-new CLI preview build.
+handles, scan for undeclared files, or watch VM-owned project asset mutation as an independent
+candidate. The non-embedded path re-resolves those project assets only when a valid YAML generation
+is staged. Asset removals, renames, kind/path changes, and bundle-shape changes remain full-rebuild
+boundaries for the dedicated asset-only transaction.

@@ -824,6 +824,41 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
 });
 
+test('resolves a generation-specific runtime component before creating a preview session', async () => {
+  const project = await packagedProject();
+  const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {
+    ...limits,
+    subtleCrypto,
+  });
+  assert.equal(runtimeComponent.ok, true, JSON.stringify(runtimeComponent.diagnostics));
+  const changed = frontend.parse(waitStory.replace('wait: 0', 'wait: 0.001'), {
+    sourceId: 'main',
+  });
+  assert.equal(changed.ok, true, JSON.stringify(changed.diagnostics));
+  const resolved = [];
+  const createSession = createDsl4TurboWarpPreviewSessionFactory({
+    featureFlags: {dsl4Runtime: true},
+    runtimeComponent,
+    ...platformFixture([]),
+    resetManagedPresentation() {},
+    resolveRuntimeComponent(context) {
+      resolved.push(context);
+      return {...context.baseComponent, storyDocument: context.storyDocument};
+    },
+  });
+
+  const session = await createSession({
+    storyDocument: changed.storyDocument,
+    previousSession: null,
+    preserveManagedPresentation: false,
+  });
+  await session.start();
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0].storyDocument, changed.storyDocument);
+  assert.equal(resolved[0].baseComponent, runtimeComponent);
+  await session.dispose('generation-component-test');
+});
+
 test('provides the DSL 3.2 transition port to browser preview sessions by default', async () => {
   const project = await packagedProject();
   const runtimeComponent = await loadDsl4RuntimeComponent(project, frontend, {

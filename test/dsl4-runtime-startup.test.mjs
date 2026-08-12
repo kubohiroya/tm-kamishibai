@@ -13,6 +13,7 @@ import {
   createDsl4RuntimeStartup,
   createDsl4SourceFrontend,
   dsl4DefaultFeatureFlags,
+  dsl4NonEmbeddedDevelopmentFeatureFlags,
   dsl4StandardProductionFeatureFlags,
   resolveDsl4FeatureFlags,
 } from '../src/dsl4/index.js';
@@ -193,6 +194,19 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
     resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags).dsl4SpeechAdvanceTypewriter,
+    true,
+  );
+  assert.deepEqual(dsl4NonEmbeddedDevelopmentFeatureFlags, {
+    dsl4Runtime: true,
+    dsl4AppShell: true,
+    dsl4PoseFeedbackModes: true,
+    dsl4SpeechAdvanceTypewriter: true,
+    dsl4WebPreviewAdapter: true,
+    dsl4PreviewReloadOverlay: true,
+  });
+  assert.equal(Object.isFrozen(dsl4NonEmbeddedDevelopmentFeatureFlags), true);
+  assert.equal(
+    resolveDsl4FeatureFlags(dsl4NonEmbeddedDevelopmentFeatureFlags).dsl4WebPreviewAdapter,
     true,
   );
   assert.throws(
