@@ -157,6 +157,14 @@ async function listFiles(directory, relative = '') {
   return files;
 }
 
+async function readSourceFiles(directory) {
+  const files = new Map();
+  for (const relativePath of await listFiles(directory)) {
+    files.set(relativePath, await readFile(path.join(directory, relativePath)));
+  }
+  return files;
+}
+
 async function assertSourceFiles(directory, expectedFiles, repairGuidance) {
   const expectedNames = normalizedSourceFiles(expectedFiles).map(([relativePath]) => relativePath);
   assert.deepEqual(
@@ -242,12 +250,15 @@ export async function checkDsl4Release({
   const repairGuidance =
     metadata.state === 'candidate'
       ? `Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}; do not edit hashes by hand.`
-      : `${dsl4ReleaseVersion} is ${metadata.state} and immutable. Create ${dsl4NextReleaseVersion} instead.`;
-  const expectedFiles = await createSourceFiles();
+      : `Restore ${dsl4ReleaseRoot} from ${dsl4ReleaseTag}; versioned release snapshots are immutable.`;
   const sourceDirectory = path.join(root, dsl4ReleaseSourceDirectory);
-  await assertSourceFiles(sourceDirectory, expectedFiles, repairGuidance);
+  if (metadata.state === 'candidate') {
+    const expectedFiles = await createSourceFiles();
+    await assertSourceFiles(sourceDirectory, expectedFiles, repairGuidance);
+  }
+  const releaseFiles = await readSourceFiles(sourceDirectory);
   assert.equal(
-    createDsl4ReleaseSourceIdentity(expectedFiles),
+    createDsl4ReleaseSourceIdentity(releaseFiles),
     metadata.sourceIdentity,
     `DSL 4 release source identity is stale. ${repairGuidance}`,
   );
