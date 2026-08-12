@@ -6,6 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {zipSync} from 'fflate';
+
 import {loadDsl4LocalAssetSnapshot} from '../src/builder/index.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
@@ -46,6 +48,14 @@ async function workspace(t) {
     writeFile(path.join(root, 'models', 'rescue', 'model.json'), files.model),
     writeFile(path.join(root, 'models', 'rescue', 'metadata.json'), files.metadata),
     writeFile(path.join(root, 'models', 'rescue', 'nested', 'weights.bin'), files.weights),
+    writeFile(
+      path.join(root, 'models', 'rescue.ZIP'),
+      zipSync({
+        'metadata.json': files.metadata,
+        'model.json': files.model,
+        'weights.bin': files.weights,
+      }),
+    ),
   ]);
   return {root, files};
 }
@@ -175,6 +185,34 @@ scenes:
     () => snapshot.getFile('Remote', 'remote.svg'),
     (error) => error.code === 'K4-ASSET-LOOKUP-001',
   );
+});
+
+test('extracts a local poseModel zip file into the embedded three-file bundle', async (t) => {
+  const fixture = await workspace(t);
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  RescuePose:
+    kind: poseModel
+    file: models/rescue.ZIP
+scenes:
+  opening:
+    poseModel: RescuePose
+    actions: []
+`);
+  const snapshot = await loadDsl4LocalAssetSnapshot(fixture.root, storyDocument, {
+    ...standardLimits,
+    subtleCrypto: webcrypto.subtle,
+  });
+  const source = snapshot.manifest.assets[0].source;
+  assert.equal(source.mode, 'archive');
+  assert.deepEqual(
+    source.files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  assert.deepEqual(snapshot.getFile('RescuePose', 'metadata.json'), fixture.files.metadata);
+  assert.deepEqual(snapshot.getFile('RescuePose', 'model.json'), fixture.files.model);
+  assert.deepEqual(snapshot.getFile('RescuePose', 'weights.bin'), fixture.files.weights);
 });
 
 test('snapshots a target-independent image file without a Scratch target', async (t) => {

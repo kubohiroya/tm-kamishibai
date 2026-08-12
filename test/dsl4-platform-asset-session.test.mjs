@@ -119,6 +119,12 @@ function remotePoseRuntimeComponent(remoteBytes) {
   };
 }
 
+function unverifiedRemotePoseRuntimeComponent(url) {
+  const component = remotePoseRuntimeComponent(new Uint8Array([1]));
+  component.assetBundle.manifest.assets[0].source = {type: 'remote', url};
+  return component;
+}
+
 function poseArchiveLimits() {
   return {
     maxArchiveBytes: 64 * 1024,
@@ -713,6 +719,43 @@ test('extracts a verified remote pose archive inside the platform boundary', asy
   assert.ok(log.some(([event, name]) => event === 'pose.release' && name === 'RemotePose'));
 });
 
+test('extracts an unpinned zip URL with the platform finite defaults', async () => {
+  const remoteBytes = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+    'weights.bin': Uint8Array.from([1, 2, 3]),
+  });
+  const url = 'https://cdn.example.com/pose.ZIP?download=1';
+  const component = unverifiedRemotePoseRuntimeComponent(url);
+  const log = [];
+  let registration;
+  const setup = options(component, log, {
+    tmpose: {
+      async registerPoseModel(input) {
+        registration = input;
+        return {name: input.name, labels: ['rescue']};
+      },
+    },
+  });
+  const loads = [];
+  const session = createDsl4PlatformAssetSession({
+    ...setup.value,
+    subtleCrypto: webcrypto.subtle,
+    async loadRemoteAsset(payload) {
+      loads.push(payload);
+      return {bytes: remoteBytes, contentType: 'application/zip'};
+    },
+  });
+
+  await session.lifecycle.prepare({assetIds: ['RemotePose']}, context());
+  assert.deepEqual(loads, [{assetId: 'RemotePose', url}]);
+  assert.deepEqual(
+    registration.files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  await session.dispose('unverified-remote-pose-complete');
+});
+
 test('bounds repeated remote pose materialization and persistent cache bytes', async () => {
   const remoteBytes = zipSync({
     'metadata.json': strToU8('{"labels":["rescue"]}'),
@@ -876,8 +919,9 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
         runtimeComponent: remotePoseRuntimeComponent(new Uint8Array([1])),
         cacheIdentity,
         loadRemoteAsset() {},
+        poseArchiveLimits: {},
       }),
-    /pose archive limits/u,
+    /maxCompressionRatio/u,
   );
   assert.equal(factoryCalls, 0);
 

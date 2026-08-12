@@ -7,7 +7,7 @@ import path from 'node:path';
 import {runInThisContext} from 'node:vm';
 import test from 'node:test';
 
-import {strFromU8, unzipSync, zipSync} from 'fflate';
+import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
 import {
@@ -627,15 +627,25 @@ assets:
   Card:
     kind: backdrop
     file: assets/card.svg
+  Rescue:
+    kind: poseModel
+    file: models/rescue.zip
 cover:
   backdrop: Card
 scenes:
   opening:
-    - wait: 0
+    poseModel: Rescue
+    actions:
+      - wait: 0
 `;
   const card = new TextEncoder().encode(
     '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"></svg>',
   );
+  const poseArchive = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+    'weights.bin': new Uint8Array([1, 2, 3]),
+  });
   const built = await buildDsl4BrowserSelectedStoryProject({
     project,
     entries: [
@@ -644,6 +654,10 @@ scenes:
         file: browserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
       },
       {path: 'story-project/assets/card.svg', file: browserFile('card.svg', card)},
+      {
+        path: 'story-project/models/rescue.zip',
+        file: browserFile('rescue.zip', poseArchive),
+      },
       {
         path: 'story-project/private.txt',
         file: browserFile('private.txt', new Uint8Array([1, 2, 3])),
@@ -666,7 +680,24 @@ scenes:
       path: filePath,
       size,
     })),
-    [{assetId: 'Card', path: 'card.svg', size: card.byteLength}],
+    [
+      {assetId: 'Card', path: 'card.svg', size: card.byteLength},
+      {
+        assetId: 'Rescue',
+        path: 'metadata.json',
+        size: strToU8('{"labels":["rescue"]}').byteLength,
+      },
+      {
+        assetId: 'Rescue',
+        path: 'model.json',
+        size: strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}').byteLength,
+      },
+      {assetId: 'Rescue', path: 'weights.bin', size: 3},
+    ],
+  );
+  assert.equal(
+    component.assets.manifest.assets.find((asset) => asset.id === 'Rescue').source.mode,
+    'archive',
   );
 });
 

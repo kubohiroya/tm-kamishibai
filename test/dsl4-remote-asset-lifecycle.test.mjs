@@ -5,11 +5,14 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
   createDsl4SourceFrontend,
 } from '../src/dsl4/index.js';
+import {createDsl4PoseArchiveExtractor} from '../src/dsl4/platform/pose-archive-extractor.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -67,7 +70,7 @@ ${scene}
   };
 }
 
-function barePoseComponent() {
+function barePoseComponent(url = 'https://cdn.example.com/pose/') {
   const parsed = frontend.parse(
     `
 kamishibai: '4.0'
@@ -77,7 +80,7 @@ assets:
     delivery: remote
     loading: lazy
     source:
-      url: https://cdn.example.com/pose/
+      url: ${url}
 scenes:
   opening:
     poseModel: Remote
@@ -96,7 +99,7 @@ scenes:
             id: 'Remote',
             kind: 'poseModel',
             loading: 'lazy',
-            source: {type: 'remote', url: 'https://cdn.example.com/pose/'},
+            source: {type: 'remote', url},
           },
         ],
       },
@@ -209,6 +212,55 @@ test('loads an unpinned TMPose directory lazily without requiring integrity meta
     ['model.json', 'metadata.json', 'weights.bin'],
   );
   assert.equal(Object.hasOwn(loads[0], 'integrity'), false);
+  await lifecycle.release({reason: 'stop'});
+});
+
+test('loads and extracts an unpinned TMPose zip URL as one bounded archive', async () => {
+  const archive = zipSync({
+    'metadata.json': strToU8('{"labels":["rescue"]}'),
+    'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
+    'weights.bin': new Uint8Array([1, 2, 3]),
+  });
+  const url = 'https://cdn.example.com/pose/Rescue.ZIP?download=1';
+  const loads = [];
+  const prepared = [];
+  const lifecycle = createDsl4RemoteAssetLifecycle({
+    runtimeComponent: barePoseComponent(url),
+    async loadRemoteAsset(payload) {
+      loads.push(payload);
+      return {bytes: archive, contentType: 'application/zip'};
+    },
+    extractRemotePoseArchive(payload, extractContext) {
+      return createDsl4PoseArchiveExtractor({
+        limits: {
+          maxArchiveBytes: 4096,
+          maxEntries: 3,
+          maxCompressedEntryBytes: 2048,
+          maxExpandedEntryBytes: 2048,
+          maxTotalExpandedBytes: 4096,
+          maxCompressionRatio: 100,
+        },
+        subtleCrypto: webcrypto.subtle,
+      })(payload, extractContext);
+    },
+    adapter: {
+      prepare(payload) {
+        prepared.push(payload);
+        return {id: payload.asset.id};
+      },
+      release() {},
+    },
+    setLoading() {},
+    subtleCrypto: webcrypto.subtle,
+  });
+
+  await lifecycle.prepare({assetIds: ['Remote']}, context());
+  assert.deepEqual(loads, [{assetId: 'Remote', url}]);
+  assert.deepEqual(
+    prepared[0].files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
+  assert.equal(prepared[0].archiveBinding.extractorFormat, 'tmpose-zip-v1');
   await lifecycle.release({reason: 'stop'});
 });
 

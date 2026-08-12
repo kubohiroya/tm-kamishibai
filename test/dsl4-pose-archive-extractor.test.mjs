@@ -7,6 +7,9 @@ import {strToU8, zipSync} from 'fflate';
 import {
   createDsl4PoseArchiveExtractor,
   DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT,
+  extractDsl4PoseArchive,
+  isDsl4PoseArchivePath,
+  isDsl4RemotePoseArchiveUrl,
 } from '../src/dsl4/platform/pose-archive-extractor.js';
 
 const files = Object.freeze({
@@ -82,6 +85,32 @@ test('extracts exactly one bounded pose model and binds every file to the verifi
     assert.equal(file.size, file.bytes.byteLength);
     assert.equal(file.integrity, integrity(file.bytes));
   }
+});
+
+test('detects local and remote pose archives by case-insensitive path suffix', () => {
+  assert.equal(isDsl4PoseArchivePath('models/rescue.zip'), true);
+  assert.equal(isDsl4PoseArchivePath('models/rescue.ZIP'), true);
+  assert.equal(isDsl4PoseArchivePath('models/rescue.zip/'), false);
+  assert.equal(isDsl4RemotePoseArchiveUrl('https://cdn.example.com/rescue.ZIP?download=1'), true);
+  assert.equal(isDsl4RemotePoseArchiveUrl('https://cdn.example.com/rescue/?file=model.zip'), false);
+  assert.equal(isDsl4RemotePoseArchiveUrl('not a URL.zip'), false);
+});
+
+test('extracts an unbound local archive through the finite convenience boundary', async () => {
+  const bytes = archive();
+  const result = await extractDsl4PoseArchive({
+    assetId: 'LocalPose',
+    bytes,
+    maxArchiveBytes: limits.maxArchiveBytes,
+    maxFileBytes: limits.maxExpandedEntryBytes,
+    maxTotalBytes: limits.maxTotalExpandedBytes,
+    subtleCrypto: webcrypto.subtle,
+  });
+  assert.equal(result.archiveIntegrity, integrity(bytes));
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['metadata.json', 'model.json', 'weights.bin'],
+  );
 });
 
 test('rejects traversal, nested, absolute, backslash, and duplicate entry paths', async () => {

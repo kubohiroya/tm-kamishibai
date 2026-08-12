@@ -770,7 +770,8 @@ class Converter {
         );
         return;
       }
-      const normalizedUrl = sourceUrl.endsWith('/') ? sourceUrl : `${sourceUrl}/`;
+      const archiveUrl = /\.zip$/iu.test(parsedUrl.pathname);
+      const normalizedUrl = archiveUrl || sourceUrl.endsWith('/') ? sourceUrl : `${sourceUrl}/`;
       let assetId = this.remotePoseModels.get(normalizedUrl);
       if (!assetId) {
         do {

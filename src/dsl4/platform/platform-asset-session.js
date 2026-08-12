@@ -10,7 +10,11 @@ import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
 import {createDsl4PoseActionPort} from './pose-action-port.js';
-import {createDsl4PoseArchiveExtractor} from './pose-archive-extractor.js';
+import {
+  createDsl4PoseArchiveExtractor,
+  dsl4PoseArchiveDefaultLimits,
+  isDsl4RemotePoseArchiveUrl,
+} from './pose-archive-extractor.js';
 import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 import {
   createDsl4StoryCameraLifecycle,
@@ -197,13 +201,13 @@ export function createDsl4PlatformAssetSession(options) {
     }
     cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
   }
-  const verifiedRemotePoseRequired = componentAssetBundle.manifest.assets.some(
+  const remotePoseArchiveRequired = componentAssetBundle.manifest.assets.some(
     /** @param {unknown} asset */ (asset) =>
       isRecord(asset) &&
       asset.kind === 'poseModel' &&
       isRecord(asset.source) &&
       asset.source.type === 'remote' &&
-      typeof asset.source.integrity === 'string',
+      (typeof asset.source.integrity === 'string' || isDsl4RemotePoseArchiveUrl(asset.source.url)),
   );
   if (
     options.verifiedRemoteCacheOptions !== undefined &&
@@ -246,9 +250,9 @@ export function createDsl4PlatformAssetSession(options) {
     throw new TypeError('createFile must be a function');
   }
   const poseArchiveExtractor =
-    remoteEnabled && verifiedRemotePoseRequired
+    remoteEnabled && remotePoseArchiveRequired
       ? createDsl4PoseArchiveExtractor({
-          limits: options.poseArchiveLimits,
+          limits: options.poseArchiveLimits ?? dsl4PoseArchiveDefaultLimits,
           subtleCrypto: options.subtleCrypto,
         })
       : null;

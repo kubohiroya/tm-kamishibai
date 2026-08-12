@@ -17,8 +17,14 @@ export {
   dsl4ScratchPoseFeedbackVariableNames,
 } from './scratch-pose-feedback-adapter.js';
 export {
+  computeDsl4PoseArchiveIntegrity,
   createDsl4PoseArchiveExtractor,
+  dsl4PoseArchiveDefaultLimits,
   DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT,
+  DSL4_POSE_ARCHIVE_MAX_COMPRESSION_RATIO,
+  extractDsl4PoseArchive,
+  isDsl4PoseArchivePath,
+  isDsl4RemotePoseArchiveUrl,
 } from './pose-archive-extractor.js';
 export {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 export {createDsl4BubblePlatform} from './bubble-platform.js';

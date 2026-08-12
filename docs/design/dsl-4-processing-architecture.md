@@ -128,7 +128,7 @@ Copyright © 2026 Hiroya Kubo.
 | dispose                     | ownerが保持するresourceを、途中の解放失敗があっても残りを継続しながら一度だけ解放する終了操作                        |
 | scope                       | story、scene、action等の有効範囲。scope終了時にその範囲専用のvariableやresourceを解放する                            |
 | embedded asset              | asset byte列をSB3内へ格納し、実行時にnetworkを使わずmaterializeするdelivery                                          |
-| remote pose asset           | TMPose directory URLを正本として、必要時に現在のmodel filesを取得するdelivery                                        |
+| remote pose asset           | TMPose directory URL、またはpathname末尾が`.zip`のarchive URLを正本として、必要時にmodel filesを取得するdelivery     |
 | verified remote asset       | 台本がHTTPS URL、期待SHA-256 integrity、media type、sizeを明示し、取得後のbyte列を再検証してから使用するdelivery     |
 | asset dependency index      | story開始時または各sceneで必要になるasset IDを、`StoryDocument`から事前計算した対応表                                |
 | Asset Preload Coordinator   | dependency indexに従って遷移先assetのprepareを開始し、成功時のcommitと不要resourceのreleaseを調整するcore object     |
