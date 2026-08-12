@@ -25,6 +25,8 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     readRepositoryFile('LICENSES.md'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  assert.equal(packageJson.version, contract.standardArtifact.version);
+  assert.equal(packageJson.publishConfig.tag, contract.releaseLifecycle.npmDistTag);
   const lockfile = parse(lockfileSource);
   const ids = new Set();
   const extensionIds = new Set([contract.standardArtifact.extensionId]);
@@ -147,8 +149,8 @@ test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversibl
     kind: 'single-embedded-extension',
     unbundle: null,
     provenance: [
-      'release-sources/4.0.0/app/project.source.json',
-      'release-sources/4.0.0/app/embedded-extensions.json',
+      'release-sources/4.0.0-rc.1/app/project.source.json',
+      'release-sources/4.0.0-rc.1/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -186,17 +188,18 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   assert.deepEqual(contract.releaseOrder, [
     'release-capability-packages',
     'update-exact-package-and-lock-pins',
-    'set-release-version',
+    'set-release-candidate-version',
+    'update-release-candidate-atomically',
     'run-full-verification',
-    'write-versioned-release-source',
-    'verify-deterministic-sb3',
-    'update-download-catalog-integrity-and-source-commit',
-    'merge-with-provenance-preserving-strategy',
+    'check-release-candidate-without-mutation',
+    'merge-release-candidate',
     'rerun-release-verification',
+    'freeze-release-source-identity-and-artifact-hash',
     'create-version-tag',
-    'publish-npm-package',
-    'publish-github-release',
-    'publish-site',
+    'publish-npm-package-with-next-dist-tag',
+    'publish-github-prerelease',
+    'publish-site-with-stable-recommendation-unchanged',
+    'record-and-verify-publication',
   ]);
   assert.deepEqual(contract.rollbackOrder, [
     'disable-default-off-feature-surface',
@@ -211,9 +214,24 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.1/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
-  assert.match(release.artifact.sourceCommit, /^[0-9a-f]{40}$/u);
+  assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
+
+  assert.deepEqual(contract.releaseLifecycle, {
+    metadata: 'release-sources/4.0.0-rc.1/release.json',
+    states: ['candidate', 'frozen', 'published'],
+    updateCommand: 'pnpm release:dsl4:update',
+    checkCommand: 'pnpm release:dsl4:check',
+    freezeCommand: 'pnpm release:dsl4:freeze',
+    publicationCommand: 'pnpm release:dsl4:record-publication',
+    immutableStates: ['frozen', 'published'],
+    nextCandidateVersion: '4.0.0-rc.2',
+    npmDistTag: 'next',
+    gitTag: 'v4.0.0-rc.1',
+    githubPrerelease: true,
+    recommendedStableVersion: '3.2.3',
+  });
 
   for (const evidencePath of contract.evidence) {
     assert.ok((await readRepositoryFile(evidencePath)).length > 0, evidencePath);

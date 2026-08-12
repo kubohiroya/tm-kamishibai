@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0",
+    "version": "4.0.0-rc.1",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "single-embedded-extension",
@@ -21,8 +21,8 @@
       "openOfficialWebsite",
       "toggleTitleLanguage"
     ],
-    "projectSource": "release-sources/4.0.0/app/project.source.json",
-    "bundleManifest": "release-sources/4.0.0/app/embedded-extensions.json",
+    "projectSource": "release-sources/4.0.0-rc.1/app/project.source.json",
+    "bundleManifest": "release-sources/4.0.0-rc.1/app/embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": true,
@@ -140,8 +140,8 @@
       "kind": "single-embedded-extension",
       "unbundle": null,
       "provenance": [
-        "release-sources/4.0.0/app/project.source.json",
-        "release-sources/4.0.0/app/embedded-extensions.json",
+        "release-sources/4.0.0-rc.1/app/project.source.json",
+        "release-sources/4.0.0-rc.1/app/embedded-extensions.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
@@ -189,18 +189,33 @@
   "releaseOrder": [
     "release-capability-packages",
     "update-exact-package-and-lock-pins",
-    "set-release-version",
+    "set-release-candidate-version",
+    "update-release-candidate-atomically",
     "run-full-verification",
-    "write-versioned-release-source",
-    "verify-deterministic-sb3",
-    "update-download-catalog-integrity-and-source-commit",
-    "merge-with-provenance-preserving-strategy",
+    "check-release-candidate-without-mutation",
+    "merge-release-candidate",
     "rerun-release-verification",
+    "freeze-release-source-identity-and-artifact-hash",
     "create-version-tag",
-    "publish-npm-package",
-    "publish-github-release",
-    "publish-site"
+    "publish-npm-package-with-next-dist-tag",
+    "publish-github-prerelease",
+    "publish-site-with-stable-recommendation-unchanged",
+    "record-and-verify-publication"
   ],
+  "releaseLifecycle": {
+    "metadata": "release-sources/4.0.0-rc.1/release.json",
+    "states": ["candidate", "frozen", "published"],
+    "updateCommand": "pnpm release:dsl4:update",
+    "checkCommand": "pnpm release:dsl4:check",
+    "freezeCommand": "pnpm release:dsl4:freeze",
+    "publicationCommand": "pnpm release:dsl4:record-publication",
+    "immutableStates": ["frozen", "published"],
+    "nextCandidateVersion": "4.0.0-rc.2",
+    "npmDistTag": "next",
+    "gitTag": "v4.0.0-rc.1",
+    "githubPrerelease": true,
+    "recommendedStableVersion": "3.2.3"
+  },
   "rollbackOrder": [
     "disable-default-off-feature-surface",
     "deprecate-released-npm-version-if-required",

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
-import {mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
+import {readFile, readdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
@@ -30,7 +30,7 @@ const applicationMenuIconPaths = Object.freeze({
   about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
   language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.1', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
 const closeTitleBroadcastId = 'closeTitleMessage';
@@ -444,16 +444,6 @@ async function listFiles(directory, relative = '') {
   return files;
 }
 
-async function writeRelease(files) {
-  await rm(releaseDirectory, {force: true, recursive: true});
-  for (const [relativePath, contents] of files) {
-    const outputPath = path.join(releaseDirectory, relativePath);
-    await mkdir(path.dirname(outputPath), {recursive: true});
-    await writeFile(outputPath, contents);
-  }
-  process.stdout.write(`Wrote ${files.size} DSL 4.0 release source file(s).\n`);
-}
-
 async function checkRelease(files) {
   const actualFiles = await listFiles(releaseDirectory);
   assert.deepEqual(
@@ -462,13 +452,16 @@ async function checkRelease(files) {
   );
   for (const [relativePath, expected] of files) {
     const actual = await readFile(path.join(releaseDirectory, relativePath));
-    assert(actual.equals(expected), `DSL 4.0 release source is stale: ${relativePath}`);
+    assert(actual.equals(expected), `DSL 4.0.0-rc.1 release source is stale: ${relativePath}`);
   }
-  process.stdout.write(`Verified ${files.size} DSL 4.0 release source file(s).\n`);
+  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.1 release source file(s).\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  assert(
+    !process.argv.includes('--write'),
+    'Direct release source writes are disabled. Run pnpm release:dsl4:update.',
+  );
   const files = await createDsl4ReleaseSourceFiles();
-  if (process.argv.includes('--write')) await writeRelease(files);
-  else await checkRelease(files);
+  await checkRelease(files);
 }

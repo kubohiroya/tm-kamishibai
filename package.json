@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "4.0.0",
+  "version": "4.0.0-rc.1",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
@@ -35,15 +35,16 @@
   ],
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "tag": "next"
   },
   "packageManager": "pnpm@11.18.0",
   "scripts": {
     "build": "node scripts/build-site.mjs",
     "sb3:build": "node scripts/sb3/build.mjs",
     "sb3:check": "sb3-toolchain check app && pnpm sb3:dsl4-release:check",
-    "sb3:dsl4-release:check": "node scripts/sb3/dsl4-downloadable-release.mjs",
-    "sb3:dsl4-release:write": "node scripts/sb3/dsl4-downloadable-release.mjs --write",
+    "sb3:dsl4-release:check": "pnpm release:dsl4:check",
+    "sb3:dsl4-release:write": "pnpm release:dsl4:update",
     "sb3:import": "sb3-toolchain import --output app",
     "sb3:extensions:status": "sb3-toolchain extensions status app",
     "sb3:extensions:sync": "sb3-toolchain extensions sync app",
@@ -63,7 +64,11 @@
     "deploy": "gh-pages -d dist",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "pack:smoke": "node scripts/verify-package.mjs",
-    "release:check": "npm publish --dry-run --access public",
+    "release:check": "npm publish --dry-run --access public --tag next",
+    "release:dsl4:update": "node scripts/sb3/dsl4-release-workflow.mjs update",
+    "release:dsl4:check": "node scripts/sb3/dsl4-release-workflow.mjs check",
+    "release:dsl4:freeze": "node scripts/sb3/dsl4-release-workflow.mjs freeze",
+    "release:dsl4:record-publication": "node scripts/sb3/dsl4-release-workflow.mjs record-publication",
     "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
     "tmpose-kamishibai": "node bin/tmpose-kamishibai.mjs"
   },
