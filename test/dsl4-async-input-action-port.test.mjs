@@ -150,3 +150,37 @@ test('restores the cursor when an actor touch wait is cancelled', async () => {
     {visible: false, source: 'touch-input-1', cursor: 'pointer'},
   ]);
 });
+
+test('serializes asynchronous cursor notifications without delaying actor input', async () => {
+  const cursors = [];
+  const releaseCursorStart = deferred();
+  const cursorNotificationsDone = deferred();
+  const port = createDsl4AsyncInputActionPort({
+    async setCursor(event) {
+      if (event.visible) await releaseCursorStart.promise;
+      cursors.push(event);
+      if (cursors.length === 2) cursorNotificationsDone.resolve();
+    },
+    composition: {
+      waitForKeyCandidate() {
+        assert.fail('key input must not be used');
+      },
+      waitForActorTouchCandidate() {
+        return Promise.resolve('Hero');
+      },
+    },
+  });
+
+  assert.equal(
+    await port.touchInputToChangeScene({actors: ['Hero']}, context()),
+    'Hero',
+    'cursor presentation must not delay authoritative input',
+  );
+  assert.deepEqual(cursors, []);
+  releaseCursorStart.resolve();
+  await cursorNotificationsDone.promise;
+  assert.deepEqual(cursors, [
+    {visible: true, source: 'touch-input-1', cursor: 'pointer'},
+    {visible: false, source: 'touch-input-1', cursor: 'pointer'},
+  ]);
+});

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSL 4 browser authoring menu capture fixture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        margin: 0;
+        overflow: hidden;
+        color: #29292f;
+        background: #ececf1;
+        font-family: system-ui, sans-serif;
+      }
+      header {
+        display: flex;
+        height: 64px;
+        align-items: center;
+        gap: 22px;
+        padding: 0 24px;
+        color: white;
+        background: #594bd8;
+        font-size: 21px;
+        font-weight: 700;
+      }
+      header button {
+        width: 50px;
+        height: 44px;
+        border: 4px solid transparent;
+        border-radius: 8px;
+        color: white;
+        background: #20a65a;
+        font-size: 27px;
+      }
+      header button[data-highlight='true'] {
+        border-color: #ffe45c;
+        box-shadow: 0 0 0 3px #38323f;
+      }
+      .toolbar {
+        height: 44px;
+        padding: 10px 30px;
+        border-bottom: 1px solid #c9c9d1;
+        background: white;
+        color: #53535d;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 260px 1fr 220px;
+        height: 612px;
+        gap: 16px;
+        padding: 20px;
+      }
+      aside {
+        border: 1px solid #d0d0d8;
+        border-radius: 10px;
+        background: white;
+        padding: 22px;
+      }
+      aside h2 {
+        margin: 0 0 18px;
+        font-size: 22px;
+      }
+      aside p,
+      aside li {
+        color: #62626c;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .workspace {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .stage {
+        position: relative;
+        width: 720px;
+        height: 540px;
+        overflow: hidden;
+        border: 8px solid #24242b;
+        border-radius: 8px;
+        background: linear-gradient(#a9d5ed 0 58%, #74afcf 58% 100%);
+      }
+      .stage[data-mode='start']::before {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        content: '「参加型」AI紙芝居';
+        color: #173f3a;
+        background: #fbfaf1;
+        font-size: 43px;
+        font-weight: 800;
+      }
+      .stage[data-mode='diagnostic']::before {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        content: '最後に正常だった作品を保持';
+        color: #173f3a;
+        font-size: 30px;
+        font-weight: 700;
+      }
+      .stage-label {
+        display: none;
+      }
+      [data-dsl4-menu-action][data-highlight='true'] {
+        outline: 7px solid #ffe45c;
+        outline-offset: -1px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>TurboWarp</strong>
+      <button id="green-flag" type="button" aria-label="緑の旗">⚑</button>
+      <span>kamishibai-4.0.0-rc.2.sb3</span>
+    </header>
+    <div class="toolbar">ファイル　編集　設定</div>
+    <main>
+      <aside>
+        <h2>コード</h2>
+        <p>Standard SB3のブロックは変更しません。</p>
+        <p>緑の旗から作者用プレビューを始めます。</p>
+      </aside>
+      <section class="workspace" aria-label="ステージ">
+        <div id="stage" class="stage"></div>
+        <div id="stage-label" class="stage-label"></div>
+      </section>
+      <aside>
+        <h2>スプライト</h2>
+        <ul>
+          <li>Stage</li>
+          <li>Loading</li>
+          <li>Turtle</li>
+        </ul>
+      </aside>
+    </main>
+    <script type="module" src="./browser-authoring-menu.mjs"></script>
+  </body>
+</html>

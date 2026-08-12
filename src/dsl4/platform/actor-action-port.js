@@ -1,5 +1,6 @@
 import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
+import {createDsl4OrderedCursorNotifier} from './ordered-cursor-notifier.js';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -436,23 +437,11 @@ export function createDsl4ActorActionPort(options) {
     throw new TypeError('setCursor must be a function');
   }
   let speechCursorId = 0;
+  const publishCursor = setCursor ? createDsl4OrderedCursorNotifier(setCursor) : null;
 
   /** @param {boolean} visible @param {string} source */
   function notifySpeechCursor(visible, source) {
-    if (!setCursor) return;
-    try {
-      void Promise.resolve(
-        setCursor(
-          Object.freeze({
-            visible,
-            source,
-            cursor: 'pointer',
-          }),
-        ),
-      ).catch(() => {});
-    } catch {
-      // Cursor styling is non-authoritative and cannot change speech semantics.
-    }
+    publishCursor?.(Object.freeze({visible, source, cursor: 'pointer'}));
   }
 
   /** @param {string} skin */

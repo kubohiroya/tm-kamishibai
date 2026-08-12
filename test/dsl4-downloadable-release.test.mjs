@@ -24,6 +24,7 @@ import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
+  loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
 import {
@@ -157,8 +158,15 @@ function mutablePreviewProject(initialSource) {
   };
 }
 
-function installPreviewBrowserGlobals(projectRoot, {storyFileHandle} = {}) {
-  const names = ['isSecureContext', 'self', 'top', 'showDirectoryPicker', 'showOpenFilePicker'];
+function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, saveFileHandle} = {}) {
+  const names = [
+    'isSecureContext',
+    'self',
+    'top',
+    'showDirectoryPicker',
+    'showOpenFilePicker',
+    'showSaveFilePicker',
+  ];
   const previous = new Map(
     names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
   );
@@ -189,6 +197,25 @@ function installPreviewBrowserGlobals(projectRoot, {storyFileHandle} = {}) {
                 ],
               });
               return [storyFileHandle];
+            },
+          },
+        }),
+    ...(saveFileHandle === undefined
+      ? {}
+      : {
+          showSaveFilePicker: {
+            configurable: true,
+            value: async (options) => {
+              assert.deepEqual(options, {
+                suggestedName: 'story.sb3',
+                types: [
+                  {
+                    description: 'Scratch 3 project',
+                    accept: {'application/x.scratch.sb3': ['.sb3']},
+                  },
+                ],
+              });
+              return saveFileHandle;
             },
           },
         }),
@@ -484,6 +511,58 @@ async function loadProjectQuietly(vm, archive) {
   } finally {
     vmLog.warn = originalWarn;
     vmLog.warning = originalWarning;
+  }
+}
+
+async function assertFreshBrowserBuiltStoryRuns(archive) {
+  const freshVm = new VirtualMachine();
+  try {
+    freshVm.setCompatibilityMode(false);
+    freshVm.setTurboMode(false);
+    freshVm.setCompilerOptions({enabled: false});
+    freshVm.securityManager.canLoadExtensionFromProject = () => true;
+    freshVm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(freshVm, archive);
+    let nextFreshId = 1;
+    for (const target of freshVm.runtime.targets) {
+      target.drawableID = nextFreshId;
+      for (const costume of target.sprite?.costumes ?? []) {
+        costume.skinId = nextFreshId;
+        nextFreshId += 1;
+      }
+    }
+    freshVm.runtime.renderer = {
+      draw() {},
+      createSVGSkin() {
+        return 1;
+      },
+      destroySkin() {},
+      updateDrawableSkinId() {},
+    };
+    freshVm.greenFlag();
+    const titleDeadline = Date.now() + 5_000;
+    while (Date.now() < titleDeadline) {
+      freshVm.runtime._step();
+      if ((await extensionReporter(freshVm, 'statusReporter')) === 'title') break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(await extensionReporter(freshVm, 'statusReporter'), 'title');
+    await extensionReporter(freshVm, 'closeTitle');
+    const completionDeadline = Date.now() + 5_000;
+    while (Date.now() < completionDeadline) {
+      freshVm.runtime._step();
+      const status = await extensionReporter(freshVm, 'statusReporter');
+      if (status === 'menu') break;
+      if (status === 'error') {
+        assert.fail(
+          `Fresh browser-built story failed: ${await extensionReporter(freshVm, 'lastErrorReporter')}`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(await extensionReporter(freshVm, 'statusReporter'), 'menu');
+  } finally {
+    freshVm.quit();
   }
 }
 
@@ -884,7 +963,9 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
 });
 
 test('uses the exact version 3 SVG bytes as the reusable DOM menu defaults', () => {
-  assert.deepEqual(dsl4RuntimeApplicationMenuDefaultIcons, version3MenuIconDataUrls);
+  const {build, ...legacyIcons} = dsl4RuntimeApplicationMenuDefaultIcons;
+  assert.deepEqual(legacyIcons, version3MenuIconDataUrls);
+  assert.match(build, /^data:image\/svg\+xml;base64,/u);
 });
 
 test('preserves the embedded source descriptor through a pinned TurboWarp resave', async () => {
@@ -971,7 +1052,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.1');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.2');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,
@@ -1488,7 +1569,19 @@ scenes:
   opening:
     - wait: 60
 `);
-    const restorePreviewGlobals = installPreviewBrowserGlobals(project.root);
+    let savedDistribution = null;
+    const saveFileHandle = {
+      async createWritable(options) {
+        assert.deepEqual(options, {keepExistingData: false});
+        return {
+          async write(bytes) {
+            savedDistribution = new Uint8Array(bytes);
+          },
+          async close() {},
+        };
+      },
+    };
+    const restorePreviewGlobals = installPreviewBrowserGlobals(project.root, {saveFileHandle});
     const vm = new VirtualMachine();
     try {
       vm.setCompatibilityMode(false);
@@ -1553,6 +1646,77 @@ scenes:
         'running',
         await extensionReporter(vm, 'runtimeDiagnosticsReporter'),
       );
+      project.setSource(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 0.05
+`);
+      const buildMenuDeadline = Date.now() + 5_000;
+      while (Date.now() < buildMenuDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'menu') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(await extensionReporter(vm, 'statusReporter'), 'menu');
+      const buildButton = findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'build')[0];
+      assert.equal(buildButton.hidden, false);
+      assert.equal(buildButton.disabled, false);
+      buildButton.click();
+      const buildDeadline = Date.now() + 7_000;
+      while (Date.now() < buildDeadline) {
+        vm.runtime._step();
+        if (savedDistribution && (await extensionReporter(vm, 'statusReporter')) === 'menu') {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert(savedDistribution, await extensionReporter(vm, 'lastErrorReporter'));
+      const distributionArchive = unzipSync(savedDistribution);
+      const distributionProject = JSON.parse(strFromU8(distributionArchive['project.json']));
+      const distributionStage = distributionProject.targets.find(({isStage}) => isStage);
+      assert.deepEqual(
+        Object.values(distributionStage.variables)
+          .map(([name]) => name)
+          .filter((name) => ['ポーズ認識', 'チャージ'].includes(name))
+          .sort(),
+        ['チャージ', 'ポーズ認識'],
+      );
+      assert.equal(
+        distributionProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId]
+          .application.mode,
+        'story',
+      );
+      const verifiedDistribution = await loadDsl4RuntimeComponent(distributionProject, frontend, {
+        ...storyComponentLimits,
+        subtleCrypto: webcrypto.subtle,
+      });
+      assert.equal(verifiedDistribution.ok, true, JSON.stringify(verifiedDistribution.diagnostics));
+      project.setSource(`kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+scenes:
+  opening:
+    - wait: 60
+`);
+      const sourceRefreshDeadline = Date.now() + 2_000;
+      while (Date.now() < sourceRefreshDeadline) {
+        vm.runtime._step();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      findByAttribute(applicationMenu, 'data-dsl4-menu-action', 'reload')[0].click();
+      const restartedDeadline = Date.now() + 5_000;
+      while (Date.now() < restartedDeadline) {
+        vm.runtime._step();
+        if ((await extensionReporter(vm, 'statusReporter')) === 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(await extensionReporter(vm, 'statusReporter'), 'running');
       const stage = vm.runtime.getTargetForStage();
       const droppedBackdrop = {
         ...stage.sprite.costumes.find(({name}) => name === 'Menu'),
@@ -1617,6 +1781,8 @@ scenes:
         true,
         'TurboWarp-owned sounds must remain in the project after a source reload.',
       );
+      vm.quit();
+      await assertFreshBrowserBuiltStoryRuns(savedDistribution);
     } finally {
       vm.quit();
       restorePreviewGlobals();

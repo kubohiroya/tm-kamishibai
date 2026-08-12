@@ -30,7 +30,7 @@ const applicationMenuIconPaths = Object.freeze({
   about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
   language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.1', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.2', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const extensionPath = `extensions/${extensionId}.js`;
 const closeTitleBroadcastId = 'closeTitleMessage';
@@ -452,9 +452,9 @@ async function checkRelease(files) {
   );
   for (const [relativePath, expected] of files) {
     const actual = await readFile(path.join(releaseDirectory, relativePath));
-    assert(actual.equals(expected), `DSL 4.0.0-rc.1 release source is stale: ${relativePath}`);
+    assert(actual.equals(expected), `DSL 4.0.0-rc.2 release source is stale: ${relativePath}`);
   }
-  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.1 release source file(s).\n`);
+  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.2 release source file(s).\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

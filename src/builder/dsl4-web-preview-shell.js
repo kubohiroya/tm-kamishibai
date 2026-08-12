@@ -21,6 +21,7 @@ const optionKeys = new Set([
   'maxIncludeDepth',
   'mount',
   'onError',
+  'onDistributionBuildState',
   'onProjectRoot',
   'prepareSourceResult',
   'protocolSession',
@@ -70,6 +71,7 @@ export const dsl4WebPreviewShellManifest = deepFreeze({
     'dsl4SourceIncludes',
     'dsl4AppShell',
     'dsl4WebPreviewAdapter',
+    'dsl4BrowserDistributionBuild',
     'dsl4WebPreviewAssetLiveReload',
     'dsl4PreviewReloadOverlay',
     'dsl4Debugger',
@@ -316,6 +318,12 @@ export function createDsl4WebPreviewShell(input = {}) {
   if (input.onError !== undefined && typeof input.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
+  if (
+    input.onDistributionBuildState !== undefined &&
+    typeof input.onDistributionBuildState !== 'function'
+  ) {
+    throw new TypeError('onDistributionBuildState must be a function');
+  }
   if (input.onProjectRoot !== undefined && typeof input.onProjectRoot !== 'function') {
     throw new TypeError('onProjectRoot must be a function');
   }
@@ -335,6 +343,7 @@ export function createDsl4WebPreviewShell(input = {}) {
   }
   const prepareSourceResult = input.prepareSourceResult;
   const projectRootObserver = input.onProjectRoot;
+  const distributionBuildObserver = input.onDistributionBuildState;
   const errorObserver = /** @type {Function | undefined} */ (input.onError);
   const createCoordinator = input.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
   if (typeof createCoordinator !== 'function') {
@@ -508,6 +517,7 @@ export function createDsl4WebPreviewShell(input = {}) {
     selectedProjectRoot = projectRoot;
     await projectRootObserver?.(projectRoot);
     if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
+    notifyDistributionBuildState();
   }
 
   /** @param {Readonly<Record<string, any>>} view */
@@ -575,6 +585,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
       if (event.candidate) {
         candidateDetails = details;
+        notifyDistributionBuildState();
         const choices = event.candidate.options;
         if (reloadSurface) {
           if (manualRestartDepth === 0) {
@@ -626,6 +637,7 @@ export function createDsl4WebPreviewShell(input = {}) {
       if (event.current?.integrity) {
         activeDetails = details;
         candidateDetails = null;
+        notifyDistributionBuildState();
         render({
           formatVersion: 1,
           phase: 'running',
@@ -646,6 +658,7 @@ export function createDsl4WebPreviewShell(input = {}) {
     if (event.type === 'preview.source.committed') {
       activeDetails = candidateDetails ?? activeDetails;
       candidateDetails = null;
+      notifyDistributionBuildState();
       if (!activeDetails || !event.current?.integrity) return;
       render({
         formatVersion: 1,
@@ -665,6 +678,7 @@ export function createDsl4WebPreviewShell(input = {}) {
     }
     if (event.type === 'preview.source.deferred') {
       candidateDetails = null;
+      notifyDistributionBuildState();
       if (!activeDetails || !event.current?.integrity) return;
       render({
         formatVersion: 1,
@@ -749,6 +763,7 @@ export function createDsl4WebPreviewShell(input = {}) {
             latestValidSourceResult = /** @type {Readonly<Record<string, any>>} */ (result);
             if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
           }
+          notifyDistributionBuildState();
         },
         onProtocolEvent,
         onSourceStatus,
@@ -759,9 +774,11 @@ export function createDsl4WebPreviewShell(input = {}) {
             diagnosticStatus.textContent = '';
             fallback.hidden = true;
             if (reloadSurface) observe(reloadSurface.setDiagnostic('source', null));
+            notifyDistributionBuildState();
             return;
           }
           renderDiagnostic(/** @type {Record<string, any>} */ (diagnostic));
+          notifyDistributionBuildState();
         },
         onError: reportError,
       }),
@@ -880,6 +897,72 @@ export function createDsl4WebPreviewShell(input = {}) {
     });
   }
 
+  function distributionBuildState() {
+    if (!featureFlags.dsl4BrowserDistributionBuild) {
+      return deepFreeze({enabled: false, reason: 'Browser distribution build is disabled.'});
+    }
+    if (!selectedProjectRoot || coordinator.getState().source.started !== true) {
+      return deepFreeze({enabled: false, reason: 'Open a project directory first.'});
+    }
+    if (selectedProjectRoot.dsl4SourceOnly === true) {
+      return deepFreeze({enabled: false, reason: 'Open a complete project directory to build.'});
+    }
+    const coordinatorState = coordinator.getState();
+    const publication = coordinatorState.source.lastPublication;
+    const integrity = latestValidSourceResult?.sourceSnapshot?.integrity;
+    if (
+      diagnosticCode !== null ||
+      publication?.kind !== 'source' ||
+      publication.ok !== true ||
+      typeof integrity !== 'string' ||
+      publication.integrity !== integrity
+    ) {
+      return deepFreeze({
+        enabled: false,
+        reason: 'Fix the latest source or asset diagnostic before building.',
+      });
+    }
+    if (
+      coordinatorState.protocol.pendingStages !== 0 ||
+      coordinatorState.protocol.candidate !== null ||
+      ['connecting', 'staging', 'committing', 'deferring', 'failed'].includes(
+        coordinatorState.protocol.status,
+      )
+    ) {
+      return deepFreeze({enabled: false, reason: 'Wait for the latest validation to finish.'});
+    }
+    const assetTransaction = assetPipeline?.getState()?.transaction;
+    if (
+      assetTransaction?.diagnostic ||
+      assetTransaction?.candidate ||
+      ['preparing', 'applying', 'diagnostic', 'full-rebuild'].includes(assetTransaction?.status)
+    ) {
+      return deepFreeze({
+        enabled: false,
+        reason: 'Apply or fix the latest asset change before building.',
+      });
+    }
+    return deepFreeze({enabled: true, reason: null, integrity});
+  }
+
+  function notifyDistributionBuildState() {
+    try {
+      distributionBuildObserver?.(distributionBuildState());
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  async function settleLatestProjectFiles() {
+    await coordinator.pollNow();
+    await assetSourceQueue;
+    if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
+    await coordinator.whenIdle();
+    await assetSourceQueue;
+    if (assetPipelineStarted && assetPipeline) await assetPipeline.whenIdle();
+    await reloadSurface?.whenIdle();
+  }
+
   function dispose() {
     if (disposePromise) return disposePromise;
     if (disposed) return Promise.resolve(snapshot());
@@ -916,10 +999,24 @@ export function createDsl4WebPreviewShell(input = {}) {
       return coordinator.start(projectRoot);
     },
     async pollNow() {
-      await coordinator.pollNow();
-      await assetSourceQueue;
-      if (assetPipelineStarted && assetPipeline) await assetPipeline.pollNow();
+      await settleLatestProjectFiles();
       return snapshot();
+    },
+    getDistributionBuildState: distributionBuildState,
+    async prepareDistributionBuild() {
+      if (disposed) throw new TypeError('Web Preview shell is disposed');
+      await settleLatestProjectFiles();
+      const state = distributionBuildState();
+      if (state.enabled !== true || !selectedProjectRoot || !latestValidSourceResult) {
+        const error = new Error(state.reason ?? 'Browser distribution build is unavailable');
+        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
+        throw error;
+      }
+      return Object.freeze({
+        projectRoot: selectedProjectRoot,
+        sourceResult: latestValidSourceResult,
+        integrity: latestValidSourceResult.sourceSnapshot.integrity,
+      });
     },
     /** @param {'storyStart' | 'currentScene' | 'currentAction'} choice */
     restart(choice) {

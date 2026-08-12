@@ -63,21 +63,24 @@ function createCoordinatorFixture() {
   let disposed = false;
   let sourceStarted = false;
   let current = null;
+  let candidate = null;
+  let lastPublication = null;
   const state = () => ({
     version: 1,
     disposed,
-    source: {started: sourceStarted, status: 'idle'},
-    protocol: {current},
+    source: {started: sourceStarted, status: 'idle', lastPublication},
+    protocol: {current, candidate, status: candidate ? 'candidate' : 'connected', pendingStages: 0},
   });
   const coordinator = {
     openProject() {
       calls.push(['openProject']);
       return Promise.resolve(state());
     },
-    start(root) {
+    async start(root) {
       calls.push(['start', root]);
       sourceStarted = true;
-      return Promise.resolve(state());
+      await options?.onProjectRoot?.(root);
+      return state();
     },
     pollNow() {
       calls.push(['pollNow']);
@@ -118,6 +121,12 @@ function createCoordinatorFixture() {
     },
     setCurrent(value) {
       current = value;
+    },
+    setPublication(value) {
+      lastPublication = value;
+    },
+    setCandidate(value) {
+      candidate = value;
     },
     createCoordinator(input) {
       options = input;
@@ -245,6 +254,7 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'dsl4SourceIncludes',
       'dsl4AppShell',
       'dsl4WebPreviewAdapter',
+      'dsl4BrowserDistributionBuild',
       'dsl4WebPreviewAssetLiveReload',
       'dsl4PreviewReloadOverlay',
       'dsl4Debugger',
@@ -446,6 +456,45 @@ test('hides host chrome while retaining the reload overlay for the non-embedded 
   assert(findById(shell.element, 'dsl4-preview-reload-status-button'));
   await shell.restart('storyStart');
   assert.deepEqual(fixture.calls.at(-1), ['restart', 'storyStart']);
+  await shell.dispose();
+});
+
+test('prepares only the latest valid project generation for a browser distribution build', async () => {
+  const {fixture, shell} = createShell({
+    featureFlags: {...enabledFlags, dsl4BrowserDistributionBuild: true},
+  });
+  assert.deepEqual(shell.getDistributionBuildState(), {
+    enabled: false,
+    reason: 'Open a project directory first.',
+  });
+  const root = {kind: 'directory'};
+  await shell.start(root);
+  const integrity = sri('browser-distribution');
+  const result = sourceResult(integrity);
+  fixture.options.onSourceResult(result);
+  fixture.setPublication({kind: 'source', integrity, ok: true, diagnosticCount: 0});
+
+  assert.deepEqual(shell.getDistributionBuildState(), {enabled: true, reason: null, integrity});
+  const prepared = await shell.prepareDistributionBuild();
+  assert.strictEqual(prepared.projectRoot, root);
+  assert.strictEqual(prepared.sourceResult, result);
+  assert.equal(prepared.integrity, integrity);
+  assert.equal(
+    fixture.calls.some(([name]) => name === 'pollNow'),
+    true,
+  );
+
+  fixture.setCandidate({id: 1});
+  assert.equal(shell.getDistributionBuildState().enabled, false);
+  fixture.setCandidate(null);
+
+  fixture.options.onSourceDiagnostic({
+    code: 'K4-YAML-001',
+    severity: 'error',
+    message: 'The latest source is invalid.',
+  });
+  assert.equal(shell.getDistributionBuildState().enabled, false);
+  await assert.rejects(shell.prepareDistributionBuild(), {code: 'K4-BROWSER-BUILD-NOT-READY'});
   await shell.dispose();
 });
 

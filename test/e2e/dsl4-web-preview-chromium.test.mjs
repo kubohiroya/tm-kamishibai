@@ -153,6 +153,72 @@ async function startFixtureServer(
 }
 
 test(
+  'preserves explicit canvas pointers when the runtime cursor returns to auto in Chromium',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-cursor-style-chromium-'));
+    const {server, url} = await startFixtureServer(
+      '/test/fixtures/dsl4/cursor-computed-style.html',
+    );
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.dsl4CursorComputedStyleFixture?.ready === true',
+        'cursor computed style fixture',
+      );
+      const snapshot = () =>
+        client.evaluate('globalThis.dsl4CursorComputedStyleFixture.snapshot()');
+
+      assert.deepEqual(await snapshot(), {
+        surface: 'auto',
+        canvas: 'pointer',
+        enabled: 'pointer',
+        disabled: 'not-allowed',
+      });
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: true, cursor: "wait"})',
+      );
+      assert.equal((await snapshot()).canvas, 'wait');
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: true, cursor: "progress"})',
+      );
+      assert.equal((await snapshot()).canvas, 'progress');
+      await client.evaluate(
+        'globalThis.dsl4CursorComputedStyleFixture.setCursor({visible: false, cursor: "progress"})',
+      );
+      assert.equal((await snapshot()).canvas, 'pointer');
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
   'loads the pinned TurboWarp browser platform bundle in real Chromium',
   {timeout: 30_000},
   async () => {
@@ -642,6 +708,7 @@ test(
       );
       const menu = await client.evaluate(`(() => {
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
+        const build = document.querySelector('[data-dsl4-menu-action=build]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
         const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
         const runtime = globalThis.Scratch.vm.runtime;
@@ -652,6 +719,7 @@ test(
           reloadDisabled: reload?.disabled,
           reloadAriaDisabled: reload?.getAttribute('aria-disabled'),
           reloadCursor: reload ? getComputedStyle(reload).cursor : null,
+          buildHidden: build?.hidden,
           inputAccept: input?.accept,
           inputMultiple: input?.multiple,
           inputWebkitDirectory: input?.webkitdirectory,
@@ -664,16 +732,213 @@ test(
       assert.equal(menu.reloadDisabled, true);
       assert.equal(menu.reloadAriaDisabled, 'true');
       assert.equal(menu.reloadCursor, 'not-allowed');
+      assert.equal(menu.buildHidden, true);
       assert.equal(menu.inputAccept, '.yml,.yaml');
       assert.equal(menu.inputMultiple, false);
       assert.equal(menu.inputWebkitDirectory, false);
-      assert.equal(menu.iconFilters.length, 4);
+      assert.equal(menu.iconFilters.length, 5);
       assert.equal(
         menu.iconFilters.every((filter) => filter !== 'none'),
         true,
       );
       assert.match(menu.stageCostume, /^Menu(?:Runtime)?$/u);
       assert.equal(menu.errorVisible, false);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
+
+test(
+  'builds the latest browser project and loads the generated SB3 in a fresh Chromium VM',
+  {timeout: 60_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-build-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-build-package-'));
+    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const loadedProject = await TurboWarpPackager.loadProject(release.archive);
+    const packager = new TurboWarpPackager.Packager();
+    packager.project = loadedProject;
+    packager.options.autoplay = true;
+    packager.options.app.title = 'DSL 4.0 browser distribution build E2E';
+    const packaged = await packager.package();
+    assert.equal(packaged.type, 'text/html');
+    await writeFile(path.join(fixtureDirectory, 'index.html'), packaged.data);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      await client.evaluate(`(() => {
+        const encoder = new TextEncoder();
+        const files = new Map([
+          ['project.source.json', JSON.stringify({
+            formatVersion: 1,
+            mode: 'external',
+            sourceId: 'main',
+            path: 'story.kamishibai.yaml'
+          })],
+          ['story.kamishibai.yaml', "kamishibai: '4.0'\\ncontrols:\\n  keymaps:\\n    production:\\n      Space: navigation.nextAction\\nscenes:\\n  opening:\\n    - wait: 0.05\\n"]
+        ]);
+        const notFound = () => Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
+        const root = {
+          kind: 'directory',
+          name: 'tutorial-story',
+          async queryPermission() { return 'granted'; },
+          async requestPermission() { return 'granted'; },
+          async getFileHandle(name) {
+            if (!files.has(name)) throw notFound();
+            return {
+              kind: 'file',
+              name,
+              async getFile() {
+                const bytes = encoder.encode(files.get(name));
+                return {
+                  name,
+                  size: bytes.byteLength,
+                  async arrayBuffer() { return bytes.slice().buffer; }
+                };
+              }
+            };
+          },
+          async getDirectoryHandle() { throw notFound(); }
+        };
+        globalThis.__dsl4DirectoryPickerCalls = 0;
+        globalThis.__dsl4SavePickerCalls = 0;
+        globalThis.__dsl4SavedDistribution = null;
+        globalThis.showDirectoryPicker = async () => {
+          globalThis.__dsl4DirectoryPickerCalls += 1;
+          return root;
+        };
+        globalThis.showSaveFilePicker = () => {
+          globalThis.__dsl4SavePickerCalls += 1;
+          return Promise.resolve({
+            kind: 'file',
+            name: 'story.sb3',
+            async createWritable() {
+              return {
+                async write(bytes) {
+                  globalThis.__dsl4SavedDistribution = new Uint8Array(bytes);
+                },
+                async close() {}
+              };
+            }
+          });
+        };
+        return true;
+      })()`);
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-title-controls=true]')?.style.display === 'block'`,
+        'browser build release title',
+      );
+      await click(client, '[data-dsl4-title-action=close]');
+      await waitForEvaluation(
+        client,
+        `document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'browser build application menu',
+      );
+      await click(client, '[data-dsl4-menu-action=open]');
+      await waitForEvaluation(
+        client,
+        `Boolean(document.querySelector('[data-dsl4-source-choice=project]'))`,
+        'browser project source chooser',
+      );
+      await click(client, '[data-dsl4-source-choice=project]');
+      await waitForEvaluation(
+        client,
+        `(() => {
+          const button = document.querySelector('[data-dsl4-menu-action=build]');
+          return document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block' &&
+            button?.hidden === false && button?.disabled === false;
+        })()`,
+        'enabled browser distribution build action',
+      );
+      await click(client, '[data-dsl4-menu-action=build]');
+      await waitForEvaluation(
+        client,
+        `globalThis.__dsl4SavedDistribution instanceof Uint8Array &&
+          document.querySelector('[data-dsl4-application-menu=true]')?.style.display === 'block'`,
+        'saved browser distribution SB3',
+      );
+      const built = await client.evaluate(`(() => {
+        const project = JSON.parse(globalThis.Scratch.vm.toJSON());
+        return {
+          directoryPickerCalls: globalThis.__dsl4DirectoryPickerCalls,
+          savePickerCalls: globalThis.__dsl4SavePickerCalls,
+          size: globalThis.__dsl4SavedDistribution.byteLength,
+          currentMode: project.extensionStorage.kubohiroyakamishibai4.components
+            .kubohiroyakamishibairuntime4.application.mode
+        };
+      })()`);
+      assert.equal(built.directoryPickerCalls, 1);
+      assert.equal(built.savePickerCalls, 1);
+      assert.ok(built.size > 0);
+      assert.equal(built.currentMode, 'menu', 'The authoring VM project must remain unchanged.');
+
+      const loaded = await client.evaluate(`(async () => {
+        const directoryPickerCalls = globalThis.__dsl4DirectoryPickerCalls;
+        const archive = globalThis.__dsl4SavedDistribution.slice().buffer;
+        globalThis.showDirectoryPicker = async () => {
+          globalThis.__dsl4DirectoryPickerCalls += 1;
+          throw Object.assign(new Error('Fresh story must not open a directory'), {name: 'AbortError'});
+        };
+        const FreshVm = globalThis.Scratch.vm.constructor;
+        const freshVm = new FreshVm();
+        freshVm.setCompatibilityMode(false);
+        freshVm.setTurboMode(false);
+        freshVm.setCompilerOptions({enabled: false});
+        freshVm.securityManager.canLoadExtensionFromProject = () => true;
+        freshVm.securityManager.getSandboxMode = () => 'unsandboxed';
+        await freshVm.loadProject(archive);
+        const project = JSON.parse(freshVm.toJSON());
+        globalThis.__dsl4FreshVm = freshVm;
+        return {
+          directoryPickerCalls,
+          targetCount: freshVm.runtime.targets.length,
+          mode: project.extensionStorage.kubohiroyakamishibai4.components
+            .kubohiroyakamishibairuntime4.application.mode
+        };
+      })()`);
+      assert.equal(loaded.mode, 'story');
+      assert.ok(loaded.targetCount > 0);
+      const fresh = await client.evaluate(`(() => {
+        return {
+          directoryPickerCalls: globalThis.__dsl4DirectoryPickerCalls,
+          extensionLoaded: Boolean(
+            globalThis.__dsl4FreshVm.runtime._primitives
+              .kubohiroyakamishibai4_statusReporter
+          )
+        };
+      })()`);
+      assert.equal(fresh.directoryPickerCalls, loaded.directoryPickerCalls);
+      assert.equal(fresh.extensionLoaded, true);
       assert.deepEqual(client.exceptions, []);
     } finally {
       client?.close();
