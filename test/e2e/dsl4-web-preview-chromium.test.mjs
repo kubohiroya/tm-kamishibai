@@ -10,14 +10,17 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
-import {strToU8, zipSync} from 'fflate';
+import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
 import {
   createDownloadableReleaseSb3,
   downloadableReleases,
 } from '../../scripts/sb3/downloadable-releases.mjs';
 import {createKamishibaiSb3} from '../../scripts/sb3/build.mjs';
-import {createDsl4ReleaseSourceFiles} from '../../scripts/sb3/dsl4-downloadable-release.mjs';
+import {
+  createDsl4ReleaseSourceFiles,
+  createDsl4RuntimeExtensionSource,
+} from '../../scripts/sb3/dsl4-downloadable-release.mjs';
 import {
   buildDsl4TurboWarpBrowserBundle,
   createDsl4LocalPreviewHost,
@@ -476,6 +479,86 @@ async function stopChrome(child) {
   child.kill('SIGKILL');
   await waitForExit(child, 5_000);
 }
+
+test(
+  'loads the current DSL 4.0 runtime without duplicate TensorFlow.js registration warnings',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-chromium-'));
+    const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-package-'));
+    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const archive = unzipSync(release.archive);
+    const project = JSON.parse(strFromU8(archive['project.json']));
+    const extensionSource = await createDsl4RuntimeExtensionSource();
+    project.extensionURLs.kubohiroyakamishibai4 = `data:text/javascript;base64,${extensionSource.toString('base64')}`;
+    archive['project.json'] = strToU8(JSON.stringify(project));
+    const loadedProject = await TurboWarpPackager.loadProject(Buffer.from(zipSync(archive)));
+    const packager = new TurboWarpPackager.Packager();
+    packager.project = loadedProject;
+    packager.options.autoplay = true;
+    packager.options.app.title = 'DSL 4.0 TensorFlow registry E2E';
+    const packaged = await packager.package();
+    assert.equal(packaged.type, 'text/html');
+    const warningProbe = `<script>
+globalThis.__dsl4Warnings = [];
+const __dsl4OriginalWarn = console.warn.bind(console);
+console.warn = (...values) => {
+  globalThis.__dsl4Warnings.push(values.map(String).join(' '));
+  __dsl4OriginalWarn(...values);
+};
+</script>`;
+    const html = Buffer.from(packaged.data)
+      .toString('utf8')
+      .replace('<head>', `<head>${warningProbe}`);
+    await writeFile(path.join(fixtureDirectory, 'index.html'), html);
+    const {server, url} = await startFixtureServer('/index.html', fixtureDirectory);
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
+      const warnings = await client.evaluate('globalThis.__dsl4Warnings');
+      for (const unexpected of [
+        'webgl backend was already registered',
+        'cpu backend was already registered',
+        'Platform browser has already been set',
+      ]) {
+        assert.equal(
+          warnings.some((warning) => warning.includes(unexpected)),
+          false,
+          `Unexpected TensorFlow.js warning: ${unexpected}\n${warnings.join('\n')}`,
+        );
+      }
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await Promise.all([
+        rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100}),
+        rm(fixtureDirectory, {recursive: true, force: true}),
+      ]);
+    }
+  },
+);
 
 test(
   'opens the non-embedded release title and disabled Reload menu without loading its story bundle',
