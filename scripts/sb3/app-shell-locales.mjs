@@ -101,7 +101,7 @@ export const appShellLocales = Object.freeze({
       close: '閉じる',
       invalidScript: 'エラー：不正な台本ファイル',
       language: '言語',
-      open: 'ファイルを開く',
+      open: '台本を開く',
       openFile: '台本ファイルを開く',
       openProject: 'プロジェクトディレクトリを開く',
       cancel: 'キャンセル',
@@ -161,3 +161,12 @@ export const appShellProjectPlaceholders = Object.freeze({
   '{{UI_RELOAD_EN}}': appShellLocales.en.ui.reload,
   '{{UI_RELOAD_JA}}': appShellLocales.ja.ui.reload,
 });
+
+const appShellLegacyProjectPlaceholders = Object.freeze({
+  ...appShellProjectPlaceholders,
+  '{{UI_OPEN_JA}}': 'ファイルを開く',
+});
+
+export function resolveAppShellProjectPlaceholders(version) {
+  return version.startsWith('4.') ? appShellProjectPlaceholders : appShellLegacyProjectPlaceholders;
+}

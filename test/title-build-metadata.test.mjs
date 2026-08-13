@@ -13,6 +13,7 @@ import {
   appShellLocales,
   appShellProjectPlaceholders,
   appShellTitleLines,
+  resolveAppShellProjectPlaceholders,
 } from '../scripts/sb3/app-shell-locales.mjs';
 import {
   officialWebsiteFaviconPlaceholder,
@@ -68,6 +69,11 @@ test('resolves the Title build date in Asia/Tokyo and accepts a reproducible ove
       }),
     /not a valid calendar date/u,
   );
+});
+
+test('keeps published 3.x menu localization separate from current 4.x labels', () => {
+  assert.equal(resolveAppShellProjectPlaceholders('3.2.3')['{{UI_OPEN_JA}}'], 'ファイルを開く');
+  assert.equal(resolveAppShellProjectPlaceholders('4.0.0-rc.2')['{{UI_OPEN_JA}}'], '台本を開く');
 });
 
 test('embeds an initial Title fallback and runtime-localized app-shell text', async () => {
@@ -163,6 +169,7 @@ test('embeds an initial Title fallback and runtime-localized app-shell text', as
       runtimeValues.get('about.officialWebsite.name').has(localized.about.officialWebsite.name),
     );
   }
+  assert(runtimeValues.get('ui.open').has('台本を開く'));
 
   assert.deepEqual(
     officialWebsiteButton.costumes.map((costume) => costume.name),

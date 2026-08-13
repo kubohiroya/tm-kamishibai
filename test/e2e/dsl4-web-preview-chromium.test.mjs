@@ -2565,7 +2565,7 @@ scenes:
         );
         const initialMenuLocale = await client.evaluate(`(() => {
           const open = document.querySelector('[data-dsl4-menu-action="open"]')?.textContent;
-          return open === 'ファイルを開く' ? 'ja' : 'en';
+          return open === '台本を開く' ? 'ja' : 'en';
         })()`);
         const openClick = await client.evaluate(`(() => {
           document.querySelector('[data-dsl4-menu-action="open"]').click();
@@ -2593,7 +2593,7 @@ scenes:
           client,
           `(() => {
             return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
-              initialMenuLocale === 'ja' ? 'Open' : 'ファイルを開く',
+              initialMenuLocale === 'ja' ? 'Open' : '台本を開く',
             )};
           })()`,
           'browser-owned toggled application-menu locale',
@@ -2621,7 +2621,7 @@ scenes:
           client,
           `(() => {
             return document.querySelector('[data-dsl4-menu-action="open"]')?.textContent === ${JSON.stringify(
-              initialMenuLocale === 'ja' ? 'ファイルを開く' : 'Open',
+              initialMenuLocale === 'ja' ? '台本を開く' : 'Open',
             )};
           })()`,
           'browser-owned restored application-menu locale',

@@ -347,7 +347,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
           locales: {
             en: {open: 'Open', reload: 'Reload', about: 'About', language: 'Language'},
             ja: {
-              open: 'ファイルを開く',
+              open: '台本を開く',
               reload: 'もう一度',
               about: 'アプリ情報',
               language: '言語',
