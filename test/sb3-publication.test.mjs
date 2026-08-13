@@ -69,6 +69,16 @@ test('renders ordered versioned download cards from one release catalog', async 
   for (const release of downloadableReleases) {
     assert.match(downloadPage, new RegExp(`href="${release.filename}" download`, 'u'));
     assert(downloadPage.includes(`<code>${release.filename}</code>（${release.version}）`));
+    assert(
+      downloadPage.includes(
+        `<time datetime="${release.buildDate}">${release.buildDate
+          .split('-')
+          .map(Number)
+          .map((part, index) => `${part}${['年', '月', '日'][index]}`)
+          .join('')}</time>`,
+      ),
+    );
+    assert(downloadPage.includes(`${release.size.toLocaleString('ja-JP')} bytes`));
   }
   assert.doesNotMatch(downloadPage, /4\.0ドキュメントを参照できます。/u);
   assert.doesNotMatch(downloadPage, /4\.0ドキュメントを開く/u);
