@@ -618,7 +618,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     archive[stage.costumes.find(({name}) => name === 'MenuRuntime').md5ext],
   );
   assert.doesNotMatch(menuSvg, />Open|>Reload|>About|>Language/u);
-  assert.doesNotMatch(localizedMenuSvg, />ファイルを開く|>もう一度|>アプリ情報|>言語/u);
+  assert.doesNotMatch(localizedMenuSvg, />台本を開く|>もう一度|>アプリ情報|>言語/u);
   assert.deepEqual(
     stage.costumes.map(({name}) => name),
     ['Title', 'TitleRuntime', 'Menu', 'MenuRuntime'],

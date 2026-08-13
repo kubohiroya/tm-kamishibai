@@ -57,7 +57,7 @@ if (mode === 'start') {
   stageLabel.textContent =
     mode === 'build'
       ? '台本と素材が正常なとき、配布用SB3を作れます。'
-      : '「ファイルを開く」からtutorial-storyフォルダーを選びます。';
+      : '「台本を開く」からtutorial-storyフォルダーを選びます。';
 }
 
 globalThis.browserAuthoringMenuFixture = Object.freeze({ready: true, mode});

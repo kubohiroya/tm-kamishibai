@@ -9,9 +9,9 @@ import {strFromU8, unzipSync} from 'fflate';
 import {
   appShellCommon,
   appShellLocales,
-  appShellProjectPlaceholders,
   appShellTitleLines,
   appShellVersion4TitleLines,
+  resolveAppShellProjectPlaceholders,
 } from './app-shell-locales.mjs';
 
 export const titleVersionPlaceholder = 'Version {{VERSION}} ({{BUILD_DATE}})';
@@ -229,8 +229,9 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     readFile(projectPath, 'utf8'),
     readFile(sourceManifestPath, 'utf8'),
   ]);
+  const projectPlaceholders = resolveAppShellProjectPlaceholders(metadata.version);
   const replacements = Object.freeze({
-    ...appShellProjectPlaceholders,
+    ...projectPlaceholders,
     [titleVersionPlaceholder]: metadata.label,
   });
   const project = replaceProjectPlaceholders(JSON.parse(projectSource), replacements);
@@ -397,7 +398,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   }
 
   const resolvedProjectSource = `${JSON.stringify(project, null, 2)}\n`;
-  for (const placeholder of Object.keys(appShellProjectPlaceholders)) {
+  for (const placeholder of Object.keys(projectPlaceholders)) {
     assert(
       !resolvedProjectSource.includes(placeholder),
       `The app project contains an unresolved app-shell placeholder: ${placeholder}`,
