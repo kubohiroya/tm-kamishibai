@@ -23,6 +23,7 @@ export const downloadCatalog = deepFreeze([
       filename: dsl4ReleaseMetadata.artifact.filename,
       faviconPath: 'site/favicon.png',
       sha256: dsl4ReleaseMetadata.artifact.sha256,
+      size: 7_652_780,
       sourceIdentity: dsl4ReleaseMetadata.sourceIdentity,
       sourceDirectory: dsl4ReleaseMetadata.sourceDirectory,
     },
@@ -32,6 +33,7 @@ export const downloadCatalog = deepFreeze([
     series: '4.0',
     status: 'リリース候補',
     statusKind: 'development',
+    updatedAt: dsl4ReleaseMetadata.buildDate,
     version: dsl4ReleaseMetadata.version,
   },
   {
@@ -40,6 +42,7 @@ export const downloadCatalog = deepFreeze([
       filename: 'kamishibai-3.2.sb3',
       faviconPath: 'release-sources/3.2.3/site/favicon.png',
       sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
+      size: 853_938,
       sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
       sourceDirectory: 'release-sources/3.2.3/app',
     },
@@ -49,6 +52,7 @@ export const downloadCatalog = deepFreeze([
     series: '3.2',
     status: '安定版',
     statusKind: 'stable',
+    updatedAt: '2026-08-06',
     version: '3.2.3',
   },
   {
@@ -57,6 +61,7 @@ export const downloadCatalog = deepFreeze([
       filename: 'kamishibai-3.1.sb3',
       faviconPath: 'release-sources/3.1.9/site/favicon.png',
       sha256: '31a4358a459407624aabe748e9b3ba74d08667d0550f06078a72da100d3ae018',
+      size: 633_465,
       sourceCommit: '96b1fe66e052f10da2938389f98fd15c95fcfdee',
       sourceDirectory: 'release-sources/3.1.9/app',
     },
@@ -65,6 +70,7 @@ export const downloadCatalog = deepFreeze([
     series: '3.1',
     status: '過去の安定版',
     statusKind: 'past',
+    updatedAt: '2026-08-04',
     version: '3.1.9',
   },
 ]);
@@ -88,7 +94,22 @@ for (const entry of downloadCatalog) {
     typeof entry.version === 'string' && entry.version.length > 0,
     'Catalog version is required.',
   );
+  assert.match(entry.updatedAt, /^\d{4}-\d{2}-\d{2}$/u, `${entry.series} date is invalid.`);
   if (entry.artifact) {
+    assert.match(
+      entry.artifact.buildDate,
+      /^\d{4}-\d{2}-\d{2}$/u,
+      `${entry.series} date is invalid.`,
+    );
+    assert(
+      Number.isSafeInteger(entry.artifact.size) && entry.artifact.size > 0,
+      `${entry.series} size is invalid.`,
+    );
+    assert.equal(
+      entry.updatedAt,
+      entry.artifact.buildDate,
+      `${entry.series} update date differs from its artifact build date.`,
+    );
     assert.match(entry.artifact.sha256, /^[0-9a-f]{64}$/u, `${entry.series} SHA-256 is invalid.`);
     if (entry.artifact.sourceIdentity) {
       assert.match(
@@ -150,14 +171,25 @@ function renderFileInfo(entry) {
   if (!entry.artifact) return escapeHtml(entry.unavailableNote);
   return (
     `ファイル: <code>${escapeHtml(entry.artifact.filename)}</code>` +
-    `（${escapeHtml(entry.version)}）`
+    `（${escapeHtml(entry.version)}）・${formatFileSize(entry.artifact.size)}`
   );
+}
+
+function formatFileSize(size) {
+  const megabytes = (size / 1_000_000).toLocaleString('ja-JP', {maximumFractionDigits: 1});
+  return `${megabytes} MB（${size.toLocaleString('ja-JP')} bytes）`;
+}
+
+function formatDisplayDate(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return `${year}年${month}月${day}日`;
 }
 
 function renderCard(entry) {
   return `    <article data-version="${escapeHtml(entry.series)}">
       <h2>kamishibai ${escapeHtml(entry.series)} <span class="status status--${escapeHtml(entry.statusKind)}">${escapeHtml(entry.status)}</span></h2>
       <p>${escapeHtml(entry.description)}</p>
+      <p class="updated-at">更新日: <time datetime="${entry.updatedAt}">${formatDisplayDate(entry.updatedAt)}</time></p>
       <div class="actions">
 ${renderActions(entry)}
       </div>

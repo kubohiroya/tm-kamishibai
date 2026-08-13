@@ -312,6 +312,11 @@ async function verifyDownloads(releaseBuilds = []) {
       `The ${release.series} card version differs from the release catalog.`,
     );
     assert(
+      html.includes(`<time datetime="${release.buildDate}">`) &&
+        html.includes(`${release.size.toLocaleString('ja-JP')} bytes`),
+      `The ${release.series} card is missing its update date or file size.`,
+    );
+    assert(
       publishedMetadata.version === release.version,
       `The published ${release.series} SB3 must use version ${release.version}.`,
     );
@@ -331,6 +336,7 @@ async function verifyDownloads(releaseBuilds = []) {
     );
     assert(
       archiveStat.size === publishedArchive.length &&
+        archiveStat.size === release.size &&
         archiveStat.size > 0 &&
         publishedArchive.subarray(0, 2).toString() === 'PK',
       `The published ${release.series} SB3 is not a non-empty ZIP-based Scratch project.`,
