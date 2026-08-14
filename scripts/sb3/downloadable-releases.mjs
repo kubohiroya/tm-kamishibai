@@ -4,6 +4,11 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {
+  buildSb3 as buildLegacySb3,
+  createDeterministicSb3 as createLegacyDeterministicSb3,
+} from '@kubohiroya/sb3-toolchain-legacy';
+
 import {downloadableReleases} from '../download-catalog.mjs';
 import {buildKamishibaiSb3, createKamishibaiSb3} from './build.mjs';
 
@@ -12,7 +17,12 @@ export {downloadableReleases};
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 function releaseSourceOptions(release, options) {
+  const historicalToolchain =
+    release.toolchainVersion === '0.6.0'
+      ? {build: buildLegacySb3, create: createLegacyDeterministicSb3}
+      : {};
   return {
+    ...historicalToolchain,
     ...options,
     buildDate: release.buildDate,
     faviconPath: path.join(projectRoot, release.faviconPath),

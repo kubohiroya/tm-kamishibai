@@ -25,10 +25,10 @@ license表示とsource repositoryを正本とします。
 | ---------------------------------------- | ----------------- | ------------ | ---------------------------------------------- |
 | @kubohiroya/turbowarp-asset-manager      | 0.9.0             | MPL-2.0      | `kubohiroya/turbowarp-asset-manager`           |
 | @kubohiroya/turbowarp-async-input        | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-async-input`             |
-| @kubohiroya/turbowarp-bubble             | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
+| @kubohiroya/turbowarp-bubble             | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-tmpose             | 1.7.0             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
+| @kubohiroya/turbowarp-tmpose             | 1.9.0             | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
 | @teachablemachine/pose                   | 0.8.3             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                         | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
@@ -55,10 +55,13 @@ npm runtime packageへ直接組み込みません。Packagerが成果物へ含�
 ## DSL 4.0 bundled pose runtime and PoseNet supply
 
 The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.3 browser runtime, including
-its TensorFlow.js 1.3.1 runtime, instead of loading either library from a CDN. It also embeds the
-PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by `tensorflow/tfjs-models` v2.2.2. The
-model JSON and weight shards are Apache-2.0 material; the manifest records their upstream URL and SHA-256 values in
-[`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js).
+its TensorFlow.js 1.3.1 runtime, instead of loading either library from a CDN. The SB3 runtime
+component stores the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
+`tensorflow/tfjs-models` v2.2.2 as explicit model data, outside the runtime JavaScript. The model
+JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-tmpose@1.9.0` publishes the
+canonical `./posenet` manifest, upstream URLs, package assets, and SHA-256 values; the local
+[`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js) adapter only selects
+the SB3 storage channel.
 
 ## DSL 3.2 compatibility extension
 

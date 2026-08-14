@@ -238,6 +238,26 @@ test('atomically stores and loads source, artifact, and assets in either channel
   }
 });
 
+test('replaces the Standard authoring extension with an explicit playback runtime', async () => {
+  const component = await fixture();
+  const project = baseProject();
+  project.extensions = ['kubohiroyakamishibai4'];
+  project.extensionURLs = {
+    kubohiroyakamishibai4: 'data:text/javascript;base64,YXV0aG9yaW5n',
+  };
+  const original = structuredClone(project);
+  const runtimeExtensionSource =
+    '// Name: Kamishibai DSL 4.0 Runtime\n' +
+    '// ID: kubohiroyakamishibai4\n' +
+    'console.log("playback");\n';
+  const installed = await install(component, 'bundled', project, {runtimeExtensionSource});
+  assert.deepEqual(project, original);
+  assert.equal(
+    installed.extensionURLs.kubohiroyakamishibai4,
+    `data:text/javascript;base64,${Buffer.from(runtimeExtensionSource).toString('base64')}`,
+  );
+});
+
 test('rejects partial, opposite-channel, unauthorized, and mixed-mode replacement', async () => {
   const component = await fixture();
   const partial = baseProject();

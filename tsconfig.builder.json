@@ -10,5 +10,6 @@
     "target": "ES2023",
     "types": ["node"]
   },
-  "include": ["src/**/*.js", "bin/**/*.mjs"]
+  "include": ["src/**/*.js", "bin/**/*.mjs"],
+  "exclude": ["src/builder/runtime/dsl4-playback-runtime-extension.js"]
 }

@@ -7,12 +7,14 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
 import {build} from 'esbuild';
+import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
 
 import {installDsl4PackagedRuntimeComponent} from '../../src/builder/dsl4-source.js';
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {createDsl4EmbeddedAssetBundle} from '../../src/dsl4/asset-bundle-descriptor.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../../src/dsl4/runtime-artifact-descriptor.js';
 import {createDsl4EmbeddedSourceDescriptor} from '../../src/dsl4/source-descriptor.js';
+import {createDsl4PoseNetProjectBundleFromLoader} from '../../src/dsl4/platform/posenet-bundle.js';
 import {
   dsl4RuntimeProvenance,
   formatDsl4RuntimeExtensionHeader,
@@ -69,7 +71,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyabubble',
       name: 'Bubble',
       package: '@kubohiroya/turbowarp-bubble',
-      version: '0.5.0',
+      version: '0.7.0',
       artifact: 'dist/turbowarp-bubble.js',
       sourcePath: path.join(
         path.dirname(
@@ -110,7 +112,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'tmpose',
       name: 'TMPose',
       package: '@kubohiroya/turbowarp-tmpose',
-      version: '1.8.0',
+      version: '1.9.0',
       artifact: 'dist/tmpose.js',
       sourcePath: path.join(
         path.dirname(
@@ -125,6 +127,12 @@ const bundleMemberIds = Object.freeze([
   runtimeExtensionId,
   ...externalExtensionMembers.map(({id}) => id),
 ]);
+const extensionBundle = Object.freeze({
+  id: extensionId,
+  name: 'Kamishibai DSL 4.0 Runtime',
+  members: [...bundleMemberIds],
+  recoveryCapsule: false,
+});
 const closeTitleBroadcastId = 'closeTitleMessage';
 const closeTitleBroadcastName = 'closeTitle';
 const poseConfidenceVariableId = 'dsl4-pose-confidence';
@@ -143,6 +151,76 @@ const limits = Object.freeze({
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
+const runtimeProfiles = new Set(['authoring', 'playback']);
+const playbackRuntimeModuleStubs = new Map([
+  ['../../src/builder/dsl4-web-preview-shell.js', ['createDsl4WebPreviewShell']],
+  [
+    '../../src/dsl4/browser-preview-source-adapter.js',
+    ['createDsl4BrowserPreviewStoryFileProject', 'inspectDsl4BrowserPreviewSupport'],
+  ],
+  ['../../src/dsl4/debug-execution.js', ['createDsl4DebugExecutionCoordinator']],
+  [
+    '../../src/dsl4/platform/browser-distribution-build.js',
+    [
+      'createDsl4BrowserDistributionFilename',
+      'createDsl4BrowserDistributionSb3',
+      'requestDsl4BrowserDistributionSaveTarget',
+      'saveDsl4BrowserDistributionSb3',
+    ],
+  ],
+  ['../../src/dsl4/live-reload-session.js', ['createDsl4LiveReloadSession']],
+  [
+    '../../src/dsl4/platform/browser-preview-runtime-component.js',
+    ['createDsl4BrowserPreviewRuntimeComponent'],
+  ],
+  [
+    '../../src/dsl4/platform/browser-story-file-loader.js',
+    ['buildDsl4BrowserSelectedStoryProject', 'collectDsl4BrowserDroppedFiles'],
+  ],
+  [
+    '../../src/dsl4/platform/turbowarp-preview-session.js',
+    ['createDsl4TurboWarpPreviewSessionFactory'],
+  ],
+  ['../../src/dsl4/preview-protocol.js', ['createDsl4PreviewProtocolSession']],
+]);
+let pendingPoseNetProjectBundle;
+
+function createPoseNetProjectBundle() {
+  pendingPoseNetProjectBundle ??= createDsl4PoseNetProjectBundleFromLoader(
+    async ({packageSpecifier}) =>
+      new Uint8Array(await readFile(fileURLToPath(import.meta.resolve(packageSpecifier)))),
+    {subtleCrypto: webcrypto.subtle},
+  );
+  return pendingPoseNetProjectBundle;
+}
+
+function playbackRuntimeProfilePlugin() {
+  return {
+    name: 'dsl4-playback-runtime-profile',
+    setup(buildContext) {
+      for (const modulePath of playbackRuntimeModuleStubs.keys()) {
+        buildContext.onResolve(
+          {filter: new RegExp(`^${modulePath.replaceAll('.', '\\.')}$`)},
+          () => ({
+            path: modulePath,
+            namespace: 'dsl4-playback-stub',
+          }),
+        );
+      }
+      buildContext.onLoad(
+        {filter: /.*/, namespace: 'dsl4-playback-stub'},
+        ({path: resolvedPath}) => ({
+          contents: `const unavailable = () => { throw new Error(${JSON.stringify(
+            `Authoring module ${resolvedPath} is unavailable in the playback runtime.`,
+          )}); };\n${(playbackRuntimeModuleStubs.get(resolvedPath) ?? [])
+            .map((name) => `export const ${name} = unavailable;`)
+            .join('\n')}\n`,
+          loader: 'js',
+        }),
+      );
+    },
+  };
+}
 
 function md5(contents) {
   return createHash('md5').update(contents).digest('hex');
@@ -415,6 +493,7 @@ async function createProject(assets) {
       subtleCrypto: webcrypto.subtle,
     },
   );
+  const poseNetBundle = await createPoseNetProjectBundle();
   const installed = await installDsl4PackagedRuntimeComponent(
     project,
     parsed.storyDocument,
@@ -424,6 +503,7 @@ async function createProject(assets) {
     {
       channel: 'unbundled',
       ...limits,
+      poseNetBundle,
       subtleCrypto: webcrypto.subtle,
     },
   );
@@ -431,7 +511,10 @@ async function createProject(assets) {
   return installed;
 }
 
-export async function createDsl4RuntimeExtensionSource() {
+export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} = {}) {
+  if (!runtimeProfiles.has(profile)) {
+    throw new TypeError('DSL 4.0 runtime profile must be authoring or playback');
+  }
   const [
     tensorflowBrowserRuntime,
     tmPoseBrowserRuntime,
@@ -467,11 +550,12 @@ export async function createDsl4RuntimeExtensionSource() {
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
         `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
       ),
+      DSL4_RUNTIME_PROFILE: JSON.stringify(profile),
     },
     format: 'iife',
     banner: {
-      // Initialize one global TensorFlow.js runtime, then route Teachable Machine's bundled
-      // module reference to the same instance so it cannot register a second backend factory.
+      // Compatibility fallback until turbowarp-tmpose publishes one reviewed browser runtime.
+      // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
       js:
         `${formatDsl4RuntimeExtensionHeader()}\n` +
         `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
@@ -481,6 +565,7 @@ export async function createDsl4RuntimeExtensionSource() {
     logLevel: 'silent',
     minify: true,
     platform: 'browser',
+    plugins: profile === 'playback' ? [playbackRuntimeProfilePlugin()] : [],
     target: ['es2022'],
     write: false,
   });
@@ -488,16 +573,75 @@ export async function createDsl4RuntimeExtensionSource() {
   return Buffer.from(result.outputFiles[0].contents);
 }
 
-export async function createDsl4ReleaseSourceFiles() {
-  const assets = titleAssets();
-  const project = await createProject(assets);
-  const runtimeExtensionSource = await createDsl4RuntimeExtensionSource();
-  const externalExtensionSources = await Promise.all(
+async function loadExternalExtensionSources() {
+  return Promise.all(
     externalExtensionMembers.map(async (member) => ({
       ...member,
       contents: await readFile(member.sourcePath),
     })),
   );
+}
+
+function extensionSourceDescriptors(externalExtensionSources) {
+  return [
+    {
+      id: runtimeExtensionId,
+      path: runtimeExtensionPath,
+      mediaType: 'text/javascript',
+      parameters: [],
+      encoding: 'base64',
+    },
+    ...externalExtensionSources.map((member) => ({
+      id: member.id,
+      path: member.path,
+      mediaType: 'text/javascript',
+      parameters: [],
+      encoding: 'base64',
+      source: {
+        provider: 'npm',
+        package: member.package,
+        version: member.version,
+        artifact: member.artifact,
+        integrity: sha256Sri(member.contents),
+      },
+    })),
+  ];
+}
+
+export async function createDsl4RuntimeBundleSource({profile = 'authoring'} = {}) {
+  const [runtimeExtensionSource, externalExtensionSources] = await Promise.all([
+    createDsl4RuntimeExtensionSource({profile}),
+    loadExternalExtensionSources(),
+  ]);
+  const extensions = extensionSourceDescriptors(externalExtensionSources);
+  const extensionContents = new Map([
+    [runtimeExtensionId, runtimeExtensionSource],
+    ...externalExtensionSources.map((member) => [member.id, member.contents]),
+  ]);
+  const project = {
+    extensions: [...bundleMemberIds],
+    extensionURLs: Object.fromEntries(
+      bundleMemberIds.map((memberId) => [memberId, `embedded-extension:extensions/${memberId}.js`]),
+    ),
+  };
+  const bundled = buildExtensionBundles({
+    extensionBundles: [extensionBundle],
+    extensionContents,
+    extensions,
+    project,
+  });
+  const source = bundled.extensionContents.get(extensionId);
+  assert(source, 'The DSL 4.0 runtime bundle source was not generated.');
+  return Buffer.from(String(source).replace(/^ +(?=\t)/gmu, ''));
+}
+
+export async function createDsl4ReleaseSourceFiles() {
+  const assets = titleAssets();
+  const project = await createProject(assets);
+  const [runtimeExtensionSource, externalExtensionSources] = await Promise.all([
+    createDsl4RuntimeExtensionSource(),
+    loadExternalExtensionSources(),
+  ]);
   const archiveEntries = ['project.json', ...assets.map(({filename}) => filename)];
   const files = new Map([
     ['project.source.json', Buffer.from(`${JSON.stringify(project, null, 2)}\n`)],
@@ -507,36 +651,8 @@ export async function createDsl4ReleaseSourceFiles() {
         `${JSON.stringify(
           {
             formatVersion: 1,
-            extensions: [
-              {
-                id: runtimeExtensionId,
-                path: runtimeExtensionPath,
-                mediaType: 'text/javascript',
-                parameters: [],
-                encoding: 'base64',
-              },
-              ...externalExtensionSources.map((member) => ({
-                id: member.id,
-                path: member.path,
-                mediaType: 'text/javascript',
-                parameters: [],
-                encoding: 'base64',
-                source: {
-                  provider: 'npm',
-                  package: member.package,
-                  version: member.version,
-                  artifact: member.artifact,
-                  integrity: sha256Sri(member.contents),
-                },
-              })),
-            ],
-            extensionBundles: [
-              {
-                id: extensionId,
-                name: 'Kamishibai DSL 4.0 Runtime',
-                members: [...bundleMemberIds],
-              },
-            ],
+            extensions: extensionSourceDescriptors(externalExtensionSources),
+            extensionBundles: [extensionBundle],
             sourceNotices: dsl4RuntimeProvenance,
           },
           null,

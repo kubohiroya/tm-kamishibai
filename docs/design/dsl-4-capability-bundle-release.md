@@ -34,10 +34,10 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
 | Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.5.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.8.0`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.9.0`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet` |
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition         |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外             |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外             |
@@ -45,6 +45,12 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
 生成SB3は外側のbundleを一度だけ登録し、各memberのhandler、menu、storage、由来アイコンを名前空間付きで委譲します。
+
+TMPose 1.9.0の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
+Base64変換、runtime fetch差し替えの正本とします。利用側はSB3のbundled／unbundled component storageから
+model descriptorを一意に選ぶだけとし、検証・復号は初回pose recognition時に上流APIへ委譲します。
+PoseNet model dataはruntime JavaScriptへ含めず、PNG／costume／soundへ偽装せず、明示的なcomponent model
+dataとして保存します。
 
 Standard Runtimeはnpmの完全固定releaseを直接利用し、`patchedDependencies`やrepository-local patchを
 介しません。rollbackは直前のexact pinとlockfileを復元するか、
@@ -153,7 +159,9 @@ cleanupを継続します。
 version付きrelease sourceを差し替えません。`frozen`または`published`ではupdateをfail closedにし、修正は
 4.0.0-rc.5、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
-3.2の`extensionBundles` member更新は一件ずつ行い、recovery capsuleを保ったままmember単位で戻します。
+3.2の`extensionBundles` member更新は一件ずつ行います。生成SB3では重複するrecovery capsuleを省き、
+追跡済みの個別sourceとprovenanceからmember単位で再構築して戻します。生成SB3単体から直接unbundleする必要が
+生じた場合だけ、`recoveryCapsule: true`を明示して再生成します。
 
 ## 8. 受け入れ基準
 
@@ -172,5 +180,5 @@ version付きrelease sourceを差し替えません。`frozen`または`publishe
 - remote code／remote preview禁止とverified remote asset opt-inを混同しない
 - release／update／rollback順序と実行済みevidenceが機械可読契約から検査される
 
-この契約だけを戻す場合は文書、fixture、test、release source生成をrevertし、`sb3-toolchain@0.6.0`へ戻して
-4.0.0-rc.3の単一Runtime成果物を使用します。
+この契約だけを戻す場合は文書、fixture、test、release source生成をrevertし、公開済み
+4.0.0-rc.4の固定成果物を使用します。

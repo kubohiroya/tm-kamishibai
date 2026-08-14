@@ -9,6 +9,10 @@ import {
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 import {ensureDsl4ExternalSourceCacheIdentity} from './dsl4-external-source.js';
+import {
+  readDsl4PlaybackPoseNetBundle,
+  readDsl4PlaybackRuntimeExtensionSource,
+} from './dsl4-playback-runtime-source.js';
 import {Sb3BuilderError} from './errors.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {readSb3} from './sb3.js';
@@ -149,6 +153,17 @@ export async function buildDsl4RuntimeComponentFile(options) {
     ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
   });
   const sourceManifest = identity.manifest;
+  const baseProject = readSb3(baseSb3Bytes).project;
+  const usesStandardRuntime =
+    Array.isArray(baseProject.extensions) &&
+    baseProject.extensions.includes('kubohiroyakamishibai4') &&
+    typeof baseProject.extensionURLs?.kubohiroyakamishibai4 === 'string';
+  const [runtimeExtensionSource, poseNetBundle] = usesStandardRuntime
+    ? await Promise.all([
+        readDsl4PlaybackRuntimeExtensionSource(),
+        readDsl4PlaybackPoseNetBundle({subtleCrypto: options.subtleCrypto}),
+      ])
+    : [undefined, undefined];
   const buildOptions = {
     baseSb3Bytes,
     projectRoot,
@@ -160,6 +175,8 @@ export async function buildDsl4RuntimeComponentFile(options) {
     maxAssetFileBytes: options.maxAssetFileBytes,
     maxAssetFiles: options.maxAssetFiles,
     maxTotalAssetBytes: options.maxTotalAssetBytes,
+    ...(runtimeExtensionSource === undefined ? {} : {runtimeExtensionSource}),
+    ...(poseNetBundle === undefined ? {} : {poseNetBundle}),
     ...(options.assetConfig === undefined ? {} : {assetConfig: options.assetConfig}),
     ...(options.assetLock === undefined ? {} : {assetLock: options.assetLock}),
     ...(options.assetProfile === undefined ? {} : {assetProfile: options.assetProfile}),

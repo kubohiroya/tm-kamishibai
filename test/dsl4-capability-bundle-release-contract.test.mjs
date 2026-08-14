@@ -162,7 +162,7 @@ test('ships the Standard artifact as one compact static extension bundle', async
   }
 });
 
-test('uses compact Standard 4.0 and reversible legacy 3.2 static bundles', () => {
+test('uses compact Standard 4.0 and source-rebuildable legacy 3.2 static bundles', async () => {
   assert.deepEqual(contract.bundleBoundaries.standard4, {
     kind: 'extensionBundles',
     unbundle: 'expanded-source',
@@ -176,9 +176,19 @@ test('uses compact Standard 4.0 and reversible legacy 3.2 static bundles', () =>
   });
   assert.deepEqual(contract.bundleBoundaries.legacy32, {
     kind: 'extensionBundles',
-    unbundle: 'recovery-capsule',
+    unbundle: 'source-rebuild',
     provenance: ['app/project.source.json', 'app/embedded-extensions.json'],
   });
+  const legacyManifest = JSON.parse(await readRepositoryFile('app/embedded-extensions.json'));
+  assert.equal(legacyManifest.extensionBundles[0].recoveryCapsule, false);
+  const publishedLegacyManifest = JSON.parse(
+    await readRepositoryFile('release-sources/3.2.3/app/embedded-extensions.json'),
+  );
+  assert.equal(
+    publishedLegacyManifest.extensionBundles[0].recoveryCapsule,
+    undefined,
+    'Published 3.2.3 source must stay immutable and use its pinned legacy toolchain default.',
+  );
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');
   assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-opt-in');
   assert.deepEqual(contract.assetPolicy.remoteAssetRequirements, [

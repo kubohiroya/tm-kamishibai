@@ -265,6 +265,35 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
   });
 });
 
+test('replaces the Standard authoring runtime with the generated playback profile', async () => {
+  await withFixture(async (fixture) => {
+    const project = baseProject();
+    project.extensions = ['kubohiroyakamishibai4'];
+    project.extensionURLs = {
+      kubohiroyakamishibai4: 'data:text/javascript;base64,YXV0aG9yaW5n',
+    };
+    await writeFile(
+      fixture.baseSb3Path,
+      Buffer.from(
+        zipSync({
+          'project.json': strToU8(`${JSON.stringify(project)}\n`),
+          'existing.svg': strToU8('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+        }),
+      ),
+    );
+    const result = await runCli(cliArguments(fixture, 'playback.sb3'), {
+      stdout: {write() {}},
+    });
+    const outputProject = readSb3(await readFile(result.outputPath)).project;
+    const dataUrl = outputProject.extensionURLs.kubohiroyakamishibai4;
+    assert.match(dataUrl, /^data:text\/javascript;base64,/u);
+    const source = Buffer.from(dataUrl.split(',', 2)[1], 'base64').toString('utf8');
+    assert.match(source, /Authoring module/u);
+    assert.doesNotMatch(source, /browser preview/u);
+    assert.match(source, /playback runtime cannot open a non-embedded authoring project/u);
+  });
+});
+
 test('connects an explicit asset distribution profile through build and runtime loading', async () => {
   await withFixture(async (fixture) => {
     const openingBytes = Buffer.from('<svg/>');

@@ -45,6 +45,7 @@ export const downloadCatalog = deepFreeze([
       size: 853_938,
       sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
       sourceDirectory: 'release-sources/3.2.3/app',
+      toolchainVersion: '0.6.0',
     },
     description:
       '3.1と3.2の既存作品を扱う現在の推奨安定版です。4.0はリリース候補として先行検証できます。',
@@ -122,6 +123,13 @@ for (const entry of downloadCatalog) {
         entry.artifact.sourceCommit,
         /^[0-9a-f]{40}$/u,
         `${entry.series} source commit is invalid.`,
+      );
+    }
+    if (entry.artifact.toolchainVersion !== undefined) {
+      assert.match(
+        entry.artifact.toolchainVersion,
+        /^\d+\.\d+\.\d+$/u,
+        `${entry.series} toolchain version is invalid.`,
       );
     }
   } else {

@@ -20,8 +20,8 @@ importers:
         specifier: 0.4.0
         version: 0.4.0
       '@kubohiroya/turbowarp-bubble':
-        specifier: 0.5.0
-        version: 0.5.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)
+        specifier: 0.7.0
+        version: 0.7.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.4.0
         version: 0.4.0
@@ -29,8 +29,8 @@ importers:
         specifier: 0.5.0
         version: 0.5.0
       '@kubohiroya/turbowarp-tmpose':
-        specifier: 1.8.0
-        version: 1.8.0
+        specifier: 1.9.0
+        version: 1.9.0
       '@teachablemachine/pose':
         specifier: 0.8.3
         version: 0.8.3(@tensorflow/tfjs-converter@3.21.0(@tensorflow/tfjs-core@3.21.0))(@tensorflow/tfjs-core@3.21.0)(@tensorflow/tfjs@1.3.1(seedrandom@2.4.3))
@@ -39,7 +39,7 @@ importers:
         version: 1.3.1(seedrandom@2.4.3)
       '@turbowarp/scratch-storage':
         specifier: 2.0.0
-        version: 2.0.0(webpack@4.47.0(supports-color@7.2.0))
+        version: 2.0.0(webpack@4.47.0)
       '@turbowarp/scratch-svg-renderer':
         specifier: 1.1.0
         version: 1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)
@@ -63,7 +63,7 @@ importers:
         version: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30
       scratch-render:
         specifier: github:TurboWarp/scratch-render#a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce
-        version: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0(supports-color@7.2.0))
+        version: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0)
       scratch-vm:
         specifier: github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f
         version: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f(@turbowarp/scratch-svg-renderer@1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961))
@@ -73,10 +73,10 @@ importers:
     devDependencies:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.8.0
-        version: 0.8.0(supports-color@7.2.0)
+        version: 0.8.0
       '@kubohiroya/sb3-toolchain-legacy':
         specifier: npm:@kubohiroya/sb3-toolchain@0.6.0
-        version: '@kubohiroya/sb3-toolchain@0.6.0(supports-color@7.2.0)'
+        version: '@kubohiroya/sb3-toolchain@0.6.0'
       '@turbowarp/packager':
         specifier: 3.13.0
         version: 3.13.0
@@ -85,13 +85,13 @@ importers:
         version: 7.0.0
       '@types/node':
         specifier: ^26.1.2
-        version: 26.1.2
+        version: 26.2.0
       ajv:
         specifier: 8.20.0
         version: 8.20.0
       eslint:
         specifier: ^10.8.0
-        version: 10.8.0(supports-color@7.2.0)
+        version: 10.8.1
       fake-indexeddb:
         specifier: 6.2.5
         version: 6.2.5
@@ -361,8 +361,8 @@ packages:
   '@kubohiroya/turbowarp-async-input@0.4.0':
     resolution: {integrity: sha512-V8io/dZpNu8HJM/QHymcm8V//PNNa7eUzeSDrxHINKeISNl+QCaqPGgjNIaSdgSEaJGqYQNZsRZnxZvRH2TFew==}
 
-  '@kubohiroya/turbowarp-bubble@0.5.0':
-    resolution: {integrity: sha512-Nl1WqS+uKb1tOy+/ZJGr/a7a6jaDEaVjCAt5Mmo8QLCKZnZQyNfISyyTENcl2MqoBLMREp+DedKY0klmNAZeow==}
+  '@kubohiroya/turbowarp-bubble@0.7.0':
+    resolution: {integrity: sha512-4vxONEd9ZwVRugq8fE/A2e58Poybwz3AMn2x6ZPCukd9axElzVOaeX4guYIxC5ArbGX3KfZ2yj2Y4PyUkb1Igg==}
     peerDependencies:
       '@kubohiroya/turbowarp-asset-manager': '>=0.7.0 <1'
       '@kubohiroya/turbowarp-async-input': '>=0.3.0 <1'
@@ -384,8 +384,8 @@ packages:
   '@kubohiroya/turbowarp-svg-text@0.5.0':
     resolution: {integrity: sha512-LHyKtLMtP+AKESZPX6C4ws17aI8yyjCsbSj09YNyK0YskYSIs2bSHkaBSgQv7+WgJEmL3H7toDxSrc3fJdCwfw==}
 
-  '@kubohiroya/turbowarp-tmpose@1.8.0':
-    resolution: {integrity: sha512-77n7vqYJkKYmRhnTJd3uOF0qi3lgsSNURpmCX3l1gVKRZWJKG2NUC3zcg4/uxECnwWQlxqkl/1zlZabGyBpX4Q==}
+  '@kubohiroya/turbowarp-tmpose@1.9.0':
+    resolution: {integrity: sha512-C8k12a19AYEiiBw/QpTY19bYB5tHph7zJvJbCh4wuMFcSb/eT03UeX66l5J6KQXA+kcsTq+mvnMXZ7Kgkw2qZA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -495,8 +495,8 @@ packages:
   '@types/node-fetch@2.6.13':
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
 
-  '@types/node@26.1.2':
-    resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
+  '@types/node@26.2.0':
+    resolution: {integrity: sha512-5IviulTZeRNp2vAJ514cc/HUlY5nZ9fCbq9DMyC52BrhFZACo3nI0R7qBxhQmo/d27NFe96ur/b7Wwxklda+kg==}
 
   '@types/offscreencanvas@2019.3.0':
     resolution: {integrity: sha512-esIJx9bQg+QYF0ra8GnvfianIY8qWB0GBx54PK5Eps6m+xTj86KLavHv6qDhzKcu5UUOgNfJ2pWaIIV7TRUd9Q==}
@@ -1154,8 +1154,8 @@ packages:
   domhandler@2.4.2:
     resolution: {integrity: sha512-JiK04h0Ht5u/80fdLMCEmV4zkNh2BcoMFBmZ/91WtYZ8qVXSKjiw7fXMgFPnHcSZgOo3XdinHvmnDUeMf5R4wA==}
 
-  dompurify@3.4.12:
-    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+  dompurify@3.4.13:
+    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
 
   domutils@1.7.0:
     resolution: {integrity: sha512-Lgd2XcJ/NjEw+7tFvfKxOzCYKZsdct5lczQ2ZaQY8Djz7pfAD3Gbp8ySJWtreII/vDlMVmxwa6pHmdxIYgttDg==}
@@ -1275,8 +1275,8 @@ packages:
     resolution: {integrity: sha512-tD40eHxA35h0PEIZNeIjkHoDR4YjjJp34biM0mDvplBe//mB+IHCqHDGV7pxF+7MklTvighcCPPZC7ynWyjdTA==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  eslint@10.8.0:
-    resolution: {integrity: sha512-nuKKvN+oIBO0koN7Tm7dlkmnkc21mtt0QJLwAKzjLq14y6lRTdVG36MZHJ8eQHwdJMwZbQNMlPOYedMq/oVJvQ==}
+  eslint@10.8.1:
+    resolution: {integrity: sha512-wqA7W2jbsC/BnV9Iv1UZpKVFkO1AdNoSmYW8NWG4HNOBbkAMvIqDZ27pI2f07dqn583NcIC44ckjAcOXDL1QbQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
     hasBin: true
     peerDependencies:
@@ -1565,10 +1565,6 @@ packages:
 
   grapheme-breaker@0.3.2:
     resolution: {integrity: sha512-mB6rwkw1Z7z4z2RkFFTd/+q6Ug1gnCgjKAervAKgBeNI1mSr8E5EUWoYzFNOZsLHFArLfpk+O8X8qXC7uvuawQ==}
-
-  has-flag@4.0.0:
-    resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
-    engines: {node: '>=8'}
 
   has-property-descriptors@1.0.2:
     resolution: {integrity: sha512-55JNKuIW+vq4Ke1BjOTjM2YctQIvCT7GFzHwmfZPGo5wnrgkid0YQtnAleFSqumZm4az3n2BS+erby5ipJdgrg==}
@@ -1987,6 +1983,15 @@ packages:
     resolution: {integrity: sha512-IHLHYskTc2arMYsHZH82PVX8CSKT5lzb7AXeyO06QnjGDKtkv+pv3mEki6S7reB/x1QPo+YPxQRNEVgR5V/w3Q==}
     engines: {node: 4.x || >=6.0.0}
 
+  node-fetch@2.6.13:
+    resolution: {integrity: sha512-StxNAxh15zr77QvvkmveSQ8uCQ4+v5FkvNTj0OESmiHu+VRi/gXArXtkWMElOsOUNLtUEvI4yS+rdtOHZTwlQA==}
+    engines: {node: 4.x || >=6.0.0}
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+
   node-fetch@2.6.7:
     resolution: {integrity: sha512-ZjMPFEfVx5j+y2yF35Kzx5sF7kDzxuDj6ziH4FFbOp87zKDZNx8yExJIb05OGF4Nlt9IHFIMBkRl41VdvcNdbQ==}
     engines: {node: 4.x || >=6.0.0}
@@ -2336,7 +2341,7 @@ packages:
     resolution: {integrity: sha512-5cfCmsTYV/wPaRIItNxatw02ua/MThdIUNnUOCYp+3LSEJvnG804ANw2VLaavNILIfWXF1D1G2KNANkBBvInwQ==}
 
   scratch-audio@https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30:
-    resolution: {gitHosted: true, integrity: sha512-Y261m4LsHUOriNLV0x1CR/0uSuH3rvnU2YwMH8M2K2nAdVAaIPBtaZb1pU2NihDnB58H2odk71qm9VhICgfIaw==, tarball: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30}
     version: 0.1.0
 
   scratch-parser@6.0.0:
@@ -2344,11 +2349,11 @@ packages:
     engines: {node: '>=8.0'}
 
   scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961:
-    resolution: {gitHosted: true, integrity: sha512-uODd7hOqXZgkir8WtRx8K6IHs9UJa06wEm03Q6vgXubhbkRoimU3Osx3baqy9ppof+ThSTkie0xH2OpNDrmWFA==, tarball: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961}
     version: 1.0.0
 
   scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce:
-    resolution: {gitHosted: true, integrity: sha512-JIbFGheHaPPVgcWWKJoPx8qVlDxefdkW8y1DcTzqOPHyoSRfRB7E8OGAjU4JU/OqpL0GJ4bWt7bDDlNCImZaPw==, tarball: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce}
     version: 0.1.0
 
   scratch-sb1-converter@0.2.7:
@@ -2361,7 +2366,7 @@ packages:
     resolution: {integrity: sha512-6+bQU9iVYv23T8J0SjpV6MTugm0y8myh/4DPgu1BGfccysdkaWzu3MkNGQyQRUlbqAiW9wM7ctfv3USPEkzTgg==}
 
   scratch-vm@https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f:
-    resolution: {gitHosted: true, integrity: sha512-0i2uA7c2Px81yzT1aEx6oqYIrEUu6dEAkAsKjHYDRH0jfxcTsICI3+oIrrvp/bPD6KbXsgNxGZwUUb1WYE7hOg==, tarball: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f}
     version: 2.1.46
     peerDependencies:
       '@turbowarp/scratch-svg-renderer': ^1.1.0
@@ -2525,10 +2530,6 @@ packages:
   strtok3@10.3.5:
     resolution: {integrity: sha512-ki4hZQfh5rX0QDLLkOCj+h+CVNkqmp/CMf8v8kZpkNVK6jGQooMytqzLZYUVYIZcFZ6yDB70EfD8POcFXiF5oA==}
     engines: {node: '>=18'}
-
-  supports-color@7.2.0:
-    resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
-    engines: {node: '>=8'}
 
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
@@ -2867,17 +2868,17 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@eslint-community/eslint-utils@4.10.1(eslint@10.8.0(supports-color@7.2.0))':
+  '@eslint-community/eslint-utils@4.10.1(eslint@10.8.1)':
     dependencies:
-      eslint: 10.8.0(supports-color@7.2.0)
+      eslint: 10.8.1
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.2': {}
 
-  '@eslint/config-array@0.23.5(supports-color@7.2.0)':
+  '@eslint/config-array@0.23.5':
     dependencies:
       '@eslint/object-schema': 3.0.5
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3
       minimatch: 10.2.6
     transitivePeerDependencies:
       - supports-color
@@ -2920,18 +2921,18 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@kubohiroya/sb3-toolchain@0.6.0(supports-color@7.2.0)':
+  '@kubohiroya/sb3-toolchain@0.6.0':
     dependencies:
       fflate: 0.8.3
-      music-metadata: 11.14.0(supports-color@7.2.0)
+      music-metadata: 11.14.0
       yaml: 2.9.0
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/sb3-toolchain@0.8.0(supports-color@7.2.0)':
+  '@kubohiroya/sb3-toolchain@0.8.0':
     dependencies:
       fflate: 0.8.3
-      music-metadata: 11.14.0(supports-color@7.2.0)
+      music-metadata: 11.14.0
       yaml: 2.9.0
     transitivePeerDependencies:
       - supports-color
@@ -2940,7 +2941,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-async-input@0.4.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.5.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)':
+  '@kubohiroya/turbowarp-bubble@0.7.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
     optionalDependencies:
@@ -2953,7 +2954,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-svg-text@0.5.0': {}
 
-  '@kubohiroya/turbowarp-tmpose@1.8.0': {}
+  '@kubohiroya/turbowarp-tmpose@1.9.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -3007,7 +3008,7 @@ snapshots:
       '@types/webgl-ext': 0.0.30
       '@webgpu/types': 0.1.16
       long: 4.0.0
-      node-fetch: 2.6.7
+      node-fetch: 2.6.13
       seedrandom: 3.0.5
     transitivePeerDependencies:
       - encoding
@@ -3032,9 +3033,9 @@ snapshots:
     transitivePeerDependencies:
       - seedrandom
 
-  '@tokenizer/inflate@0.4.1(supports-color@7.2.0)':
+  '@tokenizer/inflate@0.4.1':
     dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3
       token-types: 6.1.2
     transitivePeerDependencies:
       - supports-color
@@ -3070,7 +3071,7 @@ snapshots:
       '@turbowarp/json': 0.1.2
       '@turbowarp/jszip': 3.12.0
 
-  '@turbowarp/scratch-storage@2.0.0(webpack@4.47.0(supports-color@7.2.0))':
+  '@turbowarp/scratch-storage@2.0.0(webpack@4.47.0)':
     dependencies:
       '@babel/runtime': 7.21.0
       '@turbowarp/nanolog': 0.2.0
@@ -3078,7 +3079,7 @@ snapshots:
       base64-js: 1.3.0
       cross-fetch: 3.1.5
       js-md5: 0.7.3
-      worker-loader: 2.0.0(webpack@4.47.0(supports-color@7.2.0))
+      worker-loader: 2.0.0(webpack@4.47.0)
     transitivePeerDependencies:
       - encoding
       - webpack
@@ -3088,7 +3089,7 @@ snapshots:
       '@turbowarp/nanolog': 0.2.0
       base64-js: 1.2.1
       base64-loader: 1.0.0
-      dompurify: 3.4.12
+      dompurify: 3.4.13
       scratch-render-fonts: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961
       transformation-matrix: 1.15.0
 
@@ -3104,10 +3105,10 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 26.1.2
+      '@types/node': 26.2.0
       form-data: 4.0.6
 
-  '@types/node@26.1.2':
+  '@types/node@26.2.0':
     dependencies:
       undici-types: 8.3.0
 
@@ -3323,9 +3324,9 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  anymatch@2.0.0(supports-color@7.2.0):
+  anymatch@2.0.0:
     dependencies:
-      micromatch: 3.1.10(supports-color@7.2.0)
+      micromatch: 3.1.10
       normalize-path: 2.1.1
     transitivePeerDependencies:
       - supports-color
@@ -3440,7 +3441,7 @@ snapshots:
     dependencies:
       balanced-match: 4.0.4
 
-  braces@2.3.2(supports-color@7.2.0):
+  braces@2.3.2:
     dependencies:
       arr-flatten: 1.1.0
       array-unique: 0.3.2
@@ -3448,7 +3449,7 @@ snapshots:
       fill-range: 4.0.0
       isobject: 3.0.1
       repeat-element: 1.1.4
-      snapdragon: 0.8.2(supports-color@7.2.0)
+      snapdragon: 0.8.2
       snapdragon-node: 2.1.1
       split-string: 3.1.0
       to-regex: 3.0.2
@@ -3589,18 +3590,18 @@ snapshots:
 
   canvas-toBlob@1.0.0: {}
 
-  chokidar@2.1.8(supports-color@7.2.0):
+  chokidar@2.1.8:
     dependencies:
-      anymatch: 2.0.0(supports-color@7.2.0)
+      anymatch: 2.0.0
       async-each: 1.0.6
-      braces: 2.3.2(supports-color@7.2.0)
+      braces: 2.3.2
       glob-parent: 3.1.0
       inherits: 2.0.4
       is-binary-path: 1.0.1
       is-glob: 4.0.3
       normalize-path: 3.0.0
       path-is-absolute: 1.0.1
-      readdirp: 2.2.1(supports-color@7.2.0)
+      readdirp: 2.2.1
       upath: 1.2.0
     optionalDependencies:
       fsevents: 1.2.13
@@ -3753,17 +3754,13 @@ snapshots:
 
   dash-ast@2.0.1: {}
 
-  debug@2.6.9(supports-color@7.2.0):
+  debug@2.6.9:
     dependencies:
       ms: 2.0.0
-    optionalDependencies:
-      supports-color: 7.2.0
 
-  debug@4.4.3(supports-color@7.2.0):
+  debug@4.4.3:
     dependencies:
       ms: 2.1.3
-    optionalDependencies:
-      supports-color: 7.2.0
 
   decode-html@2.0.0: {}
 
@@ -3830,7 +3827,7 @@ snapshots:
     dependencies:
       domelementtype: 1.3.1
 
-  dompurify@3.4.12:
+  dompurify@3.4.13:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -4014,11 +4011,11 @@ snapshots:
 
   eslint-visitor-keys@5.0.1: {}
 
-  eslint@10.8.0(supports-color@7.2.0):
+  eslint@10.8.1:
     dependencies:
-      '@eslint-community/eslint-utils': 4.10.1(eslint@10.8.0(supports-color@7.2.0))
+      '@eslint-community/eslint-utils': 4.10.1(eslint@10.8.1)
       '@eslint-community/regexpp': 4.12.2
-      '@eslint/config-array': 0.23.5(supports-color@7.2.0)
+      '@eslint/config-array': 0.23.5
       '@eslint/config-helpers': 0.7.0
       '@eslint/core': 1.2.1
       '@eslint/plugin-kit': 0.7.2
@@ -4028,7 +4025,7 @@ snapshots:
       '@types/estree': 1.0.9
       ajv: 6.15.0
       cross-spawn: 7.0.6
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3
       escape-string-regexp: 4.0.0
       eslint-scope: 9.1.2
       eslint-visitor-keys: 5.0.1
@@ -4094,14 +4091,14 @@ snapshots:
       md5.js: 1.3.5
       safe-buffer: 5.2.1
 
-  expand-brackets@2.1.4(supports-color@7.2.0):
+  expand-brackets@2.1.4:
     dependencies:
-      debug: 2.6.9(supports-color@7.2.0)
+      debug: 2.6.9
       define-property: 0.2.5
       extend-shallow: 2.0.1
       posix-character-classes: 0.1.1
       regex-not: 1.0.2
-      snapdragon: 0.8.2(supports-color@7.2.0)
+      snapdragon: 0.8.2
       to-regex: 3.0.2
     transitivePeerDependencies:
       - supports-color
@@ -4119,15 +4116,15 @@ snapshots:
       assign-symbols: 1.0.0
       is-extendable: 1.0.1
 
-  extglob@2.0.4(supports-color@7.2.0):
+  extglob@2.0.4:
     dependencies:
       array-unique: 0.3.2
       define-property: 1.0.0
-      expand-brackets: 2.1.4(supports-color@7.2.0)
+      expand-brackets: 2.1.4
       extend-shallow: 2.0.1
       fragment-cache: 0.2.1
       regex-not: 1.0.2
-      snapdragon: 0.8.2(supports-color@7.2.0)
+      snapdragon: 0.8.2
       to-regex: 3.0.2
     transitivePeerDependencies:
       - supports-color
@@ -4169,9 +4166,9 @@ snapshots:
     dependencies:
       flat-cache: 4.0.1
 
-  file-type@21.3.4(supports-color@7.2.0):
+  file-type@21.3.4:
     dependencies:
-      '@tokenizer/inflate': 0.4.1(supports-color@7.2.0)
+      '@tokenizer/inflate': 0.4.1
       strtok3: 10.3.5
       token-types: 6.1.2
       uint8array-extras: 1.5.0
@@ -4386,9 +4383,6 @@ snapshots:
     dependencies:
       brfs: 1.6.1
       unicode-trie: 0.3.1
-
-  has-flag@4.0.0:
-    optional: true
 
   has-property-descriptors@1.0.2:
     dependencies:
@@ -4700,7 +4694,7 @@ snapshots:
 
   md5.js@1.3.5:
     dependencies:
-      hash-base: 3.1.2
+      hash-base: 3.0.5
       inherits: 2.0.4
       safe-buffer: 5.2.1
 
@@ -4724,20 +4718,20 @@ snapshots:
 
   microee@0.0.6: {}
 
-  micromatch@3.1.10(supports-color@7.2.0):
+  micromatch@3.1.10:
     dependencies:
       arr-diff: 4.0.0
       array-unique: 0.3.2
-      braces: 2.3.2(supports-color@7.2.0)
+      braces: 2.3.2
       define-property: 2.0.2
       extend-shallow: 3.0.2
-      extglob: 2.0.4(supports-color@7.2.0)
+      extglob: 2.0.4
       fragment-cache: 0.2.1
       kind-of: 6.0.3
-      nanomatch: 1.2.13(supports-color@7.2.0)
+      nanomatch: 1.2.13
       object.pick: 1.3.0
       regex-not: 1.0.2
-      snapdragon: 0.8.2(supports-color@7.2.0)
+      snapdragon: 0.8.2
       to-regex: 3.0.2
     transitivePeerDependencies:
       - supports-color
@@ -4815,13 +4809,13 @@ snapshots:
     dependencies:
       duplexer2: 0.1.4
 
-  music-metadata@11.14.0(supports-color@7.2.0):
+  music-metadata@11.14.0:
     dependencies:
       '@borewit/text-codec': 0.2.2
       '@tokenizer/token': 0.3.0
       content-type: 2.0.0
-      debug: 4.4.3(supports-color@7.2.0)
-      file-type: 21.3.4(supports-color@7.2.0)
+      debug: 4.4.3
+      file-type: 21.3.4
       media-typer: 2.0.0
       strtok3: 10.3.5
       token-types: 6.1.2
@@ -4833,7 +4827,7 @@ snapshots:
   nan@2.28.0:
     optional: true
 
-  nanomatch@1.2.13(supports-color@7.2.0):
+  nanomatch@1.2.13:
     dependencies:
       arr-diff: 4.0.0
       array-unique: 0.3.2
@@ -4844,7 +4838,7 @@ snapshots:
       kind-of: 6.0.3
       object.pick: 1.3.0
       regex-not: 1.0.2
-      snapdragon: 0.8.2(supports-color@7.2.0)
+      snapdragon: 0.8.2
       to-regex: 3.0.2
     transitivePeerDependencies:
       - supports-color
@@ -4856,6 +4850,10 @@ snapshots:
   next-tick@1.1.0: {}
 
   node-fetch@2.1.2: {}
+
+  node-fetch@2.6.13:
+    dependencies:
+      whatwg-url: 5.0.0
 
   node-fetch@2.6.7:
     dependencies:
@@ -5145,10 +5143,10 @@ snapshots:
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
 
-  readdirp@2.2.1(supports-color@7.2.0):
+  readdirp@2.2.1:
     dependencies:
       graceful-fs: 4.2.11
-      micromatch: 3.1.10(supports-color@7.2.0)
+      micromatch: 3.1.10
       readable-stream: 2.3.8
     transitivePeerDependencies:
       - supports-color
@@ -5249,7 +5247,7 @@ snapshots:
     dependencies:
       base64-loader: 1.0.0
 
-  scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0(supports-color@7.2.0)):
+  scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0):
     dependencies:
       '@turbowarp/ancient-hull.js': 0.2.13
       '@turbowarp/nanolog': 0.2.0
@@ -5258,7 +5256,7 @@ snapshots:
       ify-loader: 1.0.4
       linebreak: 0.3.0
       raw-loader: 0.5.1
-      scratch-storage: 1.3.6(webpack@4.47.0(supports-color@7.2.0))
+      scratch-storage: 1.3.6(webpack@4.47.0)
       twgl.js: 4.4.0
     transitivePeerDependencies:
       - scratch-render-fonts
@@ -5270,14 +5268,14 @@ snapshots:
       minilog: 3.1.0
       text-encoding: 0.7.0
 
-  scratch-storage@1.3.6(webpack@4.47.0(supports-color@7.2.0)):
+  scratch-storage@1.3.6(webpack@4.47.0):
     dependencies:
       arraybuffer-loader: 1.0.8
       base64-js: 1.3.0
       fastestsmallesttextencoderdecoder: 1.0.22
       js-md5: 0.7.3
       minilog: 3.1.0
-      worker-loader: 2.0.0(webpack@4.47.0(supports-color@7.2.0))
+      worker-loader: 2.0.0(webpack@4.47.0)
     transitivePeerDependencies:
       - webpack
 
@@ -5388,10 +5386,10 @@ snapshots:
     dependencies:
       kind-of: 3.2.2
 
-  snapdragon@0.8.2(supports-color@7.2.0):
+  snapdragon@0.8.2:
     dependencies:
       base: 0.11.2
-      debug: 2.6.9(supports-color@7.2.0)
+      debug: 2.6.9
       define-property: 0.2.5
       extend-shallow: 2.0.1
       map-cache: 0.2.2
@@ -5525,16 +5523,11 @@ snapshots:
     dependencies:
       '@tokenizer/token': 0.3.0
 
-  supports-color@7.2.0:
-    dependencies:
-      has-flag: 4.0.0
-    optional: true
-
   supports-preserve-symlinks-flag@1.0.0: {}
 
   tapable@1.1.3: {}
 
-  terser-webpack-plugin@1.4.6(webpack@4.47.0(supports-color@7.2.0)):
+  terser-webpack-plugin@1.4.6(webpack@4.47.0):
     dependencies:
       cacache: 12.0.4
       find-cache-dir: 2.1.0
@@ -5543,7 +5536,7 @@ snapshots:
       serialize-javascript: 4.0.0
       source-map: 0.6.1
       terser: 4.8.1
-      webpack: 4.47.0(supports-color@7.2.0)
+      webpack: 4.47.0
       webpack-sources: 1.4.3
       worker-farm: 1.7.0
 
@@ -5722,20 +5715,20 @@ snapshots:
 
   vm-browserify@1.1.2: {}
 
-  watchpack-chokidar2@2.0.1(supports-color@7.2.0):
+  watchpack-chokidar2@2.0.1:
     dependencies:
-      chokidar: 2.1.8(supports-color@7.2.0)
+      chokidar: 2.1.8
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  watchpack@1.7.5(supports-color@7.2.0):
+  watchpack@1.7.5:
     dependencies:
       graceful-fs: 4.2.11
       neo-async: 2.6.2
     optionalDependencies:
       chokidar: 3.6.0
-      watchpack-chokidar2: 2.0.1(supports-color@7.2.0)
+      watchpack-chokidar2: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
@@ -5746,7 +5739,7 @@ snapshots:
       source-list-map: 2.0.1
       source-map: 0.6.1
 
-  webpack@4.47.0(supports-color@7.2.0):
+  webpack@4.47.0:
     dependencies:
       '@webassemblyjs/ast': 1.9.0
       '@webassemblyjs/helper-module-context': 1.9.0
@@ -5762,14 +5755,14 @@ snapshots:
       loader-runner: 2.4.0
       loader-utils: 1.4.2
       memory-fs: 0.4.1
-      micromatch: 3.1.10(supports-color@7.2.0)
+      micromatch: 3.1.10
       mkdirp: 0.5.6
       neo-async: 2.6.2
       node-libs-browser: 2.2.1
       schema-utils: 1.0.0
       tapable: 1.1.3
-      terser-webpack-plugin: 1.4.6(webpack@4.47.0(supports-color@7.2.0))
-      watchpack: 1.7.5(supports-color@7.2.0)
+      terser-webpack-plugin: 1.4.6(webpack@4.47.0)
+      watchpack: 1.7.5
       webpack-sources: 1.4.3
     transitivePeerDependencies:
       - supports-color
@@ -5801,11 +5794,11 @@ snapshots:
     dependencies:
       errno: 0.1.8
 
-  worker-loader@2.0.0(webpack@4.47.0(supports-color@7.2.0)):
+  worker-loader@2.0.0(webpack@4.47.0):
     dependencies:
       loader-utils: 1.4.2
       schema-utils: 0.4.7
-      webpack: 4.47.0(supports-color@7.2.0)
+      webpack: 4.47.0
 
   wrappy@1.0.2: {}
 

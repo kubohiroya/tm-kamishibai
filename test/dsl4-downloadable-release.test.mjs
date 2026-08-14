@@ -18,6 +18,7 @@ import {
 import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
 import {
   createDsl4ReleaseSourceFiles,
+  createDsl4RuntimeBundleSource,
   createDsl4RuntimeExtensionSource,
 } from '../scripts/sb3/dsl4-downloadable-release.mjs';
 import {
@@ -33,11 +34,16 @@ import {
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
+import {dsl4RuntimeProvenance} from '../src/dsl4/runtime-provenance.js';
 import {
   buildDsl4BrowserSelectedStoryProject,
   collectDsl4BrowserDroppedFiles,
   selectDsl4BrowserStorySource,
 } from '../src/dsl4/platform/browser-story-file-loader.js';
+import {
+  loadDsl4PoseNetProjectBundle,
+  loadDsl4PoseNetProjectBundleData,
+} from '../src/dsl4/platform/posenet-bundle.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
 import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
@@ -80,25 +86,31 @@ async function buildRelease() {
   return createDownloadableReleaseSb3(release);
 }
 
-async function buildCurrentRuntimeRelease() {
-  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'dsl4-current-release-'));
-  const sourceDirectory = path.join(temporaryRoot, 'app');
-  try {
-    for (const [relativePath, contents] of await createDsl4ReleaseSourceFiles()) {
-      const outputPath = path.join(sourceDirectory, relativePath);
-      await mkdir(path.dirname(outputPath), {recursive: true});
-      await writeFile(outputPath, contents);
+let pendingCurrentRuntimeRelease;
+
+function buildCurrentRuntimeRelease() {
+  pendingCurrentRuntimeRelease ??= (async () => {
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'dsl4-current-release-'));
+    const sourceDirectory = path.join(temporaryRoot, 'app');
+    try {
+      for (const [relativePath, contents] of await createDsl4ReleaseSourceFiles()) {
+        const outputPath = path.join(sourceDirectory, relativePath);
+        await mkdir(path.dirname(outputPath), {recursive: true});
+        await writeFile(outputPath, contents);
+      }
+      const built = await createKamishibaiSb3({
+        buildDate: '2026-08-14',
+        faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
+        packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
+        sourceDirectory,
+        version: '4.0.0-rc.4',
+      });
+      return {archive: Buffer.from(built.archive)};
+    } finally {
+      await rm(temporaryRoot, {recursive: true, force: true});
     }
-    return await createKamishibaiSb3({
-      buildDate: '2026-08-14',
-      faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
-      packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
-      sourceDirectory,
-      version: '4.0.0-rc.4',
-    });
-  } finally {
-    await rm(temporaryRoot, {recursive: true, force: true});
-  }
+  })();
+  return pendingCurrentRuntimeRelease;
 }
 
 function browserFile(name, contents) {
@@ -610,14 +622,152 @@ test('builds the current DSL 4.0 runtime with one shared TensorFlow.js registry'
   );
   assert.match(
     extensionSource,
-    /if\(0===r\)return globalThis\.tf;/u,
+    /if\(0===r\)return globalThis\.tf;if\(e\[r\]\)/u,
     'Teachable Machine must reuse the initialized global TensorFlow.js module.',
   );
   assert.equal(
-    extensionSource.split('if(0===r)return globalThis.tf;').length - 1,
-    1,
-    'The pinned Teachable Machine module loader patch must be applied exactly once.',
+    extensionSource.includes('@tensorflow/tfjs Copyright 2019 Google'),
+    true,
+    'TM Pose directly references the standalone global TensorFlow.js runtime.',
   );
+  assert.equal(
+    extensionSource.includes('if(0===r)return globalThis.tf;if(e[r])'),
+    true,
+    'The embedded TM Pose TensorFlow module must route to the same global runtime.',
+  );
+});
+
+test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain', async () => {
+  const [bubblePackageSource, toolchainPackageSource, reveal, sourceFiles, built] =
+    await Promise.all([
+      readFile(
+        new URL('../node_modules/@kubohiroya/turbowarp-bubble/package.json', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL('../node_modules/@kubohiroya/sb3-toolchain/package.json', import.meta.url),
+        'utf8',
+      ),
+      import('@kubohiroya/turbowarp-bubble/reveal'),
+      createDsl4ReleaseSourceFiles(),
+      buildCurrentRuntimeRelease(),
+    ]);
+  const bubblePackage = JSON.parse(bubblePackageSource);
+  const toolchainPackage = JSON.parse(toolchainPackageSource);
+  const manifest = JSON.parse(sourceFiles.get('embedded-extensions.json').toString('utf8'));
+  const archive = unzipSync(built.archive);
+  const project = JSON.parse(strFromU8(archive['project.json']));
+  const extensionUrl = project.extensionURLs[bundleExtensionId];
+  const extensionSource = Buffer.from(
+    extensionUrl.slice('data:text/javascript;base64,'.length),
+    'base64',
+  ).toString('utf8');
+
+  assert.equal(toolchainPackage.version, '0.8.0');
+  assert.equal(bubblePackage.version, '0.7.0');
+  assert.equal(bubblePackage.exports['./reveal'].import, './dist/reveal.js');
+  assert.deepEqual(Object.keys(reveal).sort(), [
+    'bubbleRevealUnits',
+    'normalizeBubbleReveal',
+    'revealedBubbleText',
+    'splitBubbleText',
+  ]);
+  assert.deepEqual(manifest.extensionBundles, [
+    {
+      id: bundleExtensionId,
+      name: 'Kamishibai DSL 4.0 Runtime',
+      members: [
+        runtimeExtensionId,
+        'kubohiroyaassetmanager',
+        'kubohiroyaasyncinput',
+        'kubohiroyabubble',
+        'kubohiroyaruntimeexpression',
+        'kubohiroyasvgtext',
+        'tmpose',
+      ],
+      recoveryCapsule: false,
+    },
+  ]);
+  assert.deepEqual(manifest.sourceNotices, dsl4RuntimeProvenance);
+  assert.deepEqual(Object.keys(project.extensionURLs), [bundleExtensionId]);
+  assert.match(
+    extensionSource,
+    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.7\.0/u,
+  );
+  assert.doesNotMatch(extensionSource, /@kubohiroya\/turbowarp-bubble@0\.4\.0/u);
+});
+
+test('builds separate authoring and playback runtime profiles', async () => {
+  // Build sequentially to keep the peak module-graph memory bounded.
+  const authoring = await createDsl4RuntimeExtensionSource({profile: 'authoring'});
+  const playback = await createDsl4RuntimeExtensionSource({profile: 'playback'});
+  const playbackBundle = await createDsl4RuntimeBundleSource({profile: 'playback'});
+  const poseShardPrefix = (
+    await readFile(
+      require.resolve('@kubohiroya/turbowarp-tmpose/posenet-assets/group1-shard1of2.bin'),
+    )
+  )
+    .toString('base64')
+    .slice(0, 256);
+  assert.equal(playback.byteLength < authoring.byteLength, true);
+  assert.equal(authoring.byteLength - playback.byteLength > 200_000, true);
+  assert.equal(authoring.includes(poseShardPrefix), false);
+  assert.equal(playback.includes(poseShardPrefix), false);
+  assert.equal(authoring.includes('browser preview'), true);
+  assert.equal(playback.includes('browser preview'), false);
+  assert.equal(playback.includes('createDsl4WebPreviewShell'), false);
+  assert.equal(playback.includes('Authoring module'), true);
+  assert.equal(
+    playback.includes('playback runtime cannot open a non-embedded authoring project'),
+    true,
+  );
+  const checkedInPlayback = await readFile(
+    new URL('../src/builder/runtime/dsl4-playback-runtime-extension.js', import.meta.url),
+  );
+  // deepEqual tries to format the entire binary diff when this artifact is stale.
+  assert.equal(
+    playbackBundle.equals(checkedInPlayback),
+    true,
+    `The checked-in playback runtime must be regenerated with pnpm dsl4:playback-runtime:generate. ` +
+      `generated=${createHash('sha256').update(playbackBundle).digest('hex')} ` +
+      `checked-in=${createHash('sha256').update(checkedInPlayback).digest('hex')}`,
+  );
+  assert.match(playbackBundle.toString('utf8'), /^\/\/ ID: kubohiroyakamishibai4$/mu);
+  assert.match(playbackBundle.toString('utf8'), /blockIconURI/u);
+});
+
+test('keeps PoseNet model data out of the current generated runtime extension', async () => {
+  const result = await buildCurrentRuntimeRelease();
+  const archive = unzipSync(result.archive);
+  const projectBytes = archive['project.json'];
+  const project = JSON.parse(strFromU8(projectBytes));
+  const runtimeStorage = project.extensionStorage[bundleExtensionId].components[runtimeExtensionId];
+  const extensionUrl = project.extensionURLs[bundleExtensionId];
+  const extensionSource = Buffer.from(
+    extensionUrl.slice('data:text/javascript;base64,'.length),
+    'base64',
+  );
+  const shardPrefix = (
+    await readFile(
+      require.resolve('@kubohiroya/turbowarp-tmpose/posenet-assets/group1-shard1of2.bin'),
+    )
+  )
+    .toString('base64')
+    .slice(0, 256);
+  const poseNetBundle = await loadDsl4PoseNetProjectBundleData(
+    loadDsl4PoseNetProjectBundle(project),
+    {
+      subtleCrypto: webcrypto.subtle,
+    },
+  );
+  assert.equal(extensionSource.byteLength < 4_000_000, true);
+  assert.equal(extensionSource.includes(shardPrefix), false);
+  assert.equal(runtimeStorage.poseNet.encoding, 'base64');
+  assert.equal(
+    poseNetBundle.files.reduce((total, file) => total + file.bytes.byteLength, 0),
+    5_082_500,
+  );
+  assert.equal(projectBytes.byteLength < 12_000_000, true);
 });
 
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
@@ -708,7 +858,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.doesNotMatch(
     extensionSource,
     /dsl4TurboWarpActionSurface/u,
-    'The immutable 4.0.0-rc.3 artifact must not be rewritten for a later feature.',
+    'The immutable 4.0.0-rc.4 artifact must not be rewritten for a later feature.',
   );
   assert.match(extensionSource, /display:none/u);
   for (const title of [
@@ -1095,12 +1245,14 @@ test('uses the exact version 3 SVG bytes as the reusable DOM menu defaults', () 
   assert.match(build, /^data:image\/svg\+xml;base64,/u);
 });
 
-test('preserves the embedded source descriptor through a pinned TurboWarp resave', async () => {
-  const result = await buildRelease();
+test('preserves source and explicit PoseNet model data through a pinned TurboWarp resave', async () => {
+  const result = await buildCurrentRuntimeRelease();
   const archive = unzipSync(result.archive);
   const originalProject = JSON.parse(strFromU8(archive['project.json']));
   const originalSource =
     originalProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].source;
+  const originalPoseNet =
+    originalProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].poseNet;
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
   try {
@@ -1115,6 +1267,10 @@ test('preserves the embedded source descriptor through a pinned TurboWarp resave
     assert.deepEqual(
       resavedProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].source,
       originalSource,
+    );
+    assert.deepEqual(
+      resavedProject.extensionStorage[bundleExtensionId].components[runtimeExtensionId].poseNet,
+      originalPoseNet,
     );
   } finally {
     vm.quit();

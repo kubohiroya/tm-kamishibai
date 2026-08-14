@@ -97,6 +97,8 @@ function failDiagnostics(diagnostics, stage) {
  * @param {string} [options.assetProfile]
  * @param {number} [options.maxAssetConfigBytes]
  * @param {number} [options.maxAssetLockBytes]
+ * @param {string} [options.runtimeExtensionSource]
+ * @param {unknown} [options.poseNetBundle]
  */
 export async function buildDsl4RuntimeComponent(options) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 build options are required');
@@ -126,6 +128,8 @@ export async function buildDsl4RuntimeComponent(options) {
     assetProfile,
     maxAssetConfigBytes,
     maxAssetLockBytes,
+    runtimeExtensionSource,
+    poseNetBundle,
   } = options;
   if (!(baseSb3Bytes instanceof Uint8Array)) {
     throw new TypeError('baseSb3Bytes must be a Buffer or Uint8Array');
@@ -314,6 +318,8 @@ export async function buildDsl4RuntimeComponent(options) {
     replaceExisting,
     subtleCrypto,
     ...(assetDistribution === undefined ? {} : {assetDistribution}),
+    ...(runtimeExtensionSource === undefined ? {} : {runtimeExtensionSource}),
+    ...(poseNetBundle === undefined ? {} : {poseNetBundle}),
   };
   const embedded = buildFeatureFlags.dsl4RootBinaryEntryPackaging
     ? await embedDsl4BinaryEntryRuntimeComponentInSb3(
