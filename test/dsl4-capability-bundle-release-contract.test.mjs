@@ -105,7 +105,13 @@ test('ships the Standard artifact as one compact static extension bundle', async
   const {extensionId, memberExtensionIds, runtimeComponentId} = contract.standardArtifact;
 
   assert.equal(contract.standardArtifact.integration, 'static-extension-bundle');
+  assert.equal(contract.standardArtifact.recoveryCapsule, false);
   assert.equal(contract.standardArtifact.blockIconPolicy, 'member-blockIconURI');
+  assert.equal(contract.standardArtifact.memberDocumentation.policy, 'member-docsURI-button');
+  assert.deepEqual(
+    Object.keys(contract.standardArtifact.memberDocumentation.urls),
+    memberExtensionIds,
+  );
   assert.equal(contract.standardArtifact.includesPreviewSurface, true);
   assert.equal(contract.standardArtifact.previewActivation, 'nonembedded-menu-default');
   assert.equal(contract.standardArtifact.embeddedStoryPreview, false);
@@ -117,6 +123,7 @@ test('ships the Standard artifact as one compact static extension bundle', async
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
       members: memberExtensionIds,
+      recoveryCapsule: contract.standardArtifact.recoveryCapsule,
     },
   ]);
   assert.deepEqual(
@@ -128,6 +135,13 @@ test('ships the Standard artifact as one compact static extension bundle', async
   assert.match(entrypoint, /dsl4NonEmbeddedDevelopmentFeatureFlags/u);
   assert.match(entrypoint, /createDsl4RuntimeSourceChooser/u);
   assert.match(entrypoint, /createDsl4BrowserPreviewRuntimeComponent/u);
+  assert.match(
+    entrypoint,
+    new RegExp(
+      contract.standardArtifact.memberDocumentation.urls[runtimeComponentId].replaceAll('/', '\\/'),
+      'u',
+    ),
+  );
   assert.doesNotMatch(entrypoint, /kubohiroyaweblink/u);
 
   const opcodes = [...entrypoint.matchAll(/opcode: '([^']+)'/gu)].map((match) => match[1]);
@@ -167,8 +181,8 @@ test('uses compact Standard 4.0 and source-rebuildable legacy 3.2 static bundles
     kind: 'extensionBundles',
     unbundle: 'expanded-source',
     provenance: [
-      'release-sources/4.0.0-rc.4/app/project.source.json',
-      'release-sources/4.0.0-rc.4/app/embedded-extensions.json',
+      'release-sources/4.0.0-rc.5/app/project.source.json',
+      'release-sources/4.0.0-rc.5/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -242,21 +256,21 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.4/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.5/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-sources/4.0.0-rc.4/release.json',
+    metadata: 'release-sources/4.0.0-rc.5/release.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.5',
+    nextCandidateVersion: '4.0.0-rc.6',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.4',
+    gitTag: 'v4.0.0-rc.5',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });

@@ -46,7 +46,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
         maxSourceBytes: 1_048_576,
         channel: 'bundled',
       },
-      version: '4.0.0-rc.4',
+      version: '4.0.0-rc.5',
       package: '@kubohiroya/tmpose-kamishibai',
     },
     extensionBundle: {
@@ -56,7 +56,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
     },
     appShell: {
       integrity: fixture.input.appShell.integrity,
-      templateVersion: '4.0.0-rc.4',
+      templateVersion: '4.0.0-rc.5',
       id: 'standard',
     },
     assetBundleIntegrity: fixture.input.assetBundleIntegrity,

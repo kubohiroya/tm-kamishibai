@@ -73,7 +73,7 @@ test('resolves the Title build date in Asia/Tokyo and accepts a reproducible ove
 
 test('keeps published 3.x menu localization separate from current 4.x labels', () => {
   assert.equal(resolveAppShellProjectPlaceholders('3.2.3')['{{UI_OPEN_JA}}'], 'ファイルを開く');
-  assert.equal(resolveAppShellProjectPlaceholders('4.0.0-rc.4')['{{UI_OPEN_JA}}'], '台本を開く');
+  assert.equal(resolveAppShellProjectPlaceholders('4.0.0-rc.5')['{{UI_OPEN_JA}}'], '台本を開く');
 });
 
 test('embeds an initial Title fallback and runtime-localized app-shell text', async () => {

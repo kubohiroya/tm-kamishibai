@@ -50,7 +50,7 @@ import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, DSL4_RUNTIME_PROFILE, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.4';
+const extensionVersion = '4.0.0-rc.5';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -220,7 +220,8 @@ class KamishibaiDsl4RuntimeExtension {
       name: 'Kamishibai DSL 4.0 Runtime',
       description:
         'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
-      docsURI: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+      docsURI:
+        'https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       blockIconURI,
       creator: 'Hiroya Kubo',
       license: 'MPL-2.0',
