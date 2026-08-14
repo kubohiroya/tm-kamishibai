@@ -52,6 +52,9 @@ loading:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  modelInitialization:
+    policy: latest-needed
+    parallel: false
   sequence:
     confidenceThreshold: 0.5
     fullConfidenceHoldSeconds: 1

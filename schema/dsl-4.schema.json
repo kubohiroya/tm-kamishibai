@@ -591,11 +591,24 @@
       "properties": {
         "idleSound": {"$ref": "#/$defs/assetId"},
         "chargeSound": {"$ref": "#/$defs/assetId"},
+        "modelInitialization": {"$ref": "#/$defs/poseModelInitialization"},
         "sequence": {"$ref": "#/$defs/poseSequenceRecognition"},
         "selection": {"$ref": "#/$defs/poseSelectionRecognition"},
         "feedback": {"$ref": "#/$defs/poseFeedback"},
         "navigation": {"$ref": "#/$defs/poseNavigation"},
         "preview": {"$ref": "#/$defs/posePreview"}
+      }
+    },
+    "poseModelInitialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["legacy", "latest-needed"],
+          "default": "legacy"
+        },
+        "parallel": {"type": "boolean", "default": false}
       }
     },
     "posePreview": {
