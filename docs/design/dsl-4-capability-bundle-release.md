@@ -2,21 +2,21 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #266／#517／#585の実装正本（2026-08-14）
+文書状態: Issue #266／#517／#583の実装正本（2026-08-15）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
 [#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)、
 [#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)、
-[#585](https://github.com/kubohiroya/tmpose-kamishibai/issues/585)
+[#583](https://github.com/kubohiroya/tmpose-kamishibai/issues/583)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
 
 ## 1. 結論
 
-4.0.0-rc.4のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
+4.0.0-rc.5のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
 6つのcapability拡張を`kubohiroyakamishibai4`一件へ集約して生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
 組み込みません。展開sourceは7 memberを保持しますが、生成SB3がTurboWarpへ登録する拡張とdata URLは
@@ -30,17 +30,17 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 ## 2. capability inventory
 
-| capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界         |
-| ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
-| Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
+| capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界               |
+| ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------------- |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`                    |
+| Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`                    |
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
-| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
-| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.10.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet` |
-| Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition         |
-| Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外             |
-| Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外             |
+| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`                    |
+| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`                    |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.10.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+| Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition               |
+| Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外                   |
+| Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外                   |
 
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
@@ -85,8 +85,10 @@ download catalogのSHA-256を合わせて、
 | development preview host    | なし                                 |    0 |              DOM／CLI |     開発時のみ |
 
 Runtime memberのopcodeはcanonical templateの内部接続・状態確認用で、すべて`hideFromPalette: true`です。
-6つのStandalone memberの通常ブロックは由来元のSVG `blockIconURI`を保持し、生成LABEL見出しと二重separatorで
-グループ化されます。block固有iconがある場合は、それを優先します。
+Runtimeと6つのStandalone memberの通常ブロックは由来元のSVG `blockIconURI`を保持し、生成LABEL見出しと
+二重separatorでグループ化されます。block固有iconがある場合は、それを優先します。各見出しの直後には
+member固有の`docsURI`を開くボタンを置き、core RuntimeはDSL 4.0 block reference、6つの上流memberは
+それぞれのGitHub Pagesを参照します。
 Standard SB3はruntime source、YAML source descriptor、runtime artifact、asset bundle bytesを内包し、
 実行時にextension codeをremote取得しません。preview token、candidate、modal、reload preferenceなどの
 transient stateも保存しません。非埋め込み`application.mode=menu`は制作・debug runnerとして
@@ -140,7 +142,7 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-4.0.0-rc.4 releaseは必ず次の順で行います。
+4.0.0-rc.5 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
@@ -149,7 +151,7 @@ cleanupを継続します。
 5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
 6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
 7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
-8. frozen commitへannotated `v4.0.0-rc.4` tagを作成する
+8. frozen commitへannotated `v4.0.0-rc.5` tagを作成する
 9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
 10. GitHub prereleaseを公開する
 11. 3.2.3を推奨安定版に維持したままsiteをbuildして公開する
@@ -157,7 +159,7 @@ cleanupを継続します。
 
 更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release、
 version付きrelease sourceを差し替えません。`frozen`または`published`ではupdateをfail closedにし、修正は
-4.0.0-rc.5、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+4.0.0-rc.6、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 3.2の`extensionBundles` member更新は一件ずつ行います。生成SB3では重複するrecovery capsuleを省き、
 追跡済みの個別sourceとprovenanceからmember単位で再構築して戻します。生成SB3単体から直接unbundleする必要が
@@ -169,6 +171,7 @@ version付きrelease sourceを差し替えません。`frozen`または`publishe
 - Standard展開ソースがRuntimeと6つのcapability memberを管理し、Web Linkを含まない
 - Standard SB3が`kubohiroyakamishibai4`一件だけをembedded URLから読み込む
 - 各memberの通常ブロックが由来元の異なるSVG `blockIconURI`を保持する
+- 各memberの見出し直後に、そのmember固有の`docsURI`を開くボタンが一つある
 - Standard bundleが重複するrecovery capsuleを既定で含まず、展開sourceから復元できる
 - runtime source先頭にheader、全構成要素のprovenanceが残る
 - Standard paletteのvisible DSL 4.0 blockがcore action manifestと一致し、preview専用opcodeを含まない

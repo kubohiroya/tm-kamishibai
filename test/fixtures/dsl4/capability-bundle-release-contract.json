@@ -3,11 +3,12 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.4",
+    "version": "4.0.0-rc.5",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
     "registrationCount": 1,
+    "recoveryCapsule": false,
     "memberExtensionIds": [
       "kubohiroyakamishibairuntime4",
       "kubohiroyaassetmanager",
@@ -18,6 +19,18 @@
       "tmpose"
     ],
     "blockIconPolicy": "member-blockIconURI",
+    "memberDocumentation": {
+      "policy": "member-docsURI-button",
+      "urls": {
+        "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
+        "kubohiroyaassetmanager": "https://kubohiroya.github.io/turbowarp-asset-manager/",
+        "kubohiroyaasyncinput": "https://kubohiroya.github.io/turbowarp-async-input/",
+        "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
+        "kubohiroyaruntimeexpression": "https://kubohiroya.github.io/turbowarp-runtime-expression/",
+        "kubohiroyasvgtext": "https://kubohiroya.github.io/turbowarp-svg-text/",
+        "tmpose": "https://kubohiroya.github.io/turbowarp-tmpose/"
+      }
+    },
     "runtimeVisibleOpcodes": [
       "stage",
       "bgm",
@@ -55,8 +68,8 @@
       "openOfficialWebsite",
       "toggleTitleLanguage"
     ],
-    "projectSource": "release-sources/4.0.0-rc.4/app/project.source.json",
-    "bundleManifest": "release-sources/4.0.0-rc.4/app/embedded-extensions.json",
+    "projectSource": "release-sources/4.0.0-rc.5/app/project.source.json",
+    "bundleManifest": "release-sources/4.0.0-rc.5/app/embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": true,
@@ -176,8 +189,8 @@
       "kind": "extensionBundles",
       "unbundle": "expanded-source",
       "provenance": [
-        "release-sources/4.0.0-rc.4/app/project.source.json",
-        "release-sources/4.0.0-rc.4/app/embedded-extensions.json",
+        "release-sources/4.0.0-rc.5/app/project.source.json",
+        "release-sources/4.0.0-rc.5/app/embedded-extensions.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
@@ -239,16 +252,16 @@
     "record-and-verify-publication"
   ],
   "releaseLifecycle": {
-    "metadata": "release-sources/4.0.0-rc.4/release.json",
+    "metadata": "release-sources/4.0.0-rc.5/release.json",
     "states": ["candidate", "frozen", "published"],
     "updateCommand": "pnpm release:dsl4:update",
     "checkCommand": "pnpm release:dsl4:check",
     "freezeCommand": "pnpm release:dsl4:freeze",
     "publicationCommand": "pnpm release:dsl4:record-publication",
     "immutableStates": ["frozen", "published"],
-    "nextCandidateVersion": "4.0.0-rc.5",
+    "nextCandidateVersion": "4.0.0-rc.6",
     "npmDistTag": "next",
-    "gitTag": "v4.0.0-rc.4",
+    "gitTag": "v4.0.0-rc.5",
     "githubPrerelease": true,
     "recommendedStableVersion": "3.2.3"
   },

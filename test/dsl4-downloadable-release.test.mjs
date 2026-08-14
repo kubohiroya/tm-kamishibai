@@ -99,11 +99,11 @@ function buildCurrentRuntimeRelease() {
         await writeFile(outputPath, contents);
       }
       const built = await createKamishibaiSb3({
-        buildDate: '2026-08-14',
+        buildDate: '2026-08-15',
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.4',
+        version: '4.0.0-rc.5',
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -855,11 +855,6 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
       `The Standard release bundle must enable ${flag}.`,
     );
   }
-  assert.doesNotMatch(
-    extensionSource,
-    /dsl4TurboWarpActionSurface/u,
-    'The immutable 4.0.0-rc.4 artifact must not be rewritten for a later feature.',
-  );
   assert.match(extensionSource, /display:none/u);
   for (const title of [
     'Asset Manager',
@@ -916,7 +911,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
 });
 
-test('keeps every bundled extension icon on its own TurboWarp blocks', async () => {
+test('keeps every bundled extension icon and documentation button on its own palette group', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
@@ -944,14 +939,40 @@ test('keeps every bundled extension icon on its own TurboWarp blocks', async () 
         'tmpose',
       ],
     );
+    const expectedDocumentation = {
+      [runtimeExtensionId]:
+        'https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+      kubohiroyaassetmanager: 'https://kubohiroya.github.io/turbowarp-asset-manager/',
+      kubohiroyaasyncinput: 'https://kubohiroya.github.io/turbowarp-async-input/',
+      kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',
+      kubohiroyaruntimeexpression: 'https://kubohiroya.github.io/turbowarp-runtime-expression/',
+      kubohiroyasvgtext: 'https://kubohiroya.github.io/turbowarp-svg-text/',
+      tmpose: 'https://kubohiroya.github.io/turbowarp-tmpose/',
+    };
 
     const memberIcons = [];
     for (const [headingIndex, heading] of headings.entries()) {
       const end = headings[headingIndex + 1]?.index ?? info.blocks.length;
-      const memberBlocks = info.blocks
-        .slice(heading.index + 1, end)
-        .filter((block) => block && typeof block === 'object' && typeof block.opcode === 'string');
-      assert(memberBlocks.length > 0, heading.block.sb3Toolchain.memberId);
+      const paletteGroup = info.blocks.slice(heading.index + 1, end);
+      const memberId = heading.block.sb3Toolchain.memberId;
+      const documentationBlocks = paletteGroup.filter(
+        (block) => block?.sb3Toolchain?.kind === 'bundle-member-docs',
+      );
+      assert.equal(documentationBlocks.length, 1, `${memberId} documentation button`);
+      const [documentationBlock] = documentationBlocks;
+      assert.equal(documentationBlock.sb3Toolchain.memberId, memberId);
+      assert.equal(documentationBlock.sb3Toolchain.docsURI, expectedDocumentation[memberId]);
+      assert.equal(documentationBlock.blockType, 'xml');
+      assert.match(documentationBlock.xml, /callbackKey="OPEN_EXTENSION_DOCS"/u);
+      assert.match(
+        documentationBlock.xml,
+        new RegExp(`callbackData="${expectedDocumentation[memberId]}"`, 'u'),
+      );
+
+      const memberBlocks = paletteGroup.filter(
+        (block) => block && typeof block === 'object' && typeof block.opcode === 'string',
+      );
+      assert(memberBlocks.length > 0, memberId);
       assert.equal(
         memberBlocks.every(
           (block) =>
@@ -959,7 +980,7 @@ test('keeps every bundled extension icon on its own TurboWarp blocks', async () 
             block.blockIconURI.startsWith('data:image/svg+xml,'),
         ),
         true,
-        heading.block.sb3Toolchain.memberId,
+        memberId,
       );
       memberIcons.push(memberBlocks[0].blockIconURI);
     }
@@ -1306,7 +1327,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
 });
 
 test('registers all 23 core action blocks as visible VM primitives', async () => {
-  const result = await buildCurrentRuntimeRelease();
+  const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
   try {
@@ -1375,7 +1396,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.4');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.5');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,
