@@ -465,6 +465,20 @@ export function createDsl4NavigationSession({
       resetHistory();
       return state;
     },
+    /** @param {Readonly<Record<string, unknown>>} action */
+    invokeAction(action) {
+      if (disposed) {
+        const error = new Error('Navigation session is disposed');
+        Object.defineProperty(error, 'code', {value: 'K4-NAVIGATION-DISPOSED'});
+        return Promise.reject(error);
+      }
+      if (sessionDiagnostic) {
+        const error = new Error('Navigation session stopped after a history failure');
+        Object.defineProperty(error, 'code', {value: String(sessionDiagnostic.code)});
+        return Promise.reject(error);
+      }
+      return controller.invokeAction(action);
+    },
     dispatchCommand,
     attach: inputAdapter.attach,
     attachStagePointer: inputAdapter.attachPointer,

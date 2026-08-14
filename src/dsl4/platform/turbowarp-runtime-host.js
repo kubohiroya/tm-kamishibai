@@ -1449,6 +1449,11 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       void deactivateCacheLease();
       return state;
     },
+    /** @param {Readonly<Record<string, unknown>>} action */
+    invokeAction(action) {
+      ensureActive();
+      return session.invokeAction(action);
+    },
     /** @param {unknown} target */
     attach(target) {
       ensureActive();

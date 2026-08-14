@@ -391,6 +391,199 @@ test('dispatches every core action and keeps transition separate from scene move
   );
 });
 
+test('invokes TurboWarp actions through the active dispatcher context and commits nested navigation', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach: backdrop
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+    - wait: 0
+  ending:
+    - wait: 0
+`);
+  const contexts = [];
+  let controller;
+  const nestedResults = [];
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    port: {
+      async broadcastMessageAndWait(_payload, context) {
+        contexts.push(context);
+        nestedResults.push(
+          await controller.invokeAction({
+            command: 'stage',
+            target: null,
+            args: {backdrop: 'Beach'},
+          }),
+        );
+        nestedResults.push(
+          await controller.invokeAction({
+            command: 'goto',
+            target: null,
+            args: {scene: 'ending'},
+          }),
+        );
+      },
+      async stage(_payload, context) {
+        contexts.push(context);
+      },
+      async wait() {},
+    },
+  });
+
+  await controller.start();
+
+  assert.equal(contexts.length, 2);
+  assert.equal(contexts[0], contexts[1]);
+  assert.deepEqual(nestedResults, [
+    {outcome: 'completed'},
+    {outcome: 'transitioned', sceneId: 'ending', reason: 'goto'},
+  ]);
+  assert.equal(controller.getState().status, 'finished');
+  assert.equal(controller.getState().sceneId, 'ending');
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'scene.enter')
+      .map(({sceneId}) => sceneId),
+    ['opening', 'ending'],
+  );
+  await assert.rejects(
+    controller.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+  );
+});
+
+test('fails deterministically when TurboWarp receivers request competing scene transitions', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+  first: []
+  second: []
+`);
+  let controller;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    port: {
+      async broadcastMessageAndWait() {
+        await Promise.allSettled([
+          controller.invokeAction({command: 'goto', target: null, args: {scene: 'first'}}),
+          controller.invokeAction({command: 'goto', target: null, args: {scene: 'second'}}),
+        ]);
+      },
+    },
+  });
+
+  await controller.start();
+
+  assert.equal(controller.getState().status, 'failed');
+  assert.equal(controller.getState().diagnostic.code, 'K4-RUNTIME-INVOKE-TRANSITION-CONFLICT');
+  assert.deepEqual(
+    controller
+      .getTrace()
+      .filter(({type}) => type === 'scene.enter')
+      .map(({sceneId}) => sceneId),
+    ['opening'],
+  );
+});
+
+test('cancels a nested TurboWarp action with the parent DSL action signal', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+`);
+  let controller;
+  let nestedInvocation;
+  let parentContext;
+  let nestedContext;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    port: {
+      broadcastMessageAndWait(_payload, context) {
+        parentContext = context;
+        nestedInvocation = controller.invokeAction({
+          command: 'wait',
+          target: null,
+          args: {seconds: 10},
+        });
+        return nestedInvocation;
+      },
+      wait(_payload, context) {
+        nestedContext = context;
+        return new Promise((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('nested wait cancelled');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            {once: true},
+          );
+        });
+      },
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => nestedInvocation !== undefined, 'nested action did not start');
+  assert.equal(parentContext, nestedContext);
+  controller.stop('test-stop');
+
+  await assert.rejects(nestedInvocation, {name: 'AbortError'});
+  await run;
+  assert.equal(nestedContext.signal.aborted, true);
+  assert.equal(controller.getState().status, 'stopped');
+});
+
+test('keeps the parent action open until unawaited TurboWarp invocations settle', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  Beach: backdrop
+scenes:
+  opening:
+    - stage: Beach
+`);
+  const nestedWait = deferred();
+  let controller;
+  let nestedInvocation;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    port: {
+      stage() {
+        nestedInvocation = controller.invokeAction({
+          command: 'wait',
+          target: null,
+          args: {seconds: 1},
+        });
+      },
+      wait() {
+        return nestedWait.promise;
+      },
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => nestedInvocation !== undefined, 'nested wait did not start');
+  await Promise.resolve();
+  assert.equal(controller.getState().status, 'running');
+  nestedWait.resolve();
+
+  assert.deepEqual(await nestedInvocation, {outcome: 'completed'});
+  await run;
+  assert.equal(controller.getState().status, 'finished');
+});
+
 test('applies effective pose preview mirroring on every scene entry without changing recognition', async () => {
   const storyDocument = parseStory(`
 kamishibai: '4.0'

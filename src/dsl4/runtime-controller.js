@@ -386,6 +386,14 @@ export function createDsl4RuntimeController({
   let runId = 0;
   /** @type {AbortController | null} */
   let actionAbortController = null;
+  /** @type {ActionContext | null} */
+  let activeActionContext = null;
+  /** @type {{sceneId: string, reason: string} | null} */
+  let nestedActionTransition = null;
+  /** @type {string | null} */
+  let nestedNavigationCommand = null;
+  /** @type {Set<Promise<Readonly<Record<string, unknown>>>>} */
+  const activeNestedInvocations = new Set();
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
   /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
@@ -1195,6 +1203,91 @@ export function createDsl4RuntimeController({
     return runtimeActionDispatcher.dispatch(action, context, options);
   }
 
+  /** @param {string} code @param {string} message */
+  function invocationError(code, message) {
+    const error = new Error(message);
+    Object.defineProperty(error, 'code', {value: code});
+    return error;
+  }
+
+  /**
+   * Invoke one already-normalized action from a TurboWarp receiver while the
+   * current DSL action remains active. The parent action owns cancellation,
+   * variable access, diagnostics, and the eventual scene transition commit.
+   *
+   * @param {Readonly<Record<string, unknown>>} action
+   * @returns {Promise<Readonly<Record<string, unknown>>>}
+   */
+  function invokeAction(action) {
+    const context = activeActionContext;
+    if (
+      status !== 'running' ||
+      !context ||
+      context.signal.aborted ||
+      !isCurrent(context.generation)
+    ) {
+      return Promise.reject(
+        invocationError(
+          'K4-RUNTIME-INVOKE-INACTIVE',
+          'TurboWarp actions require an active DSL 4.0 action',
+        ),
+      );
+    }
+
+    const command = isRecord(action) ? String(action.command ?? '') : '';
+    const navigationCommand = [
+      'goto',
+      'branch',
+      'keyInputToChangeScene',
+      'touchInputToChangeScene',
+      'poseInputToChangeScene',
+    ].includes(command);
+    if (navigationCommand) {
+      if (nestedNavigationCommand !== null) {
+        const error = invocationError(
+          'K4-RUNTIME-INVOKE-TRANSITION-CONFLICT',
+          `TurboWarp action ${command} conflicts with active navigation action ${nestedNavigationCommand}`,
+        );
+        fail(error);
+        return Promise.reject(error);
+      }
+      nestedNavigationCommand = command;
+    }
+
+    const operation = (async () => {
+      try {
+        const transition = await dispatch(action, context);
+        if (!isCurrent(context.generation) || context.signal.aborted) {
+          throw invocationError(
+            'K4-RUNTIME-INVOKE-CANCELLED',
+            'TurboWarp action was cancelled with its parent DSL 4.0 action',
+          );
+        }
+        if (transition) nestedActionTransition = transition;
+        return deepFreeze(
+          transition
+            ? {outcome: 'transitioned', sceneId: transition.sceneId, reason: transition.reason}
+            : {outcome: 'completed'},
+        );
+      } catch (error) {
+        if (isCurrent(context.generation) && !context.signal.aborted) fail(error);
+        throw error;
+      }
+    })();
+    activeNestedInvocations.add(operation);
+    void operation.then(
+      () => activeNestedInvocations.delete(operation),
+      () => activeNestedInvocations.delete(operation),
+    );
+    return operation;
+  }
+
+  async function waitForNestedInvocations() {
+    while (activeNestedInvocations.size > 0) {
+      await Promise.all([...activeNestedInvocations]);
+    }
+  }
+
   /**
    * @param {unknown} error
    * @param {boolean} [cleanupStructuredData]
@@ -1382,16 +1475,26 @@ export function createDsl4RuntimeController({
         }
         emit('action.start');
         let transition = null;
+        activeActionContext = context;
+        nestedActionTransition = null;
+        nestedNavigationCommand = null;
+        activeNestedInvocations.clear();
         try {
           transition = await dispatch(currentAction(), context, {
             rehearsalSceneSkip: applyingRehearsalSceneState,
           });
+          await waitForNestedInvocations();
         } catch (error) {
           if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
           fail(error);
           break;
+        } finally {
+          if (activeActionContext === context) activeActionContext = null;
         }
         if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
+        transition = nestedActionTransition ?? transition;
+        nestedActionTransition = null;
+        nestedNavigationCommand = null;
         try {
           releaseStructuredAction('action-complete');
         } catch (error) {
@@ -2101,6 +2204,7 @@ export function createDsl4RuntimeController({
   return Object.freeze({
     start,
     stop,
+    invokeAction,
     canAdvance,
     canRehearsalSkip,
     acceptAdvanceInput,

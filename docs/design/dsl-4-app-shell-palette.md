@@ -76,6 +76,14 @@ blockは台本と同じdefault、validation、非同期完了、cancellation、d
 Schemaへcore actionを追加するときはmanifest、block、実行fixture、利用者向け文書の更新を同じ変更に含めます。
 一つでも欠ければCIを失敗させます。
 
+blockからのaction呼び出しは、別controllerや別の変数snapshotを作りません。実行中のDSL actionが所有する
+`ActionContext`と共有dispatcherへ、runtime host／preview session／live reload sessionの`invokeAction`境界を通して
+再入します。親actionの`AbortSignal`、scene、action path、runtime variable、Structured Data resourceを共有し、親actionは
+開始済みのblock actionがすべてsettleするまでcommitしません。`goto`、`branch`、key／touch／pose入力によるscene遷移は
+親actionのcommit境界で一度だけ反映し、同じ親actionから複数のscene遷移が要求された場合は
+`K4-RUNTIME-INVOKE-TRANSITION-CONFLICT`でfail closedとします。active action外の呼び出しも
+`K4-RUNTIME-INVOKE-INACTIVE`で拒否します。
+
 移行中は`dsl4TurboWarpActionSurface`を起動時固定・既定OFFとします。全23 actionの実VM回帰が完了するまで、
 既存Standard成果物のvisible opcode契約は切り替えません。
 
