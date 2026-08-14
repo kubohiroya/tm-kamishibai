@@ -8,7 +8,8 @@ Copyright © 2026 Hiroya Kubo.
 [#264](https://github.com/kubohiroya/tmpose-kamishibai/issues/264)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
 [#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)、
-[#284](https://github.com/kubohiroya/tmpose-kamishibai/issues/284)
+[#284](https://github.com/kubohiroya/tmpose-kamishibai/issues/284)、
+[TMPose #63](https://github.com/kubohiroya/turbowarp-tmpose/issues/63)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)
 
@@ -307,7 +308,7 @@ source bytesと一時objectはtransactionまたは登録完了後にapplication�
 実ブラウザ検証には`test/fixtures/dsl4/browser/remote-cache-retention.html`を使います。repository rootを
 HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同時保持数が1、解放後が0、IndexedDBが
 1 entry／archive byte数のまま増えないこと、および明示cleanup後に0 entry／0 bytesとなることを表示します。
-runtime／schema接続はIssue #284で実装済みです。TMPose 1.6.1の`releasePoseModel()`／`releaseAll()`は
+runtime／schema接続はIssue #284で実装済みです。TMPose 1.10.0の`releasePoseModel()`／`releaseAll()`は
 classifierとPoseNet双方のdispose完了を待ちます。
 
 self-contained 4.0 SB3の新規`binary-entry`形式は`dsl4RootBinaryEntryPackaging`による明示opt-inです。
@@ -338,6 +339,9 @@ cover:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  modelInitialization:
+    policy: latest-needed
+    parallel: true
   sequence:
     confidenceThreshold: 0.5
     fullConfidenceHoldSeconds: 1
@@ -405,12 +409,40 @@ bubbleStyles:
 3.2互換設定、両方を指定した設定を受理します。音を指定しなくても`sequence`、`selection`、`feedback`、
 `navigation`、`preview`は独立して設定できます。
 
+### 4.1 Poseモデル初期化
+
+`poseRecognition.modelInitialization`は、scene遷移で不要になったPoseモデルの初期化を止め、直近で
+必要なモデルだけを準備する方法を指定します。
+
+| DSL 4.0                                     | TMPose 1.10 Composition                      | 既定値   |
+| ------------------------------------------- | -------------------------------------------- | -------- |
+| `modelInitialization.policy: legacy`        | `modelInitializationPolicy: 'legacy'`        | `legacy` |
+| `modelInitialization.policy: latest-needed` | `modelInitializationPolicy: 'latest-needed'` |          |
+| `modelInitialization.parallel`              | `parallelModelInitialization`                | `false`  |
+
+`modelInitialization.parallel`はbooleanで、`true`または`false`を指定します。
+
+`latest-needed`では重い初期化を実行中1件、最新待機1件までに制限します。Aを初期化中にB、Cの順で要求が
+変わった場合、Bは開始せず、Aを安全境界でcancelしてCだけを開始します。poseを使わないsceneへskipした場合は
+待機要求を破棄し、新しい初期化を開始しません。cancel済みmodelはregistryへ公開せず、遅れて完了した
+classifier、PoseNet、descriptor byte列はexactly onceで解放します。
+
+カメラの`getUserMedia()`／`video.play()`と、記述子探索・Base64復号・fileごとのSHA検証・classifier loadは
+並行できます。複数PoseNet fileのSHA検証も並行し、検証済みbyte列が揃うまでTensorFlow／PoseNetへ渡しません。
+最初の推論だけが「カメラ準備完了」と「使用するモデルのregistry登録完了」の両方を待ちます。モデル初期化の
+cancelだけでカメラは停止しません。
+
+既定の`legacy`／`parallel: false`は従来動作を維持する安全なrollbackです。Web CryptoやTensorFlow.jsが
+すでに開始した処理を物理的に中断できない場合でも、後続phaseを開始せず、完了した一時resourceを解放します。
+この実行契約にはTMPose 1.10.0以降が必要です。npm公開前はSchemaとhost接続だけを先行でき、配布runtimeの
+TMPose pinは1.10.0公開後に更新します。
+
 `cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
 3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
 非埋め込み版は`showMenu`へ遷移します。言語の初期値はブラウザ言語から毎回決定し、localStorage保存を
 互換要件にはしません。
 
-### 4.1 control profile
+### 4.2 control profile
 
 ```yaml
 controls:

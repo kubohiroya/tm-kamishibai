@@ -138,6 +138,7 @@ function poseArchiveLimits() {
 
 function factories(log, overrides = {}) {
   const assetManagerCreateArguments = [];
+  const tmposeCreateArguments = [];
   const assetManagerComposition = {
     async registerProjectAsset(input) {
       log.push(['media.register-project', input.name]);
@@ -246,6 +247,7 @@ function factories(log, overrides = {}) {
   return {
     assetManagerComposition,
     assetManagerCreateArguments,
+    tmposeCreateArguments,
     tmposeComposition,
     createAssetManagerComposition(...args) {
       assetManagerCreateArguments.push(args);
@@ -253,6 +255,7 @@ function factories(log, overrides = {}) {
       return assetManagerComposition;
     },
     createTMPoseComposition(options) {
+      tmposeCreateArguments.push(options);
       log.push(['pose.create', options.runtime]);
       return tmposeComposition;
     },
@@ -320,6 +323,26 @@ test('creates one shared composition pair and routes a complete lifecycle throug
     async () => session.lifecycle.prepare({assetIds: ['Beach']}, context()),
     (error) => error.code === 'K4-PLATFORM-ASSET-SESSION-001',
   );
+});
+
+test('maps the DSL pose model initialization policy into TMPose composition options', async () => {
+  const component = runtimeComponent();
+  component.storyDocument.poseRecognition = {
+    modelInitialization: {policy: 'latest-needed', parallel: true},
+  };
+  const log = [];
+  const setup = options(component, log);
+  const session = createDsl4PlatformAssetSession(setup.value);
+
+  assert.deepEqual(setup.created.tmposeCreateArguments, [
+    {
+      runtime: setup.tmPoseRuntime,
+      modelInitializationPolicy: 'latest-needed',
+      parallelModelInitialization: true,
+    },
+  ]);
+
+  await session.dispose('model-initialization-options-checked');
 });
 
 test('passes pose, key, and actor touch sources into one Async Input composition', async () => {

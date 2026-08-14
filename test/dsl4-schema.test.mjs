@@ -55,6 +55,10 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.equal(result.storyDocument.scenes[0].actions[2].id, '/scenes/opening/actions/2');
   assert.equal(result.storyDocument.scenes[0].actions[2].stableId, 'openingTitle');
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
+  assert.deepEqual(result.storyDocument.poseRecognition.modelInitialization, {
+    policy: 'latest-needed',
+    parallel: false,
+  });
   assert.deepEqual(result.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
   assert.deepEqual(result.storyDocument.poseRecognition.navigation, {allowSkip: false});
   assert.deepEqual(result.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
@@ -62,6 +66,8 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.deepEqual(result.storyDocument.scenes[1].posePreview, {mirroring: 'unmirrored'});
   assert.equal(result.storyDocument.scenes[2].posePreview, null);
   assert.ok(result.storyDocument.sourceMap['/poseRecognition/feedback/mode']);
+  assert.ok(result.storyDocument.sourceMap['/poseRecognition/modelInitialization/policy']);
+  assert.ok(result.storyDocument.sourceMap['/poseRecognition/modelInitialization/parallel']);
   assert.ok(result.storyDocument.sourceMap['/poseRecognition/navigation/allowSkip']);
   assert.ok(result.storyDocument.sourceMap['/poseRecognition/preview/mirroring']);
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
@@ -775,6 +781,10 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   const valid = frontend.parse(base);
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
   assert.deepEqual(valid.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(valid.storyDocument.poseRecognition.modelInitialization, {
+    policy: 'legacy',
+    parallel: false,
+  });
   assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
   assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
 
@@ -799,6 +809,9 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
 
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
+    ['modelInitialization', '    policy: newest\n'],
+    ['modelInitialization', '    policy: latest-needed\n    parallel: yes\n'],
+    ['modelInitialization', '    policy: legacy\n    extra: true\n'],
     ['feedback', '    mode: presenter\n    extra: true\n'],
     ['navigation', '    allowSkip: yes\n'],
     ['navigation', '    allowSkip: false\n    extra: true\n'],

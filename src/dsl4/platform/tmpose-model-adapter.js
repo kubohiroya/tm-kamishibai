@@ -146,13 +146,16 @@ export function createDsl4TMPoseModelAdapter(options) {
           await cancellation;
           throw abortError();
         }
-        const registration = await composition.registerPoseModel({
-          name: assetId,
-          files: payload.files.map((file) => ({
-            path: /** @type {Record<string, unknown>} */ (file).path,
-            bytes: /** @type {Record<string, unknown>} */ (file).bytes,
-          })),
-        });
+        const registration = await composition.registerPoseModel(
+          {
+            name: assetId,
+            files: payload.files.map((file) => ({
+              path: /** @type {Record<string, unknown>} */ (file).path,
+              bytes: /** @type {Record<string, unknown>} */ (file).bytes,
+            })),
+          },
+          signal ? {signal} : undefined,
+        );
         if (signal?.aborted) {
           cancelRegistration();
           await cancellation;
@@ -214,6 +217,8 @@ export function createDsl4TMPoseModelAdapter(options) {
  * @param {unknown} options.runtime
  * @param {Function} [options.createFile]
  * @param {Function} [options.createComposition]
+ * @param {'legacy' | 'latest-needed'} [options.modelInitializationPolicy]
+ * @param {boolean} [options.parallelModelInitialization]
  */
 export function createDsl4TMPosePlatform(options) {
   if (!isRecord(options)) throw new TypeError('TMPose platform options must be an object');
@@ -221,9 +226,28 @@ export function createDsl4TMPosePlatform(options) {
   if (typeof createComposition !== 'function') {
     throw new TypeError('createComposition must be a function');
   }
+  if (
+    options.modelInitializationPolicy !== undefined &&
+    options.modelInitializationPolicy !== 'legacy' &&
+    options.modelInitializationPolicy !== 'latest-needed'
+  ) {
+    throw new TypeError('modelInitializationPolicy must be legacy or latest-needed');
+  }
+  if (
+    options.parallelModelInitialization !== undefined &&
+    typeof options.parallelModelInitialization !== 'boolean'
+  ) {
+    throw new TypeError('parallelModelInitialization must be a boolean');
+  }
   const composition = createComposition({
     runtime: options.runtime,
     ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
+    ...(options.modelInitializationPolicy === undefined
+      ? {}
+      : {modelInitializationPolicy: options.modelInitializationPolicy}),
+    ...(options.parallelModelInitialization === undefined
+      ? {}
+      : {parallelModelInitialization: options.parallelModelInitialization}),
   });
   return Object.freeze({
     composition,

@@ -122,7 +122,7 @@
     {
       "id": "tmpose",
       "package": "@kubohiroya/turbowarp-tmpose",
-      "version": "1.9.0",
+      "version": "1.10.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
       "compositionExport": "./composition",

@@ -526,6 +526,9 @@ loading:
 poseRecognition:
   idleSound: ClockTicking
   chargeSound: Success
+  modelInitialization:
+    policy: latest-needed
+    parallel: true
   sequence:
     confidenceThreshold: 0.5
     fullConfidenceHoldSeconds: 1
@@ -1593,9 +1596,15 @@ sceneの初回entryとすべてのscene遷移では、Tのactionを開始する�
 scene stateと`scene.transition`／`scene.enter` eventをcommitしません。stage、backdrop、effect、BGM、app shellの
 UI targetはこの可視性resetの対象外です。
 
-poseModelはpreload中にcurrentとselected nextの最大二つが一時共存し得ます。通常状態で訪問済みmodel数に比例して
-完全初期化済みPoseNet／TensorFlow resourceを残しません。Abort、superseded navigation、live reload、disposeが
-競合してもstale resourceを公開せず、releaseをidempotentにします。
+`poseRecognition.modelInitialization.policy: latest-needed`では、重い初期化を実行中1件と最新待機1件に
+制限します。Aの初期化中にB、Cを順に要求した場合は、Aを安全境界でcancelし、Bを開始せずCだけを開始します。
+poseを使わないsceneへskipした場合は最新待機も破棄します。cancel済みresourceをregistryへ公開せず、遅れて
+完了したresourceもexactly onceで解放します。`legacy`を既定値にしてrollbackを設定値だけで行えるようにします。
+
+カメラ準備とモデル準備は独立して開始し、最初の推論でだけ同期します。記述子のdecodeとfileごとのSHA検証、
+classifier loadは可能な範囲で並行しますが、未検証byte列はTensorFlow／PoseNetへ渡しません。モデル要求のcancelは
+カメラを停止しません。hostはasset lifecycleの`AbortSignal`をTMPose 1.10.0以降の
+`registerPoseModel(input, {signal})`へ渡します。`parallel: false`と`policy: legacy`は従来経路です。
 
 #### 10.5.3 台本単位のIndexedDB identity
 
@@ -1683,8 +1692,8 @@ clear操作は変更しません。
 player runtime componentはmanifestだけを保持し、ingest後のproviderやdecoded byte copyを公開snapshotへ含めません。
 editorが再保存するときだけsession backingまたはdirect sourceからentryを一時materializeし、元descriptorと同じcontent-addressed entryを
 再構成します。保存処理の`releaseEntries()`後は一時copyを破棄します。互換用Base64 loader／writerは既定のままで、
-binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.6.1のrelease完了待ちと既存の
-two-phase scene retentionにより、通常時のmodel保持はcurrent、preload中はcurrent＋selected nextへ制限します。
+binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.10.0のrelease完了待ちと
+latest-needed policyにより、重いmodel初期化はactive 1件＋最新pending 1件へ制限します。
 
 実ブラウザ回帰は`test/fixtures/dsl4/browser/pose-memory-retention.html`をreal Chromiumで実行します。
 24回のscene離脱／再訪でinstrumented disposable backendの最大値は20 tensors／196,608 bytes、最終値は

@@ -432,8 +432,22 @@ export function createDsl4PlatformAssetSession(options) {
       ...(options.revokeObjectURL === undefined ? {} : {revokeObjectURL: options.revokeObjectURL}),
     });
 
+    const storyDocument = /** @type {Record<string, unknown>} */ (runtimeComponent.storyDocument);
+    const poseRecognition = isRecord(storyDocument.poseRecognition)
+      ? storyDocument.poseRecognition
+      : {};
+    const modelInitialization = isRecord(poseRecognition.modelInitialization)
+      ? poseRecognition.modelInitialization
+      : {};
+    const modelInitializationPolicy =
+      modelInitialization.policy === 'latest-needed' ? 'latest-needed' : 'legacy';
+    const parallelModelInitialization =
+      typeof modelInitialization.parallel === 'boolean' ? modelInitialization.parallel : false;
+
     const tmpose = createDsl4TMPosePlatform({
       runtime: tmPoseRuntime,
+      modelInitializationPolicy,
+      parallelModelInitialization,
       ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
       ...(options.createTMPoseComposition === undefined
         ? {}

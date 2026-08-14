@@ -153,6 +153,23 @@ test('releases invalid or aborted registrations without publishing a resource', 
   assert.deepEqual(malformed.calls.release, ['RescuePose']);
 });
 
+test('forwards the preparation AbortSignal to TMPose registration', async () => {
+  let registrationOptions;
+  const fake = fakeComposition({
+    async registerPoseModel(input, options) {
+      fake.calls.register.push(input);
+      registrationOptions = options;
+      return {name: input.name, labels: ['rescue']};
+    },
+  });
+  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const controller = new AbortController();
+
+  await adapter.prepare(poseModel(), {signal: controller.signal});
+
+  assert.strictEqual(registrationOptions.signal, controller.signal);
+});
+
 test('creates an app-shell-scoped TMPose composition and adapter pair', async () => {
   const fake = fakeComposition();
   const runtime = {Webcam: class {}, loadFromFiles() {}};
@@ -161,18 +178,50 @@ test('creates an app-shell-scoped TMPose composition and adapter pair', async ()
   const platform = createDsl4TMPosePlatform({
     runtime,
     createFile,
+    modelInitializationPolicy: 'latest-needed',
+    parallelModelInitialization: true,
     createComposition(options) {
       calls.push(options);
       return fake.composition;
     },
   });
 
-  assert.deepEqual(calls, [{runtime, createFile}]);
+  assert.deepEqual(calls, [
+    {
+      runtime,
+      createFile,
+      modelInitializationPolicy: 'latest-needed',
+      parallelModelInitialization: true,
+    },
+  ]);
   assert.strictEqual(platform.composition, fake.composition);
   assert.equal(Object.isFrozen(platform), true);
   const resource = await platform.adapter.prepare(poseModel());
   await platform.adapter.release(resource);
   assert.deepEqual(fake.calls.release, ['RescuePose']);
+});
+
+test('rejects invalid TMPose model initialization options', () => {
+  const runtime = {Webcam: class {}, loadFromFiles() {}};
+  const createComposition = () => fakeComposition().composition;
+  assert.throws(
+    () =>
+      createDsl4TMPosePlatform({
+        runtime,
+        createComposition,
+        modelInitializationPolicy: 'newest',
+      }),
+    /modelInitializationPolicy/u,
+  );
+  assert.throws(
+    () =>
+      createDsl4TMPosePlatform({
+        runtime,
+        createComposition,
+        parallelModelInitialization: 'yes',
+      }),
+    /parallelModelInitialization/u,
+  );
 });
 
 test('routes media and pose assets to their owners and preserves release ownership', async () => {

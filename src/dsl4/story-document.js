@@ -163,6 +163,9 @@ function normalizeAsset(asset, id) {
 function normalizePoseRecognition(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const source = /** @type {Record<string, unknown>} */ (cloneValue(value));
+  const modelInitialization = /** @type {Record<string, unknown>} */ (
+    source.modelInitialization ?? {}
+  );
   const feedback = /** @type {Record<string, unknown>} */ (source.feedback ?? {});
   const navigation = /** @type {Record<string, unknown>} */ (source.navigation ?? {});
   const preview = /** @type {Record<string, unknown>} */ (source.preview ?? {});
@@ -177,6 +180,7 @@ function normalizePoseRecognition(value) {
     : undefined;
   return {
     ...source,
+    modelInitialization: {policy: 'legacy', parallel: false, ...modelInitialization},
     feedback: {mode: 'scratchMirror', ...feedback},
     navigation: {allowSkip: false, ...navigation},
     preview: {
@@ -199,6 +203,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
   for (const field of [
     'idleSound',
     'chargeSound',
+    'modelInitialization',
     'sequence',
     'selection',
     'feedback',
@@ -209,6 +214,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
     if (!fieldNode) continue;
     sourceMap[`/poseRecognition/${field}`] = sourceRangeForNode(fieldNode, lineCounter);
     const nestedFields = {
+      modelInitialization: ['policy', 'parallel'],
       sequence: ['confidenceThreshold', 'fullConfidenceHoldSeconds', 'idleChargePerSecond'],
       selection: ['accumulationPerSecond', 'decayPerSecond', 'scoreThreshold'],
       feedback: ['mode'],

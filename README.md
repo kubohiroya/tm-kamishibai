@@ -437,6 +437,12 @@ lazy dependencyとして読み込まれます。文字送りの純粋関数は�
 TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
 本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
 
+DSL 4.0では`poseRecognition.modelInitialization`により、従来互換の`legacy`と、不要になったモデルを
+cancelして最新の1件だけを準備する`latest-needed`を選べます。カメラ準備とモデル準備は並行し、最初の推論で
+同期します。Schema、既定値、cancel境界は
+[DSL 4.0 surface仕様](./docs/design/dsl-4-surface.md#41-poseモデル初期化)を参照してください。実行には
+TMPose 1.10.0以降が必要で、`legacy`／`parallel: false`がrollback可能な既定値です。
+
 Bubble 0.7では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
 `LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
 animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
