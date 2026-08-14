@@ -3,6 +3,10 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {buildSb3, createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
+import {
+  buildSb3 as buildLegacySb3,
+  createDeterministicSb3 as createLegacyDeterministicSb3,
+} from '@kubohiroya/sb3-toolchain-legacy';
 
 import {withTitleBuildMetadataSource} from './title-build-metadata.mjs';
 
@@ -24,8 +28,16 @@ function titleSourceOptions(options) {
   };
 }
 
+function usesImmutableLegacyToolchain(version) {
+  return typeof version === 'string' && /^[123]\./u.test(version);
+}
+
 export async function createKamishibaiSb3(options = {}) {
-  const create = options.create ?? createDeterministicSb3;
+  const create =
+    options.create ??
+    (usesImmutableLegacyToolchain(options.version)
+      ? createLegacyDeterministicSb3
+      : createDeterministicSb3);
   return withTitleBuildMetadataSource(
     titleSourceOptions(options),
     async ({metadata, sourceDirectory}) => ({
@@ -36,7 +48,8 @@ export async function createKamishibaiSb3(options = {}) {
 }
 
 export async function buildKamishibaiSb3(options = {}) {
-  const build = options.build ?? buildSb3;
+  const build =
+    options.build ?? (usesImmutableLegacyToolchain(options.version) ? buildLegacySb3 : buildSb3);
   const outputPath = options.outputPath ?? defaultKamishibaiOutputPath;
   return withTitleBuildMetadataSource(
     titleSourceOptions(options),

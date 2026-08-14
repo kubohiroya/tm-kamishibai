@@ -6,7 +6,7 @@
 
 ## 1. Runtime Expression互換
 
-DSL 4.0の`branch[].if`は`@kubohiroya/turbowarp-runtime-expression` 0.3.0の
+DSL 4.0の`branch[].if`は`@kubohiroya/turbowarp-runtime-expression` 0.4.0の
 `./composition` entrypointを使用します。Kamishibai独自の式parser、`eval`、`Function`、Scratch block
 呼出しへfallbackしません。importだけではScratch、DOM、network、storageへ触れません。
 

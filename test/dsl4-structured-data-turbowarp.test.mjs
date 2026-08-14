@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   createDsl4StructuredDataTurboWarpSurfaces,
+  dsl4StructuredDataBlockIconURI,
+  dsl4StructuredDataDebugBlockIconURI,
   dsl4StructuredDataDefaultFeatureFlags,
   dsl4StructuredDataDeveloperManifest,
   dsl4StructuredDataStandaloneManifest,
@@ -151,6 +153,13 @@ test('registers only enabled palettes once and forwards Scratch-cast arguments',
   mutableFlags.structuredDataStandaloneEnabled = false;
 
   assert.equal(surfaces.standalone.getInfo().id, 'kubohiroyastructdata1');
+  assert.equal(surfaces.standalone.getInfo().blockIconURI, dsl4StructuredDataBlockIconURI);
+  const standaloneIcon = decodeURIComponent(
+    dsl4StructuredDataBlockIconURI.slice('data:image/svg+xml,'.length),
+  );
+  assert.match(standaloneIcon, /viewBox="0 0 64 64"/u);
+  assert.match(standaloneIcon, /<circle cx="32" cy="11" r="5"\/>/u);
+  assert.doesNotMatch(standaloneIcon, /<rect/u);
   assert.deepEqual(
     surfaces.standalone.getInfo().blocks.map((definition) => definition.opcode),
     expectedStandaloneContract.map(([opcode]) => opcode),
@@ -184,6 +193,12 @@ test('keeps the developer palette separate and casts numeric debug indices', () 
 
   assert.equal(surfaces.standalone, null);
   assert.equal(surfaces.developer.getInfo().id, 'kubohiroyastructdata1debug');
+  assert.equal(surfaces.developer.getInfo().blockIconURI, dsl4StructuredDataDebugBlockIconURI);
+  const developerIcon = decodeURIComponent(
+    dsl4StructuredDataDebugBlockIconURI.slice('data:image/svg+xml,'.length),
+  );
+  assert.match(developerIcon, /<circle cx="47" cy="41" r="12"\/>/u);
+  assert.doesNotMatch(developerIcon, /<rect/u);
   assert.equal(surfaces.developer.debugLimits({}), '{"bounded":true}');
   assert.equal(
     surfaces.developer.debugNormalizedPath({RESOURCE: 'r', INDEX: '4'}),

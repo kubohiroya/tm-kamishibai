@@ -33,9 +33,98 @@ const applicationMenuIconPaths = Object.freeze({
   about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
   language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.3', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.4', 'app');
 const extensionId = 'kubohiroyakamishibai4';
-const extensionPath = `extensions/${extensionId}.js`;
+const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
+const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
+const externalExtensionMembers = Object.freeze(
+  [
+    {
+      id: 'kubohiroyaassetmanager',
+      name: 'Asset Manager',
+      package: '@kubohiroya/turbowarp-asset-manager',
+      version: '0.11.0',
+      artifact: 'dist/asset-manager.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-asset-manager/composition')),
+        ),
+        'asset-manager.js',
+      ),
+    },
+    {
+      id: 'kubohiroyaasyncinput',
+      name: 'Async Input',
+      package: '@kubohiroya/turbowarp-async-input',
+      version: '0.4.0',
+      artifact: 'dist/async-input.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-async-input/composition')),
+        ),
+        'async-input.js',
+      ),
+    },
+    {
+      id: 'kubohiroyabubble',
+      name: 'Bubble',
+      package: '@kubohiroya/turbowarp-bubble',
+      version: '0.5.0',
+      artifact: 'dist/turbowarp-bubble.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-bubble/composition')),
+        ),
+        'turbowarp-bubble.js',
+      ),
+    },
+    {
+      id: 'kubohiroyaruntimeexpression',
+      name: 'Runtime Expression',
+      package: '@kubohiroya/turbowarp-runtime-expression',
+      version: '0.4.0',
+      artifact: 'dist/runtime-expression.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(
+            import.meta.resolve('@kubohiroya/turbowarp-runtime-expression/composition'),
+          ),
+        ),
+        'runtime-expression.js',
+      ),
+    },
+    {
+      id: 'kubohiroyasvgtext',
+      name: 'SVG Text',
+      package: '@kubohiroya/turbowarp-svg-text',
+      version: '0.5.0',
+      artifact: 'dist/svg-text.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-svg-text/composition')),
+        ),
+        'svg-text.js',
+      ),
+    },
+    {
+      id: 'tmpose',
+      name: 'TMPose',
+      package: '@kubohiroya/turbowarp-tmpose',
+      version: '1.8.0',
+      artifact: 'dist/tmpose.js',
+      sourcePath: path.join(
+        path.dirname(
+          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-tmpose/composition')),
+        ),
+        'tmpose.js',
+      ),
+    },
+  ].map((member) => Object.freeze({...member, path: `extensions/${member.id}.js`})),
+);
+const bundleMemberIds = Object.freeze([
+  runtimeExtensionId,
+  ...externalExtensionMembers.map(({id}) => id),
+]);
 const closeTitleBroadcastId = 'closeTitleMessage';
 const closeTitleBroadcastName = 'closeTitle';
 const poseConfidenceVariableId = 'dsl4-pose-confidence';
@@ -57,6 +146,10 @@ const limits = Object.freeze({
 
 function md5(contents) {
   return createHash('md5').update(contents).digest('hex');
+}
+
+function sha256Sri(contents) {
+  return `sha256-${createHash('sha256').update(contents).digest('base64')}`;
 }
 
 function svgAsset(name, source, rotationCenterX, rotationCenterY) {
@@ -160,7 +253,7 @@ function stageTarget(title, titleRuntime, menu, menuRuntime) {
         y: 0,
       },
       titleFlagShow: {
-        opcode: 'kubohiroyakamishibai4_showTitle',
+        opcode: `${runtimeExtensionId}_showTitle`,
         next: null,
         parent: 'titleFlag',
         inputs: {},
@@ -169,7 +262,7 @@ function stageTarget(title, titleRuntime, menu, menuRuntime) {
         topLevel: false,
       },
       titleSetVersion: {
-        opcode: 'kubohiroyakamishibai4_setTextValue',
+        opcode: `${runtimeExtensionId}_setTextValue`,
         next: null,
         parent: null,
         inputs: {
@@ -218,7 +311,7 @@ function stageTarget(title, titleRuntime, menu, menuRuntime) {
         y: 240,
       },
       titleCloseStart: {
-        opcode: 'kubohiroyakamishibai4_closeTitle',
+        opcode: `${runtimeExtensionId}_closeTitle`,
         next: null,
         parent: 'titleCloseHat',
         inputs: {},
@@ -282,10 +375,11 @@ async function createProject(assets) {
   const project = {
     targets: [stageTarget(title, titleRuntime, menu, menuRuntime)],
     monitors: poseFeedbackMonitors(),
-    extensions: [extensionId],
-    extensionURLs: {
-      [extensionId]: `embedded-extension:${extensionPath}`,
-    },
+    extensions: [...bundleMemberIds],
+    extensionURLs: Object.fromEntries([
+      [runtimeExtensionId, `embedded-extension:${runtimeExtensionPath}`],
+      ...externalExtensionMembers.map((member) => [member.id, `embedded-extension:${member.path}`]),
+    ]),
     extensionStorage: {},
     meta: {
       semver: '3.0.0',
@@ -328,13 +422,12 @@ async function createProject(assets) {
     artifactResult.artifact,
     assetBundle,
     {
-      channel: 'bundled',
+      channel: 'unbundled',
       ...limits,
       subtleCrypto: webcrypto.subtle,
     },
   );
-  installed.extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.application =
-    {mode: 'menu'};
+  installed.extensionStorage[runtimeExtensionId].application = {mode: 'menu'};
   return installed;
 }
 
@@ -398,6 +491,13 @@ export async function createDsl4RuntimeExtensionSource() {
 export async function createDsl4ReleaseSourceFiles() {
   const assets = titleAssets();
   const project = await createProject(assets);
+  const runtimeExtensionSource = await createDsl4RuntimeExtensionSource();
+  const externalExtensionSources = await Promise.all(
+    externalExtensionMembers.map(async (member) => ({
+      ...member,
+      contents: await readFile(member.sourcePath),
+    })),
+  );
   const archiveEntries = ['project.json', ...assets.map(({filename}) => filename)];
   const files = new Map([
     ['project.source.json', Buffer.from(`${JSON.stringify(project, null, 2)}\n`)],
@@ -409,11 +509,32 @@ export async function createDsl4ReleaseSourceFiles() {
             formatVersion: 1,
             extensions: [
               {
-                id: extensionId,
-                path: extensionPath,
+                id: runtimeExtensionId,
+                path: runtimeExtensionPath,
                 mediaType: 'text/javascript',
                 parameters: [],
                 encoding: 'base64',
+              },
+              ...externalExtensionSources.map((member) => ({
+                id: member.id,
+                path: member.path,
+                mediaType: 'text/javascript',
+                parameters: [],
+                encoding: 'base64',
+                source: {
+                  provider: 'npm',
+                  package: member.package,
+                  version: member.version,
+                  artifact: member.artifact,
+                  integrity: sha256Sri(member.contents),
+                },
+              })),
+            ],
+            extensionBundles: [
+              {
+                id: extensionId,
+                name: 'Kamishibai DSL 4.0 Runtime',
+                members: [...bundleMemberIds],
               },
             ],
             sourceNotices: dsl4RuntimeProvenance,
@@ -439,8 +560,9 @@ export async function createDsl4ReleaseSourceFiles() {
         )}\n`,
       ),
     ],
-    [extensionPath, await createDsl4RuntimeExtensionSource()],
+    [runtimeExtensionPath, runtimeExtensionSource],
   ]);
+  for (const member of externalExtensionSources) files.set(member.path, member.contents);
   for (const asset of assets) files.set(`assets/${asset.filename}`, asset.bytes);
   return files;
 }
@@ -466,9 +588,9 @@ async function checkRelease(files) {
   );
   for (const [relativePath, expected] of files) {
     const actual = await readFile(path.join(releaseDirectory, relativePath));
-    assert(actual.equals(expected), `DSL 4.0.0-rc.3 release source is stale: ${relativePath}`);
+    assert(actual.equals(expected), `DSL 4.0.0-rc.4 release source is stale: ${relativePath}`);
   }
-  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.3 release source file(s).\n`);
+  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.4 release source file(s).\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

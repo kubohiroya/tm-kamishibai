@@ -161,7 +161,7 @@ const result = await packageDsl4WithTurboWarpPackager({
 ON時の既定は`prefer`で、`required`と`disabled`を明示できます。選択したmodeを物語の実行途中で変更しません。
 
 runtime hostでは次の起動時optionを使用します。`sessionId`を省略した場合は起動ごとに新しいIDを生成します。
-`storeOptions`はAsset Manager 0.10.0のsession専用storeへだけ渡し、persistent remote cacheや既存の
+`storeOptions`はAsset Manager 0.11.0のsession専用storeへだけ渡し、persistent remote cacheや既存の
 `binaryBundleStore`には渡しません。
 
 ```js

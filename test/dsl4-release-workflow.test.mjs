@@ -73,12 +73,12 @@ test('updates atomically, remains idempotent, and preserves the candidate on fai
     assert.deepEqual(await releaseSnapshot(root), firstSnapshot);
 
     await writeFile(
-      path.join(root, 'release-sources/4.0.0-rc.3/release.json'),
+      path.join(root, 'release-sources/4.0.0-rc.4/release.json'),
       '{"invalid":true}\n',
     );
     await assert.rejects(updateDsl4Release(options), /metadata format is invalid/u);
     assert.equal(
-      await readFile(path.join(root, 'release-sources/4.0.0-rc.3/app/project.source.json'), 'utf8'),
+      await readFile(path.join(root, 'release-sources/4.0.0-rc.4/app/project.source.json'), 'utf8'),
       '{"targets":[]}\n',
     );
   } finally {
@@ -131,8 +131,8 @@ test('checks candidates against the generator and frozen releases against their 
 
     const published = await recordDsl4Publication(
       {
-        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.3',
-        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.3',
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.4',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.4',
         pagesUrl: 'https://example.github.io/project/downloads/',
       },
       {root},
@@ -164,8 +164,8 @@ test('verifies only the stored release snapshot and rejects snapshot mutation', 
     await freezeDsl4Release(options);
     await recordDsl4Publication(
       {
-        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.3',
-        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.3',
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.4',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.4',
         pagesUrl: 'https://example.github.io/project/downloads/',
       },
       {root},

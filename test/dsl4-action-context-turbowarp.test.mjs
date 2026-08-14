@@ -8,6 +8,7 @@ import {
   createDsl4ActionContextTurboWarpSurface,
   createDsl4ActionInvocationAdapter,
   createDsl4ActionRegistrySnapshot,
+  dsl4ActionContextBlockIconURI,
   dsl4ActionContextBlockBudget,
   dsl4ActionContextDefaultFeatureFlags,
   dsl4ActionContextManifest,
@@ -212,6 +213,13 @@ test('maps Scratch inputs and thread util to the adapter without casting typed o
   const util = {thread: {id: 'thread'}};
 
   assert.equal(info.id, dsl4ActionContextManifest.id);
+  assert.equal(info.blockIconURI, dsl4ActionContextBlockIconURI);
+  const iconSvg = decodeURIComponent(
+    dsl4ActionContextBlockIconURI.slice('data:image/svg+xml,'.length),
+  );
+  assert.match(iconSvg, /viewBox="0 0 64 64"/u);
+  assert.match(iconSvg, /m29 37 14 7-14 7Z/u);
+  assert.doesNotMatch(iconSvg, /<rect/u);
   assert.deepEqual(
     info.blocks.map(({opcode, blockType}) => [opcode, blockType]),
     dsl4ActionContextManifest.blocks.map(({opcode, blockType}) => [

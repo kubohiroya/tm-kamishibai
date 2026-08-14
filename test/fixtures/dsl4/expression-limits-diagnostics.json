@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "runtimeExpression": {
     "package": "@kubohiroya/turbowarp-runtime-expression",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "entrypoint": "./composition",
     "limits": {
       "maxExpressionCodeUnits": 4096,

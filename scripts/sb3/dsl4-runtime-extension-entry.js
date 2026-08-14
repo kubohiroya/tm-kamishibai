@@ -49,8 +49,11 @@ import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
 
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
-const extensionId = 'kubohiroyakamishibai4';
-const extensionVersion = '4.0.0-rc.3';
+const extensionId = 'kubohiroyakamishibairuntime4';
+const extensionVersion = '4.0.0-rc.4';
+const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
+)}`;
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
@@ -141,7 +144,10 @@ function filePickerSupported() {
 
 /** @param {Record<string, any>} project */
 function packagedRuntimeComponent(project) {
-  return project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4;
+  return (
+    project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4 ??
+    project?.extensionStorage?.kubohiroyakamishibairuntime4
+  );
 }
 
 /** @param {Record<string, any>} project */
@@ -214,6 +220,7 @@ class KamishibaiDsl4RuntimeExtension {
       description:
         'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
       docsURI: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+      blockIconURI,
       creator: 'Hiroya Kubo',
       license: 'MPL-2.0',
       credits: dsl4RuntimeProvenance

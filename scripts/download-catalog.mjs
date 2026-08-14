@@ -5,7 +5,7 @@ export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(new URL('../release-sources/4.0.0-rc.3/release.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../release-sources/4.0.0-rc.4/release.json', import.meta.url), 'utf8'),
 );
 
 function deepFreeze(value) {
@@ -23,7 +23,7 @@ export const downloadCatalog = deepFreeze([
       filename: dsl4ReleaseMetadata.artifact.filename,
       faviconPath: 'site/favicon.png',
       sha256: dsl4ReleaseMetadata.artifact.sha256,
-      size: 7_652_780,
+      size: 7_866_652,
       sourceIdentity: dsl4ReleaseMetadata.sourceIdentity,
       sourceDirectory: dsl4ReleaseMetadata.sourceDirectory,
     },

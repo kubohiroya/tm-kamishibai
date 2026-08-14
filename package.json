@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "4.0.0-rc.3",
+  "version": "4.0.0-rc.4",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
@@ -84,12 +84,12 @@
   "author": "Hiroya Kubo",
   "license": "MPL-2.0",
   "dependencies": {
-    "@kubohiroya/turbowarp-asset-manager": "0.10.0",
-    "@kubohiroya/turbowarp-async-input": "0.3.0",
-    "@kubohiroya/turbowarp-bubble": "0.4.0",
-    "@kubohiroya/turbowarp-runtime-expression": "0.3.0",
-    "@kubohiroya/turbowarp-svg-text": "0.4.0",
-    "@kubohiroya/turbowarp-tmpose": "1.7.4",
+    "@kubohiroya/turbowarp-asset-manager": "0.11.0",
+    "@kubohiroya/turbowarp-async-input": "0.4.0",
+    "@kubohiroya/turbowarp-bubble": "0.5.0",
+    "@kubohiroya/turbowarp-runtime-expression": "0.4.0",
+    "@kubohiroya/turbowarp-svg-text": "0.5.0",
+    "@kubohiroya/turbowarp-tmpose": "1.8.0",
     "@teachablemachine/pose": "0.8.3",
     "@tensorflow/tfjs": "1.3.1",
     "@turbowarp/scratch-storage": "2.0.0",
@@ -105,7 +105,8 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "0.6.0",
+    "@kubohiroya/sb3-toolchain": "0.8.0",
+    "@kubohiroya/sb3-toolchain-legacy": "npm:@kubohiroya/sb3-toolchain@0.6.0",
     "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",
     "@types/node": "^26.1.2",
