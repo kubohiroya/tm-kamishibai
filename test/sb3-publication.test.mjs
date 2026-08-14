@@ -92,7 +92,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
-    '0.6.0',
+    '0.8.0',
     'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);

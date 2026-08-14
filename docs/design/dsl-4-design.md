@@ -77,7 +77,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 - memberごとのIDとdata URLを一つのbundle IDとdata URLへ変換する
 - block、monitor、menu、custom field、hat、extension storageをmember namespaceへ写す
 - memberからの`runtime.startHats()`と`runtime.getOpcodeFunction()`をbundle opcodeへ変換する
-- 個別sourceとprovenanceを展開ソースに残し、復元カプセルによるunbundleを可能にする
+- 個別sourceとprovenanceを展開ソースに残し、既定ではそこからunbundle可能にする。SB3単体の復元カプセルはopt-inとする
 - 安全に分類できないmemberや未分類opcode参照を、推測で変換せずbuild errorにする
 
 したがって4.0では、独自の合成系を先に新設せず、現行`extensionBundles`契約を第一候補とします。
@@ -121,8 +121,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   DSL設計から分離する既定OFFのblock cleanup
 - [`sb3-toolchain` PR #38](https://github.com/kubohiroya/sb3-toolchain/pull/38):
   完全固定npm sourceの`status`／`sync`／`update`
-- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/extension-bundles.md)
-- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.6.0/docs/ja/source-format-v1.md)
+- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.8.0/docs/ja/extension-bundles.md)
+- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.8.0/docs/ja/source-format-v1.md)
 
 ## 1. 設計の目的
 
@@ -1787,7 +1787,7 @@ flowchart LR
   M["embedded-extensions.json<br/>individual members + provenance"] --> T["sb3-toolchain build"]
   P["project.source.json<br/>original IDs/opcodes/storage"] --> T
   T --> B["generated SB3<br/>one composite ID/data URL"]
-  T --> C["recovery capsule<br/>original member data"]
+  T -. optional .-> C["recovery capsule<br/>original member data"]
   B --> W["TurboWarp<br/>one permission unit"]
 ```
 
@@ -1904,7 +1904,7 @@ fixtureで再現してから検討します。
 | 登録         | runtime wrapperがmemberのregisterを捕捉し、Compositeを1回登録 | composition rootがserviceを組み立て、完成した拡張を1回登録 |
 | member間連携 | block opcode、`startHats()`、`getOpcodeFunction()`、VM API    | import、型付きinterface、port、直接のmethod call           |
 | 更新単位     | memberのGitHub commitまたはnpm version                        | composition APIを公開するpackage version                   |
-| 可逆性       | 復元カプセルと個別sourceからunbundle可能                      | 別途Standalone buildとopcode変換／復元契約が必要           |
+| 可逆性       | 既定は個別sourceからunbundle可能。SB3単体の復元はopt-in       | 別途Standalone buildとopcode変換／復元契約が必要           |
 | 互換性検査   | block API manifestと保存済みproject参照                       | TypeScript型、service API version、統合testが別途必要      |
 
 #### 11.3.2 現行memberの依存監査
@@ -2162,7 +2162,7 @@ block contributionとして公開することをmodule分割の目標にしま�
 dependencies:
   '@kubohiroya/turbowarp-svg-text': 'github:kubohiroya/turbowarp-svg-text#<commit>'
 devDependencies:
-  '@kubohiroya/sb3-toolchain': '0.6.0'
+  '@kubohiroya/sb3-toolchain': '0.8.0'
 ```
 
 GitHub providerのcapabilityは`package.json`／lockfileまたは`embedded-extensions.json`でresolved commitと
@@ -2431,7 +2431,7 @@ runtimeで追加コードをdownloadしません。
 - SB3新規読込で拡張許可が一回で済む
 - 個別sourceのID／opcode／storageを保持し、生成SB3だけがComposite namespaceを使う
 - member間`startHats()`／`getOpcodeFunction()`がComposite opcodeへ変換される
-- unbundleで個別memberのURL、順序、storageを復元できる
+- 展開sourceからのunbundleで個別memberのURL、順序、storageを復元できる
 - GitHub／npm providerのstatus、sync、updateとAPI互換性検査をmember単位で行える
 - parse error時にgreen flag処理が実行へ進まない
 - SVGにline、column、excerpt、messageが表示される
@@ -2510,7 +2510,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [x] GitHub／npm providerをcapabilityごとに選び、version／commit、artifact、integrityを固定する
 - [x] 現行`sb3-toolchain`の`extensionBundles`を4.0 Compositeの第一候補にする
 - [x] member間`startHats`／`getOpcodeFunction`とstorageをComposite namespaceへ変換する
-- [x] bundleは生成SB3だけを変更し、個別sourceと復元可能性を維持する
+- [x] bundleは生成SB3だけを変更し、個別sourceからの復元可能性を維持する
 - [x] Kamishibai固有adapterを本projectに置き、汎用projectからの逆依存を禁止する
 - [ ] 4.0で新規追加・更新するmanaged memberにAPI manifestを必須化するか
 - [ ] Diagnostic SVG rendererを独立capabilityにするか

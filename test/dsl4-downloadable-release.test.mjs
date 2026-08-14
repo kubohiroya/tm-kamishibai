@@ -75,14 +75,7 @@ async function buildRelease() {
 }
 
 async function buildCurrentRuntimeRelease() {
-  const released = await buildRelease();
-  const archive = unzipSync(released.archive);
-  const project = JSON.parse(strFromU8(archive['project.json']));
-  const extensionSource = await createDsl4RuntimeExtensionSource();
-  project.extensionURLs[bundleExtensionId] =
-    `data:text/javascript;base64,${extensionSource.toString('base64')}`;
-  archive['project.json'] = new TextEncoder().encode(JSON.stringify(project));
-  return {archive: Buffer.from(zipSync(archive))};
+  return buildRelease();
 }
 
 function browserFile(name, contents) {
@@ -498,7 +491,13 @@ function installUnsandboxedScriptDom({withTitleUi = false} = {}) {
 async function extensionReporter(vm, opcode) {
   const service = vm.extensionManager._loadedExtensions.get(bundleExtensionId);
   assert(service, 'The embedded DSL 4.0 runtime extension was not loaded.');
-  return dispatch.call(service, opcode);
+  return dispatch.call(service, `${runtimeExtensionId}__${opcode}`);
+}
+
+async function extensionInfo(vm) {
+  const service = vm.extensionManager._loadedExtensions.get(bundleExtensionId);
+  assert(service, 'The embedded DSL 4.0 runtime extension was not loaded.');
+  return dispatch.call(service, 'getInfo');
 }
 
 async function loadProjectQuietly(vm, archive) {
@@ -630,7 +629,10 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   );
   assert.equal(stage.blocks.titleFlag?.opcode, 'event_whenflagclicked');
   assert.equal(stage.blocks.titleFlag?.next, 'titleFlagShow');
-  assert.equal(stage.blocks.titleFlagShow?.opcode, `${bundleExtensionId}_showTitle`);
+  assert.equal(
+    stage.blocks.titleFlagShow?.opcode,
+    `${bundleExtensionId}_${runtimeExtensionId}__showTitle`,
+  );
   assert.equal(stage.blocks.titleStageClick?.opcode, 'event_whenstageclicked');
   assert.deepEqual(stage.blocks.titleStageClickClose?.inputs?.BROADCAST_INPUT, [
     1,
@@ -641,7 +643,10 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     'closeTitle',
     'closeTitleMessage',
   ]);
-  assert.equal(stage.blocks.titleCloseStart?.opcode, `${bundleExtensionId}_closeTitle`);
+  assert.equal(
+    stage.blocks.titleCloseStart?.opcode,
+    `${bundleExtensionId}_${runtimeExtensionId}__closeTitle`,
+  );
 
   assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
   assert.deepEqual(project.extensions, [bundleExtensionId]);
@@ -649,10 +654,17 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.match(extensionUrl, /^data:text\/javascript;base64,/u);
   assert.match(extensionSource, /^\/\/ Name: Kamishibai DSL 4\.0 Runtime/mu);
   assert.match(extensionSource, /^\/\/ ID: kubohiroyakamishibai4/mu);
+  assert.match(extensionSource, /blockIconURI/u);
+  assert.match(extensionSource, /data:image\/svg\+xml/u);
   assert.match(extensionSource, /data-dsl4-title-controls/u);
   assert.match(extensionSource, /data-dsl4-title-action/u);
   assert.match(extensionSource, /data-dsl4-close-icon/u);
-  assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
+  assert.doesNotMatch(extensionSource, /kubohiroyaweblink/u);
+  assert.doesNotMatch(extensionSource, /SB3-Toolchain-Reversible-Bundle-v1/u);
+  assert.ok(
+    archive['project.json'].byteLength < 16 * 1024 * 1024,
+    'The compact bundle must stay within the default browser distribution build limit.',
+  );
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
     assert.equal(enabled, true);
     assert.equal(
@@ -715,6 +727,60 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     ],
   );
   assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
+});
+
+test('keeps every bundled extension icon on its own TurboWarp blocks', async () => {
+  const result = await buildRelease();
+  const restoreGlobals = installUnsandboxedScriptDom();
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+
+    const info = await extensionInfo(vm);
+    const headings = info.blocks
+      .map((block, index) => ({block, index}))
+      .filter(({block}) => block?.sb3Toolchain?.kind === 'bundle-member-heading');
+    assert.deepEqual(
+      headings.map(({block}) => block.sb3Toolchain.memberId),
+      [
+        runtimeExtensionId,
+        'kubohiroyaassetmanager',
+        'kubohiroyaasyncinput',
+        'kubohiroyabubble',
+        'kubohiroyaruntimeexpression',
+        'kubohiroyasvgtext',
+        'tmpose',
+      ],
+    );
+
+    const memberIcons = [];
+    for (const [headingIndex, heading] of headings.entries()) {
+      const end = headings[headingIndex + 1]?.index ?? info.blocks.length;
+      const memberBlocks = info.blocks
+        .slice(heading.index + 1, end)
+        .filter((block) => block && typeof block === 'object' && typeof block.opcode === 'string');
+      assert(memberBlocks.length > 0, heading.block.sb3Toolchain.memberId);
+      assert.equal(
+        memberBlocks.every(
+          (block) =>
+            typeof block.blockIconURI === 'string' &&
+            block.blockIconURI.startsWith('data:image/svg+xml,'),
+        ),
+        true,
+        heading.block.sb3Toolchain.memberId,
+      );
+      memberIcons.push(memberBlocks[0].blockIconURI);
+    }
+    assert.equal(new Set(memberIcons).size, headings.length);
+  } finally {
+    vm.quit();
+    restoreGlobals();
+  }
 });
 
 test('builds a browser-selected YAML story and only its declared local assets in memory', async () => {
@@ -1076,7 +1142,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.3');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.4');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,

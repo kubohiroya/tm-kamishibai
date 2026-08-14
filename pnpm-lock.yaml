@@ -14,23 +14,23 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
-        specifier: 0.10.0
-        version: 0.10.0
+        specifier: 0.11.0
+        version: 0.11.0
       '@kubohiroya/turbowarp-async-input':
-        specifier: 0.3.0
-        version: 0.3.0
-      '@kubohiroya/turbowarp-bubble':
-        specifier: 0.4.0
-        version: 0.4.0(@kubohiroya/turbowarp-asset-manager@0.10.0)(@kubohiroya/turbowarp-async-input@0.3.0)(@kubohiroya/turbowarp-runtime-expression@0.3.0)(@kubohiroya/turbowarp-svg-text@0.4.0)
-      '@kubohiroya/turbowarp-runtime-expression':
-        specifier: 0.3.0
-        version: 0.3.0
-      '@kubohiroya/turbowarp-svg-text':
         specifier: 0.4.0
         version: 0.4.0
+      '@kubohiroya/turbowarp-bubble':
+        specifier: 0.5.0
+        version: 0.5.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)
+      '@kubohiroya/turbowarp-runtime-expression':
+        specifier: 0.4.0
+        version: 0.4.0
+      '@kubohiroya/turbowarp-svg-text':
+        specifier: 0.5.0
+        version: 0.5.0
       '@kubohiroya/turbowarp-tmpose':
-        specifier: 1.7.4
-        version: 1.7.4
+        specifier: 1.8.0
+        version: 1.8.0
       '@teachablemachine/pose':
         specifier: 0.8.3
         version: 0.8.3(@tensorflow/tfjs-converter@3.21.0(@tensorflow/tfjs-core@3.21.0))(@tensorflow/tfjs-core@3.21.0)(@tensorflow/tfjs@1.3.1(seedrandom@2.4.3))
@@ -72,8 +72,11 @@ importers:
         version: 2.9.0
     devDependencies:
       '@kubohiroya/sb3-toolchain':
-        specifier: 0.6.0
-        version: 0.6.0(supports-color@7.2.0)
+        specifier: 0.8.0
+        version: 0.8.0(supports-color@7.2.0)
+      '@kubohiroya/sb3-toolchain-legacy':
+        specifier: npm:@kubohiroya/sb3-toolchain@0.6.0
+        version: '@kubohiroya/sb3-toolchain@0.6.0(supports-color@7.2.0)'
       '@turbowarp/packager':
         specifier: 3.13.0
         version: 3.13.0
@@ -347,14 +350,19 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-asset-manager@0.10.0':
-    resolution: {integrity: sha512-HE7kgOUq7Dcyd0Nw9wQ+qEWMRoF5bNmMNrtaHSP4Dk7cAhlqSAmk2ntO8Na1JSQqAmCD3YMxv5MHfF4HGJTMZw==}
+  '@kubohiroya/sb3-toolchain@0.8.0':
+    resolution: {integrity: sha512-PysMdwlv8MixaUNrvBPu2fK8Bn3LOLVheQO6UEIGL7h/j8w62HO1CEdrRIvzf1NW1njU/I4FODBxQwdRCtOXQw==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
 
-  '@kubohiroya/turbowarp-async-input@0.3.0':
-    resolution: {integrity: sha512-GbQ8lmZDS388TvFGa8C3EMKzdfUuq/vrzlfRD8jNtbWpI9/Rv5KZZNzvxr67t6Y++0obABFjuxpxxrTN1kqqHg==}
+  '@kubohiroya/turbowarp-asset-manager@0.11.0':
+    resolution: {integrity: sha512-1+ez0LmyytRBbb6vUgNn14nWDkcdI9JddGpjqMrAPm/CXc/UVFr1JM+1x81tpMyGODZw3+Q+UYxAuGUdjb4Qxw==}
 
-  '@kubohiroya/turbowarp-bubble@0.4.0':
-    resolution: {integrity: sha512-1u035zWey8qaYMi69iUfY06l8qA49piHGbqdCU025B2RFeubuVLbxrctqdm2e1kVaHKQ4sUodmSM814GLuo7EA==}
+  '@kubohiroya/turbowarp-async-input@0.4.0':
+    resolution: {integrity: sha512-V8io/dZpNu8HJM/QHymcm8V//PNNa7eUzeSDrxHINKeISNl+QCaqPGgjNIaSdgSEaJGqYQNZsRZnxZvRH2TFew==}
+
+  '@kubohiroya/turbowarp-bubble@0.5.0':
+    resolution: {integrity: sha512-Nl1WqS+uKb1tOy+/ZJGr/a7a6jaDEaVjCAt5Mmo8QLCKZnZQyNfISyyTENcl2MqoBLMREp+DedKY0klmNAZeow==}
     peerDependencies:
       '@kubohiroya/turbowarp-asset-manager': '>=0.7.0 <1'
       '@kubohiroya/turbowarp-async-input': '>=0.3.0 <1'
@@ -370,14 +378,14 @@ packages:
       '@kubohiroya/turbowarp-svg-text':
         optional: true
 
-  '@kubohiroya/turbowarp-runtime-expression@0.3.0':
-    resolution: {integrity: sha512-6GCzLqwKxQW0h65tuszZxVzRueNrizktQeL6zw2e+QpPeE3Xjy2ux0z/UGjUvqz1l4V3YChiIcMqP1z3FxDg6Q==}
+  '@kubohiroya/turbowarp-runtime-expression@0.4.0':
+    resolution: {integrity: sha512-jhFvnwmKEl3LLadsJUgKEoYDr+vfkY1Xx1ZgMqNVou964Gew6+5wvjsAC2JvzzhQvJYvTSNxtoT0fvoCLzylAg==}
 
-  '@kubohiroya/turbowarp-svg-text@0.4.0':
-    resolution: {integrity: sha512-wtdCZdAfjowJFwELKRQ3XPJjF51iatuo2k3bNdcHVy3884kqfELys6mDxOnmKnvdb1B3kbwUAusYwVPMDRqHRA==}
+  '@kubohiroya/turbowarp-svg-text@0.5.0':
+    resolution: {integrity: sha512-LHyKtLMtP+AKESZPX6C4ws17aI8yyjCsbSj09YNyK0YskYSIs2bSHkaBSgQv7+WgJEmL3H7toDxSrc3fJdCwfw==}
 
-  '@kubohiroya/turbowarp-tmpose@1.7.4':
-    resolution: {integrity: sha512-raO8u1h4N+czn+csoGEwpI8Oh2yrYn4JsSw7S3Lu88uxP/0GfKAVTBYDizEPI9OZKcYUT09WbGbu4e8XTaKq4g==}
+  '@kubohiroya/turbowarp-tmpose@1.8.0':
+    resolution: {integrity: sha512-77n7vqYJkKYmRhnTJd3uOF0qi3lgsSNURpmCX3l1gVKRZWJKG2NUC3zcg4/uxECnwWQlxqkl/1zlZabGyBpX4Q==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2920,24 +2928,32 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-asset-manager@0.10.0': {}
+  '@kubohiroya/sb3-toolchain@0.8.0(supports-color@7.2.0)':
+    dependencies:
+      fflate: 0.8.3
+      music-metadata: 11.14.0(supports-color@7.2.0)
+      yaml: 2.9.0
+    transitivePeerDependencies:
+      - supports-color
 
-  '@kubohiroya/turbowarp-async-input@0.3.0': {}
+  '@kubohiroya/turbowarp-asset-manager@0.11.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.4.0(@kubohiroya/turbowarp-asset-manager@0.10.0)(@kubohiroya/turbowarp-async-input@0.3.0)(@kubohiroya/turbowarp-runtime-expression@0.3.0)(@kubohiroya/turbowarp-svg-text@0.4.0)':
+  '@kubohiroya/turbowarp-async-input@0.4.0': {}
+
+  '@kubohiroya/turbowarp-bubble@0.5.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)(@kubohiroya/turbowarp-svg-text@0.5.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
     optionalDependencies:
-      '@kubohiroya/turbowarp-asset-manager': 0.10.0
-      '@kubohiroya/turbowarp-async-input': 0.3.0
-      '@kubohiroya/turbowarp-runtime-expression': 0.3.0
-      '@kubohiroya/turbowarp-svg-text': 0.4.0
+      '@kubohiroya/turbowarp-asset-manager': 0.11.0
+      '@kubohiroya/turbowarp-async-input': 0.4.0
+      '@kubohiroya/turbowarp-runtime-expression': 0.4.0
+      '@kubohiroya/turbowarp-svg-text': 0.5.0
 
-  '@kubohiroya/turbowarp-runtime-expression@0.3.0': {}
+  '@kubohiroya/turbowarp-runtime-expression@0.4.0': {}
 
-  '@kubohiroya/turbowarp-svg-text@0.4.0': {}
+  '@kubohiroya/turbowarp-svg-text@0.5.0': {}
 
-  '@kubohiroya/turbowarp-tmpose@1.7.4': {}
+  '@kubohiroya/turbowarp-tmpose@1.8.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

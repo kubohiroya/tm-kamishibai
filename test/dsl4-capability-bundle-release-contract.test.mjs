@@ -92,7 +92,7 @@ test('keeps every external capability on its reviewed composition boundary', asy
   ]);
 });
 
-test('ships the Standard artifact as one embedded runtime extension', async () => {
+test('ships the Standard artifact as one compact static extension bundle', async () => {
   const [projectSource, bundleManifestSource, entrypoint] = await Promise.all([
     readRepositoryFile(contract.standardArtifact.projectSource),
     readRepositoryFile(contract.standardArtifact.bundleManifest),
@@ -100,33 +100,38 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
   ]);
   const project = JSON.parse(projectSource);
   const bundleManifest = JSON.parse(bundleManifestSource);
-  const {extensionId} = contract.standardArtifact;
+  const {extensionId, memberExtensionIds, runtimeComponentId} = contract.standardArtifact;
 
-  assert.equal(contract.standardArtifact.integration, 'single-embedded-extension');
+  assert.equal(contract.standardArtifact.integration, 'static-extension-bundle');
+  assert.equal(contract.standardArtifact.blockIconPolicy, 'member-blockIconURI');
   assert.equal(contract.standardArtifact.includesPreviewSurface, true);
   assert.equal(contract.standardArtifact.previewActivation, 'nonembedded-menu-default');
   assert.equal(contract.standardArtifact.embeddedStoryPreview, false);
-  assert.deepEqual(project.extensions, [extensionId]);
-  assert.deepEqual(project.extensionURLs, {
-    [extensionId]: `embedded-extension:extensions/${extensionId}.js`,
-  });
-  assert.deepEqual(Object.keys(project.extensionStorage), [extensionId]);
-  assert.equal(bundleManifest.extensionBundles, undefined);
+  assert.deepEqual(project.extensions, memberExtensionIds);
+  assert.deepEqual(Object.keys(project.extensionURLs), memberExtensionIds);
+  assert.deepEqual(Object.keys(project.extensionStorage), [runtimeComponentId]);
+  assert.deepEqual(bundleManifest.extensionBundles, [
+    {
+      id: extensionId,
+      name: 'Kamishibai DSL 4.0 Runtime',
+      members: memberExtensionIds,
+    },
+  ]);
   assert.deepEqual(
     bundleManifest.extensions.map(({id}) => id),
-    [extensionId],
+    memberExtensionIds,
   );
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
-  assert.match(entrypoint, new RegExp(`const extensionId = '${extensionId}'`));
+  assert.match(entrypoint, new RegExp(`const extensionId = '${runtimeComponentId}'`));
   assert.match(entrypoint, /dsl4NonEmbeddedDevelopmentFeatureFlags/u);
   assert.match(entrypoint, /createDsl4RuntimeSourceChooser/u);
   assert.match(entrypoint, /createDsl4BrowserPreviewRuntimeComponent/u);
   assert.doesNotMatch(entrypoint, /kubohiroyaweblink/u);
 
   const opcodes = [...entrypoint.matchAll(/opcode: '([^']+)'/gu)].map((match) => match[1]);
-  assert.deepEqual(opcodes, contract.standardArtifact.hiddenOpcodes);
+  assert.deepEqual(opcodes, contract.standardArtifact.runtimeHiddenOpcodes);
   assert.equal((entrypoint.match(/hideFromPalette: true/gu) ?? []).length, opcodes.length);
-  assert.deepEqual(contract.standardArtifact.visibleOpcodes, []);
+  assert.deepEqual(contract.standardArtifact.runtimeVisibleOpcodes, []);
   assert.doesNotMatch(JSON.stringify(project.extensionURLs), /https?:/u);
 
   const persisted = JSON.stringify(project);
@@ -144,13 +149,13 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
   }
 });
 
-test('uses one runtime extension for Standard 4.0 and keeps legacy 3.2 reversible', () => {
+test('uses compact Standard 4.0 and reversible legacy 3.2 static bundles', () => {
   assert.deepEqual(contract.bundleBoundaries.standard4, {
-    kind: 'single-embedded-extension',
-    unbundle: null,
+    kind: 'extensionBundles',
+    unbundle: 'expanded-source',
     provenance: [
-      'release-sources/4.0.0-rc.3/app/project.source.json',
-      'release-sources/4.0.0-rc.3/app/embedded-extensions.json',
+      'release-sources/4.0.0-rc.4/app/project.source.json',
+      'release-sources/4.0.0-rc.4/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -214,21 +219,21 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.3/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.4/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-sources/4.0.0-rc.3/release.json',
+    metadata: 'release-sources/4.0.0-rc.4/release.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.4',
+    nextCandidateVersion: '4.0.0-rc.5',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.3',
+    gitTag: 'v4.0.0-rc.4',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });

@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "project": "project.source.json",
+  "embeddedExtensions": "embedded-extensions.json",
+  "assetsDirectory": "assets",
+  "archiveEntries": [
+    "project.json",
+    "812248d06815a5467b8c6966cb2e18bf.svg",
+    "3714ae8d8ff44f82a232cd489c412369.svg",
+    "8abd76def4a84e4516163f956cdcfc83.svg",
+    "25e75263647cc980ff37773a95d9dad1.svg"
+  ]
+}
