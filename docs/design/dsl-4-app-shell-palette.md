@@ -2,22 +2,25 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #265で確定する実装基準
+文書状態: Issue #265の実装基準をIssue #579の双方向parity方針で更新
 
 関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)、
 [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)
+[#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
+[#579](https://github.com/kubohiroya/tmpose-kamishibai/issues/579)
 
 機械可読な契約:
 [`app-shell-contract.json`](../../test/fixtures/dsl4/app-shell-contract.json)
 
 ## 1. 結論
 
-標準の台本製作者が追加するTurboWarpブロックは**0個**とします。標準Runtimeは起動、停止、
-状態確認に必要な固定block facadeだけをtemplate内部へ保存し、そのblockをpaletteへ表示しません。
-作品固有actionをScratchで実装する利用者だけが、別配布のAction Context developer surfaceを明示的に
-有効化します。
+標準の台本製作者が追加を必須とされるTurboWarpブロックは**0個**のままです。同時に、TurboWarp側の
+コードからもDSL 4.0台本と同じ実行時機能を利用できるよう、標準Runtimeは全core actionに対応する
+visible blockを1対1で公開します。YAML経路とblock経路は、引数正規化後に同じruntime dispatcherを通します。
+
+起動、停止、状態確認に必要な固定block facadeは引き続きtemplate内部だけで使用し、paletteへ表示しません。
+作品固有actionをScratchで実装する利用者は、別配布のAction Context developer surfaceを明示的に有効化します。
 
 これは一つの拡張内で「標準作者用／開発者用」の表示profileを切り替える設計ではありません。用途、拡張ID、
 起動時flag、成果物を分けます。標準作品へStore、Iterator、JSONPath、診断、preview操作を混入させません。
@@ -45,22 +48,38 @@ JavaScript runtimeが所有し、Scratch variable、list、broadcastを保存形
 
 ## 3. 配布面
 
-| 配布面                     | 拡張ID                               | 標準作品         | palette                   | 用途                                                   |
-| -------------------------- | ------------------------------------ | ---------------- | ------------------------- | ------------------------------------------------------ |
-| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み     | DSL 4.0 blockは0          | RuntimeとWeb Linkを一つの権限単位として登録            |
-| Runtime member             | `kubohiroyakamishibairuntime4`       | Composite内      | `hideFromPalette: true`   | 台本の検証、実行、asset制御と固定shell                 |
-| Web Link member            | `kubohiroyaweblink`                  | Composite内      | `hideFromPalette: true`   | 公式Webサイトの固定HTTPS URLを開く                     |
-| template内部control        | Runtime member内                     | 保存済み         | `hideFromPalette: true`   | version、状態、error、内部text設定                     |
-| Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない     | 8 opcode                  | 作品固有custom actionをScratchで実装するcustomizer向け |
-| Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない     | Store／Iterator／JSONPath | 汎用データ処理を使う開発者向け                         |
-| Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない     | 診断opcode                | capability開発者向け                                   |
-| app shell debug（予定）    | `kubohiroyakamishibai4debug`         | 読み込まない     | shell診断opcode           | template／runtime開発者向け                            |
-| development preview host   | 拡張IDなし                           | 非埋め込みで有効 | DOM／CLI UI               | source watch、reload方針、診断表示                     |
+| 配布面                     | 拡張ID                               | 標準作品         | palette                        | 用途                                                   |
+| -------------------------- | ------------------------------------ | ---------------- | ------------------------------ | ------------------------------------------------------ |
+| Standard Composite         | `kubohiroyakamishibai4`              | 読み込み済み     | core action 23 opcode          | Runtimeを一つの権限単位として登録                      |
+| Runtime member             | `kubohiroyakamishibairuntime4`       | Composite内      | coreはvisible、controlはhidden | 台本の検証、実行、asset制御と固定shell                 |
+| Web Link member            | `kubohiroyaweblink`                  | Composite内      | `hideFromPalette: true`        | 公式Webサイトの固定HTTPS URLを開く                     |
+| template内部control        | Runtime member内                     | 保存済み         | `hideFromPalette: true`        | version、状態、error、内部text設定                     |
+| Action Context             | `kubohiroyakamishibai4actioncontext` | 読み込まない     | 8 opcode                       | 作品固有custom actionをScratchで実装するcustomizer向け |
+| Structured Data Standalone | `kubohiroyastructdata1`              | 読み込まない     | Store／Iterator／JSONPath      | 汎用データ処理を使う開発者向け                         |
+| Structured Data debug      | `kubohiroyastructdata1debug`         | 読み込まない     | 診断opcode                     | capability開発者向け                                   |
+| app shell debug（予定）    | `kubohiroyakamishibai4debug`         | 読み込まない     | shell診断opcode                | template／runtime開発者向け                            |
+| development preview host   | 拡張IDなし                           | 非埋め込みで有効 | DOM／CLI UI                    | source watch、reload方針、診断表示                     |
 
-Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個です。機能拡張がTurboWarpの
-「拡張を追加」画面に現れるかどうかと、作品内paletteへ個別blockを表示するかどうかは別の契約です。
+Standard Runtimeは全core actionのDSL 4.0 blockを表示します。機能拡張がTurboWarpの「拡張を追加」画面に
+現れるかどうかと、作品内paletteへ個別blockを表示するかどうかは別の契約です。
 
-### 3.1 template内部control
+### 3.1 core action public surface
+
+公開blockの正本は`src/dsl4/core-action-manifest.js`です。global 12 actionとactor 11 actionの計23 actionを
+それぞれ同名opcodeへ対応させます。generic JSON実行block一つだけで代替したことにはしません。
+
+- Stage／BGM／音／待機／debugger／broadcast and wait／transition
+- goto／branch／key・touch・pose入力によるscene遷移
+- actorのshow／hide／透明度／移動／say／think／skin／layer／loop／text／pose
+
+blockは台本と同じdefault、validation、非同期完了、cancellation、diagnostic、scene transitionを使用します。
+Schemaへcore actionを追加するときはmanifest、block、実行fixture、利用者向け文書の更新を同じ変更に含めます。
+一つでも欠ければCIを失敗させます。
+
+移行中は`dsl4TurboWarpActionSurface`を起動時固定・既定OFFとします。全23 actionの実VM回帰が完了するまで、
+既存Standard成果物のvisible opcode契約は切り替えません。
+
+### 3.2 template内部control
 
 4.0.0の内部opcodeを次の4個に固定し、標準配布の`getInfo()`ではすべて
 `hideFromPalette: true`にします。
@@ -73,7 +92,7 @@ Standard Runtimeが通常の台本製作者へ見せるDSL 4.0 blockは0個で�
 台本製作者はこれらを配置しません。builderがversion付きcanonical templateを複製し、保存済みblockが
 存在すること、opcodeが許可listと一致すること、block graph digestが期待値と一致することを検証します。
 
-### 3.2 Action Context developer surface
+### 3.3 Action Context developer surface
 
 Action ContextはStandard Runtimeの「作者向けblock」ではなく、作品カスタマイザーが明示的に追加する
 別surfaceです。`dsl4CustomActionsEnabled`は起動時固定かつ既定OFFで、Standard startupは自動登録しません。
@@ -177,6 +196,7 @@ test harnessまたは独自hostがruntimeを所有できるheadless経路とし�
 | Stage以外の固定shell／presentation target（各target）     |   20 |         20 |
 | project全体                                               |  350 |        500 |
 | custom handler接続用overhead（各handler、演出本体を除く） |    8 |          8 |
+| Standard Runtimeのvisible core action block               |   23 |         23 |
 | Stage／global scalar variable                             |   16 |         16 |
 | local scalar variable（各target）                         |    4 |          4 |
 | project全体のscalar variable                              |   32 |         32 |
@@ -247,7 +267,7 @@ builderは作品ごとのScratch block graphを生成しません。version付�
 
 1. templateのID、version、block graph digestが許可値と一致する
 2. target別／project全体のblock、variable、list、broadcast budgetを満たす
-3. Standard Runtimeのvisible DSL 4.0 opcodeが0である
+3. Standard Runtimeのvisible DSL 4.0 opcodeがcore action manifestと一致する
 4. template内部controlが許可listだけで、すべてpalette非表示である
 5. Standard artifactがAction Context、Structured Data debug、preview専用opcodeをpaletteに含まない
 6. sourceだけを変更したbuildで`targets[].blocks`がbyte-equivalentなcanonical JSONになる
@@ -259,7 +279,7 @@ sourceとtemplateのfingerprint、incremental buildとfull rebuildを切り替�
 
 - 台本Aと台本Bのbuildで`targets[].blocks`が同一になる
 - 最小台本と全core action台本のどちらも作者追加blockが0になる
-- Standard Runtimeのvisible DSL 4.0 blockが0になる
+- Standard Runtimeのvisible DSL 4.0 blockがcore action manifestの23 actionと一致する
 - Action Contextの8 opcodeと各default-OFF flagが機械可読契約と実装manifestで一致する
 - 非埋め込みeditorだけがpreview shellを初期化し、埋め込みproductionでは初期化しない
 - どのSB3にもfilesystem handle、candidate、reload preference、dialog状態を保存しない

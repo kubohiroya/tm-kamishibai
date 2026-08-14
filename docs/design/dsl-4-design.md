@@ -596,7 +596,8 @@ story owner scopeで解放します。自然終了またはfail時はrendererと
 `runtime.resume`で同じrendererを再開し、明示的なstory stopまたはhost disposeで初めて所有resourceを解放します。
 起動時固定・既定OFFの`dsl4CameraPreviewControls`がOFFならcontrol専用assetを
 startup準備から除外し、TMPose camera APIもDOM rendererも検査しません。これはStandard productionの固定UI
-であり、台本製作者の必須block 0、palette block 0を維持します。`mirroring` controlがあるsessionは#387の
+であり、台本製作者の必須block 0、camera control専用palette block 0を維持します。`mirroring` controlが
+あるsessionは#387の
 story／scene effective mirroringを同じcompositionへ適用し、外部の反転変更もtarget-state iconへ同期します。
 
 ### 3.11 分岐 `[提案]`
@@ -1486,7 +1487,8 @@ command name -> argument schema -> validator -> executor
 
 app shell、palette、surface、budgetの正本を
 [`dsl-4-app-shell-palette.md`](dsl-4-app-shell-palette.md)に分離します。標準の台本製作者が追加する
-必須blockと、Standard Compositeがpaletteへ表示するDSL 4.0 blockはいずれも0個です。
+必須blockは0個です。一方、Issue #579の双方向parity方針により、Standard Compositeは全core actionの
+visible blockを1対1で提供します。
 
 標準テンプレートが内部で使用する論理opcodeを次の5種に固定します。
 
@@ -1512,7 +1514,7 @@ StoryDocument作成、iterator操作、asset準備を個別command blockとし�
 
 | 配布面                        | 標準テンプレートでの状態 | paletteに表示するもの                              |
 | ----------------------------- | ------------------------ | -------------------------------------------------- |
-| Kamishibai標準Composite       | 読み込み済み             | DSL 4.0 blockは0                                   |
+| Kamishibai標準Composite       | 読み込み済み             | 全core actionの1対1 block                          |
 | template内部control           | 保存済み                 | `hideFromPalette`にしたstart／stop／retry／終了hat |
 | Action Context developer面    | 読み込まない             | custom action用のhat、context、完了／失敗／遷移    |
 | Structured Data Standalone    | 読み込まない             | Store、scope、lease、Iterator、JSONPath            |
@@ -2419,7 +2421,7 @@ runtimeで追加コードをdownloadしません。
 - 標準テンプレートへ台本A／Bを適用しても`targets[].blocks`が同一である
 - 最小台本と全core action台本で、台本製作者が追加する必須blockが0である
 - 固定テンプレートのDSL接続blockが30以下である
-- 標準Compositeのvisible DSL 4.0 paletteが0 blockである
+- 標準Compositeのvisible DSL 4.0 paletteがcore action manifestと一致する
 - Action Context developer surfaceの公開opcodeが別拡張の8個だけである
 - template内部controlが保存済みprojectで実行でき、paletteでは非表示である
 - Structured Data Standaloneとdeveloper／debug blockが標準テンプレートへ読み込まれない

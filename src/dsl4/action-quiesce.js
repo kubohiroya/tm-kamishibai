@@ -2,33 +2,12 @@ import {
   dsl4EmptyActionRegistrySnapshot,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+import {dsl4CoreActionManifest} from './core-action-manifest.js';
 
 /** @type {Readonly<Record<string, 'finish-only' | 'cancel-replay-safe'>>} */
-export const dsl4CoreActionQuiesceModes = Object.freeze({
-  stage: 'finish-only',
-  bgm: 'finish-only',
-  sound: 'finish-only',
-  wait: 'cancel-replay-safe',
-  debugger: 'cancel-replay-safe',
-  broadcastMessageAndWait: 'finish-only',
-  transition: 'cancel-replay-safe',
-  goto: 'finish-only',
-  branch: 'finish-only',
-  keyInputToChangeScene: 'cancel-replay-safe',
-  touchInputToChangeScene: 'cancel-replay-safe',
-  poseInputToChangeScene: 'cancel-replay-safe',
-  show: 'finish-only',
-  hide: 'finish-only',
-  setTransparency: 'finish-only',
-  moveTo: 'cancel-replay-safe',
-  say: 'cancel-replay-safe',
-  think: 'cancel-replay-safe',
-  setSkin: 'finish-only',
-  setLayer: 'finish-only',
-  loop: 'finish-only',
-  setText: 'finish-only',
-  pose: 'cancel-replay-safe',
-});
+export const dsl4CoreActionQuiesceModes = Object.freeze(
+  Object.fromEntries(dsl4CoreActionManifest.map(({command, quiesce}) => [command, quiesce])),
+);
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
