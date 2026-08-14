@@ -3,7 +3,7 @@
   "series": "4.0",
   "version": "4.0.0-rc.4",
   "channel": "next",
-  "state": "frozen",
+  "state": "published",
   "buildDate": "2026-08-14",
   "sourceDirectory": "release-sources/4.0.0-rc.4/app",
   "sourceIdentity": "sha256:8171a30624811a143b761a36c29dde8496b21ac8eb3aa7802322a83e327d11bd",
@@ -21,6 +21,11 @@
     },
     "pages": {
       "recommended": false
+    },
+    "urls": {
+      "npm": "https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.4",
+      "githubRelease": "https://github.com/kubohiroya/tmpose-kamishibai/releases/tag/v4.0.0-rc.4",
+      "pages": "https://kubohiroya.github.io/tmpose-kamishibai/downloads/"
     }
   }
 }
