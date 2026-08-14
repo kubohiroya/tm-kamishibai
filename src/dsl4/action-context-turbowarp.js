@@ -1,6 +1,9 @@
 const notRegisteredResult = Object.freeze({registered: false});
 const registeredResult = Object.freeze({registered: true});
 const featureFlagKeys = new Set(['dsl4CustomActionsEnabled']);
+export const dsl4ActionContextBlockIconURI = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 23 53 12l3 11-44 11Z"/><path d="M13 31h42v24H13Z"/></g><path fill="#fff" d="m29 37 14 7-14 7Z"/><path fill="none" stroke="#fff" stroke-width="4" d="m20 20 7 8M34 17l7 8M48 14l6 7"/></svg>',
+)}`;
 
 export const dsl4ActionContextDefaultFeatureFlags = Object.freeze({
   dsl4CustomActionsEnabled: false,
@@ -171,6 +174,7 @@ export function createDsl4ActionContextTurboWarpSurface(options = {}) {
       return {
         id: dsl4ActionContextManifest.id,
         name: dsl4ActionContextManifest.name,
+        blockIconURI: dsl4ActionContextBlockIconURI,
         color1: '#6c4eb6',
         color2: '#593f99',
         color3: '#47327a',

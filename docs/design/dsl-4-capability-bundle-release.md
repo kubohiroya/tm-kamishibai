@@ -2,49 +2,52 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #266／#517の実装正本（2026-08-10）
+文書状態: Issue #266／#517／#585の実装正本（2026-08-14）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
 [#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)、
-[#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)
+[#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)、
+[#585](https://github.com/kubohiroya/tmpose-kamishibai/issues/585)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
 
 ## 1. 結論
 
-4.0.0-rc.1のStandard成果物は、`kubohiroyakamishibai4`一件をembedded extensionとして生成します。
+4.0.0-rc.4のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
+6つのcapability拡張を`kubohiroyakamishibai4`一件へ集約して生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
-組み込みません。生成SB3がTurboWarpへ登録する拡張とdata URLはこの一件だけです。
+組み込みません。展開sourceは7 memberを保持しますが、生成SB3がTurboWarpへ登録する拡張とdata URLは
+復元カプセルを重複保持しないcompact bundle一件だけです。個別memberへの復元はversion管理された展開sourceを正本とします。
 
 Runtime member自体は、6つの完全固定npm packageの公開composition subpathと、このrepositoryの
-first-party Structured Dataをesbuildで一つのclassic拡張sourceへ構成します。そのsource先頭には
+first-party Structured Dataをesbuildで一つのRuntime member sourceへ構成します。そのsource先頭には
 Gallery形式のmember headerと、内部構成要素のtitle、copyright、license、package versionを残します。
+6つのnpm packageのStandalone成果物も静的bundle memberとして同梱し、それぞれのトップレベル
+`blockIconURI`を変換後の各通常ブロックへ継承します。
 
 ## 2. capability inventory
 
 | capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界         |
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.10.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
-| Async Input        | `@kubohiroya/turbowarp-async-input@0.3.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.4.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
-| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.3.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
-| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.4.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.7.4`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`              |
+| Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`              |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.5.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./` + `./turbowarp-adapter` |
+| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`              |
+| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`              |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.8.0`             | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition`              |
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition         |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外             |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外             |
 
-package versionはrangeを使わず、lockfileのnpm integrityと一致させます。6つのnpm capabilityのStandalone成果物は
-4.0 Standardのbundle memberにはせず、Runtime memberのcomposition rootだけがそれらのserviceを構成します。
-Standard Runtimeは`Scratch.extensions.register()`を一度だけ実行し、外部リンクを含むアプリshell capabilityも
-同じRuntime境界で提供します。
+package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
+6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
+生成SB3は外側のbundleを一度だけ登録し、各memberのhandler、menu、storage、由来アイコンを名前空間付きで委譲します。
 
-Asset Manager 0.8.0はstructured project locatorを正規のcomposition APIとして公開しています。
 Standard Runtimeはnpmの完全固定releaseを直接利用し、`patchedDependencies`やrepository-local patchを
-介しません。rollbackは0.7.0のexact pin、直前の`patchedDependencies`／patch、lockfileを復元するか、
+介しません。rollbackは直前のexact pinとlockfileを復元するか、
 DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 
 ## 3. API、integrity、license、SBOM
@@ -56,10 +59,9 @@ Runtime member内部のsource composition互換契約は次の4点です。
 3. packageが公開する`./composition` export
 4. Kamishibai adapterを通す統合test
 
-Standard 4.0のembedded extensionはRuntime 4一件です。Gallery形式のheader、単一の同期
-`Scratch.extensions.register()`、固定IDを満たし、保存済みblock graphのopcodeを回帰testで検証します。
-managed external memberを追加するときは、artifact integrityに加えてextension ID、opcode、menu、storage、
-互換versionを持つAPI manifestを必須にします。
+Standard 4.0の生成SB3は静的bundle一件です。各memberはGallery形式のheader、単一の同期
+`Scratch.extensions.register()`、固定IDを満たし、npm artifact integrity、bundle opcode、menu、storage、
+block iconを回帰testで検証します。
 
 配布SBOMの入力は`package.json`と`pnpm-lock.yaml`、attributionの正本は`LICENSES.md`です。Standard成果物を
 生成するlocal source、version付きrelease source directory、そのpathとbyte列から求めたsource identity、
@@ -68,15 +70,17 @@ download catalogのSHA-256を合わせて、
 
 ## 4. 成果物とpalette
 
-| surface                    | extension ID                         | 登録 |           palette |     preview UI |
-| -------------------------- | ------------------------------------ | ---: | ----------------: | -------------: |
-| Standard 4.0 Runtime       | `kubohiroyakamishibai4`              |    1 |     hidden facade | 非埋め込みのみ |
-| Action Context             | `kubohiroyakamishibai4actioncontext` |    0 |          8 opcode |           なし |
-| Structured Data Standalone | `kubohiroyastructdata1`              |    0 | developer surface |           なし |
-| Structured Data debug      | `kubohiroyastructdata1debug`         |    0 |     debug surface |           なし |
-| development preview host   | なし                                 |    0 |          DOM／CLI |     開発時のみ |
+| surface                     | extension ID                         | 登録 |               palette |     preview UI |
+| --------------------------- | ------------------------------------ | ---: | --------------------: | -------------: |
+| Standard 4.0 Runtime bundle | `kubohiroyakamishibai4`              |    1 | member別のblockとicon | 非埋め込みのみ |
+| Action Context              | `kubohiroyakamishibai4actioncontext` |    0 |              8 opcode |           なし |
+| Structured Data Standalone  | `kubohiroyastructdata1`              |    0 |     developer surface |           なし |
+| Structured Data debug       | `kubohiroyastructdata1debug`         |    0 |         debug surface |           なし |
+| development preview host    | なし                                 |    0 |              DOM／CLI |     開発時のみ |
 
 Runtime memberのopcodeはcanonical templateの内部接続・状態確認用で、すべて`hideFromPalette: true`です。
+6つのStandalone memberの通常ブロックは由来元のSVG `blockIconURI`を保持し、生成LABEL見出しと二重separatorで
+グループ化されます。block固有iconがある場合は、それを優先します。
 Standard SB3はruntime source、YAML source descriptor、runtime artifact、asset bundle bytesを内包し、
 実行時にextension codeをremote取得しません。preview token、candidate、modal、reload preferenceなどの
 transient stateも保存しません。非埋め込み`application.mode=menu`は制作・debug runnerとして
@@ -109,9 +113,9 @@ fingerprintにもproduction artifactにも含めません。
 | TurboWarp editor     | Standard SB3、または台本埋め込みSB3                          | 非埋め込みはOpen後にwatch、埋め込みはcomponent descriptorをproduction再生                                   | Editorで追加したcostume／soundを保持し、非埋め込みのYAML更新時に`name`から再解決   |
 | Web player／Packager | 同じStandard SB3                                             | production shellはruntime componentのembedded descriptorだけを読み、external pathやpreview bridgeを読まない | playerは保存せず、Packagerは検証済みSB3のsource／artifact／asset storageを保持する |
 
-4.0 StandardはRuntime内部のsource compositionを行い、SB3生成時には一件のembedded extensionとして格納します。
-source descriptorの可逆性は、Runtime component storage pathの検証と、固定TurboWarp VMの実際の
-load → `toJSON()`再保存testを正本とします。`extensionBundles`は複数の実在する拡張を統合する3.2成果物だけに使います。
+4.0 StandardはRuntime内部のsource compositionに加え、SB3生成時に`extensionBundles`で7 memberを一件へ
+集約します。source descriptorとbundleの展開source復元性は、Runtime component storage path、固定済み
+release source、TurboWarp VMの実際のload → `toJSON()`再保存testを正本とします。
 
 ## 6. lifecycle
 
@@ -130,7 +134,7 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-4.0.0-rc.1 releaseは必ず次の順で行います。
+4.0.0-rc.4 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
@@ -139,7 +143,7 @@ cleanupを継続します。
 5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
 6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
 7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
-8. frozen commitへannotated `v4.0.0-rc.1` tagを作成する
+8. frozen commitへannotated `v4.0.0-rc.4` tagを作成する
 9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
 10. GitHub prereleaseを公開する
 11. 3.2.3を推奨安定版に維持したままsiteをbuildして公開する
@@ -147,15 +151,17 @@ cleanupを継続します。
 
 更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release、
 version付きrelease sourceを差し替えません。`frozen`または`published`ではupdateをfail closedにし、修正は
-4.0.0-rc.2、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+4.0.0-rc.5、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 3.2の`extensionBundles` member更新は一件ずつ行い、recovery capsuleを保ったままmember単位で戻します。
 
 ## 8. 受け入れ基準
 
 - capability、repository、package、version、extension ID、providerがfixtureと一致する
-- Standard展開ソースがRuntime 4一件を管理し、Web Linkを含まない
+- Standard展開ソースがRuntimeと6つのcapability memberを管理し、Web Linkを含まない
 - Standard SB3が`kubohiroyakamishibai4`一件だけをembedded URLから読み込む
+- 各memberの通常ブロックが由来元の異なるSVG `blockIconURI`を保持する
+- Standard bundleが重複するrecovery capsuleを既定で含まず、展開sourceから復元できる
 - runtime source先頭にheader、全構成要素のprovenanceが残る
 - Standard paletteのvisible DSL 4.0 blockがcore action manifestと一致し、preview専用opcodeを含まない
 - 非埋め込みだけがpreviewを初期化し、埋め込みproductionは初期化しない
@@ -166,5 +172,5 @@ version付きrelease sourceを差し替えません。`frozen`または`publishe
 - remote code／remote preview禁止とverified remote asset opt-inを混同しない
 - release／update／rollback順序と実行済みevidenceが機械可読契約から検査される
 
-この契約だけを戻す場合は文書、fixture、test、`app-shell-contract.json`のStandard Runtime ID修正をrevertします。
-runtime、package pin、release sourceの挙動は変更しません。
+この契約だけを戻す場合は文書、fixture、test、release source生成をrevertし、`sb3-toolchain@0.6.0`へ戻して
+4.0.0-rc.3の単一Runtime成果物を使用します。

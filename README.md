@@ -19,7 +19,7 @@ TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの�
 検証済みバージョンを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.3
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.4
 ```
 
 ```bash
@@ -529,8 +529,9 @@ pnpm install
 新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
-`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.6.0`を使用します。
-CIでも`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じツールチェインで`app/`を検証します。
+`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.8.0`を使用します。
+公開済み3.x成果物の再現だけは`@kubohiroya/sb3-toolchain@0.6.0`のaliasへ固定します。CIでも
+`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じ現行ツールチェインで`app/`を検証します。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として
 生成します。公開済み系列の入力は`release-sources/<version>/`へ固定し、build dateとSHA-256も

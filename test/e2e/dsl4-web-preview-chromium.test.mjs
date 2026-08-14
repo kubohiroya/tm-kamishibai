@@ -1018,7 +1018,7 @@ test(
           directoryPickerCalls: globalThis.__dsl4DirectoryPickerCalls,
           extensionLoaded: Boolean(
             globalThis.__dsl4FreshVm.runtime._primitives
-              .kubohiroyakamishibai4_statusReporter
+              .kubohiroyakamishibai4_kubohiroyakamishibairuntime4__statusReporter
           )
         };
       })()`);

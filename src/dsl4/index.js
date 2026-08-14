@@ -21,6 +21,7 @@ export {
 } from './action-invocation-adapter.js';
 export {
   createDsl4ActionContextTurboWarpSurface,
+  dsl4ActionContextBlockIconURI,
   dsl4ActionContextBlockBudget,
   dsl4ActionContextDefaultFeatureFlags,
   dsl4ActionContextManifest,
@@ -232,6 +233,8 @@ export {
 } from './structured-data-adapter.js';
 export {
   createDsl4StructuredDataTurboWarpSurfaces,
+  dsl4StructuredDataBlockIconURI,
+  dsl4StructuredDataDebugBlockIconURI,
   dsl4StructuredDataDefaultFeatureFlags,
   dsl4StructuredDataDeveloperManifest,
   dsl4StructuredDataStandaloneManifest,

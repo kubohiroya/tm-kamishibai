@@ -1,5 +1,11 @@
 const standaloneId = 'kubohiroyastructdata1';
 const developerId = 'kubohiroyastructdata1debug';
+export const dsl4StructuredDataBlockIconURI = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 15v13M16 29h32M16 29v15M32 29v15M48 29v15"/><circle cx="32" cy="11" r="5"/><circle cx="16" cy="49" r="5"/><circle cx="32" cy="49" r="5"/><circle cx="48" cy="49" r="5"/></g></svg>',
+)}`;
+export const dsl4StructuredDataDebugBlockIconURI = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 14v10M11 25h24M11 25v14M23 25v14"/><circle cx="23" cy="10" r="4"/><circle cx="11" cy="44" r="4"/><circle cx="23" cy="44" r="4"/><circle cx="47" cy="41" r="12"/><path d="M47 34v8M47 48h.01"/></g></svg>',
+)}`;
 
 /** @template T @param {T} value @returns {Readonly<T>} */
 function deepFreeze(value) {
@@ -264,6 +270,9 @@ function createExtension(Scratch, manifest, handlers) {
       return {
         id: manifest.id,
         name: manifest.name,
+        blockIconURI: manifest.developer
+          ? dsl4StructuredDataDebugBlockIconURI
+          : dsl4StructuredDataBlockIconURI,
         color1: manifest.developer ? '#555555' : '#2f6f9f',
         color2: manifest.developer ? '#444444' : '#275f88',
         color3: manifest.developer ? '#333333' : '#1f4f70',
