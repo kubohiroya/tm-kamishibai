@@ -81,6 +81,27 @@ action       ::= mapping(action-name => scalar-args | named-args)  # exactly one
 action-name  ::= global-command | actor-id "." actor-command
 ```
 
+### 2.1 `scenes` mappingの順序
+
+YAML 1.2のrepresentation modelではmappingは順序なしであり、mapping keyのserialization順を
+applicationの意味に使用しないことが原則です（[YAML 1.2.2 Mapping Key Order](https://yaml.org/spec/1.2.2/#3221-mapping-key-order)）。
+DSL 4.0はこの原則に対する明示的な固有規則として、
+`scenes` mappingだけはsource YAMLのserialization treeに現れるpairの順序をscene順と解釈します。
+最初のpairが通常実行の開始sceneになり、`goto`、`branch`、入力action等が別sceneを選ばない限り、
+scene末尾では次のpairのsceneへ進みます。Source Graphを使用する場合は、合成後のcanonical sourceに
+現れるpair順を同じ規則で解釈します。
+
+この規則は一般的なYAML mapping、JSON object、またはYAMLからmaterializeされたnative objectの列挙順を
+保証するものではありません。source frontendは`scenes`のYAML nodeが持つpair順、または全scene IDで
+それと同値な順序を保証する中間表現から`StoryDocument.scenes`を作り、native objectのproperty列挙規則を
+順序の正本にしてはいけません。scene IDは空でない任意の文字列であるため、数字だけのscene IDも例外なく
+sourceのpair順を保持します。JSON Schemaは`scenes`のshapeと件数を検証しますが、この順序セマンティクスは
+表現できないため、本節を正本とします。
+
+DSL 4.0対応のparser、converter、formatter、serializer、editorは、scene keyのアルファベット順、数値順、
+その他の順序への並べ替えを行ってはいけません。scene keyを並べ替えるとschema-validなまま台本の実行意味が
+変わります。parse、serialize、parseのround tripでもpair順と`StoryDocument.scenes`の順序を維持します。
+
 ## 3. アセット
 
 ### 3.1 短形式

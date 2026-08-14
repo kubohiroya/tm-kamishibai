@@ -80,7 +80,7 @@ Copyright © 2026 Hiroya Kubo.
 | Source Graph Frontend          | Source Graphをcomposed sourceへ変換し、production Source Frontendを呼び、診断とsource位置を宣言元sourceへ投影する、flag有効時だけの追加処理層                                                |
 | Source Frontend                | canonical sourceを上限付きYAML parse、JSON Schema、意味、resource上限、式の事前検査の順で検証し、成功時だけ`StoryDocument`を返すpureな検証境界                                               |
 | production Source Frontend     | pure Source Frontendへ固定Runtime Expression評価器を注入し、buildとruntimeで同じ式文法を検証する共通処理入口                                                                                 |
-| 上限付きYAML parse             | YAMLをobjectへ変換しつつ、文書数、node数、深さ、alias、tag、重複key等の許可範囲を検査する段階                                                                                                |
+| 上限付きYAML parse             | YAML serialization treeと検証用objectを作りつつ、文書数、node数、深さ、alias、tag、重複key等の許可範囲を検査する段階                                                                         |
 | JSON Schema検証                | key名、必須field、型、列挙値、object／array形状がDSL 4.0 schemaに一致するかを検査する段階                                                                                                    |
 | semantic検証                   | schemaだけでは判定できないID参照、scene遷移先、asset種別、action引数間の意味的整合性を検査する段階                                                                                           |
 | 式の事前検査（preflight）      | 条件式を実行せずにparseし、許可された文法、演算、参照、resource上限に収まることをbuild／startup時に確認する段階                                                                              |
@@ -264,7 +264,26 @@ Source Frontendへ渡します。図の中央にある`StoryDocument`が、sourc
 直接参照せず、sceneを記述順のarray、actionを型付き引数、source位置をSource Mapとして持つ
 正規化済み文書だけを実行します。
 
-### 2.2 モジュール責務
+### 2.2 scene順序の正規化契約
+
+YAML 1.2のmappingはrepresentation model上で順序を持ちませんが、DSL 4.0は表層仕様の固有規則として、
+`scenes` mappingのserialization tree上のpair順を通常実行のscene順にします。Source Frontendはこのpair列を
+順序の正本として検証済み`StoryDocument.scenes` arrayへ正規化します。JSON Schemaへ渡すobjectはshape検証用であり、
+そのproperty列挙順をscene順の正本としてはいけません。runtime、artifact、live reload、Source Graph frontendは
+正規化後のarrayだけを実行順として共有します。
+
+DSL 4.0対応toolはscene keyをsortせず、parse、serialize、parseのround tripで同じpair順を保持します。
+文字列keyの挿入順を保持するnative mapであっても、すべてのscene IDでYAML pair順と一致することをtool側が
+保証しない限り正本にはできません。特にECMAScriptのordinary objectはarray index相当のpropertyを数値昇順で
+列挙するため、数字だけのscene IDを含む台本ではsource順と一致しない場合があります。
+
+現行の[`source-frontend.js`](../../src/dsl4/source-frontend.js)は`Document#toJS()`で検証用objectを作り、
+[`story-document.js`](../../src/dsl4/story-document.js)はその`scenes`を`Object.entries()`で配列化しています。
+このため、例えばsourceで`"10"`、`"2"`、`"1"`の順にsceneを宣言しても、現行実装は`"1"`、`"2"`、
+`"10"`の順にmaterializeします。これは意図したDSL契約ではなく既知の適合差です。修正されるまで作者は
+数字だけのscene IDを避け、tool実装者はこの現行挙動を互換仕様として固定しません。
+
+### 2.3 モジュール責務
 
 | レイヤー                 | 主なmodule                                                                                                                                                                                                                                                                                                                                                                          | 責務                                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
