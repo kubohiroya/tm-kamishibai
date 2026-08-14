@@ -70,6 +70,29 @@ pnpm exec tmpose-kamishibai build-dsl4 \
   --max-total-asset-bytes 134217728
 ```
 
+### sceneの記述順
+
+DSL 4.0では、`scenes`へ最初に書いたsceneから通常実行を開始し、明示的な遷移がなければ記述順に
+次のsceneへ進みます。
+
+```yaml
+scenes:
+  opening: []
+  rescue: []
+  ending: []
+```
+
+YAML 1.2一般ではmappingに順序の意味はありません（[YAML 1.2.2 Mapping Key Order](https://yaml.org/spec/1.2.2/#3221-mapping-key-order)）。
+DSL 4.0は例外として、`scenes` mappingのsource上の
+pair順を実行順として使用します。このため、scene keyをアルファベット順や数値順へ並べ替えるformatter、
+serializer、editorを使用しないでください。並べ替え後もschema validationには成功しますが、台本の実行順が
+変わります。DSL 4.0対応toolはscene keyを保存時に並べ替えず、round tripで記述順を保持する必要があります。
+
+現行frontendはYAMLをJavaScript objectへmaterializeしてからsceneを配列化するため、`"10"`、`"2"`等の
+数字だけのscene IDでは記述順を保証できません。これは意図したDSL仕様ではなく既知の実装制約です。修正されるまで
+`scene10`、`scene2`のように数字以外を含むscene IDを使用してください。正式な順序契約は
+[DSL 4.0表層仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序)を参照してください。
+
 ### 台本作者向けアセット変換
 
 単一fileのDSL 4 projectでは、個別アセットまたは全アセットを`local`、`remote`、SB3内の

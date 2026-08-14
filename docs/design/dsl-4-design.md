@@ -922,6 +922,13 @@ StoryDocumentはパース完了後に変更しない不変データとします�
 保持するordered arrayとし、各sceneは名前に由来する一意なscene IDを持ちます。scene IDから
 配列位置を引くindexは派生データであり、StoryDocument本体とは分離します。
 
+この順序はYAML mapping一般の意味ではありません。YAML 1.2ではmapping keyはrepresentation model上で
+順序を持たないため、DSL 4.0は`scenes` mappingのserialization tree上のpair順をscene順とする固有規則を
+追加します。Source FrontendはYAML nodeのpair列からordered arrayを作り、materialize後のnative objectの
+property列挙順へ依存してはいけません。formatter、converter、serializerもscene keyをsortせず、round tripで
+pair順を保持します。JSON Schemaはmappingのshapeを検証しますが、この順序契約は表現しないため、表層仕様と
+Source Frontendの正規化契約で固定します。
+
 ### 6.2 正規化ActionNode `[決定済み]`
 
 短形式と長形式は、次のような同一構造へ変換します。
