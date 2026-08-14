@@ -152,6 +152,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(dsl4DefaultFeatureFlags), true);
@@ -192,6 +193,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: true,
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
+    dsl4TurboWarpActionSurface: true,
   });
   assert.equal(Object.isFrozen(dsl4StandardProductionFeatureFlags), true);
   assert.equal(
@@ -203,6 +205,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4AppShell: true,
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
+    dsl4TurboWarpActionSurface: true,
     dsl4WebPreviewAdapter: true,
     dsl4BrowserDistributionBuild: true,
     dsl4PreviewReloadOverlay: true,
@@ -235,6 +238,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   };
   assert.deepEqual(resolveDsl4FeatureFlags(), disabledFlags);
@@ -257,6 +261,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: true}), {
@@ -277,6 +282,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: true}), {
@@ -297,6 +303,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.deepEqual(resolveDsl4FeatureFlags({structuredDataIntegrationEnabled: true}), {
@@ -317,6 +324,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.throws(
@@ -343,6 +351,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4BubbleAdvanceIndicator: false,
       dsl4TurboWarpBubble: false,
       dsl4TurboWarpBubbleAdvancedPresentation: false,
+      dsl4TurboWarpActionSurface: false,
       structuredDataIntegrationEnabled: false,
     },
   );
@@ -364,6 +373,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.throws(() => resolveDsl4FeatureFlags({dsl4SpeechAdvanceTypewriter: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4BubbleAdvanceIndicator: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4TurboWarpBubble: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4TurboWarpActionSurface: 1}), TypeError);
   assert.throws(
     () => resolveDsl4FeatureFlags({dsl4TurboWarpBubbleAdvancedPresentation: 1}),
     TypeError,
@@ -379,6 +389,17 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.throws(
     () => resolveDsl4FeatureFlags({dsl4TurboWarpBubbleAdvancedPresentation: true}),
     /requires dsl4TurboWarpBubble/u,
+  );
+  assert.throws(
+    () => resolveDsl4FeatureFlags({dsl4TurboWarpActionSurface: true}),
+    /requires dsl4Runtime/u,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      dsl4Runtime: true,
+      dsl4TurboWarpActionSurface: true,
+    }).dsl4TurboWarpActionSurface,
+    true,
   );
   assert.equal(
     resolveDsl4FeatureFlags({
@@ -446,6 +467,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
       dsl4BubbleAdvanceIndicator: false,
       dsl4TurboWarpBubble: false,
       dsl4TurboWarpBubbleAdvancedPresentation: false,
+      dsl4TurboWarpActionSurface: false,
       structuredDataIntegrationEnabled: false,
     },
   );
@@ -519,6 +541,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: false,
   });
   assert.equal(Object.isFrozen(result.featureFlags), true);
@@ -692,6 +715,7 @@ test('enables internal Structured Data independently without exposing a generic 
     dsl4BubbleAdvanceIndicator: false,
     dsl4TurboWarpBubble: false,
     dsl4TurboWarpBubbleAdvancedPresentation: false,
+    dsl4TurboWarpActionSurface: false,
     structuredDataIntegrationEnabled: true,
   });
   assert.equal((await result.session.start()).status, 'finished');
@@ -770,6 +794,7 @@ test('creates a component-aware asset lifecycle after validation and releases it
       dsl4BubbleAdvanceIndicator: false,
       dsl4TurboWarpBubble: false,
       dsl4TurboWarpBubbleAdvancedPresentation: false,
+      dsl4TurboWarpActionSurface: false,
       structuredDataIntegrationEnabled: false,
     },
   });
@@ -908,6 +933,7 @@ test('creates an atomic runtime environment only after component validation', as
       dsl4BubbleAdvanceIndicator: false,
       dsl4TurboWarpBubble: false,
       dsl4TurboWarpBubbleAdvancedPresentation: false,
+      dsl4TurboWarpActionSurface: false,
       structuredDataIntegrationEnabled: false,
     },
   });

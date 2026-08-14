@@ -5,6 +5,9 @@ import test from 'node:test';
 import {
   dsl4ActionContextDefaultFeatureFlags,
   dsl4ActionContextManifest,
+  dsl4CoreActionManifest,
+  dsl4DefaultFeatureFlags,
+  dsl4StandardProductionFeatureFlags,
   dsl4StructuredDataDefaultFeatureFlags,
   dsl4StructuredDataDeveloperManifest,
   dsl4StructuredDataStandaloneManifest,
@@ -21,7 +24,11 @@ test('freezes the #265 Standard author and template-internal palette boundary', 
   assert.equal(contract.formatVersion, 1);
   assert.equal(contract.standardRuntime.extensionId, 'kubohiroyakamishibai4');
   assert.equal(contract.standardRuntime.runtimeComponentId, 'kubohiroyakamishibairuntime4');
-  assert.deepEqual(contract.standardRuntime.visibleOpcodes, []);
+  assert.deepEqual(
+    contract.standardRuntime.visibleOpcodes,
+    dsl4CoreActionManifest.map(({command}) => command),
+  );
+  assert.equal(new Set(contract.standardRuntime.visibleOpcodes).size, 23);
   assert.deepEqual(contract.standardRuntime.hiddenOpcodes, [
     'versionReporter',
     'statusReporter',
@@ -46,6 +53,16 @@ test('specifies the app shell as a startup-fixed default-off implementation flag
     implemented: true,
   });
   assert.equal(typeof createDsl4StandardAppShell, 'function');
+  assert.deepEqual(contract.featureFlags.turboWarpActionSurface, {
+    name: 'dsl4TurboWarpActionSurface',
+    defaultEnabled: false,
+    standardProductionEnabled: true,
+    startupFixed: true,
+    requires: ['dsl4Runtime'],
+    implemented: true,
+  });
+  assert.equal(dsl4DefaultFeatureFlags.dsl4TurboWarpActionSurface, false);
+  assert.equal(dsl4StandardProductionFeatureFlags.dsl4TurboWarpActionSurface, true);
 });
 
 test('keeps actual developer manifests aligned with the optional-surface contract', () => {

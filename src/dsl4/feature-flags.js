@@ -18,6 +18,7 @@ const featureFlagKeys = new Set([
   'dsl4BubbleAdvanceIndicator',
   'dsl4TurboWarpBubble',
   'dsl4TurboWarpBubbleAdvancedPresentation',
+  'dsl4TurboWarpActionSurface',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -39,6 +40,7 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4BubbleAdvanceIndicator: false,
   dsl4TurboWarpBubble: false,
   dsl4TurboWarpBubbleAdvancedPresentation: false,
+  dsl4TurboWarpActionSurface: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -48,6 +50,7 @@ export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4AppShell: true,
   dsl4PoseFeedbackModes: true,
   dsl4SpeechAdvanceTypewriter: true,
+  dsl4TurboWarpActionSurface: true,
 });
 
 // The non-embedded Standard SB3 is the authoring runner. Preview state remains session-only.
@@ -145,6 +148,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4TurboWarpBubbleAdvancedPresentation && !resolved.dsl4TurboWarpBubble) {
     throw new TypeError('dsl4TurboWarpBubbleAdvancedPresentation requires dsl4TurboWarpBubble');
+  }
+  if (resolved.dsl4TurboWarpActionSurface && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4TurboWarpActionSurface requires dsl4Runtime');
   }
   return deepFreeze(resolved);
 }

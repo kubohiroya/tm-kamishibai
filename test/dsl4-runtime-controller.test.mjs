@@ -584,6 +584,35 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('maps a block normalization rejection to the active runtime diagnostic', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+`);
+  let controller;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    port: {
+      async broadcastMessageAndWait() {
+        const error = new Error('invalid block input');
+        Object.defineProperty(error, 'code', {value: 'K4-BLOCK-ACTION-SCHEMA-001'});
+        await assert.rejects(
+          controller.rejectActionInvocation(error),
+          (failure) => failure === error,
+        );
+      },
+    },
+  });
+
+  await controller.start();
+
+  assert.equal(controller.getState().status, 'failed');
+  assert.equal(controller.getState().diagnostic.code, 'K4-BLOCK-ACTION-SCHEMA-001');
+});
+
 test('applies effective pose preview mirroring on every scene entry without changing recognition', async () => {
   const storyDocument = parseStory(`
 kamishibai: '4.0'

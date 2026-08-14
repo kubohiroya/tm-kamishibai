@@ -37,6 +37,11 @@ export {
 } from './posenet-bundle.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 export {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
+export {
+  createDsl4TurboWarpCoreActionBlockAdapter,
+  createDsl4TurboWarpCoreActionBlockSurface,
+  dsl4TurboWarpCoreActionBlockSpecs,
+} from './turbowarp-core-action-block.js';
 export {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 export {createDsl4TurboWarpPreviewSessionFactory} from './turbowarp-preview-session.js';
 export {
