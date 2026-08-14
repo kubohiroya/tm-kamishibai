@@ -157,7 +157,7 @@ version付きrelease sourceを差し替えません。`frozen`または`publishe
 - Standard展開ソースがRuntime 4一件を管理し、Web Linkを含まない
 - Standard SB3が`kubohiroyakamishibai4`一件だけをembedded URLから読み込む
 - runtime source先頭にheader、全構成要素のprovenanceが残る
-- Standard paletteのvisible DSL 4.0 blockが0で、preview専用opcodeを含まない
+- Standard paletteのvisible DSL 4.0 blockがcore action manifestと一致し、preview専用opcodeを含まない
 - 非埋め込みだけがpreviewを初期化し、埋め込みproductionは初期化しない
 - preview handle、candidate、reload preference、dialog stateをSB3に保存しない
 - exact dependency、lock integrity、license attributionが回帰testで検証される

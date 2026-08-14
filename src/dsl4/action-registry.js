@@ -1,3 +1,5 @@
+import {dsl4CoreActionManifest} from './core-action-manifest.js';
+
 const identifierPattern = /^[\p{L}_][\p{L}\p{N}_-]*$/u;
 const parameterTypes = new Set(['string', 'number', 'boolean']);
 const quiesceModes = new Set(['finish-only', 'cancel-replay-safe']);
@@ -6,34 +8,13 @@ const parameterKeys = new Set(['name', 'type', 'required']);
 const sourceKeys = new Set(['targetId', 'hatBlockId']);
 const snapshotKeys = new Set(['kind', 'version', 'actions']);
 
-export const dsl4GlobalCoreActionNames = Object.freeze([
-  'stage',
-  'bgm',
-  'sound',
-  'wait',
-  'debugger',
-  'broadcastMessageAndWait',
-  'transition',
-  'goto',
-  'branch',
-  'keyInputToChangeScene',
-  'touchInputToChangeScene',
-  'poseInputToChangeScene',
-]);
+export const dsl4GlobalCoreActionNames = Object.freeze(
+  dsl4CoreActionManifest.filter(({target}) => target === 'global').map(({command}) => command),
+);
 
-export const dsl4ActorCoreActionNames = Object.freeze([
-  'show',
-  'hide',
-  'setTransparency',
-  'moveTo',
-  'say',
-  'think',
-  'setSkin',
-  'setLayer',
-  'loop',
-  'setText',
-  'pose',
-]);
+export const dsl4ActorCoreActionNames = Object.freeze(
+  dsl4CoreActionManifest.filter(({target}) => target === 'actor').map(({command}) => command),
+);
 
 export const dsl4CoreActionNames = Object.freeze([
   ...dsl4GlobalCoreActionNames,

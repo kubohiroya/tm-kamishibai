@@ -4,6 +4,7 @@ import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
+import {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -1090,171 +1091,108 @@ export function createDsl4RuntimeController({
   }
 
   /**
+   * @param {Readonly<{target: string | null, args: Record<string, unknown>}>} payload
+   * @param {ActionContext} context
+   */
+  async function dispatchPose({target, args}, context) {
+    const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
+    const poseModel = String(currentScene()?.poseModel ?? '');
+    for (const [stepIndex, step] of steps.entries()) {
+      const stepController = new AbortController();
+      const handleActionAbort = () => stepController.abort(context.signal.reason);
+      if (context.signal.aborted) handleActionAbort();
+      else context.signal.addEventListener('abort', handleActionAbort, {once: true});
+      const poseWait = {
+        generation: context.generation,
+        stepIndex,
+        controller: stepController,
+        completion: deferred(),
+        cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
+        waitingForRecognition: false,
+        skipRequested: false,
+        skipReason: null,
+      };
+      if (
+        poseAdvanceLock?.generation === context.generation &&
+        poseAdvanceLock.stepIndex !== stepIndex
+      ) {
+        poseAdvanceLock = null;
+      }
+      activePoseWait = poseWait;
+      const stepContext = {
+        ...context,
+        signal: stepController.signal,
+        actionSignal: context.signal,
+      };
+      let skipped = false;
+      try {
+        if (typeof step.skin === 'string') {
+          await invokePort('setSkin', {target, skin: step.skin}, stepContext);
+          ensureActive(context);
+        }
+        poseWait.waitingForRecognition = true;
+        await invokePort(
+          'waitForPose',
+          {
+            target,
+            pose: step.pose,
+            stepIndex,
+            stepCount: steps.length,
+            poseModel,
+            recognition: cloneValue(poseSequenceRecognition),
+          },
+          stepContext,
+        );
+        if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
+          skipped = true;
+        }
+      } catch (error) {
+        const errorRecord = isRecord(error) ? error : {};
+        if (
+          !poseWait.skipRequested ||
+          context.signal.aborted ||
+          !isCurrent(context.generation) ||
+          errorRecord.name !== 'AbortError'
+        ) {
+          throw error;
+        }
+        skipped = true;
+      } finally {
+        poseWait.cleanup();
+        if (activePoseWait === poseWait) activePoseWait = null;
+        poseWait.completion.resolve(undefined);
+      }
+      if (skipped) {
+        emit('pose.step.skip', {
+          stepIndex,
+          reason: poseWait.skipReason ?? 'navigation.nextAction',
+        });
+        continue;
+      }
+      ensureActive(context);
+      if (typeof step.sound === 'string') {
+        await invokePort('bgm', {sound: step.sound}, context);
+        ensureActive(context);
+      }
+    }
+  }
+
+  const runtimeActionDispatcher = createDsl4RuntimeActionDispatcher({
+    invokePort,
+    resolveBranch,
+    resolveSpeechStyle,
+    getPoseModel: () => String(currentScene()?.poseModel ?? ''),
+    poseSelectionRecognition,
+    dispatchPose,
+  });
+
+  /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
    * @param {{rehearsalSceneSkip?: boolean}} [options]
-   * @returns {Promise<{sceneId: string, reason: string} | null>}
    */
-  async function dispatch(action, context, {rehearsalSceneSkip = false} = {}) {
-    const command = String(action.command);
-    const target = action.target === null ? null : String(action.target);
-    const args = /** @type {Record<string, unknown>} */ (action.args);
-    if (command === 'debugger') return null;
-    if (action.handler === 'custom') {
-      const outcome = await invokePort(
-        'customAction',
-        {name: command, target, arguments: cloneValue(args)},
-        context,
-      );
-      if (outcome === undefined || outcome === null) return null;
-      if (isRecord(outcome) && outcome.outcome === 'completed' && Object.keys(outcome).length === 1)
-        return null;
-      if (
-        isRecord(outcome) &&
-        outcome.outcome === 'transitioned' &&
-        typeof outcome.sceneId === 'string' &&
-        Object.keys(outcome).length === 2
-      ) {
-        return {sceneId: outcome.sceneId, reason: 'customAction'};
-      }
-      const error = new Error('Invalid custom action runtime result');
-      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
-      throw error;
-    }
-    if (command === 'goto') return {sceneId: String(args.scene), reason: 'goto'};
-    if (command === 'branch') {
-      return {sceneId: await resolveBranch(String(args.branch), context), reason: 'branch'};
-    }
-    if (command === 'keyInputToChangeScene') {
-      const routes = /** @type {Record<string, string>} */ (args.routes);
-      const selected = await invokePort(command, {codes: Object.keys(routes)}, context);
-      if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
-        const error = new Error(`Invalid key input result: ${String(selected)}`);
-        Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
-        throw error;
-      }
-      return {sceneId: routes[selected], reason: 'keyInput'};
-    }
-    if (command === 'touchInputToChangeScene') {
-      const routes = /** @type {Record<string, string>} */ (args.routes);
-      const selected = await invokePort(command, {actors: Object.keys(routes)}, context);
-      if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
-        const error = new Error(`Invalid touch input result: ${String(selected)}`);
-        Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
-        throw error;
-      }
-      return {sceneId: routes[selected], reason: 'touchInput'};
-    }
-    if (command === 'poseInputToChangeScene') {
-      const routes = /** @type {Record<string, string>} */ (args.routes);
-      const poseModel = String(currentScene()?.poseModel ?? '');
-      const selected = await invokePort(
-        command,
-        {
-          poses: Object.keys(routes),
-          poseModel,
-          recognition: cloneValue(poseSelectionRecognition),
-        },
-        context,
-      );
-      if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
-        const error = new Error(`Invalid pose input result: ${String(selected)}`);
-        Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-RESULT-001'});
-        throw error;
-      }
-      return {sceneId: routes[selected], reason: 'poseInput'};
-    }
-    if (command === 'pose') {
-      const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
-      const poseModel = String(currentScene()?.poseModel ?? '');
-      for (const [stepIndex, step] of steps.entries()) {
-        const stepController = new AbortController();
-        const handleActionAbort = () => stepController.abort(context.signal.reason);
-        if (context.signal.aborted) handleActionAbort();
-        else context.signal.addEventListener('abort', handleActionAbort, {once: true});
-        const poseWait = {
-          generation: context.generation,
-          stepIndex,
-          controller: stepController,
-          completion: deferred(),
-          cleanup: () => context.signal.removeEventListener('abort', handleActionAbort),
-          waitingForRecognition: false,
-          skipRequested: false,
-          skipReason: null,
-        };
-        if (
-          poseAdvanceLock?.generation === context.generation &&
-          poseAdvanceLock.stepIndex !== stepIndex
-        ) {
-          poseAdvanceLock = null;
-        }
-        activePoseWait = poseWait;
-        const stepContext = {
-          ...context,
-          signal: stepController.signal,
-          actionSignal: context.signal,
-        };
-        let skipped = false;
-        try {
-          if (typeof step.skin === 'string') {
-            await invokePort('setSkin', {target, skin: step.skin}, stepContext);
-            ensureActive(context);
-          }
-          poseWait.waitingForRecognition = true;
-          await invokePort(
-            'waitForPose',
-            {
-              target,
-              pose: step.pose,
-              stepIndex,
-              stepCount: steps.length,
-              poseModel,
-              recognition: cloneValue(poseSequenceRecognition),
-            },
-            stepContext,
-          );
-          if (poseWait.skipRequested && !context.signal.aborted && isCurrent(context.generation)) {
-            skipped = true;
-          }
-        } catch (error) {
-          const errorRecord = isRecord(error) ? error : {};
-          if (
-            !poseWait.skipRequested ||
-            context.signal.aborted ||
-            !isCurrent(context.generation) ||
-            errorRecord.name !== 'AbortError'
-          ) {
-            throw error;
-          }
-          skipped = true;
-        } finally {
-          poseWait.cleanup();
-          if (activePoseWait === poseWait) activePoseWait = null;
-          poseWait.completion.resolve(undefined);
-        }
-        if (skipped) {
-          emit('pose.step.skip', {
-            stepIndex,
-            reason: poseWait.skipReason ?? 'navigation.nextAction',
-          });
-          continue;
-        }
-        ensureActive(context);
-        if (typeof step.sound === 'string') {
-          await invokePort('bgm', {sound: step.sound}, context);
-          ensureActive(context);
-        }
-      }
-      return null;
-    }
-    const portArgs =
-      command === 'say' || command === 'think'
-        ? resolveSpeechStyle(command, args)
-        : rehearsalSceneSkip && command === 'transition'
-          ? {...args, seconds: 0}
-          : args;
-    await invokePort(command, target === null ? {...portArgs} : {target, ...portArgs}, context);
-    return null;
+  function dispatch(action, context, options) {
+    return runtimeActionDispatcher.dispatch(action, context, options);
   }
 
   /**

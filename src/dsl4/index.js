@@ -9,6 +9,7 @@ export {
   Dsl4ActionRegistryError,
   validateDsl4ActionRegistrySnapshot,
 } from './action-registry.js';
+export {dsl4CoreActionManifest, dsl4CustomActionSchemaDefinition} from './core-action-manifest.js';
 export {
   detectDsl4ActionRegistrySnapshot,
   dsl4ActionHatDetectorDefaultLimits,
@@ -174,6 +175,7 @@ export {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-por
 export {createDsl4PoseStateEvent} from './pose-feedback-policy.js';
 export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
+export {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 export {
   createDsl4RuntimeStartup,
   dsl4DefaultFeatureFlags,
