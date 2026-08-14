@@ -14,6 +14,7 @@ export default [
       'release-sources/**',
       'tmp/**',
       'src/dsl4/platform/posenet-bundle-assets.js',
+      'src/builder/runtime/dsl4-playback-runtime-extension.js',
       // These files are immutable build artifacts synchronized from their upstream repositories.
       'app/extensions/kubohiroyaassetmanager.js',
       'app/extensions/kubohiroyaasyncinput.js',

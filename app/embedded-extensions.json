@@ -142,7 +142,8 @@
         "text",
         "kubohiroyakamishibairuntime",
         "kubohiroyasvgtext"
-      ]
+      ],
+      "recoveryCapsule": false
     }
   ]
 }

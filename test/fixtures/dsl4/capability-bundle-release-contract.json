@@ -89,7 +89,7 @@
     {
       "id": "bubble",
       "package": "@kubohiroya/turbowarp-bubble",
-      "version": "0.5.0",
+      "version": "0.7.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-bubble",
       "compositionExport": "./turbowarp-adapter",
@@ -122,10 +122,11 @@
     {
       "id": "tmpose",
       "package": "@kubohiroya/turbowarp-tmpose",
-      "version": "1.8.0",
+      "version": "1.9.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
       "compositionExport": "./composition",
+      "poseNetExport": "./posenet",
       "standaloneExtensionId": "tmpose",
       "license": "MPL-2.0",
       "role": "pose model and recognition lifecycle"
@@ -158,7 +159,7 @@
     "@kubohiroya/turbowarp-async-input/composition": [
       "src/dsl4/platform/platform-asset-session.js"
     ],
-    "@kubohiroya/turbowarp-bubble": ["src/dsl4/platform/turbowarp-actor-adapter.js"],
+    "@kubohiroya/turbowarp-bubble/reveal": ["src/dsl4/platform/turbowarp-actor-adapter.js"],
     "@kubohiroya/turbowarp-bubble/turbowarp-adapter": [
       "src/dsl4/platform/bubble-platform.js",
       "src/dsl4/platform/turbowarp-runtime-host.js"
@@ -167,7 +168,8 @@
       "src/dsl4/platform/turbowarp-runtime-host.js"
     ],
     "@kubohiroya/turbowarp-svg-text/composition": ["src/dsl4/platform/svg-text-action-port.js"],
-    "@kubohiroya/turbowarp-tmpose/composition": ["src/dsl4/platform/tmpose-model-adapter.js"]
+    "@kubohiroya/turbowarp-tmpose/composition": ["src/dsl4/platform/tmpose-model-adapter.js"],
+    "@kubohiroya/turbowarp-tmpose/posenet": ["src/dsl4/platform/posenet-bundle.js"]
   },
   "bundleBoundaries": {
     "standard4": {
@@ -183,7 +185,7 @@
     },
     "legacy32": {
       "kind": "extensionBundles",
-      "unbundle": "recovery-capsule",
+      "unbundle": "source-rebuild",
       "provenance": ["app/project.source.json", "app/embedded-extensions.json"]
     }
   },

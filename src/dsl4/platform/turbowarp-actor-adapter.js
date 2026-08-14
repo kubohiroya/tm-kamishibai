@@ -1,4 +1,4 @@
-import {normalizeBubbleReveal, splitBubbleText} from '@kubohiroya/turbowarp-bubble';
+import {normalizeBubbleReveal, splitBubbleText} from '@kubohiroya/turbowarp-bubble/reveal';
 import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {applyDsl4MoveEasing, dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
 

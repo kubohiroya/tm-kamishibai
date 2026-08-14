@@ -10,10 +10,10 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-async-input': '0.4.0',
   '@kubohiroya/turbowarp-asset-manager': '0.11.0',
-  '@kubohiroya/turbowarp-bubble': '0.5.0',
+  '@kubohiroya/turbowarp-bubble': '0.7.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.4.0',
   '@kubohiroya/turbowarp-svg-text': '0.5.0',
-  '@kubohiroya/turbowarp-tmpose': '1.8.0',
+  '@kubohiroya/turbowarp-tmpose': '1.9.0',
 });
 
 test('pins every DSL4 extension to an exact npm release and matching lock entry', async () => {

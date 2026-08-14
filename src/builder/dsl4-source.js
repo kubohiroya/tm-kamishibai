@@ -12,10 +12,14 @@ import {
   validateDsl4EmbeddedSourceDescriptor,
 } from '../dsl4/source-descriptor.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from '../dsl4/source-origin-descriptor.js';
+import {validateDsl4PoseNetProjectBundle} from '../dsl4/platform/posenet-bundle.js';
+import {fromByteArray} from 'base64-js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 
 const channels = new Set(['bundled', 'unbundled']);
+const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
+const runtimeExtensionDataUrlPrefix = 'data:text/javascript;base64,';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -57,6 +61,35 @@ function optionalObjectProperty(parent, key) {
     fail(`Cannot inspect DSL 4.0 source because ${key} is not an object`, 'K4-SOURCE-STORAGE-001');
   }
   return parent[key];
+}
+
+/** @param {Record<string, unknown>} project @param {unknown} source */
+function installPlaybackRuntimeExtension(project, source) {
+  if (source === undefined) return;
+  if (
+    typeof source !== 'string' ||
+    source.length < 1 ||
+    source.length > 16 * 1024 * 1024 ||
+    !source.startsWith('// Name: Kamishibai DSL 4.0 Runtime') ||
+    !source.includes(`\n// ID: ${standardRuntimeExtensionId}\n`)
+  ) {
+    throw new TypeError(
+      'runtimeExtensionSource must be a bounded DSL 4.0 composite runtime source string',
+    );
+  }
+  if (
+    !Array.isArray(project.extensions) ||
+    !project.extensions.includes(standardRuntimeExtensionId) ||
+    !isRecord(project.extensionURLs) ||
+    typeof project.extensionURLs[standardRuntimeExtensionId] !== 'string'
+  ) {
+    fail(
+      'The base SB3 does not contain the Standard DSL 4.0 runtime extension',
+      'K4-RUNTIME-EXTENSION-PROFILE-001',
+    );
+  }
+  project.extensionURLs[standardRuntimeExtensionId] =
+    runtimeExtensionDataUrlPrefix + fromByteArray(new TextEncoder().encode(source));
 }
 
 /**
@@ -181,6 +214,8 @@ export async function embedDsl4SourceInSb3(baseSb3Bytes, descriptor, options) {
  * @param {number} [options.maxAssetFileBytes]
  * @param {number} [options.maxAssetBytes]
  * @param {unknown} [options.assetDistribution]
+ * @param {unknown} [options.poseNetBundle]
+ * @param {string} [options.runtimeExtensionSource]
  * @param {{digest: Function}} [options.subtleCrypto]
  */
 export async function installDsl4RuntimeComponent(
@@ -196,6 +231,8 @@ export async function installDsl4RuntimeComponent(
     assetBundle,
     assetBundleFormat = 'embedded-base64',
     assetDistribution,
+    poseNetBundle,
+    runtimeExtensionSource,
     maxAssetFiles,
     maxAssetFileBytes,
     maxAssetBytes,
@@ -285,8 +322,17 @@ export async function installDsl4RuntimeComponent(
       throw error;
     }
   }
+  const validatedPoseNetBundle =
+    poseNetBundle === undefined
+      ? undefined
+      : await validateDsl4PoseNetProjectBundle(poseNetBundle, {
+          subtleCrypto: /** @type {Pick<SubtleCrypto, 'digest'> | undefined} */ (
+            /** @type {unknown} */ (subtleCrypto)
+          ),
+        });
 
   const output = /** @type {Record<string, unknown>} */ (structuredClone(project));
+  installPlaybackRuntimeExtension(output, runtimeExtensionSource);
   const extensionStorage = objectProperty(output, 'extensionStorage');
   const {selected, opposite} = sourceContainers(
     extensionStorage,
@@ -297,7 +343,8 @@ export async function installDsl4RuntimeComponent(
     (opposite.source !== undefined ||
       opposite.artifact !== undefined ||
       opposite.assets !== undefined ||
-      opposite.assetDistribution !== undefined)
+      opposite.assetDistribution !== undefined ||
+      opposite.poseNet !== undefined)
   ) {
     fail(
       'DSL 4.0 runtime component already exists in the opposite storage channel',
@@ -341,6 +388,9 @@ export async function installDsl4RuntimeComponent(
   selected.artifact = structuredClone(validatedArtifactSuccess.artifact);
   selected.application = {mode: 'story'};
   if (validatedAssets) selected.assets = structuredClone(validatedAssets.descriptor);
+  if (validatedPoseNetBundle !== undefined) {
+    selected.poseNet = structuredClone(validatedPoseNetBundle);
+  }
   if (assetDistribution !== undefined)
     selected.assetDistribution = structuredClone(assetDistribution);
   else delete selected.assetDistribution;

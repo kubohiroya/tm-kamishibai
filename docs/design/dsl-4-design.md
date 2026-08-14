@@ -77,7 +77,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 - memberごとのIDとdata URLを一つのbundle IDとdata URLへ変換する
 - block、monitor、menu、custom field、hat、extension storageをmember namespaceへ写す
 - memberからの`runtime.startHats()`と`runtime.getOpcodeFunction()`をbundle opcodeへ変換する
-- 個別sourceとprovenanceを展開ソースに残し、既定ではそこからunbundle可能にする。SB3単体の復元カプセルはopt-inとする
+- 個別sourceとprovenanceを展開ソースに残し、既定では重複する復元カプセルを省く
+- 追跡済みの展開ソースからunbundleでき、生成SB3単体からの直接復元が必要な場合だけ復元カプセルを明示する
 - 安全に分類できないmemberや未分類opcode参照を、推測で変換せずbuild errorにする
 
 したがって4.0では、独自の合成系を先に新設せず、現行`extensionBundles`契約を第一候補とします。
@@ -1904,7 +1905,7 @@ fixtureで再現してから検討します。
 | 登録         | runtime wrapperがmemberのregisterを捕捉し、Compositeを1回登録 | composition rootがserviceを組み立て、完成した拡張を1回登録 |
 | member間連携 | block opcode、`startHats()`、`getOpcodeFunction()`、VM API    | import、型付きinterface、port、直接のmethod call           |
 | 更新単位     | memberのGitHub commitまたはnpm version                        | composition APIを公開するpackage version                   |
-| 可逆性       | 既定は個別sourceからunbundle可能。SB3単体の復元はopt-in       | 別途Standalone buildとopcode変換／復元契約が必要           |
+| 可逆性       | 個別sourceからunbundle可能。復元カプセルは明示時だけ付加      | 別途Standalone buildとopcode変換／復元契約が必要           |
 | 互換性検査   | block API manifestと保存済みproject参照                       | TypeScript型、service API version、統合testが別途必要      |
 
 #### 11.3.2 現行memberの依存監査
@@ -1929,7 +1930,7 @@ wrapperの保証範囲に入るかをfixtureで確認します。保証できな
 - Standalone ID、元opcode、block graph、extension storage、個別sourceを正本として維持できる
 - member更新、API互換性検査、bundle生成を別工程にし、更新失敗をmember単位で戻せる
 - build時にmember JavaScriptを実行せず、未分類参照や未対応形式をfail-closedで拒否できる
-- 生成SB3からunbundleでき、3.2のStandalone運用と編集資産を残せる
+- 個別sourceからunbundleでき、3.2のStandalone運用と編集資産を残せる
 - memberごとのIssue、test、release周期を維持し、4.0実装の前提変更を最小化できる
 
 #### 11.3.4 現行`extensionBundles`の欠点
@@ -2431,7 +2432,7 @@ runtimeで追加コードをdownloadしません。
 - SB3新規読込で拡張許可が一回で済む
 - 個別sourceのID／opcode／storageを保持し、生成SB3だけがComposite namespaceを使う
 - member間`startHats()`／`getOpcodeFunction()`がComposite opcodeへ変換される
-- 展開sourceからのunbundleで個別memberのURL、順序、storageを復元できる
+- 展開ソースからのunbundleで個別memberのURL、順序、storageを復元できる
 - GitHub／npm providerのstatus、sync、updateとAPI互換性検査をmember単位で行える
 - parse error時にgreen flag処理が実行へ進まない
 - SVGにline、column、excerpt、messageが表示される

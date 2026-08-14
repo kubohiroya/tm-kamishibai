@@ -95,6 +95,11 @@ test('renders ordered versioned download cards from one release catalog', async 
     '0.8.0',
     'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
+  assert.equal(
+    packageJson.devDependencies['@kubohiroya/sb3-toolchain-legacy'],
+    'npm:@kubohiroya/sb3-toolchain@0.6.0',
+    'Only immutable 3.2.3 replay may use the exact historical toolchain alias.',
+  );
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
     readme,

@@ -30,9 +30,16 @@ export {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 export {createDsl4BubblePlatform} from './bubble-platform.js';
 export {createDsl4TMPoseModelAdapter, createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
 export {
+  createDsl4PoseNetProjectBundle,
+  createDsl4PoseNetProjectBundleFromLoader,
   createDsl4BundledTMPoseRuntime,
+  createDsl4ProjectTMPoseRuntime,
   dsl4PoseNetBundleManifest,
+  dsl4PoseNetBundleStoragePaths,
   dsl4PoseNetModelDefaults,
+  loadDsl4PoseNetProjectBundle,
+  loadDsl4PoseNetProjectBundleData,
+  validateDsl4PoseNetProjectBundle,
   verifyDsl4PoseNetBundle,
 } from './posenet-bundle.js';
 export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';

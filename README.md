@@ -428,15 +428,16 @@ scenes:
 文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
 sceneのasset依存へ含まれます。
 
-DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble` Compositionが所有します。
+DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble@0.7.0` Compositionが所有します。
 `textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
 `HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
 portraitのbase／blink／lip-syncと`continueIndicator`のframe assetもstyleへ宣言でき、参照sceneの
-lazy dependencyとして読み込まれます。Bubble 0.4のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
+lazy dependencyとして読み込まれます。文字送りの純粋関数は軽量な`./reveal`から、表示surfaceは
+`./turbowarp-adapter`から読み込みます。Bubble 0.7のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
 TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
 本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
 
-Bubble 0.4では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
+Bubble 0.7では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
 `LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
 animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
 外形animationを同じsurface上で実行します。native revealと旧`characterIntervalSeconds`系は同じ
@@ -530,8 +531,10 @@ pnpm install
 `scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
 
 `pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.8.0`を使用します。
-公開済み3.x成果物の再現だけは`@kubohiroya/sb3-toolchain@0.6.0`のaliasへ固定します。CIでも
-`pnpm verify:full`を通して`pnpm sb3:check`を実行し、同じ現行ツールチェインで`app/`を検証します。
+公開済み3.2.3の再現だけは、当時の出力hashを変えないため
+`@kubohiroya/sb3-toolchain@0.6.0`のnpm aliasへ固定します。CIでも`pnpm verify:full`を通して
+`pnpm sb3:check`を実行し、同じ現行ツールチェインで`app/`を検証します。現行sourceの生成・検証には
+このlegacy aliasを使用しません。
 
 GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として
 生成します。公開済み系列の入力は`release-sources/<version>/`へ固定し、build dateとSHA-256も
