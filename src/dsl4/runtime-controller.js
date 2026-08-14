@@ -1282,6 +1282,30 @@ export function createDsl4RuntimeController({
     return operation;
   }
 
+  /** @param {unknown} error */
+  function rejectActionInvocation(error) {
+    const context = activeActionContext;
+    if (
+      status !== 'running' ||
+      !context ||
+      context.signal.aborted ||
+      !isCurrent(context.generation)
+    ) {
+      return Promise.reject(
+        invocationError(
+          'K4-RUNTIME-INVOKE-INACTIVE',
+          'TurboWarp actions require an active DSL 4.0 action',
+        ),
+      );
+    }
+    const failure =
+      error instanceof Error
+        ? error
+        : invocationError('K4-BLOCK-ACTION-001', 'TurboWarp action input is invalid');
+    fail(failure);
+    return Promise.reject(failure);
+  }
+
   async function waitForNestedInvocations() {
     while (activeNestedInvocations.size > 0) {
       await Promise.all([...activeNestedInvocations]);
@@ -2205,6 +2229,7 @@ export function createDsl4RuntimeController({
     start,
     stop,
     invokeAction,
+    rejectActionInvocation,
     canAdvance,
     canRehearsalSkip,
     acceptAdvanceInput,

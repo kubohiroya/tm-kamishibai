@@ -24,6 +24,7 @@ import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
+  dsl4CoreActionManifest,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
 import {dsl4StandardProductionFeatureFlags} from '../src/dsl4/feature-flags.js';
@@ -568,6 +569,14 @@ async function assertFreshBrowserBuiltStoryRuns(archive) {
 
 test('builds the current DSL 4.0 runtime with one shared TensorFlow.js registry', async () => {
   const extensionSource = (await createDsl4RuntimeExtensionSource()).toString('utf8');
+  for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
+    assert.equal(enabled, true);
+    assert.equal(
+      extensionSource.includes(`${flag}:!0`),
+      true,
+      `The current Standard runtime must enable ${flag}.`,
+    );
+  }
   assert.match(extensionSource, /var tmPose=/u);
   assert.match(
     extensionSource,
@@ -655,12 +664,18 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
   assert.doesNotMatch(extensionSource, /kubohiroyaweblink|SB3-Toolchain-Reversible-Bundle-v1/u);
   for (const [flag, enabled] of Object.entries(dsl4StandardProductionFeatureFlags)) {
     assert.equal(enabled, true);
+    if (flag === 'dsl4TurboWarpActionSurface') continue;
     assert.equal(
       extensionSource.includes(`${flag}:!0`),
       true,
       `The Standard release bundle must enable ${flag}.`,
     );
   }
+  assert.doesNotMatch(
+    extensionSource,
+    /dsl4TurboWarpActionSurface/u,
+    'The immutable 4.0.0-rc.3 artifact must not be rewritten for a later feature.',
+  );
   assert.match(extensionSource, /display:none/u);
   for (const title of [
     'Asset Manager',
@@ -1043,6 +1058,40 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
     restoreGlobals();
     if (previousOpen === undefined) Reflect.deleteProperty(globalThis, 'open');
     else globalThis.open = previousOpen;
+  }
+});
+
+test('registers all 23 core action blocks as visible VM primitives', async () => {
+  const result = await buildCurrentRuntimeRelease();
+  const restoreGlobals = installUnsandboxedScriptDom();
+  const vm = new VirtualMachine();
+  try {
+    vm.setCompatibilityMode(false);
+    vm.setTurboMode(false);
+    vm.setCompilerOptions({enabled: false});
+    vm.securityManager.canLoadExtensionFromProject = () => true;
+    vm.securityManager.getSandboxMode = () => 'unsandboxed';
+    await loadProjectQuietly(vm, result.archive);
+
+    const commands = dsl4CoreActionManifest.map(({command}) => command);
+    const category = vm.runtime._blockInfo.find(({id}) => id === bundleExtensionId);
+    assert(category, 'The embedded DSL 4.0 runtime category was not registered.');
+    assert.deepEqual(
+      category.blocks
+        .filter(({info}) => info.opcode && info.hideFromPalette !== true)
+        .map(({info}) => info.opcode),
+      commands,
+    );
+    for (const command of commands) {
+      assert.equal(
+        typeof vm.runtime.getOpcodeFunction(`${bundleExtensionId}_${command}`),
+        'function',
+        command,
+      );
+    }
+  } finally {
+    vm.quit();
+    restoreGlobals();
   }
 });
 

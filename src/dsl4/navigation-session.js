@@ -479,6 +479,11 @@ export function createDsl4NavigationSession({
       }
       return controller.invokeAction(action);
     },
+    /** @param {unknown} error */
+    rejectActionInvocation(error) {
+      if (disposed) return Promise.reject(new TypeError('Navigation session is disposed'));
+      return controller.rejectActionInvocation(error);
+    },
     dispatchCommand,
     attach: inputAdapter.attach,
     attachStagePointer: inputAdapter.attachPointer,

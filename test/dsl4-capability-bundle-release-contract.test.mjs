@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 
 import {downloadCatalog} from '../scripts/download-catalog.mjs';
+import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
+import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const contract = JSON.parse(
@@ -126,7 +128,18 @@ test('ships the Standard artifact as one embedded runtime extension', async () =
   const opcodes = [...entrypoint.matchAll(/opcode: '([^']+)'/gu)].map((match) => match[1]);
   assert.deepEqual(opcodes, contract.standardArtifact.hiddenOpcodes);
   assert.equal((entrypoint.match(/hideFromPalette: true/gu) ?? []).length, opcodes.length);
-  assert.deepEqual(contract.standardArtifact.visibleOpcodes, []);
+  assert.deepEqual(
+    contract.standardArtifact.visibleOpcodes,
+    dsl4CoreActionManifest.map(({command}) => command),
+  );
+  assert.deepEqual(
+    dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
+    contract.standardArtifact.visibleOpcodes,
+  );
+  assert.match(entrypoint, /createDsl4TurboWarpCoreActionBlockSurface/u);
+  for (const opcode of contract.standardArtifact.visibleOpcodes) {
+    assert.match(entrypoint, new RegExp(`\\n  ${opcode}\\(args\\)`, 'u'));
+  }
   assert.doesNotMatch(JSON.stringify(project.extensionURLs), /https?:/u);
 
   const persisted = JSON.stringify(project);

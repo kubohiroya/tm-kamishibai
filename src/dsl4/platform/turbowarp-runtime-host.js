@@ -1306,7 +1306,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   if (!startup.ok) return deepFreeze({...startup, host: null});
 
   const successfulStartup =
-    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
+    /** @type {Readonly<{featureFlags: Readonly<{dsl4Runtime: boolean, dsl4BroadcastMessageAndWait: boolean, dsl4SessionBinaryBacking: boolean, dsl4AppShell: boolean, dsl4WebPreviewAdapter: boolean, dsl4WebPreviewAssetLiveReload: boolean, dsl4PreviewReloadOverlay: boolean, dsl4PoseFeedbackModes: boolean, dsl4PosePreviewMirroring: boolean, dsl4CameraPreviewControls: boolean, dsl4SpeechAdvanceTypewriter: boolean, dsl4BubbleAdvanceIndicator: boolean, dsl4TurboWarpBubble: boolean, dsl4TurboWarpBubbleAdvancedPresentation: boolean, dsl4TurboWarpActionSurface: boolean, structuredDataIntegrationEnabled: boolean}>, channel: 'bundled' | 'unbundled', runtimeComponent: Readonly<Record<string, unknown>>, session: Readonly<Record<string, Function>>}>} */ (
       /** @type {unknown} */ (startup)
     );
   const session = successfulStartup.session;
@@ -1453,6 +1453,11 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
     invokeAction(action) {
       ensureActive();
       return session.invokeAction(action);
+    },
+    /** @param {unknown} error */
+    rejectActionInvocation(error) {
+      ensureActive();
+      return session.rejectActionInvocation(error);
     },
     /** @param {unknown} target */
     attach(target) {

@@ -617,12 +617,22 @@ export function createDsl4LiveReloadSession({
     return Promise.resolve(current.session.invokeAction(action));
   }
 
+  /** @param {unknown} error */
+  function rejectActionInvocation(error) {
+    if (disposed) return Promise.reject(new TypeError('live reload session is disposed'));
+    if (!current || typeof current.session.rejectActionInvocation !== 'function') {
+      return Promise.reject(new TypeError('live reload has no action-capable current runtime'));
+    }
+    return Promise.resolve(current.session.rejectActionInvocation(error));
+  }
+
   return Object.freeze({
     stage,
     defer,
     discardCandidate,
     commit,
     invokeAction,
+    rejectActionInvocation,
     dispose,
     getState: snapshot,
     async whenIdle() {

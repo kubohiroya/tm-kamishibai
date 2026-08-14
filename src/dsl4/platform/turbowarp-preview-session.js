@@ -383,6 +383,11 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         if (disposed) return Promise.reject(disposedError());
         return initialize().then((session) => session.invokeAction(action));
       },
+      /** @param {unknown} error */
+      rejectActionInvocation(error) {
+        if (disposed) return Promise.reject(disposedError());
+        return initialize().then((session) => session.rejectActionInvocation(error));
+      },
       /** @param {{candidateId: number}} quiesceOptions */
       quiesce(quiesceOptions) {
         if (disposed) return Promise.reject(disposedError());

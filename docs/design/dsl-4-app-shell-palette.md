@@ -84,8 +84,9 @@ blockからのaction呼び出しは、別controllerや別の変数snapshotを作
 `K4-RUNTIME-INVOKE-TRANSITION-CONFLICT`でfail closedとします。active action外の呼び出しも
 `K4-RUNTIME-INVOKE-INACTIVE`で拒否します。
 
-移行中は`dsl4TurboWarpActionSurface`を起動時固定・既定OFFとします。全23 actionの実VM回帰が完了するまで、
-既存Standard成果物のvisible opcode契約は切り替えません。
+`dsl4TurboWarpActionSurface`は起動時固定・既定OFFとし、Standard production profileだけが明示的にONにします。
+全23 actionのmanifest、Schema adapter、opcode実装、実VM回帰を同じrelease契約で検証します。問題がある場合は
+Standard production profileの同flagをOFFに戻し、既存のYAML実行経路を変えずにpaletteだけを即時rollbackします。
 
 ### 3.2 template内部control
 

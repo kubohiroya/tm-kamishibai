@@ -4,7 +4,31 @@
   "standardRuntime": {
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
-    "visibleOpcodes": [],
+    "visibleOpcodes": [
+      "stage",
+      "bgm",
+      "sound",
+      "wait",
+      "debugger",
+      "broadcastMessageAndWait",
+      "transition",
+      "goto",
+      "branch",
+      "keyInputToChangeScene",
+      "touchInputToChangeScene",
+      "poseInputToChangeScene",
+      "show",
+      "hide",
+      "setTransparency",
+      "moveTo",
+      "say",
+      "think",
+      "setSkin",
+      "setLayer",
+      "loop",
+      "setText",
+      "pose"
+    ],
     "hiddenOpcodes": [
       "versionReporter",
       "statusReporter",
@@ -22,6 +46,14 @@
     "appShell": {
       "name": "dsl4AppShell",
       "defaultEnabled": false,
+      "startupFixed": true,
+      "requires": ["dsl4Runtime"],
+      "implemented": true
+    },
+    "turboWarpActionSurface": {
+      "name": "dsl4TurboWarpActionSurface",
+      "defaultEnabled": false,
+      "standardProductionEnabled": true,
       "startupFixed": true,
       "requires": ["dsl4Runtime"],
       "implemented": true

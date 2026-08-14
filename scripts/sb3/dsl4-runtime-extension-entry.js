@@ -37,6 +37,10 @@ import {
 } from '../../src/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {createDsl4TurboWarpPreviewSessionFactory} from '../../src/dsl4/platform/turbowarp-preview-session.js';
+import {
+  createDsl4TurboWarpCoreActionBlockAdapter,
+  createDsl4TurboWarpCoreActionBlockSurface,
+} from '../../src/dsl4/platform/turbowarp-core-action-block.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {createDsl4PreviewProtocolSession} from '../../src/dsl4/preview-protocol.js';
 import {loadDsl4RuntimeComponent} from '../../src/dsl4/runtime-artifact-loader.js';
@@ -167,6 +171,7 @@ class KamishibaiDsl4RuntimeExtension {
   constructor(Scratch) {
     this.Scratch = Scratch;
     this.frontend = createDsl4ProductionSourceFrontend(schema);
+    this.coreActionBlockAdapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
     this.shell = null;
     this.errorIndicator = null;
     this.warningIndicator = null;
@@ -199,6 +204,10 @@ class KamishibaiDsl4RuntimeExtension {
 
   getInfo() {
     const {ArgumentType, BlockType} = this.Scratch;
+    const coreActionSurface = createDsl4TurboWarpCoreActionBlockSurface(
+      {ArgumentType, BlockType},
+      {visible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpActionSurface},
+    );
     return {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
@@ -214,6 +223,7 @@ class KamishibaiDsl4RuntimeExtension {
         )
         .join('\n'),
       blocks: [
+        ...coreActionSurface.blocks,
         {
           opcode: 'versionReporter',
           blockType: BlockType.REPORTER,
@@ -284,6 +294,7 @@ class KamishibaiDsl4RuntimeExtension {
           hideFromPalette: true,
         },
       ],
+      menus: coreActionSurface.menus,
     };
   }
 
@@ -361,6 +372,131 @@ class KamishibaiDsl4RuntimeExtension {
   toggleTitleLanguage() {
     this.titleLocale = this.titleLocale === 'ja' ? 'en' : 'ja';
     this.showScratchTitle(this.titleLocale);
+  }
+
+  actionInvoker() {
+    const invoker = this.shell?.runtimeHost ?? this.previewLiveReload;
+    if (
+      !invoker ||
+      typeof invoker.invokeAction !== 'function' ||
+      typeof invoker.rejectActionInvocation !== 'function'
+    ) {
+      const error = new Error('A running DSL 4.0 story is required for action blocks');
+      Object.defineProperty(error, 'code', {value: 'K4-BLOCK-RUNTIME-INACTIVE'});
+      throw error;
+    }
+    return invoker;
+  }
+
+  async invokeCoreActionBlock(command, args) {
+    let invoker;
+    try {
+      invoker = this.actionInvoker();
+      const action = this.coreActionBlockAdapter.createAction(command, args);
+      return await invoker.invokeAction(action);
+    } catch (error) {
+      if (invoker) {
+        try {
+          await invoker.rejectActionInvocation(error);
+        } catch {
+          // The original normalized block failure remains authoritative.
+        }
+      }
+      this.reportFailure(error, `action-${command}`);
+      return undefined;
+    }
+  }
+
+  stage(args) {
+    return this.invokeCoreActionBlock('stage', args);
+  }
+
+  bgm(args) {
+    return this.invokeCoreActionBlock('bgm', args);
+  }
+
+  sound(args) {
+    return this.invokeCoreActionBlock('sound', args);
+  }
+
+  wait(args) {
+    return this.invokeCoreActionBlock('wait', args);
+  }
+
+  debugger(args) {
+    return this.invokeCoreActionBlock('debugger', args);
+  }
+
+  broadcastMessageAndWait(args) {
+    return this.invokeCoreActionBlock('broadcastMessageAndWait', args);
+  }
+
+  transition(args) {
+    return this.invokeCoreActionBlock('transition', args);
+  }
+
+  goto(args) {
+    return this.invokeCoreActionBlock('goto', args);
+  }
+
+  branch(args) {
+    return this.invokeCoreActionBlock('branch', args);
+  }
+
+  keyInputToChangeScene(args) {
+    return this.invokeCoreActionBlock('keyInputToChangeScene', args);
+  }
+
+  touchInputToChangeScene(args) {
+    return this.invokeCoreActionBlock('touchInputToChangeScene', args);
+  }
+
+  poseInputToChangeScene(args) {
+    return this.invokeCoreActionBlock('poseInputToChangeScene', args);
+  }
+
+  show(args) {
+    return this.invokeCoreActionBlock('show', args);
+  }
+
+  hide(args) {
+    return this.invokeCoreActionBlock('hide', args);
+  }
+
+  setTransparency(args) {
+    return this.invokeCoreActionBlock('setTransparency', args);
+  }
+
+  moveTo(args) {
+    return this.invokeCoreActionBlock('moveTo', args);
+  }
+
+  say(args) {
+    return this.invokeCoreActionBlock('say', args);
+  }
+
+  think(args) {
+    return this.invokeCoreActionBlock('think', args);
+  }
+
+  setSkin(args) {
+    return this.invokeCoreActionBlock('setSkin', args);
+  }
+
+  setLayer(args) {
+    return this.invokeCoreActionBlock('setLayer', args);
+  }
+
+  loop(args) {
+    return this.invokeCoreActionBlock('loop', args);
+  }
+
+  setText(args) {
+    return this.invokeCoreActionBlock('setText', args);
+  }
+
+  pose(args) {
+    return this.invokeCoreActionBlock('pose', args);
   }
 
   ensureApplicationMenu() {
