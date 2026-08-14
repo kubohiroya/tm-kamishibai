@@ -799,6 +799,10 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   await first.start();
   assert.deepEqual(resets, ['reset']);
   assert.equal(first.getState().runtime.status, 'finished');
+  await assert.rejects(
+    first.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+  );
 
   const second = await createSession({
     storyDocument: changed.storyDocument,
@@ -821,6 +825,10 @@ test('creates browser preview sessions from wire StoryDocuments without parsing 
   await third.start();
   assert.deepEqual(resets, ['reset', 'reset']);
   await third.dispose('preview-test');
+  await assert.rejects(
+    third.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    /disposed/u,
+  );
   assert.equal(log.filter((entry) => entry[0] === 'media.create').length, 3);
   assert.equal(log.filter((entry) => entry[0] === 'media.release-all').length, 3);
 });
@@ -2590,6 +2598,10 @@ test('creates an idle host, attaches explicitly, runs, and disposes every owned 
   assert.equal(Object.isFrozen(fixture.runtime), false);
   assert.equal(Object.isFrozen(fixture.runtime.targets[0]), false);
   assert.equal(result.host.getState().runtime.status, 'idle');
+  await assert.rejects(
+    result.host.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    (error) => error.code === 'K4-RUNTIME-INVOKE-INACTIVE',
+  );
   assert.equal(
     log.some(([name]) => name === 'listener.add'),
     false,

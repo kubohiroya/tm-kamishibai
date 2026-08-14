@@ -88,6 +88,50 @@ controls:
       Space: navigation.nextAction
 `;
 
+test('exposes active TurboWarp action invocation without creating a second controller', async () => {
+  const story = parseStory(`
+kamishibai: '4.0'
+${controls}
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+`);
+  let session;
+  let nestedResult;
+  const contexts = [];
+  const created = createDsl4NavigationSession({
+    storyDocument: story,
+    controlProfile: 'production',
+    broadcastMessageAndWaitEnabled: true,
+    port: {
+      async broadcastMessageAndWait(_payload, context) {
+        contexts.push(context);
+        nestedResult = await session.invokeAction({
+          command: 'wait',
+          target: null,
+          args: {seconds: 0},
+        });
+      },
+      async wait(_payload, context) {
+        contexts.push(context);
+      },
+    },
+  });
+  assert.equal(created.ok, true, JSON.stringify(created.diagnostics));
+  session = created.session;
+
+  await session.start();
+
+  assert.deepEqual(nestedResult, {outcome: 'completed'});
+  assert.equal(contexts.length, 2);
+  assert.equal(contexts[0], contexts[1]);
+  session.dispose();
+  await assert.rejects(
+    session.invokeAction({command: 'wait', target: null, args: {seconds: 0}}),
+    (error) => error.code === 'K4-NAVIGATION-DISPOSED',
+  );
+});
+
 test('history-free profile creates no history state and dispatches only its selected keymap', async () => {
   const pending = deferred();
   let stageCalls = 0;

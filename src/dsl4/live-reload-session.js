@@ -602,11 +602,27 @@ export function createDsl4LiveReloadSession({
     });
   }
 
+  /** @param {Readonly<Record<string, unknown>>} action */
+  function invokeAction(action) {
+    if (disposed) {
+      const error = new Error('live reload session is disposed');
+      Object.defineProperty(error, 'code', {value: 'K4-RELOAD-INVOKE-DISPOSED'});
+      return Promise.reject(error);
+    }
+    if (!current || typeof current.session.invokeAction !== 'function') {
+      const error = new Error('live reload has no action-capable current runtime');
+      Object.defineProperty(error, 'code', {value: 'K4-RELOAD-INVOKE-INACTIVE'});
+      return Promise.reject(error);
+    }
+    return Promise.resolve(current.session.invokeAction(action));
+  }
+
   return Object.freeze({
     stage,
     defer,
     discardCandidate,
     commit,
+    invokeAction,
     dispose,
     getState: snapshot,
     async whenIdle() {

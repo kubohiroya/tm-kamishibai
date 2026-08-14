@@ -50,6 +50,10 @@ function fakeSession(runtime, events, name) {
       quiesceToken = null;
       return state;
     },
+    invokeAction(action) {
+      events.push([name, 'invokeAction', action]);
+      return Promise.resolve({outcome: 'completed'});
+    },
     dispose(reason) {
       events.push([name, 'dispose', reason]);
       disposed = true;
@@ -95,6 +99,38 @@ scenes:
         stableId: active-wait
     - wait: 2
 `;
+
+test('routes action invocation directly to the active live reload generation', async () => {
+  const events = [];
+  const storyDocument = parse(initialSource).storyDocument;
+  const currentSession = fakeSession(
+    {
+      status: 'running',
+      sceneId: 'opening',
+      actionIndex: 0,
+      actionPath: '/scenes/opening/actions/0',
+      variables: {score: 0},
+    },
+    events,
+    'current',
+  );
+  const liveReload = createDsl4LiveReloadSession({
+    initialStoryDocument: storyDocument,
+    initialSession: currentSession,
+    createSession() {
+      assert.fail('action invocation must not create a reload generation');
+    },
+  });
+  const action = {command: 'wait', target: null, args: {seconds: 0}};
+
+  assert.deepEqual(await liveReload.invokeAction(action), {outcome: 'completed'});
+  assert.deepEqual(events, [['current', 'invokeAction', action]]);
+  await liveReload.dispose();
+  await assert.rejects(
+    liveReload.invokeAction(action),
+    (error) => error.code === 'K4-RELOAD-INVOKE-DISPOSED',
+  );
+});
 
 test('waits through an invalid initial source and auto-starts the first valid snapshot', async () => {
   const events = [];
