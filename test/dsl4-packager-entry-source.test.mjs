@@ -294,6 +294,9 @@ test('registers the actual Plain HTML and zip-one-asset ZIP closure before loadP
       html.indexOf(attach) < html.indexOf('await scaffolding.loadProject(projectData)'),
       true,
     );
+    const embeddedRuntime =
+      target === 'html' ? html : strFromU8(unzipSync(result.data)['script.js']);
+    assert.equal(embeddedRuntime.includes('getContext("2d",{willReadFrequently:!0})'), true);
     if (target === 'zip-one-asset') {
       const outer = unzipSync(result.data);
       const inner = unzipSync(outer['project.zip']);
