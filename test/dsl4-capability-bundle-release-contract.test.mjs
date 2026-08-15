@@ -95,10 +95,11 @@ test('keeps every external capability on its reviewed composition boundary', asy
 });
 
 test('ships the Standard artifact as one compact static extension bundle', async () => {
-  const [projectSource, bundleManifestSource, entrypoint] = await Promise.all([
+  const [projectSource, bundleManifestSource, entrypoint, authoringProfile] = await Promise.all([
     readRepositoryFile(contract.standardArtifact.projectSource),
     readRepositoryFile(contract.standardArtifact.bundleManifest),
     readRepositoryFile(contract.standardArtifact.entrypoint),
+    readRepositoryFile('scripts/sb3/dsl4-runtime-authoring-profile.js'),
   ]);
   const project = JSON.parse(projectSource);
   const bundleManifest = JSON.parse(bundleManifestSource);
@@ -132,9 +133,12 @@ test('ships the Standard artifact as one compact static extension bundle', async
   );
   assert.equal((entrypoint.match(/Scratch\.extensions\.register\(/gu) ?? []).length, 1);
   assert.match(entrypoint, new RegExp(`const extensionId = '${runtimeComponentId}'`));
-  assert.match(entrypoint, /dsl4NonEmbeddedDevelopmentFeatureFlags/u);
-  assert.match(entrypoint, /createDsl4RuntimeSourceChooser/u);
-  assert.match(entrypoint, /createDsl4BrowserPreviewRuntimeComponent/u);
+  assert.match(entrypoint, /installDsl4RuntimeAuthoringProfile/u);
+  assert.doesNotMatch(entrypoint, /createDsl4RuntimeSourceChooser/u);
+  assert.doesNotMatch(entrypoint, /createDsl4BrowserPreviewRuntimeComponent/u);
+  assert.match(authoringProfile, /dsl4NonEmbeddedDevelopmentFeatureFlags/u);
+  assert.match(authoringProfile, /createDsl4RuntimeSourceChooser/u);
+  assert.match(authoringProfile, /createDsl4BrowserPreviewRuntimeComponent/u);
   assert.match(
     entrypoint,
     new RegExp(

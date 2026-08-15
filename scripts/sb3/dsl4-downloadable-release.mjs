@@ -152,37 +152,10 @@ const limits = Object.freeze({
   maxAssetBytes: 64 * 1024 * 1024,
 });
 const runtimeProfiles = new Set(['authoring', 'playback']);
-const playbackRuntimeModuleStubs = new Map([
-  ['../../src/builder/dsl4-web-preview-shell.js', ['createDsl4WebPreviewShell']],
-  [
-    '../../src/dsl4/browser-preview-source-adapter.js',
-    ['createDsl4BrowserPreviewStoryFileProject', 'inspectDsl4BrowserPreviewSupport'],
-  ],
-  ['../../src/dsl4/debug-execution.js', ['createDsl4DebugExecutionCoordinator']],
-  [
-    '../../src/dsl4/platform/browser-distribution-build.js',
-    [
-      'createDsl4BrowserDistributionFilename',
-      'createDsl4BrowserDistributionSb3',
-      'requestDsl4BrowserDistributionSaveTarget',
-      'saveDsl4BrowserDistributionSb3',
-    ],
-  ],
-  ['../../src/dsl4/live-reload-session.js', ['createDsl4LiveReloadSession']],
-  [
-    '../../src/dsl4/platform/browser-preview-runtime-component.js',
-    ['createDsl4BrowserPreviewRuntimeComponent'],
-  ],
-  [
-    '../../src/dsl4/platform/browser-story-file-loader.js',
-    ['buildDsl4BrowserSelectedStoryProject', 'collectDsl4BrowserDroppedFiles'],
-  ],
-  [
-    '../../src/dsl4/platform/turbowarp-preview-session.js',
-    ['createDsl4TurboWarpPreviewSessionFactory'],
-  ],
-  ['../../src/dsl4/preview-protocol.js', ['createDsl4PreviewProtocolSession']],
-]);
+const runtimeExtensionEntryPath = path.join(
+  projectRoot,
+  'scripts/sb3/dsl4-runtime-extension-entry.js',
+);
 let pendingPoseNetProjectBundle;
 
 function createPoseNetProjectBundle() {
@@ -192,34 +165,6 @@ function createPoseNetProjectBundle() {
     {subtleCrypto: webcrypto.subtle},
   );
   return pendingPoseNetProjectBundle;
-}
-
-function playbackRuntimeProfilePlugin() {
-  return {
-    name: 'dsl4-playback-runtime-profile',
-    setup(buildContext) {
-      for (const modulePath of playbackRuntimeModuleStubs.keys()) {
-        buildContext.onResolve(
-          {filter: new RegExp(`^${modulePath.replaceAll('.', '\\.')}$`)},
-          () => ({
-            path: modulePath,
-            namespace: 'dsl4-playback-stub',
-          }),
-        );
-      }
-      buildContext.onLoad(
-        {filter: /.*/, namespace: 'dsl4-playback-stub'},
-        ({path: resolvedPath}) => ({
-          contents: `const unavailable = () => { throw new Error(${JSON.stringify(
-            `Authoring module ${resolvedPath} is unavailable in the playback runtime.`,
-          )}); };\n${(playbackRuntimeModuleStubs.get(resolvedPath) ?? [])
-            .map((name) => `export const ${name} = unavailable;`)
-            .join('\n')}\n`,
-          loader: 'js',
-        }),
-      );
-    },
-  };
 }
 
 function md5(contents) {
@@ -542,7 +487,7 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
   const result = await build({
-    entryPoints: [path.join(projectRoot, 'scripts/sb3/dsl4-runtime-extension-entry.js')],
+    entryPoints: [runtimeExtensionEntryPath],
     bundle: true,
     charset: 'utf8',
     define: {
@@ -550,7 +495,7 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
         `data:image/png;base64,${officialWebsiteFavicon.toString('base64')}`,
       ),
-      DSL4_RUNTIME_PROFILE: JSON.stringify(profile),
+      DSL4_AUTHORING_PROFILE: JSON.stringify(profile === 'authoring'),
     },
     format: 'iife',
     banner: {
@@ -565,7 +510,6 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     logLevel: 'silent',
     minify: true,
     platform: 'browser',
-    plugins: profile === 'playback' ? [playbackRuntimeProfilePlugin()] : [],
     target: ['es2022'],
     write: false,
   });

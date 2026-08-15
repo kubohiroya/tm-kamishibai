@@ -288,8 +288,10 @@ test('replaces the Standard authoring runtime with the generated playback profil
     const dataUrl = outputProject.extensionURLs.kubohiroyakamishibai4;
     assert.match(dataUrl, /^data:text\/javascript;base64,/u);
     const source = Buffer.from(dataUrl.split(',', 2)[1], 'base64').toString('utf8');
-    assert.match(source, /Authoring module/u);
+    assert.doesNotMatch(source, /Authoring module/u);
     assert.doesNotMatch(source, /browser preview/u);
+    assert.doesNotMatch(source, /showOpenFilePicker|showDirectoryPicker/u);
+    assert.doesNotMatch(source, /buildDistributionSb3|initializeNonEmbeddedPreview/u);
     assert.match(source, /playback runtime cannot open a non-embedded authoring project/u);
   });
 });

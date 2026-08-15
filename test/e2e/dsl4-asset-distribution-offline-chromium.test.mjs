@@ -36,6 +36,7 @@ controls:
 `;
 const openingBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>');
 const openingIntegrity = `sha256-${sha256(openingBytes)}`;
+const chromeResultTimeoutMs = 30_000;
 
 async function chromeExecutable() {
   const candidates = [
@@ -125,7 +126,7 @@ async function runChrome(executable, url, profileDirectory) {
       settled = true;
       child.kill('SIGTERM');
       reject(new Error(`Chrome did not produce the smoke result: ${stderr}`));
-    }, 15_000);
+    }, chromeResultTimeoutMs);
     const finish = () => {
       if (settled) return;
       settled = true;

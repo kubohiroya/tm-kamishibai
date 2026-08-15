@@ -269,6 +269,28 @@ test('shows an accessible build action only for the non-embedded authoring menu'
   menu.dispose();
 });
 
+test('hides the open action when the playback profile has no authoring surface', () => {
+  const document = createFakeDocument();
+  const menu = createDsl4RuntimeApplicationMenu({
+    document,
+    mount: document.body,
+    locales: {
+      en: {open: 'Open', reload: 'Reload', about: 'About', language: 'Language'},
+      ja: {open: '開く', reload: '再実行', about: '情報', language: '言語'},
+    },
+    onReload() {},
+    onAbout() {},
+    onLocaleChange() {},
+    openVisible: false,
+  });
+  const openButton = findByAttribute(menu.element, 'data-dsl4-menu-action', 'open')[0];
+  menu.show('en');
+  assert.equal(openButton.hidden, true);
+  assert.equal(openButton.disabled, true);
+  assert.equal(openButton.style.display, 'none');
+  menu.dispose();
+});
+
 test('uses the native save transaction when available and treats picker cancellation explicitly', async () => {
   const writes = [];
   const handle = {

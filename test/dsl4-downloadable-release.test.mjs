@@ -715,8 +715,20 @@ test('builds separate authoring and playback runtime profiles', async () => {
   assert.equal(playback.includes(poseShardPrefix), false);
   assert.equal(authoring.includes('browser preview'), true);
   assert.equal(playback.includes('browser preview'), false);
+  assert.equal(authoring.includes('showOpenFilePicker'), true);
+  assert.equal(playback.includes('showOpenFilePicker'), false);
+  assert.equal(authoring.includes('showDirectoryPicker'), true);
+  assert.equal(playback.includes('showDirectoryPicker'), false);
+  assert.equal(authoring.includes('buildDistributionSb3'), true);
+  assert.equal(playback.includes('buildDistributionSb3'), false);
+  assert.equal(authoring.includes('initializeNonEmbeddedPreview'), true);
+  assert.equal(playback.includes('initializeNonEmbeddedPreview'), false);
   assert.equal(playback.includes('createDsl4WebPreviewShell'), false);
-  assert.equal(playback.includes('Authoring module'), true);
+  assert.equal(playback.includes('Authoring module'), false);
+  assert.equal(playback.includes('live reload session is disposed'), false);
+  assert.equal(playback.includes('live reload requires a DSL 4.0 StoryDocument'), false);
+  assert.equal(playback.includes('Unknown live reload restart choice'), false);
+  assert.equal(playback.includes('source-live-reload'), false);
   assert.equal(
     playback.includes('playback runtime cannot open a non-embedded authoring project'),
     true,
