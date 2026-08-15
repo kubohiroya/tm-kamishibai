@@ -28,7 +28,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-bubble             | 0.7.0             | MPL-2.0      | `kubohiroya/turbowarp-bubble`                  |
 | @kubohiroya/turbowarp-runtime-expression | 0.3.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
 | @kubohiroya/turbowarp-svg-text           | 0.4.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
-| @kubohiroya/turbowarp-tmpose             | 1.10.0            | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
+| @kubohiroya/turbowarp-tmpose             | 1.10.1            | MPL-2.0      | `kubohiroya/turbowarp-tmpose`                  |
 | @teachablemachine/pose                   | 0.8.3             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |
 | @tensorflow/tfjs                         | 1.3.1             | Apache-2.0   | `tensorflow/tfjs`                              |
 | @turbowarp/scratch-storage               | 2.0.0             | BSD-3-Clause | `TurboWarp/scratch-storage`                    |
@@ -58,16 +58,16 @@ The DSL 4.0 runtime embeds the Apache-2.0 Teachable Machine Pose 0.8.3 browser r
 its TensorFlow.js 1.3.1 runtime, instead of loading either library from a CDN. The SB3 runtime
 component stores the PoseNet MobileNetV1 0.75 / stride16 checkpoint supplied by
 `tensorflow/tfjs-models` v2.2.2 as explicit model data, outside the runtime JavaScript. The model
-JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-tmpose@1.10.0` publishes the
+JSON and weight shards are Apache-2.0 material. `@kubohiroya/turbowarp-tmpose@1.10.1` publishes the
 canonical `./posenet` manifest, upstream URLs, package assets, and SHA-256 values; the local
 [`src/dsl4/platform/posenet-bundle.js`](src/dsl4/platform/posenet-bundle.js) adapter only selects
 the SB3 storage channel.
 
 ## DSL 3.2 compatibility extension
 
-The offline project source includes the TurboWarp Text extension under its legacy
-`strings` ID so that older projects do not depend on a network extension URL. Its
-original source notice is retained in [`app/extensions/strings.js`](app/extensions/strings.js).
+Published DSL 3.2 SB3 files include the TurboWarp Text extension under its legacy `strings` ID.
+Those immutable binaries are distributed from GitHub Releases rather than retained as expanded
+source on the current branch.
 
 | title | copyright                           | license         | source                                                                         |
 | ----- | ----------------------------------- | --------------- | ------------------------------------------------------------------------------ |

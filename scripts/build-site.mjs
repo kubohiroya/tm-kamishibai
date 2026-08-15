@@ -104,7 +104,7 @@ const releaseBuilds = await Promise.all(
     const build = await buildDownloadableReleaseSb3(release, {
       outputPath: path.join(outputPath, 'downloads', release.filename),
     });
-    console.log(`Built downloadable ${release.series} SB3: ${build.outputPath}`);
+    console.log(`Downloaded verified ${release.series} SB3: ${build.outputPath}`);
     return {release, titleBuildMetadata: build.titleBuildMetadata};
   }),
 );

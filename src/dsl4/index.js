@@ -142,10 +142,12 @@ export {
 } from './runtime-variable-surface.js';
 export {
   dsl4DefaultExternalSourceManifestFilename,
-  dsl4DefaultExternalSourcePath,
+  dsl4ExternalSourceManifestDefaults,
   dsl4ExternalSourceManifestFilenames,
+  dsl4ProjectSourceFilenameSuffix,
   Dsl4ExternalSourceManifestError,
   parseDsl4ExternalSourceManifestSource,
+  resolveDsl4ExternalSourceManifestContract,
   serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';

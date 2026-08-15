@@ -27,8 +27,8 @@ test('pins the reviewed Packager and scratch-render contract', () => {
     upstreamBaseCommit: 'a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce',
     upstreamPullRequest: 21,
     fixedRepository: 'kubohiroya/scratch-render',
-    fixedCommit: '1fa6cc7d23e12aabf8db16e8e3ce400538f44165',
-    readbackCanvases: ['Silhouette.updateCanvas', 'TextBubbleSkin.canvas'],
+    fixedCommit: 'c69318a6c8d43439fc35fa9e403bf6d2781fdaee',
+    readbackCanvases: ['Silhouette.updateCanvas'],
   });
 });
 
@@ -42,8 +42,8 @@ for (const filename of ['scaffolding-min.js', 'scaffolding-full.js']) {
       patchTurboWarpPackagerScratchRenderReadbackContext(sourceBytes),
     );
 
-    assert.equal(count(patched, optimizedReadbackContext), 2);
-    assert.equal(count(patched, readbackContext), count(source, readbackContext) - 2);
+    assert.equal(count(patched, optimizedReadbackContext), 1);
+    assert.equal(count(patched, readbackContext), count(source, readbackContext) - 1);
     assert.equal(patched.replaceAll(optimizedReadbackContext, readbackContext), source);
     assert.throws(
       () => patchTurboWarpPackagerScratchRenderReadbackContext(new TextEncoder().encode(patched)),

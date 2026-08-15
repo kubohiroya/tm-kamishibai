@@ -12,11 +12,11 @@ import {
   validateDsl4AssetDistributionLock,
 } from '../dsl4/asset-distribution-profile.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
-import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {loadDsl4ExternalSource} from './dsl4-external-source.js';
+import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
-import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
+import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
@@ -645,12 +645,12 @@ export async function generateDsl4AssetDistributionLock(options) {
     if (error instanceof Sb3BuilderError) throw error;
     fail('Cannot resolve project root', 'K4-ASSET-ROOT-001', error);
   }
-  const manifestInput = await loadDsl4ProjectSourceManifest({
+  const resolvedSource = await resolveDsl4ProjectSource({
     projectRoot: options.projectRoot,
-    inputPath: options.sourceManifest,
-    maxBytes: maxSourceManifestBytes,
-    label: 'source manifest',
-    code: 'K4-SOURCE-MANIFEST-001',
+    ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
+    ...(options.source === undefined ? {} : {source: options.source}),
+    ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+    maxSourceManifestBytes,
     fileSystem,
     readFile: options.readFile,
   });
@@ -663,7 +663,7 @@ export async function generateDsl4AssetDistributionLock(options) {
     fileSystem,
     readFile: options.readFile,
   });
-  const manifest = validateDsl4ExternalSourceManifest(manifestInput);
+  const manifest = resolvedSource.manifest;
   const config = validateDsl4AssetDistributionConfig(configInput);
   const source = await loadDsl4ExternalSource(options.projectRoot, manifest, {
     maxSourceBytes: sourceLimits.maxSourceFileBytes,

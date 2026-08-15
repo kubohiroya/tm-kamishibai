@@ -62,29 +62,30 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 | custom action      | 30秒、許容範囲100 ms〜300秒、failure message 256 scalar                  |
 | reload quiesce     | 5秒、許容範囲100 ms〜30秒                                                |
 | preview watch      | quiet 100 ms、retry 50 ms、stability timeout 2秒                         |
-| source frontend    | canonical source 256 KiB、YAML node 20,000、depth 64、scalar 16,384等    |
+| source frontend    | canonical source 1 MiB、YAML node 20,000、depth 64、scalar 16,384等      |
 | diagnostic表示     | 保持100件、UI 20件、excerpt 240 scalar、message 500 scalar、related 8件  |
 
 完全なfield名と値は機械可読contractを正本とし、testで公開定数または実装sourceと照合します。
 
 ### 2.2 現在の必須explicit上限
 
-`maxSourceBytes`、asset一件／件数／総byte、history action／scene visit、pose archive展開上限はhostが
-明示します。省略時defaultへ推測せずbuild/startupを拒否します。preview、validate、build、runtimeは
-同じartifactについて同じ値を使います。台本やruntime variableから値を引き上げられません。
+builder／runtime APIでは`maxSourceBytes`、asset一件／件数／総byte、history action／scene visit、
+pose archive展開上限をhostが明示します。公開CLIはこのうちsource／assetの共通4値へ有限defaultを
+渡します。preview、validate、build、runtimeは同じartifactについて同じ値を使います。台本やruntime
+variableから値を引き上げられません。
 
 ### 2.3 source frontend既定policy
 
-| 上限             |        既定値 | 理由                                                               |
-| ---------------- | ------------: | ------------------------------------------------------------------ |
-| canonical source |       256 KiB | 1 MiBを根拠なく規範化せず、parse前のhard boundを置く               |
-| YAML node        |        20,000 | mapping/sequence/scalarの総数を制限する                            |
-| YAML depth       |            64 | nested collectionによるstack/memory増加を制限する                  |
-| scalar           | 16,384 scalar | 長文を許しつつ単一message/pathの肥大を防ぐ                         |
-| scene            |           512 | UIとruntime indexを有限化する                                      |
-| action/scene     |         1,024 | 一sceneだけの極端な配列を拒否する                                  |
-| total action     |         4,096 | benchmarkで約4,000 actionが約92 ms／heap増分最大約21 MiBだったため |
-| asset            |         1,024 | dependency indexとmanifestを有限化する                             |
+| 上限             |        既定値 | 理由                                                                  |
+| ---------------- | ------------: | --------------------------------------------------------------------- |
+| canonical source |         1 MiB | 長い台詞を含む2,000 actionの計測で、4 MiBほどheapが増えない範囲を選択 |
+| YAML node        |        20,000 | mapping/sequence/scalarの総数を制限する                               |
+| YAML depth       |            64 | nested collectionによるstack/memory増加を制限する                     |
+| scalar           | 16,384 scalar | 長文を許しつつ単一message/pathの肥大を防ぐ                            |
+| scene            |           512 | UIとruntime indexを有限化する                                         |
+| action/scene     |         1,024 | 一sceneだけの極端な配列を拒否する                                     |
+| total action     |         4,096 | benchmarkで約4,000 actionが約92 ms／heap増分最大約21 MiBだったため    |
+| asset            |         1,024 | dependency indexとmanifestを有限化する                                |
 
 2026-08-07、Node 26.5.0のlocal Apple Silicon環境で、`wait: 0`だけを持つ一sceneを3回parseした中央値は
 次のとおりでした。heap値はGC直後からparse完了までの最大観測差で、製品保証値ではありません。
@@ -97,7 +98,21 @@ compositionは再利用可能です。source検証時のsyntax checkとruntime�
 | 32,000 |    448,037 | 526.4 ms |  127.9 MiB |
 
 byte上限だけではaction数を十分に制限できないため、この複合上限をsource frontendの既定値として採用します。
-hostは採用上限以下へ下げられますが、台本から上げられません。境界は独立fixtureで検証します。
+
+2026-08-15には同じNode 26.5.0、Apple M1 Max、64 GiB環境で、2 scene × 1,000 `say` actionの
+台詞長だけを変えた有効な入力を3回ずつparseしました。
+
+| canonical source | 台詞scalar/action |   median | 最大heap差 |
+| ---------------: | ----------------: | -------: | ---------: |
+|          256 KiB |                79 | 105.4 ms |   27.1 MiB |
+|            1 MiB |               472 | 125.0 ms |   39.4 MiB |
+|            4 MiB |             2,045 | 260.6 ms |  152.7 MiB |
+
+256 KiBから1 MiBへの拡張は、長い台詞を持つ実用的な台本余地を4倍にしながら、同一action数での
+median増加を約20 ms、最大heap差の増加を約12 MiBに抑えました。一方4 MiBでは最大heap差が
+150 MiBを超えたため採用しません。1 MiBをfrontendとCLIの共通上限とし、YAML node、scalar、scene、
+actionの独立上限を維持します。hostは採用上限以下へ下げられますが、台本から上げられません。
+境界は独立fixtureで検証します。
 
 ## 3. Versioned diagnostic
 

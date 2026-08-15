@@ -1,4 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="150" height="32" viewBox="0 0 150 32">
-  <rect x="0.75" y="0.75" width="148.5" height="30.5" rx="15.25" fill="#fff" stroke="#007f71" stroke-width="1.5"/>
-  <image href="data:image/png;base64,{{OFFICIAL_WEBSITE_FAVICON}}" x="18" y="7" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
-</svg>

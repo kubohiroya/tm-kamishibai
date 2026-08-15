@@ -177,6 +177,9 @@ export function ensureDsl4ExternalSourceCacheIdentity(
   if (typeof createStableId !== 'function')
     throw new TypeError('createStableId must be a function');
   const manifest = validateDsl4ExternalSourceManifest(input);
+  if (manifest.path === undefined) {
+    fail('External source manifest path is unresolved', 'K4-SOURCE-MISSING');
+  }
   const label = path.posix.basename(manifest.path);
   if (manifest.cacheId !== undefined) {
     return deepFreeze({
@@ -228,6 +231,9 @@ export async function loadDsl4ExternalSource(
     throw new TypeError('projectRoot must be a non-empty string');
   }
   const manifest = validateDsl4ExternalSourceManifest(inputManifest);
+  if (manifest.path === undefined) {
+    fail('External source manifest path is unresolved', 'K4-SOURCE-MISSING');
+  }
   const identity =
     manifest.cacheId === undefined
       ? null

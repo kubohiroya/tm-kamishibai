@@ -5,8 +5,16 @@ export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(new URL('../release-sources/4.0.0-rc.5/release.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../release-metadata/4.0.0-rc.6.json', import.meta.url), 'utf8'),
 );
+const dsl4PublishedArtifact =
+  dsl4ReleaseMetadata.state === 'published'
+    ? {
+        buildDate: dsl4ReleaseMetadata.buildDate,
+        ...dsl4ReleaseMetadata.artifact,
+        sourceIdentity: dsl4ReleaseMetadata.sourceIdentity,
+      }
+    : undefined;
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -18,21 +26,15 @@ function deepFreeze(value) {
 
 export const downloadCatalog = deepFreeze([
   {
-    artifact: {
-      buildDate: dsl4ReleaseMetadata.buildDate,
-      filename: dsl4ReleaseMetadata.artifact.filename,
-      faviconPath: 'site/favicon.png',
-      sha256: dsl4ReleaseMetadata.artifact.sha256,
-      size: 6_664_571,
-      sourceIdentity: dsl4ReleaseMetadata.sourceIdentity,
-      sourceDirectory: dsl4ReleaseMetadata.sourceDirectory,
-    },
+    artifact: dsl4PublishedArtifact,
     description:
       'YAML、local preview、自己完結SB3を先行検証する公開候補です。安定運用には3.2.3を利用してください。',
     docsUrl: dsl4DocsUrl,
     series: '4.0',
     status: 'リリース候補',
     statusKind: 'development',
+    unavailableLabel: '公開準備中',
+    unavailableNote: 'GitHub prereleaseの公開後にダウンロードできます。',
     updatedAt: dsl4ReleaseMetadata.buildDate,
     version: dsl4ReleaseMetadata.version,
   },
@@ -40,12 +42,10 @@ export const downloadCatalog = deepFreeze([
     artifact: {
       buildDate: '2026-08-06',
       filename: 'kamishibai-3.2.sb3',
-      faviconPath: 'release-sources/3.2.3/site/favicon.png',
+      url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
       sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
       size: 853_938,
       sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
-      sourceDirectory: 'release-sources/3.2.3/app',
-      toolchainVersion: '0.6.0',
     },
     description:
       '3.1と3.2の既存作品を扱う現在の推奨安定版です。4.0はリリース候補として先行検証できます。',
@@ -60,11 +60,10 @@ export const downloadCatalog = deepFreeze([
     artifact: {
       buildDate: '2026-08-04',
       filename: 'kamishibai-3.1.sb3',
-      faviconPath: 'release-sources/3.1.9/site/favicon.png',
+      url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.1.9/kamishibai-3.1.sb3',
       sha256: '31a4358a459407624aabe748e9b3ba74d08667d0550f06078a72da100d3ae018',
       size: 633_465,
       sourceCommit: '96b1fe66e052f10da2938389f98fd15c95fcfdee',
-      sourceDirectory: 'release-sources/3.1.9/app',
     },
     description:
       '3.1系列で作成した既存作品を扱うための最終安定版です。新しく作品を作る場合は3.2を利用してください。',
@@ -112,6 +111,14 @@ for (const entry of downloadCatalog) {
       `${entry.series} update date differs from its artifact build date.`,
     );
     assert.match(entry.artifact.sha256, /^[0-9a-f]{64}$/u, `${entry.series} SHA-256 is invalid.`);
+    assert.match(
+      entry.artifact.url,
+      new RegExp(
+        `^https://github\\.com/kubohiroya/tmpose-kamishibai/releases/download/v${entry.version.replaceAll('.', '\\.')}/${entry.artifact.filename.replaceAll('.', '\\.')}$`,
+        'u',
+      ),
+      `${entry.series} release asset URL is invalid.`,
+    );
     if (entry.artifact.sourceIdentity) {
       assert.match(
         entry.artifact.sourceIdentity,
@@ -123,13 +130,6 @@ for (const entry of downloadCatalog) {
         entry.artifact.sourceCommit,
         /^[0-9a-f]{40}$/u,
         `${entry.series} source commit is invalid.`,
-      );
-    }
-    if (entry.artifact.toolchainVersion !== undefined) {
-      assert.match(
-        entry.artifact.toolchainVersion,
-        /^\d+\.\d+\.\d+$/u,
-        `${entry.series} toolchain version is invalid.`,
       );
     }
   } else {

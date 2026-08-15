@@ -105,6 +105,19 @@ function createCommandFixture({onOpen, start} = {}) {
   const dependencies = {
     signalTarget,
     readyTimeoutMs: 100,
+    async resolveProjectSource(options) {
+      return {
+        manifest: {
+          formatVersion: 1,
+          mode: 'external',
+          sourceId: options.sourceId ?? 'main',
+          path: options.source ?? 'story.k4.yml',
+        },
+        manifestPath: options.sourceManifest ?? null,
+        manifestFilename: options.sourceManifest ? path.basename(options.sourceManifest) : null,
+        manifestExists: options.sourceManifest !== undefined,
+      };
+    },
     async readFile(filePath) {
       return filePath.endsWith('project.source.yaml')
         ? Buffer.from('formatVersion: 1\nmode: external\nsourceId: main\npath: story.k4.yml\n')
@@ -197,7 +210,7 @@ test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
   excessiveSource[excessiveSource.indexOf('--max-source-bytes') + 1] = String(
     dsl4CliDefaultLimits.maxSourceBytes + 1,
   );
-  assert.throws(() => parseCliArguments(excessiveSource), /must be <= 262144/u);
+  assert.throws(() => parseCliArguments(excessiveSource), /must be <= 1048576/u);
   const excessiveFile = previewArguments();
   excessiveFile[excessiveFile.indexOf('--max-asset-file-bytes') + 1] = '20000';
   assert.throws(
@@ -411,7 +424,7 @@ test('rejects an oversized source manifest before build or host side effects', a
           stderr: {write() {}},
         },
       ),
-      (error) => error.code === 'K4-PREVIEW-CLI-INPUT-LIMIT',
+      (error) => error.code === 'K4-SOURCE-MANIFEST-SIZE-001',
     );
     assert.equal(buildCount, 0);
   } finally {

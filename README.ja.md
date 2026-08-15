@@ -22,15 +22,15 @@ TMPose紙芝居は、カメラの前で取ったポーズをきっかけに、�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.5                                   |
+|                      | 3.2.3                                | 4.0.0-rc.6                                   |
 | -------------------- | ------------------------------------ | -------------------------------------------- |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                                 |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証   |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                                 |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]／npmの`next` |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc5]                     |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc6]                     |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.5は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.6は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -42,7 +42,7 @@ TMPose紙芝居は、カメラの前で取ったポーズをきっかけに、�
 
 ### ブラウザだけで作る
 
-4.0.0-rc.5のStandard SB3には、台本の選択、検証、live preview、配布用SB3生成までを行う作者用ランナーが入っています。
+4.0.0-rc.6のStandard SB3には、台本の選択、検証、live preview、配布用SB3生成までを行う作者用ランナーが入っています。
 
 1. [4.0のSB3をダウンロード][downloads]し、[TurboWarp Editor](https://turbowarp.org/editor)で開く。
 2. 緑の旗を押し、メニューの「開く」から台本ファイルまたはproject directoryを選ぶ。
@@ -53,29 +53,47 @@ project directoryの監視には、File System Access APIを利用できるdeskt
 
 ### projectの最小構成
 
-DSL 4.0では、source manifest、YAML台本、画像・音声・pose modelなどのアセットを一つのproject rootで管理します。分類用directoryの名前は任意です。
+DSL 4.0 projectは、project root直下の`.k4.yml`台本一つだけでも成立します。画像・音声・
+pose modelなどのassetも同じproject root以下に置けます。分類用directoryの名前は任意です。
 
 ```text
 my-story/
-├── project.source.yaml
-├── story.k4.yml
-├── images/
-├── sounds/
-└── pose-models/
+└── opening.k4.yml
 ```
 
-`project.source.yaml`はentry sourceを指定します。
+root直下の`.k4.yml`が一つだけなら、そのfileを自動選択するため`project.source.yml`は不要です。
+台本を二つ以上置く場合は、固定file名に頼らず、`project.source.yml`またはCLIの`--source`で
+entry sourceを選択します。
+
+```text
+my-story/
+├── project.source.yml
+├── opening.k4.yml
+└── alternate-ending.k4.yml
+```
 
 ```yaml
-formatVersion: 1
-mode: external
-sourceId: main
-path: story.k4.yml
+path: opening.k4.yml
 ```
 
-project directoryを開くと、TMPose紙芝居は最初に`project.source.yaml`を探し、存在しない場合は従来の`project.source.json`へfallbackします。両方が存在する場合はYAML manifestを優先します。既存のJSON manifestも引き続き利用できます。
+`project.source.yml`の全項目を省略できます。
 
-最小の`story.k4.yml`は、versionと一つ以上のsceneを持ちます。
+| 項目                           | 必須 | 値／省略時の扱い                                                                 |
+| ------------------------------ | ---- | -------------------------------------------------------------------------------- |
+| `formatVersion`                | 任意 | `1`                                                                              |
+| `mode`                         | 任意 | `external`                                                                       |
+| `sourceId`                     | 任意 | `main`。CLIの`--source-id`を指定すると上書きします。                             |
+| `path`                         | 任意 | 固定既定名なし。`--source`、`path`、root直下で唯一の`*.k4.yml`の順に選択します。 |
+| `cacheId`, `cacheDatabaseName` | 任意 | 既定では未設定。明示する場合は二つを必ず同時に指定します。                       |
+
+空またはcommentだけのmanifestも、全項目の既定値を適用する有効な入力です。CLIにもmanifestにも
+source指定がない場合、root直下の`.k4.yml`が0件または複数なら曖昧な選択をせずerrorになります。
+manifestが存在しない場合に暗黙生成することもありません。
+
+project入力では`project.source.yaml`と`project.source.json`も利用でき、`project.source.yml`の後に
+この順で探索します。このREADMEの推奨例は`.yml`表記に統一します。
+
+最小の`.k4.yml`台本は、versionと一つ以上のsceneを持ちます。
 
 ```yaml
 kamishibai: '4.0'
@@ -98,10 +116,10 @@ scenes:
 
 ### CLIで検証・preview・buildする
 
-[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.5)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.12.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
+[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.6)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.12.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.5
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.6
 pnpm exec tmpose-kamishibai --help
 ```
 
@@ -109,7 +127,7 @@ pnpm exec tmpose-kamishibai --help
 
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.k4.yml \
+  --input opening.k4.yml \
   --format pretty
 ```
 
@@ -119,7 +137,6 @@ project全体を監視し、ブラウザでpreviewします。
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.yaml \
   --control-profile production \
   --channel bundled
 ```
@@ -130,7 +147,6 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.yaml \
   --output dist/my-story.sb3 \
   --control-profile production \
   --channel bundled
@@ -140,12 +156,18 @@ pnpm exec tmpose-kamishibai build-dsl4 \
 
 | option                    | デフォルト | overrideまたは制約                                                   |
 | ------------------------- | ---------- | -------------------------------------------------------------------- |
-| `--max-source-bytes`      | 262144     | canonical sourceの固定上限。これを超えるcomposed storyは現在未対応   |
+| `--max-source-bytes`      | 1048576    | 現行frontendの1 MiB上限。YAML node数とaction数も別に制限する         |
 | `--max-asset-file-bytes`  | 16777216   | 確認済みの単一assetが16 MiBを超える場合に増やす                      |
 | `--max-asset-files`       | 256        | build／asset処理では増やせるが、browser previewは現在256 filesが上限 |
 | `--max-total-asset-bytes` | 134217728  | 確認済みassetの合計が128 MiBを超える場合に増やす                     |
 
-これらは予約memory量ではなく上限値です。例外的に大きいprojectでは明示overrideできますが、previewで推奨上限のasset合計128 MiBを超える場合は`--allow-large-preview-artifacts`が必要で、browserの絶対上限も残ります。Source Graph includeはopt-inのままであり、graph構造を安全に推定できないため、file数・source合計byte数・深さの各上限を別途指定します。
+これらは予約memory量ではなく上限値です。sourceの1 MiB上限は、既存のaction上限内で長い台詞を
+持つ入力を計測した結果から選びました。計測値と判断根拠は
+[resource limit設計](./docs/design/dsl-4-expression-limits-diagnostics.md#23-source-frontend既定policy)に
+記録しています。例外的に大きいassetは明示overrideできますが、previewで推奨上限のasset合計
+128 MiBを超える場合は`--allow-large-preview-artifacts`が必要で、browserの絶対上限も残ります。
+Source Graph includeはopt-inのままであり、graph構造を安全に推定できないため、file数・source合計
+byte数・深さの各上限を別途指定します。
 
 CLIにはほかに次のcommandがあります。引数と終了statusは`tmpose-kamishibai --help`および[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)で確認できます。
 
@@ -157,6 +179,12 @@ CLIにはほかに次のcommandがあります。引数と終了statusは`tmpose
 | `lock-dsl4-assets`    | allowlist内のremote assetを検証しlockを生成           |
 | `audit-dsl4-assets`   | 配布profileとlockをネットワークアクセスなしで監査     |
 | `vendor-dsl4-assets`  | remote assetをcontent-addressedなoffline mirrorへ固定 |
+
+DSL 4.0では`poseRecognition.modelInitialization`により、従来互換の`legacy`と、不要になったモデルを
+cancelして最新の1件だけを準備する`latest-needed`を選べます。camera canvasのreadback contextは
+TMPose 1.10.1が所有し、Kamishibai側でTensorFlow.jsの`fromPixels()`経路を補修しません。
+責務境界を戻す場合は、TMPose 1.10.0を固定したrc.5成果物を使用します。Schema、既定値、cancel境界は
+[DSL 4.0表層仕様](./docs/design/dsl-4-surface.md#41-poseモデル初期化)を参照してください。
 
 JavaScriptから使う場合は、package exportの`@kubohiroya/tmpose-kamishibai/builder`、`@kubohiroya/tmpose-kamishibai/dsl4`、`@kubohiroya/tmpose-kamishibai/converter`を用途に応じてimportします。
 
@@ -176,7 +204,7 @@ browser preview / CLI build
 TurboWarp runtime + TMPose
 ```
 
-- YAMLと`project.source.yaml`を編集可能な正本として扱う
+- 選択されたYAML台本と、存在する場合の`project.source.yml`を編集可能な正本として扱う
 - preview、validator、builder、runtime loaderで同じStoryDocumentと診断を使う
 - local assetは作品SB3へ埋め込み、remote assetはintegrityと配布profileを明示する
 - build失敗時は既存成果物を保持し、検証済みcandidateだけを置き換える
@@ -203,24 +231,34 @@ pnpm verify:quick
 | `pnpm verify:quick` | lint、型検査、軽量テスト。日常の実装確認                      |
 | `pnpm verify:full`  | SB3、全テスト、E2E、site build、package smokeを含むCI相当検証 |
 | `pnpm format`       | Prettierによるformat check                                    |
-| `pnpm test`         | 生成SB3と実VMを含むfull test suite                            |
-| `pnpm run build`    | 公開サイトと配布用SB3を`dist/`へ生成                          |
-| `pnpm sb3:build`    | 編集用SB3を`tmp/kamishibai.sb3`へ生成                         |
-| `pnpm sb3:check`    | `app/`と4.0配布sourceを検証                                   |
+| `pnpm test`         | unit／integrationのfull test suite                            |
+| `pnpm run build`    | siteをbuildし検証済みRelease SB3を`dist/`へ取得               |
+| `pnpm sb3:build`    | 現行candidateをGit管理外の`tmp/`へ一時生成                    |
+| `pnpm sb3:check`    | 現行DSL 4.0 release candidateを再生成して検証                 |
 
 変更はGitHub Issueでスコープ、依存、受け入れ基準、ロールバックを明確にしてから、小さなPRとして進めます。問題報告と提案は[GitHub Issues](https://github.com/kubohiroya/tmpose-kamishibai/issues)へお願いします。
 
 ### 主なdirectory
 
-- `app/`: 現行の紙芝居SB3 source
-- `release-sources/`: 公開済みSB3を再現するversion別snapshot
-- `src/dsl4/`: DSL 4.0のdomain、runtime、platform adapter
-- `src/builder/`: CLIとSB3／preview builder
-- `schema/`: 公開JSON Schema
-- `site/`: 公開サイトのsource
-- `scripts/`: build、release、検証workflow
-- `test/`: unit、integration、browser E2Eとfixture
-- `docs/design/`: 実装に近い設計契約
+| directory             | 責務                                                      |
+| --------------------- | --------------------------------------------------------- |
+| `bin/`                | 公開CLIの実行entry point                                  |
+| `src/dsl4/`           | DSL 4のdomain model、parser、runtime、platform adapter    |
+| `src/builder/`        | CLI commandとSB3、preview、asset、project-source builder  |
+| `src/converter/`      | 旧台本からDSL 4への変換API                                |
+| `schema/`             | 公開JSON Schema                                           |
+| `scripts/sb3/`        | 現行releaseの生成、公開とGitHub Release asset取得workflow |
+| `scripts/sb3/assets/` | 現行DSL 4 release generatorが所有する用途名付きasset      |
+| `release-metadata/`   | 現行releaseのidentityと公開状態だけを持つ小さいrecord     |
+| `site/`               | GitHub Pages source。公開済みSB3はbuild時だけ注入する     |
+| `docs/design/`        | 実装に近い設計契約                                        |
+| `docs/releases/`      | release note                                              |
+| `test/`               | unit、integration、現行browser E2Eと最小fixture           |
+
+公開済みSB3と過去versionの展開sourceは現行branchへ保存しません。Pages buildは各versionの
+GitHub Release固定URLからSB3を取得し、catalogのsize、SHA-256、ZIP構造、Titleのversion情報を
+検証してから`dist/downloads/`へ配置します。candidateのsource treeとSB3はOS tempまたは
+Git管理外の`tmp/`だけへ一時生成し、`app/`と`release-sources/`はrepository構成に含めません。
 
 ## ドキュメント
 
@@ -228,7 +266,7 @@ pnpm verify:quick
 - [ドキュメントsource](https://github.com/kubohiroya/tmpose-kamishibai-docs): 公開文書の原稿とissue
 - [DSL 4.0表層仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAMLのschema外契約とaction surface
 - [DSL 4.0移行設計](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): 3.2との違いと移行方針
-- [v4.0.0-rc.5リリースノート][rc5]: 公開状態、互換性、検証済みartifact
+- [v4.0.0-rc.6リリースノート][rc6]: 公開状態、互換性、検証済みartifact
 
 ## 関連プロジェクト
 
@@ -243,4 +281,4 @@ pnpm verify:quick
 
 [docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
-[rc5]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.5.md
+[rc6]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.6.md

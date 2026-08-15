@@ -54,6 +54,7 @@ export {
   serializeDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
+export {dsl4ProjectSourceDefaults, resolveDsl4ProjectSource} from './dsl4-project-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 export {convertDsl4ProjectAssets} from './dsl4-asset-converter.js';
 export {

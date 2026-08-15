@@ -6,7 +6,7 @@ import {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 import {createDsl4LocalPreviewBrowserClient} from './dsl4-local-preview-browser-client.js';
 
 export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
-  maxSourceBytes: 64 * 1024,
+  maxSourceBytes: dsl4CliDefaultLimits.maxSourceBytes,
   maxAssetFiles: 64,
   maxAssetBytes: dsl4BrowserPreviewArtifactLimits.defaults.maxAssetBytes,
 });

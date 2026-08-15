@@ -170,7 +170,7 @@ auditは次を返す。
 - remote選択が一件もない場合だけ`true`になる`offlineReady`
 
 `offlineReady`は成果物の構造的判定であり、remote cacheが現在埋まっていることを意味しない。
-config／lockはproject内のsymlinkでない`.json`通常file、source manifestはsymlinkでない`.yaml`／`.json`通常fileに限定し、個別byte上限の下で
+config／lockはproject内のsymlinkでない`.json`通常file、source manifestはsymlinkでない`.yml`／`.yaml`／`.json`通常fileに限定し、個別byte上限の下で
 二回読み取った内容とfile状態が一致した場合だけ採用する。JSON／pretty出力にはURL、providerのlocal
 path、source本文、machine-local absolute pathを含めない。
 

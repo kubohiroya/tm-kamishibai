@@ -96,8 +96,8 @@ await globalThis.showDirectoryPicker({mode: 'read'});
 adapterで監視します。そのfile以外のhandleを持たないため、SB3内project assetとremote assetは
 利用できますが、local `file` assetは`K4-ASSET-PROJECT-DIRECTORY-REQUIRED`として拒否します。
 
-adapterは選択されたroot直下で`project.source.yaml`を最初に探し、存在しない場合だけ
-`project.source.json`へfallbackします。両方が存在する場合はYAMLを選択します。manifestは既存
+adapterは選択されたroot直下で`project.source.yml`、`project.source.yaml`、
+`project.source.json`の順に探します。manifestは既存
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
 - 省略時は`story.kamishibai.yaml`へ正規化する

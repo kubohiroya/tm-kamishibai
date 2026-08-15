@@ -1,8 +1,10 @@
 import {
   dsl4DefaultExternalSourceManifestFilename,
   dsl4ExternalSourceManifestFilenames,
+  dsl4ProjectSourceFilenameSuffix,
   Dsl4ExternalSourceManifestError,
   parseDsl4ExternalSourceManifestSource,
+  resolveDsl4ExternalSourceManifestContract,
   serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';
@@ -63,6 +65,7 @@ const diagnosticMessages = Object.freeze({
     'The project source manifest is not a valid UTF-8 YAML mapping',
   'K4-SOURCE-MANIFEST-001': 'The project source manifest is invalid',
   'K4-SOURCE-PATH-001': 'The project source path is not allowed',
+  'K4-SOURCE-AMBIGUOUS': 'The project has multiple possible entry sources',
   'K4-SOURCE-MISSING': 'The DSL 4.0 source is missing',
   'K4-SOURCE-READ-001': 'The DSL 4.0 source could not be read',
   'K4-SOURCE-FILE-001': 'The DSL 4.0 source is not a regular file',
@@ -582,7 +585,8 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
   let rootHandle = null;
   /** @type {Readonly<Record<string, any>> | null} */
   let manifest = null;
-  let activeManifestFilename = dsl4DefaultExternalSourceManifestFilename;
+  /** @type {string | null} */
+  let activeManifestFilename = null;
   let permissionWasGranted = false;
   let publicationKey = '';
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -686,18 +690,26 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     const manifestFilename = activeManifestFilename;
     const sourceFile = manifest?.path ?? null;
     const manifestDiagnostic = code.includes('MANIFEST');
+    const entryResolutionDiagnostic =
+      sourceFile === null && ['K4-SOURCE-MISSING', 'K4-SOURCE-AMBIGUOUS'].includes(code);
     const displayName =
       isRecord(failure) && typeof failure.displayName === 'string'
         ? failure.displayName
-        : manifestDiagnostic || sourceFile === null
-          ? manifestFilename
-          : sourceFile;
+        : entryResolutionDiagnostic
+          ? `*${dsl4ProjectSourceFilenameSuffix}`
+          : manifestDiagnostic || sourceFile === null
+            ? (manifestFilename ?? dsl4DefaultExternalSourceManifestFilename)
+            : sourceFile;
     const missingMessage =
       code === 'K4-WEB-PREVIEW-MANIFEST-MISSING'
         ? `Required project file is missing: ${dsl4ExternalSourceManifestFilenames.join(' or ')}`
         : code === 'K4-SOURCE-MISSING' && sourceFile
           ? `Required story file is missing: ${sourceFile}`
-          : null;
+          : entryResolutionDiagnostic
+            ? code === 'K4-SOURCE-AMBIGUOUS'
+              ? `Project root contains multiple ${dsl4ProjectSourceFilenameSuffix} entry sources; select one explicitly`
+              : `Project root contains no ${dsl4ProjectSourceFilenameSuffix} entry source`
+            : null;
     const diagnostic = sourceDiagnostic(code, severity, manifest?.sourceId ?? 'main', {
       displayName,
       ...(isRecord(failure) && typeof failure.path === 'string' ? {path: failure.path} : {}),
@@ -765,8 +777,34 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     permissionWasGranted = true;
   }
 
-  async function readManifestBytes() {
+  async function readEntrySourcePaths() {
     if (!rootHandle) throw new TypeError('browser preview has no project root');
+    if (typeof rootHandle.entries !== 'function') fail('K4-SOURCE-READ-001');
+    const paths = [];
+    try {
+      for await (const entry of rootHandle.entries()) {
+        if (!Array.isArray(entry) || entry.length !== 2) fail('K4-SOURCE-READ-001');
+        const [name, handle] = entry;
+        if (
+          typeof name === 'string' &&
+          isRecord(handle) &&
+          handle.kind === 'file' &&
+          name.endsWith(dsl4ProjectSourceFilenameSuffix)
+        ) {
+          paths.push(name);
+          if (paths.length === 2) break;
+        }
+      }
+    } catch (error) {
+      if (expectedError(error)) throw error;
+      fail('K4-SOURCE-READ-001', error);
+    }
+    return paths.sort();
+  }
+
+  async function readManifestSnapshot() {
+    if (!rootHandle) throw new TypeError('browser preview has no project root');
+    let selected = null;
     for (const filename of dsl4ExternalSourceManifestFilenames) {
       let handle;
       try {
@@ -781,45 +819,71 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
         'K4-WEB-PREVIEW-MANIFEST-READ-001',
         'K4-WEB-PREVIEW-MANIFEST-READ-001',
       );
-      return {filename, bytes};
+      selected = {filename, bytes};
+      break;
     }
-    fail('K4-WEB-PREVIEW-MANIFEST-MISSING');
+    /** @type {Record<string, any>} */
+    let input = {};
+    if (selected !== null) {
+      try {
+        const syntaxCode = /\.ya?ml$/u.test(selected.filename)
+          ? 'K4-WEB-PREVIEW-MANIFEST-YAML-001'
+          : 'K4-WEB-PREVIEW-MANIFEST-JSON-001';
+        input = parseDsl4ExternalSourceManifestSource(decodeUtf8(selected.bytes, syntaxCode), {
+          filename: selected.filename,
+        });
+      } catch (error) {
+        if (expectedError(error)) throw error;
+        if (error instanceof Dsl4ExternalSourceManifestError) {
+          if (error.code === 'K4-SOURCE-MANIFEST-YAML-001') {
+            fail('K4-WEB-PREVIEW-MANIFEST-YAML-001', error);
+          }
+          if (error.code === 'K4-SOURCE-MANIFEST-JSON-001') {
+            fail('K4-WEB-PREVIEW-MANIFEST-JSON-001', error);
+          }
+          fail(error.code, error);
+        }
+        throw error;
+      }
+    }
+    const sourcePaths = input.path === undefined ? await readEntrySourcePaths() : [];
+    return {
+      filename: selected?.filename ?? null,
+      bytes: selected?.bytes ?? new Uint8Array(),
+      input,
+      sourcePaths,
+    };
   }
 
   /** @param {number} requestedGeneration */
   async function loadStableManifest(requestedGeneration) {
     await setStatus('loading-manifest');
-    const first = await readManifestBytes();
+    const first = await readManifestSnapshot();
     await clock.sleep(quietWindowMs);
     if (disposed || requestedGeneration !== generation) return null;
-    const second = await readManifestBytes();
-    if (first.filename !== second.filename || !equalBytes(first.bytes, second.bytes)) {
+    const second = await readManifestSnapshot();
+    if (
+      first.filename !== second.filename ||
+      !equalBytes(first.bytes, second.bytes) ||
+      JSON.stringify(first.sourcePaths) !== JSON.stringify(second.sourcePaths)
+    ) {
       fail('K4-WEB-PREVIEW-MANIFEST-READ-001');
     }
     activeManifestFilename = second.filename;
-    let parsed;
+    let resolved;
     try {
-      const syntaxCode = second.filename.endsWith('.yaml')
-        ? 'K4-WEB-PREVIEW-MANIFEST-YAML-001'
-        : 'K4-WEB-PREVIEW-MANIFEST-JSON-001';
-      parsed = parseDsl4ExternalSourceManifestSource(decodeUtf8(second.bytes, syntaxCode), {
-        filename: second.filename,
+      resolved = resolveDsl4ExternalSourceManifestContract(second.input, {
+        sourcePaths: second.sourcePaths,
       });
     } catch (error) {
       if (expectedError(error)) throw error;
       if (error instanceof Dsl4ExternalSourceManifestError) {
-        if (error.code === 'K4-SOURCE-MANIFEST-YAML-001') {
-          fail('K4-WEB-PREVIEW-MANIFEST-YAML-001', error);
-        }
-        if (error.code === 'K4-SOURCE-MANIFEST-JSON-001') {
-          fail('K4-WEB-PREVIEW-MANIFEST-JSON-001', error);
-        }
         fail(error.code, error);
       }
       throw error;
     }
     try {
-      return validateManifest(parsed);
+      return validateManifest(resolved);
     } catch (error) {
       if (error instanceof Dsl4ExternalSourceManifestError) fail(error.code, error);
       throw error;

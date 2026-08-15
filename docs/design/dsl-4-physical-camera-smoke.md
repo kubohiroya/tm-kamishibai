@@ -18,7 +18,7 @@ iframe内ではカメラ権限を検証しません。
 
 ## 起動
 
-release sourceと同じ検証を先に実行します。
+current release candidateの再生成検証を先に実行します。
 
 ```bash
 pnpm sb3:dsl4-release:check

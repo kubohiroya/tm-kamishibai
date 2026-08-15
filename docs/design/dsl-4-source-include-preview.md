@@ -6,7 +6,7 @@
 `include`から到達する全sourceを一つのimmutable generationとして扱います。flagは既定OFFであり、
 OFF時は従来どおりmanifestが指す単一sourceだけを監視します。
 
-新規sourceの推奨suffixは`.k4.yml`です。entry sourceは`project.source.yaml`（JSON fallback可）のroot-level basename、
+新規sourceの推奨suffixは`.k4.yml`です。entry sourceは`project.source.yml`（`.yaml`／`.json`互換入力可）のroot-level basename、
 included sourceはinclude元から解決されるproject内の相対pathで指定します。directory名やbasename本体は任意で、
 `.k4.yml`で終わればSource Graphのsourceとして使用できます。既存projectとの互換性のため、従来suffixも
 引き続き受理します。

@@ -6,14 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const testDirectory = path.join(projectRoot, 'test');
-const fullOnlyTests = new Set([
-  'builder.test.mjs',
-  'register-branch.test.mjs',
-  'release-smoke-fixtures.test.mjs',
-  'sb3-project.test.mjs',
-  'script-diagnostics.test.mjs',
-  'turbowarp-vm.test.mjs',
-]);
+const fullOnlyTests = new Set(['builder.test.mjs']);
 
 const run = (command, arguments_) => {
   const result = spawnSync(command, arguments_, {
@@ -43,13 +36,6 @@ if (suite !== 'quick' && suite !== 'full') {
 
     const selectedTests =
       suite === 'full' ? testFiles : testFiles.filter((fileName) => !fullOnlyTests.has(fileName));
-
-    if (suite === 'full') {
-      const prepareStatus = run(process.execPath, ['scripts/sb3/prepare-test.mjs']);
-      if (prepareStatus !== 0) {
-        process.exitCode = prepareStatus;
-      }
-    }
 
     if (process.exitCode === undefined) {
       process.exitCode = run(process.execPath, [
