@@ -19,6 +19,9 @@ const featureFlagKeys = new Set([
   'dsl4TurboWarpBubble',
   'dsl4TurboWarpBubbleAdvancedPresentation',
   'dsl4TurboWarpActionSurface',
+  'dsl4TurboWarpStateSurface',
+  'dsl4TurboWarpStoryVariableWrite',
+  'dsl4ExpressionRuntimeState',
   'structuredDataIntegrationEnabled',
 ]);
 
@@ -41,6 +44,9 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4TurboWarpBubble: false,
   dsl4TurboWarpBubbleAdvancedPresentation: false,
   dsl4TurboWarpActionSurface: false,
+  dsl4TurboWarpStateSurface: false,
+  dsl4TurboWarpStoryVariableWrite: false,
+  dsl4ExpressionRuntimeState: false,
   structuredDataIntegrationEnabled: false,
 });
 
@@ -87,6 +93,25 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4BroadcastMessageAndWait && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4BroadcastMessageAndWait requires dsl4Runtime');
+  }
+  if (resolved.dsl4TurboWarpStateSurface && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4TurboWarpStateSurface requires dsl4Runtime');
+  }
+  if (
+    resolved.dsl4TurboWarpStoryVariableWrite &&
+    (!resolved.dsl4Runtime || !resolved.dsl4TurboWarpStateSurface)
+  ) {
+    throw new TypeError(
+      'dsl4TurboWarpStoryVariableWrite requires dsl4Runtime and dsl4TurboWarpStateSurface',
+    );
+  }
+  if (
+    resolved.dsl4ExpressionRuntimeState &&
+    (!resolved.dsl4Runtime || !resolved.dsl4TurboWarpStateSurface)
+  ) {
+    throw new TypeError(
+      'dsl4ExpressionRuntimeState requires dsl4Runtime and dsl4TurboWarpStateSurface',
+    );
   }
   if (resolved.dsl4SessionBinaryBacking && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4SessionBinaryBacking requires dsl4Runtime');

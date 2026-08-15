@@ -26,6 +26,9 @@ export function mapDsl4RuntimeExpressionError(error, {storyPath, sourcePath}) {
   if (genericCode === 'RUNTIME_EXPRESSION_UNKNOWN_VARIABLE') {
     code = 'K4-EXPRESSION-VARIABLE-UNKNOWN';
     message = 'Runtime expression referenced an undefined variable';
+  } else if (genericCode === 'RUNTIME_EXPRESSION_UNKNOWN_RUNTIME_KEY') {
+    code = 'K4-EXPRESSION-RUNTIME-UNKNOWN';
+    message = 'Runtime expression referenced an unknown runtime key';
   } else if (genericCode && runtimeExpressionInvalidVariableCodes.has(genericCode)) {
     code = 'K4-EXPRESSION-VARIABLE-001';
     message = 'Runtime variables do not satisfy the expression contract';

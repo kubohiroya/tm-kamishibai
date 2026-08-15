@@ -73,6 +73,7 @@ function deferred() {
  * @property {AbortSignal} [actionSignal]
  * @property {number} generation
  * @property {string} sceneId
+ * @property {number} actionIndex
  * @property {string} actionPath
  * @property {Readonly<Record<string, string | number | boolean>>} variables
  * @property {Readonly<{actionScopeRef: string, actionViewRef: string}>} [structuredData]
@@ -154,6 +155,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {boolean} [options.broadcastMessageAndWaitEnabled]
+ * @param {boolean} [options.storyVariableWriteEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -173,6 +175,7 @@ export function createDsl4RuntimeController({
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
+  storyVariableWriteEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -247,6 +250,9 @@ export function createDsl4RuntimeController({
   }
   if (typeof broadcastMessageAndWaitEnabled !== 'boolean') {
     throw new TypeError('broadcastMessageAndWaitEnabled must be boolean');
+  }
+  if (typeof storyVariableWriteEnabled !== 'boolean') {
+    throw new TypeError('storyVariableWriteEnabled must be boolean');
   }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
@@ -394,6 +400,8 @@ export function createDsl4RuntimeController({
   let nestedNavigationCommand = null;
   /** @type {Set<Promise<Readonly<Record<string, unknown>>>>} */
   const activeNestedInvocations = new Set();
+  /** @type {Array<Readonly<{generation: number, operation: 'set' | 'change', name: string, value: string | number | boolean}>>} */
+  let pendingVariableWrites = [];
   /** @type {Promise<Readonly<Record<string, unknown>>> | null} */
   let runPromise = null;
   /** @type {{generation: number, stepIndex: number, operation: Promise<Readonly<Record<string, unknown>>>} | null} */
@@ -823,6 +831,7 @@ export function createDsl4RuntimeController({
       signal,
       generation: actionGeneration,
       sceneId,
+      actionIndex: currentActionIndex,
       actionPath,
       variables: deepFreeze({...variables}),
       ...(structuredDataIntegration && structuredActionResources
@@ -1282,6 +1291,74 @@ export function createDsl4RuntimeController({
     return operation;
   }
 
+  /**
+   * Queue a typed story-variable mutation for the active action boundary.
+   *
+   * @param {unknown} request
+   */
+  function queueVariableWrite(request) {
+    /** @param {string} code */
+    const reject = (code) => deepFreeze({accepted: false, code});
+    if (!storyVariableWriteEnabled) return reject('K4-VARIABLE-WRITE-DISABLED');
+    const context = activeActionContext;
+    if (
+      status !== 'running' ||
+      !context ||
+      context.signal.aborted ||
+      !isCurrent(context.generation)
+    ) {
+      return reject('K4-VARIABLE-WRITE-INACTIVE');
+    }
+    if (!isRecord(request)) return reject('K4-VARIABLE-WRITE-INPUT');
+    const operation = request.operation;
+    const name = request.name;
+    const value = request.value;
+    if (operation !== 'set' && operation !== 'change') {
+      return reject('K4-VARIABLE-WRITE-INPUT');
+    }
+    if (typeof name !== 'string' || !Object.hasOwn(variables, name)) {
+      return reject('K4-VARIABLE-WRITE-UNKNOWN');
+    }
+    if (operation === 'change') {
+      if (typeof variables[name] !== 'number') return reject('K4-VARIABLE-WRITE-TYPE');
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return reject('K4-VARIABLE-WRITE-VALUE');
+      }
+    } else {
+      if (typeof variables[name] !== typeof value) return reject('K4-VARIABLE-WRITE-TYPE');
+      if (typeof value === 'number' && !Number.isFinite(value)) {
+        return reject('K4-VARIABLE-WRITE-VALUE');
+      }
+      if (!['string', 'number', 'boolean'].includes(typeof value)) {
+        return reject('K4-VARIABLE-WRITE-VALUE');
+      }
+    }
+    pendingVariableWrites.push(
+      Object.freeze({
+        generation: context.generation,
+        operation,
+        name,
+        value: /** @type {string | number | boolean} */ (value),
+      }),
+    );
+    return deepFreeze({accepted: true, code: ''});
+  }
+
+  /** @param {number} actionGeneration */
+  function commitVariableWrites(actionGeneration) {
+    const writes = pendingVariableWrites;
+    pendingVariableWrites = [];
+    for (const write of writes) {
+      if (write.generation !== actionGeneration) continue;
+      if (write.operation === 'change') {
+        const next = Number(variables[write.name]) + Number(write.value);
+        if (Number.isFinite(next)) variables[write.name] = next;
+        continue;
+      }
+      variables[write.name] = write.value;
+    }
+  }
+
   /** @param {unknown} error */
   function rejectActionInvocation(error) {
     const context = activeActionContext;
@@ -1333,6 +1410,7 @@ export function createDsl4RuntimeController({
       }
     }
     status = 'failed';
+    pendingVariableWrites = [];
     actionAbortController?.abort('runtime-failed');
     const actionPath = typeof currentAction()?.id === 'string' ? String(currentAction().id) : null;
     const errorRecord =
@@ -1500,6 +1578,7 @@ export function createDsl4RuntimeController({
         emit('action.start');
         let transition = null;
         activeActionContext = context;
+        pendingVariableWrites = [];
         nestedActionTransition = null;
         nestedNavigationCommand = null;
         activeNestedInvocations.clear();
@@ -1514,6 +1593,9 @@ export function createDsl4RuntimeController({
           break;
         } finally {
           if (activeActionContext === context) activeActionContext = null;
+          if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) {
+            pendingVariableWrites = [];
+          }
         }
         if (!isCurrent(actionGeneration) || actionAbortController.signal.aborted) break;
         transition = nestedActionTransition ?? transition;
@@ -1525,6 +1607,7 @@ export function createDsl4RuntimeController({
           fail(error);
           break;
         }
+        commitVariableWrites(actionGeneration);
         emit('action.commit');
         actionAbortController = null;
         if (transition && !(await enterScene(transition.sceneId, transition.reason, activeRunId))) {
@@ -1582,6 +1665,7 @@ export function createDsl4RuntimeController({
     if (status === 'running' || status === 'paused') stop('restart');
     else if (previousStatus === 'failed' || previousStatus === 'finished') releaseAssets('restart');
     variables = nextVariables;
+    pendingVariableWrites = [];
     failureDiagnostic = null;
     currentSceneIndex = -1;
     currentActionIndex = -1;
@@ -1633,6 +1717,7 @@ export function createDsl4RuntimeController({
     const action = currentAction();
     const wasRunning = status === 'running';
     if (wasRunning) actionAbortController?.abort(reason);
+    pendingVariableWrites = [];
     generation += 1;
     if (wasRunning && action) emit('action.cancel', {reason});
     try {
@@ -1798,6 +1883,7 @@ export function createDsl4RuntimeController({
     finishPresentationTransitions(reason);
     const action = currentAction();
     actionAbortController?.abort(reason);
+    pendingVariableWrites = [];
     generation += 1;
     if (action) emit('action.cancel', {reason});
     runId += 1;
@@ -1831,6 +1917,7 @@ export function createDsl4RuntimeController({
     rehearsalSkipLock = lock;
     const action = currentAction();
     actionAbortController?.abort(lock.command);
+    pendingVariableWrites = [];
     generation += 1;
     if (action) emit('action.cancel', {reason: lock.command});
     runId += 1;
@@ -1872,6 +1959,7 @@ export function createDsl4RuntimeController({
     rehearsalSceneSkip = {sceneIndex: currentSceneIndex, reason: lock.command};
     const action = currentAction();
     actionAbortController?.abort(lock.command);
+    pendingVariableWrites = [];
     generation += 1;
     if (action) emit('action.cancel', {reason: lock.command});
     runId += 1;
@@ -1914,6 +2002,7 @@ export function createDsl4RuntimeController({
     const action = currentAction();
     finishPresentationTransitions(reason);
     actionAbortController?.abort(reason);
+    pendingVariableWrites = [];
     generation += 1;
     if (action) emit('action.cancel', {reason});
     runId += 1;
@@ -1958,6 +2047,7 @@ export function createDsl4RuntimeController({
     const action = currentAction();
     finishPresentationTransitions(reason);
     if (wasRunning) actionAbortController?.abort(reason);
+    pendingVariableWrites = [];
     generation += 1;
     if (wasRunning && action) emit('action.cancel', {reason});
     try {
@@ -2027,6 +2117,7 @@ export function createDsl4RuntimeController({
     const action = currentAction();
     finishPresentationTransitions(reason);
     actionAbortController?.abort(reason);
+    pendingVariableWrites = [];
     generation += 1;
     if (action) emit('action.cancel', {reason});
     try {
@@ -2229,6 +2320,7 @@ export function createDsl4RuntimeController({
     start,
     stop,
     invokeAction,
+    queueVariableWrite,
     rejectActionInvocation,
     canAdvance,
     canRehearsalSkip,

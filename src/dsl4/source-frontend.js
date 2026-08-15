@@ -396,10 +396,14 @@ function validateBranchExpressions(
       if (isRecord(result) && result.ok === true) continue;
       const position =
         isRecord(result) && Number.isSafeInteger(result.position) ? result.position : 0;
+      const unknownRuntimeKey =
+        isRecord(result) && result.code === 'RUNTIME_EXPRESSION_UNKNOWN_RUNTIME_KEY';
       diagnostics.push(
         diagnostic({
-          code: 'K4-EXPRESSION-SYNTAX-001',
-          message: `Condition syntax is invalid at expression offset ${position}`,
+          code: unknownRuntimeKey ? 'K4-EXPRESSION-RUNTIME-UNKNOWN' : 'K4-EXPRESSION-SYNTAX-001',
+          message: unknownRuntimeKey
+            ? `Condition uses an unknown runtime key at expression offset ${position}`
+            : `Condition syntax is invalid at expression offset ${position}`,
           sourceId,
           path: `$.branches[${JSON.stringify(branchId)}][${index}].if`,
           node: document.getIn(['branches', branchId, index, 'if'], true),

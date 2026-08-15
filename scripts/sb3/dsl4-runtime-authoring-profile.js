@@ -50,6 +50,7 @@ function filePickerSupported() {
  *
  * @param {new (...args: any[]) => any} RuntimeExtension
  * @param {object} dependencies
+ * @param {string} dependencies.runtimeVersion
  * @param {Readonly<Record<string, number>>} dependencies.limits
  * @param {(Scratch: any) => any} dependencies.resolveRuntimeMount
  * @param {() => any} dependencies.resolveBundledTMPoseRuntime
@@ -61,6 +62,7 @@ function filePickerSupported() {
 export function installDsl4RuntimeAuthoringProfile(
   RuntimeExtension,
   {
+    runtimeVersion,
     limits,
     resolveRuntimeMount,
     resolveBundledTMPoseRuntime,
@@ -157,6 +159,7 @@ export function installDsl4RuntimeAuthoringProfile(
       let liveReload;
       const createSession = createDsl4TurboWarpPreviewSessionFactory({
         featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
+        runtimeVersion,
         runtimeComponent: component,
         debugExecution,
         resolveRuntimeComponent({storyDocument}) {

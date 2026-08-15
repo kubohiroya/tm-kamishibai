@@ -18,6 +18,10 @@ import {
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
 } from '../../src/dsl4/platform/turbowarp-core-action-block.js';
+import {
+  coerceDsl4StoryVariableBlockValue,
+  createDsl4TurboWarpRuntimeVariableBlockSurface,
+} from '../../src/dsl4/platform/turbowarp-runtime-variable-block.js';
 import {createDsl4TurboWarpTransitionPort} from '../../src/dsl4/platform/turbowarp-transition-port.js';
 import {dsl4RuntimeProvenance} from '../../src/dsl4/runtime-provenance.js';
 import {appShellCommon, appShellLocales} from './app-shell-locales.mjs';
@@ -132,7 +136,9 @@ function loggedError(failure) {
 class KamishibaiDsl4RuntimeExtension {
   constructor(Scratch) {
     this.Scratch = Scratch;
-    this.frontend = createDsl4ProductionSourceFrontend(schema);
+    this.frontend = createDsl4ProductionSourceFrontend(schema, {
+      runtimeStateExpressionsEnabled: dsl4StandardProductionFeatureFlags.dsl4ExpressionRuntimeState,
+    });
     this.coreActionBlockAdapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
     this.shell = null;
     this.errorIndicator = null;
@@ -154,6 +160,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.applicationMenu = null;
     this.titleControls = null;
     this.sourceChooser = null;
+    this.lastStoryVariableWriteResult = false;
+    this.storyVariableWriteResults = new WeakMap();
 
     const runtime = Scratch.vm.runtime;
     runtime.on('PROJECT_STOP_ALL', () =>
@@ -169,6 +177,13 @@ class KamishibaiDsl4RuntimeExtension {
     const coreActionSurface = createDsl4TurboWarpCoreActionBlockSurface(
       {ArgumentType, BlockType},
       {visible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpActionSurface},
+    );
+    const runtimeVariableSurface = createDsl4TurboWarpRuntimeVariableBlockSurface(
+      {ArgumentType, BlockType},
+      {
+        stateVisible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpStateSurface === true,
+        writeVisible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite === true,
+      },
     );
     return {
       id: extensionId,
@@ -188,6 +203,7 @@ class KamishibaiDsl4RuntimeExtension {
         .join('\n'),
       blocks: [
         ...coreActionSurface.blocks,
+        ...runtimeVariableSurface.blocks,
         {
           opcode: 'versionReporter',
           blockType: BlockType.REPORTER,
@@ -258,12 +274,146 @@ class KamishibaiDsl4RuntimeExtension {
           hideFromPalette: true,
         },
       ],
-      menus: coreActionSurface.menus,
+      menus: {...coreActionSurface.menus, ...runtimeVariableSurface.menus},
     };
   }
 
   versionReporter() {
     return extensionVersion;
+  }
+
+  runtimeVersionReporter() {
+    return extensionVersion;
+  }
+
+  runtimeVariableInvoker() {
+    return this.shell?.runtimeHost ?? this.previewLiveReload;
+  }
+
+  runtimeVariableSnapshot() {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStateSurface) return null;
+    return this.runtimeVariableInvoker()?.getRuntimeVariableSnapshot?.() ?? null;
+  }
+
+  storyVariableReporter(args) {
+    const variables = this.runtimeVariableSnapshot()?.storyVariables;
+    const name = String(args?.NAME ?? '');
+    return variables && Object.hasOwn(variables, name) ? variables[name] : '';
+  }
+
+  storyVariableExists(args) {
+    const variables = this.runtimeVariableSnapshot()?.storyVariables;
+    return Boolean(variables && Object.hasOwn(variables, String(args?.NAME ?? '')));
+  }
+
+  storyVariableType(args) {
+    const variables = this.runtimeVariableSnapshot()?.storyVariables;
+    const name = String(args?.NAME ?? '');
+    return variables && Object.hasOwn(variables, name) ? typeof variables[name] : 'unknown';
+  }
+
+  storyStatusReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.status ?? 'idle';
+  }
+
+  currentSceneIdReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['scene.id'] ?? '';
+  }
+
+  currentActionNumberReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['action.number'] ?? 0;
+  }
+
+  currentActionPathReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['action.path'] ?? '';
+  }
+
+  lastRuntimeErrorCodeReporter() {
+    return this.runtimeVariableSnapshot()?.diagnostic?.code ?? '';
+  }
+
+  lastRuntimeErrorStoryPathReporter() {
+    return this.runtimeVariableSnapshot()?.diagnostic?.storyPath ?? '';
+  }
+
+  posePhaseReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['pose.phase'] ?? 'inactive';
+  }
+
+  poseTargetReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['pose.target'] ?? '';
+  }
+
+  poseNameReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['pose.name'] ?? '';
+  }
+
+  poseStepNumberReporter() {
+    return this.runtimeVariableSnapshot()?.runtime?.['pose.stepNumber'] ?? 0;
+  }
+
+  applicationStatusReporter() {
+    return dsl4StandardProductionFeatureFlags.dsl4TurboWarpStateSurface ? this.status : 'ready';
+  }
+
+  canNavigateToPreviousAction() {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStateSurface) return false;
+    const state = this.runtimeVariableInvoker()?.getState?.();
+    return Boolean(state?.historyEnabled && state?.history?.actionCursor > 0);
+  }
+
+  canNavigateToNextAction() {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStateSurface) return false;
+    const state = this.runtimeVariableInvoker()?.getState?.();
+    if (state?.historyEnabled && state?.history?.mode === 'history') {
+      return state.history.actionCursor < state.history.actionEntries.length;
+    }
+    return state?.runtime?.status === 'running';
+  }
+
+  rememberStoryVariableWrite(result, util) {
+    const accepted = result?.accepted === true;
+    this.lastStoryVariableWriteResult = accepted;
+    if (util?.thread && typeof util.thread === 'object') {
+      this.storyVariableWriteResults.set(util.thread, accepted);
+    }
+    return result;
+  }
+
+  setStoryVariable(args, util) {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
+      return this.rememberStoryVariableWrite({accepted: false}, util);
+    }
+    const converted = coerceDsl4StoryVariableBlockValue(args?.VALUE, String(args?.TYPE ?? ''));
+    if (!converted.ok) return this.rememberStoryVariableWrite({accepted: false}, util);
+    const result = this.runtimeVariableInvoker()?.queueVariableWrite?.({
+      operation: 'set',
+      name: String(args?.NAME ?? ''),
+      value: converted.value,
+    });
+    return this.rememberStoryVariableWrite(result, util);
+  }
+
+  changeNumberStoryVariable(args, util) {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite) {
+      return this.rememberStoryVariableWrite({accepted: false}, util);
+    }
+    const delta = Number(args?.DELTA);
+    const result = Number.isFinite(delta)
+      ? this.runtimeVariableInvoker()?.queueVariableWrite?.({
+          operation: 'change',
+          name: String(args?.NAME ?? ''),
+          value: delta,
+        })
+      : {accepted: false};
+    return this.rememberStoryVariableWrite(result, util);
+  }
+
+  lastStoryVariableWriteAccepted(_args, util) {
+    if (!dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite) return false;
+    return util?.thread && typeof util.thread === 'object'
+      ? (this.storyVariableWriteResults.get(util.thread) ?? false)
+      : this.lastStoryVariableWriteResult;
   }
 
   statusReporter() {
@@ -834,6 +984,7 @@ class KamishibaiDsl4RuntimeExtension {
         document: globalThis.document,
         mount: resolveRuntimeMount(Scratch),
         runtimeHostOptions: {
+          runtimeVersion: extensionVersion,
           project,
           sourceFrontend: this.frontend,
           ...limits,
@@ -912,6 +1063,7 @@ class KamishibaiDsl4RuntimeExtension {
 
 if (DSL4_AUTHORING_PROFILE) {
   installDsl4RuntimeAuthoringProfile(KamishibaiDsl4RuntimeExtension, {
+    runtimeVersion: extensionVersion,
     limits,
     resolveRuntimeMount,
     resolveBundledTMPoseRuntime,

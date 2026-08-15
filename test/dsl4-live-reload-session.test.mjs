@@ -54,6 +54,13 @@ function fakeSession(runtime, events, name) {
       events.push([name, 'invokeAction', action]);
       return Promise.resolve({outcome: 'completed'});
     },
+    queueVariableWrite(request) {
+      events.push([name, 'queueVariableWrite', request]);
+      return {accepted: true, code: ''};
+    },
+    getRuntimeVariableSnapshot() {
+      return {owner: name, storyVariables: {...state.variables}};
+    },
     dispose(reason) {
       events.push([name, 'dispose', reason]);
       disposed = true;
@@ -124,7 +131,16 @@ test('routes action invocation directly to the active live reload generation', a
   const action = {command: 'wait', target: null, args: {seconds: 0}};
 
   assert.deepEqual(await liveReload.invokeAction(action), {outcome: 'completed'});
-  assert.deepEqual(events, [['current', 'invokeAction', action]]);
+  const write = {operation: 'change', name: 'score', value: 1};
+  assert.deepEqual(liveReload.queueVariableWrite(write), {accepted: true, code: ''});
+  assert.deepEqual(liveReload.getRuntimeVariableSnapshot(), {
+    owner: 'current',
+    storyVariables: {score: 0},
+  });
+  assert.deepEqual(events, [
+    ['current', 'invokeAction', action],
+    ['current', 'queueVariableWrite', write],
+  ]);
   await liveReload.dispose();
   await assert.rejects(
     liveReload.invokeAction(action),

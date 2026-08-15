@@ -1,6 +1,7 @@
 import {createDsl4NavigationSession} from '../navigation-session.js';
 import {resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
+import {createDsl4RuntimeVariableSnapshot} from '../runtime-variable-surface.js';
 import {createDsl4TurboWarpRuntimeEnvironment} from './turbowarp-runtime-host.js';
 import {createDsl4TurboWarpTransitionPort} from './turbowarp-transition-port.js';
 
@@ -55,14 +56,23 @@ function validateSessionContext(value) {
  * Make one navigation session the sole owner of its TurboWarp runtime environment.
  *
  * @param {Readonly<Record<string, Function>>} session
- * @param {Readonly<{dispose: Function}>} environment
+ * @param {Readonly<{dispose: Function, getPoseState?: Function}>} environment
+ * @param {unknown} runtimeVersion
+ * @param {boolean} stateSurfaceEnabled
  * @returns {Readonly<Record<string, Function>>}
  */
-function ownRuntimeEnvironment(session, environment) {
+function ownRuntimeEnvironment(session, environment, runtimeVersion, stateSurfaceEnabled) {
   /** @type {Promise<void> | null} */
   let disposePromise = null;
   return Object.freeze({
     ...session,
+    getRuntimeVariableSnapshot() {
+      if (!stateSurfaceEnabled) return null;
+      return createDsl4RuntimeVariableSnapshot(session.getState().runtime, {
+        poseState: environment.getPoseState?.() ?? null,
+        version: runtimeVersion,
+      });
+    },
     /** @param {string} [reason] */
     dispose(reason = 'dispose') {
       if (disposePromise) return disposePromise;
@@ -213,6 +223,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         turboWarpBubbleAdvancedPresentationEnabled:
           featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
         broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
+        storyVariableWriteEnabled: featureFlags.dsl4TurboWarpStoryVariableWrite,
       });
     } catch (error) {
       try {
@@ -269,7 +280,12 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
       }
       throw error;
     }
-    const owned = ownRuntimeEnvironment(navigationSession, environment);
+    const owned = ownRuntimeEnvironment(
+      navigationSession,
+      environment,
+      options.runtimeVersion,
+      featureFlags.dsl4TurboWarpStateSurface,
+    );
     return owned;
   }
 
@@ -378,10 +394,22 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
         return disposePromise;
       },
       getState: snapshot,
+      getRuntimeVariableSnapshot() {
+        if (!featureFlags.dsl4TurboWarpStateSurface) return null;
+        if (!concreteSession) return createDsl4RuntimeVariableSnapshot(snapshot().runtime);
+        return concreteSession.getRuntimeVariableSnapshot();
+      },
       /** @param {Readonly<Record<string, unknown>>} action */
       invokeAction(action) {
         if (disposed) return Promise.reject(disposedError());
         return initialize().then((session) => session.invokeAction(action));
+      },
+      /** @param {unknown} request */
+      queueVariableWrite(request) {
+        if (disposed || !concreteSession) {
+          return deepFreeze({accepted: false, code: 'K4-VARIABLE-WRITE-INACTIVE'});
+        }
+        return concreteSession.queueVariableWrite(request);
       },
       /** @param {unknown} error */
       rejectActionInvocation(error) {
