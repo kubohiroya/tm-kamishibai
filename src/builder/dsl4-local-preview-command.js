@@ -4,13 +4,11 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {dsl4ExternalSourceManifestFilenames} from '../dsl4/external-source-manifest.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {buildDsl4RuntimeComponent} from './dsl4-build.js';
-import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
-import {
-  dsl4LocalPreviewBrowserBootstrapDefaults,
-  dsl4LocalPreviewBrowserBootstrapMaximums,
-} from './dsl4-local-preview-browser-bootstrap.js';
+import {parseDsl4ExternalSourceManifest} from './dsl4-external-source.js';
+import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
@@ -98,22 +96,19 @@ async function readBoundedFile(filePath, maximumBytes, description) {
   return bytes;
 }
 
-/** @param {Buffer} bytes */
-function parseSourceManifest(bytes) {
-  let parsed;
+/** @param {Buffer} bytes @param {string} filename */
+function parseSourceManifest(bytes, filename) {
+  let source;
   try {
-    parsed = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
   } catch (error) {
-    throw commandError(
-      'Source manifest must be valid UTF-8 JSON',
-      'K4-PREVIEW-CLI-MANIFEST',
-      error,
-    );
+    throw commandError('Source manifest must be valid UTF-8', 'K4-PREVIEW-CLI-MANIFEST', error);
   }
-  if (!isRecord(parsed)) {
-    throw commandError('Source manifest JSON must contain one object', 'K4-PREVIEW-CLI-MANIFEST');
+  try {
+    return parseDsl4ExternalSourceManifest(source, {filename});
+  } catch (error) {
+    throw commandError('Source manifest is invalid', 'K4-PREVIEW-CLI-MANIFEST', error);
   }
-  return validateDsl4ExternalSourceManifest(parsed);
 }
 
 /**
@@ -202,7 +197,7 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     options.maxSourceBytes,
     'maxSourceBytes',
     1,
-    dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
+    dsl4LocalPreviewBrowserBootstrapMaximums.maxSourceBytes,
   );
   const featureFlags = resolveDsl4FeatureFlags(options.featureFlags ?? {});
   const sourceLimits = resolveDsl4BuildSourceLimits({
@@ -254,9 +249,12 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
   const port = boundedInteger(options.port ?? 0, 'port', 0, 65_535);
   const projectRoot = path.resolve(options.projectRoot);
   const sourceManifestPath = path.resolve(options.sourceManifest);
-  if (sourceManifestPath !== path.join(projectRoot, 'project.source.json')) {
+  if (
+    path.dirname(sourceManifestPath) !== projectRoot ||
+    !dsl4ExternalSourceManifestFilenames.includes(path.basename(sourceManifestPath))
+  ) {
     throw commandError(
-      'sourceManifest must be projectRoot/project.source.json',
+      `sourceManifest must be one of: ${dsl4ExternalSourceManifestFilenames.join(', ')}`,
       'K4-PREVIEW-CLI-MANIFEST',
     );
   }
@@ -373,7 +371,7 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     ]);
     let sourceManifest;
     try {
-      sourceManifest = parseSourceManifest(manifestBytes);
+      sourceManifest = parseSourceManifest(manifestBytes, path.basename(sourceManifestPath));
     } finally {
       manifestBytes.fill(0);
     }

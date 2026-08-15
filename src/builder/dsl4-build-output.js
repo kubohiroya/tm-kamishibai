@@ -8,7 +8,11 @@ import {
 } from '../dsl4/runtime-artifact-loader.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
-import {ensureDsl4ExternalSourceCacheIdentity} from './dsl4-external-source.js';
+import {
+  ensureDsl4ExternalSourceCacheIdentity,
+  parseDsl4ExternalSourceManifest,
+  serializeDsl4ExternalSourceManifest,
+} from './dsl4-external-source.js';
 import {
   readDsl4PlaybackPoseNetBundle,
   readDsl4PlaybackRuntimeExtensionSource,
@@ -46,32 +50,30 @@ async function readInput(filePath, description) {
   }
 }
 
-/** @param {Buffer} bytes */
-function parseSourceManifest(bytes) {
-  let value;
+/** @param {Buffer} bytes @param {string} filename */
+function parseSourceManifest(bytes, filename) {
+  let source;
   try {
-    value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
   } catch (error) {
-    throw new Sb3BuilderError('Source manifest must be valid UTF-8 JSON', {
+    const format = filename.endsWith('.yaml') ? 'YAML' : 'JSON';
+    throw new Sb3BuilderError(`Source manifest must be valid UTF-8 ${format}`, {
       stage: 'dsl4-build-input',
-      code: 'K4-SOURCE-MANIFEST-JSON-001',
+      code: `K4-SOURCE-MANIFEST-${format}-001`,
       cause: error,
     });
   }
-  if (!isRecord(value)) {
-    throw new Sb3BuilderError('Source manifest JSON must contain one object', {
-      stage: 'dsl4-build-input',
-      code: 'K4-SOURCE-MANIFEST-JSON-001',
-    });
-  }
-  return value;
+  return parseDsl4ExternalSourceManifest(source, {filename});
 }
 
 /** @param {string} manifestPath @param {Readonly<Record<string, unknown>>} manifest */
 async function persistSourceManifest(manifestPath, manifest) {
   const temporaryPath = `${manifestPath}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`, {flag: 'wx'});
+    const source = serializeDsl4ExternalSourceManifest(manifest, {
+      filename: path.basename(manifestPath),
+    });
+    await writeFile(temporaryPath, source, {flag: 'wx'});
     await rename(temporaryPath, manifestPath);
   } catch (error) {
     await rm(temporaryPath, {force: true}).catch(() => {});
@@ -149,9 +151,12 @@ export async function buildDsl4RuntimeComponentFile(options) {
     readInput(baseSb3, 'base SB3'),
     readInput(sourceManifestPath, 'source manifest'),
   ]);
-  const identity = ensureDsl4ExternalSourceCacheIdentity(parseSourceManifest(sourceManifestBytes), {
-    ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
-  });
+  const identity = ensureDsl4ExternalSourceCacheIdentity(
+    parseSourceManifest(sourceManifestBytes, path.basename(sourceManifestPath)),
+    {
+      ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
+    },
+  );
   const sourceManifest = identity.manifest;
   const baseProject = readSb3(baseSb3Bytes).project;
   const usesStandardRuntime =

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {
   openDsl4LocalPreviewBrowser,
   runDsl4LocalPreviewCommand,
@@ -27,7 +27,7 @@ function previewArguments(extra = []) {
     '--project-root',
     '/project',
     '--source-manifest',
-    '/project/project.source.json',
+    '/project/project.source.yaml',
     '--control-profile',
     'production',
     '--channel',
@@ -44,9 +44,34 @@ function previewArguments(extra = []) {
   ];
 }
 
+function withoutDefaultLimitOptions(arguments_) {
+  const options = new Set([
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]);
+  const result = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    if (options.has(arguments_[index])) {
+      index += 1;
+    } else {
+      result.push(arguments_[index]);
+    }
+  }
+  return result;
+}
+
 function commandOptions(extra = []) {
   return {
     ...parseCliArguments(previewArguments(extra)).options,
+    sourceFrontend: {parse() {}},
+  };
+}
+
+function defaultCommandOptions() {
+  return {
+    ...parseCliArguments(withoutDefaultLimitOptions(previewArguments())).options,
     sourceFrontend: {parse() {}},
   };
 }
@@ -81,15 +106,8 @@ function createCommandFixture({onOpen, start} = {}) {
     signalTarget,
     readyTimeoutMs: 100,
     async readFile(filePath) {
-      return filePath.endsWith('project.source.json')
-        ? Buffer.from(
-            JSON.stringify({
-              formatVersion: 1,
-              mode: 'external',
-              sourceId: 'main',
-              path: 'story.k4.yml',
-            }),
-          )
+      return filePath.endsWith('project.source.yaml')
+        ? Buffer.from('formatVersion: 1\nmode: external\nsourceId: main\npath: story.k4.yml\n')
         : Buffer.from('base');
     },
     async buildRuntime(options) {
@@ -148,13 +166,23 @@ function createCommandFixture({onOpen, start} = {}) {
   };
 }
 
-test('parses the bounded preview-dsl4 --watch contract and rejects unsafe arguments', () => {
+test('parses preview-dsl4 defaults and rejects unsafe arguments', () => {
   const parsed = parseCliArguments(previewArguments(['--port', '0', '--replace-existing']));
   assert.equal(parsed.action, 'preview-dsl4');
   assert.equal(parsed.options.watch, true);
   assert.equal(parsed.options.port, 0);
   assert.equal(parsed.options.replaceExisting, true);
   assert.match(usage(), /preview-dsl4 --watch/u);
+  const defaulted = parseCliArguments(withoutDefaultLimitOptions(previewArguments()));
+  assert.deepEqual(
+    {
+      maxSourceBytes: defaulted.options.maxSourceBytes,
+      maxAssetFileBytes: defaulted.options.maxAssetFileBytes,
+      maxAssetFiles: defaulted.options.maxAssetFiles,
+      maxTotalAssetBytes: defaulted.options.maxTotalAssetBytes,
+    },
+    dsl4CliDefaultLimits,
+  );
 
   assert.throws(
     () => parseCliArguments(previewArguments().filter((value) => value !== '--watch')),
@@ -166,8 +194,10 @@ test('parses the bounded preview-dsl4 --watch contract and rejects unsafe argume
     /Duplicate option: --watch/u,
   );
   const excessiveSource = previewArguments();
-  excessiveSource[excessiveSource.indexOf('--max-source-bytes') + 1] = '65537';
-  assert.throws(() => parseCliArguments(excessiveSource), /must be <= 65536/u);
+  excessiveSource[excessiveSource.indexOf('--max-source-bytes') + 1] = String(
+    dsl4CliDefaultLimits.maxSourceBytes + 1,
+  );
+  assert.throws(() => parseCliArguments(excessiveSource), /must be <= 262144/u);
   const excessiveFile = previewArguments();
   excessiveFile[excessiveFile.indexOf('--max-asset-file-bytes') + 1] = '20000';
   assert.throws(
@@ -230,7 +260,7 @@ test('parses the bounded preview-dsl4 --watch contract and rejects unsafe argume
 test('runCli delegates preview only with the production frontend and selected IO', async () => {
   const captured = captureIo();
   let delegated;
-  const result = await runCli(previewArguments(), captured.io, {
+  const result = await runCli(withoutDefaultLimitOptions(previewArguments()), captured.io, {
     async runPreview(options, dependencies) {
       delegated = {options, dependencies};
       return {exitCode: 0, reason: 'test'};
@@ -239,6 +269,8 @@ test('runCli delegates preview only with the production frontend and selected IO
   assert.deepEqual(result, {exitCode: 0, reason: 'test'});
   assert.equal(typeof delegated.options.sourceFrontend.parse, 'function');
   assert.equal(delegated.options.watch, true);
+  assert.equal(delegated.options.maxSourceBytes, dsl4CliDefaultLimits.maxSourceBytes);
+  assert.equal(delegated.options.maxAssetFiles, dsl4CliDefaultLimits.maxAssetFiles);
   assert.equal(delegated.dependencies.stdout, captured.io.stdout);
   assert.equal(delegated.dependencies.stderr, captured.io.stderr);
 });
@@ -251,7 +283,7 @@ test('waits for runtime-ready, redacts the token, and cleans up on SIGINT', asyn
       setImmediate(() => signalTarget.emit('SIGINT'));
     },
   });
-  const result = await runDsl4LocalPreviewCommand(commandOptions(), {
+  const result = await runDsl4LocalPreviewCommand(defaultCommandOptions(), {
     ...fixture.dependencies,
     ...captured.io,
   });
@@ -262,6 +294,8 @@ test('waits for runtime-ready, redacts the token, and cleans up on SIGINT', asyn
   assert.match(captured.stdout, /Preview stopped by SIGINT/u);
   assert.equal(captured.stdout.includes('A'.repeat(43)), false);
   assert.equal(fixture.disposeCount, 1);
+  assert.equal(fixture.runtimeOptions.maxSourceBytes, dsl4CliDefaultLimits.maxSourceBytes);
+  assert.equal(fixture.hostOptions.maxAssetFiles, dsl4CliDefaultLimits.maxAssetFiles);
   assert.equal(fixture.signalTarget.listenerCount('SIGINT'), 0);
   assert.equal(fixture.signalTarget.listenerCount('SIGTERM'), 0);
 });

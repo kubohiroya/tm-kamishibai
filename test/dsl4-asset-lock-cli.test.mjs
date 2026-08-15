@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 
 function lockArguments(extra = []) {
   return [
@@ -10,7 +10,7 @@ function lockArguments(extra = []) {
     '--project-root',
     'project',
     '--source-manifest',
-    'project/project.source.json',
+    'project/project.source.yaml',
     '--asset-config',
     'project/project.assets.json',
     '--output',
@@ -76,6 +76,25 @@ test('parses bounded lock-dsl4-assets options and rejects unbounded input', () =
   assert.equal(parsed.options.maxRedirects, 2);
   assert.match(usage(), /lock-dsl4-assets/u);
   assert.match(usage(), /allowlisted HTTPS/u);
+  const defaultedLock = lockArguments();
+  for (const option of [
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]) {
+    defaultedLock.splice(defaultedLock.indexOf(option), 2);
+  }
+  const defaultedLockOptions = parseCliArguments(defaultedLock).options;
+  assert.deepEqual(
+    {
+      maxSourceBytes: defaultedLockOptions.maxSourceBytes,
+      maxAssetFileBytes: defaultedLockOptions.maxAssetFileBytes,
+      maxAssetFiles: defaultedLockOptions.maxAssetFiles,
+      maxTotalAssetBytes: defaultedLockOptions.maxTotalAssetBytes,
+    },
+    dsl4CliDefaultLimits,
+  );
 
   assert.throws(
     () =>
@@ -117,6 +136,23 @@ test('parses and dispatches vendor-dsl4-assets with explicit finite limits', asy
   assert.equal(parsed.action, 'vendor-dsl4-assets');
   assert.equal(parsed.options.vendorDirectory, '.cache/assets');
   assert.equal(parsed.options.maxAssetLockBytes, 65536);
+  const defaultedVendor = vendorArguments();
+  for (const option of ['--max-asset-file-bytes', '--max-asset-files', '--max-total-asset-bytes']) {
+    defaultedVendor.splice(defaultedVendor.indexOf(option), 2);
+  }
+  const defaultedVendorOptions = parseCliArguments(defaultedVendor).options;
+  assert.deepEqual(
+    {
+      maxAssetFileBytes: defaultedVendorOptions.maxAssetFileBytes,
+      maxAssetFiles: defaultedVendorOptions.maxAssetFiles,
+      maxTotalAssetBytes: defaultedVendorOptions.maxTotalAssetBytes,
+    },
+    {
+      maxAssetFileBytes: dsl4CliDefaultLimits.maxAssetFileBytes,
+      maxAssetFiles: dsl4CliDefaultLimits.maxAssetFiles,
+      maxTotalAssetBytes: dsl4CliDefaultLimits.maxTotalAssetBytes,
+    },
+  );
   assert.match(usage(), /vendor-dsl4-assets/u);
   let stdout = '';
   let received;

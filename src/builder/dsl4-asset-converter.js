@@ -12,10 +12,11 @@ import {
   resolveDsl4RemotePoseWeightsPath,
 } from '../dsl4/remote-pose-directory.js';
 import {deepFreeze} from '../dsl4/story-document.js';
-import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
+import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
 import {fetchDsl4AssetRemote} from './dsl4-asset-lock.js';
 import {
   loadDsl4ExternalSource,
+  serializeDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
@@ -1172,7 +1173,7 @@ export async function convertDsl4ProjectAssets(options) {
     fail('Output directory cannot be inside .git', 'K4-ASSET-CONVERT-OUTPUT-001');
   }
 
-  const manifestInput = await loadDsl4ProjectJson({
+  const manifestInput = await loadDsl4ProjectSourceManifest({
     projectRoot: canonicalRoot,
     inputPath: sourceManifestPath,
     maxBytes: maxSourceManifestBytes,
@@ -1658,12 +1659,14 @@ export async function convertDsl4ProjectAssets(options) {
   const name = outputName(options.outputName, sourceStem(source.descriptor.displayName));
   const sourceFilename = `${name}.k4.yml`;
   const sb3Filename = `${name}.sb3`;
-  const sourceManifestFilename = 'project.source.json';
+  const sourceManifestFilename = 'project.source.yaml';
   const outputSourceManifest = validateDsl4ExternalSourceManifest({
     ...inputSourceManifest,
     path: sourceFilename,
   });
-  const serializedSourceManifest = `${JSON.stringify(outputSourceManifest, null, 2)}\n`;
+  const serializedSourceManifest = serializeDsl4ExternalSourceManifest(outputSourceManifest, {
+    filename: sourceManifestFilename,
+  });
   if (Buffer.byteLength(serializedSourceManifest) > maxSourceManifestBytes) {
     fail(
       'Converted source manifest exceeds maxSourceManifestBytes',
@@ -1679,9 +1682,13 @@ export async function convertDsl4ProjectAssets(options) {
     requestedOutput,
     outputFiles,
     async (candidateDirectory) => {
-      const candidateManifest = JSON.parse(
-        await readFile(path.join(candidateDirectory, sourceManifestFilename), 'utf8'),
-      );
+      const candidateManifest = await loadDsl4ProjectSourceManifest({
+        projectRoot: candidateDirectory,
+        inputPath: path.join(candidateDirectory, sourceManifestFilename),
+        maxBytes: maxSourceManifestBytes,
+        label: 'source manifest',
+        code: 'K4-SOURCE-MANIFEST-001',
+      });
       const candidateSource = await loadDsl4ExternalSource(candidateDirectory, candidateManifest, {
         maxSourceBytes,
         subtleCrypto: options.subtleCrypto,

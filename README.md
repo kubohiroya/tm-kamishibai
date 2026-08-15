@@ -57,23 +57,23 @@ A DSL 4.0 project keeps its source manifest, YAML script, and assets such as ima
 
 ```text
 my-story/
-├── project.source.json
+├── project.source.yaml
 ├── story.k4.yml
 ├── images/
 ├── sounds/
 └── pose-models/
 ```
 
-`project.source.json` identifies the entry source.
+`project.source.yaml` identifies the entry source.
 
-```json
-{
-  "formatVersion": 1,
-  "mode": "external",
-  "sourceId": "main",
-  "path": "story.k4.yml"
-}
+```yaml
+formatVersion: 1
+mode: external
+sourceId: main
+path: story.k4.yml
 ```
+
+When a project directory is opened, TMPose Kamishibai looks for `project.source.yaml` first and then falls back to the legacy `project.source.json`. If both files exist, the YAML manifest takes precedence. Existing JSON manifests remain supported.
 
 At minimum, `story.k4.yml` declares a version and one or more scenes.
 
@@ -110,7 +110,6 @@ Validate a script without building it.
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes 262144 \
   --format pretty
 ```
 
@@ -120,13 +119,9 @@ Watch the complete project and preview it in a browser.
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes 65536 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --channel bundled
 ```
 
 Build a self-contained SB3 from the same input.
@@ -135,17 +130,22 @@ Build a self-contained SB3 from the same input.
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --output dist/my-story.sb3 \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes 262144 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728
+  --channel bundled
 ```
 
-The byte limits are deliberately required: they make malformed input and unexpectedly large artifacts fail closed. Increase them only after reviewing the intended project size.
+The CLI applies finite safety limits when the four common limit options are omitted.
+
+| Option                    | Default   | Override or limitation                                                                |
+| ------------------------- | --------- | ------------------------------------------------------------------------------------- |
+| `--max-source-bytes`      | 262144    | Fixed canonical-source maximum; a larger composed story is currently unsupported      |
+| `--max-asset-file-bytes`  | 16777216  | Increase when one reviewed asset is larger than 16 MiB                                |
+| `--max-asset-files`       | 256       | Increase for build/asset jobs with more files; browser preview currently stops at 256 |
+| `--max-total-asset-bytes` | 134217728 | Increase when reviewed assets exceed 128 MiB in total                                 |
+
+These values are ceilings, not reserved memory. Explicit overrides remain available for exceptional projects, but preview values above the recommended 128 MiB asset total require `--allow-large-preview-artifacts` and still have absolute browser limits. Source Graph includes remain opt-in and require their separate file-count, total-source-byte, and depth limits because their topology cannot be inferred safely.
 
 The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
 
@@ -176,7 +176,7 @@ self-contained SB3
 TurboWarp runtime + TMPose
 ```
 
-- YAML and `project.source.json` remain the editable sources of truth
+- YAML and `project.source.yaml` remain the editable sources of truth
 - Preview, validation, build, and runtime loading use the same StoryDocument and diagnostics
 - Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile
 - Failed builds preserve existing output and replace it only with a validated candidate

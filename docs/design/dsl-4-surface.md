@@ -261,7 +261,7 @@ DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にs
 tw-kamishibai-assets-v1--<台本basename由来slug>--<stable-story-id>
 ```
 
-`project.source.json`ではstable IDを`cacheId`、生成済みdatabase名を`cacheDatabaseName`として保持します。
+`project.source.yaml`（既存の`project.source.json`も可）ではstable IDを`cacheId`、生成済みdatabase名を`cacheDatabaseName`として保持します。
 正常な初回buildが両fieldをatomicに追記し、生成SB3のsource descriptorにも`cacheIdentity`として埋め込みます。
 runtime hostは埋め込みidentityを正本として使用し、異なるidentityの外部注入を拒否します。
 

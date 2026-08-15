@@ -18,8 +18,12 @@ import {
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from '../dsl4/browser-turbowarp-stage.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
+import {dsl4ExternalSourceManifestFilenames} from '../dsl4/external-source-manifest.js';
 import {Sb3BuilderError} from './errors.js';
-import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
+import {
+  parseDsl4ExternalSourceManifest,
+  validateDsl4ExternalSourceManifest,
+} from './dsl4-external-source.js';
 import {createDsl4PreviewTransportPolicy} from './dsl4-preview-transport-policy.js';
 import {createDsl4PreviewSourceWatcher} from './dsl4-preview-watch.js';
 import {
@@ -316,9 +320,11 @@ export function createDsl4LocalPreviewHost(options) {
   );
   if (
     path.dirname(sourceManifestPath) !== projectRoot ||
-    path.basename(sourceManifestPath) !== 'project.source.json'
+    !dsl4ExternalSourceManifestFilenames.includes(path.basename(sourceManifestPath))
   ) {
-    throw new TypeError('sourceManifestPath must be projectRoot/project.source.json');
+    throw new TypeError(
+      `sourceManifestPath must use one of: ${dsl4ExternalSourceManifestFilenames.join(', ')}`,
+    );
   }
   const sourceManifest = validateDsl4ExternalSourceManifest(options.sourceManifest);
   const sourceFrontend = validateFrontend(options.sourceFrontend);
@@ -629,7 +635,12 @@ export function createDsl4LocalPreviewHost(options) {
   async function inspectManifestChange() {
     let parsed;
     try {
-      parsed = JSON.parse(await readFile(sourceManifestPath, 'utf8'));
+      const source = new TextDecoder('utf-8', {fatal: true}).decode(
+        await readFile(sourceManifestPath),
+      );
+      parsed = parseDsl4ExternalSourceManifest(source, {
+        filename: path.basename(sourceManifestPath),
+      });
     } catch {
       await requireFullRebuild(
         'K4-PREVIEW-STRUCTURE-MANIFEST',
@@ -658,7 +669,7 @@ export function createDsl4LocalPreviewHost(options) {
   function startStructureWatcher() {
     const watcher = structureWatchFactory(projectRoot, (_eventType, filename) => {
       if (disposed || status === 'rebuild-required') return;
-      if (filename !== null && String(filename) !== 'project.source.json') return;
+      if (filename !== null && String(filename) !== path.basename(sourceManifestPath)) return;
       structuralOperation = structuralOperation
         .then(inspectManifestChange)
         .catch((error) => reportError(error));

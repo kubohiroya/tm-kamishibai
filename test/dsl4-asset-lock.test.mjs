@@ -74,8 +74,8 @@ async function withProject(callback) {
     await Promise.all([
       writeFile(path.join(root, 'story.kamishibai.yaml'), source),
       writeFile(
-        path.join(root, 'project.source.json'),
-        JSON.stringify({formatVersion: 1, mode: 'external', sourceId: 'main'}),
+        path.join(root, 'project.source.yaml'),
+        'formatVersion: 1\nmode: external\nsourceId: main\n',
       ),
       writeFile(path.join(root, 'project.assets.json'), JSON.stringify(config())),
       writeFile(path.join(root, 'assets', 'logo.svg'), localBytes.logo),
@@ -94,7 +94,7 @@ async function withProject(callback) {
 function options(root, fetchImplementation) {
   return {
     projectRoot: root,
-    sourceManifest: path.join(root, 'project.source.json'),
+    sourceManifest: path.join(root, 'project.source.yaml'),
     assetConfig: path.join(root, 'project.assets.json'),
     sourceFrontend,
     maxSourceBytes: 16 * 1024,

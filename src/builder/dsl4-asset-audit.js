@@ -12,6 +12,7 @@ import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
   loadDsl4ExternalSource,
+  parseDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
@@ -107,19 +108,34 @@ async function readBoundedFile(filePath, limit, fileSystem) {
  * @param {string} options.code
  * @param {{realpath: Function, lstat: Function, open: Function}} options.fileSystem
  * @param {(filePath: string, limit: number) => Promise<Buffer | Uint8Array>} options.readFile
+ * @param {readonly string[]} [options.extensions]
+ * @param {string} [options.formatLabel]
+ * @param {(source: string, filename: string) => unknown} [options.parse]
  */
 async function readStableProjectJson(
   requestedRoot,
   canonicalRoot,
   inputPath,
-  {maxBytes, label, code, fileSystem, readFile},
+  {
+    maxBytes,
+    label,
+    code,
+    fileSystem,
+    readFile,
+    extensions = ['.json'],
+    formatLabel = 'JSON',
+    parse = (source) => JSON.parse(source),
+  },
 ) {
   if (typeof inputPath !== 'string' || inputPath.length === 0 || inputPath.includes('\0')) {
     throw new TypeError(`${label} path must be a non-empty string without NUL`);
   }
   const requestedPath = path.resolve(inputPath);
-  if (!isWithin(requestedRoot, requestedPath) || path.extname(requestedPath) !== '.json') {
-    fail(`${label} must be a project-local JSON file`, code);
+  if (
+    !isWithin(requestedRoot, requestedPath) ||
+    !extensions.includes(path.extname(requestedPath))
+  ) {
+    fail(`${label} must be a project-local ${formatLabel} file`, code);
   }
   let requestedState;
   let canonicalPath;
@@ -164,11 +180,12 @@ async function readStableProjectJson(
   }
   let parsed;
   try {
-    parsed = JSON.parse(decoded);
+    parsed = parse(decoded, path.basename(requestedPath));
   } catch (error) {
-    fail(`${label} must contain valid JSON`, code, error);
+    if (error instanceof Sb3BuilderError) throw error;
+    fail(`${label} must contain valid ${formatLabel}`, code, error);
   }
-  if (!isRecord(parsed)) fail(`${label} JSON must contain one object`, code);
+  if (!isRecord(parsed)) fail(`${label} ${formatLabel} must contain one object`, code);
   return parsed;
 }
 
@@ -218,6 +235,58 @@ export async function loadDsl4ProjectJson({
     code,
     fileSystem: fs,
     readFile: readSnapshot,
+  });
+}
+
+/**
+ * Read one project-local YAML or JSON source manifest with the bounded stable-snapshot contract.
+ *
+ * @param {object} options
+ * @param {string} options.projectRoot
+ * @param {string} options.inputPath
+ * @param {number} options.maxBytes
+ * @param {string} options.label
+ * @param {string} options.code
+ * @param {{realpath: Function, lstat: Function, open: Function}} [options.fileSystem]
+ * @param {(filePath: string, limit: number) => Promise<Buffer | Uint8Array>} [options.readFile]
+ */
+export async function loadDsl4ProjectSourceManifest({
+  projectRoot,
+  inputPath,
+  maxBytes,
+  label,
+  code,
+  fileSystem = defaultFileSystem,
+  readFile,
+}) {
+  if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
+    throw new TypeError('projectRoot must be a non-empty string');
+  }
+  const limit = positiveLimit(maxBytes, 'maxBytes');
+  const fs = validateFileSystem(fileSystem);
+  if (readFile !== undefined && typeof readFile !== 'function') {
+    throw new TypeError('readFile must be a function');
+  }
+  const readSnapshot = readFile ?? ((filePath, maximum) => readBoundedFile(filePath, maximum, fs));
+  const requestedRoot = path.resolve(projectRoot);
+  let canonicalRoot;
+  try {
+    canonicalRoot = await fs.realpath(requestedRoot);
+    const rootState = await fs.lstat(canonicalRoot);
+    if (!rootState.isDirectory()) fail('Project root is not a directory', code);
+  } catch (error) {
+    if (error instanceof Sb3BuilderError) throw error;
+    fail('Cannot resolve project root', code, error);
+  }
+  return readStableProjectJson(requestedRoot, canonicalRoot, inputPath, {
+    maxBytes: limit,
+    label,
+    code,
+    fileSystem: fs,
+    readFile: readSnapshot,
+    extensions: ['.yaml', '.json'],
+    formatLabel: 'YAML or JSON',
+    parse: (source, filename) => parseDsl4ExternalSourceManifest(source, {filename}),
   });
 }
 
@@ -274,6 +343,9 @@ export async function loadDsl4AssetAuditInputs({
       code: 'K4-SOURCE-MANIFEST-001',
       fileSystem: fs,
       readFile: readSnapshot,
+      extensions: ['.yaml', '.json'],
+      formatLabel: 'YAML or JSON',
+      parse: (source, filename) => parseDsl4ExternalSourceManifest(source, {filename}),
     }),
     readStableProjectJson(requestedRoot, canonicalRoot, assetConfig, {
       maxBytes: configLimit,

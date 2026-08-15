@@ -1,8 +1,15 @@
+import {isMap, parseAllDocuments, stringify} from 'yaml';
+
 import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {deepFreeze} from './story-document.js';
 
 export const dsl4DefaultExternalSourcePath = 'story.kamishibai.yaml';
+export const dsl4ExternalSourceManifestFilenames = deepFreeze([
+  'project.source.yaml',
+  'project.source.json',
+]);
+export const dsl4DefaultExternalSourceManifestFilename = dsl4ExternalSourceManifestFilenames[0];
 
 const requiredManifestKeys = new Set(['formatVersion', 'mode', 'sourceId']);
 const manifestKeys = new Set([...requiredManifestKeys, 'path', 'cacheId', 'cacheDatabaseName']);
@@ -24,6 +31,64 @@ function fail(code, message) {
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** @param {unknown} value */
+function manifestFilename(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
+    fail('K4-SOURCE-MANIFEST-001', 'Source manifest filename must be a non-empty string');
+  }
+  const leaf = value.split(/[\\/]/u).at(-1);
+  if (leaf?.endsWith('.yaml')) return {filename: leaf, format: 'yaml'};
+  if (leaf?.endsWith('.json')) return {filename: leaf, format: 'json'};
+  fail('K4-SOURCE-MANIFEST-001', 'Source manifest filename must end in .yaml or .json');
+}
+
+/** @param {string} source */
+function parseYamlManifest(source) {
+  const documents = parseAllDocuments(source, {
+    prettyErrors: false,
+    schema: 'core',
+    strict: true,
+    uniqueKeys: true,
+  });
+  const issue = documents.flatMap((document) => [...document.errors, ...document.warnings])[0];
+  if (issue || documents.length !== 1 || !isMap(documents[0]?.contents)) {
+    fail(
+      'K4-SOURCE-MANIFEST-YAML-001',
+      issue?.message ?? 'Source manifest YAML must contain exactly one mapping document',
+    );
+  }
+  try {
+    const value = documents[0].toJS({mapAsMap: false, maxAliasCount: 0});
+    if (!isRecord(value)) {
+      fail('K4-SOURCE-MANIFEST-YAML-001', 'Source manifest YAML must contain one mapping');
+    }
+    return value;
+  } catch (error) {
+    if (error instanceof Dsl4ExternalSourceManifestError) throw error;
+    fail(
+      'K4-SOURCE-MANIFEST-YAML-001',
+      error instanceof Error ? error.message : 'Source manifest YAML is invalid',
+    );
+  }
+}
+
+/** @param {string} source */
+function parseJsonManifest(source) {
+  let value;
+  try {
+    value = JSON.parse(source);
+  } catch (error) {
+    fail(
+      'K4-SOURCE-MANIFEST-JSON-001',
+      error instanceof Error ? error.message : 'Source manifest JSON is invalid',
+    );
+  }
+  if (!isRecord(value)) {
+    fail('K4-SOURCE-MANIFEST-JSON-001', 'Source manifest JSON must contain one object');
+  }
+  return value;
 }
 
 /** @param {unknown} value @param {string} name */
@@ -111,4 +176,41 @@ export function validateDsl4ExternalSourceManifestContract(input) {
     path: source,
     ...(cache ? {cacheId: cache.id, cacheDatabaseName: cache.databaseName} : {}),
   });
+}
+
+/**
+ * Parse and validate one UTF-8-decoded source manifest while preserving JSON compatibility.
+ *
+ * @param {string} source
+ * @param {object} [options]
+ * @param {string} [options.filename]
+ */
+export function parseDsl4ExternalSourceManifestSource(
+  source,
+  {filename = dsl4DefaultExternalSourceManifestFilename} = {},
+) {
+  if (typeof source !== 'string') {
+    throw new TypeError('Source manifest source must be a string');
+  }
+  const descriptor = manifestFilename(filename);
+  const input =
+    descriptor.format === 'yaml' ? parseYamlManifest(source) : parseJsonManifest(source);
+  return validateDsl4ExternalSourceManifestContract(input);
+}
+
+/**
+ * Serialize a validated source manifest in the format selected by its filename.
+ *
+ * @param {unknown} input
+ * @param {object} [options]
+ * @param {string} [options.filename]
+ */
+export function serializeDsl4ExternalSourceManifestSource(
+  input,
+  {filename = dsl4DefaultExternalSourceManifestFilename} = {},
+) {
+  const manifest = validateDsl4ExternalSourceManifestContract(input);
+  const descriptor = manifestFilename(filename);
+  if (descriptor.format === 'json') return `${JSON.stringify(manifest, null, 2)}\n`;
+  return stringify(manifest, {lineWidth: 0, sortMapEntries: false});
 }

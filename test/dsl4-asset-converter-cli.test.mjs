@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 
 function argumentsFor(extra = []) {
   return [
@@ -10,7 +10,7 @@ function argumentsFor(extra = []) {
     '--project-root',
     'project',
     '--source-manifest',
-    'project/project.source.json',
+    'project/project.source.yaml',
     '--base',
     'project/base.sb3',
     '--output-dir',
@@ -57,9 +57,25 @@ test('parses the bounded author asset conversion command', () => {
   assert.match(usage(), /omitted means all assets/u);
   assert.match(usage(), /rsync-destination/u);
 
-  const missing = argumentsFor();
-  missing.splice(missing.indexOf('--max-asset-files'), 2);
-  assert.throws(() => parseCliArguments(missing), /Missing required option: --max-asset-files/u);
+  const defaulted = argumentsFor();
+  for (const option of [
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]) {
+    defaulted.splice(defaulted.indexOf(option), 2);
+  }
+  const defaultedOptions = parseCliArguments(defaulted).options;
+  assert.deepEqual(
+    {
+      maxSourceBytes: defaultedOptions.maxSourceBytes,
+      maxAssetFileBytes: defaultedOptions.maxAssetFileBytes,
+      maxAssetFiles: defaultedOptions.maxAssetFiles,
+      maxTotalAssetBytes: defaultedOptions.maxTotalAssetBytes,
+    },
+    dsl4CliDefaultLimits,
+  );
   const invalidTarget = argumentsFor();
   invalidTarget[invalidTarget.indexOf('--to') + 1] = 'automatic';
   assert.throws(() => parseCliArguments(invalidTarget), /local, project, or remote/u);
@@ -109,7 +125,7 @@ test('routes conversion through the production frontend and reports the reusable
         received = options;
         return {
           converted: {Opening: 'local', Narration: 'local'},
-          sourceManifestPath: path.join(options.outputDirectory, 'project.source.json'),
+          sourceManifestPath: path.join(options.outputDirectory, 'project.source.yaml'),
           sourcePath: path.join(options.outputDirectory, 'story.k4.yml'),
           sb3Path: path.join(options.outputDirectory, 'story.sb3'),
         };
@@ -121,6 +137,6 @@ test('routes conversion through the production frontend and reports the reusable
   assert.deepEqual(result.converted, {Opening: 'local', Narration: 'local'});
   assert.equal(
     stdout,
-    'Converted 2 asset(s)\nSaved project.source.json\nSaved story.k4.yml\nSaved story.sb3\n',
+    'Converted 2 asset(s)\nSaved project.source.yaml\nSaved story.k4.yml\nSaved story.sb3\n',
   );
 });

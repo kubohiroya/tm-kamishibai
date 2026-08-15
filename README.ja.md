@@ -57,23 +57,23 @@ DSL 4.0では、source manifest、YAML台本、画像・音声・pose modelな�
 
 ```text
 my-story/
-├── project.source.json
+├── project.source.yaml
 ├── story.k4.yml
 ├── images/
 ├── sounds/
 └── pose-models/
 ```
 
-`project.source.json`はentry sourceを指定します。
+`project.source.yaml`はentry sourceを指定します。
 
-```json
-{
-  "formatVersion": 1,
-  "mode": "external",
-  "sourceId": "main",
-  "path": "story.k4.yml"
-}
+```yaml
+formatVersion: 1
+mode: external
+sourceId: main
+path: story.k4.yml
 ```
+
+project directoryを開くと、TMPose紙芝居は最初に`project.source.yaml`を探し、存在しない場合は従来の`project.source.json`へfallbackします。両方が存在する場合はYAML manifestを優先します。既存のJSON manifestも引き続き利用できます。
 
 最小の`story.k4.yml`は、versionと一つ以上のsceneを持ちます。
 
@@ -110,7 +110,6 @@ pnpm exec tmpose-kamishibai --help
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes 262144 \
   --format pretty
 ```
 
@@ -120,13 +119,9 @@ project全体を監視し、ブラウザでpreviewします。
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes 65536 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --channel bundled
 ```
 
 同じ入力から自己完結SB3を生成します。
@@ -135,17 +130,22 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --output dist/my-story.sb3 \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes 262144 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728
+  --channel bundled
 ```
 
-byte上限は入力規模を明示し、誤った入力や過大な成果物をfail closedにするための必須値です。必要性を確認せずに大きくしないでください。
+4つの共通上限optionを省略すると、CLIは次の有限な安全上限を適用します。
+
+| option                    | デフォルト | overrideまたは制約                                                   |
+| ------------------------- | ---------- | -------------------------------------------------------------------- |
+| `--max-source-bytes`      | 262144     | canonical sourceの固定上限。これを超えるcomposed storyは現在未対応   |
+| `--max-asset-file-bytes`  | 16777216   | 確認済みの単一assetが16 MiBを超える場合に増やす                      |
+| `--max-asset-files`       | 256        | build／asset処理では増やせるが、browser previewは現在256 filesが上限 |
+| `--max-total-asset-bytes` | 134217728  | 確認済みassetの合計が128 MiBを超える場合に増やす                     |
+
+これらは予約memory量ではなく上限値です。例外的に大きいprojectでは明示overrideできますが、previewで推奨上限のasset合計128 MiBを超える場合は`--allow-large-preview-artifacts`が必要で、browserの絶対上限も残ります。Source Graph includeはopt-inのままであり、graph構造を安全に推定できないため、file数・source合計byte数・深さの各上限を別途指定します。
 
 CLIにはほかに次のcommandがあります。引数と終了statusは`tmpose-kamishibai --help`および[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)で確認できます。
 
@@ -176,7 +176,7 @@ browser preview / CLI build
 TurboWarp runtime + TMPose
 ```
 
-- YAMLと`project.source.json`を編集可能な正本として扱う
+- YAMLと`project.source.yaml`を編集可能な正本として扱う
 - preview、validator、builder、runtime loaderで同じStoryDocumentと診断を使う
 - local assetは作品SB3へ埋め込み、remote assetはintegrityと配布profileを明示する
 - build失敗時は既存成果物を保持し、検証済みcandidateだけを置き換える

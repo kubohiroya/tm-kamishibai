@@ -36,7 +36,11 @@ test('uses a read-only, session-only project root selection boundary', () => {
   assert.equal(contract.selection.userActivationRequired, true);
   assert.equal(contract.selection.pickerMethod, 'showDirectoryPicker');
   assert.deepEqual(contract.selection.pickerOptions, {mode: 'read'});
-  assert.equal(contract.selection.manifestFilename, 'project.source.json');
+  assert.deepEqual(contract.selection.manifestFilenames, [
+    'project.source.yaml',
+    'project.source.json',
+  ]);
+  assert.equal(contract.selection.sourceDiscovery, 'yaml-then-json-manifest-or-default-only');
   assert.equal(contract.selection.defaultSourceFilename, 'story.kamishibai.yaml');
   assert.equal(contract.selection.recommendedSourceFilenameSuffix, '.k4.yml');
   assert.deepEqual(contract.selection.acceptedSourceFilenameSuffixes, [
@@ -47,7 +51,6 @@ test('uses a read-only, session-only project root selection boundary', () => {
   ]);
   assert.equal(contract.selection.sourcePathOptional, true);
   assert.equal(contract.selection.sourcePathScope, 'normalized-project-root-relative');
-  assert.equal(contract.selection.sourceDiscovery, 'manifest-or-default-only');
   assert.equal(contract.selection.assetDirectoryLayout, 'optional');
   assert.equal(contract.selection.manifestMaximumBytes, 32 * 1024);
   assert.equal(contract.selection.persistHandles, false);

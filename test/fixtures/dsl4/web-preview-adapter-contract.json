@@ -38,7 +38,7 @@
     "userActivationRequired": true,
     "pickerMethod": "showDirectoryPicker",
     "pickerOptions": {"mode": "read"},
-    "manifestFilename": "project.source.json",
+    "manifestFilenames": ["project.source.yaml", "project.source.json"],
     "defaultSourceFilename": "story.kamishibai.yaml",
     "recommendedSourceFilenameSuffix": ".k4.yml",
     "acceptedSourceFilenameSuffixes": [
@@ -49,7 +49,7 @@
     ],
     "sourcePathOptional": true,
     "sourcePathScope": "normalized-project-root-relative",
-    "sourceDiscovery": "manifest-or-default-only",
+    "sourceDiscovery": "yaml-then-json-manifest-or-default-only",
     "assetDirectoryLayout": "optional",
     "manifestMaximumBytes": 32768,
     "persistHandles": false
@@ -106,6 +106,7 @@
     {"code": "K4-WEB-PREVIEW-MANIFEST-MISSING", "severity": "error"},
     {"code": "K4-WEB-PREVIEW-MANIFEST-READ-001", "severity": "error"},
     {"code": "K4-WEB-PREVIEW-MANIFEST-JSON-001", "severity": "error"},
+    {"code": "K4-WEB-PREVIEW-MANIFEST-YAML-001", "severity": "error"},
     {"code": "K4-SOURCE-MANIFEST-001", "severity": "error"},
     {"code": "K4-SOURCE-PATH-001", "severity": "error"},
     {"code": "K4-SOURCE-MISSING", "severity": "error"},

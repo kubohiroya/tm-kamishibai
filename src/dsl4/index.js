@@ -141,8 +141,12 @@ export {
   lowerDsl4RuntimeExpression,
 } from './runtime-variable-surface.js';
 export {
+  dsl4DefaultExternalSourceManifestFilename,
   dsl4DefaultExternalSourcePath,
+  dsl4ExternalSourceManifestFilenames,
   Dsl4ExternalSourceManifestError,
+  parseDsl4ExternalSourceManifestSource,
+  serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';
 export {

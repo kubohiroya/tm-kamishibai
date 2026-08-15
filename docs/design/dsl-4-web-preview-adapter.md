@@ -96,7 +96,8 @@ await globalThis.showDirectoryPicker({mode: 'read'});
 adapterで監視します。そのfile以外のhandleを持たないため、SB3内project assetとremote assetは
 利用できますが、local `file` assetは`K4-ASSET-PROJECT-DIRECTORY-REQUIRED`として拒否します。
 
-adapterは選択されたroot直下の`project.source.json`だけを最初に読みます。manifestは既存
+adapterは選択されたroot直下で`project.source.yaml`を最初に探し、存在しない場合だけ
+`project.source.json`へfallbackします。両方が存在する場合はYAMLを選択します。manifestは既存
 `validateDsl4ExternalSourceManifest`と同じ契約を使用し、`path`は次をすべて満たす必要があります。
 
 - 省略時は`story.kamishibai.yaml`へ正規化する
@@ -104,7 +105,7 @@ adapterは選択されたroot直下の`project.source.json`だけを最初に読
 - `/`、backslash、absolute path、drive prefix、URL scheme、NULを含まない
 - directoryを走査または推測して別のYAMLへfallbackしない
 
-選択済みroot handleへ`getFileHandle()`を一回だけ呼び、root直下のYAMLを取得します。文字列pathをOS pathへ変換せず、
+manifest選択後、選択済みroot handleへ`getFileHandle()`を呼び、root直下のentry YAMLを取得します。文字列pathをOS pathへ変換せず、
 root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
 
 一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。pose modelはbundle自体を
@@ -112,7 +113,7 @@ directoryにしますが、`assets/`、`images/`、`sounds/`、`pose-models/`等
 
 ```text
 project-root/
-├── project.source.json
+├── project.source.yaml
 ├── story.kamishibai.yaml
 ├── hero.svg
 ├── opening.mp3
@@ -125,7 +126,7 @@ project-root/
 YAML内のlocal asset pathはproject root基準です。YAML自体をroot直下に限定するため、adapter／builderはproject root
 から同じ正規化済みpathを解決します。
 
-manifestのraw上限は32 KiBです。UTF-8をfatal decodeし、JSON objectと既存manifest schemaを検証します。
+manifestのraw上限は32 KiBです。UTF-8をfatal decodeし、YAML mappingまたはJSON objectと既存manifest schemaを検証します。
 初版session中にmanifestが変更された場合はadapter設定を暗黙更新せず、project再選択またはlocal full rebuildを
 要求します。base SB3、app shell、extension、builder設定、`controlProfile`は読みません。YAMLが
 宣言したlocal asset pathだけを毎generation二重読込し、remote metadataと現在のTurboWarp VM内project
@@ -143,7 +144,7 @@ asset referenceと一緒にsession-only runtime componentへ固定します。
 | retry interval              |    50 ms | missing／unstableを再取得する間隔                            |
 | stability timeout           | 2,000 ms | 一回のpoll cycleでretryする上限                              |
 | stable read count           |        2 | 同じcanonical integrityが連続するまでpublishしない           |
-| manifest raw byte limit     | 32,768 B | `project.source.json`の読込上限                              |
+| manifest raw byte limit     | 32,768 B | `project.source.yaml`／`.json`の読込上限                     |
 | source raw byte limit       | `2N+3` B | canonical source上限`N`に対するCRLF／BOM許容。Nodeと同じ意味 |
 
 各pollは次の順序です。
@@ -289,38 +290,31 @@ UIの固定要旨は次です。
 > このブラウザではフォルダーの変更を安全に監視できません。HTTPSのdesktop Chrome/Edgeで開くか、local
 > toolで台本を検証・再buildしてください。
 
-現時点で案内できる実在commandは次です。`N`やasset limitをUIが推測せず、projectの設定値を表示します。
+現時点で案内できる実在commandは次です。主要4上限はCLIの有限デフォルトを使用し、projectに
+明示overrideがある場合だけ追加optionとして表示します。preview artifact上限はUIが推測せず、
+projectの設定値を表示します。
 
 ```bash
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
-  --source-manifest PROJECT_ROOT/project.source.json \
+  --source-manifest PROJECT_ROOT/project.source.yaml \
   --control-profile production \
   --channel bundled \
-  --max-source-bytes N \
-  --max-asset-file-bytes N \
-  --max-asset-files N \
-  --max-total-asset-bytes N \
   --max-project-bytes N \
   --max-project-json-bytes N
 
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes N \
   --format pretty
 
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
-  --source-manifest PROJECT_ROOT/project.source.json \
+  --source-manifest PROJECT_ROOT/project.source.yaml \
   --output OUTPUT.sb3 \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes N \
-  --max-asset-file-bytes N \
-  --max-asset-files N \
-  --max-total-asset-bytes N
+  --channel bundled
 ```
 
 browser非対応時もdownload、polyfill、`webkitdirectory`へ自動fallbackせず、上の明示経路へ案内します。

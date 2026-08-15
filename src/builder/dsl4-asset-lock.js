@@ -16,7 +16,7 @@ import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {loadDsl4ExternalSource} from './dsl4-external-source.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
-import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
+import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
@@ -645,7 +645,7 @@ export async function generateDsl4AssetDistributionLock(options) {
     if (error instanceof Sb3BuilderError) throw error;
     fail('Cannot resolve project root', 'K4-ASSET-ROOT-001', error);
   }
-  const manifestInput = await loadDsl4ProjectJson({
+  const manifestInput = await loadDsl4ProjectSourceManifest({
     projectRoot: options.projectRoot,
     inputPath: options.sourceManifest,
     maxBytes: maxSourceManifestBytes,

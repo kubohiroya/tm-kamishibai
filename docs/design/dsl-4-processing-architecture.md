@@ -69,9 +69,9 @@ Copyright © 2026 Hiroya Kubo.
 
 | 用語                           | この文書での意味                                                                                                                                                                             |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| entry source                   | `project.source.json`が指す、projectの入口となる1個のDSL 4.0 YAML。許可suffixとpath規則はsource loader契約を正本とする                                                                       |
+| entry source                   | `project.source.yaml`（JSON fallback可）が指す、projectの入口となる1個のDSL 4.0 YAML。許可suffixとpath規則はsource loader契約を正本とする                                                     |
 | included source                | entry sourceの`include`から到達する任意source。`dsl4SourceIncludes`が起動時に有効な場合だけ読み、default経路では存在しない                                                                   |
-| source manifest                | entry sourceのmode、source ID、project-relative path、cache identityを宣言する`project.source.json`                                                                                          |
+| source manifest                | entry sourceのmode、source ID、project-relative path、cache identityを宣言する`project.source.yaml`または互換用`project.source.json`                                                         |
 | `sourceId`                     | 診断とsource descriptorでsourceを識別する論理ID。作者machine上の絶対pathやURLを使わない                                                                                                      |
 | cache identity                 | verified remote asset cacheを台本単位で分離するstable story ID、表示名、IndexedDB database名の組。source本文のintegrityとは別物                                                              |
 | canonical source               | UTF-8 BOMを除去し、CRLF／CRをLFへ揃えたsource text。byte長、integrity、YAML診断位置の基準になる                                                                                              |
@@ -174,7 +174,7 @@ flowchart TB
   subgraph AUTHORING["Authoring input"]
     YAML["DSL 4.0 YAML<br/>entry source"]
     INCLUDES["Optional included sources<br/>dsl4SourceIncludes = true only"]
-    MANIFEST["project.source.json"]
+    MANIFEST["project.source.yaml<br/>JSON fallback"]
     LOCAL["Local / remote asset declarations"]
     BASE["Base SB3"]
   end
@@ -369,7 +369,7 @@ sequenceDiagram
 
 build core自体はdiskを書き換えません。SB3出力mutationは`dsl4-build-output.js`へ隔離され、候補byte列が
 変化していないことと、diskから読み直したSB3が共有loaderを通ることを確認した後だけ既存出力を
-置換します。新規cache identityを`project.source.json`へ保存する操作はSB3置換transactionとは別であり、
+置換します。新規cache identityを選択されたsource manifestへ同じYAML／JSON形式で保存する操作はSB3置換transactionとは別であり、
 両fileを一つのatomic transactionとして扱うものではありません。
 
 ## 4. Runtime初期化シーケンス
