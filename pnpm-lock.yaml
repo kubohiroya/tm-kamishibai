@@ -81,13 +81,13 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
       '@types/node':
-        specifier: ^26.1.2
+        specifier: ^26.2.0
         version: 26.2.0
       ajv:
         specifier: 8.20.0
         version: 8.20.0
       eslint:
-        specifier: ^10.8.0
+        specifier: ^10.8.1
         version: 10.8.1
       fake-indexeddb:
         specifier: 6.2.5
@@ -99,7 +99,7 @@ importers:
         specifier: 17.9.0
         version: 17.9.0
       prettier:
-        specifier: ^3.0.0
+        specifier: ^3.9.6
         version: 3.9.6
       scratch-parser:
         specifier: 6.0.0
