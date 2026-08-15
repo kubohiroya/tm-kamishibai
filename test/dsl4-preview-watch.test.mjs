@@ -22,6 +22,7 @@ const manifest = Object.freeze({
   formatVersion: 1,
   mode: 'external',
   sourceId: 'main',
+  path: 'story.kamishibai.yaml',
 });
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening: []\n";
 

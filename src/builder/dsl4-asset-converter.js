@@ -19,6 +19,7 @@ import {
   serializeDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
+import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {fixedZipTimestamp} from './constants.js';
 import {Sb3BuilderError} from './errors.js';
@@ -1041,7 +1042,9 @@ async function installOutputDirectory(projectRoot, outputDirectory, files, valid
  *
  * @param {object} options
  * @param {string} options.projectRoot
- * @param {string} options.sourceManifest
+ * @param {string} [options.sourceManifest]
+ * @param {string} [options.source]
+ * @param {string} [options.sourceId]
  * @param {string} options.baseSb3
  * @param {string} options.outputDirectory
  * @param {'local' | 'project' | 'remote'} options.to
@@ -1159,7 +1162,6 @@ export async function convertDsl4ProjectAssets(options) {
     }
     return path.resolve(canonicalRoot, path.relative(requestedRoot, requestedPath));
   };
-  const sourceManifestPath = canonicalProjectPath(String(options.sourceManifest), 'sourceManifest');
   const baseSb3Path = path.resolve(String(options.baseSb3));
   const requestedOutputPath = path.resolve(String(options.outputDirectory));
   if (!isWithin(requestedRoot, requestedOutputPath) || requestedOutputPath === requestedRoot) {
@@ -1173,14 +1175,16 @@ export async function convertDsl4ProjectAssets(options) {
     fail('Output directory cannot be inside .git', 'K4-ASSET-CONVERT-OUTPUT-001');
   }
 
-  const manifestInput = await loadDsl4ProjectSourceManifest({
+  const resolvedSource = await resolveDsl4ProjectSource({
     projectRoot: canonicalRoot,
-    inputPath: sourceManifestPath,
-    maxBytes: maxSourceManifestBytes,
-    label: 'source manifest',
-    code: 'K4-SOURCE-MANIFEST-001',
+    ...(options.sourceManifest === undefined
+      ? {}
+      : {sourceManifest: canonicalProjectPath(options.sourceManifest, 'sourceManifest')}),
+    ...(options.source === undefined ? {} : {source: options.source}),
+    ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+    maxSourceManifestBytes,
   });
-  const inputSourceManifest = validateDsl4ExternalSourceManifest(manifestInput);
+  const inputSourceManifest = validateDsl4ExternalSourceManifest(resolvedSource.manifest);
   const source = await loadDsl4ExternalSource(canonicalRoot, inputSourceManifest, {
     maxSourceBytes,
     subtleCrypto: options.subtleCrypto,
@@ -1659,7 +1663,7 @@ export async function convertDsl4ProjectAssets(options) {
   const name = outputName(options.outputName, sourceStem(source.descriptor.displayName));
   const sourceFilename = `${name}.k4.yml`;
   const sb3Filename = `${name}.sb3`;
-  const sourceManifestFilename = 'project.source.yaml';
+  const sourceManifestFilename = 'project.source.yml';
   const outputSourceManifest = validateDsl4ExternalSourceManifest({
     ...inputSourceManifest,
     path: sourceFilename,

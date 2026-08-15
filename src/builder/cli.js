@@ -64,17 +64,19 @@ export function usage() {
     --assets assets.lock.json --output dist/sample --profile editor [options]
 
   tmpose-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
-    --source-manifest project.source.yaml --output dist/story.sb3 \\
-    --control-profile production --channel bundled \\
+    --output dist/story.sb3 --control-profile production --channel bundled \\
+    [--source STORY.k4.yml] [--source-id ID] \\
+    [--source-manifest project.source.yml] \\
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] [options]
 
   tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
-    --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
+    --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
 
   tmpose-kamishibai convert-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.yaml --base BASE.sb3 \\
+    [--source STORY.k4.yml] [--source-id ID] \\
+    [--source-manifest project.source.yml] --base BASE.sb3 \\
     --output-dir converted --to local|remote|project \\
     --max-source-manifest-bytes N \\
     --max-remote-map-bytes N --max-base-sb3-bytes N \\
@@ -84,18 +86,20 @@ export function usage() {
     [--rsync-ssh-port N] [--rsync-timeout-ms N] \\
     [--allow-host HOST] [--output-name NAME]
 
-  tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
+  tmpose-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json]
 
   tmpose-kamishibai audit-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.yaml \\
+    [--source STORY.k4.yml] [--source-id ID] \\
+    [--source-manifest project.source.yml] \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
     --asset-profile PROFILE --max-source-manifest-bytes N \\
     --max-asset-config-bytes N \\
     --max-asset-lock-bytes N [--format pretty|json] [options]
 
   tmpose-kamishibai lock-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.yaml --asset-config project.assets.json \\
+    [--source STORY.k4.yml] [--source-id ID] \\
+    [--source-manifest project.source.yml] --asset-config project.assets.json \\
     --output project.assets.lock.json --allow-host HOST [options]
 
   tmpose-kamishibai vendor-dsl4-assets --project-root DIR \\
@@ -104,8 +108,9 @@ export function usage() {
     --allow-host HOST [options]
 
   tmpose-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
-    --source-manifest project.source.yaml --control-profile production \\
-    --channel bundled [options]
+    --control-profile production --channel bundled \\
+    [--source STORY.k4.yml] [--source-id ID] \\
+    [--source-manifest project.source.yml] [options]
 
 DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
@@ -142,7 +147,7 @@ DSL 4.0 preview-dsl4 options:
   --replace-existing              Replace a same-channel component in the base SB3
 
 DSL 4.0 common limit options (when supported):
-  --max-source-bytes N       Maximum source bytes (default: 262144)
+  --max-source-bytes N       Maximum source bytes (default: 1048576)
   --max-asset-file-bytes N   Maximum bytes per asset file (default: 16777216)
   --max-asset-files N        Maximum asset files/pose entries (default: 256)
   --max-total-asset-bytes N  Maximum total asset bytes (default: 134217728)
@@ -150,6 +155,14 @@ DSL 4.0 common limit options (when supported):
 Omit these four options for normal projects. The source limit is the current fixed
 canonical maximum. Review memory, disk, and network impact before raising asset limits;
 browser preview currently caps source bytes and asset files at their defaults.
+
+DSL 4.0 project source options (when supported):
+  --source FILE             Override the root-level entry source
+  --source-id ID            Override the diagnostic source ID (default: main)
+  --source-manifest FILE    Use an explicit manifest; otherwise discover one
+
+Without an explicit source, the CLI uses the manifest path or the only root-level
+*.k4.yml file. Zero or multiple candidates fail instead of choosing a fixed filename.
 
 convert-dsl4 options:
   --pose-models FILE      Optionally embed exact TMPoseURL values as local poseModel assets
@@ -258,7 +271,9 @@ function parseValidateDsl4Arguments(arguments_) {
  * @param {string[]} arguments_
  * @returns {{
  *   projectRoot: string,
- *   sourceManifest: string,
+ *   sourceManifest?: string,
+ *   source?: string,
+ *   sourceId?: string,
  *   assetConfig: string,
  *   assetLock: string,
  *   assetProfile: string,
@@ -280,6 +295,8 @@ function parseAuditDsl4AssetArguments(arguments_) {
   const allowedValueOptions = new Set([
     '--project-root',
     '--source-manifest',
+    '--source',
+    '--source-id',
     '--asset-config',
     '--asset-lock',
     '--asset-profile',
@@ -318,7 +335,6 @@ function parseAuditDsl4AssetArguments(arguments_) {
 
   for (const required of [
     '--project-root',
-    '--source-manifest',
     '--asset-config',
     '--asset-lock',
     '--asset-profile',
@@ -380,7 +396,11 @@ function parseAuditDsl4AssetArguments(arguments_) {
 
   return {
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
-    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    ...(values.has('--source-manifest')
+      ? {sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest')))}
+      : {}),
+    ...(values.has('--source') ? {source: values.get('--source')} : {}),
+    ...(values.has('--source-id') ? {sourceId: values.get('--source-id')} : {}),
     assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
     assetLock: path.resolve(/** @type {string} */ (values.get('--asset-lock'))),
     assetProfile: /** @type {string} */ (values.get('--asset-profile')),
@@ -404,7 +424,9 @@ function parseAuditDsl4AssetArguments(arguments_) {
  * @param {string[]} arguments_
  * @returns {{
  *   projectRoot: string,
- *   sourceManifest: string,
+ *   sourceManifest?: string,
+ *   source?: string,
+ *   sourceId?: string,
  *   assetConfig: string,
  *   output: string,
  *   maxSourceBytes: number,
@@ -429,6 +451,8 @@ function parseLockDsl4AssetArguments(arguments_) {
   const allowedValueOptions = new Set([
     '--project-root',
     '--source-manifest',
+    '--source',
+    '--source-id',
     '--asset-config',
     '--output',
     '--max-source-bytes',
@@ -469,7 +493,6 @@ function parseLockDsl4AssetArguments(arguments_) {
   }
   for (const required of [
     '--project-root',
-    '--source-manifest',
     '--asset-config',
     '--output',
     '--max-source-manifest-bytes',
@@ -538,7 +561,11 @@ function parseLockDsl4AssetArguments(arguments_) {
   }
   return {
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
-    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    ...(values.has('--source-manifest')
+      ? {sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest')))}
+      : {}),
+    ...(values.has('--source') ? {source: values.get('--source')} : {}),
+    ...(values.has('--source-id') ? {sourceId: values.get('--source-id')} : {}),
     assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
     output: path.resolve(/** @type {string} */ (values.get('--output'))),
     maxSourceBytes,
@@ -694,6 +721,8 @@ function parseConvertDsl4AssetsArguments(arguments_) {
   const allowed = new Set([
     '--project-root',
     '--source-manifest',
+    '--source',
+    '--source-id',
     '--base',
     '--output-dir',
     '--output-name',
@@ -735,7 +764,6 @@ function parseConvertDsl4AssetsArguments(arguments_) {
   }
   const required = [
     '--project-root',
-    '--source-manifest',
     '--base',
     '--output-dir',
     '--to',
@@ -796,7 +824,11 @@ function parseConvertDsl4AssetsArguments(arguments_) {
   }
   return {
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
-    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    ...(values.has('--source-manifest')
+      ? {sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest')))}
+      : {}),
+    ...(values.has('--source') ? {source: values.get('--source')} : {}),
+    ...(values.has('--source-id') ? {sourceId: values.get('--source-id')} : {}),
     baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
     outputDirectory: path.resolve(/** @type {string} */ (values.get('--output-dir'))),
     to,
@@ -924,7 +956,6 @@ function parseBuildDsl4Arguments(rest) {
   const requiredValueOptions = new Set([
     '--base',
     '--project-root',
-    '--source-manifest',
     '--output',
     '--control-profile',
     '--channel',
@@ -938,6 +969,9 @@ function parseBuildDsl4Arguments(rest) {
   const valueOptions = new Set([
     ...requiredValueOptions,
     ...defaultedValueOptions,
+    '--source-manifest',
+    '--source',
+    '--source-id',
     '--max-source-files',
     '--max-total-source-bytes',
     '--max-include-depth',
@@ -1032,7 +1066,11 @@ function parseBuildDsl4Arguments(rest) {
   return {
     baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
-    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    ...(values.has('--source-manifest')
+      ? {sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest')))}
+      : {}),
+    ...(values.has('--source') ? {source: values.get('--source')} : {}),
+    ...(values.has('--source-id') ? {sourceId: values.get('--source-id')} : {}),
     output: path.resolve(/** @type {string} */ (values.get('--output'))),
     controlProfile: /** @type {string} */ (values.get('--control-profile')),
     channel,
@@ -1090,7 +1128,6 @@ function parsePreviewDsl4Arguments(rest) {
   const requiredValueOptions = new Set([
     '--base',
     '--project-root',
-    '--source-manifest',
     '--control-profile',
     '--channel',
   ]);
@@ -1109,6 +1146,9 @@ function parsePreviewDsl4Arguments(rest) {
     ...requiredValueOptions,
     ...defaultedValueOptions,
     ...graphValueOptions,
+    '--source-manifest',
+    '--source',
+    '--source-id',
     '--max-project-bytes',
     '--max-project-json-bytes',
     '--port',
@@ -1259,7 +1299,11 @@ function parsePreviewDsl4Arguments(rest) {
     watch: true,
     baseSb3: path.resolve(/** @type {string} */ (values.get('--base'))),
     projectRoot: path.resolve(/** @type {string} */ (values.get('--project-root'))),
-    sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest'))),
+    ...(values.has('--source-manifest')
+      ? {sourceManifest: path.resolve(/** @type {string} */ (values.get('--source-manifest')))}
+      : {}),
+    ...(values.has('--source') ? {source: values.get('--source')} : {}),
+    ...(values.has('--source-id') ? {sourceId: values.get('--source-id')} : {}),
     controlProfile: /** @type {string} */ (values.get('--control-profile')),
     channel,
     maxSourceBytes,

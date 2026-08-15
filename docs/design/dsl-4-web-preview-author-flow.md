@@ -33,12 +33,12 @@ handle APIが利用できる必要があります。
 
 ```text
 project-root/
-├── project.source.yaml
+├── project.source.yml
 └── story.kamishibai.yaml
 ```
 
-`project.source.yaml`は次のread-only source契約を持ちます。directory open時はYAMLを先に探し、
-存在しない場合だけ従来の`project.source.json`へfallbackします。
+`project.source.yml`は次のread-only source契約を持ちます。directory open時は
+`project.source.yml`、`project.source.yaml`、`project.source.json`の順に探します。
 
 ```yaml
 formatVersion: 1

@@ -4,15 +4,14 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
-import {dsl4ExternalSourceManifestFilenames} from '../dsl4/external-source-manifest.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {buildDsl4RuntimeComponent} from './dsl4-build.js';
-import {parseDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {
   createDsl4LocalPreviewHost,
   dsl4LocalPreviewHostDefaults,
 } from './dsl4-local-preview-host.js';
+import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {buildDsl4TurboWarpBrowserBundle} from './dsl4-turbowarp-browser-bundle.js';
 import {Sb3BuilderError} from './errors.js';
@@ -94,21 +93,6 @@ async function readBoundedFile(filePath, maximumBytes, description) {
   const bytes = Buffer.concat(chunks, size);
   for (const chunk of chunks) chunk.fill(0);
   return bytes;
-}
-
-/** @param {Buffer} bytes @param {string} filename */
-function parseSourceManifest(bytes, filename) {
-  let source;
-  try {
-    source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
-  } catch (error) {
-    throw commandError('Source manifest must be valid UTF-8', 'K4-PREVIEW-CLI-MANIFEST', error);
-  }
-  try {
-    return parseDsl4ExternalSourceManifest(source, {filename});
-  } catch (error) {
-    throw commandError('Source manifest is invalid', 'K4-PREVIEW-CLI-MANIFEST', error);
-  }
 }
 
 /**
@@ -248,16 +232,6 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
   }
   const port = boundedInteger(options.port ?? 0, 'port', 0, 65_535);
   const projectRoot = path.resolve(options.projectRoot);
-  const sourceManifestPath = path.resolve(options.sourceManifest);
-  if (
-    path.dirname(sourceManifestPath) !== projectRoot ||
-    !dsl4ExternalSourceManifestFilenames.includes(path.basename(sourceManifestPath))
-  ) {
-    throw commandError(
-      `sourceManifest must be one of: ${dsl4ExternalSourceManifestFilenames.join(', ')}`,
-      'K4-PREVIEW-CLI-MANIFEST',
-    );
-  }
   const maxProjectBytes = boundedInteger(
     options.maxProjectBytes ?? dsl4LocalPreviewHostDefaults.maxProjectBytes,
     'maxProjectBytes',
@@ -292,6 +266,7 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
   const buildBrowserBundle = dependencies.buildBrowserBundle ?? buildDsl4TurboWarpBrowserBundle;
   const createHost = dependencies.createHost ?? createDsl4LocalPreviewHost;
   const openBrowser = dependencies.openBrowser ?? openDsl4LocalPreviewBrowser;
+  const resolveProjectSource = dependencies.resolveProjectSource ?? resolveDsl4ProjectSource;
   const signalTarget = dependencies.signalTarget ?? process;
   const stdout = dependencies.stdout ?? process.stdout;
   const stderr = dependencies.stderr ?? process.stderr;
@@ -301,6 +276,7 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     ['buildBrowserBundle', buildBrowserBundle],
     ['createHost', createHost],
     ['openBrowser', openBrowser],
+    ['resolveProjectSource', resolveProjectSource],
   ]) {
     if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
   }
@@ -365,16 +341,17 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
   let result = null;
   let primaryError = null;
   try {
-    const [baseSb3Bytes, manifestBytes] = await Promise.all([
+    const [baseSb3Bytes, resolvedSource] = await Promise.all([
       readInput(path.resolve(options.baseSb3), maxProjectBytes, 'base SB3'),
-      readInput(sourceManifestPath, maximumManifestBytes, 'source manifest'),
+      resolveProjectSource({
+        projectRoot,
+        ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
+        ...(options.source === undefined ? {} : {source: options.source}),
+        ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+        maxSourceManifestBytes: maximumManifestBytes,
+      }),
     ]);
-    let sourceManifest;
-    try {
-      sourceManifest = parseSourceManifest(manifestBytes, path.basename(sourceManifestPath));
-    } finally {
-      manifestBytes.fill(0);
-    }
+    const sourceManifest = resolvedSource.manifest;
     let built;
     let browserBundleBytes;
     try {
@@ -411,9 +388,13 @@ export async function runDsl4LocalPreviewCommand(optionsInput, dependenciesInput
     const bundleBytes = Uint8Array.from(browserBundleBytes);
     browserBundleBytes.fill(0);
     try {
+      const hostProjectRoot =
+        resolvedSource.manifestPath === null
+          ? projectRoot
+          : path.dirname(resolvedSource.manifestPath);
       const createdHost = createHost({
-        projectRoot,
-        sourceManifestPath,
+        projectRoot: hostProjectRoot,
+        sourceManifestPath: resolvedSource.manifestPath,
         sourceManifest,
         sourceFrontend: options.sourceFrontend,
         maxSourceBytes,

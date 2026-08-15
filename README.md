@@ -22,15 +22,15 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.5                                                    |
+|                 | 3.2.3                                           | 4.0.0-rc.6                                                    |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc5]                                      |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc6]                                      |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.5 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.6 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -42,7 +42,7 @@ To open a project in TurboWarp, download an SB3 for the series you need from the
 
 ### Browser-only authoring
 
-The 4.0.0-rc.5 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
+The 4.0.0-rc.6 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
 
 1. [Download the 4.0 SB3][downloads] and open it in the [TurboWarp Editor](https://turbowarp.org/editor).
 2. Click the green flag, then choose **Open** and select a story file or project directory.
@@ -53,29 +53,48 @@ Watching a project directory requires the File System Access API in a top-level 
 
 ### Minimal project
 
-A DSL 4.0 project keeps its source manifest, YAML script, and assets such as images, audio, and pose models under one project root. Asset directory names are organizational and may be chosen freely.
+A DSL 4.0 project can consist of just one root-level `.k4.yml` script. Assets such as images, audio,
+and pose models may live below the same project root; their directory names are organizational and
+may be chosen freely.
 
 ```text
 my-story/
-├── project.source.yaml
-├── story.k4.yml
-├── images/
-├── sounds/
-└── pose-models/
+└── opening.k4.yml
 ```
 
-`project.source.yaml` identifies the entry source.
+When exactly one root-level `.k4.yml` file exists, TMPose Kamishibai selects it automatically and
+`project.source.yml` is unnecessary. With two or more scripts, select the entry script either with
+`project.source.yml` or the CLI `--source` option instead of relying on a fixed filename.
+
+```text
+my-story/
+├── project.source.yml
+├── opening.k4.yml
+└── alternate-ending.k4.yml
+```
 
 ```yaml
-formatVersion: 1
-mode: external
-sourceId: main
-path: story.k4.yml
+path: opening.k4.yml
 ```
 
-When a project directory is opened, TMPose Kamishibai looks for `project.source.yaml` first and then falls back to the legacy `project.source.json`. If both files exist, the YAML manifest takes precedence. Existing JSON manifests remain supported.
+Every `project.source.yml` field is optional.
 
-At minimum, `story.k4.yml` declares a version and one or more scenes.
+| Field                          | Required | Value or default                                                                                        |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `formatVersion`                | No       | `1`                                                                                                     |
+| `mode`                         | No       | `external`                                                                                              |
+| `sourceId`                     | No       | `main`; the CLI `--source-id` option overrides it.                                                      |
+| `path`                         | No       | No fixed filename. Selection is `--source`, then `path`, then the only root-level `*.k4.yml` candidate. |
+| `cacheId`, `cacheDatabaseName` | No       | Absent by default; when explicitly supplied, both fields are required together.                         |
+
+An empty or comment-only manifest therefore applies all defaults. If neither the CLI nor a manifest
+selects a source, zero or multiple root-level `.k4.yml` candidates produce an error. A missing
+manifest is not created implicitly.
+
+Project input also accepts `project.source.yaml` and `project.source.json`, discovered after
+`project.source.yml` in that order. This README consistently uses the recommended `.yml` spelling.
+
+At minimum, a `.k4.yml` script declares a version and one or more scenes.
 
 ```yaml
 kamishibai: '4.0'
@@ -98,10 +117,10 @@ For practical scripts, asset references, pose models, branches, and speech bubbl
 
 ### Validate, preview, and build with the CLI
 
-The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.5) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.6) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.5
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.6
 pnpm exec tmpose-kamishibai --help
 ```
 
@@ -109,7 +128,7 @@ Validate a script without building it.
 
 ```bash
 pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.k4.yml \
+  --input opening.k4.yml \
   --format pretty
 ```
 
@@ -119,7 +138,6 @@ Watch the complete project and preview it in a browser.
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.yaml \
   --control-profile production \
   --channel bundled
 ```
@@ -130,7 +148,6 @@ Build a self-contained SB3 from the same input.
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
   --project-root . \
-  --source-manifest project.source.yaml \
   --output dist/my-story.sb3 \
   --control-profile production \
   --channel bundled
@@ -140,12 +157,18 @@ The CLI applies finite safety limits when the four common limit options are omit
 
 | Option                    | Default   | Override or limitation                                                                |
 | ------------------------- | --------- | ------------------------------------------------------------------------------------- |
-| `--max-source-bytes`      | 262144    | Fixed canonical-source maximum; a larger composed story is currently unsupported      |
+| `--max-source-bytes`      | 1048576   | Current 1 MiB frontend ceiling, bounded separately by YAML node and action limits     |
 | `--max-asset-file-bytes`  | 16777216  | Increase when one reviewed asset is larger than 16 MiB                                |
 | `--max-asset-files`       | 256       | Increase for build/asset jobs with more files; browser preview currently stops at 256 |
 | `--max-total-asset-bytes` | 134217728 | Increase when reviewed assets exceed 128 MiB in total                                 |
 
-These values are ceilings, not reserved memory. Explicit overrides remain available for exceptional projects, but preview values above the recommended 128 MiB asset total require `--allow-large-preview-artifacts` and still have absolute browser limits. Source Graph includes remain opt-in and require their separate file-count, total-source-byte, and depth limits because their topology cannot be inferred safely.
+These values are ceilings, not reserved memory. The 1 MiB source ceiling was selected after measuring
+long-dialogue inputs at the existing 2,000-action boundary; the benchmark and rationale are recorded
+in the [resource-limit design](./docs/design/dsl-4-expression-limits-diagnostics.md#23-source-frontend既定policy).
+Asset overrides remain available for exceptional projects, but preview values above the recommended
+128 MiB asset total require `--allow-large-preview-artifacts` and still have absolute browser limits.
+Source Graph includes remain opt-in and require their separate file-count, total-source-byte, and
+depth limits because their topology cannot be inferred safely.
 
 The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
 
@@ -157,6 +180,14 @@ The CLI also provides the following commands. See `tmpose-kamishibai --help` and
 | `lock-dsl4-assets`    | Verify allowlisted remote assets and create a lock            |
 | `audit-dsl4-assets`   | Audit a distribution profile and lock without network access  |
 | `vendor-dsl4-assets`  | Pin remote assets into a content-addressed offline mirror     |
+
+DSL 4.0 can select the backward-compatible `legacy` model initialization policy or
+`latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
+TMPose 1.10.1 owns initialization of the camera canvas readback context; Kamishibai does not patch
+TMPose's TensorFlow.js `fromPixels()` path. To roll back this boundary, use the rc.5 artifact pinned
+to TMPose 1.10.0. See the
+[DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
+defaults, and cancellation boundary.
 
 JavaScript consumers can import the package exports `@kubohiroya/tmpose-kamishibai/builder`, `@kubohiroya/tmpose-kamishibai/dsl4`, and `@kubohiroya/tmpose-kamishibai/converter` as needed.
 
@@ -176,7 +207,7 @@ self-contained SB3
 TurboWarp runtime + TMPose
 ```
 
-- YAML and `project.source.yaml` remain the editable sources of truth
+- The selected YAML script and, when present, `project.source.yml` remain the editable sources of truth
 - Preview, validation, build, and runtime loading use the same StoryDocument and diagnostics
 - Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile
 - Failed builds preserve existing output and replace it only with a validated candidate
@@ -203,24 +234,35 @@ pnpm verify:quick
 | `pnpm verify:quick` | Lint, type-check, and run the lightweight tests during development  |
 | `pnpm verify:full`  | Run the CI-equivalent SB3, full test, E2E, site, and package checks |
 | `pnpm format`       | Check formatting with Prettier                                      |
-| `pnpm test`         | Run the full suite, including generated SB3 and real-VM tests       |
-| `pnpm run build`    | Build the public site and downloadable SB3 projects into `dist/`    |
-| `pnpm sb3:build`    | Build the editable SB3 at `tmp/kamishibai.sb3`                      |
-| `pnpm sb3:check`    | Verify `app/` and the DSL 4.0 release sources                       |
+| `pnpm test`         | Run the full unit and integration suite                             |
+| `pnpm run build`    | Build the site and fetch verified Release SB3 assets into `dist/`   |
+| `pnpm sb3:build`    | Generate the current candidate into ignored `tmp/` storage          |
+| `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate         |
 
 Before implementation, record the scope, dependencies, acceptance criteria, and rollback in a GitHub Issue, then keep each pull request small. Use [GitHub Issues](https://github.com/kubohiroya/tmpose-kamishibai/issues) for bug reports and proposals.
 
 ### Key directories
 
-- `app/`: current Kamishibai SB3 source
-- `release-sources/`: immutable versioned snapshots for reproducing published SB3 projects
-- `src/dsl4/`: DSL 4.0 domain, runtime, and platform adapters
-- `src/builder/`: CLI, SB3 builder, and preview builder
-- `schema/`: public JSON Schemas
-- `site/`: public website source
-- `scripts/`: build, release, and verification workflows
-- `test/`: unit, integration, browser E2E tests, and fixtures
-- `docs/design/`: implementation-adjacent design contracts
+| Directory             | Responsibility                                                                |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `bin/`                | Executable entry points for the published CLI                                 |
+| `src/dsl4/`           | DSL 4 domain model, parser, runtime, and platform adapters                    |
+| `src/builder/`        | CLI commands and the SB3, preview, asset, and project-source builders         |
+| `src/converter/`      | Legacy-script to DSL 4 conversion API                                         |
+| `schema/`             | Public JSON Schemas                                                           |
+| `scripts/sb3/`        | Current-release generation, publication, and Release-asset download workflows |
+| `scripts/sb3/assets/` | Named assets owned by the current DSL 4 release generator                     |
+| `release-metadata/`   | Small records for the current release identity and publication state          |
+| `site/`               | GitHub Pages source; published SB3 files are injected only during build       |
+| `docs/design/`        | Implementation-adjacent design contracts                                      |
+| `docs/releases/`      | Release notes                                                                 |
+| `test/`               | Unit, integration, current browser E2E tests, and minimal fixtures            |
+
+Published SB3 files and their historical expanded sources are not stored on the current branch.
+Pages obtains each published SB3 from its exact GitHub Release URL and verifies the catalog size,
+SHA-256, ZIP structure, and stamped Title metadata before copying it into `dist/downloads/`.
+Candidate source trees and SB3 files are generated only in OS temporary or ignored `tmp/` storage;
+neither `app/` nor `release-sources/` is part of the repository layout.
 
 ## Documentation
 
@@ -228,7 +270,7 @@ Before implementation, record the scope, dependencies, acceptance criteria, and 
 - [Documentation source](https://github.com/kubohiroya/tmpose-kamishibai-docs): source documents and issues
 - [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
 - [DSL 4.0 migration design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
-- [v4.0.0-rc.5 release notes][rc5]: publication status, compatibility, and verified artifacts
+- [v4.0.0-rc.6 release notes][rc6]: publication status, compatibility, and verified artifacts
 
 ## Related Projects
 
@@ -243,4 +285,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
-[rc5]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.5.md
+[rc6]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.6.md

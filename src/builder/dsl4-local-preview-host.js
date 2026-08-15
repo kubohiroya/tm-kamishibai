@@ -314,19 +314,23 @@ function previewHtml(sourceDisplayName, runtimeOwner, runtimeLimits) {
 export function createDsl4LocalPreviewHost(options) {
   if (!isRecord(options)) throw new TypeError('local preview host options are required');
   const projectRoot = normalizedAbsolutePath(options.projectRoot, 'projectRoot');
-  const sourceManifestPath = normalizedAbsolutePath(
-    options.sourceManifestPath,
-    'sourceManifestPath',
-  );
+  const sourceManifestPath =
+    options.sourceManifestPath === null || options.sourceManifestPath === undefined
+      ? null
+      : normalizedAbsolutePath(options.sourceManifestPath, 'sourceManifestPath');
   if (
-    path.dirname(sourceManifestPath) !== projectRoot ||
-    !dsl4ExternalSourceManifestFilenames.includes(path.basename(sourceManifestPath))
+    sourceManifestPath !== null &&
+    (path.dirname(sourceManifestPath) !== projectRoot ||
+      !dsl4ExternalSourceManifestFilenames.includes(path.basename(sourceManifestPath)))
   ) {
     throw new TypeError(
       `sourceManifestPath must use one of: ${dsl4ExternalSourceManifestFilenames.join(', ')}`,
     );
   }
   const sourceManifest = validateDsl4ExternalSourceManifest(options.sourceManifest);
+  if (typeof sourceManifest.path !== 'string') {
+    throw new TypeError('sourceManifest.path must be resolved');
+  }
   const sourceFrontend = validateFrontend(options.sourceFrontend);
   const maxSourceBytes = safeInteger(options.maxSourceBytes, 'maxSourceBytes', 1);
   const featureFlags = resolveDsl4FeatureFlags(options.featureFlags ?? {});
@@ -633,6 +637,13 @@ export function createDsl4LocalPreviewHost(options) {
   }
 
   async function inspectManifestChange() {
+    if (sourceManifestPath === null) {
+      await requireFullRebuild(
+        'K4-PREVIEW-STRUCTURE-CHANGED',
+        'Project entry sources changed; restart preview so source discovery can run again',
+      );
+      return;
+    }
     let parsed;
     try {
       const source = new TextDecoder('utf-8', {fatal: true}).decode(
@@ -669,7 +680,19 @@ export function createDsl4LocalPreviewHost(options) {
   function startStructureWatcher() {
     const watcher = structureWatchFactory(projectRoot, (_eventType, filename) => {
       if (disposed || status === 'rebuild-required') return;
-      if (filename !== null && String(filename) !== path.basename(sourceManifestPath)) return;
+      if (filename !== null) {
+        const changed = String(filename);
+        if (sourceManifestPath === null) {
+          if (
+            changed === sourceManifest.path ||
+            (!changed.endsWith('.k4.yml') && !dsl4ExternalSourceManifestFilenames.includes(changed))
+          ) {
+            return;
+          }
+        } else if (changed !== path.basename(sourceManifestPath)) {
+          return;
+        }
+      }
       structuralOperation = structuralOperation
         .then(inspectManifestChange)
         .catch((error) => reportError(error));
@@ -986,7 +1009,7 @@ export function createDsl4LocalPreviewHost(options) {
       }
       if (requestUrl.pathname === '/') {
         const body = previewHtml(
-          sourceManifest.path,
+          /** @type {string} */ (sourceManifest.path),
           /** @type {'protocol' | 'browser'} */ (runtimeOwner),
           {
             maxProjectBytes,

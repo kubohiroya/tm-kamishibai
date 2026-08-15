@@ -18,9 +18,13 @@ const productionContract = JSON.parse(
     'utf8',
   ),
 );
-const productionProject = JSON.parse(
-  await readFile(new URL('../app/project.source.json', import.meta.url), 'utf8'),
-);
+const productionProject = {
+  extensions: [],
+  extensionURLs: {},
+  extensionStorage: {},
+  targets: [{blocks: {}}],
+  monitors: [],
+};
 
 function sri(value) {
   return `sha256-${createHash('sha256').update(value).digest('base64')}`;

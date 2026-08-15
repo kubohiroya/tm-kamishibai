@@ -125,7 +125,7 @@ test('routes conversion through the production frontend and reports the reusable
         received = options;
         return {
           converted: {Opening: 'local', Narration: 'local'},
-          sourceManifestPath: path.join(options.outputDirectory, 'project.source.yaml'),
+          sourceManifestPath: path.join(options.outputDirectory, 'project.source.yml'),
           sourcePath: path.join(options.outputDirectory, 'story.k4.yml'),
           sb3Path: path.join(options.outputDirectory, 'story.sb3'),
         };
@@ -137,6 +137,6 @@ test('routes conversion through the production frontend and reports the reusable
   assert.deepEqual(result.converted, {Opening: 'local', Narration: 'local'});
   assert.equal(
     stdout,
-    'Converted 2 asset(s)\nSaved project.source.yaml\nSaved story.k4.yml\nSaved story.sb3\n',
+    'Converted 2 asset(s)\nSaved project.source.yml\nSaved story.k4.yml\nSaved story.sb3\n',
   );
 });

@@ -2,25 +2,28 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #266／#517／#583の実装正本（2026-08-15）
+文書状態: Issue #266／#517／#601の実装正本（2026-08-15）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
 [#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)、
 [#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)、
-[#583](https://github.com/kubohiroya/tmpose-kamishibai/issues/583)
+[#583](https://github.com/kubohiroya/tmpose-kamishibai/issues/583)、
+[#601](https://github.com/kubohiroya/tmpose-kamishibai/issues/601)、
+[#609](https://github.com/kubohiroya/tmpose-kamishibai/issues/609)
 
 機械可読な契約:
 [`capability-bundle-release-contract.json`](../../test/fixtures/dsl4/capability-bundle-release-contract.json)
 
 ## 1. 結論
 
-4.0.0-rc.5のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
+4.0.0-rc.6のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
 6つのcapability拡張を`kubohiroyakamishibai4`一件へ集約して生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
-組み込みません。展開sourceは7 memberを保持しますが、生成SB3がTurboWarpへ登録する拡張とdata URLは
-復元カプセルを重複保持しないcompact bundle一件だけです。個別memberへの復元はversion管理された展開sourceを正本とします。
+組み込みません。release generatorは7 memberの展開sourceを一時生成しますが、Gitには保存しません。
+生成SB3がTurboWarpへ登録する拡張とdata URLは、復元カプセルを重複保持しないcompact bundle一件だけです。
+公開後の成果物はGitHub Release asset、公開前の再現性はgeneratorとsource identityを正本とします。
 
 Runtime member自体は、6つの完全固定npm packageの公開composition subpathと、このrepositoryの
 first-party Structured Dataをesbuildで一つのRuntime member sourceへ構成します。そのsource先頭には
@@ -37,7 +40,7 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`                    |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.10.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.10.1`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition               |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外                   |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外                   |
@@ -46,7 +49,7 @@ package versionはrangeを使わず、lockfileのnpm integrityと一致させま
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
 生成SB3は外側のbundleを一度だけ登録し、各memberのhandler、menu、storage、由来アイコンを名前空間付きで委譲します。
 
-TMPose 1.10.0の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
+TMPose 1.10.1の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
 Base64変換、runtime fetch差し替えの正本とします。利用側はSB3のbundled／unbundled component storageから
 model descriptorを一意に選ぶだけとし、検証・復号は初回pose recognition時に上流APIへ委譲します。
 PoseNet model dataはruntime JavaScriptへ含めず、PNG／costume／soundへ偽装せず、明示的なcomponent model
@@ -55,6 +58,12 @@ dataとして保存します。
 Standard Runtimeはnpmの完全固定releaseを直接利用し、`patchedDependencies`やrepository-local patchを
 介しません。rollbackは直前のexact pinとlockfileを復元するか、
 DSL 4 runtime flagをOFFにして3.2成果物を使用します。
+
+カメラvideoをTensorFlow.jsへ渡す前の2D readback context初期化はTMPoseの責務です。Kamishibaiは
+TMPose composition APIを利用するだけとし、上流のcamera canvasや`fromPixels()`経路を下流patchで
+補修しません。renderer canvasのreadback指定は別の責務境界としてscratch-renderのSilhouette共有canvasへ
+集約します。TextBubbleは`getImageData()`を行わないため対象外です。microbenchmarkで速度差は観測されておらず、
+この指定を一般的な描画性能向上として扱いません。
 
 ## 3. API、integrity、license、SBOM
 
@@ -70,8 +79,8 @@ Standard 4.0の生成SB3は静的bundle一件です。各memberはGallery形式�
 block iconを回帰testで検証します。
 
 配布SBOMの入力は`package.json`と`pnpm-lock.yaml`、attributionの正本は`LICENSES.md`です。Standard成果物を
-生成するlocal source、version付きrelease source directory、そのpathとbyte列から求めたsource identity、
-download catalogのSHA-256を合わせて、
+生成するcurrent source、generatorが一時出力したpathとbyte列から求めたsource identity、
+release metadataとdownload catalogのSHA-256を合わせて、
 「どのsourceとpackageからどのSB3を作ったか」を追跡します。
 
 ## 4. 成果物とpalette
@@ -123,7 +132,7 @@ fingerprintにもproduction artifactにも含めません。
 
 4.0 StandardはRuntime内部のsource compositionに加え、SB3生成時に`extensionBundles`で7 memberを一件へ
 集約します。source descriptorとbundleの展開source復元性は、Runtime component storage path、固定済み
-release source、TurboWarp VMの実際のload → `toJSON()`再保存testを正本とします。
+一時生成source、TurboWarp VMの実際のload → `toJSON()`再保存testを正本とします。
 
 ## 6. lifecycle
 
@@ -142,37 +151,39 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-4.0.0-rc.5 releaseは必ず次の順で行います。
+4.0.0-rc.6 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
 3. package、runtime reporter、release catalogを同じrelease versionへ更新する
-4. candidate状態で`pnpm release:dsl4:update`を実行し、version付きsource、SB3 hash、metadataを一括更新する
+4. candidate状態で`pnpm release:dsl4:update`を実行し、一時sourceからSB3を生成してsource identity、hash、size、metadataを更新する
 5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
 6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
 7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
-8. frozen commitへannotated `v4.0.0-rc.5` tagを作成する
+8. frozen commitへannotated `v4.0.0-rc.6` tagを作成する
 9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
-10. GitHub prereleaseを公開する
-11. 3.2.3を推奨安定版に維持したままsiteをbuildして公開する
-12. 外部URLをmetadataへ記録してpublishedへ遷移し、version／hash／dist-tagを照合する
+10. 一時生成したSB3をversion付きassetとしてGitHub prereleaseへ公開する
+11. npm、GitHub、PagesのURLをmetadataへ記録してpublishedへ遷移する
+12. 3.2.3を推奨安定版に維持し、GitHub Release assetを取得・検証してsiteを公開する
+13. 公開済みassetのversion／size／hash／dist-tag／Pagesを照合する
 
-更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release、
-version付きrelease sourceを差し替えません。`frozen`または`published`ではupdateをfail closedにし、修正は
-4.0.0-rc.6、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+更新中に失敗した場合は新しい成果物を公開しません。公開後は同じversionのpackage、tag、GitHub Release
+assetを差し替えません。`main` checkoutは公開済み／candidateの展開sourceやSB3を保持せず、version、
+source identity、asset URL、size、SHA-256、公開状態だけを`release-metadata/`へ保持します。Pages buildは
+GitHub Releasesからbounded downloadし、size、SHA-256、ZIP、Title metadataを照合します。
+`frozen`または`published`ではupdateをfail closedにし、修正は
+4.0.0-rc.7、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
-3.2の`extensionBundles` member更新は一件ずつ行います。生成SB3では重複するrecovery capsuleを省き、
-追跡済みの個別sourceとprovenanceからmember単位で再構築して戻します。生成SB3単体から直接unbundleする必要が
-生じた場合だけ、`recoveryCapsule: true`を明示して再生成します。
+過去の3.1／3.2はGitHub Release assetだけを配布正本とし、現在のtoolchainやsourceから再構築しません。
 
 ## 8. 受け入れ基準
 
 - capability、repository、package、version、extension ID、providerがfixtureと一致する
-- Standard展開ソースがRuntimeと6つのcapability memberを管理し、Web Linkを含まない
+- Standard source generatorがRuntimeと6つのcapability memberを一時生成し、Web Linkを含まない
 - Standard SB3が`kubohiroyakamishibai4`一件だけをembedded URLから読み込む
 - 各memberの通常ブロックが由来元の異なるSVG `blockIconURI`を保持する
 - 各memberの見出し直後に、そのmember固有の`docsURI`を開くボタンが一つある
-- Standard bundleが重複するrecovery capsuleを既定で含まず、展開sourceから復元できる
+- Standard bundleが重複するrecovery capsuleを既定で含まず、current generatorから再現できる
 - runtime source先頭にheader、全構成要素のprovenanceが残る
 - Standard paletteのvisible DSL 4.0 blockがcore action manifestと一致し、preview専用opcodeを含まない
 - 非埋め込みだけがpreviewを初期化し、埋め込みproductionは初期化しない
@@ -182,6 +193,7 @@ version付きrelease sourceを差し替えません。`frozen`または`publishe
 - 緑の旗、タイトル背景／閉じるボタン、台本有無、物語終了の遷移が3.2の状態遷移と一致する
 - remote code／remote preview禁止とverified remote asset opt-inを混同しない
 - release／update／rollback順序と実行済みevidenceが機械可読契約から検査される
+- `app/`と`release-sources/`を保持せず、公開済みSB3をGitHub Releasesから検証して取得する
 
-この契約だけを戻す場合は文書、fixture、test、release source生成をrevertし、公開済み
-4.0.0-rc.4の固定成果物を使用します。
+この契約だけを戻す場合は文書、fixture、test、release generatorをrevertし、公開済み
+4.0.0-rc.5の固定成果物を使用します。

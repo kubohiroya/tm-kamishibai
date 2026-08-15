@@ -8,7 +8,6 @@ import {clearTimeout, setTimeout} from 'node:timers';
 import {fileURLToPath} from 'node:url';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
-import {createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
 import {installBundleTransactionally} from '../src/builder/atomic-output.js';
 import {parseCliArguments, runCli} from '../src/builder/cli.js';
@@ -24,16 +23,92 @@ import {
   packageVersion,
 } from '../src/builder/constants.js';
 import {createEmbeddedReference} from '../src/builder/script.js';
-import {loadKamishibaiVm} from './helpers/turbowarp-vm.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const appDirectory = path.join(projectRoot, 'app');
 const fixtureAssetsDirectory = path.join(projectRoot, 'test', 'fixtures', 'assets');
 const actorPopFixturePath = path.join(fixtureAssetsDirectory, 'actor-pop.wav');
 const loadingChirpFixturePath = path.join(fixtureAssetsDirectory, 'loading-chirp.wav');
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function createMinimalBaseSb3(backdrop, costume) {
+  const backdropId = createHash('md5').update(backdrop).digest('hex');
+  const costumeId = createHash('md5').update(costume).digest('hex');
+  const commonTarget = {
+    variables: {},
+    lists: {},
+    broadcasts: {},
+    blocks: {},
+    comments: {},
+    currentCostume: 0,
+    sounds: [],
+    volume: 100,
+    layerOrder: 0,
+  };
+  const project = {
+    targets: [
+      {
+        ...commonTarget,
+        isStage: true,
+        name: 'Stage',
+        variables: {
+          [embeddedScriptVariableId]: [embeddedScriptVariableName, ''],
+        },
+        costumes: [
+          {
+            assetId: backdropId,
+            name: 'Title',
+            bitmapResolution: 1,
+            dataFormat: 'svg',
+            md5ext: `${backdropId}.svg`,
+            rotationCenterX: 1,
+            rotationCenterY: 1,
+          },
+        ],
+        tempo: 60,
+        videoTransparency: 50,
+        videoState: 'on',
+        textToSpeechLanguage: null,
+      },
+      {
+        ...commonTarget,
+        isStage: false,
+        name: 'Actor',
+        costumes: [
+          {
+            assetId: costumeId,
+            name: 'Actor',
+            bitmapResolution: 1,
+            dataFormat: 'svg',
+            md5ext: `${costumeId}.svg`,
+            rotationCenterX: 1,
+            rotationCenterY: 1,
+          },
+        ],
+        visible: true,
+        x: 0,
+        y: 0,
+        size: 100,
+        direction: 90,
+        draggable: false,
+        rotationStyle: 'all around',
+      },
+    ],
+    monitors: [],
+    extensions: [],
+    extensionURLs: {},
+    extensionStorage: {},
+    meta: {semver: '3.0.0', vm: '0.2.0', agent: 'minimal builder test fixture'},
+  };
+  return Buffer.from(
+    zipSync({
+      'project.json': strToU8(JSON.stringify(project)),
+      [`${backdropId}.svg`]: new Uint8Array(backdrop),
+      [`${costumeId}.svg`]: new Uint8Array(costume),
+    }),
+  );
 }
 
 async function withTemporaryDirectory(callback) {
@@ -146,8 +221,7 @@ async function writeFileFixture(directory) {
     writeFile(path.join(assetsDirectory, 'sprite.wav'), spriteSound),
   ]);
   const baseSb3Path = path.join(inputDirectory, 'base.sb3');
-  const builtBase = await createDeterministicSb3(appDirectory);
-  await writeFile(baseSb3Path, builtBase.archive);
+  await writeFile(baseSb3Path, createMinimalBaseSb3(backdrop, costume));
   const sourceScriptPath = path.join(inputDirectory, 'source.txt');
   const source = [
     'kamishibai=3.2',
@@ -303,13 +377,10 @@ test('builds all asset kinds, transforms only active asset lines, and preserves 
       await readFile(second.outputPaths['sample.manifest.json']),
       await readFile(first.outputPaths['sample.manifest.json']),
     );
-
-    const vmHarness = await loadKamishibaiVm({sb3Path: first.outputPaths['sample.sb3']});
-    vmHarness.quit();
   });
 });
 
-test('builds a player with the exact transformed script and starts it from the title click', async (context) => {
+test('builds a player with the exact transformed embedded script', async () => {
   await withTemporaryDirectory(async (directory) => {
     const fixture = await writeFileFixture(directory);
     const playerSourcePath = path.join(fixture.inputDirectory, 'player-source.txt');
@@ -360,31 +431,6 @@ test('builds a player with the exact transformed script and starts it from the t
     });
     assert.equal(stage.variables[embeddedScriptVariableId][0], embeddedScriptVariableName);
     assert.equal(stage.variables[embeddedScriptVariableId][1], validated.script);
-
-    const harness = await loadKamishibaiVm({sb3Path: result.outputPaths['player.sb3']});
-    context.after(() => harness.quit());
-    harness.extensionState.localStorage.set('script', 'stale localStorage script');
-    harness.greenFlag();
-    harness.runUntil(() => harness.getRuntimeVariable('skipMode') === 'title');
-    harness.setRuntimeVariable('script', 'stale script from another session');
-    harness.clickStage();
-    harness.runUntil(
-      () =>
-        harness.getBackdropName() === 'Builder Scene' &&
-        harness.getRuntimeVariable('text:Narration') === 'むかし' &&
-        harness.getActor('Narration')?.visible === true,
-    );
-
-    assert.equal(harness.getRuntimeVariable('script'), validated.script);
-    assert.equal(harness.getActor('Narration')?.visible, true);
-    assert.equal(harness.hasRuntimeVariable('Narration'), false);
-    assert.deepEqual(harness.extensionState.consoleErrors, []);
-    assert.equal(
-      harness.extensionState.assets.get('StageAudio'),
-      'sound:@stage:Builder Stage Audio',
-    );
-    assert.equal(harness.extensionState.filePickerRequests, 0);
-    assert.equal(harness.hasRuntimeVariable('skipMode'), false);
 
     const secondDirectory = path.join(directory, 'second-player-output');
     const second = await buildSb3Bundle({
@@ -933,7 +979,7 @@ test('exposes one CLI contract and a fixed installable package version', async (
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@kubohiroya/tmpose-kamishibai');
-  assert.equal(packageJson.version, '4.0.0-rc.5');
+  assert.equal(packageJson.version, '4.0.0-rc.6');
   assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');

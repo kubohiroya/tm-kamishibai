@@ -17,7 +17,7 @@ const forbiddenMappingKeys = new Set(['__proto__', 'constructor', 'prototype']);
 const textEncoder = new TextEncoder();
 
 export const dsl4SourceFrontendDefaultLimits = Object.freeze({
-  maxCanonicalSourceBytes: 256 * 1024,
+  maxCanonicalSourceBytes: 1024 * 1024,
   maxYamlNodes: 20_000,
   maxYamlDepth: 64,
   maxScalarScalars: 16_384,

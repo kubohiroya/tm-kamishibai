@@ -10,9 +10,9 @@ import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 import {
   ensureDsl4ExternalSourceCacheIdentity,
-  parseDsl4ExternalSourceManifest,
   serializeDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
+import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {
   readDsl4PlaybackPoseNetBundle,
   readDsl4PlaybackRuntimeExtensionSource,
@@ -50,22 +50,6 @@ async function readInput(filePath, description) {
   }
 }
 
-/** @param {Buffer} bytes @param {string} filename */
-function parseSourceManifest(bytes, filename) {
-  let source;
-  try {
-    source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
-  } catch (error) {
-    const format = filename.endsWith('.yaml') ? 'YAML' : 'JSON';
-    throw new Sb3BuilderError(`Source manifest must be valid UTF-8 ${format}`, {
-      stage: 'dsl4-build-input',
-      code: `K4-SOURCE-MANIFEST-${format}-001`,
-      cause: error,
-    });
-  }
-  return parseDsl4ExternalSourceManifest(source, {filename});
-}
-
 /** @param {string} manifestPath @param {Readonly<Record<string, unknown>>} manifest */
 async function persistSourceManifest(manifestPath, manifest) {
   const temporaryPath = `${manifestPath}.tmp-${process.pid}-${randomBytes(8).toString('hex')}`;
@@ -91,7 +75,9 @@ async function persistSourceManifest(manifestPath, manifest) {
  * @param {object} options
  * @param {string} options.baseSb3
  * @param {string} options.projectRoot
- * @param {string} options.sourceManifest
+ * @param {string} [options.sourceManifest]
+ * @param {string} [options.source]
+ * @param {string} [options.sourceId]
  * @param {string} options.output
  * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} options.sourceFrontend
  * @param {string} options.controlProfile
@@ -120,7 +106,6 @@ export async function buildDsl4RuntimeComponentFile(options) {
   }
   const baseSb3 = requiredPath(options.baseSb3, 'baseSb3');
   const projectRoot = requiredPath(options.projectRoot, 'projectRoot');
-  const sourceManifestPath = requiredPath(options.sourceManifest, 'sourceManifest');
   const output = requiredPath(options.output, 'output');
   const outputFilename = path.basename(output);
   const outputName = path.basename(outputFilename, '.sb3');
@@ -147,16 +132,20 @@ export async function buildDsl4RuntimeComponentFile(options) {
     maxTotalSourceBytes: options.maxTotalSourceBytes,
   });
 
-  const [baseSb3Bytes, sourceManifestBytes] = await Promise.all([
+  const [baseSb3Bytes, resolvedSource] = await Promise.all([
     readInput(baseSb3, 'base SB3'),
-    readInput(sourceManifestPath, 'source manifest'),
+    resolveDsl4ProjectSource({
+      projectRoot,
+      ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
+      ...(options.source === undefined ? {} : {source: options.source}),
+      ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+    }),
   ]);
-  const identity = ensureDsl4ExternalSourceCacheIdentity(
-    parseSourceManifest(sourceManifestBytes, path.basename(sourceManifestPath)),
-    {
-      ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
-    },
-  );
+  const identity = resolvedSource.manifestExists
+    ? ensureDsl4ExternalSourceCacheIdentity(resolvedSource.manifest, {
+        ...(options.createStoryId === undefined ? {} : {createStableId: options.createStoryId}),
+      })
+    : {created: false, manifest: resolvedSource.manifest};
   const sourceManifest = identity.manifest;
   const baseProject = readSb3(baseSb3Bytes).project;
   const usesStandardRuntime =
@@ -202,7 +191,9 @@ export async function buildDsl4RuntimeComponentFile(options) {
     ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
   };
   const built = await buildDsl4RuntimeComponent(buildOptions);
-  if (identity.created) await persistSourceManifest(sourceManifestPath, sourceManifest);
+  if (identity.created && resolvedSource.manifestPath !== null) {
+    await persistSourceManifest(resolvedSource.manifestPath, sourceManifest);
+  }
   const outputPaths = await installBundleTransactionally({
     outputDirectory: path.dirname(output),
     outputName,

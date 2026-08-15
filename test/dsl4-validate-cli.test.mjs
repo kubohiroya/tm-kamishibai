@@ -74,7 +74,7 @@ test('parses the default and explicitly bounded one-shot validation commands', (
       parseCliArguments(
         argumentsFor('story.kamishibai.yaml', 'pretty', dsl4CliDefaultLimits.maxSourceBytes + 1),
       ),
-    /max-source-bytes must be <= 262144/u,
+    /max-source-bytes must be <= 1048576/u,
   );
 });
 

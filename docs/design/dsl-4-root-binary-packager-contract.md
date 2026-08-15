@@ -229,7 +229,7 @@ absolute pathを含めません。
 浦島太郎の正本台本とassetは、隣接する`tmpose-kamishibai-samples/stories/urashima`を使用します。
 smokeは次の正式経路だけで一時成果物を作成します。
 
-1. `scripts/sb3/build.mjs`でDSL 4 release sourceから基礎SB3を作る
+1. current release generatorで一時sourceを生成し、基礎SB3を作る
 2. sb3-toolchainで基礎SB3を展開し、`project-assets-dsl4.yml`を適用して決定的に再構築する
 3. `build-dsl4 --enable-root-binary-entries`で正本`urashima.k4.yml`と全assetを埋め込む
 4. 固定したTurboWarp Packager adapterで各surfaceを生成する
@@ -265,11 +265,11 @@ entry名、size、SHA-256、bytesを検証します。ブラウザ計測は次�
 2026-08-11、Chrome 151、samples commit `c2497f301423a1196131041c4e80bafd7c623ce8`での浦島太郎計測値は
 次のとおりです。byte値は`performance.memory.usedJSHeapSize`で、GC後値は明示的GC直後を記録しています。
 
-| surface／mode                         | startup peak | title GC後 | 最初のpose GC後 | provider保持 | pose model registered／active |
-| ------------------------------------ | -----------: | ---------: | --------------: | ------------ | ----------------------------- |
-| Plain HTML／session                  | 229,921,692  | 70,195,311 | 102,925,929     | なし         | 1／1                          |
-| Plain HTML／direct fallback          | 187,301,476  | 110,556,719 | 143,397,300     | あり         | 1／1                          |
-| 通常ZIP／direct                      | 113,924,786  | 69,708,627 | 102,559,028     | あり         | 1／1                          |
+| surface／mode               | startup peak |  title GC後 | 最初のpose GC後 | provider保持 | pose model registered／active |
+| --------------------------- | -----------: | ----------: | --------------: | ------------ | ----------------------------- |
+| Plain HTML／session         |  229,921,692 |  70,195,311 |     102,925,929 | なし         | 1／1                          |
+| Plain HTML／direct fallback |  187,301,476 | 110,556,719 |     143,397,300 | あり         | 1／1                          |
+| 通常ZIP／direct             |  113,924,786 |  69,708,627 |     102,559,028 | あり         | 1／1                          |
 
 Plain HTMLは起動時にSB3全体をBase85 decode／ZIP展開するため、一時peakを避けられません。大容量assetでは、
 起動時peakと元archive保持を抑えられる通常ZIPまたはElectronを推奨します。`report.json`には成果物hash、起動時間、

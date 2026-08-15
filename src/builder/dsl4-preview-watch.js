@@ -232,6 +232,9 @@ export function createDsl4PreviewSourceWatcher({
   const timeout = finiteMilliseconds(stabilityTimeoutMs, 'stabilityTimeoutMs', retry);
   const maximumAttempts = Math.ceil(timeout / retry) + 1;
   const clock = validateClock(inputClock);
+  if (typeof manifest.path !== 'string') {
+    throw new TypeError('manifest.path must be resolved');
+  }
   const sourcePath = path.resolve(projectRoot, ...manifest.path.split('/'));
   const sourceDirectory = path.dirname(sourcePath);
   const sourceBasename = path.basename(sourcePath);
@@ -329,7 +332,7 @@ export function createDsl4PreviewSourceWatcher({
       await createDsl4PreviewSourceGraphGeneration(sourceGraph, {
         sourceFrontend,
         sourceId: manifest.sourceId,
-        displayName: path.basename(manifest.path),
+        displayName: sourceBasename,
         maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
         subtleCrypto,
       })

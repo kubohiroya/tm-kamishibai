@@ -72,7 +72,7 @@ async function withProject(callback) {
     await mkdir(path.join(root, 'assets'), {recursive: true});
     await mkdir(path.join(root, 'models', 'rescue'), {recursive: true});
     await Promise.all([
-      writeFile(path.join(root, 'story.kamishibai.yaml'), source),
+      writeFile(path.join(root, 'story.k4.yml'), source),
       writeFile(
         path.join(root, 'project.source.yaml'),
         'formatVersion: 1\nmode: external\nsourceId: main\n',
@@ -205,7 +205,7 @@ test('fails closed for unallowlisted hosts, redirects, and local/remote mismatch
 test('locks a local pose archive against the same remote archive content', async () => {
   await withProject(async (root) => {
     await writeFile(
-      path.join(root, 'story.kamishibai.yaml'),
+      path.join(root, 'story.k4.yml'),
       source.replace('file: models/rescue', 'file: models/rescue.zip'),
     );
     const result = await generateDsl4AssetDistributionLock(

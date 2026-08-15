@@ -176,7 +176,7 @@ function assertAuditShape(audit) {
 
 async function withProject(callback) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-audit-'));
-  const sourceManifest = path.join(directory, 'project.source.yaml');
+  const sourceManifest = path.join(directory, 'project.source.yml');
   const assetConfig = path.join(directory, 'project.assets.json');
   const assetLock = path.join(directory, 'project.assets.lock.json');
   try {

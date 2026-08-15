@@ -1,4 +1,4 @@
-import {lstat, open, realpath} from 'node:fs/promises';
+import {lstat, open, readdir, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -16,10 +16,11 @@ import {
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
+import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {Sb3BuilderError} from './errors.js';
 
-const defaultFileSystem = Object.freeze({lstat, open, realpath});
+const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
@@ -284,7 +285,7 @@ export async function loadDsl4ProjectSourceManifest({
     code,
     fileSystem: fs,
     readFile: readSnapshot,
-    extensions: ['.yaml', '.json'],
+    extensions: ['.yml', '.yaml', '.json'],
     formatLabel: 'YAML or JSON',
     parse: (source, filename) => parseDsl4ExternalSourceManifest(source, {filename}),
   });
@@ -343,7 +344,7 @@ export async function loadDsl4AssetAuditInputs({
       code: 'K4-SOURCE-MANIFEST-001',
       fileSystem: fs,
       readFile: readSnapshot,
-      extensions: ['.yaml', '.json'],
+      extensions: ['.yml', '.yaml', '.json'],
       formatLabel: 'YAML or JSON',
       parse: (source, filename) => parseDsl4ExternalSourceManifest(source, {filename}),
     }),
@@ -526,7 +527,9 @@ export function createDsl4AssetDistributionAudit({storyDocument, config, lock, p
  *
  * @param {object} options
  * @param {string} options.projectRoot
- * @param {string} options.sourceManifest
+ * @param {string} [options.sourceManifest]
+ * @param {string} [options.source]
+ * @param {string} [options.sourceId]
  * @param {string} options.assetConfig
  * @param {string} options.assetLock
  * @param {string} options.assetProfile
@@ -573,17 +576,46 @@ export async function auditDsl4AssetDistribution(options) {
     maxSourceBytes: options.maxSourceBytes,
     maxTotalSourceBytes: options.maxTotalSourceBytes,
   });
-  const inputs = await loadDsl4AssetAuditInputs({
-    projectRoot: options.projectRoot,
-    sourceManifest: options.sourceManifest,
-    assetConfig: options.assetConfig,
-    assetLock: options.assetLock,
-    maxSourceManifestBytes: options.maxSourceManifestBytes,
-    maxAssetConfigBytes: options.maxAssetConfigBytes,
-    maxAssetLockBytes: options.maxAssetLockBytes,
-    ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
-    ...(options.readFile === undefined ? {} : {readFile: options.readFile}),
-  });
+  const [resolvedSource, configInput, lockInput] = await Promise.all([
+    resolveDsl4ProjectSource({
+      projectRoot: options.projectRoot,
+      ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
+      ...(options.source === undefined ? {} : {source: options.source}),
+      ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+      maxSourceManifestBytes: options.maxSourceManifestBytes,
+      ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
+      ...(options.readFile === undefined ? {} : {readFile: options.readFile}),
+    }),
+    loadDsl4ProjectJson({
+      projectRoot: options.projectRoot,
+      inputPath: options.assetConfig,
+      maxBytes: options.maxAssetConfigBytes,
+      label: 'asset distribution config',
+      code: 'K4-ASSET-PROFILE-001',
+      ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
+      ...(options.readFile === undefined ? {} : {readFile: options.readFile}),
+    }),
+    loadDsl4ProjectJson({
+      projectRoot: options.projectRoot,
+      inputPath: options.assetLock,
+      maxBytes: options.maxAssetLockBytes,
+      label: 'asset distribution lock',
+      code: 'K4-ASSET-LOCK-001',
+      ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
+      ...(options.readFile === undefined ? {} : {readFile: options.readFile}),
+    }),
+  ]);
+  let inputs;
+  try {
+    inputs = deepFreeze({
+      sourceManifest: resolvedSource.manifest,
+      config: validateDsl4AssetDistributionConfig(configInput),
+      lock: validateDsl4AssetDistributionLock(lockInput),
+    });
+  } catch (error) {
+    if (error instanceof Dsl4AssetDistributionError) fail(error.message, error.code, error);
+    throw error;
+  }
   const source = await loadDsl4ExternalSource(options.projectRoot, inputs.sourceManifest, {
     maxSourceBytes: sourceLimits.maxSourceFileBytes,
     ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),

@@ -27,7 +27,7 @@ visible blockを1対1で公開します。YAML経路とblock経路は、引数�
 
 ## 2. 現行3.2からの移行境界
 
-`app/project.source.json`のblock graphを基準にした再計数値は次のとおりです。この値は4.0の目標ではなく、
+公開済み3.2.3 SB3のblock graphを基準にした再計数値は次のとおりです。この値は4.0の目標ではなく、
 Scratch側に残っている責務を特定する監査baselineです。
 
 | target                |     block | top-level script | 4.0での扱い                                                                                      |
