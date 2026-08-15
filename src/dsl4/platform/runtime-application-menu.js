@@ -40,12 +40,13 @@ export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
  * @param {unknown} options.mount
  * @param {Readonly<Record<'en' | 'ja', Readonly<Record<string, string>>>>} options.locales
  * @param {Readonly<Partial<Record<'open' | 'reload' | 'build' | 'about' | 'language', string>>>} [options.icons]
- * @param {() => unknown | Promise<unknown>} options.onOpen
+ * @param {() => unknown | Promise<unknown>} [options.onOpen]
  * @param {() => unknown | Promise<unknown>} options.onReload
  * @param {() => unknown | Promise<unknown>} [options.onBuild]
  * @param {() => unknown | Promise<unknown>} options.onAbout
  * @param {(locale: 'en' | 'ja') => unknown | Promise<unknown>} options.onLocaleChange
  * @param {(error: unknown) => unknown} [options.onError]
+ * @param {boolean} [options.openVisible]
  * @param {boolean} [options.reloadEnabled]
  * @param {boolean} [options.buildVisible]
  * @param {boolean} [options.buildEnabled]
@@ -54,12 +55,15 @@ export function createDsl4RuntimeApplicationMenu(options) {
   if (!isRecord(options)) throw new TypeError('application menu options are required');
   const document = requireDocument(options.document);
   const mount = requireElement(options.mount, 'mount');
-  for (const callback of /** @type {const} */ ([
-    'onOpen',
-    'onReload',
-    'onAbout',
-    'onLocaleChange',
-  ])) {
+  const openVisible = options.openVisible ?? true;
+  if (typeof openVisible !== 'boolean') throw new TypeError('open visible state must be boolean');
+  if (openVisible && typeof options.onOpen !== 'function') {
+    throw new TypeError('onOpen must be a function when the open action is visible');
+  }
+  if (options.onOpen !== undefined && typeof options.onOpen !== 'function') {
+    throw new TypeError('onOpen must be a function');
+  }
+  for (const callback of /** @type {const} */ (['onReload', 'onAbout', 'onLocaleChange'])) {
     if (typeof options[callback] !== 'function') {
       throw new TypeError(`${callback} must be a function`);
     }
@@ -114,7 +118,7 @@ export function createDsl4RuntimeApplicationMenu(options) {
 
   /** @type {Array<{action: 'open' | 'reload' | 'build' | 'about' | 'language', left: string, top: string, callback: null | Function}>} */
   const definitionList = [
-    {action: 'open', left: '10%', top: '25.5556%', callback: options.onOpen},
+    {action: 'open', left: '10%', top: '25.5556%', callback: options.onOpen ?? null},
     {action: 'reload', left: '53.3333%', top: '25.5556%', callback: options.onReload},
     {action: 'about', left: '10%', top: '58.8889%', callback: options.onAbout},
     {action: 'language', left: '53.3333%', top: '58.8889%', callback: null},
@@ -219,8 +223,10 @@ export function createDsl4RuntimeApplicationMenu(options) {
       value.label.textContent = label;
       value.button.setAttribute('aria-label', label);
       const disabled =
-        (action === 'reload' && !reloadEnabled) || (action === 'build' && !buildEnabled);
-      const hidden = action === 'build' && !buildVisible;
+        (action === 'open' && !openVisible) ||
+        (action === 'reload' && !reloadEnabled) ||
+        (action === 'build' && !buildEnabled);
+      const hidden = (action === 'open' && !openVisible) || (action === 'build' && !buildVisible);
       value.button.disabled = disabled;
       value.button.setAttribute('aria-disabled', String(disabled));
       value.button.hidden = hidden;
