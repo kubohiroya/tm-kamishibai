@@ -289,6 +289,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
       turboWarpBubbleAdvancedPresentationEnabled:
         featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
+      storyVariableWriteEnabled: featureFlags.dsl4TurboWarpStoryVariableWrite,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {

@@ -617,6 +617,19 @@ export function createDsl4LiveReloadSession({
     return Promise.resolve(current.session.invokeAction(action));
   }
 
+  /** @param {unknown} request */
+  function queueVariableWrite(request) {
+    if (disposed || !current || typeof current.session.queueVariableWrite !== 'function') {
+      return Object.freeze({accepted: false, code: 'K4-VARIABLE-WRITE-INACTIVE'});
+    }
+    return current.session.queueVariableWrite(request);
+  }
+
+  function getRuntimeVariableSnapshot() {
+    if (!current || typeof current.session.getRuntimeVariableSnapshot !== 'function') return null;
+    return current.session.getRuntimeVariableSnapshot();
+  }
+
   /** @param {unknown} error */
   function rejectActionInvocation(error) {
     if (disposed) return Promise.reject(new TypeError('live reload session is disposed'));
@@ -632,6 +645,8 @@ export function createDsl4LiveReloadSession({
     discardCandidate,
     commit,
     invokeAction,
+    queueVariableWrite,
+    getRuntimeVariableSnapshot,
     rejectActionInvocation,
     dispose,
     getState: snapshot,

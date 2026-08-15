@@ -135,6 +135,12 @@ export {
 } from './diagnostic-projection.js';
 export {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 export {
+  createDsl4RuntimeStateExpressionComposition,
+  createDsl4RuntimeVariableSnapshot,
+  dsl4RuntimeExpressionKeys,
+  lowerDsl4RuntimeExpression,
+} from './runtime-variable-surface.js';
+export {
   dsl4DefaultExternalSourcePath,
   Dsl4ExternalSourceManifestError,
   validateDsl4ExternalSourceManifestContract,

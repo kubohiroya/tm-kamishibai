@@ -584,6 +584,173 @@ scenes:
   assert.equal(controller.getState().status, 'finished');
 });
 
+test('commits typed TurboWarp story-variable writes in acceptance order at the action boundary', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+  title: start
+branches:
+  result:
+    - if: score == 3
+      goto: success
+    - else: failure
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+    - branch: result
+  failure: []
+  success: []
+`);
+  let controller;
+  let variablesDuringReceiver;
+  const evaluatedVariables = [];
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    storyVariableWriteEnabled: true,
+    evaluateCondition(_expression, variables) {
+      evaluatedVariables.push({...variables});
+      return variables.score === 3;
+    },
+    port: {
+      broadcastMessageAndWait() {
+        assert.deepEqual(
+          controller.queueVariableWrite({
+            operation: 'set',
+            name: 'score',
+            value: 1,
+          }),
+          {accepted: true, code: ''},
+        );
+        assert.deepEqual(
+          controller.queueVariableWrite({
+            operation: 'change',
+            name: 'score',
+            value: 2,
+          }),
+          {accepted: true, code: ''},
+        );
+        variablesDuringReceiver = controller.getState().variables;
+      },
+    },
+  });
+
+  await controller.start();
+
+  assert.deepEqual(variablesDuringReceiver, {score: 0, title: 'start'});
+  assert.equal(controller.getState().variables.score, 3);
+  assert.deepEqual(evaluatedVariables, [{score: 3, title: 'start'}]);
+  assert.equal(controller.getState().sceneId, 'success');
+  assert.deepEqual(controller.queueVariableWrite({operation: 'set', name: 'score', value: 4}), {
+    accepted: false,
+    code: 'K4-VARIABLE-WRITE-INACTIVE',
+  });
+});
+
+test('rejects invalid typed writes and discards accepted writes when the action is cancelled', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+  ready: false
+scenes:
+  opening:
+    - broadcastMessageAndWait: receiver
+`);
+  const receiver = deferred();
+  let controller;
+  let accepted;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    broadcastMessageAndWaitEnabled: true,
+    storyVariableWriteEnabled: true,
+    port: {
+      broadcastMessageAndWait() {
+        assert.equal(
+          controller.queueVariableWrite({operation: 'set', name: 'missing', value: 1}).code,
+          'K4-VARIABLE-WRITE-UNKNOWN',
+        );
+        assert.equal(
+          controller.queueVariableWrite({operation: 'set', name: 'ready', value: 1}).code,
+          'K4-VARIABLE-WRITE-TYPE',
+        );
+        assert.equal(
+          controller.queueVariableWrite({operation: 'set', name: 'score', value: Number.NaN}).code,
+          'K4-VARIABLE-WRITE-VALUE',
+        );
+        accepted = controller.queueVariableWrite({operation: 'set', name: 'score', value: 9});
+        return receiver.promise;
+      },
+    },
+  });
+
+  const run = controller.start();
+  await waitFor(() => accepted !== undefined, 'story-variable write was not queued');
+  assert.deepEqual(accepted, {accepted: true, code: ''});
+  controller.stop('test-cancel');
+  receiver.resolve();
+  await run;
+
+  assert.equal(controller.getState().status, 'stopped');
+  assert.equal(controller.getState().variables.score, 0);
+});
+
+test('uses one branch snapshot when a story-variable write arrives between rules', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+variables:
+  score: 0
+branches:
+  stable:
+    - if: score == 1
+      goto: changed
+    - if: score == 0
+      goto: stable
+    - else: failed
+scenes:
+  opening:
+    - branch: stable
+  changed: []
+  failed: []
+  stable: []
+`);
+  const observed = [];
+  let controller;
+  controller = createDsl4RuntimeController({
+    storyDocument,
+    storyVariableWriteEnabled: true,
+    evaluateCondition(expression, variables) {
+      observed.push(variables);
+      if (observed.length === 1) {
+        assert.deepEqual(
+          controller.queueVariableWrite({
+            operation: 'set',
+            name: 'score',
+            value: 1,
+          }),
+          {accepted: true, code: ''},
+        );
+      }
+      return expression === 'score == 0' && variables.score === 0;
+    },
+    port: {},
+  });
+
+  await controller.start();
+
+  assert.equal(observed.length, 2);
+  assert.strictEqual(observed[0], observed[1]);
+  assert.equal(observed[1].score, 0);
+  assert.equal(controller.getState().variables.score, 1);
+  assert.equal(
+    controller
+      .getTrace()
+      .some((event) => event.type === 'scene.enter' && event.sceneId === 'stable'),
+    true,
+  );
+});
+
 test('maps a block normalization rejection to the active runtime diagnostic', async () => {
   const storyDocument = parseStory(`
 kamishibai: '4.0'

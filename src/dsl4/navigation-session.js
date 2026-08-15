@@ -76,6 +76,7 @@ function historyFailure(result) {
  * @param {boolean} [options.turboWarpBubbleEnabled]
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {boolean} [options.broadcastMessageAndWaitEnabled]
+ * @param {boolean} [options.storyVariableWriteEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -103,6 +104,7 @@ export function createDsl4NavigationSession({
   turboWarpBubbleEnabled = false,
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
+  storyVariableWriteEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -280,6 +282,7 @@ export function createDsl4NavigationSession({
       turboWarpBubbleEnabled,
       turboWarpBubbleAdvancedPresentationEnabled,
       broadcastMessageAndWaitEnabled,
+      storyVariableWriteEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });
@@ -478,6 +481,14 @@ export function createDsl4NavigationSession({
         return Promise.reject(error);
       }
       return controller.invokeAction(action);
+    },
+    /** @param {unknown} request */
+    queueVariableWrite(request) {
+      if (disposed) return deepFreeze({accepted: false, code: 'K4-VARIABLE-WRITE-INACTIVE'});
+      if (sessionDiagnostic) {
+        return deepFreeze({accepted: false, code: 'K4-VARIABLE-WRITE-INACTIVE'});
+      }
+      return controller.queueVariableWrite(request);
     },
     /** @param {unknown} error */
     rejectActionInvocation(error) {

@@ -6,6 +6,7 @@ import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {installDsl4PackagedRuntimeComponent} from '../src/builder/index.js';
+import {createDsl4ProductionSourceFrontend} from '../src/builder/dsl4-source-frontend.js';
 import {
   createDsl4DebugExecutionCoordinator,
   createDsl4EmbeddedAssetBundle,
@@ -29,6 +30,9 @@ const schema = JSON.parse(
   await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(schema);
+const runtimeStateFrontend = createDsl4ProductionSourceFrontend(schema, {
+  runtimeStateExpressionsEnabled: true,
+});
 const subtleCrypto = webcrypto.subtle;
 const limits = {maxSourceBytes: 16_384, maxAssetFiles: 20, maxAssetBytes: 16_384};
 const waitStory = `
@@ -205,9 +209,9 @@ function manualScheduler() {
 
 async function packagedProject(
   sourceText = waitStory,
-  {cacheIdentity, historyNavigationAvailable = false} = {},
+  {cacheIdentity, historyNavigationAvailable = false, sourceFrontend = frontend} = {},
 ) {
-  const parsed = frontend.parse(sourceText, {sourceId: 'main', historyNavigationAvailable});
+  const parsed = sourceFrontend.parse(sourceText, {sourceId: 'main', historyNavigationAvailable});
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
@@ -3692,6 +3696,68 @@ scenes:
     {visible: false, source: 'touch-input-1', cursor: 'pointer'},
   ]);
   await result.host.dispose();
+});
+
+test('shares the public runtime snapshot with runtime expressions behind independent flags', async () => {
+  const project = await packagedProject(
+    `
+kamishibai: '4.0'
+variables:
+  score: 1
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+branches:
+  runtimeChoice:
+    - if: 'score == 1 && runtime["status"] == "running" && runtime["scene.id"] == "opening" && runtime["action.number"] == 1'
+      goto: matched
+    - else: failed
+scenes:
+  opening:
+    - branch: runtimeChoice
+  failed: []
+  matched: []
+`,
+    {sourceFrontend: runtimeStateFrontend},
+  );
+  const events = [];
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, platformFixture([]), {
+      featureFlags: {
+        dsl4Runtime: true,
+        dsl4TurboWarpStateSurface: true,
+        dsl4ExpressionRuntimeState: true,
+      },
+      sourceFrontend: runtimeStateFrontend,
+      runtimeVersion: '4.0.0-test.1',
+      onEvent(event) {
+        events.push(event);
+      },
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.host.getRuntimeVariableSnapshot().runtime, {
+    status: 'idle',
+    'scene.id': '',
+    'action.number': 0,
+    'action.path': '',
+    'pose.phase': 'inactive',
+    'pose.target': '',
+    'pose.name': '',
+    'pose.stepNumber': 0,
+    version: '4.0.0-test.1',
+  });
+
+  const finished = await result.host.start();
+  assert.equal(finished.status, 'finished');
+  assert.equal(
+    events.some((event) => event.type === 'scene.enter' && event.sceneId === 'matched'),
+    true,
+  );
+  assert.deepEqual(result.host.getRuntimeVariableSnapshot().storyVariables, {score: 1});
+  await result.host.dispose();
+  assert.equal(result.host.getRuntimeVariableSnapshot().runtime.status, 'stopped');
 });
 
 test('fails closed for missing story input and injected built-in collisions, then cleans up', async () => {
