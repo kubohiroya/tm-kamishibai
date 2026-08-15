@@ -41,9 +41,10 @@ test('keeps static distribution sources free of SB3 binaries', async () => {
 });
 
 test('renders ordered versioned download cards from one release catalog', async () => {
-  const [downloadTemplate, readme, packageJsonSource] = await Promise.all([
+  const [downloadTemplate, readme, readmeJapanese, packageJsonSource] = await Promise.all([
     readFile(path.join(projectRoot, 'site/downloads/index.html'), 'utf8'),
     readFile(path.join(projectRoot, 'README.md'), 'utf8'),
+    readFile(path.join(projectRoot, 'README.ja.md'), 'utf8'),
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
@@ -117,6 +118,33 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(readme, /kubohiroya\.github\.io\/tmpose-kamishibai-docs\//u);
   assert.doesNotMatch(readme, /\]\(docs\//u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
+  assert.match(readme, /English \| \[日本語\]\(README\.ja\.md\)/u);
+  assert.match(readmeJapanese, /\[English\]\(README\.md\) \| 日本語/u);
+  assert(packageJson.files.includes('README.md'));
+  assert(packageJson.files.includes('README.ja.md'));
+
+  const examples = (source) =>
+    [...source.matchAll(/```(?:bash|json|yaml)\n([\s\S]*?)```/gu)].map((match) => match[1]);
+  assert.deepEqual(examples(readmeJapanese), examples(readme));
+
+  const remoteLinks = (source) =>
+    [...new Set([...source.matchAll(/https:\/\/[^\s)]+/gu)].map((match) => match[0]))].sort();
+  assert.deepEqual(remoteLinks(readmeJapanese), remoteLinks(readme));
+
+  const headingLevels = (source) =>
+    source
+      .split('\n')
+      .filter((line) => /^#{1,6} /u.test(line))
+      .map((line) => line.indexOf(' '));
+  assert.deepEqual(headingLevels(readmeJapanese), headingLevels(readme));
+  assert.match(
+    readmeJapanese,
+    new RegExp(
+      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
+      'u',
+    ),
+    'Japanese README installation must use the current fixed npm version.',
+  );
 });
 
 test('builds immutable release artifacts from local snapshots without git history', async () => {

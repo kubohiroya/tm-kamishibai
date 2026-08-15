@@ -46,6 +46,8 @@ try {
 
   const packedPaths = new Set(packResult.files.map(({path: filePath}) => filePath));
   for (const requiredPath of [
+    'README.md',
+    'README.ja.md',
     'bin/tmpose-kamishibai.mjs',
     'schema/dsl-4.schema.json',
     'src/builder/index.js',

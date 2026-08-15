@@ -1,37 +1,70 @@
-# TMPose紙芝居
+# TMPose Kamishibai
 
-**ポーズで進めるAIインタラクティブ紙芝居**
+English | [日本語](README.ja.md)
 
-TMPose紙芝居は、TurboWarpとTMPoseを利用し、参加者がカメラの前でポーズを取ることで物語を進める紙芝居システムです。このリポジトリには、紙芝居アプリのソース、配布用SB3、公開ページ、および台本とアセットをSB3へ組み込むビルダーがあります。ドキュメントは専用の[`tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs)リポジトリで管理します。
+**Participatory AI storytelling driven by body poses**
 
-## 使ってみる
+TMPose Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TMPose for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
 
-- [現在公開中のWeb版](https://sqs.prof.cuc.ac.jp/kamishibai/)
-- [GitHub Pages版](https://kubohiroya.github.io/tmpose-kamishibai/)
-- [サンプル](https://kubohiroya.github.io/tmpose-kamishibai-samples/)
+This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tmpose-kamishibai-docs/) is the source of truth for operating instructions and script references.
 
-利用方法、台本の書式、利用できるコマンドについては[ドキュメントサイト](https://kubohiroya.github.io/tmpose-kamishibai-docs/)を参照してください。
+![TMPose Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
 
-## npmパッケージ
+[Project website](https://kubohiroya.github.io/tmpose-kamishibai/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/tmpose-kamishibai/downloads/) · [Read the documentation](https://kubohiroya.github.io/tmpose-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tmpose-kamishibai-samples/)
 
-[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai)は、DSL 4.0 YAMLの検証、local preview、自己完結SB3の生成と、3.1／3.2台本の変換を行うCLI／JavaScript APIを提供します。
+## What You Can Build
 
-検証済みバージョンを固定して導入します。
+- Advance a story through participant poses, keyboard input, and stage touches
+- Describe scenes, branches, dialogue, motion, audio, and pose recognition in YAML or the 3.1/3.2 text DSL
+- Preview scripts in TurboWarp and export self-contained SB3 stories for distribution
+- Automate validation, live preview, SB3 builds, legacy DSL conversion, and asset distribution with the CLI
+- Invoke DSL 4.0 core actions from TurboWarp blocks or the JavaScript API
 
-```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.5
+## Choose a Version
+
+|                 | 3.2.3                                           | 4.0.0-rc.5                                                    |
+| --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| Status          | Stable and currently recommended                | Release candidate                                             |
+| Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
+| Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
+| Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc5]                                      |
+
+If you are unsure, use 3.2.3. Version 4.0.0-rc.5 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+
+## Try It First
+
+Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
+
+To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/).
+
+## Build a Story with DSL 4.0
+
+### Browser-only authoring
+
+The 4.0.0-rc.5 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
+
+1. [Download the 4.0 SB3][downloads] and open it in the [TurboWarp Editor](https://turbowarp.org/editor).
+2. Click the green flag, then choose **Open** and select a story file or project directory.
+3. Edit YAML or local assets in an external editor. Valid saves are checked and applied automatically.
+4. Choose **Build distributable SB3** to save a story with its script and assets embedded.
+
+Watching a project directory requires the File System Access API in a top-level HTTPS page on desktop Chrome or Edge. When a native save picker is unavailable, the runner falls back to a browser download. Other unsupported authoring operations can use single-file selection or the CLI below. See the [DSL 4.0 author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) for browser requirements, UI instructions, and troubleshooting.
+
+### Minimal project
+
+A DSL 4.0 project keeps its source manifest, YAML script, and assets such as images, audio, and pose models under one project root. Asset directory names are organizational and may be chosen freely.
+
+```text
+my-story/
+├── project.source.json
+├── story.k4.yml
+├── images/
+├── sounds/
+└── pose-models/
 ```
 
-```bash
-pnpm exec tmpose-kamishibai build-sb3 \
-  --base kamishibai.sb3 \
-  --script source.txt \
-  --assets assets.lock.json \
-  --output dist/_sample \
-  --profile editor
-```
-
-DSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を生成できます。有限上限と保存channelは省略できません。
+`project.source.json` identifies the entry source.
 
 ```json
 {
@@ -42,206 +75,46 @@ DSL 4.0では、外部YAML正本と`project.source.json`から自己完結SB3を
 }
 ```
 
-一般作者向けの最小構成では、YAMLと単一file assetをproject root直下へ置けます。
-
-```text
-project-root/
-├── project.source.json
-├── story.k4.yml
-├── hero.svg
-├── opening.mp3
-└── rescue-pose/
-    ├── model.json
-    ├── metadata.json
-    └── weights.bin
-```
-
-```bash
-pnpm exec tmpose-kamishibai build-dsl4 \
-  --base kamishibai-4-base.sb3 \
-  --project-root . \
-  --source-manifest project.source.json \
-  --output dist/story-4.sb3 \
-  --control-profile production \
-  --channel bundled \
-  --max-source-bytes 262144 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728
-```
-
-### sceneの記述順
-
-DSL 4.0では、`scenes`へ最初に書いたsceneから通常実行を開始し、明示的な遷移がなければ記述順に
-次のsceneへ進みます。
+At minimum, `story.k4.yml` declares a version and one or more scenes.
 
 ```yaml
+kamishibai: '4.0'
+
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+
 scenes:
-  opening: []
-  rescue: []
+  opening:
+    - wait: 1
+    - goto: ending
   ending: []
 ```
 
-YAML 1.2一般ではmappingに順序の意味はありません（[YAML 1.2.2 Mapping Key Order](https://yaml.org/spec/1.2.2/#3221-mapping-key-order)）。
-DSL 4.0は例外として、`scenes` mappingのsource上の
-pair順を実行順として使用します。このため、scene keyをアルファベット順や数値順へ並べ替えるformatter、
-serializer、editorを使用しないでください。並べ替え後もschema validationには成功しますが、台本の実行順が
-変わります。DSL 4.0対応toolはscene keyを保存時に並べ替えず、round tripで記述順を保持する必要があります。
+The source order of `scenes` defines the normal execution order. Do not use formatters that sort scene keys, and avoid scene IDs made only of digits with the current implementation. See the [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序) for the formal contract and known limitation.
 
-現行frontendはYAMLをJavaScript objectへmaterializeしてからsceneを配列化するため、`"10"`、`"2"`等の
-数字だけのscene IDでは記述順を保証できません。これは意図したDSL仕様ではなく既知の実装制約です。修正されるまで
-`scene10`、`scene2`のように数字以外を含むscene IDを使用してください。正式な順序契約は
-[DSL 4.0表層仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序)を参照してください。
+For practical scripts, asset references, pose models, branches, and speech bubbles, continue with the [author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tmpose-kamishibai-samples).
 
-### 台本作者向けアセット変換
+### Validate, preview, and build with the CLI
 
-単一fileのDSL 4 projectでは、個別アセットまたは全アセットを`local`、`remote`、SB3内の
-`project` assetへ変換し、`project.source.json`、変換済み`.k4.yml`、作者用`.sb3`を一組で保存できます。
-入力YAML／SB3は変更せず、未存在の`--output-dir`を独立した新しいproject rootとして検証後に一括作成
-します。生成YAML内のlocal参照はこの新しいrootからの相対pathになり、個別変換で未選択のまま残る
-local assetも同じrootへcopyされます。`--asset`は反復指定でき、省略すると全アセットが対象です。
+The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.5) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
 
 ```bash
-pnpm dsl4:assets:convert -- \
-  --project-root . \
-  --source-manifest project.source.json \
-  --base kamishibai-4-base.sb3 \
-  --output-dir converted-local \
-  --to local \
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.5
+pnpm exec tmpose-kamishibai --help
+```
+
+Validate a script without building it.
+
+```bash
+pnpm exec tmpose-kamishibai validate-dsl4 \
+  --input story.k4.yml \
   --max-source-bytes 262144 \
-  --max-source-manifest-bytes 16384 \
-  --max-remote-map-bytes 65536 \
-  --max-base-sb3-bytes 268435456 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 \
-  --timeout-ms 10000 \
-  --max-redirects 3 \
-  --allow-host cdn.example.com
+  --format pretty
 ```
 
-`remote`への変換は、アップロード済み実体を記述したmappingを検証する方法と、content-addressed
-fileをrsync over SSHで同期する方法を選べます。mapping方式ではtoolはuploadやmetadataの推測を
-行わず、allowlist内HTTPSから実体を取得して、SHA-256、Content-Type、size、および変換元と同じ
-byte列であることを確認します。Teachable Machineのpose ZIPは内部構造を検証せず、有限サイズの
-不透明な1 fileとしてZIP全体のbyte列だけを比較します。
-
-入力台本のremote画像（backdrop／costume／image）とremote音声は、`source.url`だけの指定にも対応します。
-local／project変換時は同じHTTPS allowlist、redirect上限、timeout、byte上限を適用して取得し、応答の
-Content-Typeと実byte列のmedia形式が一致する場合だけ変換します。URL-only参照は内容を固定しないため、
-継続利用するremote成果物にはintegrity／Content-Type／sizeをすべて指定するか、rsync方式で検証metadataを
-生成することを推奨します。remote mapping fileは引き続き4項目すべてが必須です。
-
-```json
-{
-  "Opening": {
-    "url": "https://cdn.example.com/opening.svg",
-    "integrity": "sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "contentType": "image/svg+xml",
-    "size": 1234
-  }
-}
-```
-
-```bash
-pnpm dsl4:assets:convert -- \
-  --project-root . --source-manifest project.source.json \
-  --base kamishibai-4-base.sb3 --output-dir converted-remote \
-  --to remote --asset Opening --remote-map remote-assets.json \
-  --allow-host cdn.example.com \
-  --max-source-bytes 262144 --max-source-manifest-bytes 16384 \
-  --max-remote-map-bytes 65536 --max-base-sb3-bytes 268435456 \
-  --max-asset-file-bytes 16777216 --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 --timeout-ms 10000 --max-redirects 3
-```
-
-rsync方式では、SSH同期先と、それに対応して外部公開されるHTTPS directory URLを両方指定します。
-local／project／既存remoteの選択assetをcontent-addressed filenameへ変換し、一時directoryから
-`rsync --archive --checksum --protect-args`で同期します。directory形式のlocal／remote pose modelは
-固定timestamp・固定順序のZIPにし、既存のlocal／remote pose ZIPは再圧縮しません。URL-onlyの従来TMPose
-directoryは`model.json`、`metadata.json`、`weightsManifest`が指す単一weights fileを取得します。同期後は公開URLから全fileを再取得して
-metadataと元のbyte列を検証し、成功した場合だけ
-変換済みsource manifest／YAML／SB3のlocal出力projectを確定します。
-
-```bash
-pnpm dsl4:assets:convert -- \
-  --project-root . --source-manifest project.source.json \
-  --base kamishibai-4-base.sb3 --output-dir converted-remote \
-  --to remote --asset Opening --asset RescuePose \
-  --rsync-destination author@assets.example.com:/srv/www/k4-assets \
-  --remote-base-url https://cdn.example.com/k4-assets/ \
-  --rsync-ssh-port 22 --rsync-timeout-ms 30000 \
-  --allow-host cdn.example.com \
-  --max-source-bytes 262144 --max-source-manifest-bytes 16384 \
-  --max-remote-map-bytes 65536 --max-base-sb3-bytes 268435456 \
-  --max-asset-file-bytes 16777216 --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 --timeout-ms 10000 --max-redirects 3
-```
-
-rsyncはshellを介さず、`BatchMode=yes`と`StrictHostKeyChecking=yes`を付けて実行します。事前に
-SSH agent／SSH config／`known_hosts`と書き込み可能な同期先directoryを準備してください。remote pathは安全な
-`[user@]host:/absolute/path`形式に限定されます。`--delete`は使わず、content-addressed filename以外を
-変更しません。同期に成功してもHTTPS公開が直ちに反映されなければ検証失敗となり、local成果物は
-作成されません。CDN cacheを利用する場合は、新しいhash filenameがoriginから即時取得できる構成が
-必要です。
-
-`project`化できるのはScratchがtarget上で保持できるbackdrop／costume／soundです。target非依存の
-`image`と複数fileの`poseModel`はproject assetへ変換できないため、診断付きで停止します。
-backdrop／costumeをproject化するとSB3側のbitmapResolutionによって表示scaleが変わり得るため、元画像の
-byte列も出力projectへ保全します。local元画像は元と同じproject相対path、remote元画像は
-`assets/originals/`以下へ保存し、builder APIの`preservedOriginals`でasset IDから保全pathを取得できます。
-`local`化では選択assetを出力directoryの`assets/`へcopyまたはmaterializeし、project assetから
-移した未共有entryは出力SB3から除きます。remote pose ZIPは展開せず、同じbyte列のlocal ZIP fileとして
-保存します。生成SB3は作者用baseなので、配布用の自己完結SB3は生成された
-出力directoryを`--project-root`、その`project.source.json`を`--source-manifest`、生成SB3を`--base`として
-`build-dsl4`で作成してください。Source Graphの複数file編集はこのcommandの対象外です。
-
-DSL embedded assetをBase64本文ではなくSB3 rootのcontent-addressed entryとして試す場合は、build開始時に
-`--enable-root-binary-entries`を明示します。これは既定OFFです。OFFでは従来のBase64形式を生成するため、
-ロールバック時はflagを外して成果物を再buildします。entry形式、対応sbdl version、Packager／session backingの契約は
-[DSL 4.0 root binary／Packager契約](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-root-binary-packager-contract.md)を参照してください。
-
-root-entry SB3をTurboWarp Packagerへ渡す場合は、固定`@turbowarp/packager` 3.13.0とbuilder exportの
-`packageDsl4WithTurboWarpPackager()`を使用します。Plain HTML／`zip-one-asset`は同じPackager ZIP closureを
-`scaffolding.loadProject()`前に登録し、通常ZIP／Electronは`assets/`配下の個別entryをdirect sourceとして登録します。
-実行時のPackager objectを差し替えたり、生成HTMLを任意の文字列置換で更新したりしないでください。対応templateが変化した場合、
-adapterはbuildをfail closedにします。必要な引数とsurface別の所有権は上記契約書を参照してください。
-
-TurboWarpエディターでSB3を直接開いて実行する成果物は、`--enable-root-binary-entries`を指定せずBase64形式でbuildしてください。
-エディターは読み込み後にSB3 ZIP entry sourceを保持しないため、v3 root-entry descriptorだけを持つSB3は直接実行できません。
-
-`project.source.json`の`path`を省略すると、後方互換のためproject root直下の`story.kamishibai.yaml`を使用します。新規sourceの推奨suffixは`.k4.yml`です。別名には`.k4.yml`、`.k4.yaml`、`.kamishibai.yml`、`.kamishibai.yaml`のいずれかで終わるproject root直下のnormalized basenameを指定できます。YAML内のlocal asset pathはproject root基準で、`assets/`や`pose-models/`等の分類directoryは任意です。初回の正常buildでは、台本別remote cacheを分離する`cacheId`と`cacheDatabaseName`をmanifestへatomicに追記し、以後のbuildと台本名変更でも同じidentityを使用します。YAMLがローカル参照する画像・音声・pose modelは生成SB3へ埋め込みます。pose modelは展開済みdirectoryに加え、`file` pathまたはremote URLのpathnameが`.zip`（大文字小文字を区別しない）で終わる場合はZIPファイルを直接指定できます。`delivery: remote`のpose modelは従来のTMPoseディレクトリURLも引き続き指定でき、内容を固定したい場合は`file`へローカル化して埋め込みます。integrity／Content-Type／sizeをすべて指定したremote assetは検証metadataだけを格納します。出力はdisk上の候補を共有startup loaderで再検証してからatomicに置換され、失敗時は既存SB3を保持します。
-
-`--enable-source-includes`を使う場合、`--max-source-bytes`は各source fileの上限、`--max-total-source-bytes`はSource Graph全sourceのbyte合計とcomposed canonical sourceの両方の上限です。後者は前者以上でなければならず、builder、source descriptor、disk candidate、runtime loaderは同じcomposed source上限を使用します。
-
-local previewでも同じflagとgraph上限を指定できます。ON時はincluded sourceとlocal assetを含む全体を二回取得し、同じgeneration keyになった場合だけruntimeへstageします。新規sourceは任意のbasename／directoryで`.k4.yml` suffixを使用できます（entry sourceだけはmanifestのroot-level basenameです）。途中保存や一部assetだけが新しい状態は公開しません。詳細は[DSL 4.0 Source Graph Preview](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-source-include-preview.md)を参照してください。
-
-実カメラを使う最終確認は、[DSL 4.0 実Chrome・実カメラ Smoke 手順](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-physical-camera-smoke.md)に従います。自動E2Eはカメラをスタブ化しているため、実機確認の代替にはなりません。
-
-配布用の非埋め込み Standard SB3は、制作・デバッグ用ランナーとして起動します。HTTPSのtop-level
-desktop Chrome／Edgeに開き、メニューの「Open」から台本ファイル、または
-`project.source.json`を持つproject directoryをread-only選択すると、サーバーを起動せずに
-YAML保存を500 ms間隔で監視します。validな保存は
-確認ダイアログを出さず、既定の現在actionから自動reloadし、安全に再開できなければscene、台本先頭へ
-fallbackします。reload status buttonを押した場合だけ、次回以降の再開位置を変更できます。
-
-同じ非埋め込みランナーでは、台本中の引数なし`debugger` actionで実行直前に停止できます。
-reload status buttonの設定画面から「debuggerで停止」または「1 actionずつ実行」を選び、停止中は
-「次のactionを実行」で再開します。debug mode、停止位置、選択した実行modeはsessionだけに保持し、
-YAML、SB3、project、localStorageへ保存しません。台本埋め込みproduction SB3では`debugger`はno-opです。
-詳細は[DSL 4.0 debug execution](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-debug-execution.md)を参照してください。
-
-project directoryを開いた場合は、YAMLが宣言するlocal file assetを同じrootから安定読込し、
-remote assetとSB3内のproject assetも同じgenerationで再解決します。TurboWarp Editorにドロップして
-追加したコスチューや音声はSB3側が所有したままで、YAMLの`name`参照から利用できます。
-台本ファイル単体でもSB3内project assetとremote assetは利用できますが、隣接local file assetは
-読めないためproject directoryを選択します。
-
-`build-dsl4`が台本を埋め込んだ作品SB3は従来どおりproduction modeで起動し、filesystem pickerや
-watcherを初期化しません。非対応browserでは、非埋め込みSB3も従来の単発YAML file pickerへ
-fallbackします。その場合やasset-only更新まで独立に監視する場合は、次のlocal previewを使用します。
-
-台本を保存するたびに実TurboWarp runtimeへ反映するlocal previewは、次のdevelopment-only commandで起動します。base runtimeとbrowser bundleはmemory上で一度だけbuildし、YAML-only変更でSB3を再buildしません。loopback以外へはbindせず、browser runtimeから認証済みready応答が来るまで起動成功を表示しません。終了は`Ctrl-C`です。
+Watch the complete project and preview it in a browser.
 
 ```bash
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
@@ -253,326 +126,121 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-source-bytes 65536 \
   --max-asset-file-bytes 16777216 \
   --max-asset-files 64 \
-  --max-total-asset-bytes 67108864 \
-  --max-project-bytes 201326592 \
-  --max-project-json-bytes 201326592
+  --max-total-asset-bytes 67108864
 ```
 
-stableかつvalidなYAML変更は保存のたびにblocking dialogを出さず、safe boundaryで自動reloadします。session方針の
-既定は現在actionで、replay-safeでなければ現在scene、さらに利用不能ならストーリー先頭へfallbackします。常時表示の
-reload status buttonはcommit完了を通知し、押した場合だけ、今回の手動reload位置または次回以降の方針をstory／scene／
-actionから設定するdialogを開きます。
-
-`--max-project-bytes`と`--max-project-json-bytes`は省略時192 MiBです。アセット128 MiB、SB3 256 MiB、
-展開後`project.json` 256 MiBの推奨上限を超えてpreviewする場合は、値を明示したうえで
-`--allow-large-preview-artifacts`を追加してください。確認済みの拡張値にも、アセット512 MiB、SB3／JSON 1 GiBの
-絶対上限を適用します。
-
-Source Graphを監視する場合は、上のcommandへ次を追加します。
-
-```bash
-  --enable-source-includes \
-  --max-source-files 64 \
-  --max-total-source-bytes 4194304 \
-  --max-include-depth 32
-```
-
-buildやpreviewと同じDSL 4.0 frontendで、台本だけを副作用なしに検証できます。上限は省略できません。`pretty`は`filename:line:column`形式を、`json`はversion付き診断envelopeだけを出力し、source本文や絶対pathを含めません。終了statusは正常`0`、source／validation error `1`、CLI usage／internal failure `2`です。
-
-```bash
-pnpm exec tmpose-kamishibai validate-dsl4 \
-  --input story.k4.yml \
-  --max-source-bytes 262144 \
-  --format pretty
-```
-
-配布profileを使うprojectでは、既存の`project.assets.json`と`project.assets.lock.json`から、
-embedded／remote容量、startup／scene別のpreload集合、重複容量、offline readinessを副作用なしに
-監査できます。このcommandはremote assetを取得せず、cacheを参照せず、fileを書き換えません。
-
-lockを新規生成または更新する場合は、remote取得を明示的に許可するhostと有限上限を指定します。
-redirect先もHTTPS／allowlistを再検証し、既存lockは検証済みcandidateのatomic置換まで変更しません。
-
-```bash
-pnpm exec tmpose-kamishibai lock-dsl4-assets \
-  --project-root . \
-  --source-manifest project.source.json \
-  --asset-config project.assets.json \
-  --output project.assets.lock.json \
-  --allow-host cdn.example.com \
-  --max-source-bytes 262144 \
-  --max-source-manifest-bytes 16384 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 \
-  --timeout-ms 10000 \
-  --max-redirects 3
-```
-
-```bash
-pnpm exec tmpose-kamishibai audit-dsl4-assets \
-  --project-root . \
-  --source-manifest project.source.json \
-  --asset-config project.assets.json \
-  --asset-lock project.assets.lock.json \
-  --asset-profile online \
-  --max-source-bytes 262144 \
-  --max-source-manifest-bytes 16384 \
-  --max-asset-config-bytes 65536 \
-  --max-asset-lock-bytes 262144 \
-  --format pretty
-```
-
-remote assetをネットワークなしで配布する場合は、lockのremote providerを再取得・再検証して
-content-addressed mirrorへ固定し、embedded providerを追加したoffline用config／lockを生成します。
-入力config／lockは変更されず、mirrorとJSONは検証済みcandidateだけがatomicに置換されます。
-
-```bash
-pnpm exec tmpose-kamishibai vendor-dsl4-assets \
-  --project-root . \
-  --asset-config project.assets.json \
-  --asset-lock project.assets.lock.json \
-  --output-config project.assets.offline.json \
-  --output-lock project.assets.offline.lock.json \
-  --vendor-dir .kamishibai/vendor/dsl4-assets \
-  --allow-host cdn.example.com \
-  --max-asset-config-bytes 65536 \
-  --max-asset-lock-bytes 262144 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 \
-  --timeout-ms 10000 \
-  --max-redirects 3
-```
-
-profile設定、lock形式、解決順序、audit出力の詳細は
-[DSL 4.0アセット配布プロファイル](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md)を
-参照してください。
-
-生成したconfig／lockは、`build-dsl4`で明示的にprofileを選んで接続します。`offline`では
-`network: forbidden`とcontent-addressed embedded mirrorが検証され、runtime componentにも同じ
-resolved StoryDocumentが保存されます。
+Build a self-contained SB3 from the same input.
 
 ```bash
 pnpm exec tmpose-kamishibai build-dsl4 \
-  --base BASE.sb3 --project-root . \
-  --source-manifest project.source.json --output dist/story.sb3 \
-  --control-profile production --channel bundled \
-  --max-source-bytes 262144 --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 --max-total-asset-bytes 134217728 \
-  --asset-config project.assets.offline.json \
-  --asset-lock project.assets.offline.lock.json \
-  --asset-profile offline \
-  --max-asset-config-bytes 65536 --max-asset-lock-bytes 262144
+  --base kamishibai-4-base.sb3 \
+  --project-root . \
+  --source-manifest project.source.json \
+  --output dist/my-story.sb3 \
+  --control-profile production \
+  --channel bundled \
+  --max-source-bytes 262144 \
+  --max-asset-file-bytes 16777216 \
+  --max-asset-files 256 \
+  --max-total-asset-bytes 134217728
 ```
 
-DSL 4.0の`say`／`think`では、`seconds`と`waitFor: advance`を併記すると、入力または指定秒数の経過の
-早い方で吹き出しを終了できます。`characterIntervalSeconds`はgrapheme単位の文字送り、
-`startSound`は吹き出し表示開始時に1回再生するsound asset、`characterSound`は1文字ごとのsound assetを
-指定します。`startSound`へセリフ音声を指定すると、フルボイスのノベルゲームを構成できます。文字送り中に
-入力またはタイムアウトが成立した場合は、残り全文を効果音なしで一括表示して次のactionへ進み、再生中の
-`startSound`も停止します。speech soundの停止単位はAsset Managerのasset IDです。同じsound assetを
-speechとBGMなどで同時再生せず、用途ごとに別のasset IDを割り当ててください。
-`noSoundCharacters`には文字音を鳴らさない文字、`restCharacters`には文字音を鳴らさず長めに休止する
-文字を連結して指定します。休止時間は`restCharacterIntervalSeconds`で指定します。文字集合の判定は
-本文と同じUnicode grapheme cluster単位です。これらの文字送り設定はトップレベルの`bubbleStyles`へ
-名前付きの部分styleとしてまとめ、`say`／`think`の`styles`配列から複数を再利用できます。styleは記載順に
-deep mergeされ、後のstyleを優先し、最後にaction内指定を適用します。配列値は連結せず全体を置換します。
-style名には内部空白や日本語を使用できますが、前後空白、改行、tab、制御文字は使用できません。
-style定義内の`styles`配列から既存styleを合成して、新しい名前付きstyleを定義することもできます。参照先を
-順に合成してから定義自身のpropertyを適用し、循環参照、未知参照、重複参照はエラーにします。
+The byte limits are deliberately required: they make malformed input and unexpectedly large artifacts fail closed. Increase them only after reviewing the intended project size.
 
-```yaml
-assets:
-  HeroIdle: costume:Hero
-  HeroGreetingVoice: sound
-  Typewriter: sound
-  Next1:
-    kind: image
-    file: ui/next-1.png
-  Next2:
-    kind: image
-    file: ui/next-2.png
-actors:
-  Hero: HeroIdle
-bubbleStyles:
-  Typing base:
-    characterIntervalSeconds: 0.05
-    noSoundCharacters: '「」'
-  日本語 効果音:
-    characterSound: Typewriter
-    restCharacters: '、。…'
-    restCharacterIntervalSeconds: 0.5
-    continueIndicator:
-      frames: [Next1, Next2]
-      frameIntervalSeconds: 0.12
-  Hero style:
-    styles:
-      - Typing base
-      - 日本語 効果音
-    placement: FOOTER_LIKE
-    visualStyle: NARRATION
-scenes:
-  opening:
-    - Hero.say:
-        text: こんにちは！
-        seconds: 10
-        waitFor: advance
-        styles:
-          - Hero style
-        startSound: HeroGreetingVoice
-```
+The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
 
-`continueIndicator`は`waitFor: advance`で全文の表示が終わってから入力を待つ間だけ、本文末尾に
-`frames`のimage assetを順番にループ表示します。`frames`は2枚以上、`frameIntervalSeconds`は正の秒数です。
-文字送り中、secondsだけのspeech、入力・timeout・cancel・stop後は表示しません。各frameはstyleを参照する
-sceneのasset依存へ含まれます。
+| Command               | Purpose                                                       |
+| --------------------- | ------------------------------------------------------------- |
+| `build-sb3`           | Build the SB3 outputs for a 3.1/3.2 script and its assets     |
+| `convert-dsl4`        | Convert a 3.1/3.2 text script to DSL 4.0 YAML                 |
+| `convert-dsl4-assets` | Convert 4.0 assets among local, remote, and SB3 project forms |
+| `lock-dsl4-assets`    | Verify allowlisted remote assets and create a lock            |
+| `audit-dsl4-assets`   | Audit a distribution profile and lock without network access  |
+| `vendor-dsl4-assets`  | Pin remote assets into a content-addressed offline mirror     |
 
-DSL 4.0の吹き出し表示は`@kubohiroya/turbowarp-bubble@0.7.0` Compositionが所有します。
-`textStyle`は本文レイヤーの`textStyles` ID、`placement`はactor相対16方位または
-`HEADER_LIKE`／`CENTER`／`FOOTER_LIKE`、`visualStyle`は吹き出し外形を指定します。
-portraitのbase／blink／lip-syncと`continueIndicator`のframe assetもstyleへ宣言でき、参照sceneの
-lazy dependencyとして読み込まれます。文字送りの純粋関数は軽量な`./reveal`から、表示surfaceは
-`./turbowarp-adapter`から読み込みます。Bubble 0.7のcoreはホスト非依存の`BubbleTextCapability`だけを参照し、
-TurboWarp Runtime HostがSVG Text compositionをadapterで接続します。SVG Textは`Actor.setText`とBubble内部の
-本文レイヤーに限って使用し、`Actor.say`／`Actor.think`のsurfaceとlifecycleはBubbleが管理します。
+JavaScript consumers can import the package exports `@kubohiroya/tmpose-kamishibai/builder`, `@kubohiroya/tmpose-kamishibai/dsl4`, and `@kubohiroya/tmpose-kamishibai/converter` as needed.
 
-DSL 4.0では`poseRecognition.modelInitialization`により、従来互換の`legacy`と、不要になったモデルを
-cancelして最新の1件だけを準備する`latest-needed`を選べます。カメラ準備とモデル準備は並行し、最初の推論で
-同期します。Schema、既定値、cancel境界は
-[DSL 4.0 surface仕様](./docs/design/dsl-4-surface.md#41-poseモデル初期化)を参照してください。実行には
-TMPose 1.10.0以降が必要で、`legacy`／`parallel: false`がrollback可能な既定値です。
+## How It Works
 
-Bubble 0.7では、`maxWidth`と`textLocale`による実測幅ベースの自動改行、`CHARACTER`／`WORD`／
-`LINE`／`BLOCK`単位のnative reveal、`voice`／`reveal`／`finish`音声、表示開始・表示中・表示終了
-animationを利用できます。`visibleAnimations`は配列順に`handle.animate()`へ接続され、shake、explode、
-外形animationを同じsurface上で実行します。native revealと旧`characterIntervalSeconds`系は同じ
-effective styleへ混在させず、用途に応じてどちらか一方を選びます。
-
-これらの拡張は起動時固定の`dsl4SpeechAdvanceTypewriter`、`dsl4BubbleAdvanceIndicator`、
-`dsl4TurboWarpBubble`、`dsl4TurboWarpBubbleAdvancedPresentation` feature flagが既定OFFです。
-Bubble経路ではportraitとindicatorもBubbleが所有します。入力対象や
-`seconds`／`waitFor`の組み合わせを含む完全な仕様は
-[DSL 4.0 surface仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#72-actor-action)を参照してください。
-
-API、アセットマニフェスト、安全設定、出力形式については[メンテナンスガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
-
-### DSL 3.1／3.2から4.0への変換
-
-外部テキストのDSL 3.1／3.2台本を、入力を変更せずDSL 4.0 YAMLへ変換できます。コマンド、pose model
-置換、診断、自動変換できない入力、変換後の検証、JavaScript APIは、独立した
-[紙芝居DSL 3.2から4.0への変換ガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/dsl-author-guides/dsl-3.2-to-4.0-conversion-guide/)を
-参照してください。
-
-## DSL 3.2の互換性
-
-tmpose-kamishibai 3.2.xは、冒頭が`kamishibai=3.1`または`kamishibai=3.2`の台本を読み込めます。既存の3.1台本は冒頭を書き換えずに実行でき、新規の台本には`kamishibai=3.2`を推奨します。旧Text Asset構文はdeprecatedですが、移行期間中も表示・更新処理を含めて利用できます。
-
-- `asset=NAME,text`
-- `text=NAME:VALUE`
-- `textStyle=NAME:PROPERTY:VALUE`
-- `action=text:NAME:VALUE`
-- 旧Text Assetを参照する`show`および`setSkin`
-
-旧構文を含む台本では、プロジェクトごとに一度`LEGACY_TEXT_ASSET_DEPRECATED`警告を開発者コンソールへ出力しますが、実行は継続します。旧Text Assetは少なくとも3.2系列では維持し、削除する場合は将来のメジャーバージョンで事前に告知します。移行先は[`kubohiroya/turbowarp-svg-text`](https://github.com/kubohiroya/turbowarp-svg-text)です。この機能拡張を組み込んだ3.2プロジェクトでは、旧Text Assetと新しいSVG Textを同じ台本内で併用できます。新規の台本では、名前付きスタイルを共有するSVG Textを使用してください。アプリ自身のメニューやタイトルで使用する内部テキスト表示は、この警告の対象外です。
-
-SVG Textは`./composition` APIを含むnpm package `@kubohiroya/turbowarp-svg-text@0.3.0`（gitHead `05580a6018ebcb078d22334619c533f548a1f7ed`）をexact versionで利用します。台本のシーン定義より前に、背景色、文字色、フォント、相対フォントサイズ、配置、吹き出し方向を名前付きスタイルとして定義します。サイズ`100`は480×360ステージにおける標準14px相当で、ステージ寸法に比例して拡大・縮小します。
+All DSL 4.0 authoring and distribution paths share the same inputs and validation rules.
 
 ```text
-svgTextStyle=title:#112233:#ffffff:Noto Sans JP:150:center:up
+YAML + assets
+    ↓
+source frontend (parse, schema, semantic validation)
+    ↓
+browser preview / CLI build
+    ↓
+self-contained SB3
+    ↓
+TurboWarp runtime + TMPose
 ```
 
-値の並びは`STYLE:BACKGROUND:TEXT_COLOR:FONT:SIZE:ALIGN:DIRECTION`です。`ALIGN`は`left`、`center`、`right`から指定します。`DIRECTION`の16方向は、`up`、`up-up-right`、`up-right`、`right-up-right`、`right`、`right-down-right`、`down-right`、`down-down-right`、`down`、`down-down-left`、`down-left`、`left-down-left`、`left`、`left-up-left`、`up-left`、`up-up-left`です。
+- YAML and `project.source.json` remain the editable sources of truth
+- Preview, validation, build, and runtime loading use the same StoryDocument and diagnostics
+- Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile
+- Failed builds preserve existing output and replace it only with a validated candidate
 
-方位エイリアスとして`north`、`northeast`、`east`、`southeast`、`south`、`southwest`、`west`、`northwest`の8方位と、`north-northeast`、`east-northeast`、`east-southeast`、`south-southeast`、`south-southwest`、`west-southwest`、`west-northwest`、`north-northwest`を含む16方位を指定できます。また、`0`以上`360`以下の数値と小数角度も指定できます。Scratchのスプライト方向と同じく`0`は上、`90`は右、`180`は下、`270`は左、`360`は`0`と同じ方向です。方向は吹き出しにだけ適用されます。
+See the [DSL 4.0 processing architecture](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-processing-architecture.md) for processing boundaries and the [asset distribution profile design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md) for delivery behavior.
 
-アクター自身をSVGテキストとして表示するには、アクションで文字列とスタイル名を指定します。文字列中のリテラル`\n`は改行になります。アニメーションは3.2系列の対象外です。
+## Develop This Repository
 
-```text
-action=Hero:setText:タイトル\nサブタイトル:title
-```
+### Requirements
 
-アクターの`say`または`think`吹き出しへ名前付きスタイルを適用する場合は、表示秒数の後にスタイル名を指定します。
-
-```text
-svgTextStyle=baloonStyle:#ffffff:#222222:Noto Sans JP:120:left:up-right
-
-action=Hero:say:こんにちは:5.0:baloonStyle
-action=Hero:think:どうしよう……:5.0:baloonStyle
-```
-
-書式は`action=ACTOR:say|think:TEXT:SECONDS:STYLE`です。スタイル名を省略した従来の`action=Hero:say:こんにちは`および`action=Hero:say:こんにちは:5.0`は引き続き`default`スタイルを使用します。
-
-## このリポジトリを開発する
-
-### 必要な環境
-
-- Node.js 22.12.0以上
+- Node.js 22.12.0 or later
 - pnpm 11
+- A desktop environment capable of running TurboWarp when changing SB3 or browser integration
 
-### セットアップ
+### Setup and verification
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+pnpm verify:quick
 ```
 
-### 主なコマンド
+| Command             | Purpose                                                             |
+| ------------------- | ------------------------------------------------------------------- |
+| `pnpm verify:quick` | Lint, type-check, and run the lightweight tests during development  |
+| `pnpm verify:full`  | Run the CI-equivalent SB3, full test, E2E, site, and package checks |
+| `pnpm format`       | Check formatting with Prettier                                      |
+| `pnpm test`         | Run the full suite, including generated SB3 and real-VM tests       |
+| `pnpm run build`    | Build the public site and downloadable SB3 projects into `dist/`    |
+| `pnpm sb3:build`    | Build the editable SB3 at `tmp/kamishibai.sb3`                      |
+| `pnpm sb3:check`    | Verify `app/` and the DSL 4.0 release sources                       |
 
-| コマンド                                  | 内容                                            |
-| ----------------------------------------- | ----------------------------------------------- |
-| `pnpm run build`                          | 公開ページと配布用SB3を`dist/`へ生成            |
-| `pnpm test:quick`                         | 事前生成SB3と重い実VM統合を除き短時間でテスト   |
-| `pnpm test` / `pnpm test:full`            | 生成SB3と実VMを含む全テストを実行               |
-| `pnpm verify:quick`                       | lint、型検査、Quickテストを実行                 |
-| `pnpm verify:full`                        | CI相当の全検証、ビルド、パッケージ検査を実行    |
-| `pnpm lint`                               | JavaScriptを検査                                |
-| `pnpm typecheck`                          | ビルダーAPIを型検査                             |
-| `pnpm sb3:build`                          | `app/`から編集用SB3を`tmp/kamishibai.sb3`へ生成 |
-| `pnpm sb3:check`                          | `app/`のSB3ソースを検証                         |
-| `pnpm sb3:import -- /path/to/project.sb3` | TurboWarpで編集したSB3を`app/`へ取り込み        |
-| `pnpm run deploy`                         | ビルド結果をGitHub Pagesへ公開                  |
+Before implementation, record the scope, dependencies, acceptance criteria, and rollback in a GitHub Issue, then keep each pull request small. Use [GitHub Issues](https://github.com/kubohiroya/tmpose-kamishibai/issues) for bug reports and proposals.
 
-日常の実装中は`pnpm verify:quick`を使用し、PR前とCIでは`pnpm verify:full`を使用します。
-新しい`test/*.test.mjs`は自動的にQuickとFullの両方へ入り、生成SB3または実VMが必要なテストだけを
-`scripts/test/run-suite.mjs`のFull専用一覧へ明示します。Quickは生成物がないclean checkoutでも実行できます。
+### Key directories
 
-`pnpm sb3:*`は`devDependencies`へ厳密バージョン固定した`@kubohiroya/sb3-toolchain@0.8.0`を使用します。
-公開済み3.2.3の再現だけは、当時の出力hashを変えないため
-`@kubohiroya/sb3-toolchain@0.6.0`のnpm aliasへ固定します。CIでも`pnpm verify:full`を通して
-`pnpm sb3:check`を実行し、同じ現行ツールチェインで`app/`を検証します。現行sourceの生成・検証には
-このlegacy aliasを使用しません。
+- `app/`: current Kamishibai SB3 source
+- `release-sources/`: immutable versioned snapshots for reproducing published SB3 projects
+- `src/dsl4/`: DSL 4.0 domain, runtime, and platform adapters
+- `src/builder/`: CLI, SB3 builder, and preview builder
+- `schema/`: public JSON Schemas
+- `site/`: public website source
+- `scripts/`: build, release, and verification workflows
+- `test/`: unit, integration, browser E2E tests, and fixtures
+- `docs/design/`: implementation-adjacent design contracts
 
-GitHub Pagesのバージョン別カードと配布SB3は`scripts/download-catalog.mjs`を単一の正本として
-生成します。公開済み系列の入力は`release-sources/<version>/`へ固定し、build dateとSHA-256も
-カタログで固定します。このためサイトの再ビルドに完全なGit履歴は不要で、同じversionの配布物が
-意図せず変化した場合はビルドを失敗させます。
+## Documentation
 
-主な生成先は次のとおりです。
+- [Published documentation](https://kubohiroya.github.io/tmpose-kamishibai-docs/): operating instructions, author guides, commands, and workshop materials
+- [Documentation source](https://github.com/kubohiroya/tmpose-kamishibai-docs): source documents and issues
+- [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
+- [DSL 4.0 migration design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
+- [v4.0.0-rc.5 release notes][rc5]: publication status, compatibility, and verified artifacts
 
-- `dist/`: GitHub Pagesへ公開する入口ページと配布用SB3
-- `tmp/kamishibai.sb3`: TurboWarpで編集するためのSB3
+## Related Projects
 
-## リポジトリ構成
+- [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
+- [`kubohiroya/tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
+- [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): SB3 extraction, validation, rebuilding, and embedded-extension management
+- [`kubohiroya/turbowarp-tmpose`](https://github.com/kubohiroya/turbowarp-tmpose): pose-recognition extension for TurboWarp
 
-- `app/`: 紙芝居SB3のGit管理上の正本
-- `release-sources/`: 公開済みSB3を再生成する不変のversion別source snapshot
-- `src/builder/`、`src/dsl4/`、`schema/`、`bin/`: npmで配布するDSL 3.2／4.0ビルダーAPIとCLI
-- `site/`: 公開サイトの静的ファイル
-- `scripts/`: 公開ページとSB3のビルド処理
-- `test/`: 自動テストと最小検証用台本
+## License
 
-## ドキュメント
+Software and assets copyrighted by this project are licensed under MPL-2.0 unless marked otherwise. See [`LICENSES.md`](LICENSES.md) for third-party works and asset-specific terms. Documentation and samples are governed by the terms in their respective repositories.
 
-一般向け、紙芝居DSL作成者向け、開発者向け、および体験会資料は、[公開ドキュメント一覧](https://kubohiroya.github.io/tmpose-kamishibai-docs/)から参照できます。原稿、図版、Vivliostyle設定は[`kubohiroya/tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs)で管理します。
-
-実装前の設計レビュー資料として、[紙芝居DSL 4.0 設計レビュー草案](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-design.md)をこのリポジトリで管理します。
-
-## 関連プロジェクト
-
-- [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): このリポジトリで利用している、SB3の展開・検証・再構築・埋め込み拡張管理のためのツール
-- [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples): サンプル台本、スプライト、背景、画像、音声、組み込み済みSB3
-- [`kubohiroya/tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs): 一般向け、DSL作成者向け、開発者向け、および体験会のドキュメント
-
-## ライセンス
-
-個別表示のない、本プロジェクトが著作権を持つソフトウェアおよび素材にはMPL-2.0を適用します。詳細と第三者著作物の扱いは[`LICENSES.md`](LICENSES.md)を参照してください。移設した文書のライセンスは文書リポジトリで管理します。
+[docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
+[downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
+[rc5]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.5.md
