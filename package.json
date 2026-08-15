@@ -3,7 +3,7 @@
   "version": "4.0.0-rc.5",
   "private": false,
   "type": "module",
-  "description": "TMPose Kamishibai — an AI-powered interactive storytelling system using Teachable Machine for pose recognition and TurboWarp as its authoring and playback platform",
+  "description": "TMPose Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine for pose recognition",
   "homepage": "https://kubohiroya.github.io/tmpose-kamishibai/",
   "repository": {
     "type": "git",
