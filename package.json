@@ -30,6 +30,7 @@
     "schema/dsl-4-asset-lock.schema.json",
     "src/converter/",
     "README.md",
+    "README.ja.md",
     "LICENSE",
     "LICENSES.md"
   ],
