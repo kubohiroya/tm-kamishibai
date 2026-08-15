@@ -1,4 +1,5 @@
 import {access, readFile, readdir, stat} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
@@ -8,7 +9,7 @@ import {
   recommendedDownload,
 } from './download-catalog.mjs';
 import {siteVersionPlaceholder} from './site-version.mjs';
-import {createDownloadableReleaseSb3, downloadableReleases} from './sb3/downloadable-releases.mjs';
+import {downloadableReleases} from './sb3/downloadable-releases.mjs';
 import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
 import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
@@ -327,12 +328,9 @@ async function verifyDownloads(releaseBuilds = []) {
         `The published ${release.series} SB3 metadata differs from its build metadata.`,
       );
     }
-    const expectedBuild = await createDownloadableReleaseSb3(release, {
-      buildDate: publishedMetadata.buildDate,
-    });
     assert(
-      publishedArchive.equals(Buffer.from(expectedBuild.archive)),
-      `The published ${release.series} SB3 differs from its pinned source build.`,
+      createHash('sha256').update(publishedArchive).digest('hex') === release.sha256,
+      `The published ${release.series} SB3 differs from its GitHub Release identity.`,
     );
     assert(
       archiveStat.size === publishedArchive.length &&

@@ -157,7 +157,7 @@ test('separates implemented defaults from required explicit host limits', () => 
     new Set(contract.requiredExplicitLimits).size,
     contract.requiredExplicitLimits.length,
   );
-  assert.equal(contract.sourceFrontendPolicy.values.maxCanonicalSourceBytes, 256 * 1024);
+  assert.equal(contract.sourceFrontendPolicy.values.maxCanonicalSourceBytes, 1024 * 1024);
   assert.ok(
     contract.sourceFrontendPolicy.values.maxTotalActions <=
       contract.sourceFrontendPolicy.values.maxYamlNodes,

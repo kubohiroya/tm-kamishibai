@@ -821,7 +821,7 @@ test('makes a selective local conversion a reusable standalone project', async (
       assets: ['ProjectBackdrop'],
     }),
   );
-  assert.equal(result.sourceManifestPath, path.join(result.outputDirectory, 'project.source.yaml'));
+  assert.equal(result.sourceManifestPath, path.join(result.outputDirectory, 'project.source.yml'));
   assert.equal(result.assetsDirectory, path.join(result.outputDirectory, 'assets'));
   const manifest = parse(await readFile(result.sourceManifestPath, 'utf8'));
   assert.deepEqual(manifest, {

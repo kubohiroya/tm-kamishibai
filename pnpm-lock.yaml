@@ -74,9 +74,6 @@ importers:
       '@kubohiroya/sb3-toolchain':
         specifier: 0.8.0
         version: 0.8.0
-      '@kubohiroya/sb3-toolchain-legacy':
-        specifier: npm:@kubohiroya/sb3-toolchain@0.6.0
-        version: '@kubohiroya/sb3-toolchain@0.6.0'
       '@turbowarp/packager':
         specifier: 3.13.0
         version: 3.13.0
@@ -344,11 +341,6 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
-
-  '@kubohiroya/sb3-toolchain@0.6.0':
-    resolution: {integrity: sha512-xV8hFlN1SF9QU/L2RIf68ty8IxhQzFxwFEZ2kuwq1U1hNdYNCY/WE4j+0HQ2M5iQ8pMMoNHqASpEAEwKwGGRyQ==}
-    engines: {node: '>=22.12.0'}
-    hasBin: true
 
   '@kubohiroya/sb3-toolchain@0.8.0':
     resolution: {integrity: sha512-PysMdwlv8MixaUNrvBPu2fK8Bn3LOLVheQO6UEIGL7h/j8w62HO1CEdrRIvzf1NW1njU/I4FODBxQwdRCtOXQw==}
@@ -2920,14 +2912,6 @@ snapshots:
   '@humanwhocodes/module-importer@1.0.1': {}
 
   '@humanwhocodes/retry@0.4.3': {}
-
-  '@kubohiroya/sb3-toolchain@0.6.0':
-    dependencies:
-      fflate: 0.8.3
-      music-metadata: 11.14.0
-      yaml: 2.9.0
-    transitivePeerDependencies:
-      - supports-color
 
   '@kubohiroya/sb3-toolchain@0.8.0':
     dependencies:

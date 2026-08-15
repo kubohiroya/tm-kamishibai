@@ -4,15 +4,27 @@ import {validateDsl4CacheIdentity} from './cache-identity.js';
 import {hasDsl4SourceFilenameSuffix} from './source-filename.js';
 import {deepFreeze} from './story-document.js';
 
-export const dsl4DefaultExternalSourcePath = 'story.kamishibai.yaml';
+export const dsl4ProjectSourceFilenameSuffix = '.k4.yml';
 export const dsl4ExternalSourceManifestFilenames = deepFreeze([
+  'project.source.yml',
   'project.source.yaml',
   'project.source.json',
 ]);
 export const dsl4DefaultExternalSourceManifestFilename = dsl4ExternalSourceManifestFilenames[0];
+export const dsl4ExternalSourceManifestDefaults = deepFreeze({
+  formatVersion: 1,
+  mode: 'external',
+  sourceId: 'main',
+});
 
-const requiredManifestKeys = new Set(['formatVersion', 'mode', 'sourceId']);
-const manifestKeys = new Set([...requiredManifestKeys, 'path', 'cacheId', 'cacheDatabaseName']);
+const manifestKeys = new Set([
+  'formatVersion',
+  'mode',
+  'sourceId',
+  'path',
+  'cacheId',
+  'cacheDatabaseName',
+]);
 
 export class Dsl4ExternalSourceManifestError extends TypeError {
   /** @param {string} code @param {string} message */
@@ -39,9 +51,9 @@ function manifestFilename(value) {
     fail('K4-SOURCE-MANIFEST-001', 'Source manifest filename must be a non-empty string');
   }
   const leaf = value.split(/[\\/]/u).at(-1);
-  if (leaf?.endsWith('.yaml')) return {filename: leaf, format: 'yaml'};
+  if (leaf?.endsWith('.yml') || leaf?.endsWith('.yaml')) return {filename: leaf, format: 'yaml'};
   if (leaf?.endsWith('.json')) return {filename: leaf, format: 'json'};
-  fail('K4-SOURCE-MANIFEST-001', 'Source manifest filename must end in .yaml or .json');
+  fail('K4-SOURCE-MANIFEST-001', 'Source manifest filename must end in .yml, .yaml, or .json');
 }
 
 /** @param {string} source */
@@ -53,12 +65,14 @@ function parseYamlManifest(source) {
     uniqueKeys: true,
   });
   const issue = documents.flatMap((document) => [...document.errors, ...document.warnings])[0];
-  if (issue || documents.length !== 1 || !isMap(documents[0]?.contents)) {
+  const empty = documents.length === 0 || documents.every((document) => document.contents === null);
+  if (issue || (!empty && (documents.length !== 1 || !isMap(documents[0]?.contents)))) {
     fail(
       'K4-SOURCE-MANIFEST-YAML-001',
       issue?.message ?? 'Source manifest YAML must contain exactly one mapping document',
     );
   }
+  if (empty) return {};
   try {
     const value = documents[0].toJS({mapAsMap: false, maxAliasCount: 0});
     if (!isRecord(value)) {
@@ -101,23 +115,36 @@ function nonEmptyString(value, name) {
 
 /** @param {unknown} value */
 function sourcePath(value) {
-  const source = value === undefined ? dsl4DefaultExternalSourcePath : value;
-  if (typeof source !== 'string' || source.length === 0 || source.includes('\0')) {
+  if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
     fail('K4-SOURCE-PATH-001', 'path must be a non-empty string without NUL');
   }
-  const segments = source.split('/');
+  const segments = value.split('/');
   if (
-    source.includes('\\') ||
-    source.startsWith('/') ||
-    /^[A-Za-z]:/u.test(source) ||
-    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(source) ||
+    value.includes('\\') ||
+    value.startsWith('/') ||
+    /^[A-Za-z]:/u.test(value) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value) ||
     segments.length !== 1 ||
     segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-    !hasDsl4SourceFilenameSuffix(source)
+    !hasDsl4SourceFilenameSuffix(value)
   ) {
     fail('K4-SOURCE-PATH-001', 'path must be a root-level DSL 4 source basename');
   }
-  return source;
+  return value;
+}
+
+/** @param {unknown} value */
+function sourceCandidates(value) {
+  if (!Array.isArray(value)) {
+    fail('K4-SOURCE-MANIFEST-001', 'sourcePaths must be an array');
+  }
+  const normalized = value.map((candidate) => sourcePath(candidate));
+  if (new Set(normalized).size !== normalized.length) {
+    fail('K4-SOURCE-MANIFEST-001', 'sourcePaths must not contain duplicates');
+  }
+  return normalized
+    .filter((candidate) => candidate.endsWith(dsl4ProjectSourceFilenameSuffix))
+    .sort();
 }
 
 /** @param {unknown} value @param {string} label */
@@ -143,17 +170,19 @@ export function validateDsl4ExternalSourceManifestContract(input) {
   }
   const keys = Object.keys(input);
   const unknown = keys.filter((key) => !manifestKeys.has(key));
-  const missing = [...requiredManifestKeys].filter((key) => !Object.hasOwn(input, key));
-  if (unknown.length > 0 || missing.length > 0) {
+  if (unknown.length > 0) {
     fail(
       'K4-SOURCE-MANIFEST-001',
-      `External source manifest keys are invalid (unknown: ${unknown.sort().join(', ') || 'none'}; missing: ${missing.sort().join(', ') || 'none'})`,
+      `External source manifest keys are invalid (unknown: ${unknown.sort().join(', ')})`,
     );
   }
-  if (input.formatVersion !== 1 || input.mode !== 'external') {
+  const formatVersion = input.formatVersion ?? dsl4ExternalSourceManifestDefaults.formatVersion;
+  const mode = input.mode ?? dsl4ExternalSourceManifestDefaults.mode;
+  const sourceId = input.sourceId ?? dsl4ExternalSourceManifestDefaults.sourceId;
+  if (formatVersion !== 1 || mode !== 'external') {
     fail('K4-SOURCE-MANIFEST-001', 'External source manifest formatVersion or mode is invalid');
   }
-  const source = sourcePath(input.path);
+  const source = input.path === undefined ? null : sourcePath(input.path);
   const hasCacheId = Object.hasOwn(input, 'cacheId');
   const hasCacheDatabaseName = Object.hasOwn(input, 'cacheDatabaseName');
   if (hasCacheId !== hasCacheDatabaseName) {
@@ -162,7 +191,7 @@ export function validateDsl4ExternalSourceManifestContract(input) {
       'cacheId and cacheDatabaseName must either both be present or both be absent',
     );
   }
-  const label = source.split('/').at(-1);
+  const label = source?.split('/').at(-1) ?? 'source.k4.yml';
   const cache = hasCacheId
     ? cacheIdentity(
         {id: input.cacheId, databaseName: input.cacheDatabaseName},
@@ -172,9 +201,48 @@ export function validateDsl4ExternalSourceManifestContract(input) {
   return deepFreeze({
     formatVersion: 1,
     mode: 'external',
-    sourceId: nonEmptyString(input.sourceId, 'sourceId'),
-    path: source,
+    sourceId: nonEmptyString(sourceId, 'sourceId'),
+    ...(source === null ? {} : {path: source}),
     ...(cache ? {cacheId: cache.id, cacheDatabaseName: cache.databaseName} : {}),
+  });
+}
+
+/**
+ * Resolve an optional manifest config to one unambiguous root-level entry source.
+ *
+ * @param {unknown} input
+ * @param {object} [options]
+ * @param {string[]} [options.sourcePaths]
+ * @param {string} [options.sourcePath]
+ * @param {string} [options.sourceId]
+ */
+export function resolveDsl4ExternalSourceManifestContract(
+  input,
+  {sourcePaths = [], sourcePath: inputSourcePath, sourceId: inputSourceId} = {},
+) {
+  const manifest = validateDsl4ExternalSourceManifestContract(input);
+  const candidates = sourceCandidates(sourcePaths);
+  let path = inputSourcePath === undefined ? manifest.path : sourcePath(inputSourcePath);
+  if (path === undefined) {
+    if (candidates.length === 0) {
+      fail(
+        'K4-SOURCE-MISSING',
+        `Project root contains no ${dsl4ProjectSourceFilenameSuffix} entry source`,
+      );
+    }
+    if (candidates.length > 1) {
+      fail(
+        'K4-SOURCE-AMBIGUOUS',
+        `Project root contains multiple ${dsl4ProjectSourceFilenameSuffix} entry sources; select one explicitly`,
+      );
+    }
+    [path] = candidates;
+  }
+  return deepFreeze({
+    ...manifest,
+    sourceId:
+      inputSourceId === undefined ? manifest.sourceId : nonEmptyString(inputSourceId, 'sourceId'),
+    path,
   });
 }
 

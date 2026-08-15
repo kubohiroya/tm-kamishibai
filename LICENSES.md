@@ -65,9 +65,9 @@ the SB3 storage channel.
 
 ## DSL 3.2 compatibility extension
 
-The offline project source includes the TurboWarp Text extension under its legacy
-`strings` ID so that older projects do not depend on a network extension URL. Its
-original source notice is retained in [`app/extensions/strings.js`](app/extensions/strings.js).
+Published DSL 3.2 SB3 files include the TurboWarp Text extension under its legacy `strings` ID.
+Those immutable binaries are distributed from GitHub Releases rather than retained as expanded
+source on the current branch.
 
 | title | copyright                           | license         | source                                                                         |
 | ----- | ----------------------------------- | --------------- | ------------------------------------------------------------------------------ |

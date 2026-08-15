@@ -5,11 +5,13 @@ import test from 'node:test';
 import {
   createDsl4BrowserPreviewSourceAdapter,
   dsl4DefaultExternalSourceManifestFilename,
-  dsl4DefaultExternalSourcePath,
+  dsl4ExternalSourceManifestDefaults,
   dsl4ExternalSourceManifestFilenames,
+  dsl4ProjectSourceFilenameSuffix,
   Dsl4ExternalSourceManifestError,
   inspectDsl4BrowserPreviewSupport,
   parseDsl4ExternalSourceManifestSource,
+  resolveDsl4ExternalSourceManifestContract,
   serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from '../src/dsl4/index.js';
@@ -116,6 +118,7 @@ function createProject({
   source = "kamishibai: '4.0'\nscenes: {}\n",
   permission = 'granted',
 } = {}) {
+  const sourceFilename = manifest.path ?? 'story.k4.yml';
   let manifestValue = JSON.stringify(manifest);
   let sourceValue = source;
   let permissionValue = permission;
@@ -133,11 +136,14 @@ function createProject({
     async getDirectoryHandle() {
       throw domError('NotFoundError');
     },
+    async *entries() {
+      if (!sourceMissing) yield [sourceFilename, await this.getFileHandle(sourceFilename)];
+    },
     async getFileHandle(name) {
       if (name === 'project.source.json') {
         return createFileHandle(async () => encoder.encode(manifestValue));
       }
-      if (name !== 'story.kamishibai.yaml' || sourceMissing) {
+      if (name !== sourceFilename || sourceMissing) {
         throw domError('NotFoundError');
       }
       sourceHandleAcquisitionCount += 1;
@@ -301,14 +307,50 @@ function createAdapter(project, overrides = {}) {
 
 test('shares strict browser-safe manifest and POSIX path validation with the Node boundary', () => {
   assert.deepEqual(validateDsl4ExternalSourceManifestContract(validManifest), validManifest);
-  assert.equal(dsl4DefaultExternalSourcePath, 'story.kamishibai.yaml');
+  assert.equal(dsl4ProjectSourceFilenameSuffix, '.k4.yml');
+  assert.deepEqual(
+    resolveDsl4ExternalSourceManifestContract({}, {sourcePaths: ['opening.k4.yml']}),
+    {
+      ...dsl4ExternalSourceManifestDefaults,
+      path: 'opening.k4.yml',
+    },
+  );
+  assert.deepEqual(
+    resolveDsl4ExternalSourceManifestContract(
+      {path: 'manifest.k4.yml', sourceId: 'manifest'},
+      {
+        sourcePaths: ['auto.k4.yml'],
+        sourcePath: 'cli.k4.yml',
+        sourceId: 'cli',
+      },
+    ),
+    {
+      ...dsl4ExternalSourceManifestDefaults,
+      sourceId: 'cli',
+      path: 'cli.k4.yml',
+    },
+  );
+  assert.deepEqual(validateDsl4ExternalSourceManifestContract({}), {
+    ...dsl4ExternalSourceManifestDefaults,
+  });
+  for (const sourcePaths of [[], ['first.k4.yml', 'second.k4.yml']]) {
+    assert.throws(
+      () => resolveDsl4ExternalSourceManifestContract({}, {sourcePaths}),
+      (error) =>
+        error instanceof Dsl4ExternalSourceManifestError &&
+        error.code === (sourcePaths.length === 0 ? 'K4-SOURCE-MISSING' : 'K4-SOURCE-AMBIGUOUS'),
+    );
+  }
   assert.deepEqual(
     validateDsl4ExternalSourceManifestContract({
-      formatVersion: 1,
-      mode: 'external',
-      sourceId: 'main',
+      path: validManifest.path,
     }),
     validManifest,
+  );
+  assert.throws(
+    () => validateDsl4ExternalSourceManifestContract({...validManifest, cacheId: 'story-cache'}),
+    (error) =>
+      error instanceof Dsl4ExternalSourceManifestError && error.code === 'K4-SOURCE-MANIFEST-001',
   );
   for (const path of [
     '/story.kamishibai.yaml',
@@ -331,19 +373,17 @@ test('shares strict browser-safe manifest and POSIX path validation with the Nod
 });
 
 test('parses canonical YAML manifests and rejects malformed or duplicate mappings', () => {
-  assert.equal(dsl4DefaultExternalSourceManifestFilename, 'project.source.yaml');
+  assert.equal(dsl4DefaultExternalSourceManifestFilename, 'project.source.yml');
   assert.deepEqual(dsl4ExternalSourceManifestFilenames, [
+    'project.source.yml',
     'project.source.yaml',
     'project.source.json',
   ]);
-  const source = serializeDsl4ExternalSourceManifestSource(validManifest, {
-    filename: 'project.source.yaml',
-  });
-  assert.match(source, /^formatVersion: 1\nmode: external\n/u);
-  assert.deepEqual(
-    parseDsl4ExternalSourceManifestSource(source, {filename: 'project.source.yaml'}),
-    validManifest,
-  );
+  for (const filename of ['project.source.yml', 'project.source.yaml']) {
+    const source = serializeDsl4ExternalSourceManifestSource(validManifest, {filename});
+    assert.match(source, /^formatVersion: 1\nmode: external\n/u);
+    assert.deepEqual(parseDsl4ExternalSourceManifestSource(source, {filename}), validManifest);
+  }
   for (const invalid of [
     'formatVersion: [\n',
     '- formatVersion: 1\n',
@@ -359,7 +399,7 @@ test('parses canonical YAML manifests and rejects malformed or duplicate mapping
   }
 });
 
-test('discovers project.source.yaml before the JSON compatibility fallback', async () => {
+test('discovers project.source.yml before the YAML and JSON compatibility fallbacks', async () => {
   const requested = [];
   const source = "kamishibai: '4.0'\nscenes: {}\n";
   const root = {
@@ -369,6 +409,13 @@ test('discovers project.source.yaml before the JSON compatibility fallback', asy
     },
     async getFileHandle(name) {
       requested.push(name);
+      if (name === 'project.source.yml') {
+        return createFileHandle(async () =>
+          encoder.encode(
+            'formatVersion: 1\nmode: external\nsourceId: yml\npath: story.kamishibai.yaml\n',
+          ),
+        );
+      }
       if (name === 'project.source.yaml') {
         return createFileHandle(async () =>
           encoder.encode(
@@ -389,21 +436,68 @@ test('discovers project.source.yaml before the JSON compatibility fallback', asy
   };
   const setup = createAdapter({root});
   const state = await setup.adapter.start(root);
-  assert.equal(state.sourceId, 'yaml');
+  assert.equal(state.sourceId, 'yml');
+  assert.equal(requested.includes('project.source.yaml'), false);
   assert.equal(requested.includes('project.source.json'), false);
   setup.adapter.dispose();
 });
 
-test('loads the root-level default source when manifest path is omitted', async () => {
+test('discovers the only root-level .k4.yml source when manifest path is omitted', async () => {
   const project = createProject({
-    manifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    manifest: {},
   });
   const setup = createAdapter(project);
   const state = await setup.adapter.start(project.root);
-  assert.equal(state.sourceDisplayName, 'story.kamishibai.yaml');
+  assert.equal(state.sourceDisplayName, 'story.k4.yml');
+  assert.equal(state.sourceId, 'main');
   assert.equal(setup.results.length, 1);
   assert.equal(setup.results[0].ok, true, JSON.stringify(setup.results[0].diagnostics));
   setup.adapter.dispose();
+});
+
+test('opens a manifest-free single-source project and rejects an ambiguous project', async () => {
+  const source = "kamishibai: '4.0'\nscenes: {}\n";
+  const rootWith = (names) => ({
+    kind: 'directory',
+    async queryPermission() {
+      return 'granted';
+    },
+    async *entries() {
+      for (const name of names) {
+        yield [name, createFileHandle(async () => encoder.encode(source))];
+      }
+    },
+    async getFileHandle(name) {
+      if (names.includes(name)) {
+        return createFileHandle(async () => encoder.encode(source));
+      }
+      throw domError('NotFoundError');
+    },
+  });
+
+  const single = createAdapter({root: rootWith(['opening.k4.yml'])});
+  const singleState = await single.adapter.start(single.project.root);
+  assert.equal(singleState.sourceDisplayName, 'opening.k4.yml');
+  assert.equal(singleState.sourceId, 'main');
+  single.adapter.dispose();
+
+  const ambiguous = createAdapter({
+    root: rootWith(['opening.k4.yml', 'ending.k4.yml']),
+  });
+  const ambiguousState = await ambiguous.adapter.start(ambiguous.project.root);
+  assert.equal(ambiguousState.status, 'diagnostic');
+  assert.equal(ambiguousState.diagnostic.code, 'K4-SOURCE-AMBIGUOUS');
+  assert.equal(ambiguousState.diagnostic.displayName, '*.k4.yml');
+  assert.match(ambiguousState.diagnostic.message, /multiple \.k4\.yml entry sources/u);
+  ambiguous.adapter.dispose();
+
+  const empty = createAdapter({root: rootWith([])});
+  const emptyState = await empty.adapter.start(empty.project.root);
+  assert.equal(emptyState.status, 'diagnostic');
+  assert.equal(emptyState.diagnostic.code, 'K4-SOURCE-MISSING');
+  assert.equal(emptyState.diagnostic.displayName, '*.k4.yml');
+  assert.match(emptyState.diagnostic.message, /no \.k4\.yml entry source/u);
+  empty.adapter.dispose();
 });
 
 test('detects only a secure top-level directory picker without browser sniffing', () => {

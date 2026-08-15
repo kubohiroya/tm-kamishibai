@@ -12,6 +12,7 @@ import {createDeterministicSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 import {strFromU8, unzipSync} from 'fflate';
 
 import {createKamishibaiSb3} from '../sb3/build.mjs';
+import {createDsl4ReleaseSourceFiles} from '../sb3/dsl4-downloadable-release.mjs';
 import {
   createDsl4ProductionSourceFrontend,
   dsl4PackagerCompatibility,
@@ -22,7 +23,7 @@ import {loadDsl4BinaryEntryRuntimeComponent} from '../../src/dsl4/runtime-artifa
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultSamplesRoot = path.resolve(repositoryRoot, '../tmpose-kamishibai-samples');
 const runtimeLimits = Object.freeze({
-  maxSourceBytes: 256 * 1024,
+  maxSourceBytes: 1024 * 1024,
   maxAssetFileBytes: 8 * 1024 * 1024,
   maxAssetFiles: 128,
   maxAssetBytes: 64 * 1024 * 1024,
@@ -629,8 +630,14 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   const basePath = path.join(temporaryDirectory, 'kamishibai-4.0-current.sb3');
   const actorBasePath = path.join(temporaryDirectory, 'urashima-actor-base.sb3');
   const rootEntryPath = path.join(temporaryDirectory, 'urashima-root-entry.sb3');
+  const releaseSourceDirectory = path.join(temporaryDirectory, 'current-release-source');
+  for (const [relativePath, contents] of await createDsl4ReleaseSourceFiles()) {
+    const outputPath = path.join(releaseSourceDirectory, relativePath);
+    await mkdir(path.dirname(outputPath), {recursive: true});
+    await writeFile(outputPath, contents);
+  }
   const release = await createKamishibaiSb3({
-    sourceDirectory: path.join(repositoryRoot, 'release-sources/4.0.0-rc.6/app'),
+    sourceDirectory: releaseSourceDirectory,
     version: '4.0.0-rc.6',
     buildDate: '2026-08-15',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),

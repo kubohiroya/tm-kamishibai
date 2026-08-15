@@ -97,7 +97,7 @@
     "sourceFrontend": {
       "source": "src/dsl4/source-frontend.js",
       "values": {
-        "maxCanonicalSourceBytes": 262144,
+        "maxCanonicalSourceBytes": 1048576,
         "maxYamlNodes": 20000,
         "maxYamlDepth": 64,
         "maxScalarScalars": 16384,
@@ -132,7 +132,7 @@
   "sourceFrontendPolicy": {
     "status": "implemented-default",
     "values": {
-      "maxCanonicalSourceBytes": 262144,
+      "maxCanonicalSourceBytes": 1048576,
       "maxYamlNodes": 20000,
       "maxYamlDepth": 64,
       "maxScalarScalars": 16384,

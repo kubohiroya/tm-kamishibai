@@ -78,12 +78,12 @@ async function withFixture(callback) {
     const outputDirectory = path.join(directory, 'dist');
     await mkdir(outputDirectory);
     const baseSb3Path = path.join(directory, 'base.sb3');
-    const sourcePath = path.join(directory, 'story.kamishibai.yaml');
-    const sourceManifestPath = path.join(directory, 'project.source.yaml');
+    const sourcePath = path.join(directory, 'story.k4.yml');
+    const sourceManifestPath = path.join(directory, 'project.source.yml');
     await writeFile(baseSb3Path, baseSb3());
     await writeFile(sourcePath, validSource);
     await writeFile(path.join(directory, 'opening.svg'), '<svg/>');
-    await writeFile(sourceManifestPath, 'formatVersion: 1\nmode: external\nsourceId: main\n');
+    await writeFile(sourceManifestPath, '');
     return await callback({
       baseSb3Path,
       directory,
@@ -263,15 +263,15 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
       await readFile(fixture.sourceManifestPath, 'utf8'),
       {filename: path.basename(fixture.sourceManifestPath)},
     );
-    assert.equal(persistedManifest.path, 'story.kamishibai.yaml');
+    assert.equal(persistedManifest.path, 'story.k4.yml');
     assert.match(persistedManifest.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
     assert.equal(
       persistedManifest.cacheDatabaseName,
-      `tw-kamishibai-assets-v1--story--${persistedManifest.cacheId}`,
+      `tw-kamishibai-assets-v1--story.k4--${persistedManifest.cacheId}`,
     );
     assert.deepEqual(loaded.sourceDescriptor.cacheIdentity, {
       id: persistedManifest.cacheId,
-      label: 'story.kamishibai.yaml',
+      label: 'story.k4.yml',
       databaseName: persistedManifest.cacheDatabaseName,
     });
     assert.deepEqual(
@@ -291,6 +291,31 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
   });
 });
 
+test('builds the only root .k4.yml without a manifest and does not create one', async () => {
+  await withFixture(async (fixture) => {
+    await rm(fixture.sourceManifestPath);
+    const arguments_ = cliArguments(fixture, 'manifest-free.sb3');
+    arguments_.splice(arguments_.indexOf('--source-manifest'), 2);
+
+    const result = await runCli(arguments_, {stdout: {write() {}}});
+    assert.equal(path.basename(result.outputPath), 'manifest-free.sb3');
+    assert.equal(
+      (await readdir(fixture.directory)).some((name) =>
+        /^project\.source\.(?:yml|yaml|json)$/u.test(name),
+      ),
+      false,
+    );
+    const {project} = readSb3(await readFile(result.outputPath));
+    const loaded = await loadDsl4RuntimeComponent(project, frontend, {
+      maxSourceBytes: limits.maxSourceBytes,
+      maxAssetFiles: limits.maxAssetFiles,
+      maxAssetBytes: limits.maxTotalAssetBytes,
+      subtleCrypto: webcrypto.subtle,
+    });
+    assert.equal(loaded.sourceDescriptor.displayName, 'story.k4.yml');
+  });
+});
+
 test('keeps explicit project.source.json manifests compatible', async () => {
   await withFixture(async (fixture) => {
     const sourceManifestPath = path.join(fixture.directory, 'project.source.json');
@@ -303,7 +328,7 @@ test('keeps explicit project.source.json manifests compatible', async () => {
     });
     assert.equal(path.basename(result.outputPath), 'legacy-json.sb3');
     const persisted = JSON.parse(await readFile(sourceManifestPath, 'utf8'));
-    assert.equal(persisted.path, 'story.kamishibai.yaml');
+    assert.equal(persisted.path, 'story.k4.yml');
     assert.match(persisted.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
   });
 });

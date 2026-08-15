@@ -5,6 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import {strToU8, zipSync} from 'fflate';
+
 import {
   downloadCardsPlaceholder,
   downloadCatalog,
@@ -96,11 +98,7 @@ test('renders ordered versioned download cards from one release catalog', async 
     '0.8.0',
     'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
-  assert.equal(
-    packageJson.devDependencies['@kubohiroya/sb3-toolchain-legacy'],
-    'npm:@kubohiroya/sb3-toolchain@0.6.0',
-    'Only immutable 3.2.3 replay may use the exact historical toolchain alias.',
-  );
+  assert.equal(packageJson.devDependencies['@kubohiroya/sb3-toolchain-legacy'], undefined);
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
     readme,
@@ -147,26 +145,76 @@ test('renders ordered versioned download cards from one release catalog', async 
   );
 });
 
-test('builds immutable release artifacts from local snapshots without git history', async () => {
+test('downloads a bounded GitHub Release asset and verifies its catalog identity', async () => {
   const implementation = await readFile(
     path.join(projectRoot, 'scripts/sb3/downloadable-releases.mjs'),
     'utf8',
   );
   assert.doesNotMatch(implementation, /node:child_process|\bgit\b/u);
-
   for (const release of downloadableReleases) {
-    const result = await createDownloadableReleaseSb3(release, {
-      buildDate: '2099-12-31',
-      now: new Date('2099-12-31T00:00:00Z'),
-    });
-    const digest = createHash('sha256').update(result.archive).digest('hex');
-    assert.equal(result.titleBuildMetadata.buildDate, release.buildDate);
-    assert.equal(digest, release.sha256);
-    await Promise.all([
-      readFile(path.join(projectRoot, release.sourceDirectory, 'project.source.json')),
-      readFile(path.join(projectRoot, release.faviconPath)),
-    ]);
+    assert.match(
+      release.url,
+      new RegExp(`/releases/download/v${release.version.replaceAll('.', '\\.')}/`, 'u'),
+    );
+    assert.equal(Object.hasOwn(release, 'sourceDirectory'), false);
   }
+
+  const title = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const archive = Buffer.from(
+    zipSync({
+      'project.json': strToU8(
+        JSON.stringify({
+          targets: [
+            {
+              isStage: true,
+              costumes: [{name: 'Title', dataFormat: 'svg', md5ext: 'title.svg'}],
+              blocks: {
+                version: {
+                  opcode: 'kubohiroyaassetmanager_setTextValue',
+                  inputs: {
+                    NAME: [1, [10, 'about.version']],
+                    VALUE: [1, [10, 'Version 9.8.7 (2026/08/15)']],
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      ),
+      'title.svg': title,
+    }),
+  );
+  const release = {
+    buildDate: '2026-08-15',
+    filename: 'kamishibai-9.8.7.sb3',
+    series: '9.8',
+    version: '9.8.7',
+    url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v9.8.7/kamishibai-9.8.7.sb3',
+    size: archive.byteLength,
+    sha256: createHash('sha256').update(archive).digest('hex'),
+  };
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push([url, options]);
+    return new Response(archive, {
+      status: 200,
+      headers: {'content-length': String(archive.byteLength)},
+    });
+  };
+  const result = await createDownloadableReleaseSb3(release, {fetchImpl});
+  assert.deepEqual(result.archive, archive);
+  assert.deepEqual(result.titleBuildMetadata, {
+    buildDate: '2026-08-15',
+    label: 'Version 9.8.7 (2026/08/15)',
+    version: '9.8.7',
+  });
+  assert.deepEqual(requests, [
+    [release.url, {headers: {accept: 'application/octet-stream'}, redirect: 'follow'}],
+  ]);
+  await assert.rejects(
+    createDownloadableReleaseSb3({...release, sha256: '0'.repeat(64)}, {fetchImpl}),
+    /SHA-256 is invalid/u,
+  );
 });
 
 test('renders the top-page version from the recommended download catalog entry', async () => {
@@ -257,64 +305,5 @@ test('keeps only minimal validation scripts in the application repository', asyn
   for (const fixtureFile of fixtureFiles) {
     const fixture = await readFile(fixtureFile, 'utf8');
     assert(fixture.length < 1_000, `Validation script is not minimal: ${fixtureFile}`);
-  }
-});
-
-test('keeps the generic app source free of Urashima sample content', async () => {
-  const genericProjectSource = await readFile(
-    path.join(projectRoot, 'app/project.source.json'),
-    'utf8',
-  );
-  const genericProject = JSON.parse(genericProjectSource);
-  const genericStage = genericProject.targets.find((target) => target.isStage);
-  const prompt = genericProject.targets.find((target) => target.name === 'prompt');
-  const loading = genericProject.targets.find((target) => target.name === 'Loading');
-  const sampleTargetNames = ['Fish', 'Princess', 'Turtle', 'Urashima'];
-  const sampleAssetNames = ['Beach1', 'Dragon Castle', 'Ocean Wave', 'Urashima-old-2'];
-
-  assert(genericStage, 'The generic app source has no Stage target.');
-  assert.deepEqual(
-    {x: prompt?.x, y: prompt?.y, size: prompt?.size},
-    {x: -8, y: 150, size: 100},
-    'The generic prompt layout differs.',
-  );
-  assert.deepEqual(
-    {x: loading?.x, y: loading?.y, size: loading?.size},
-    {x: 1, y: -62, size: 100},
-    'The generic loading layout differs.',
-  );
-  assert.deepEqual(genericStage.variables?.tmposeEmbeddedScript, ['__tmpose_embedded_script', '']);
-  assert.equal(
-    genericProject.monitors.some((monitor) => monitor.id === 'tmposeEmbeddedScript'),
-    false,
-    'The reserved embedded script variable must not have a monitor.',
-  );
-  assert.equal(genericStage.blocks.embeddedScriptChoice?.opcode, 'control_if_else');
-  assert.equal(genericStage.blocks.embeddedSetScript?.opcode, 'lmsTempVars2_setRuntimeVariable');
-  assert.deepEqual(genericStage.blocks.embeddedSetScript?.inputs?.VAR, [1, [10, 'script']]);
-  assert.equal(
-    genericStage.blocks.embeddedStartStory?.inputs?.BROADCAST_INPUT?.[1]?.[1],
-    'startStory',
-  );
-  assert.equal(genericStage.blocks['l@']?.inputs?.BROADCAST_INPUT?.[1]?.[1], 'showCover');
-  for (const list of Object.values(genericStage.lists ?? {})) {
-    assert.deepEqual(list[1], [], `Generic runtime list is not empty: ${list[0]}`);
-  }
-  for (const targetName of sampleTargetNames) {
-    assert(
-      !genericProject.targets.some((target) => target.name === targetName),
-      `Generic app source contains the sample target: ${targetName}`,
-    );
-  }
-
-  const genericAssetNames = genericProject.targets.flatMap((target) => [
-    ...(target.costumes ?? []).map((costume) => costume.name),
-    ...(target.sounds ?? []).map((sound) => sound.name),
-  ]);
-  for (const assetName of sampleAssetNames) {
-    assert(
-      !genericAssetNames.includes(assetName),
-      `Generic app source contains the sample asset: ${assetName}`,
-    );
   }
 });

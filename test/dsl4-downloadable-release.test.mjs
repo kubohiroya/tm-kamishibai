@@ -11,10 +11,6 @@ import test from 'node:test';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
-import {
-  createDownloadableReleaseSb3,
-  downloadableReleases,
-} from '../scripts/sb3/downloadable-releases.mjs';
 import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
 import {
   createDsl4ReleaseSourceFiles,
@@ -46,7 +42,6 @@ import {
 } from '../src/dsl4/platform/posenet-bundle.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
-import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const require = createRequire(import.meta.url);
 const VirtualMachine = require('scratch-vm');
@@ -54,8 +49,10 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-const release = downloadableReleases.find(({series}) => series === '4.0');
-assert(release, 'The release catalog must publish a DSL 4.0 artifact.');
+const releaseMetadata = JSON.parse(
+  await readFile(new URL('../release-metadata/4.0.0-rc.6.json', import.meta.url), 'utf8'),
+);
+const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
@@ -65,17 +62,17 @@ const storyComponentLimits = Object.freeze({
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
-const version3MenuIconFilenames = Object.freeze({
-  open: '1766a36329eca190b2b19bba53ef7d8f.svg',
-  reload: '8cf6379b2d82bea5a39bb46757a9bd3d.svg',
-  about: 'fc0a44695524e272260a18d76320828f.svg',
-  language: '7069974a56d188a8d1e9e79513df9e0e.svg',
+const applicationMenuIconFilenames = Object.freeze({
+  open: 'application-menu-open.svg',
+  reload: 'application-menu-reload.svg',
+  about: 'application-menu-about.svg',
+  language: 'application-menu-language.svg',
 });
-const version3MenuIconDataUrls = Object.freeze(
+const applicationMenuIconDataUrls = Object.freeze(
   Object.fromEntries(
     await Promise.all(
-      Object.entries(version3MenuIconFilenames).map(async ([action, filename]) => {
-        const bytes = await readFile(new URL(`../app/assets/${filename}`, import.meta.url));
+      Object.entries(applicationMenuIconFilenames).map(async ([action, filename]) => {
+        const bytes = await readFile(new URL(`../scripts/sb3/assets/${filename}`, import.meta.url));
         return [action, `data:image/svg+xml;base64,${bytes.toString('base64')}`];
       }),
     ),
@@ -83,7 +80,7 @@ const version3MenuIconDataUrls = Object.freeze(
 );
 
 async function buildRelease() {
-  return createDownloadableReleaseSb3(release);
+  return buildCurrentRuntimeRelease();
 }
 
 let pendingCurrentRuntimeRelease;
@@ -916,7 +913,10 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
       },
     ],
   );
-  assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
+  assert.equal(
+    createHash('sha256').update(result.archive).digest('hex'),
+    releaseMetadata.artifact.sha256,
+  );
 });
 
 test('keeps every bundled extension icon and documentation button on its own palette group', async () => {
@@ -1270,7 +1270,7 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
 
 test('uses the exact version 3 SVG bytes as the reusable DOM menu defaults', () => {
   const {build, ...legacyIcons} = dsl4RuntimeApplicationMenuDefaultIcons;
-  assert.deepEqual(legacyIcons, version3MenuIconDataUrls);
+  assert.deepEqual(legacyIcons, applicationMenuIconDataUrls);
   assert.match(build, /^data:image\/svg\+xml;base64,/u);
 });
 
@@ -1634,7 +1634,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
       const buttons = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action);
       assert.equal(buttons.length, 1);
       assert.equal(buttons[0].children[0].tagName, 'IMG');
-      assert.equal(buttons[0].children[0].src, version3MenuIconDataUrls[action]);
+      assert.equal(buttons[0].children[0].src, applicationMenuIconDataUrls[action]);
       assert.equal(buttons[0].children[0].alt, '');
       assert.match(buttons[0].children[0].style.cssText, /invert\(1\).*saturate\(\.35\)/u);
       assert.match(buttons[0].children[0].style.cssText, /width:10cqw;height:10cqw/u);

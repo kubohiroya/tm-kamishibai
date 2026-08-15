@@ -100,7 +100,7 @@ scenes:
 
 test('enforces adopted source, YAML, scene, action, and asset limits with stable diagnostics', () => {
   assert.deepEqual(dsl4SourceFrontendDefaultLimits, {
-    maxCanonicalSourceBytes: 262_144,
+    maxCanonicalSourceBytes: 1_048_576,
     maxYamlNodes: 20_000,
     maxYamlDepth: 64,
     maxScalarScalars: 16_384,

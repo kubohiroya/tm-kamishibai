@@ -23,7 +23,6 @@ import {
   resolveDsl4SessionBackingConfig,
 } from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
-import {loadKamishibaiVm, turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -1787,57 +1786,6 @@ test('rejects malformed Standard runtime results and cleans partial host and DOM
     }),
     /cannot override Standard app-shell option: featureFlags/u,
   );
-});
-
-test('mounts and disposes the Standard presenter against the pinned TurboWarp VM runtime', async () => {
-  assert.equal(turbowarpVmCommit, 'c4823421cb7c17d8d8a89878851ce1668c26a21f');
-  const harness = await loadKamishibaiVm();
-  try {
-    const project = await packagedProject(`
-kamishibai: '4.0'
-assets:
-  Tick: sound
-  Charge: sound
-poseRecognition:
-  idleSound: Tick
-  chargeSound: Charge
-  feedback:
-    mode: presenter
-controls:
-  keymaps:
-    production:
-      Space: navigation.nextAction
-scenes:
-  opening:
-    - wait: 0
-`);
-    const document = createFakeDocument();
-    const shell = await createDsl4StandardAppShell({
-      featureFlags: {
-        dsl4Runtime: true,
-        dsl4AppShell: true,
-        dsl4PoseFeedbackModes: true,
-      },
-      surface: 'regularEditor',
-      document,
-      mount: document.body,
-      runtimeHostOptions: {
-        project,
-        sourceFrontend: frontend,
-        ...limits,
-        subtleCrypto,
-        ...platformFixture([]),
-        runtime: harness.vm.runtime,
-      },
-    });
-    assert.equal(shell.ok, true, JSON.stringify(shell.diagnostics));
-    assert.ok(findByDataset(shell.element, 'dsl4PoseFeedback', 'true'));
-    assert.equal((await shell.runtimeHost.start()).status, 'finished');
-    await shell.dispose('turbowarp-vm-fixture');
-    assert.equal(document.body.children.length, 0);
-  } finally {
-    harness.quit();
-  }
 });
 
 test('resets Scratch pose feedback before awaiting normal environment cleanup', async () => {

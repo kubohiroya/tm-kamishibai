@@ -37,7 +37,7 @@ const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
 const applicationMenuIcons = DSL4_APPLICATION_MENU_ICONS;
 const officialWebsiteIcon = DSL4_OFFICIAL_WEBSITE_ICON;
 const limits = Object.freeze({
-  maxSourceBytes: 64 * 1024,
+  maxSourceBytes: 1024 * 1024,
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
   maxSelectedEntries: 1024,

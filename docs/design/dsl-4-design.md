@@ -8,9 +8,7 @@ Copyright © 2026 Hiroya Kubo.
 
 関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)
 
-現行実装: [`tmpose-kamishibai 3.2.3`](../../README.md#dsl-32の互換性)
-
-機能拡張構成: [`app/embedded-extensions.json`](../../app/embedded-extensions.json)
+移行基準: 公開済み[`tmpose-kamishibai 3.2.3`](https://github.com/kubohiroya/tmpose-kamishibai/releases/tag/v3.2.3)
 調査基準日: 2026-08-05
 
 この文書は、紙芝居DSL 4.0とその実行基盤の全体architectureをレビューするための資料です。
@@ -60,8 +58,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 ### 0.2 埋め込み機能拡張 `[現行事実]`
 
-現行の正本は`app/embedded-extensions.json`内の個別エントリと、個別JavaScriptを参照する
-`app/project.source.json`です。生成SB3だけが`extensionBundles`によって変換されます。
+以下は公開済み3.2.3 SB3から調査したhistorical baselineです。3.2の展開sourceと個別extension copyは
+現行branchへ保持せず、GitHub Release assetを配布正本とします。
 
 `tmposebundle`のmemberは次の4件です。
 
@@ -165,7 +163,7 @@ blockを一つも配置しなくても実行できなければなりません。
 actionを要求する場合は、作者へblock組立てを求め続けず、core actionまたはDSL schemaへ昇格させるかを
 レビューします。
 
-現行`app/project.source.json`は合計1,811 block（Stage 1,359、Actor 241、その他211）です。4.0の定量目標は
+公開済み3.2.3のblock graphは合計1,811 block（Stage 1,359、Actor 241、その他211）でした。4.0の定量目標は
 次とします。作品固有custom actionの演出本体は別集計にします。
 
 | 指標                               | 4.0目標                                      |

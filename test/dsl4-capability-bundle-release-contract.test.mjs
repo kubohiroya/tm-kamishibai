@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 
 import {downloadCatalog} from '../scripts/download-catalog.mjs';
+import {createDsl4ReleaseSourceFiles} from '../scripts/sb3/dsl4-downloadable-release.mjs';
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
 import {dsl4TurboWarpCoreActionBlockSpecs} from '../src/dsl4/platform/turbowarp-core-action-block.js';
 
@@ -95,12 +96,13 @@ test('keeps every external capability on its reviewed composition boundary', asy
 });
 
 test('ships the Standard artifact as one compact static extension bundle', async () => {
-  const [projectSource, bundleManifestSource, entrypoint, authoringProfile] = await Promise.all([
-    readRepositoryFile(contract.standardArtifact.projectSource),
-    readRepositoryFile(contract.standardArtifact.bundleManifest),
+  const generatedFiles = await createDsl4ReleaseSourceFiles();
+  const [entrypoint, authoringProfile] = await Promise.all([
     readRepositoryFile(contract.standardArtifact.entrypoint),
     readRepositoryFile('scripts/sb3/dsl4-runtime-authoring-profile.js'),
   ]);
+  const projectSource = generatedFiles.get('project.source.json').toString('utf8');
+  const bundleManifestSource = generatedFiles.get('embedded-extensions.json').toString('utf8');
   const project = JSON.parse(projectSource);
   const bundleManifest = JSON.parse(bundleManifestSource);
   const {extensionId, memberExtensionIds, runtimeComponentId} = contract.standardArtifact;
@@ -180,33 +182,25 @@ test('ships the Standard artifact as one compact static extension bundle', async
   }
 });
 
-test('uses compact Standard 4.0 and source-rebuildable legacy 3.2 static bundles', async () => {
+test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asset', () => {
   assert.deepEqual(contract.bundleBoundaries.standard4, {
-    kind: 'extensionBundles',
-    unbundle: 'expanded-source',
+    kind: 'generated-extensionBundles',
+    unbundle: 'regenerate-current-source',
     provenance: [
-      'release-sources/4.0.0-rc.6/app/project.source.json',
-      'release-sources/4.0.0-rc.6/app/embedded-extensions.json',
+      'scripts/sb3/dsl4-downloadable-release.mjs',
+      'release-metadata/4.0.0-rc.6.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
     ],
   });
   assert.deepEqual(contract.bundleBoundaries.legacy32, {
-    kind: 'extensionBundles',
-    unbundle: 'source-rebuild',
-    provenance: ['app/project.source.json', 'app/embedded-extensions.json'],
+    kind: 'github-release-asset',
+    unbundle: 'release-asset',
+    provenance: [
+      'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
+    ],
   });
-  const legacyManifest = JSON.parse(await readRepositoryFile('app/embedded-extensions.json'));
-  assert.equal(legacyManifest.extensionBundles[0].recoveryCapsule, false);
-  const publishedLegacyManifest = JSON.parse(
-    await readRepositoryFile('release-sources/3.2.3/app/embedded-extensions.json'),
-  );
-  assert.equal(
-    publishedLegacyManifest.extensionBundles[0].recoveryCapsule,
-    undefined,
-    'Published 3.2.3 source must stay immutable and use its pinned legacy toolchain default.',
-  );
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');
   assert.equal(contract.assetPolicy.remoteAssetBytes, 'explicit-opt-in');
   assert.deepEqual(contract.assetPolicy.remoteAssetRequirements, [
@@ -244,8 +238,9 @@ test('pins a deterministic release, publication, and rollback sequence', async (
     'create-version-tag',
     'publish-npm-package-with-next-dist-tag',
     'publish-github-prerelease',
+    'record-publication',
     'publish-site-with-stable-recommendation-unchanged',
-    'record-and-verify-publication',
+    'verify-publication',
   ]);
   assert.deepEqual(contract.rollbackOrder, [
     'disable-default-off-feature-surface',
@@ -260,12 +255,18 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.6/app');
-  assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
-  assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(
+    release.artifact,
+    undefined,
+    'A candidate must not be offered before its release asset exists.',
+  );
+  const metadata = JSON.parse(await readRepositoryFile(contract.releaseLifecycle.metadata));
+  assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
+  assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
+  assert.match(metadata.artifact.url, /\/releases\/download\/v4\.0\.0-rc\.6\//u);
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-sources/4.0.0-rc.6/release.json',
+    metadata: 'release-metadata/4.0.0-rc.6.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',

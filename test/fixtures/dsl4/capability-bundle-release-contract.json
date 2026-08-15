@@ -68,8 +68,8 @@
       "openOfficialWebsite",
       "toggleTitleLanguage"
     ],
-    "projectSource": "release-sources/4.0.0-rc.6/app/project.source.json",
-    "bundleManifest": "release-sources/4.0.0-rc.6/app/embedded-extensions.json",
+    "projectSource": "generated:project.source.json",
+    "bundleManifest": "generated:embedded-extensions.json",
     "entrypoint": "scripts/sb3/dsl4-runtime-extension-entry.js",
     "allowsRemoteExtensionCode": false,
     "includesPreviewSurface": true,
@@ -186,20 +186,22 @@
   },
   "bundleBoundaries": {
     "standard4": {
-      "kind": "extensionBundles",
-      "unbundle": "expanded-source",
+      "kind": "generated-extensionBundles",
+      "unbundle": "regenerate-current-source",
       "provenance": [
-        "release-sources/4.0.0-rc.6/app/project.source.json",
-        "release-sources/4.0.0-rc.6/app/embedded-extensions.json",
+        "scripts/sb3/dsl4-downloadable-release.mjs",
+        "release-metadata/4.0.0-rc.6.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
       ]
     },
     "legacy32": {
-      "kind": "extensionBundles",
-      "unbundle": "source-rebuild",
-      "provenance": ["app/project.source.json", "app/embedded-extensions.json"]
+      "kind": "github-release-asset",
+      "unbundle": "release-asset",
+      "provenance": [
+        "https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3"
+      ]
     }
   },
   "apiCompatibility": {
@@ -248,11 +250,12 @@
     "create-version-tag",
     "publish-npm-package-with-next-dist-tag",
     "publish-github-prerelease",
+    "record-publication",
     "publish-site-with-stable-recommendation-unchanged",
-    "record-and-verify-publication"
+    "verify-publication"
   ],
   "releaseLifecycle": {
-    "metadata": "release-sources/4.0.0-rc.6/release.json",
+    "metadata": "release-metadata/4.0.0-rc.6.json",
     "states": ["candidate", "frozen", "published"],
     "updateCommand": "pnpm release:dsl4:update",
     "checkCommand": "pnpm release:dsl4:check",

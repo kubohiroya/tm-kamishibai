@@ -345,7 +345,12 @@ test('stops both watchers on browser disconnect without stopping the current run
   const sourceManifestPath = path.join(projectRoot, 'project.source.json');
   const sourceWatch = fakeWatchFactory();
   const structureWatch = fakeWatchFactory();
-  const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main'};
+  const manifest = {
+    formatVersion: 1,
+    mode: 'external',
+    sourceId: 'main',
+    path: 'story.kamishibai.yaml',
+  };
   await Promise.all([
     writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
     writeFile(path.join(projectRoot, 'story.kamishibai.yaml'), validSource),
@@ -646,7 +651,12 @@ test('fails before opening sockets for unsafe local host configuration', () => {
   const base = {
     projectRoot: '/tmp/dsl4-project',
     sourceManifestPath: '/tmp/dsl4-project/project.source.json',
-    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    sourceManifest: {
+      formatVersion: 1,
+      mode: 'external',
+      sourceId: 'main',
+      path: 'story.kamishibai.yaml',
+    },
     sourceFrontend: frontend,
     maxSourceBytes: 4096,
     protocolSession: runtime.protocol,
@@ -727,7 +737,12 @@ test('closes the loopback socket when disposal races server startup', async () =
   const host = createDsl4LocalPreviewHost({
     projectRoot,
     sourceManifestPath: path.join(projectRoot, 'project.source.json'),
-    sourceManifest: {formatVersion: 1, mode: 'external', sourceId: 'main'},
+    sourceManifest: {
+      formatVersion: 1,
+      mode: 'external',
+      sourceId: 'main',
+      path: 'story.kamishibai.yaml',
+    },
     sourceFrontend: frontend,
     maxSourceBytes: 4096,
     protocolSession: runtime.protocol,

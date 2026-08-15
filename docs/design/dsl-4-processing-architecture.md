@@ -69,9 +69,9 @@ Copyright © 2026 Hiroya Kubo.
 
 | 用語                           | この文書での意味                                                                                                                                                                             |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| entry source                   | `project.source.yaml`（JSON fallback可）が指す、projectの入口となる1個のDSL 4.0 YAML。許可suffixとpath規則はsource loader契約を正本とする                                                     |
+| entry source                   | `project.source.yml`（`.yaml`／`.json`互換入力可）が指す、projectの入口となる1個のDSL 4.0 YAML。許可suffixとpath規則はsource loader契約を正本とする                                          |
 | included source                | entry sourceの`include`から到達する任意source。`dsl4SourceIncludes`が起動時に有効な場合だけ読み、default経路では存在しない                                                                   |
-| source manifest                | entry sourceのmode、source ID、project-relative path、cache identityを宣言する`project.source.yaml`または互換用`project.source.json`                                                         |
+| source manifest                | entry sourceのmode、source ID、project-relative path、cache identityを宣言する`project.source.yml`、`project.source.yaml`、`project.source.json`                                             |
 | `sourceId`                     | 診断とsource descriptorでsourceを識別する論理ID。作者machine上の絶対pathやURLを使わない                                                                                                      |
 | cache identity                 | verified remote asset cacheを台本単位で分離するstable story ID、表示名、IndexedDB database名の組。source本文のintegrityとは別物                                                              |
 | canonical source               | UTF-8 BOMを除去し、CRLF／CRをLFへ揃えたsource text。byte長、integrity、YAML診断位置の基準になる                                                                                              |

@@ -12,10 +12,6 @@ import test from 'node:test';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
-import {
-  createDownloadableReleaseSb3,
-  downloadableReleases,
-} from '../../scripts/sb3/downloadable-releases.mjs';
 import {createKamishibaiSb3} from '../../scripts/sb3/build.mjs';
 import {
   createDsl4ReleaseSourceFiles,
@@ -39,8 +35,23 @@ import {
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
 const TurboWarpPackager = require('@turbowarp/packager');
-const dsl4Release = downloadableReleases.find(({series}) => series === '4.0');
-assert(dsl4Release, 'The DSL 4.0 downloadable release is unavailable.');
+
+async function createCurrentDsl4ReleaseSb3() {
+  const sourceDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-current-release-source-'));
+  try {
+    const sourceFiles = await createDsl4ReleaseSourceFiles();
+    await Promise.all(
+      [...sourceFiles].map(async ([relativePath, bytes]) => {
+        const filename = path.join(sourceDirectory, relativePath);
+        await mkdir(path.dirname(filename), {recursive: true});
+        await writeFile(filename, bytes);
+      }),
+    );
+    return await createKamishibaiSb3({sourceDirectory});
+  } finally {
+    await rm(sourceDirectory, {recursive: true, force: true});
+  }
+}
 
 function createPoseFeedbackVariables() {
   return {
@@ -487,7 +498,7 @@ test(
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-chromium-'));
     const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-package-'));
-    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const release = await createCurrentDsl4ReleaseSb3();
     const archive = unzipSync(release.archive);
     const project = JSON.parse(strFromU8(archive['project.json']));
     const extensionSource = await createDsl4RuntimeExtensionSource();
@@ -567,7 +578,7 @@ test(
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-chromium-'));
     const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-package-'));
-    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const release = await createCurrentDsl4ReleaseSb3();
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
@@ -848,7 +859,7 @@ test(
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-build-chromium-'));
     const fixtureDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-browser-build-package-'));
-    const release = await createDownloadableReleaseSb3(dsl4Release);
+    const release = await createCurrentDsl4ReleaseSb3();
     const loadedProject = await TurboWarpPackager.loadProject(release.archive);
     const packager = new TurboWarpPackager.Packager();
     packager.project = loadedProject;
@@ -1110,6 +1121,20 @@ test(
         ];
         const notFound = () => Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
         function root(files, index) {
+          function fileHandle(name) {
+            return {
+              kind: 'file',
+              name,
+              async getFile() {
+                const bytes = encoder.encode(files.get(name));
+                return {
+                  name,
+                  size: bytes.byteLength,
+                  async arrayBuffer() { return bytes.slice().buffer; }
+                };
+              }
+            };
+          }
           return {
             kind: 'directory',
             name: 'invalid-project-' + index,
@@ -1117,18 +1142,10 @@ test(
             async requestPermission() { return 'granted'; },
             async getFileHandle(name) {
               if (!files.has(name)) throw notFound();
-              return {
-                kind: 'file',
-                name,
-                async getFile() {
-                  const bytes = encoder.encode(files.get(name));
-                  return {
-                    name,
-                    size: bytes.byteLength,
-                    async arrayBuffer() { return bytes.slice().buffer; }
-                  };
-                }
-              };
+              return fileHandle(name);
+            },
+            async *entries() {
+              for (const name of files.keys()) yield [name, fileHandle(name)];
             },
             async getDirectoryHandle() { throw notFound(); }
           };
@@ -1169,9 +1186,9 @@ test(
 
       const cases = [
         {
-          code: 'K4-WEB-PREVIEW-MANIFEST-MISSING',
-          message: /project\.source\.yaml.*project\.source\.json/u,
-          source: 'project.source.yaml',
+          code: 'K4-SOURCE-MISSING',
+          message: /no \.k4\.yml entry source/u,
+          source: '*.k4.yml',
         },
         {
           code: /^K4-YAML/u,
@@ -2045,7 +2062,7 @@ test(
     const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
     const source =
       "kamishibai: '4.0'\ncontrols:\n  keymaps:\n    production:\n      Space: navigation.nextAction\nscenes:\n  opening: []\n";
-    const baseRelease = await createDownloadableReleaseSb3(dsl4Release);
+    const baseRelease = await createCurrentDsl4ReleaseSb3();
     await Promise.all([
       writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
       writeFile(sourcePath, source),

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rename, rm, writeFile} from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -15,9 +16,11 @@ export const dsl4ReleaseBuildDate = '2026-08-15';
 export const dsl4ReleaseChannel = 'next';
 export const dsl4ReleaseTag = `v${dsl4ReleaseVersion}`;
 export const dsl4ReleaseFilename = `kamishibai-${dsl4ReleaseVersion}.sb3`;
-export const dsl4ReleaseRoot = `release-sources/${dsl4ReleaseVersion}`;
-export const dsl4ReleaseSourceDirectory = `${dsl4ReleaseRoot}/app`;
-export const dsl4ReleaseMetadataPath = `${dsl4ReleaseRoot}/release.json`;
+export const dsl4ReleaseMetadataPath = `release-metadata/${dsl4ReleaseVersion}.json`;
+export const dsl4ReleaseCandidateArtifactPath = `tmp/release-candidates/${dsl4ReleaseFilename}`;
+export const dsl4ReleaseAssetUrl =
+  `https://github.com/kubohiroya/tmpose-kamishibai/releases/download/` +
+  `${dsl4ReleaseTag}/${dsl4ReleaseFilename}`;
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const validReleaseStates = new Set(['candidate', 'frozen', 'published']);
@@ -50,24 +53,21 @@ export function assertDsl4ReleaseMetadata(metadata) {
   assert(validReleaseStates.has(metadata.state), 'DSL 4 release state is invalid.');
   assert.equal(metadata.buildDate, dsl4ReleaseBuildDate, 'DSL 4 release build date is invalid.');
   assert.equal(
-    metadata.sourceDirectory,
-    dsl4ReleaseSourceDirectory,
-    'DSL 4 release source directory is invalid.',
+    Object.hasOwn(metadata, 'sourceDirectory'),
+    false,
+    'Release metadata must not retain a source snapshot directory.',
   );
   assert.match(
     metadata.sourceIdentity,
     /^sha256:[0-9a-f]{64}$/u,
     'DSL 4 release source identity is invalid.',
   );
-  assert.equal(
-    metadata.artifact?.filename,
-    dsl4ReleaseFilename,
-    'DSL 4 release artifact filename is invalid.',
-  );
-  assert.match(
-    metadata.artifact?.sha256,
-    /^[0-9a-f]{64}$/u,
-    'DSL 4 release artifact SHA-256 is invalid.',
+  assert.equal(metadata.artifact?.filename, dsl4ReleaseFilename);
+  assert.equal(metadata.artifact?.url, dsl4ReleaseAssetUrl);
+  assert.match(metadata.artifact?.sha256, /^[0-9a-f]{64}$/u);
+  assert(
+    Number.isSafeInteger(metadata.artifact?.size) && metadata.artifact.size > 0,
+    'DSL 4 release artifact size is invalid.',
   );
   assert.deepEqual(metadata.publication?.npm, {distTag: dsl4ReleaseChannel});
   assert.deepEqual(metadata.publication?.github, {prerelease: true, tag: dsl4ReleaseTag});
@@ -103,11 +103,12 @@ function createMetadata(files, archive, state = 'candidate') {
     channel: dsl4ReleaseChannel,
     state,
     buildDate: dsl4ReleaseBuildDate,
-    sourceDirectory: dsl4ReleaseSourceDirectory,
     sourceIdentity: createDsl4ReleaseSourceIdentity(files),
     artifact: {
       filename: dsl4ReleaseFilename,
+      url: dsl4ReleaseAssetUrl,
       sha256: sha256(archive),
+      size: archive.byteLength,
     },
     publication: {
       npm: {distTag: dsl4ReleaseChannel},
@@ -127,76 +128,12 @@ async function readMetadata(root) {
   }
 }
 
-async function directoryExists(directory) {
-  try {
-    return (await stat(directory)).isDirectory();
-  } catch (error) {
-    if (error?.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
 async function writeSourceFiles(directory, files) {
   for (const [relativePath, contents] of normalizedSourceFiles(files)) {
     const outputPath = path.join(directory, relativePath);
     await mkdir(path.dirname(outputPath), {recursive: true});
     await writeFile(outputPath, contents);
   }
-}
-
-async function listFiles(directory, relative = '') {
-  const entries = await readdir(directory, {withFileTypes: true});
-  const files = [];
-  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
-    const nested = relative ? path.posix.join(relative, entry.name) : entry.name;
-    if (entry.isDirectory())
-      files.push(...(await listFiles(path.join(directory, entry.name), nested)));
-    else if (entry.isFile()) files.push(nested);
-    else throw new Error(`Unsupported release source entry: ${nested}`);
-  }
-  return files;
-}
-
-async function readSourceFiles(directory) {
-  const files = new Map();
-  for (const relativePath of await listFiles(directory)) {
-    files.set(relativePath, await readFile(path.join(directory, relativePath)));
-  }
-  return files;
-}
-
-async function assertSourceFiles(directory, expectedFiles, repairGuidance) {
-  const expectedNames = normalizedSourceFiles(expectedFiles).map(([relativePath]) => relativePath);
-  assert.deepEqual(
-    await listFiles(directory),
-    expectedNames,
-    `DSL 4 release source file set is stale. ${repairGuidance}`,
-  );
-  for (const [relativePath, expected] of normalizedSourceFiles(expectedFiles)) {
-    const actual = await readFile(path.join(directory, relativePath));
-    assert(
-      actual.equals(expected),
-      `DSL 4 release source is stale: ${relativePath}. ${repairGuidance}`,
-    );
-  }
-}
-
-async function replaceReleaseRoot(targetRoot, temporaryRoot) {
-  const backupRoot = `${targetRoot}.backup-${process.pid}`;
-  let movedExisting = false;
-  try {
-    if (await directoryExists(targetRoot)) {
-      await rename(targetRoot, backupRoot);
-      movedExisting = true;
-    }
-    await rename(temporaryRoot, targetRoot);
-  } catch (error) {
-    if (movedExisting && !(await directoryExists(targetRoot))) {
-      await rename(backupRoot, targetRoot);
-    }
-    throw error;
-  }
-  if (movedExisting) await rm(backupRoot, {force: true, recursive: true});
 }
 
 function sb3Options(root, sourceDirectory) {
@@ -208,6 +145,47 @@ function sb3Options(root, sourceDirectory) {
   };
 }
 
+async function createCandidate(root, files, createSb3) {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tmpose-kamishibai-release-'));
+  const sourceDirectory = path.join(temporaryRoot, 'app');
+  try {
+    await writeSourceFiles(sourceDirectory, files);
+    return await createSb3(sb3Options(root, sourceDirectory));
+  } finally {
+    await rm(temporaryRoot, {force: true, recursive: true});
+  }
+}
+
+async function writeAtomically(filename, contents) {
+  await mkdir(path.dirname(filename), {recursive: true});
+  const temporaryPath = `${filename}.tmp-${process.pid}`;
+  try {
+    await writeFile(temporaryPath, contents);
+    await rename(temporaryPath, filename);
+  } catch (error) {
+    await rm(temporaryPath, {force: true});
+    throw error;
+  }
+}
+
+async function defaultFetchReleaseArtifact(metadata) {
+  const {createDownloadableReleaseSb3} = await import('./downloadable-releases.mjs');
+  const result = await createDownloadableReleaseSb3({
+    ...metadata.artifact,
+    buildDate: metadata.buildDate,
+    series: metadata.series,
+    version: metadata.version,
+  });
+  return result.archive;
+}
+
+async function verifyRemoteArtifact(metadata, fetchReleaseArtifact = defaultFetchReleaseArtifact) {
+  const archive = Buffer.from(await fetchReleaseArtifact(metadata));
+  assert.equal(archive.byteLength, metadata.artifact.size, 'Published release size is invalid.');
+  assert.equal(sha256(archive), metadata.artifact.sha256, 'Published release SHA-256 is invalid.');
+  return archive;
+}
+
 export async function updateDsl4Release({
   root = repositoryRoot,
   createSourceFiles = createDsl4ReleaseSourceFiles,
@@ -215,82 +193,51 @@ export async function updateDsl4Release({
 } = {}) {
   const previousMetadata = await readMetadata(root);
   assertDsl4ReleaseCanUpdate(previousMetadata);
-
   const files = await createSourceFiles();
-  const releaseParent = path.join(root, 'release-sources');
-  await mkdir(releaseParent, {recursive: true});
-  const temporaryRoot = await mkdtemp(path.join(releaseParent, '.dsl4-release-'));
-  const temporarySource = path.join(temporaryRoot, 'app');
-  try {
-    await writeSourceFiles(temporarySource, files);
-    const built = await createSb3(sb3Options(root, temporarySource));
-    const metadata = createMetadata(files, built.archive);
-    assertDsl4ReleaseMetadata(metadata);
-    await writeFile(
-      path.join(temporaryRoot, 'release.json'),
-      `${JSON.stringify(metadata, null, 2)}\n`,
-    );
-    await replaceReleaseRoot(path.join(root, dsl4ReleaseRoot), temporaryRoot);
-    return {metadata, previousMetadata};
-  } catch (error) {
-    await rm(temporaryRoot, {force: true, recursive: true});
-    throw error;
-  }
-}
-
-export async function checkDsl4Release({
-  root = repositoryRoot,
-  createSourceFiles = createDsl4ReleaseSourceFiles,
-  createSb3 = createKamishibaiSb3,
-  verifyCatalog = true,
-  verifyPackageVersion = true,
-} = {}) {
-  const metadata = await verifyDsl4ReleaseSnapshot({
-    root,
-    createSb3,
-    verifyCatalog,
-    verifyPackageVersion,
-  });
-  const repairGuidance =
-    metadata.state === 'candidate'
-      ? `Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}; do not edit hashes by hand.`
-      : `Restore ${dsl4ReleaseRoot} from ${dsl4ReleaseTag}; versioned release snapshots are immutable.`;
-  const sourceDirectory = path.join(root, dsl4ReleaseSourceDirectory);
-  if (metadata.state === 'candidate') {
-    const expectedFiles = await createSourceFiles();
-    await assertSourceFiles(sourceDirectory, expectedFiles, repairGuidance);
-  }
-  return metadata;
+  const built = await createCandidate(root, files, createSb3);
+  const metadata = assertDsl4ReleaseMetadata(createMetadata(files, built.archive));
+  await writeAtomically(
+    path.join(root, dsl4ReleaseMetadataPath),
+    `${JSON.stringify(metadata, null, 2)}\n`,
+  );
+  await writeAtomically(path.join(root, dsl4ReleaseCandidateArtifactPath), built.archive);
+  return {
+    artifactPath: path.join(root, dsl4ReleaseCandidateArtifactPath),
+    metadata,
+    previousMetadata,
+  };
 }
 
 export async function verifyDsl4ReleaseSnapshot({
   root = repositoryRoot,
+  createSourceFiles = createDsl4ReleaseSourceFiles,
   createSb3 = createKamishibaiSb3,
+  fetchReleaseArtifact = defaultFetchReleaseArtifact,
   verifyCatalog = true,
   verifyPackageVersion = true,
 } = {}) {
   const metadata = await readMetadata(root);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}. Run pnpm release:dsl4:update.`);
-  const sourceDirectory = path.join(root, dsl4ReleaseSourceDirectory);
-  const snapshotFiles = await readSourceFiles(sourceDirectory);
-  assert.equal(
-    createDsl4ReleaseSourceIdentity(snapshotFiles),
-    metadata.sourceIdentity,
-    `DSL 4 release snapshot identity is invalid. Restore ${dsl4ReleaseRoot} from version control.`,
-  );
-  const [first, second] = await Promise.all([
-    createSb3(sb3Options(root, sourceDirectory)),
-    createSb3(sb3Options(root, sourceDirectory)),
-  ]);
-  assert(
-    Buffer.from(first.archive).equals(Buffer.from(second.archive)),
-    `${dsl4ReleaseVersion} snapshot SB3 generation is not deterministic.`,
-  );
-  assert.equal(
-    sha256(first.archive),
-    metadata.artifact.sha256,
-    `DSL 4 release snapshot artifact hash is invalid. Restore ${dsl4ReleaseRoot} from version control.`,
-  );
+  if (metadata.state === 'published') {
+    await verifyRemoteArtifact(metadata, fetchReleaseArtifact);
+  } else {
+    const files = await createSourceFiles();
+    assert.equal(
+      createDsl4ReleaseSourceIdentity(files),
+      metadata.sourceIdentity,
+      `DSL 4 release source changed. Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}.`,
+    );
+    const [first, second] = await Promise.all([
+      createCandidate(root, files, createSb3),
+      createCandidate(root, files, createSb3),
+    ]);
+    assert(
+      Buffer.from(first.archive).equals(Buffer.from(second.archive)),
+      `${dsl4ReleaseVersion} SB3 generation is not deterministic.`,
+    );
+    assert.equal(sha256(first.archive), metadata.artifact.sha256, 'Candidate SHA-256 is stale.');
+    assert.equal(first.archive.byteLength, metadata.artifact.size, 'Candidate size is stale.');
+  }
   if (verifyPackageVersion) {
     const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.equal(packageJson.version, dsl4ReleaseVersion, 'package.json release version is stale.');
@@ -299,41 +246,38 @@ export async function verifyDsl4ReleaseSnapshot({
     const {downloadCatalog} = await import('../download-catalog.mjs');
     const catalogEntry = downloadCatalog.find(({series}) => series === dsl4ReleaseSeries);
     assert.equal(catalogEntry?.version, metadata.version);
-    assert.equal(catalogEntry?.artifact?.sha256, metadata.artifact.sha256);
-    assert.equal(catalogEntry?.artifact?.sourceIdentity, metadata.sourceIdentity);
-    assert.equal(catalogEntry?.recommended, undefined);
-    assert.equal(
-      downloadCatalog.find(({recommended}) => recommended)?.version,
-      '3.2.3',
-      '3.2.3 must remain the recommended stable release while 4.0 is a release candidate.',
-    );
+    if (metadata.state === 'published') {
+      assert.equal(catalogEntry?.artifact?.sha256, metadata.artifact.sha256);
+      assert.equal(catalogEntry?.artifact?.url, metadata.artifact.url);
+    } else {
+      assert.equal(catalogEntry?.artifact, undefined);
+    }
+    assert.equal(downloadCatalog.find(({recommended}) => recommended)?.version, '3.2.3');
   }
   return metadata;
 }
 
+export const checkDsl4Release = verifyDsl4ReleaseSnapshot;
+
 export async function verifyDsl4PublishedReleaseSnapshot(options = {}) {
-  const metadata = await verifyDsl4ReleaseSnapshot(options);
-  assert.equal(
-    metadata.state,
-    'published',
-    `${dsl4ReleaseVersion} snapshot must remain published.`,
-  );
-  return metadata;
+  const metadata = await readMetadata(options.root ?? repositoryRoot);
+  assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
+  assert.equal(metadata.state, 'published', `${dsl4ReleaseVersion} must be published.`);
+  return verifyDsl4ReleaseSnapshot(options);
 }
 
 async function writeMetadataAtomically(root, metadata) {
-  const metadataPath = path.join(root, dsl4ReleaseMetadataPath);
-  const temporaryPath = `${metadataPath}.tmp-${process.pid}`;
-  await writeFile(temporaryPath, `${JSON.stringify(metadata, null, 2)}\n`);
-  await rename(temporaryPath, metadataPath);
+  await writeAtomically(
+    path.join(root, dsl4ReleaseMetadataPath),
+    `${JSON.stringify(metadata, null, 2)}\n`,
+  );
 }
 
 export async function freezeDsl4Release(options = {}) {
   const metadata = await checkDsl4Release(options);
   if (metadata.state === 'frozen') return metadata;
   assert.equal(metadata.state, 'candidate', `${dsl4ReleaseVersion} is already published.`);
-  const frozen = {...metadata, state: 'frozen'};
-  assertDsl4ReleaseMetadata(frozen);
+  const frozen = assertDsl4ReleaseMetadata({...metadata, state: 'frozen'});
   await writeMetadataAtomically(options.root ?? repositoryRoot, frozen);
   return frozen;
 }
@@ -347,7 +291,7 @@ function publicationUrl(argumentName, value) {
 
 export async function recordDsl4Publication(
   {npmUrl, githubReleaseUrl, pagesUrl},
-  {root = repositoryRoot} = {},
+  {root = repositoryRoot, fetchReleaseArtifact = defaultFetchReleaseArtifact} = {},
 ) {
   const metadata = await readMetadata(root);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
@@ -356,7 +300,8 @@ export async function recordDsl4Publication(
     'frozen',
     `${dsl4ReleaseVersion} must be frozen before publication.`,
   );
-  const published = {
+  await verifyRemoteArtifact(metadata, fetchReleaseArtifact);
+  const published = assertDsl4ReleaseMetadata({
     ...metadata,
     state: 'published',
     publication: {
@@ -367,8 +312,7 @@ export async function recordDsl4Publication(
         pages: publicationUrl('--pages-url', pagesUrl),
       },
     },
-  };
-  assertDsl4ReleaseMetadata(published);
+  });
   await writeMetadataAtomically(root, published);
   return published;
 }
@@ -381,10 +325,10 @@ function argumentValue(name) {
 async function main() {
   const command = process.argv[2];
   if (command === 'update') {
-    const {metadata, previousMetadata} = await updateDsl4Release();
+    const {artifactPath, metadata, previousMetadata} = await updateDsl4Release();
     process.stdout.write(
       `Updated ${metadata.version} candidate: ${previousMetadata?.artifact.sha256 ?? 'new'} -> ${metadata.artifact.sha256}\n` +
-        `Run pnpm release:dsl4:check next.\n`,
+        `Transient artifact: ${artifactPath}\nRun pnpm release:dsl4:check next.\n`,
     );
     return;
   }
@@ -398,15 +342,13 @@ async function main() {
   if (command === 'verify-published-snapshot') {
     const metadata = await verifyDsl4PublishedReleaseSnapshot();
     process.stdout.write(
-      `Verified ${metadata.version} ${metadata.state} snapshot: ${metadata.artifact.sha256}\n`,
+      `Verified ${metadata.version} published release asset: ${metadata.artifact.sha256}\n`,
     );
     return;
   }
   if (command === 'freeze') {
     const metadata = await freezeDsl4Release();
-    process.stdout.write(
-      `Frozen ${metadata.version}: ${metadata.artifact.sha256}. Future changes require ${dsl4NextReleaseVersion}.\n`,
-    );
+    process.stdout.write(`Frozen ${metadata.version}: ${metadata.artifact.sha256}.\n`);
     return;
   }
   if (command === 'record-publication') {

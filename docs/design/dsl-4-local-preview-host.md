@@ -55,7 +55,7 @@ remote bind、remote preview、token再発行、source write、directory listing
 結果は同じdiagnostic envelopeを表示し、current integrityとruntime sessionを置換しません。manual reloadも、
 Web Previewと同じoverlay policyが現在の検証済みgenerationを再stageしてからcommitします。
 
-明示された`project.source.yaml`または`project.source.json`は別watcherで監視します。正規化済みmanifestのsource path／source IDが変わるか、manifestが
+明示された`project.source.yml`、`project.source.yaml`、`project.source.json`は別watcherで監視します。正規化済みmanifestのsource path／source IDが変わるか、manifestが
 不正・unreadableになった場合はsource watcherとprotocol candidateを破棄し、current runtimeを維持したまま
 `K4-PREVIEW-STRUCTURE-*`を表示します。この状態ではcommitを拒否し、full rebuild後の新host／sessionを要求します。
 base SB3、asset bundle、app shell、extension、builder設定、`controlProfile`の分類意味は既存の
@@ -71,7 +71,7 @@ server listen中またはprotocol接続中に`dispose()`された場合も、進
 disposed hostからsocketやwatcherが後発で再生成されないことを保証します。
 
 `preview-dsl4 --watch`は`preview --watch`相当の公開adapterです。base SB3、project root、
-`project.source.yaml`（既存projectでは`project.source.json`も可）、control profile、channel、source／assetの有限上限を明示必須とし、port省略時は
+`project.source.yml`、`project.source.yaml`、`project.source.json`のいずれか、control profile、channel、source／assetの有限上限を明示必須とし、port省略時は
 OSにloopback空portを選択させます。remote bindは提供しません。hostとbrowser bundleをmemory上で生成し、
 one-use tokenをfragmentに含むURLをsystem browserに一度だけ渡します。CLI出力はtokenやsourceの絶対pathを
 表示しません。
