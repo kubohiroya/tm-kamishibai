@@ -50,7 +50,7 @@ test('delegates the PoseNet manifest, verification, storage, and runtime contrac
   assert.equal(loadDsl4PoseNetProjectBundleData, loadPoseNetProjectBundle);
   assert.equal(validateDsl4PoseNetProjectBundle, validatePoseNetProjectBundle);
   assert.equal(verifyDsl4PoseNetBundle, verifyPoseNetBundle);
-  assert.equal(dsl4PoseNetBundleManifest.distribution.version, '1.10.0');
+  assert.equal(dsl4PoseNetBundleManifest.distribution.version, '1.10.1');
 });
 
 test('verifies the PoseNet supply published by TMPose', async () => {

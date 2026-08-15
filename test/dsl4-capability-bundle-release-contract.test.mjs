@@ -185,8 +185,8 @@ test('uses compact Standard 4.0 and source-rebuildable legacy 3.2 static bundles
     kind: 'extensionBundles',
     unbundle: 'expanded-source',
     provenance: [
-      'release-sources/4.0.0-rc.5/app/project.source.json',
-      'release-sources/4.0.0-rc.5/app/embedded-extensions.json',
+      'release-sources/4.0.0-rc.6/app/project.source.json',
+      'release-sources/4.0.0-rc.6/app/embedded-extensions.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -260,21 +260,21 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.5/app');
+  assert.equal(release.artifact.sourceDirectory, 'release-sources/4.0.0-rc.6/app');
   assert.match(release.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(release.artifact.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-sources/4.0.0-rc.5/release.json',
+    metadata: 'release-sources/4.0.0-rc.6/release.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.6',
+    nextCandidateVersion: '4.0.0-rc.7',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.5',
+    gitTag: 'v4.0.0-rc.6',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });

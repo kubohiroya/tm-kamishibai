@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "series": "4.0",
+  "version": "4.0.0-rc.6",
+  "channel": "next",
+  "state": "candidate",
+  "buildDate": "2026-08-15",
+  "sourceDirectory": "release-sources/4.0.0-rc.6/app",
+  "sourceIdentity": "sha256:3062b66bb1272b557b9cc6944335f7ef4de61c6c6a8837e6a73dbf7bc18233d6",
+  "artifact": {
+    "filename": "kamishibai-4.0.0-rc.6.sb3",
+    "sha256": "6062034887e4a876606c32f587e5b589e63dcdd7a5535129dfc4e3f18107beb5"
+  },
+  "publication": {
+    "npm": {
+      "distTag": "next"
+    },
+    "github": {
+      "prerelease": true,
+      "tag": "v4.0.0-rc.6"
+    },
+    "pages": {
+      "recommended": false
+    }
+  }
+}

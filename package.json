@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "4.0.0-rc.5",
+  "version": "4.0.0-rc.6",
   "private": false,
   "type": "module",
   "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
@@ -91,7 +91,7 @@
     "@kubohiroya/turbowarp-bubble": "0.7.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.4.0",
     "@kubohiroya/turbowarp-svg-text": "0.5.0",
-    "@kubohiroya/turbowarp-tmpose": "1.10.0",
+    "@kubohiroya/turbowarp-tmpose": "1.10.1",
     "@teachablemachine/pose": "0.8.3",
     "@tensorflow/tfjs": "1.3.1",
     "@turbowarp/scratch-storage": "2.0.0",
@@ -102,7 +102,7 @@
     "esbuild": "0.28.1",
     "fflate": "0.8.3",
     "scratch-audio": "github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30",
-    "scratch-render": "github:kubohiroya/scratch-render#1fa6cc7d23e12aabf8db16e8e3ce400538f44165",
+    "scratch-render": "github:kubohiroya/scratch-render#c69318a6c8d43439fc35fa9e403bf6d2781fdaee",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
     "yaml": "2.9.0"
   },

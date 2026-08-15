@@ -103,7 +103,7 @@ function buildCurrentRuntimeRelease() {
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.5',
+        version: '4.0.0-rc.6',
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -1404,7 +1404,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.5');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.6');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,

@@ -158,6 +158,14 @@ The CLI also provides the following commands. See `tmpose-kamishibai --help` and
 | `audit-dsl4-assets`   | Audit a distribution profile and lock without network access  |
 | `vendor-dsl4-assets`  | Pin remote assets into a content-addressed offline mirror     |
 
+DSL 4.0 can select the backward-compatible `legacy` model initialization policy or
+`latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
+TMPose 1.10.1 owns initialization of the camera canvas readback context; Kamishibai does not patch
+TMPose's TensorFlow.js `fromPixels()` path. To roll back this boundary, use the rc.5 artifact pinned
+to TMPose 1.10.0. See the
+[DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
+defaults, and cancellation boundary.
+
 JavaScript consumers can import the package exports `@kubohiroya/tmpose-kamishibai/builder`, `@kubohiroya/tmpose-kamishibai/dsl4`, and `@kubohiroya/tmpose-kamishibai/converter` as needed.
 
 ## How It Works

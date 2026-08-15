@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 import {createKamishibaiSb3} from './build.mjs';
 import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.mjs';
 
-export const dsl4ReleaseVersion = '4.0.0-rc.5';
-export const dsl4NextReleaseVersion = '4.0.0-rc.6';
+export const dsl4ReleaseVersion = '4.0.0-rc.6';
+export const dsl4NextReleaseVersion = '4.0.0-rc.7';
 export const dsl4ReleaseSeries = '4.0';
 export const dsl4ReleaseBuildDate = '2026-08-15';
 export const dsl4ReleaseChannel = 'next';

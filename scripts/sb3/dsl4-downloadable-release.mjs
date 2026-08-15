@@ -35,7 +35,7 @@ const applicationMenuIconPaths = Object.freeze({
   about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
   language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
-const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.5', 'app');
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.6', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
 const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
@@ -112,7 +112,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'tmpose',
       name: 'TMPose',
       package: '@kubohiroya/turbowarp-tmpose',
-      version: '1.10.0',
+      version: '1.10.1',
       artifact: 'dist/tmpose.js',
       sourcePath: path.join(
         path.dirname(
@@ -648,9 +648,9 @@ async function checkRelease(files) {
   );
   for (const [relativePath, expected] of files) {
     const actual = await readFile(path.join(releaseDirectory, relativePath));
-    assert(actual.equals(expected), `DSL 4.0.0-rc.5 release source is stale: ${relativePath}`);
+    assert(actual.equals(expected), `DSL 4.0.0-rc.6 release source is stale: ${relativePath}`);
   }
-  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.5 release source file(s).\n`);
+  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.6 release source file(s).\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
