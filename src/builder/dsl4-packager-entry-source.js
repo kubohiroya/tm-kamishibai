@@ -8,6 +8,7 @@ import {
 import {fixedZipTimestamp} from './constants.js';
 import {inspectDsl4BinaryEntryArchive} from './dsl4-binary-entry-sb3.js';
 import {dsl4PackagerCompatibility} from './dsl4-packager-compatibility.js';
+import {patchTurboWarpPackagerScratchRenderReadbackContext} from './turbowarp-packager-scratch-render.js';
 
 const bootstrapMarker = '/* tmpose-kamishibai dsl4-packager-entry-source v1 */';
 const packagerZipLoadTemplate =
@@ -233,7 +234,10 @@ function adaptPackagerResult(result, surface) {
     if (result.type !== 'text/html') {
       fail('K4-PACKAGER-RESULT-001', 'Plain HTML Packager result has an invalid content type');
     }
-    return Object.freeze({...result, data: patchPackagerHtml(result.data)});
+    return Object.freeze({
+      ...result,
+      data: patchTurboWarpPackagerScratchRenderReadbackContext(patchPackagerHtml(result.data)),
+    });
   }
   if (surface.id === 'zip-one-asset') {
     if (result.type !== 'application/zip') {
@@ -249,6 +253,10 @@ function adaptPackagerResult(result, surface) {
       fail('K4-PACKAGER-RESULT-001', 'zip-one-asset result is missing index.html');
     }
     archive['index.html'] = patchPackagerHtml(archive['index.html']);
+    if (!archive['script.js']) {
+      fail('K4-PACKAGER-RESULT-001', 'zip-one-asset result is missing script.js');
+    }
+    archive['script.js'] = patchTurboWarpPackagerScratchRenderReadbackContext(archive['script.js']);
     const ordered = Object.fromEntries(
       Object.entries(archive)
         .filter(([name]) => !name.endsWith('/'))

@@ -101,7 +101,7 @@
     "esbuild": "0.28.1",
     "fflate": "0.8.3",
     "scratch-audio": "github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30",
-    "scratch-render": "github:TurboWarp/scratch-render#a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce",
+    "scratch-render": "github:kubohiroya/scratch-render#1fa6cc7d23e12aabf8db16e8e3ce400538f44165",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
     "yaml": "2.9.0"
   },
