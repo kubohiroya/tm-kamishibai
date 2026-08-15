@@ -255,6 +255,7 @@ Before implementation, record the scope, dependencies, acceptance criteria, and 
 | `release-metadata/`   | Small records for the current release identity and publication state          |
 | `site/`               | GitHub Pages source; published SB3 files are injected only during build       |
 | `docs/design/`        | Implementation-adjacent design contracts                                      |
+| `docs/reports/`       | Reproducible investigation and benchmark reports, including limits and risks  |
 | `docs/releases/`      | Release notes                                                                 |
 | `test/`               | Unit, integration, current browser E2E tests, and minimal fixtures            |
 

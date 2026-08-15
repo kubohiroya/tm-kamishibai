@@ -252,6 +252,7 @@ pnpm verify:quick
 | `release-metadata/`   | 現行releaseのidentityと公開状態だけを持つ小さいrecord     |
 | `site/`               | GitHub Pages source。公開済みSB3はbuild時だけ注入する     |
 | `docs/design/`        | 実装に近い設計契約                                        |
+| `docs/reports/`       | 再現可能な調査・計測結果と、その適用条件・リスク          |
 | `docs/releases/`      | release note                                              |
 | `test/`               | unit、integration、現行browser E2Eと最小fixture           |
 
