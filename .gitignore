@@ -1,6 +1,7 @@
 node_modules/
 dist/
 tmp/
+/docs/reports/
 /kamishibai.sb3
 /urashima.sb3
 /site/downloads/*.sb3
