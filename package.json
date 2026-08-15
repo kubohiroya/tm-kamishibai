@@ -3,7 +3,7 @@
   "version": "4.0.0-rc.6",
   "private": false,
   "type": "module",
-  "description": "TMPose紙芝居 — ポーズで進めるAIインタラクティブ紙芝居",
+  "description": "TMPose Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine for pose recognition",
   "homepage": "https://kubohiroya.github.io/tmpose-kamishibai/",
   "repository": {
     "type": "git",
