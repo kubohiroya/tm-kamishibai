@@ -8,6 +8,7 @@ import {
 } from '../converter/index.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {packageVersion} from './constants.js';
+import {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 import {runDsl4LocalPreviewCommand} from './dsl4-local-preview-command.js';
 import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
@@ -30,16 +31,41 @@ import {
 
 const dsl4SchemaUrl = new URL('../../schema/dsl-4.schema.json', import.meta.url);
 
+export {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
+
+const dsl4CliDefaultLimitOptions = Object.freeze({
+  '--max-source-bytes': dsl4CliDefaultLimits.maxSourceBytes,
+  '--max-asset-file-bytes': dsl4CliDefaultLimits.maxAssetFileBytes,
+  '--max-asset-files': dsl4CliDefaultLimits.maxAssetFiles,
+  '--max-total-asset-bytes': dsl4CliDefaultLimits.maxTotalAssetBytes,
+});
+
+/**
+ * @param {Map<string, string>} values
+ * @param {keyof typeof dsl4CliDefaultLimitOptions} option
+ */
+function resolveDsl4CliDefaultLimit(values, option) {
+  const value = Number(values.get(option) ?? dsl4CliDefaultLimitOptions[option]);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
+  }
+  if (option === '--max-source-bytes' && value > dsl4CliDefaultLimits.maxSourceBytes) {
+    throw new Sb3BuilderError(
+      `--max-source-bytes must be <= ${dsl4CliDefaultLimits.maxSourceBytes}.`,
+      {stage: 'cli'},
+    );
+  }
+  return value;
+}
+
 export function usage() {
   return `Usage:
   tmpose-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
     --assets assets.lock.json --output dist/sample --profile editor [options]
 
   tmpose-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
-    --source-manifest project.source.json --output dist/story.sb3 \\
+    --source-manifest project.source.yaml --output dist/story.sb3 \\
     --control-profile production --channel bundled \\
-    --max-source-bytes N --max-asset-file-bytes N \\
-    --max-asset-files N --max-total-asset-bytes N \\
     [--asset-config FILE --asset-lock FILE --asset-profile PROFILE \\
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] [options]
@@ -48,29 +74,28 @@ export function usage() {
     --output STORY.kamishibai.yaml [--pose-models REPLACEMENTS.json]
 
   tmpose-kamishibai convert-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.json --base BASE.sb3 \\
+    --source-manifest project.source.yaml --base BASE.sb3 \\
     --output-dir converted --to local|remote|project \\
-    --max-source-bytes N --max-source-manifest-bytes N \\
+    --max-source-manifest-bytes N \\
     --max-remote-map-bytes N --max-base-sb3-bytes N \\
-    --max-asset-file-bytes N --max-asset-files N \\
-    --max-total-asset-bytes N --timeout-ms N --max-redirects N \\
+    --timeout-ms N --max-redirects N \\
     [--asset ASSET_ID] [--remote-map FILE | \\
      --rsync-destination USER@HOST:/PATH --remote-base-url HTTPS_URL] \\
     [--rsync-ssh-port N] [--rsync-timeout-ms N] \\
     [--allow-host HOST] [--output-name NAME]
 
   tmpose-kamishibai validate-dsl4 --input STORY.kamishibai.yaml \\
-    --max-source-bytes N [--format pretty|json]
+    [--format pretty|json]
 
   tmpose-kamishibai audit-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.json \\
+    --source-manifest project.source.yaml \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
-    --asset-profile PROFILE --max-source-bytes N \\
-    --max-source-manifest-bytes N --max-asset-config-bytes N \\
+    --asset-profile PROFILE --max-source-manifest-bytes N \\
+    --max-asset-config-bytes N \\
     --max-asset-lock-bytes N [--format pretty|json] [options]
 
   tmpose-kamishibai lock-dsl4-assets --project-root DIR \\
-    --source-manifest project.source.json --asset-config project.assets.json \\
+    --source-manifest project.source.yaml --asset-config project.assets.json \\
     --output project.assets.lock.json --allow-host HOST [options]
 
   tmpose-kamishibai vendor-dsl4-assets --project-root DIR \\
@@ -79,9 +104,8 @@ export function usage() {
     --allow-host HOST [options]
 
   tmpose-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
-    --source-manifest project.source.json --control-profile production \\
-    --channel bundled --max-source-bytes N --max-asset-file-bytes N \\
-    --max-asset-files N --max-total-asset-bytes N [options]
+    --source-manifest project.source.yaml --control-profile production \\
+    --channel bundled [options]
 
 DSL 3.1/3.2 build-sb3 options:
   --allow-file-root DIR   Allow file: assets below DIR (repeatable)
@@ -116,6 +140,16 @@ DSL 4.0 preview-dsl4 options:
   --allow-large-preview-artifacts Acknowledge memory risk above recommended limits
   --port N                        Loopback port; 0 lets the OS select one (default)
   --replace-existing              Replace a same-channel component in the base SB3
+
+DSL 4.0 common limit options (when supported):
+  --max-source-bytes N       Maximum source bytes (default: 262144)
+  --max-asset-file-bytes N   Maximum bytes per asset file (default: 16777216)
+  --max-asset-files N        Maximum asset files/pose entries (default: 256)
+  --max-total-asset-bytes N  Maximum total asset bytes (default: 134217728)
+
+Omit these four options for normal projects. The source limit is the current fixed
+canonical maximum. Review memory, disk, and network impact before raising asset limits;
+browser preview currently caps source bytes and asset files at their defaults.
 
 convert-dsl4 options:
   --pose-models FILE      Optionally embed exact TMPoseURL values as local poseModel assets
@@ -203,15 +237,12 @@ function parseValidateDsl4Arguments(arguments_) {
     }
     values.set(option, value);
   }
-  for (const required of ['--input', '--max-source-bytes']) {
+  for (const required of ['--input']) {
     if (!values.has(required)) {
       throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
     }
   }
-  const maxSourceBytes = Number(values.get('--max-source-bytes'));
-  if (!Number.isSafeInteger(maxSourceBytes) || maxSourceBytes < 1) {
-    throw new Sb3BuilderError('--max-source-bytes must be an integer >= 1.', {stage: 'cli'});
-  }
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const format = values.get('--format') ?? 'pretty';
   if (format !== 'pretty' && format !== 'json') {
     throw new Sb3BuilderError('--format must be either pretty or json.', {stage: 'cli'});
@@ -291,7 +322,6 @@ function parseAuditDsl4AssetArguments(arguments_) {
     '--asset-config',
     '--asset-lock',
     '--asset-profile',
-    '--max-source-bytes',
     '--max-source-manifest-bytes',
     '--max-asset-config-bytes',
     '--max-asset-lock-bytes',
@@ -309,7 +339,7 @@ function parseAuditDsl4AssetArguments(arguments_) {
     }
     return value;
   };
-  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const maxSourceManifestBytes = positiveInteger('--max-source-manifest-bytes');
   const maxAssetConfigBytes = positiveInteger('--max-asset-config-bytes');
   const maxAssetLockBytes = positiveInteger('--max-asset-lock-bytes');
@@ -442,11 +472,7 @@ function parseLockDsl4AssetArguments(arguments_) {
     '--source-manifest',
     '--asset-config',
     '--output',
-    '--max-source-bytes',
     '--max-source-manifest-bytes',
-    '--max-asset-file-bytes',
-    '--max-asset-files',
-    '--max-total-asset-bytes',
     '--timeout-ms',
     '--max-redirects',
   ]) {
@@ -472,11 +498,11 @@ function parseLockDsl4AssetArguments(arguments_) {
     }
     return value;
   };
-  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const maxSourceManifestBytes = positiveInteger('--max-source-manifest-bytes');
-  const maxAssetFileBytes = positiveInteger('--max-asset-file-bytes');
-  const maxAssetFiles = positiveInteger('--max-asset-files');
-  const maxTotalAssetBytes = positiveInteger('--max-total-asset-bytes');
+  const maxAssetFileBytes = resolveDsl4CliDefaultLimit(values, '--max-asset-file-bytes');
+  const maxAssetFiles = resolveDsl4CliDefaultLimit(values, '--max-asset-files');
+  const maxTotalAssetBytes = resolveDsl4CliDefaultLimit(values, '--max-total-asset-bytes');
   const timeoutMs = positiveInteger('--timeout-ms');
   const maxRedirects = nonNegativeInteger('--max-redirects');
   if (maxAssetFileBytes > maxTotalAssetBytes) {
@@ -580,9 +606,6 @@ function parseVendorDsl4AssetArguments(arguments_) {
     '--output-lock',
     '--max-asset-config-bytes',
     '--max-asset-lock-bytes',
-    '--max-asset-file-bytes',
-    '--max-asset-files',
-    '--max-total-asset-bytes',
     '--timeout-ms',
     '--max-redirects',
   ]) {
@@ -601,8 +624,8 @@ function parseVendorDsl4AssetArguments(arguments_) {
   };
   const maxAssetConfigBytes = integer('--max-asset-config-bytes', 1);
   const maxAssetLockBytes = integer('--max-asset-lock-bytes', 1);
-  const maxAssetFileBytes = integer('--max-asset-file-bytes', 1);
-  const maxTotalAssetBytes = integer('--max-total-asset-bytes', 1);
+  const maxAssetFileBytes = resolveDsl4CliDefaultLimit(values, '--max-asset-file-bytes');
+  const maxTotalAssetBytes = resolveDsl4CliDefaultLimit(values, '--max-total-asset-bytes');
   if (maxAssetFileBytes > maxTotalAssetBytes) {
     throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
       stage: 'cli',
@@ -618,7 +641,7 @@ function parseVendorDsl4AssetArguments(arguments_) {
     maxAssetConfigBytes,
     maxAssetLockBytes,
     maxAssetFileBytes,
-    maxAssetFiles: integer('--max-asset-files', 1),
+    maxAssetFiles: resolveDsl4CliDefaultLimit(values, '--max-asset-files'),
     maxTotalAssetBytes,
     timeoutMs: integer('--timeout-ms', 1),
     maxRedirects: integer('--max-redirects', 0),
@@ -716,13 +739,9 @@ function parseConvertDsl4AssetsArguments(arguments_) {
     '--base',
     '--output-dir',
     '--to',
-    '--max-source-bytes',
     '--max-source-manifest-bytes',
     '--max-remote-map-bytes',
     '--max-base-sb3-bytes',
-    '--max-asset-file-bytes',
-    '--max-asset-files',
-    '--max-total-asset-bytes',
     '--timeout-ms',
     '--max-redirects',
   ];
@@ -743,8 +762,8 @@ function parseConvertDsl4AssetsArguments(arguments_) {
   if (to !== 'local' && to !== 'project' && to !== 'remote') {
     throw new Sb3BuilderError('--to must be local, project, or remote.', {stage: 'cli'});
   }
-  const maxAssetFileBytes = integer('--max-asset-file-bytes', 1);
-  const maxTotalAssetBytes = integer('--max-total-asset-bytes', 1);
+  const maxAssetFileBytes = resolveDsl4CliDefaultLimit(values, '--max-asset-file-bytes');
+  const maxTotalAssetBytes = resolveDsl4CliDefaultLimit(values, '--max-total-asset-bytes');
   if (maxAssetFileBytes > maxTotalAssetBytes) {
     throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
       stage: 'cli',
@@ -783,12 +802,12 @@ function parseConvertDsl4AssetsArguments(arguments_) {
     to,
     assets,
     allowedHosts,
-    maxSourceBytes: integer('--max-source-bytes', 1),
+    maxSourceBytes: resolveDsl4CliDefaultLimit(values, '--max-source-bytes'),
     maxSourceManifestBytes: integer('--max-source-manifest-bytes', 1),
     maxRemoteMapBytes: integer('--max-remote-map-bytes', 1),
     maxBaseSb3Bytes: integer('--max-base-sb3-bytes', 1),
     maxAssetFileBytes,
-    maxAssetFiles: integer('--max-asset-files', 1),
+    maxAssetFiles: resolveDsl4CliDefaultLimit(values, '--max-asset-files'),
     maxTotalAssetBytes,
     timeoutMs: integer('--timeout-ms', 1),
     maxRedirects: integer('--max-redirects', 0),
@@ -909,6 +928,8 @@ function parseBuildDsl4Arguments(rest) {
     '--output',
     '--control-profile',
     '--channel',
+  ]);
+  const defaultedValueOptions = new Set([
     '--max-source-bytes',
     '--max-asset-file-bytes',
     '--max-asset-files',
@@ -916,6 +937,7 @@ function parseBuildDsl4Arguments(rest) {
   ]);
   const valueOptions = new Set([
     ...requiredValueOptions,
+    ...defaultedValueOptions,
     '--max-source-files',
     '--max-total-source-bytes',
     '--max-include-depth',
@@ -975,7 +997,7 @@ function parseBuildDsl4Arguments(rest) {
   if (channel !== 'bundled' && channel !== 'unbundled') {
     throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
   }
-  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const sourceIncludesEnabled = flags.has('--enable-source-includes');
   const rootBinaryEntriesEnabled = flags.has('--enable-root-binary-entries');
   const maxTotalSourceBytes = sourceIncludesEnabled
@@ -1015,9 +1037,9 @@ function parseBuildDsl4Arguments(rest) {
     controlProfile: /** @type {string} */ (values.get('--control-profile')),
     channel,
     maxSourceBytes,
-    maxAssetFileBytes: positiveInteger('--max-asset-file-bytes'),
-    maxAssetFiles: positiveInteger('--max-asset-files'),
-    maxTotalAssetBytes: positiveInteger('--max-total-asset-bytes'),
+    maxAssetFileBytes: resolveDsl4CliDefaultLimit(values, '--max-asset-file-bytes'),
+    maxAssetFiles: resolveDsl4CliDefaultLimit(values, '--max-asset-files'),
+    maxTotalAssetBytes: resolveDsl4CliDefaultLimit(values, '--max-total-asset-bytes'),
     ...(distributionSelected
       ? {
           assetConfig: path.resolve(/** @type {string} */ (values.get('--asset-config'))),
@@ -1071,6 +1093,8 @@ function parsePreviewDsl4Arguments(rest) {
     '--source-manifest',
     '--control-profile',
     '--channel',
+  ]);
+  const defaultedValueOptions = new Set([
     '--max-source-bytes',
     '--max-asset-file-bytes',
     '--max-asset-files',
@@ -1083,6 +1107,7 @@ function parsePreviewDsl4Arguments(rest) {
   ]);
   const valueOptions = new Set([
     ...requiredValueOptions,
+    ...defaultedValueOptions,
     ...graphValueOptions,
     '--max-project-bytes',
     '--max-project-json-bytes',
@@ -1148,14 +1173,14 @@ function parsePreviewDsl4Arguments(rest) {
   if (channel !== 'bundled' && channel !== 'unbundled') {
     throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
   }
-  const maxAssetFileBytes = positiveInteger('--max-asset-file-bytes');
-  const maxTotalAssetBytes = positiveInteger('--max-total-asset-bytes');
+  const maxAssetFileBytes = resolveDsl4CliDefaultLimit(values, '--max-asset-file-bytes');
+  const maxTotalAssetBytes = resolveDsl4CliDefaultLimit(values, '--max-total-asset-bytes');
   if (maxAssetFileBytes > maxTotalAssetBytes) {
     throw new Sb3BuilderError('--max-asset-file-bytes must be <= --max-total-asset-bytes.', {
       stage: 'cli',
     });
   }
-  const maxSourceBytes = positiveInteger('--max-source-bytes');
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
   const maxTotalSourceBytes = sourceIncludesEnabled
     ? positiveInteger('--max-total-source-bytes')
     : null;
@@ -1165,7 +1190,7 @@ function parsePreviewDsl4Arguments(rest) {
       {stage: 'cli'},
     );
   }
-  const maxAssetFiles = positiveInteger('--max-asset-files');
+  const maxAssetFiles = resolveDsl4CliDefaultLimit(values, '--max-asset-files');
   const maxProjectBytes = values.has('--max-project-bytes')
     ? positiveInteger('--max-project-bytes')
     : dsl4BrowserPreviewArtifactLimits.defaults.maxProjectBytes;

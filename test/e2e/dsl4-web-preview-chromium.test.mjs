@@ -1087,29 +1087,24 @@ test(
       await waitForEvaluation(client, 'Boolean(globalThis.Scratch?.vm)', 'packaged TurboWarp VM');
       await client.evaluate(`(() => {
         const encoder = new TextEncoder();
-        const manifest = JSON.stringify({
-          formatVersion: 1,
-          mode: 'external',
-          sourceId: 'main',
-          path: 'story.kamishibai.yaml'
-        });
+        const manifest = 'formatVersion: 1\\nmode: external\\nsourceId: main\\npath: story.kamishibai.yaml\\n';
         const cases = [
           new Map([
-            ['project.source.json', manifest],
+            ['project.source.yaml', manifest],
             ['story.kamishibai.yaml', "kamishibai: '4.0'\\ncontrols:\\n  keymaps:\\n    production:\\n      Space: navigation.nextAction\\nscenes:\\n  opening:\\n    - wait: 0.05\\n"]
           ]),
           new Map(),
           new Map([
-            ['project.source.json', manifest],
+            ['project.source.yaml', manifest],
             ['story.kamishibai.yaml', "kamishibai: '4.0'\\nscenes:\\n  opening: [\\n"]
           ]),
-          new Map([['project.source.json', manifest]]),
+          new Map([['project.source.yaml', manifest]]),
           new Map([
-            ['project.source.json', manifest],
+            ['project.source.yaml', manifest],
             ['story.kamishibai.yaml', "kamishibai: '4.0'\\nunknownField: true\\nscenes: {}\\n"]
           ]),
           new Map([
-            ['project.source.json', manifest],
+            ['project.source.yaml', manifest],
             ['story.kamishibai.yaml', "kamishibai: '4.0'\\nassets:\\n  Extra:\\n    kind: image\\n    file: assets/missing-extra-image-with-a-very-long-name.svg\\nscenes:\\n  opening: []\\n"]
           ])
         ];
@@ -1175,8 +1170,8 @@ test(
       const cases = [
         {
           code: 'K4-WEB-PREVIEW-MANIFEST-MISSING',
-          message: /project\.source\.json/u,
-          source: 'project.source.json',
+          message: /project\.source\.yaml.*project\.source\.json/u,
+          source: 'project.source.yaml',
         },
         {
           code: /^K4-YAML/u,

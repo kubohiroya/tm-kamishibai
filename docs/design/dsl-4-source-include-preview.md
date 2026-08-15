@@ -6,7 +6,7 @@
 `include`から到達する全sourceを一つのimmutable generationとして扱います。flagは既定OFFであり、
 OFF時は従来どおりmanifestが指す単一sourceだけを監視します。
 
-新規sourceの推奨suffixは`.k4.yml`です。entry sourceは`project.source.json`のroot-level basename、
+新規sourceの推奨suffixは`.k4.yml`です。entry sourceは`project.source.yaml`（JSON fallback可）のroot-level basename、
 included sourceはinclude元から解決されるproject内の相対pathで指定します。directory名やbasename本体は任意で、
 `.k4.yml`で終わればSource Graphのsourceとして使用できます。既存projectとの互換性のため、従来suffixも
 引き続き受理します。
@@ -35,13 +35,13 @@ File System Access APIのhandle、source本文、絶対machine pathはsession st
 
 ## 3. 上限と失敗時の動作
 
-`--enable-source-includes`を指定するCLI previewでは、次の上限をすべて明示します。
+`--enable-source-includes`を指定するCLI previewでは、Source Graph固有の三上限をすべて明示します。
+source一ファイルの上限は共通CLIデフォルトを使用し、必要なら小さい値へoverrideします。
 
-- `--max-source-bytes`: source一ファイルの上限
 - `--max-source-files`: Source Graphのfile数上限
 - `--max-total-source-bytes`: graph全source合計とcomposed canonical sourceの上限
 - `--max-include-depth`: include depth上限
-- 既存のasset一ファイル、file数、合計byte数上限
+- asset一ファイル、file数、合計byte数は共通CLIデフォルトまたは明示override
 
 missingまたはunstableなsource／assetは有限回retryします。timeout後もmissingならerror、変化し続ける場合は
 `K4-PREVIEW-SOURCE-UNSTABLE` warningを一度publishし、現在実行中のgenerationは置換しません。cycle、path escape、

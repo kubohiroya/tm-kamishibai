@@ -1,5 +1,9 @@
 import {
+  dsl4DefaultExternalSourceManifestFilename,
+  dsl4ExternalSourceManifestFilenames,
   Dsl4ExternalSourceManifestError,
+  parseDsl4ExternalSourceManifestSource,
+  serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from './external-source-manifest.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
@@ -31,7 +35,8 @@ function loadSourceGraphModules() {
 }
 
 export const dsl4BrowserPreviewSourceDefaults = deepFreeze({
-  manifestFilename: 'project.source.json',
+  manifestFilename: dsl4DefaultExternalSourceManifestFilename,
+  manifestFilenames: dsl4ExternalSourceManifestFilenames,
   maxManifestBytes: 32 * 1024,
   foregroundIntervalMs: 500,
   backgroundIntervalMs: 5_000,
@@ -54,6 +59,8 @@ const diagnosticMessages = Object.freeze({
   'K4-WEB-PREVIEW-MANIFEST-READ-001': 'The project source manifest could not be read',
   'K4-WEB-PREVIEW-MANIFEST-JSON-001':
     'The project source manifest is not a valid UTF-8 JSON object',
+  'K4-WEB-PREVIEW-MANIFEST-YAML-001':
+    'The project source manifest is not a valid UTF-8 YAML mapping',
   'K4-SOURCE-MANIFEST-001': 'The project source manifest is invalid',
   'K4-SOURCE-PATH-001': 'The project source path is not allowed',
   'K4-SOURCE-MISSING': 'The DSL 4.0 source is missing',
@@ -386,7 +393,11 @@ export function createDsl4BrowserPreviewStoryFileProject(fileHandleInput) {
     sourceId: 'main',
     path: sourceName,
   });
-  const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
+  const manifestBytes = new TextEncoder().encode(
+    serializeDsl4ExternalSourceManifestSource(manifest, {
+      filename: dsl4DefaultExternalSourceManifestFilename,
+    }),
+  );
   const notFound = () => {
     const error = new Error('The requested file does not exist in this source-only project');
     error.name = 'NotFoundError';
@@ -571,6 +582,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
   let rootHandle = null;
   /** @type {Readonly<Record<string, any>> | null} */
   let manifest = null;
+  let activeManifestFilename = dsl4DefaultExternalSourceManifestFilename;
   let permissionWasGranted = false;
   let publicationKey = '';
   /** @type {Readonly<Record<string, unknown>> | null} */
@@ -671,7 +683,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
    * @param {unknown} [failure]
    */
   async function publishDiagnostic(code, severity, stage, failure) {
-    const manifestFilename = dsl4BrowserPreviewSourceDefaults.manifestFilename;
+    const manifestFilename = activeManifestFilename;
     const sourceFile = manifest?.path ?? null;
     const manifestDiagnostic = code.includes('MANIFEST');
     const displayName =
@@ -682,7 +694,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
           : sourceFile;
     const missingMessage =
       code === 'K4-WEB-PREVIEW-MANIFEST-MISSING'
-        ? `Required project file is missing: ${manifestFilename}`
+        ? `Required project file is missing: ${dsl4ExternalSourceManifestFilenames.join(' or ')}`
         : code === 'K4-SOURCE-MISSING' && sourceFile
           ? `Required story file is missing: ${sourceFile}`
           : null;
@@ -755,21 +767,23 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
 
   async function readManifestBytes() {
     if (!rootHandle) throw new TypeError('browser preview has no project root');
-    let handle;
-    try {
-      handle = await rootHandle.getFileHandle(dsl4BrowserPreviewSourceDefaults.manifestFilename);
-    } catch (error) {
-      if (errorName(error) === 'NotFoundError') {
-        fail('K4-WEB-PREVIEW-MANIFEST-MISSING', error);
+    for (const filename of dsl4ExternalSourceManifestFilenames) {
+      let handle;
+      try {
+        handle = await rootHandle.getFileHandle(filename);
+      } catch (error) {
+        if (errorName(error) === 'NotFoundError') continue;
+        fail('K4-WEB-PREVIEW-MANIFEST-READ-001', error);
       }
-      fail('K4-WEB-PREVIEW-MANIFEST-READ-001', error);
+      const bytes = await readBoundedFile(
+        handle,
+        maxManifestBytes,
+        'K4-WEB-PREVIEW-MANIFEST-READ-001',
+        'K4-WEB-PREVIEW-MANIFEST-READ-001',
+      );
+      return {filename, bytes};
     }
-    return readBoundedFile(
-      handle,
-      maxManifestBytes,
-      'K4-WEB-PREVIEW-MANIFEST-READ-001',
-      'K4-WEB-PREVIEW-MANIFEST-READ-001',
-    );
+    fail('K4-WEB-PREVIEW-MANIFEST-MISSING');
   }
 
   /** @param {number} requestedGeneration */
@@ -779,21 +793,35 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
     await clock.sleep(quietWindowMs);
     if (disposed || requestedGeneration !== generation) return null;
     const second = await readManifestBytes();
-    if (!equalBytes(first, second)) fail('K4-WEB-PREVIEW-MANIFEST-READ-001');
+    if (first.filename !== second.filename || !equalBytes(first.bytes, second.bytes)) {
+      fail('K4-WEB-PREVIEW-MANIFEST-READ-001');
+    }
+    activeManifestFilename = second.filename;
     let parsed;
     try {
-      parsed = JSON.parse(decodeUtf8(second, 'K4-WEB-PREVIEW-MANIFEST-JSON-001'));
+      const syntaxCode = second.filename.endsWith('.yaml')
+        ? 'K4-WEB-PREVIEW-MANIFEST-YAML-001'
+        : 'K4-WEB-PREVIEW-MANIFEST-JSON-001';
+      parsed = parseDsl4ExternalSourceManifestSource(decodeUtf8(second.bytes, syntaxCode), {
+        filename: second.filename,
+      });
     } catch (error) {
       if (expectedError(error)) throw error;
-      fail('K4-WEB-PREVIEW-MANIFEST-JSON-001', error);
+      if (error instanceof Dsl4ExternalSourceManifestError) {
+        if (error.code === 'K4-SOURCE-MANIFEST-YAML-001') {
+          fail('K4-WEB-PREVIEW-MANIFEST-YAML-001', error);
+        }
+        if (error.code === 'K4-SOURCE-MANIFEST-JSON-001') {
+          fail('K4-WEB-PREVIEW-MANIFEST-JSON-001', error);
+        }
+        fail(error.code, error);
+      }
+      throw error;
     }
-    if (!isRecord(parsed)) fail('K4-WEB-PREVIEW-MANIFEST-JSON-001');
     try {
       return validateManifest(parsed);
     } catch (error) {
-      if (error instanceof Dsl4ExternalSourceManifestError) {
-        fail(error.code, error);
-      }
+      if (error instanceof Dsl4ExternalSourceManifestError) fail(error.code, error);
       throw error;
     }
   }
@@ -1021,6 +1049,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options) {
         'K4-WEB-PREVIEW-MANIFEST-MISSING',
         'K4-WEB-PREVIEW-MANIFEST-READ-001',
         'K4-WEB-PREVIEW-MANIFEST-JSON-001',
+        'K4-WEB-PREVIEW-MANIFEST-YAML-001',
         'K4-SOURCE-MANIFEST-001',
         'K4-SOURCE-PATH-001',
         'K4-WEB-PREVIEW-PERMISSION-DENIED',

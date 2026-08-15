@@ -147,12 +147,8 @@ function browserDirectoryHandle(name, entries) {
 function mutablePreviewProject(initialSource) {
   const encoder = new TextEncoder();
   let source = initialSource;
-  const manifest = JSON.stringify({
-    formatVersion: 1,
-    mode: 'external',
-    sourceId: 'main',
-    path: 'story.kamishibai.yaml',
-  });
+  const manifest =
+    'formatVersion: 1\nmode: external\nsourceId: main\npath: story.kamishibai.yaml\n';
   const fileHandle = (read) => ({
     kind: 'file',
     async getFile() {
@@ -172,7 +168,7 @@ function mutablePreviewProject(initialSource) {
         return 'granted';
       },
       async getFileHandle(name) {
-        if (name === 'project.source.json') return fileHandle(() => manifest);
+        if (name === 'project.source.yaml') return fileHandle(() => manifest);
         if (name === 'story.kamishibai.yaml') return fileHandle(() => source);
         throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
       },

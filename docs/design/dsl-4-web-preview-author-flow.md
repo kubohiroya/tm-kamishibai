@@ -33,18 +33,17 @@ handle APIが利用できる必要があります。
 
 ```text
 project-root/
-├── project.source.json
+├── project.source.yaml
 └── story.kamishibai.yaml
 ```
 
-`project.source.json`は次のread-only source契約を持ちます。
+`project.source.yaml`は次のread-only source契約を持ちます。directory open時はYAMLを先に探し、
+存在しない場合だけ従来の`project.source.json`へfallbackします。
 
-```json
-{
-  "formatVersion": 1,
-  "mode": "external",
-  "sourceId": "main"
-}
+```yaml
+formatVersion: 1
+mode: external
+sourceId: main
 ```
 
 `path`を省略すると後方互換のため`story.kamishibai.yaml`を使用します。新規sourceでは`.k4.yml`を推奨します。
@@ -145,32 +144,23 @@ folder APIがない、secure contextではない、またはpermissionを得ら�
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
-  --source-manifest PROJECT_ROOT/project.source.json \
+  --source-manifest PROJECT_ROOT/project.source.yaml \
   --control-profile production \
   --channel bundled \
-  --max-source-bytes N \
-  --max-asset-file-bytes N \
-  --max-asset-files N \
-  --max-total-asset-bytes N \
   --max-project-bytes N \
   --max-project-json-bytes N
 
 pnpm exec tmpose-kamishibai validate-dsl4 \
   --input story.k4.yml \
-  --max-source-bytes N \
   --format pretty
 
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
-  --source-manifest PROJECT_ROOT/project.source.json \
+  --source-manifest PROJECT_ROOT/project.source.yaml \
   --output OUTPUT.sb3 \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes N \
-  --max-asset-file-bytes N \
-  --max-asset-files N \
-  --max-total-asset-bytes N
+  --channel bundled
 ```
 
 `preview-dsl4 --watch`は認証済みloopback browserで実TurboWarp runtimeを起動し、台本を監視します。

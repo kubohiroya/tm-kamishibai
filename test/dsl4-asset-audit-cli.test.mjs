@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 
 function auditArguments(extra = []) {
   return [
@@ -10,7 +10,7 @@ function auditArguments(extra = []) {
     '--project-root',
     'project',
     '--source-manifest',
-    'project/project.source.json',
+    'project/project.source.yaml',
     '--asset-config',
     'project/project.assets.json',
     '--asset-lock',
@@ -56,6 +56,12 @@ test('parses the finite audit-dsl4-assets CLI contract', () => {
   assert.equal(parsed.options.format, 'pretty');
   assert.equal(parsed.options.maxAssetLockBytes, 32768);
   assert.equal(parsed.options.sourceIncludesEnabled, false);
+  const defaultSource = auditArguments();
+  defaultSource.splice(defaultSource.indexOf('--max-source-bytes'), 2);
+  assert.equal(
+    parseCliArguments(defaultSource).options.maxSourceBytes,
+    dsl4CliDefaultLimits.maxSourceBytes,
+  );
   assert.match(usage(), /audit-dsl4-assets/u);
   assert.match(usage(), /without network access or file writes/u);
 

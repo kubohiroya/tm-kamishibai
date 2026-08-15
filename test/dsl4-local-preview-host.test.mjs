@@ -147,14 +147,17 @@ async function request(origin, endpoint, {token, body = {}, expectedStatus = 200
 
 test('connects the loopback browser host, Node watcher, and injected runtime protocol', async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-preview-host-'));
-  const sourceManifestPath = path.join(projectRoot, 'project.source.json');
+  const sourceManifestPath = path.join(projectRoot, 'project.source.yaml');
   const sourceFilename = 'preview.k4.yml';
   const sourcePath = path.join(projectRoot, sourceFilename);
   const sourceWatch = fakeWatchFactory();
   const structureWatch = fakeWatchFactory();
   const manifest = {formatVersion: 1, mode: 'external', sourceId: 'main', path: sourceFilename};
   await Promise.all([
-    writeFile(sourceManifestPath, `${JSON.stringify(manifest)}\n`),
+    writeFile(
+      sourceManifestPath,
+      `formatVersion: 1\nmode: external\nsourceId: main\npath: ${sourceFilename}\n`,
+    ),
     writeFile(sourcePath, validSource),
   ]);
   const runtime = createRuntimeProtocol();
@@ -306,8 +309,11 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     );
 
     const manifestChanged = {...manifest, path: 'alternate.k4.yaml'};
-    await writeFile(sourceManifestPath, `${JSON.stringify(manifestChanged)}\n`);
-    structureWatch.emit('project.source.json');
+    await writeFile(
+      sourceManifestPath,
+      `formatVersion: 1\nmode: external\nsourceId: main\npath: ${manifestChanged.path}\n`,
+    );
+    structureWatch.emit('project.source.yaml');
     await waitFor(
       () => host.getSnapshot().rebuildRequired,
       'structural manifest change did not require a rebuild',

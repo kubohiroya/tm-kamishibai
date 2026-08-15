@@ -212,13 +212,8 @@ async function fixture(t) {
   );
   await writeFile(path.join(root, 'story.k4.yml'), sourceText());
   await writeFile(
-    path.join(root, 'project.source.json'),
-    `${JSON.stringify({
-      formatVersion: 1,
-      mode: 'external',
-      sourceId: 'main',
-      path: 'story.k4.yml',
-    })}\n`,
+    path.join(root, 'project.source.yaml'),
+    'formatVersion: 1\nmode: external\nsourceId: main\npath: story.k4.yml\n',
   );
   await writeFile(path.join(root, 'base.sb3'), baseSb3());
   return root;
@@ -227,7 +222,7 @@ async function fixture(t) {
 function options(root, outputName, extra = {}) {
   return {
     projectRoot: root,
-    sourceManifest: path.join(root, 'project.source.json'),
+    sourceManifest: path.join(root, 'project.source.yaml'),
     baseSb3: path.join(root, 'base.sb3'),
     outputDirectory: path.join(root, outputName),
     to: 'local',
@@ -826,9 +821,9 @@ test('makes a selective local conversion a reusable standalone project', async (
       assets: ['ProjectBackdrop'],
     }),
   );
-  assert.equal(result.sourceManifestPath, path.join(result.outputDirectory, 'project.source.json'));
+  assert.equal(result.sourceManifestPath, path.join(result.outputDirectory, 'project.source.yaml'));
   assert.equal(result.assetsDirectory, path.join(result.outputDirectory, 'assets'));
-  const manifest = JSON.parse(await readFile(result.sourceManifestPath, 'utf8'));
+  const manifest = parse(await readFile(result.sourceManifestPath, 'utf8'));
   assert.deepEqual(manifest, {
     formatVersion: 1,
     mode: 'external',

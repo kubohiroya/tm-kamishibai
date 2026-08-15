@@ -8,12 +8,13 @@ import {fileURLToPath} from 'node:url';
 
 import {strToU8, unzipSync, zipSync} from 'fflate';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {
   createDsl4SourceFrontend,
   dsl4BinaryEntryPrefix,
   loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeComponent,
+  parseDsl4ExternalSourceManifestSource,
 } from '../src/dsl4/index.js';
 import {readSb3} from '../src/builder/sb3.js';
 import {sha256} from '../src/builder/hash.js';
@@ -78,18 +79,11 @@ async function withFixture(callback) {
     await mkdir(outputDirectory);
     const baseSb3Path = path.join(directory, 'base.sb3');
     const sourcePath = path.join(directory, 'story.kamishibai.yaml');
-    const sourceManifestPath = path.join(directory, 'project.source.json');
+    const sourceManifestPath = path.join(directory, 'project.source.yaml');
     await writeFile(baseSb3Path, baseSb3());
     await writeFile(sourcePath, validSource);
     await writeFile(path.join(directory, 'opening.svg'), '<svg/>');
-    await writeFile(
-      sourceManifestPath,
-      `${JSON.stringify({
-        formatVersion: 1,
-        mode: 'external',
-        sourceId: 'main',
-      })}\n`,
-    );
+    await writeFile(sourceManifestPath, 'formatVersion: 1\nmode: external\nsourceId: main\n');
     return await callback({
       baseSb3Path,
       directory,
@@ -129,11 +123,29 @@ function cliArguments(fixture, outputName = 'story.sb3', extra = []) {
   ];
 }
 
-test('parses a complete build-dsl4 contract and rejects incomplete or unbounded input', () => {
+function withoutDefaultLimitOptions(arguments_) {
+  const options = new Set([
+    '--max-source-bytes',
+    '--max-asset-file-bytes',
+    '--max-asset-files',
+    '--max-total-asset-bytes',
+  ]);
+  const result = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    if (options.has(arguments_[index])) {
+      index += 1;
+    } else {
+      result.push(arguments_[index]);
+    }
+  }
+  return result;
+}
+
+test('parses build-dsl4 defaults and rejects incomplete or invalid input', () => {
   const fixture = {
     baseSb3Path: 'base.sb3',
     directory: 'project',
-    sourceManifestPath: 'project/project.source.json',
+    sourceManifestPath: 'project/project.source.yaml',
     outputDirectory: 'dist',
   };
   const parsed = parseCliArguments(cliArguments(fixture));
@@ -146,6 +158,16 @@ test('parses a complete build-dsl4 contract and rejects incomplete or unbounded 
   assert.match(usage(), /build-dsl4/u);
   assert.match(usage(), /--enable-source-includes/u);
   assert.match(usage(), /--enable-root-binary-entries/u);
+  const defaulted = parseCliArguments(withoutDefaultLimitOptions(cliArguments(fixture)));
+  assert.deepEqual(
+    {
+      maxSourceBytes: defaulted.options.maxSourceBytes,
+      maxAssetFileBytes: defaulted.options.maxAssetFileBytes,
+      maxAssetFiles: defaulted.options.maxAssetFiles,
+      maxTotalAssetBytes: defaulted.options.maxTotalAssetBytes,
+    },
+    dsl4CliDefaultLimits,
+  );
 
   const rootBinary = parseCliArguments(
     cliArguments(fixture, 'story.sb3', ['--enable-root-binary-entries']),
@@ -220,7 +242,7 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
       readFile(fixture.sourcePath),
     ]);
     let stdout = '';
-    const first = await runCli(cliArguments(fixture), {
+    const first = await runCli(withoutDefaultLimitOptions(cliArguments(fixture)), {
       stdout: {write: (chunk) => (stdout += chunk)},
     });
     assert(first);
@@ -237,7 +259,10 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     });
     assert.equal(loaded.ok, true, JSON.stringify(loaded.diagnostics));
     assert.equal(loaded.channel, 'bundled');
-    const persistedManifest = JSON.parse(await readFile(fixture.sourceManifestPath, 'utf8'));
+    const persistedManifest = parseDsl4ExternalSourceManifestSource(
+      await readFile(fixture.sourceManifestPath, 'utf8'),
+      {filename: path.basename(fixture.sourceManifestPath)},
+    );
     assert.equal(persistedManifest.path, 'story.kamishibai.yaml');
     assert.match(persistedManifest.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
     assert.equal(
@@ -255,13 +280,31 @@ test('builds one deterministic self-contained SB3 and revalidates the installed 
     );
     assert.deepEqual(project.targets[0].blocks, baseProject().targets[0].blocks);
 
-    const second = await runCli(cliArguments(fixture, 'story-second.sb3'), {
-      stdout: {write() {}},
-    });
+    const second = await runCli(
+      withoutDefaultLimitOptions(cliArguments(fixture, 'story-second.sb3')),
+      {stdout: {write() {}}},
+    );
     assert.deepEqual(await readFile(second.outputPath), firstBytes);
     assert.deepEqual(await readFile(fixture.baseSb3Path), inputBefore[0]);
     assert.deepEqual(await readFile(fixture.sourcePath), inputBefore[2]);
     assert.notDeepEqual(await readFile(fixture.sourceManifestPath), inputBefore[1]);
+  });
+});
+
+test('keeps explicit project.source.json manifests compatible', async () => {
+  await withFixture(async (fixture) => {
+    const sourceManifestPath = path.join(fixture.directory, 'project.source.json');
+    await writeFile(
+      sourceManifestPath,
+      `${JSON.stringify({formatVersion: 1, mode: 'external', sourceId: 'main'})}\n`,
+    );
+    const result = await runCli(cliArguments({...fixture, sourceManifestPath}, 'legacy-json.sb3'), {
+      stdout: {write() {}},
+    });
+    assert.equal(path.basename(result.outputPath), 'legacy-json.sb3');
+    const persisted = JSON.parse(await readFile(sourceManifestPath, 'utf8'));
+    assert.equal(persisted.path, 'story.kamishibai.yaml');
+    assert.match(persisted.cacheId, /^[a-z0-9][a-z0-9_-]{7,63}$/u);
   });
 });
 
@@ -534,9 +577,9 @@ test('rejects a non-SB3 output and malformed source manifest without leaking pat
       runCli(cliArguments(fixture, 'story.zip'), {stdout: {write() {}}}),
       (error) => error.code === 'K4-BUILD-OUTPUT-001',
     );
-    await writeFile(fixture.sourceManifestPath, '{invalid json');
+    await writeFile(fixture.sourceManifestPath, 'formatVersion: [\n');
     await assert.rejects(runCli(cliArguments(fixture), {stdout: {write() {}}}), (error) => {
-      assert.equal(error.code, 'K4-SOURCE-MANIFEST-JSON-001');
+      assert.equal(error.code, 'K4-SOURCE-MANIFEST-YAML-001');
       assert.equal(error.message.includes(fixture.directory), false);
       return true;
     });

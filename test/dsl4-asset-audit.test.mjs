@@ -176,7 +176,7 @@ function assertAuditShape(audit) {
 
 async function withProject(callback) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-audit-'));
-  const sourceManifest = path.join(directory, 'project.source.json');
+  const sourceManifest = path.join(directory, 'project.source.yaml');
   const assetConfig = path.join(directory, 'project.assets.json');
   const assetLock = path.join(directory, 'project.assets.lock.json');
   try {
@@ -184,12 +184,7 @@ async function withProject(callback) {
       writeFile(path.join(directory, 'story.kamishibai.yaml'), `${source}\n`),
       writeFile(
         sourceManifest,
-        `${JSON.stringify({
-          formatVersion: 1,
-          mode: 'external',
-          sourceId: 'main',
-          path: 'story.kamishibai.yaml',
-        })}\n`,
+        'formatVersion: 1\nmode: external\nsourceId: main\npath: story.kamishibai.yaml\n',
       ),
       writeFile(assetConfig, `${JSON.stringify(config())}\n`),
       writeFile(assetLock, `${JSON.stringify(lock())}\n`),

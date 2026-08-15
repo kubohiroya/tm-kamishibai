@@ -4,9 +4,13 @@ import test from 'node:test';
 
 import {
   createDsl4BrowserPreviewSourceAdapter,
+  dsl4DefaultExternalSourceManifestFilename,
   dsl4DefaultExternalSourcePath,
+  dsl4ExternalSourceManifestFilenames,
   Dsl4ExternalSourceManifestError,
   inspectDsl4BrowserPreviewSupport,
+  parseDsl4ExternalSourceManifestSource,
+  serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from '../src/dsl4/index.js';
 
@@ -324,6 +328,70 @@ test('shares strict browser-safe manifest and POSIX path validation with the Nod
       path,
     );
   }
+});
+
+test('parses canonical YAML manifests and rejects malformed or duplicate mappings', () => {
+  assert.equal(dsl4DefaultExternalSourceManifestFilename, 'project.source.yaml');
+  assert.deepEqual(dsl4ExternalSourceManifestFilenames, [
+    'project.source.yaml',
+    'project.source.json',
+  ]);
+  const source = serializeDsl4ExternalSourceManifestSource(validManifest, {
+    filename: 'project.source.yaml',
+  });
+  assert.match(source, /^formatVersion: 1\nmode: external\n/u);
+  assert.deepEqual(
+    parseDsl4ExternalSourceManifestSource(source, {filename: 'project.source.yaml'}),
+    validManifest,
+  );
+  for (const invalid of [
+    'formatVersion: [\n',
+    '- formatVersion: 1\n',
+    'formatVersion: 1\nformatVersion: 1\nmode: external\nsourceId: main\n',
+    'formatVersion: 1\n---\nmode: external\nsourceId: main\n',
+  ]) {
+    assert.throws(
+      () => parseDsl4ExternalSourceManifestSource(invalid, {filename: 'project.source.yaml'}),
+      (error) =>
+        error instanceof Dsl4ExternalSourceManifestError &&
+        error.code === 'K4-SOURCE-MANIFEST-YAML-001',
+    );
+  }
+});
+
+test('discovers project.source.yaml before the JSON compatibility fallback', async () => {
+  const requested = [];
+  const source = "kamishibai: '4.0'\nscenes: {}\n";
+  const root = {
+    kind: 'directory',
+    async queryPermission() {
+      return 'granted';
+    },
+    async getFileHandle(name) {
+      requested.push(name);
+      if (name === 'project.source.yaml') {
+        return createFileHandle(async () =>
+          encoder.encode(
+            'formatVersion: 1\nmode: external\nsourceId: yaml\npath: story.kamishibai.yaml\n',
+          ),
+        );
+      }
+      if (name === 'project.source.json') {
+        return createFileHandle(async () =>
+          encoder.encode(JSON.stringify({...validManifest, sourceId: 'json'})),
+        );
+      }
+      if (name === 'story.kamishibai.yaml') {
+        return createFileHandle(async () => encoder.encode(source));
+      }
+      throw domError('NotFoundError');
+    },
+  };
+  const setup = createAdapter({root});
+  const state = await setup.adapter.start(root);
+  assert.equal(state.sourceId, 'yaml');
+  assert.equal(requested.includes('project.source.json'), false);
+  setup.adapter.dispose();
 });
 
 test('loads the root-level default source when manifest path is omitted', async () => {

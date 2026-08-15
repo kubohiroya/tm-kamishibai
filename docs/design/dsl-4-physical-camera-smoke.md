@@ -10,7 +10,7 @@ PoseModel prepareと認識ループを開始できることを確認するため
 - macOSまたはLinuxのdesktop Chrome
 - 動作する物理カメラと、カメラ権限を許可できるユーザーセッション
 - `pnpm install` 済みのリポジトリ
-- poseModelを参照するDSL 4.0 project root（`project.source.json` と `.k4.yml`）
+- poseModelを参照するDSL 4.0 project root（`project.source.yaml` と `.k4.yml`）
 - DSL 4.0 base SB3
 
 Chromeはtop-levelの`localhost`またはHTTPS originで起動します。HTTPのremote hostや
@@ -30,13 +30,9 @@ project rootでlocal previewを起動します。`BASE.sb3`はDSL 4.0 base SB3�
 pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --control-profile production \
-  --channel bundled \
-  --max-source-bytes 65536 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 64 \
-  --max-total-asset-bytes 67108864
+  --channel bundled
 ```
 
 CLIが表示したloopback URLを、通常のdesktop Chromeで開きます。カメラ権限を許可しても

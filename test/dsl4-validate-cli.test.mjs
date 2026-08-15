@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {parseCliArguments, runCli, usage} from '../src/builder/cli.js';
+import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builder/dsl4-validate.js';
 import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
@@ -55,7 +55,7 @@ function capture() {
   };
 }
 
-test('parses an explicitly bounded one-shot validation command', () => {
+test('parses the default and explicitly bounded one-shot validation commands', () => {
   const parsed = parseCliArguments(argumentsFor('story.kamishibai.yaml'));
   assert.equal(parsed.action, 'validate-dsl4');
   assert.equal(parsed.options.format, 'pretty');
@@ -65,9 +65,16 @@ test('parses an explicitly bounded one-shot validation command', () => {
     () => parseCliArguments(argumentsFor('story.kamishibai.yaml', 'xml')),
     /pretty or json/u,
   );
+  assert.equal(
+    parseCliArguments(['validate-dsl4', '--input', 'story.kamishibai.yaml']).options.maxSourceBytes,
+    dsl4CliDefaultLimits.maxSourceBytes,
+  );
   assert.throws(
-    () => parseCliArguments(['validate-dsl4', '--input', 'story.kamishibai.yaml']),
-    /max-source-bytes/u,
+    () =>
+      parseCliArguments(
+        argumentsFor('story.kamishibai.yaml', 'pretty', dsl4CliDefaultLimits.maxSourceBytes + 1),
+      ),
+    /max-source-bytes must be <= 262144/u,
   );
 });
 

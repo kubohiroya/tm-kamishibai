@@ -2,6 +2,7 @@ import {loadDsl4BrowserTurboWarpPlatform} from '../dsl4/browser-turbowarp-platfo
 import {dsl4StandardProductionFeatureFlags} from '../dsl4/feature-flags.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 import {createDsl4LocalPreviewBrowserClient} from './dsl4-local-preview-browser-client.js';
 
 export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
@@ -11,8 +12,8 @@ export const dsl4LocalPreviewBrowserBootstrapDefaults = deepFreeze({
 });
 
 export const dsl4LocalPreviewBrowserBootstrapMaximums = deepFreeze({
-  maxSourceBytes: dsl4LocalPreviewBrowserBootstrapDefaults.maxSourceBytes,
-  maxAssetFiles: dsl4LocalPreviewBrowserBootstrapDefaults.maxAssetFiles,
+  maxSourceBytes: dsl4CliDefaultLimits.maxSourceBytes,
+  maxAssetFiles: dsl4CliDefaultLimits.maxAssetFiles,
   maxAssetBytes: dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxAssetBytes,
 });
 

@@ -7,6 +7,8 @@ import {createVerifiedRemoteCacheDatabaseName} from '@kubohiroya/turbowarp-asset
 import {validateDsl4CacheIdentity} from '../dsl4/cache-identity.js';
 import {
   Dsl4ExternalSourceManifestError,
+  parseDsl4ExternalSourceManifestSource,
+  serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from '../dsl4/external-source-manifest.js';
 import {
@@ -120,6 +122,38 @@ function sameFileState(left, right) {
 export function validateDsl4ExternalSourceManifest(input) {
   try {
     return validateDsl4ExternalSourceManifestContract(input);
+  } catch (error) {
+    if (error instanceof Dsl4ExternalSourceManifestError) {
+      fail(error.message, error.code, error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {string} source
+ * @param {object} options
+ * @param {string} options.filename
+ */
+export function parseDsl4ExternalSourceManifest(source, {filename}) {
+  try {
+    return parseDsl4ExternalSourceManifestSource(source, {filename});
+  } catch (error) {
+    if (error instanceof Dsl4ExternalSourceManifestError) {
+      fail(error.message, error.code, error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {unknown} input
+ * @param {object} options
+ * @param {string} options.filename
+ */
+export function serializeDsl4ExternalSourceManifest(input, {filename}) {
+  try {
+    return serializeDsl4ExternalSourceManifestSource(input, {filename});
   } catch (error) {
     if (error instanceof Dsl4ExternalSourceManifestError) {
       fail(error.message, error.code, error);

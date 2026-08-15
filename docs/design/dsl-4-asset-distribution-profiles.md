@@ -142,11 +142,10 @@ resolverはprofile名、network policy、asset別content identityとproviderを�
 ```bash
 pnpm exec tmpose-kamishibai audit-dsl4-assets \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --asset-config project.assets.json \
   --asset-lock project.assets.lock.json \
   --asset-profile online \
-  --max-source-bytes 262144 \
   --max-source-manifest-bytes 16384 \
   --max-asset-config-bytes 65536 \
   --max-asset-lock-bytes 262144 \
@@ -171,9 +170,13 @@ auditは次を返す。
 - remote選択が一件もない場合だけ`true`になる`offlineReady`
 
 `offlineReady`は成果物の構造的判定であり、remote cacheが現在埋まっていることを意味しない。
-config／lock／source manifestはproject内のsymlinkでない`.json`通常fileに限定し、個別byte上限の下で
+config／lockはproject内のsymlinkでない`.json`通常file、source manifestはsymlinkでない`.yaml`／`.json`通常fileに限定し、個別byte上限の下で
 二回読み取った内容とfile状態が一致した場合だけ採用する。JSON／pretty出力にはURL、providerのlocal
 path、source本文、machine-local absolute pathを含めない。
+
+主要4上限はCLIの有限デフォルト（source 256 KiB、単一asset 16 MiB、256 files、asset合計
+128 MiB）を使用する。通常のcommand例では省略し、asset規模がデフォルトを超える場合だけ確認後に
+対応する上限をoverrideする。
 
 ## 6. lock generation
 
@@ -191,15 +194,11 @@ project assetの`name`は既存SB3のbytesを参照できないため、remote a
 ```bash
 pnpm exec tmpose-kamishibai lock-dsl4-assets \
   --project-root . \
-  --source-manifest project.source.json \
+  --source-manifest project.source.yaml \
   --asset-config project.assets.json \
   --output project.assets.lock.json \
   --allow-host cdn.example.com \
-  --max-source-bytes 262144 \
   --max-source-manifest-bytes 16384 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 \
   --timeout-ms 10000 \
   --max-redirects 3
 ```
@@ -258,9 +257,6 @@ pnpm exec tmpose-kamishibai vendor-dsl4-assets \
   --allow-host cdn.example.com \
   --max-asset-config-bytes 65536 \
   --max-asset-lock-bytes 262144 \
-  --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 \
-  --max-total-asset-bytes 134217728 \
   --timeout-ms 10000 \
   --max-redirects 3
 ```
@@ -274,10 +270,8 @@ resolved `StoryDocument`をruntime／asset bundleへ渡す。profileを指定し
 ```bash
 pnpm exec tmpose-kamishibai build-dsl4 \
   --base BASE.sb3 --project-root . \
-  --source-manifest project.source.json --output dist/story.sb3 \
+  --source-manifest project.source.yaml --output dist/story.sb3 \
   --control-profile production --channel bundled \
-  --max-source-bytes 262144 --max-asset-file-bytes 16777216 \
-  --max-asset-files 256 --max-total-asset-bytes 134217728 \
   --asset-config project.assets.offline.json \
   --asset-lock project.assets.offline.lock.json \
   --asset-profile offline \

@@ -19,6 +19,7 @@ import {buildSb3Archive} from './sb3.js';
 import {validateBundle} from './validate.js';
 
 export {Sb3BuilderError} from './errors.js';
+export {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
 export {
@@ -49,6 +50,8 @@ export {
 export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
+  parseDsl4ExternalSourceManifest,
+  serializeDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
 } from './dsl4-external-source.js';
 export {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
@@ -59,6 +62,7 @@ export {
   formatDsl4AssetDistributionAudit,
   loadDsl4AssetAuditInputs,
   loadDsl4ProjectJson,
+  loadDsl4ProjectSourceManifest,
   serializeDsl4AssetDistributionAudit,
 } from './dsl4-asset-audit.js';
 export {
