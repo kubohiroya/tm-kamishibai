@@ -487,7 +487,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
   );
 });
 
-test('keeps the pose overlay source opt-in and maps normalized DSL settings to TMPose 2.0 APIs', async () => {
+test('keeps the pose overlay source opt-in and maps normalized DSL settings to TMPose 1.12 APIs', async () => {
   const component = runtimeComponent();
   component.storyDocument.poseRecognition = {
     preview: {

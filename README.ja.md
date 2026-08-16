@@ -182,17 +182,17 @@ CLIにはほかに次のcommandがあります。引数と終了statusは`tmpose
 
 DSL 4.0では`poseRecognition.modelInitialization`により、従来互換の`legacy`と、不要になったモデルを
 cancelして最新の1件だけを準備する`latest-needed`を選べます。camera canvasのreadback contextは
-TMPose 2.0.0が所有し、Kamishibai側でTensorFlow.jsの`fromPixels()`経路を補修しません。
+TMPose 1.12.0が所有し、Kamishibai側でTensorFlow.jsの`fromPixels()`経路を補修しません。
 責務境界を戻す場合は、TMPose 1.10.0を固定したrc.5成果物を使用します。Schema、既定値、cancel境界は
 [DSL 4.0表層仕様](./docs/design/dsl-4-surface.md#41-poseモデル初期化)を参照してください。
 
-TMPose 2.0.0の設定可能なSVG pose overlayもDSL 4.0から利用できます。
+TMPose 1.12.0の設定可能なSVG pose overlayもDSL 4.0から利用できます。
 `poseRecognition.preview.overlay`を明示した台本だけが表示対象となり、17 joint、bone共通style、最小
 confidence、joint／boneのconfidence連動を設定できます。既存台本はこのobjectを省略するため、overlayは
 非表示のままです。YAML例と省略値は
 [pose overlayの表層契約](./docs/design/dsl-4-surface.md#43-pose-overlay)を参照してください。
 
-TMPose 2.0.0では公開TurboWarp opcodeもブロック文に合わせ、`startRecognition`、
+TMPose 1.12.0では公開TurboWarp opcodeもブロック文に合わせ、`startRecognition`、
 `stopRecognition`、`isRecognizing`、`firstRecognitionMsReporter`へ統一しました。旧`*Predict*`名の
 aliasはありません。DSL 4.0はもともとrecognition名のComposition APIを使うため、YAML Schemaとruntime
 動作は変わりません。削除されたopcodeを保存した手書きTurboWarp scriptは、rc.7パレットで組み直します。
