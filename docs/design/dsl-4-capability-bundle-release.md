@@ -2,13 +2,14 @@
 
 Copyright © 2026 Hiroya Kubo.
 
-文書状態: Issue #266／#517／#601の実装正本（2026-08-15）
+文書状態: Issue #266／#517／#564／#601の実装正本（2026-08-16）
 
 関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
 [#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
 [#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
 [#517](https://github.com/kubohiroya/tmpose-kamishibai/issues/517)、
 [#548](https://github.com/kubohiroya/tmpose-kamishibai/issues/548)、
+[#564](https://github.com/kubohiroya/tmpose-kamishibai/issues/564)、
 [#583](https://github.com/kubohiroya/tmpose-kamishibai/issues/583)、
 [#601](https://github.com/kubohiroya/tmpose-kamishibai/issues/601)、
 [#609](https://github.com/kubohiroya/tmpose-kamishibai/issues/609)
@@ -63,8 +64,16 @@ DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 320×240の1 draw + 1 read測定では`willReadFrequently`のend-to-end改善が再現せず、1 draw + 4 reads
 以上のread-heavy条件でのみ改善したため、TMPose 1.10.3は通常contextを使います。Kamishibaiは
 TMPose composition APIを利用するだけとし、上流のcamera canvasや`fromPixels()`経路を下流patchで
-補修せず、Chromeの警告も抑制しません。renderer canvasのreadback指定は別の責務境界として
-scratch-renderのSilhouette共有canvasへ集約します。TextBubbleは`getImageData()`を行わないため対象外です。
+補修せず、Chromeの警告も抑制しません。
+
+scratch-renderも公式commitを直接固定し、Packager成果物へ`willReadFrequently`を後付けしません。
+`Silhouette.unlazy()`は画像のmaterializeごとに1 draw + 1 `getImageData()`を行いますが、以後の
+hit-testはキャッシュした`_colorData`を参照します。一方Chromiumの警告は共有canvas上で累積した
+2回目のreadbackに固定的に発生し、canvas size、経過時間、draw/read比、実測latency、現在の
+acceleration状態を判定しません。さらに通常contextはreadback後に自動的なCPU fallback候補になります。
+したがって、この警告はread-heavy workloadを発見する診断材料ではあっても、Silhouetteが
+`willReadFrequently`を必要とする証拠にはなりません。480×360の同一処理ではChrome 149で改善なし、
+Chrome 151で指定時に約22.4%低速化したため、警告抑制だけを目的とするfork／下流patchは行いません。
 
 ## 3. API、integrity、license、SBOM
 

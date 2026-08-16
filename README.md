@@ -185,9 +185,11 @@ DSL 4.0 can select the backward-compatible `legacy` model initialization policy 
 `latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
 TMPose 1.10.3 owns initialization of the camera canvas context and intentionally uses a normal
 Canvas2D context. Physical-camera measurements of its 320×240, one-draw/one-read path did not show
-a repeatable end-to-end benefit from `willReadFrequently`; Kamishibai therefore neither patches
-TMPose's TensorFlow.js `fromPixels()` path nor suppresses Chrome's readback warning. To roll back
-this boundary, use the rc.5 artifact pinned to TMPose 1.10.0. See the
+a repeatable end-to-end benefit from `willReadFrequently`. The same rule applies to scratch-render:
+each `Silhouette.unlazy()` materialization performs one read and then caches the pixel array, while
+Chromium warns on the second read accumulated by the shared canvas without measuring read rate or
+latency. Kamishibai therefore patches neither upstream implementation merely to suppress the
+warning. To roll back the TMPose boundary, use the rc.5 artifact pinned to TMPose 1.10.0. See the
 [DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
 defaults, and cancellation boundary.
 
