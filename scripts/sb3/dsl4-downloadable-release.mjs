@@ -111,7 +111,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'tmpose',
       name: 'TMPose',
       package: '@kubohiroya/turbowarp-tmpose',
-      version: '2.0.0',
+      version: '1.12.0',
       artifact: 'dist/tmpose.js',
       sourcePath: path.join(
         path.dirname(

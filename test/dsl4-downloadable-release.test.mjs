@@ -991,7 +991,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         ]) {
           assert(
             opcodes.includes(`${memberId}__${opcode}`),
-            `missing TMPose 2.0.0 opcode ${opcode}`,
+            `missing TMPose 1.12.0 opcode ${opcode}`,
           );
         }
         for (const opcode of [

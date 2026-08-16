@@ -183,7 +183,7 @@ The CLI also provides the following commands. See `tmpose-kamishibai --help` and
 
 DSL 4.0 can select the backward-compatible `legacy` model initialization policy or
 `latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
-TMPose 2.0.0 owns initialization of the camera canvas context and intentionally uses a normal
+TMPose 1.12.0 owns initialization of the camera canvas context and intentionally uses a normal
 Canvas2D context. Physical-camera measurements of its 320×240, one-draw/one-read path did not show
 a repeatable end-to-end benefit from `willReadFrequently`. The same rule applies to scratch-render:
 each `Silhouette.unlazy()` materialization performs one read and then caches the pixel array, while
@@ -193,14 +193,14 @@ warning. To roll back the TMPose boundary, use the rc.5 artifact pinned to TMPos
 [DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
 defaults, and cancellation boundary.
 
-TMPose 2.0.0 also supplies the configurable SVG pose overlay used by DSL 4.0. Opt in under
+TMPose 1.12.0 also supplies the configurable SVG pose overlay used by DSL 4.0. Opt in under
 `poseRecognition.preview.overlay`; you can show or hide it, style any of the 17 joints, style the
 shared bones, set the minimum keypoint confidence, and scale joint or bone properties by
 confidence. Existing scripts omit this object and keep the overlay hidden. The complete YAML
 example and defaults are in the
 [pose overlay surface contract](./docs/design/dsl-4-surface.md#43-pose-overlay).
 
-TMPose 2.0.0 also aligns its public TurboWarp opcodes with the block wording:
+TMPose 1.12.0 also aligns its public TurboWarp opcodes with the block wording:
 `startRecognition`, `stopRecognition`, `isRecognizing`, and `firstRecognitionMsReporter` replace
 the former `*Predict*` names without aliases. DSL 4.0 already used the recognition-named
 Composition API, so the YAML schema and runtime behavior are unchanged; hand-authored TurboWarp
