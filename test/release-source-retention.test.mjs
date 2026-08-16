@@ -22,8 +22,10 @@ test('keeps release source snapshots and the legacy app out of the current repos
     );
     assert.equal(Object.hasOwn(entry.artifact, 'sourceDirectory'), false);
   }
-  const metadata = JSON.parse(
-    await readFile(path.join(repositoryRoot, 'release-metadata/4.0.0-rc.6.json'), 'utf8'),
-  );
-  assert.equal(Object.hasOwn(metadata, 'sourceDirectory'), false);
+  for (const version of ['4.0.0-rc.6', '4.0.0-rc.7']) {
+    const metadata = JSON.parse(
+      await readFile(path.join(repositoryRoot, `release-metadata/${version}.json`), 'utf8'),
+    );
+    assert.equal(Object.hasOwn(metadata, 'sourceDirectory'), false);
+  }
 });

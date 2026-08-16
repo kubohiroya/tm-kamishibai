@@ -19,7 +19,7 @@ Copyright © 2026 Hiroya Kubo.
 
 ## 1. 結論
 
-4.0.0-rc.6のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
+4.0.0-rc.7のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
 6つのcapability拡張を`kubohiroyakamishibai4`一件へ集約して生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
 組み込みません。release generatorは7 memberの展開sourceを一時生成しますが、Gitには保存しません。
@@ -41,7 +41,12 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`                    |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.11.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@2.0.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+
+TMPose 2.0.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredicting`、
+`firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、
+`firstRecognitionMsReporter`へ置き換えました。Standard bundleは旧opcodeの互換aliasを追加せず、
+Composition APIの既存recognition名へ直接接続します。
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition               |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外                   |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外                   |
@@ -50,7 +55,7 @@ package versionはrangeを使わず、lockfileのnpm integrityと一致させま
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
 生成SB3は外側のbundleを一度だけ登録し、各memberのhandler、menu、storage、由来アイコンを名前空間付きで委譲します。
 
-TMPose 1.11.0の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
+TMPose 2.0.0の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
 Base64変換、runtime fetch差し替えの正本とします。利用側はSB3のbundled／unbundled component storageから
 model descriptorを一意に選ぶだけとし、検証・復号は初回pose recognition時に上流APIへ委譲します。
 PoseNet model dataはruntime JavaScriptへ含めず、PNG／costume／soundへ偽装せず、明示的なcomponent model
@@ -62,7 +67,7 @@ DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 
 カメラvideoをTensorFlow.jsへ渡すCanvas2D contextの選択はTMPoseの責務です。物理カメラによる
 320×240の1 draw + 1 read測定では`willReadFrequently`のend-to-end改善が再現せず、1 draw + 4 reads
-以上のread-heavy条件でのみ改善したため、TMPose 1.11.0は通常contextを使います。Kamishibaiは
+以上のread-heavy条件でのみ改善したため、TMPose 2.0.0は通常contextを使います。Kamishibaiは
 TMPose composition APIを利用するだけとし、上流のcamera canvasや`fromPixels()`経路を下流patchで
 補修せず、Chromeの警告も抑制しません。
 
@@ -161,7 +166,7 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-4.0.0-rc.6 releaseは必ず次の順で行います。
+4.0.0-rc.7 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
@@ -170,7 +175,7 @@ cleanupを継続します。
 5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
 6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
 7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
-8. frozen commitへannotated `v4.0.0-rc.6` tagを作成する
+8. frozen commitへannotated `v4.0.0-rc.7` tagを作成する
 9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
 10. 一時生成したSB3をversion付きassetとしてGitHub prereleaseへ公開する
 11. npm、GitHub、PagesのURLをmetadataへ記録してpublishedへ遷移する
@@ -182,7 +187,7 @@ assetを差し替えません。`main` checkoutは公開済み／candidateの展
 source identity、asset URL、size、SHA-256、公開状態だけを`release-metadata/`へ保持します。Pages buildは
 GitHub Releasesからbounded downloadし、size、SHA-256、ZIP、Title metadataを照合します。
 `frozen`または`published`ではupdateをfail closedにし、修正は
-4.0.0-rc.7、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+4.0.0-rc.8、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 過去の3.1／3.2はGitHub Release assetだけを配布正本とし、現在のtoolchainやsourceから再構築しません。
 
