@@ -487,6 +487,91 @@ test('gates pose preview mirroring and uses one composition method before or dur
   );
 });
 
+test('keeps the pose overlay source opt-in and maps normalized DSL settings to TMPose 1.11 APIs', async () => {
+  const component = runtimeComponent();
+  component.storyDocument.poseRecognition = {
+    preview: {
+      mirroring: 'mirrored',
+      overlay: {
+        visible: true,
+        minimumConfidence: 0.25,
+        jointStyles: {
+          leftWrist: {color: '#ff00aa', opacity: 0.8, radius: 6},
+          rightWrist: {color: '#00e5ff', opacity: 1, radius: 7},
+        },
+        boneStyle: {color: '#00e5ff', opacity: 0.9, width: 4},
+        confidenceScaling: {
+          jointOpacity: true,
+          jointRadius: false,
+          boneOpacity: false,
+          boneWidth: true,
+        },
+      },
+    },
+  };
+
+  const missingSetup = options(component, []);
+  assert.throws(
+    () => createDsl4PlatformAssetSession(missingSetup.value),
+    /showPoseOverlay|setPoseJointStyle/u,
+  );
+
+  const enabledLog = [];
+  const enabledSetup = options(component, enabledLog, {
+    tmpose: {
+      showPoseOverlay() {
+        enabledLog.push(['overlay.show']);
+      },
+      hidePoseOverlay() {
+        enabledLog.push(['overlay.hide']);
+      },
+      setPoseJointStyle(part, style) {
+        enabledLog.push(['overlay.joint', part, style]);
+      },
+      setPoseBoneStyle(style) {
+        enabledLog.push(['overlay.bone', style]);
+      },
+      setPoseOverlayMinimumConfidence(confidence) {
+        enabledLog.push(['overlay.minimum-confidence', confidence]);
+      },
+      setPoseOverlayConfidenceScaling(scaling) {
+        enabledLog.push(['overlay.confidence-scaling', scaling]);
+      },
+    },
+  });
+  const enabled = createDsl4PlatformAssetSession(enabledSetup.value);
+  assert.deepEqual(
+    enabledLog.filter(([event]) => event.startsWith('overlay.')),
+    [
+      ['overlay.joint', 'leftWrist', {color: '#ff00aa', opacity: 0.8, radius: 6}],
+      ['overlay.joint', 'rightWrist', {color: '#00e5ff', opacity: 1, radius: 7}],
+      ['overlay.bone', {color: '#00e5ff', opacity: 0.9, width: 4}],
+      ['overlay.minimum-confidence', 0.25],
+      [
+        'overlay.confidence-scaling',
+        {jointOpacity: true, jointRadius: false, boneOpacity: false, boneWidth: true},
+      ],
+      ['overlay.show'],
+    ],
+  );
+  await enabled.dispose('pose-overlay-enabled');
+
+  const noConfigLog = [];
+  const noConfigSetup = options(runtimeComponent(), noConfigLog, {
+    tmpose: {
+      hidePoseOverlay() {
+        noConfigLog.push(['overlay.hide']);
+      },
+    },
+  });
+  const noConfig = createDsl4PlatformAssetSession(noConfigSetup.value);
+  assert.deepEqual(
+    noConfigLog.filter(([event]) => event.startsWith('overlay.')),
+    [['overlay.hide']],
+  );
+  await noConfig.dispose('pose-overlay-not-configured');
+});
+
 test('gates camera preview control methods and exposes leased image URLs only while enabled', async () => {
   const disabledSetup = options(runtimeComponent(), []);
   for (const method of [

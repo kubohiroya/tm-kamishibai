@@ -611,6 +611,47 @@ sceneへ移ると必ずstory既定へ戻り、前sceneの値をstickyにしま�
 paletteを呼びません。起動時固定・既定OFFの`dsl4PosePreviewMirroring`がOFFなら新methodを検査・呼出し
 せず、現行のmirrored表示を維持します。ONでmethodが不足する場合はstartupでfail closedにします。
 
+### 4.3 Pose overlay
+
+TMPose 1.11.0のSVG pose overlayは`poseRecognition.preview.overlay`で明示的に有効化・設定します。
+既存台本との互換性を保つため、`overlay`を省略した場合はTMPose側の既定値にかかわらず非表示です。
+
+```yaml
+poseRecognition:
+  preview:
+    mirroring: mirrored
+    overlay:
+      visible: true
+      jointStyles:
+        leftWrist:
+          color: '#ff00aa'
+          opacity: 0.8
+          radius: 6
+        rightWrist:
+          radius: 6
+      boneStyle:
+        color: '#00e5ff'
+        opacity: 0.9
+        width: 3
+      minimumConfidence: 0.5
+      confidenceScaling:
+        jointOpacity: true
+        jointRadius: false
+        boneOpacity: true
+        boneWidth: false
+```
+
+`jointStyles`のkeyはPoseNetの17 keypoint名です。各joint styleと`boneStyle`は部分指定でき、省略した
+style値はTMPose 1.11.0の既定値（jointは`#00e5ff`／1／4、boneは`#00e5ff`／0.9／3）へ
+正規化します。`minimumConfidence`は0〜1で、省略時は0.5です。`confidenceScaling`の省略値は4項目とも
+`false`です。boneのconfidenceは両端jointの低い方を使用します。
+
+runtime接続はStandalone blockを経由せず、`showPoseOverlay()`／`hidePoseOverlay()`、
+`setPoseJointStyle()`、`setPoseBoneStyle()`、`setPoseOverlayMinimumConfidence()`、
+`setPoseOverlayConfidenceScaling()`だけを呼びます。専用feature flagは設けません。`overlay`省略時は
+`hidePoseOverlay()`で従来表示へ戻し、設定ありで必要methodが不足する場合はstartupでfail closedにします。
+表示の配置・左右反転・preview非表示・camera停止・recognition停止のDOM lifecycleはTMPoseが所有します。
+
 ## 5. 環境別keymap
 
 開発用の巻き戻しや早送りは固定キーをシステム的に占有せず、台本の環境別keymapで割り当てます。

@@ -41,7 +41,7 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`                    |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.10.3`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.11.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
 | Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition               |
 | Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外                   |
 | Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外                   |
@@ -50,7 +50,7 @@ package versionはrangeを使わず、lockfileのnpm integrityと一致させま
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。
 生成SB3は外側のbundleを一度だけ登録し、各memberのhandler、menu、storage、由来アイコンを名前空間付きで委譲します。
 
-TMPose 1.10.3の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
+TMPose 1.11.0の`./posenet`を、固定model manifest、package asset、SHA-256検証、project bundleの
 Base64変換、runtime fetch差し替えの正本とします。利用側はSB3のbundled／unbundled component storageから
 model descriptorを一意に選ぶだけとし、検証・復号は初回pose recognition時に上流APIへ委譲します。
 PoseNet model dataはruntime JavaScriptへ含めず、PNG／costume／soundへ偽装せず、明示的なcomponent model
@@ -62,7 +62,7 @@ DSL 4 runtime flagをOFFにして3.2成果物を使用します。
 
 カメラvideoをTensorFlow.jsへ渡すCanvas2D contextの選択はTMPoseの責務です。物理カメラによる
 320×240の1 draw + 1 read測定では`willReadFrequently`のend-to-end改善が再現せず、1 draw + 4 reads
-以上のread-heavy条件でのみ改善したため、TMPose 1.10.3は通常contextを使います。Kamishibaiは
+以上のread-heavy条件でのみ改善したため、TMPose 1.11.0は通常contextを使います。Kamishibaiは
 TMPose composition APIを利用するだけとし、上流のcamera canvasや`fromPixels()`経路を下流patchで
 補修せず、Chromeの警告も抑制しません。
 
