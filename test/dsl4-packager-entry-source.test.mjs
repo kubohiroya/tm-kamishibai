@@ -296,7 +296,7 @@ test('registers the actual Plain HTML and zip-one-asset ZIP closure before loadP
     );
     const embeddedRuntime =
       target === 'html' ? html : strFromU8(unzipSync(result.data)['script.js']);
-    assert.equal(embeddedRuntime.includes('getContext("2d",{willReadFrequently:!0})'), true);
+    assert.equal(embeddedRuntime.includes('willReadFrequently'), false);
     if (target === 'zip-one-asset') {
       const outer = unzipSync(result.data);
       const inner = unzipSync(outer['project.zip']);

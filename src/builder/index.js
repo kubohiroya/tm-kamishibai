@@ -44,10 +44,6 @@ export {
   resolveDsl4PackagerEntrySourceSurface,
 } from './dsl4-packager-entry-source.js';
 export {
-  patchTurboWarpPackagerScratchRenderReadbackContext,
-  turboWarpPackagerScratchRenderContract,
-} from './turbowarp-packager-scratch-render.js';
-export {
   ensureDsl4ExternalSourceCacheIdentity,
   loadDsl4ExternalSource,
   parseDsl4ExternalSourceManifest,

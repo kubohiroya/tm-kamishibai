@@ -62,8 +62,8 @@ importers:
         specifier: github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30
         version: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30
       scratch-render:
-        specifier: github:kubohiroya/scratch-render#c69318a6c8d43439fc35fa9e403bf6d2781fdaee
-        version: https://codeload.github.com/kubohiroya/scratch-render/tar.gz/c69318a6c8d43439fc35fa9e403bf6d2781fdaee(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0)
+        specifier: github:TurboWarp/scratch-render#a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce
+        version: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0)
       scratch-vm:
         specifier: github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f
         version: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f(@turbowarp/scratch-svg-renderer@1.1.0(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961))
@@ -2344,8 +2344,8 @@ packages:
     resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961}
     version: 1.0.0
 
-  scratch-render@https://codeload.github.com/kubohiroya/scratch-render/tar.gz/c69318a6c8d43439fc35fa9e403bf6d2781fdaee:
-    resolution: {gitHosted: true, integrity: sha512-XyCf3r4R2cK9N4ygLqkKlmWE7QHNIcw47e8STDmCjC4vmgYke24fp2N9uophUZmOEL/xHWIvpfYJoURvOXQhHw==, tarball: https://codeload.github.com/kubohiroya/scratch-render/tar.gz/c69318a6c8d43439fc35fa9e403bf6d2781fdaee}
+  scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce}
     version: 0.1.0
 
   scratch-sb1-converter@0.2.7:
@@ -5231,7 +5231,7 @@ snapshots:
     dependencies:
       base64-loader: 1.0.0
 
-  scratch-render@https://codeload.github.com/kubohiroya/scratch-render/tar.gz/c69318a6c8d43439fc35fa9e403bf6d2781fdaee(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0):
+  scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce(scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961)(webpack@4.47.0):
     dependencies:
       '@turbowarp/ancient-hull.js': 0.2.13
       '@turbowarp/nanolog': 0.2.0
