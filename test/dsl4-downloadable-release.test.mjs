@@ -50,7 +50,7 @@ const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
 const releaseMetadata = JSON.parse(
-  await readFile(new URL('../release-metadata/4.0.0-rc.6.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../release-metadata/4.0.0-rc.7.json', import.meta.url), 'utf8'),
 );
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
@@ -96,11 +96,11 @@ function buildCurrentRuntimeRelease() {
         await writeFile(outputPath, contents);
       }
       const built = await createKamishibaiSb3({
-        buildDate: '2026-08-15',
+        buildDate: '2026-08-16',
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.6',
+        version: '4.0.0-rc.7',
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -981,6 +981,32 @@ test('keeps every bundled extension icon and documentation button on its own pal
         (block) => block && typeof block === 'object' && typeof block.opcode === 'string',
       );
       assert(memberBlocks.length > 0, memberId);
+      if (memberId === 'tmpose') {
+        const opcodes = memberBlocks.map(({opcode}) => opcode);
+        for (const opcode of [
+          'startRecognition',
+          'stopRecognition',
+          'isRecognizing',
+          'firstRecognitionMsReporter',
+        ]) {
+          assert(
+            opcodes.includes(`${memberId}__${opcode}`),
+            `missing TMPose 2.0.0 opcode ${opcode}`,
+          );
+        }
+        for (const opcode of [
+          'startPredict',
+          'stopPredict',
+          'isPredicting',
+          'firstPredictMsReporter',
+        ]) {
+          assert.equal(
+            opcodes.includes(`${memberId}__${opcode}`),
+            false,
+            `removed TMPose opcode ${opcode}`,
+          );
+        }
+      }
       assert.equal(
         memberBlocks.every(
           (block) =>
@@ -1414,7 +1440,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.6');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.7');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,

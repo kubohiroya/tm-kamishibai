@@ -41,7 +41,7 @@ function loadPublishedPoseNetFiles() {
   return pendingPoseNetFiles;
 }
 
-test('delegates the PoseNet manifest, verification, storage, and runtime contract to TMPose 1.11', () => {
+test('delegates the PoseNet manifest, verification, storage, and runtime contract to TMPose 2.0', () => {
   assert.equal(createDsl4BundledTMPoseRuntime, createBundledTMPoseRuntime);
   assert.equal(createDsl4PoseNetProjectBundle, createPoseNetProjectBundle);
   assert.equal(createDsl4PoseNetProjectBundleFromLoader, createPoseNetProjectBundleFromLoader);
@@ -50,7 +50,7 @@ test('delegates the PoseNet manifest, verification, storage, and runtime contrac
   assert.equal(loadDsl4PoseNetProjectBundleData, loadPoseNetProjectBundle);
   assert.equal(validateDsl4PoseNetProjectBundle, validatePoseNetProjectBundle);
   assert.equal(verifyDsl4PoseNetBundle, verifyPoseNetBundle);
-  assert.equal(dsl4PoseNetBundleManifest.distribution.version, '1.11.0');
+  assert.equal(dsl4PoseNetBundleManifest.distribution.version, '2.0.0');
 });
 
 test('verifies the PoseNet supply published by TMPose', async () => {
