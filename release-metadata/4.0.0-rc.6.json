@@ -3,7 +3,7 @@
   "series": "4.0",
   "version": "4.0.0-rc.6",
   "channel": "next",
-  "state": "candidate",
+  "state": "frozen",
   "buildDate": "2026-08-15",
   "sourceIdentity": "sha256:ebdde314be4d929894bce9eb511f340c61879b2b9ff8366ae31cabbb00bfbf10",
   "artifact": {
