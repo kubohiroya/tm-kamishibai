@@ -255,15 +255,23 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  assert.equal(
-    release.artifact,
-    undefined,
-    'A candidate must not be offered before its release asset exists.',
-  );
   const metadata = JSON.parse(await readRepositoryFile(contract.releaseLifecycle.metadata));
   assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
   assert.match(metadata.artifact.url, /\/releases\/download\/v4\.0\.0-rc\.6\//u);
+  if (metadata.state === 'published') {
+    assert.deepEqual(release.artifact, {
+      buildDate: metadata.buildDate,
+      ...metadata.artifact,
+      sourceIdentity: metadata.sourceIdentity,
+    });
+  } else {
+    assert.equal(
+      release.artifact,
+      undefined,
+      'An unpublished release must not be offered before its release asset exists.',
+    );
+  }
 
   assert.deepEqual(contract.releaseLifecycle, {
     metadata: 'release-metadata/4.0.0-rc.6.json',
