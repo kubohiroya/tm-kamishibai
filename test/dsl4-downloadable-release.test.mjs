@@ -1268,10 +1268,20 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
   );
 });
 
-test('uses the exact version 3 SVG bytes as the reusable DOM menu defaults', () => {
+test('uses the application menu SVG bytes as the reusable DOM menu defaults', () => {
   const {build, ...legacyIcons} = dsl4RuntimeApplicationMenuDefaultIcons;
   assert.deepEqual(legacyIcons, applicationMenuIconDataUrls);
   assert.match(build, /^data:image\/svg\+xml;base64,/u);
+});
+
+test('draws a balanced reload arrowhead as part of one outlined shape', () => {
+  const svg = Buffer.from(applicationMenuIconDataUrls.reload.split(',')[1], 'base64').toString(
+    'utf8',
+  );
+  assert.equal((svg.match(/<path\b/gu) ?? []).length, 1);
+  assert.match(svg, /d="M43\.5 19\.4 38\.2 7\.1 36\.2 9\.4A19 19/u);
+  assert.match(svg, /A13 13 0 1 1 32\.4 14L30\.4 16\.3Z"/u);
+  assert.match(svg, /fill="#d85656" stroke="#000" stroke-width="2\.5"/u);
 });
 
 test('preserves source and explicit PoseNet model data through a pinned TurboWarp resave', async () => {
