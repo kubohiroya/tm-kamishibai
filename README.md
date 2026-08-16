@@ -183,9 +183,11 @@ The CLI also provides the following commands. See `tmpose-kamishibai --help` and
 
 DSL 4.0 can select the backward-compatible `legacy` model initialization policy or
 `latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
-TMPose 1.10.1 owns initialization of the camera canvas readback context; Kamishibai does not patch
-TMPose's TensorFlow.js `fromPixels()` path. To roll back this boundary, use the rc.5 artifact pinned
-to TMPose 1.10.0. See the
+TMPose 1.10.3 owns initialization of the camera canvas context and intentionally uses a normal
+Canvas2D context. Physical-camera measurements of its 320×240, one-draw/one-read path did not show
+a repeatable end-to-end benefit from `willReadFrequently`; Kamishibai therefore neither patches
+TMPose's TensorFlow.js `fromPixels()` path nor suppresses Chrome's readback warning. To roll back
+this boundary, use the rc.5 artifact pinned to TMPose 1.10.0. See the
 [DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
 defaults, and cancellation boundary.
 
