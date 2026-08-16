@@ -868,6 +868,84 @@ test('normalizes a scene pose preview override and maps its source position', ()
   }
 });
 
+test('normalizes pose overlay styles and confidence controls with source ranges', () => {
+  const source = `
+kamishibai: '4.0'
+poseRecognition:
+  preview:
+    mirroring: mirrored
+    overlay:
+      visible: true
+      jointStyles:
+        leftWrist:
+          color: '#ff00aa'
+          opacity: 0.8
+          radius: 6
+        rightWrist:
+          radius: 7
+      boneStyle:
+        color: '#00e5ff'
+        width: 4
+      minimumConfidence: 0.25
+      confidenceScaling:
+        jointOpacity: true
+        boneWidth: true
+scenes:
+  opening: []
+`;
+  const result = frontend.parse(source, {sourceId: 'pose-overlay.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.poseRecognition.preview.overlay, {
+    visible: true,
+    minimumConfidence: 0.25,
+    jointStyles: {
+      leftWrist: {color: '#ff00aa', opacity: 0.8, radius: 6},
+      rightWrist: {color: '#00e5ff', opacity: 1, radius: 7},
+    },
+    boneStyle: {color: '#00e5ff', opacity: 0.9, width: 4},
+    confidenceScaling: {
+      jointOpacity: true,
+      jointRadius: false,
+      boneOpacity: false,
+      boneWidth: true,
+    },
+  });
+  for (const path of [
+    '/poseRecognition/preview/overlay',
+    '/poseRecognition/preview/overlay/visible',
+    '/poseRecognition/preview/overlay/jointStyles/leftWrist/color',
+    '/poseRecognition/preview/overlay/jointStyles/rightWrist/radius',
+    '/poseRecognition/preview/overlay/boneStyle/width',
+    '/poseRecognition/preview/overlay/minimumConfidence',
+    '/poseRecognition/preview/overlay/confidenceScaling/jointOpacity',
+    '/poseRecognition/preview/overlay/confidenceScaling/boneWidth',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+
+  for (const [needle, replacement] of [
+    ['leftWrist:', 'neck:'],
+    ['opacity: 0.8', 'opacity: 1.1'],
+    ['radius: 6', 'radius: -1'],
+    ["color: '#ff00aa'", "color: '   '"],
+    ['width: 4', 'width: -1'],
+    ['minimumConfidence: 0.25', 'minimumConfidence: 2'],
+    ['jointOpacity: true', 'jointOpacity: yes'],
+    ['boneWidth: true', 'extra: true'],
+    ['visible: true', 'extra: true'],
+  ]) {
+    const invalid = frontend.parse(source.replace(needle, replacement));
+    assert.equal(invalid.ok, false, replacement);
+    assert.ok(invalid.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+
+  const emptyOverlay = frontend.parse(
+    source.replace(/    overlay:[\s\S]*?scenes:/u, '    overlay: {}\nscenes:'),
+  );
+  assert.equal(emptyOverlay.ok, false);
+  assert.ok(emptyOverlay.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+});
+
 test('normalizes camera preview controls, image assets, defaults, and source ranges', () => {
   const source = `
 kamishibai: '4.0'

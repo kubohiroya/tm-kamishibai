@@ -617,7 +617,83 @@
       "required": ["mirroring"],
       "properties": {
         "mirroring": {"type": "string", "enum": ["mirrored", "unmirrored"]},
+        "overlay": {"$ref": "#/$defs/poseOverlay"},
         "controls": {"$ref": "#/$defs/posePreviewControls"}
+      }
+    },
+    "poseKeypointName": {
+      "type": "string",
+      "enum": [
+        "nose",
+        "leftEye",
+        "rightEye",
+        "leftEar",
+        "rightEar",
+        "leftShoulder",
+        "rightShoulder",
+        "leftElbow",
+        "rightElbow",
+        "leftWrist",
+        "rightWrist",
+        "leftHip",
+        "rightHip",
+        "leftKnee",
+        "rightKnee",
+        "leftAnkle",
+        "rightAnkle"
+      ]
+    },
+    "poseJointStyle": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "color": {"type": "string", "pattern": "\\S", "default": "#00e5ff"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 1},
+        "radius": {"type": "number", "minimum": 0, "default": 4}
+      }
+    },
+    "poseBoneStyle": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "color": {"type": "string", "pattern": "\\S", "default": "#00e5ff"},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.9},
+        "width": {"type": "number", "minimum": 0, "default": 3}
+      }
+    },
+    "poseOverlayConfidenceScaling": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "jointOpacity": {"type": "boolean", "default": false},
+        "jointRadius": {"type": "boolean", "default": false},
+        "boneOpacity": {"type": "boolean", "default": false},
+        "boneWidth": {"type": "boolean", "default": false}
+      }
+    },
+    "poseOverlay": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "visible": {"type": "boolean", "default": true},
+        "jointStyles": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"$ref": "#/$defs/poseKeypointName"},
+          "additionalProperties": {"$ref": "#/$defs/poseJointStyle"}
+        },
+        "boneStyle": {"$ref": "#/$defs/poseBoneStyle"},
+        "minimumConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5
+        },
+        "confidenceScaling": {"$ref": "#/$defs/poseOverlayConfidenceScaling"}
       }
     },
     "scenePosePreview": {

@@ -113,6 +113,32 @@ function disposedError() {
 }
 
 /**
+ * Keep the pose overlay source opt-in at the DSL boundary.
+ *
+ * @param {Record<string, Function>} composition
+ * @param {Record<string, unknown> | null} overlay
+ */
+function configurePoseOverlay(composition, overlay) {
+  if (!overlay) {
+    composition.hidePoseOverlay?.();
+    return;
+  }
+  const jointStyles = isRecord(overlay.jointStyles) ? overlay.jointStyles : {};
+  for (const [part, style] of Object.entries(jointStyles)) {
+    composition.setPoseJointStyle(part, style);
+  }
+  if (isRecord(overlay.boneStyle)) composition.setPoseBoneStyle(overlay.boneStyle);
+  if (typeof overlay.minimumConfidence === 'number') {
+    composition.setPoseOverlayMinimumConfidence(overlay.minimumConfidence);
+  }
+  if (isRecord(overlay.confidenceScaling)) {
+    composition.setPoseOverlayConfidenceScaling(overlay.confidenceScaling);
+  }
+  if (overlay.visible === false) composition.hidePoseOverlay();
+  else composition.showPoseOverlay();
+}
+
+/**
  * Create one app-shell-scoped asset session after the DSL 4.0 runtime component is validated.
  *
  * This module intentionally remains outside the default-off core index. The app shell creates a
@@ -436,6 +462,8 @@ export function createDsl4PlatformAssetSession(options) {
     const poseRecognition = isRecord(storyDocument.poseRecognition)
       ? storyDocument.poseRecognition
       : {};
+    const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const poseOverlay = isRecord(posePreview.overlay) ? posePreview.overlay : null;
     const modelInitialization = isRecord(poseRecognition.modelInitialization)
       ? poseRecognition.modelInitialization
       : {};
@@ -480,10 +508,21 @@ export function createDsl4PlatformAssetSession(options) {
       ...(posePreviewMirroringEnabled || cameraPreviewMirroringControlEnabled
         ? ['setPreviewMirroring']
         : []),
+      ...(poseOverlay
+        ? [
+            'showPoseOverlay',
+            'hidePoseOverlay',
+            'setPoseJointStyle',
+            'setPoseBoneStyle',
+            'setPoseOverlayMinimumConfidence',
+            'setPoseOverlayConfidenceScaling',
+          ]
+        : []),
       ...(cameraMenuControlEnabled
         ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
         : []),
     ]);
+    configurePoseOverlay(tmposeComposition, poseOverlay);
     const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)
       ? createDsl4StoryCameraLifecycle({
           composition: tmposeComposition,

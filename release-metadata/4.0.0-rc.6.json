@@ -5,12 +5,12 @@
   "channel": "next",
   "state": "candidate",
   "buildDate": "2026-08-15",
-  "sourceIdentity": "sha256:97cdf9af7cb3925f9289bb32bd01a3d3b2c00b09b2c16ae7b5a25ec000480d87",
+  "sourceIdentity": "sha256:ebdde314be4d929894bce9eb511f340c61879b2b9ff8366ae31cabbb00bfbf10",
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.6.sb3",
     "url": "https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v4.0.0-rc.6/kamishibai-4.0.0-rc.6.sb3",
-    "sha256": "47f746f5d0850bcbc3364517859704df32cbb104e1297549b16d82ec51ffef97",
-    "size": 6671797
+    "sha256": "be0e38d6179873894db2363751955ccd68b971a829a5b09c048e54986fbd7796",
+    "size": 6684010
   },
   "publication": {
     "npm": {

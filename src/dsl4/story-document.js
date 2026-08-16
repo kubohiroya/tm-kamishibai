@@ -169,6 +169,51 @@ function normalizePoseRecognition(value) {
   const feedback = /** @type {Record<string, unknown>} */ (source.feedback ?? {});
   const navigation = /** @type {Record<string, unknown>} */ (source.navigation ?? {});
   const preview = /** @type {Record<string, unknown>} */ (source.preview ?? {});
+  const overlay =
+    preview.overlay && typeof preview.overlay === 'object' && !Array.isArray(preview.overlay)
+      ? /** @type {Record<string, unknown>} */ (preview.overlay)
+      : null;
+  const jointStyles =
+    overlay?.jointStyles &&
+    typeof overlay.jointStyles === 'object' &&
+    !Array.isArray(overlay.jointStyles)
+      ? /** @type {Record<string, Record<string, unknown>>} */ (overlay.jointStyles)
+      : null;
+  const boneStyle =
+    overlay?.boneStyle && typeof overlay.boneStyle === 'object' && !Array.isArray(overlay.boneStyle)
+      ? /** @type {Record<string, unknown>} */ (overlay.boneStyle)
+      : null;
+  const confidenceScaling =
+    overlay?.confidenceScaling &&
+    typeof overlay.confidenceScaling === 'object' &&
+    !Array.isArray(overlay.confidenceScaling)
+      ? /** @type {Record<string, unknown>} */ (overlay.confidenceScaling)
+      : {};
+  const normalizedOverlay = overlay
+    ? {
+        visible: true,
+        minimumConfidence: 0.5,
+        ...overlay,
+        ...(jointStyles
+          ? {
+              jointStyles: Object.fromEntries(
+                Object.entries(jointStyles).map(([name, style]) => [
+                  name,
+                  {color: '#00e5ff', opacity: 1, radius: 4, ...style},
+                ]),
+              ),
+            }
+          : {}),
+        ...(boneStyle ? {boneStyle: {color: '#00e5ff', opacity: 0.9, width: 3, ...boneStyle}} : {}),
+        confidenceScaling: {
+          jointOpacity: false,
+          jointRadius: false,
+          boneOpacity: false,
+          boneWidth: false,
+          ...confidenceScaling,
+        },
+      }
+    : undefined;
   const controls =
     preview.controls && typeof preview.controls === 'object'
       ? /** @type {Record<string, Record<string, unknown>>} */ (preview.controls)
@@ -186,6 +231,7 @@ function normalizePoseRecognition(value) {
     preview: {
       mirroring: 'mirrored',
       ...preview,
+      ...(normalizedOverlay ? {overlay: normalizedOverlay} : {}),
       ...(normalizedControls ? {controls: normalizedControls} : {}),
     },
   };
@@ -193,10 +239,11 @@ function normalizePoseRecognition(value) {
 
 /**
  * @param {Record<string, SourceRange>} sourceMap
+ * @param {unknown} value
  * @param {any} document
  * @param {import('yaml').LineCounter} lineCounter
  */
-function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
+function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
   const poseRecognitionNode = document.getIn(['poseRecognition'], true);
   if (!poseRecognitionNode) return;
   sourceMap['/poseRecognition'] = sourceRangeForNode(poseRecognitionNode, lineCounter);
@@ -219,7 +266,7 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
       selection: ['accumulationPerSecond', 'decayPerSecond', 'scoreThreshold'],
       feedback: ['mode'],
       navigation: ['allowSkip'],
-      preview: ['mirroring', 'controls'],
+      preview: ['mirroring', 'overlay', 'controls'],
     }[field];
     for (const nestedField of nestedFields ?? []) {
       const nestedNode = document.getIn(['poseRecognition', field, nestedField], true);
@@ -231,6 +278,30 @@ function mapPoseRecognitionSource(sourceMap, document, lineCounter) {
       }
     }
     if (field === 'preview') {
+      const poseRecognition =
+        typeof value === 'object' && value !== null && !Array.isArray(value)
+          ? /** @type {Record<string, unknown>} */ (value)
+          : {};
+      const preview =
+        typeof poseRecognition.preview === 'object' &&
+        poseRecognition.preview !== null &&
+        !Array.isArray(poseRecognition.preview)
+          ? /** @type {Record<string, unknown>} */ (poseRecognition.preview)
+          : {};
+      if (
+        typeof preview.overlay === 'object' &&
+        preview.overlay !== null &&
+        !Array.isArray(preview.overlay)
+      ) {
+        mapNestedSource(
+          sourceMap,
+          preview.overlay,
+          document,
+          lineCounter,
+          ['poseRecognition', 'preview', 'overlay'],
+          '/poseRecognition/preview/overlay',
+        );
+      }
       for (const controlName of ['mirroring', 'cameraMenu']) {
         const controlPath = ['poseRecognition', 'preview', 'controls', controlName];
         const controlNode = document.getIn(controlPath, true);
@@ -412,7 +483,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
 export function createStoryDocument(story, document, lineCounter, sourceId) {
   /** @type {Record<string, SourceRange>} */
   const sourceMap = {'/': sourceRangeForNode(document.contents, lineCounter)};
-  mapPoseRecognitionSource(sourceMap, document, lineCounter);
+  mapPoseRecognitionSource(sourceMap, story.poseRecognition, document, lineCounter);
   const sourceBranches = /** @type {Record<string, unknown>} */ (story.branches ?? {});
   mapBranchSources(sourceMap, sourceBranches, document, lineCounter);
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});

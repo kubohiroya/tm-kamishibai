@@ -390,6 +390,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   );
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseFeedbackModes: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4PosePreviewMirroring: 1}), TypeError);
+  assert.throws(() => resolveDsl4FeatureFlags({dsl4PoseOverlay: true}), /Unknown/u);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4CameraPreviewControls: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4SpeechAdvanceTypewriter: 1}), TypeError);
   assert.throws(() => resolveDsl4FeatureFlags({dsl4BubbleAdvanceIndicator: 1}), TypeError);
