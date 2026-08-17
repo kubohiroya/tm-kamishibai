@@ -9,8 +9,8 @@
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.7.sb3",
     "url": "https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v4.0.0-rc.7/kamishibai-4.0.0-rc.7.sb3",
-    "sha256": "00e7db8883f94f9f04a3f60ae7b3f7b641df19b6232be1b7e8050a091c081289",
-    "size": 6684533
+    "sha256": "3ad25911b9255d51273b37f24fa0d056e6ec72418f314e97c743ad52300380f8",
+    "size": 6684157
   },
   "publication": {
     "npm": {

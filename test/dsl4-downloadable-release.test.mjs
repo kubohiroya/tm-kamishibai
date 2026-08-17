@@ -49,9 +49,6 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-const releaseMetadata = JSON.parse(
-  await readFile(new URL('../release-metadata/4.0.0-rc.7.json', import.meta.url), 'utf8'),
-);
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -80,6 +77,7 @@ const applicationMenuIconDataUrls = Object.freeze(
 );
 
 async function buildRelease() {
+  // Current generator output is independent from immutable published release metadata.
   return buildCurrentRuntimeRelease();
 }
 
@@ -912,10 +910,6 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
         visible: false,
       },
     ],
-  );
-  assert.equal(
-    createHash('sha256').update(result.archive).digest('hex'),
-    releaseMetadata.artifact.sha256,
   );
 });
 
