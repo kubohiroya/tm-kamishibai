@@ -96,14 +96,14 @@ importers:
         specifier: ^6.3.0
         version: 6.3.0
       globals:
-        specifier: 17.9.0
-        version: 17.9.0
+        specifier: 17.11.0
+        version: 17.11.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
       scratch-parser:
-        specifier: 6.0.0
-        version: 6.0.0
+        specifier: 6.0.1
+        version: 6.0.1
       scratch-render-fonts:
         specifier: github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961
         version: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961
@@ -1540,8 +1540,8 @@ packages:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
     deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-  globals@17.9.0:
-    resolution: {integrity: sha512-m/MvAW61QVU5VDNF1Vj8axt016h8w7L5TU1e9zlab7XIttAT2YAlCwl75K1fOqvMM9apmD7lbCIRhpfkhmxhCg==}
+  globals@17.11.0:
+    resolution: {integrity: sha512-Z2I8hM+PbJDXQDq3Icgpzv+mPdwr68iZUU9d5WW4FuXfDUQfkZaZuvjMv42/5crNyw154+9+VWXbYrUgDXbxNw==}
     engines: {node: '>=18'}
 
   globby@11.1.0:
@@ -2333,19 +2333,23 @@ packages:
     resolution: {integrity: sha512-5cfCmsTYV/wPaRIItNxatw02ua/MThdIUNnUOCYp+3LSEJvnG804ANw2VLaavNILIfWXF1D1G2KNANkBBvInwQ==}
 
   scratch-audio@https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30}
+    resolution: {gitHosted: true, integrity: sha512-Y261m4LsHUOriNLV0x1CR/0uSuH3rvnU2YwMH8M2K2nAdVAaIPBtaZb1pU2NihDnB58H2odk71qm9VhICgfIaw==, tarball: https://codeload.github.com/TurboWarp/scratch-audio/tar.gz/aba00cd02e36d95407effafa03f3678e4c669b30}
     version: 0.1.0
 
   scratch-parser@6.0.0:
     resolution: {integrity: sha512-LXcKxJIupqBtXSe2+SXkQxwdMWg4JCdZfoSdPYj1ZtV/UhejyUYju6ptYUrr98RsLFT5UyCmmUaev8gA1SNvhQ==}
     engines: {node: '>=8.0'}
 
+  scratch-parser@6.0.1:
+    resolution: {integrity: sha512-hoKg7TKEHLHo58Ua1qgzICls84G18+VzCIZ6efcooZOFWsqyuHBzVd5V7v3IqrSSiCGlUSzHb1l6mmtSULfWJw==}
+    engines: {node: '>=8.0'}
+
   scratch-render-fonts@https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961}
+    resolution: {gitHosted: true, integrity: sha512-uODd7hOqXZgkir8WtRx8K6IHs9UJa06wEm03Q6vgXubhbkRoimU3Osx3baqy9ppof+ThSTkie0xH2OpNDrmWFA==, tarball: https://codeload.github.com/TurboWarp/scratch-render-fonts/tar.gz/7b6768fc6dfef6b343a06f992587b74807043961}
     version: 1.0.0
 
   scratch-render@https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce}
+    resolution: {gitHosted: true, integrity: sha512-JIbFGheHaPPVgcWWKJoPx8qVlDxefdkW8y1DcTzqOPHyoSRfRB7E8OGAjU4JU/OqpL0GJ4bWt7bDDlNCImZaPw==, tarball: https://codeload.github.com/TurboWarp/scratch-render/tar.gz/a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce}
     version: 0.1.0
 
   scratch-sb1-converter@0.2.7:
@@ -2358,7 +2362,7 @@ packages:
     resolution: {integrity: sha512-6+bQU9iVYv23T8J0SjpV6MTugm0y8myh/4DPgu1BGfccysdkaWzu3MkNGQyQRUlbqAiW9wM7ctfv3USPEkzTgg==}
 
   scratch-vm@https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f}
+    resolution: {gitHosted: true, integrity: sha512-0i2uA7c2Px81yzT1aEx6oqYIrEUu6dEAkAsKjHYDRH0jfxcTsICI3+oIrrvp/bPD6KbXsgNxGZwUUb1WYE7hOg==, tarball: https://codeload.github.com/TurboWarp/scratch-vm/tar.gz/c4823421cb7c17d8d8a89878851ce1668c26a21f}
     version: 2.1.46
     peerDependencies:
       '@turbowarp/scratch-svg-renderer': ^1.1.0
@@ -4348,7 +4352,7 @@ snapshots:
       once: 1.4.0
       path-is-absolute: 1.0.1
 
-  globals@17.9.0: {}
+  globals@17.11.0: {}
 
   globby@11.1.0:
     dependencies:
@@ -5222,6 +5226,12 @@ snapshots:
       '@turbowarp/startaudiocontext': 1.0.0
 
   scratch-parser@6.0.0:
+    dependencies:
+      ajv: 6.15.0
+      jszip: 3.10.1
+      pify: 4.0.1
+
+  scratch-parser@6.0.1:
     dependencies:
       ajv: 6.15.0
       jszip: 3.10.1
