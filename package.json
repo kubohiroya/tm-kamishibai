@@ -88,7 +88,7 @@
     "@kubohiroya/turbowarp-runtime-expression": "0.4.0",
     "@kubohiroya/turbowarp-svg-text": "0.5.0",
     "@kubohiroya/turbowarp-tmpose": "1.12.0",
-    "@teachablemachine/pose": "0.8.3",
+    "@teachablemachine/pose": "0.8.6",
     "@tensorflow/tfjs": "1.3.1",
     "@turbowarp/scratch-storage": "2.0.0",
     "@turbowarp/scratch-svg-renderer": "1.1.0",

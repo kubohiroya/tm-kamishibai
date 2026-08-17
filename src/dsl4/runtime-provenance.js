@@ -58,7 +58,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Teachable Machine Pose',
     source: '@teachablemachine/pose',
-    version: '0.8.3',
+    version: '0.8.6',
     copyright: 'Google LLC',
     license: 'Apache-2.0',
   },
