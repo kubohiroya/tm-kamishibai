@@ -11,6 +11,10 @@ import test from 'node:test';
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {buildSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 
+import {
+  createDownloadableReleaseSb3,
+  downloadableReleases,
+} from '../scripts/sb3/downloadable-releases.mjs';
 import {createKamishibaiSb3} from '../scripts/sb3/build.mjs';
 import {
   createDsl4ReleaseSourceFiles,
@@ -42,6 +46,7 @@ import {
 } from '../src/dsl4/platform/posenet-bundle.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
+import {turbowarpVmCommit} from './helpers/turbowarp-vm.mjs';
 
 const require = createRequire(import.meta.url);
 const VirtualMachine = require('scratch-vm');
@@ -49,7 +54,8 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
-const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
+const release = downloadableReleases.find(({series}) => series === '4.0');
+assert(release, 'The release catalog must publish a DSL 4.0 artifact.');
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
@@ -59,26 +65,30 @@ const storyComponentLimits = Object.freeze({
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
-const applicationMenuIconFilenames = Object.freeze({
-  open: 'application-menu-open.svg',
-  reload: 'application-menu-reload.svg',
-  about: 'application-menu-about.svg',
-  language: 'application-menu-language.svg',
+const menuIconFilenames = Object.freeze({
+  open: '1766a36329eca190b2b19bba53ef7d8f.svg',
+  reload: '4de06c4651dc7ea71b71846027d6d149.svg',
+  about: 'fc0a44695524e272260a18d76320828f.svg',
+  language: '7069974a56d188a8d1e9e79513df9e0e.svg',
 });
-const applicationMenuIconDataUrls = Object.freeze(
+const menuIconDataUrls = Object.freeze(
   Object.fromEntries(
     await Promise.all(
-      Object.entries(applicationMenuIconFilenames).map(async ([action, filename]) => {
-        const bytes = await readFile(new URL(`../scripts/sb3/assets/${filename}`, import.meta.url));
+      Object.entries(menuIconFilenames).map(async ([action, filename]) => {
+        const bytes = await readFile(new URL(`../app/assets/${filename}`, import.meta.url));
         return [action, `data:image/svg+xml;base64,${bytes.toString('base64')}`];
       }),
     ),
   ),
 );
+const publishedMenuIconDataUrls = Object.freeze({
+  ...menuIconDataUrls,
+  reload:
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8cGF0aCBkPSJNMzguNSAxN0ExNiAxNiAwIDEgMCA0MCAyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0zOC41IDE3QTE2IDE2IDAgMSAwIDQwIDI4IiBmaWxsPSJub25lIiBzdHJva2U9IiNkODU2NTYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTTI5IDcuNSA0MCA4bC0uNSAxMSIgZmlsbD0iI2Q4NTY1NiIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
+});
 
 async function buildRelease() {
-  // Current generator output is independent from immutable published release metadata.
-  return buildCurrentRuntimeRelease();
+  return createDownloadableReleaseSb3(release);
 }
 
 let pendingCurrentRuntimeRelease;
@@ -94,11 +104,11 @@ function buildCurrentRuntimeRelease() {
         await writeFile(outputPath, contents);
       }
       const built = await createKamishibaiSb3({
-        buildDate: '2026-08-16',
+        buildDate: '2026-08-15',
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.7',
+        version: '4.0.0-rc.5',
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -911,6 +921,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
       },
     ],
   );
+  assert.equal(createHash('sha256').update(result.archive).digest('hex'), release.sha256);
 });
 
 test('keeps every bundled extension icon and documentation button on its own palette group', async () => {
@@ -975,32 +986,6 @@ test('keeps every bundled extension icon and documentation button on its own pal
         (block) => block && typeof block === 'object' && typeof block.opcode === 'string',
       );
       assert(memberBlocks.length > 0, memberId);
-      if (memberId === 'tmpose') {
-        const opcodes = memberBlocks.map(({opcode}) => opcode);
-        for (const opcode of [
-          'startRecognition',
-          'stopRecognition',
-          'isRecognizing',
-          'firstRecognitionMsReporter',
-        ]) {
-          assert(
-            opcodes.includes(`${memberId}__${opcode}`),
-            `missing TMPose 1.12.0 opcode ${opcode}`,
-          );
-        }
-        for (const opcode of [
-          'startPredict',
-          'stopPredict',
-          'isPredicting',
-          'firstPredictMsReporter',
-        ]) {
-          assert.equal(
-            opcodes.includes(`${memberId}__${opcode}`),
-            false,
-            `removed TMPose opcode ${opcode}`,
-          );
-        }
-      }
       assert.equal(
         memberBlocks.every(
           (block) =>
@@ -1288,16 +1273,14 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
   );
 });
 
-test('uses the application menu SVG bytes as the reusable DOM menu defaults', () => {
+test('uses the content-addressed SVG bytes as the reusable DOM menu defaults', () => {
   const {build, ...legacyIcons} = dsl4RuntimeApplicationMenuDefaultIcons;
-  assert.deepEqual(legacyIcons, applicationMenuIconDataUrls);
+  assert.deepEqual(legacyIcons, menuIconDataUrls);
   assert.match(build, /^data:image\/svg\+xml;base64,/u);
 });
 
-test('draws a balanced reload arrowhead as part of one outlined shape', () => {
-  const svg = Buffer.from(applicationMenuIconDataUrls.reload.split(',')[1], 'base64').toString(
-    'utf8',
-  );
+test('draws the reload ring and arrowhead as one outlined shape', () => {
+  const svg = Buffer.from(menuIconDataUrls.reload.split(',')[1], 'base64').toString('utf8');
   assert.equal((svg.match(/<path\b/gu) ?? []).length, 1);
   assert.match(svg, /d="M43\.5 19\.4 38\.2 7\.1 36\.2 9\.4A19 19/u);
   assert.match(svg, /A13 13 0 1 1 32\.4 14L30\.4 16\.3Z"/u);
@@ -1434,7 +1417,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.7');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.5');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,
@@ -1664,7 +1647,7 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
       const buttons = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action);
       assert.equal(buttons.length, 1);
       assert.equal(buttons[0].children[0].tagName, 'IMG');
-      assert.equal(buttons[0].children[0].src, applicationMenuIconDataUrls[action]);
+      assert.equal(buttons[0].children[0].src, publishedMenuIconDataUrls[action]);
       assert.equal(buttons[0].children[0].alt, '');
       assert.match(buttons[0].children[0].style.cssText, /invert\(1\).*saturate\(\.35\)/u);
       assert.match(buttons[0].children[0].style.cssText, /width:10cqw;height:10cqw/u);

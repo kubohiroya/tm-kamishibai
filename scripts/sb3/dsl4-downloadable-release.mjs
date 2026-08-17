@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile, readdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
@@ -30,11 +30,12 @@ const tmPoseWebpackLoaderWithSharedTensorflow =
   'function n(r){if(0===r)return globalThis.tf;if(e[r])';
 const officialWebsiteFaviconPath = path.join(projectRoot, 'site/favicon.png');
 const applicationMenuIconPaths = Object.freeze({
-  open: path.join(projectRoot, 'scripts/sb3/assets/application-menu-open.svg'),
-  reload: path.join(projectRoot, 'scripts/sb3/assets/application-menu-reload.svg'),
-  about: path.join(projectRoot, 'scripts/sb3/assets/application-menu-about.svg'),
-  language: path.join(projectRoot, 'scripts/sb3/assets/application-menu-language.svg'),
+  open: path.join(projectRoot, 'app/assets/1766a36329eca190b2b19bba53ef7d8f.svg'),
+  reload: path.join(projectRoot, 'app/assets/4de06c4651dc7ea71b71846027d6d149.svg'),
+  about: path.join(projectRoot, 'app/assets/fc0a44695524e272260a18d76320828f.svg'),
+  language: path.join(projectRoot, 'app/assets/7069974a56d188a8d1e9e79513df9e0e.svg'),
 });
+const releaseDirectory = path.join(projectRoot, 'release-sources', '4.0.0-rc.5', 'app');
 const extensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
 const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
@@ -111,7 +112,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'tmpose',
       name: 'TMPose',
       package: '@kubohiroya/turbowarp-tmpose',
-      version: '1.12.0',
+      version: '1.10.0',
       artifact: 'dist/tmpose.js',
       sourcePath: path.join(
         path.dirname(
@@ -146,7 +147,7 @@ scenes:
     - wait: 0
 `;
 const limits = Object.freeze({
-  maxSourceBytes: 1024 * 1024,
+  maxSourceBytes: 64 * 1024,
   maxAssetFiles: 64,
   maxAssetBytes: 64 * 1024 * 1024,
 });
@@ -626,11 +627,37 @@ export async function createDsl4ReleaseSourceFiles() {
   return files;
 }
 
+async function listFiles(directory, relative = '') {
+  const entries = await readdir(directory, {withFileTypes: true});
+  const files = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
+    const nested = relative ? path.posix.join(relative, entry.name) : entry.name;
+    if (entry.isDirectory())
+      files.push(...(await listFiles(path.join(directory, entry.name), nested)));
+    else if (entry.isFile()) files.push(nested);
+    else throw new Error(`Unsupported release source entry: ${nested}`);
+  }
+  return files;
+}
+
+async function checkRelease(files) {
+  const actualFiles = await listFiles(releaseDirectory);
+  assert.deepEqual(
+    actualFiles,
+    [...files.keys()].sort((left, right) => left.localeCompare(right, 'en')),
+  );
+  for (const [relativePath, expected] of files) {
+    const actual = await readFile(path.join(releaseDirectory, relativePath));
+    assert(actual.equals(expected), `DSL 4.0.0-rc.5 release source is stale: ${relativePath}`);
+  }
+  process.stdout.write(`Verified ${files.size} DSL 4.0.0-rc.5 release source file(s).\n`);
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   assert(
     !process.argv.includes('--write'),
     'Direct release source writes are disabled. Run pnpm release:dsl4:update.',
   );
   const files = await createDsl4ReleaseSourceFiles();
-  process.stdout.write(`Generated ${files.size} transient DSL 4 release source file(s).\n`);
+  await checkRelease(files);
 }
