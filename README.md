@@ -113,6 +113,11 @@ scenes:
 
 The source order of `scenes` defines the normal execution order. Do not use formatters that sort scene keys, and avoid scene IDs made only of digits with the current implementation. See the [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序) for the formal contract and known limitation.
 
+To reuse an `Actor.say` or `Actor.think` completion rule, define `seconds`, `waitFor: advance`, or
+both under the top-level `bubbleClosePolicies` registry, then reference its name with `closePolicy`.
+Close policies are separate from visual `bubbleStyles` and cannot be combined with inline `seconds`
+or `waitFor` on the same action.
+
 For practical scripts, asset references, pose models, branches, and speech bubbles, continue with the [author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tmpose-kamishibai-samples).
 
 ### Validate, preview, and build with the CLI

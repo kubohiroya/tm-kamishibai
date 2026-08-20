@@ -518,6 +518,28 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     }
   }
 
+  const sourceBubbleClosePolicies = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleClosePolicies ?? {}
+  );
+  const bubbleClosePolicies = cloneValue(sourceBubbleClosePolicies);
+  const bubbleClosePoliciesNode = document.getIn(['bubbleClosePolicies'], true);
+  if (bubbleClosePoliciesNode) {
+    sourceMap['/bubbleClosePolicies'] = sourceRangeForNode(bubbleClosePoliciesNode, lineCounter);
+    for (const [policyId, policy] of Object.entries(sourceBubbleClosePolicies)) {
+      const policyPath = `/bubbleClosePolicies/${encodeDsl4StoryPathSegment(policyId)}`;
+      const policyNode = document.getIn(['bubbleClosePolicies', policyId], true);
+      sourceMap[policyPath] = sourceRangeForNode(policyNode, lineCounter);
+      mapNestedSource(
+        sourceMap,
+        policy,
+        document,
+        lineCounter,
+        ['bubbleClosePolicies', policyId],
+        policyPath,
+      );
+    }
+  }
+
   const sourceScenes = /** @type {Record<string, unknown>} */ (story.scenes);
   const scenes = Object.entries(sourceScenes).map(([sceneId, sourceScene]) => {
     const sourceScenePath = ['scenes', sceneId];
@@ -570,6 +592,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     cover: cloneValue(story.cover ?? null),
     textStyles: cloneValue(story.textStyles ?? {}),
     bubbleStyles,
+    bubbleClosePolicies,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),

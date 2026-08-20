@@ -12,6 +12,7 @@
     "cover": {"$ref": "#/$defs/cover"},
     "textStyles": {"$ref": "#/$defs/textStyles"},
     "bubbleStyles": {"$ref": "#/$defs/bubbleStyles"},
+    "bubbleClosePolicies": {"$ref": "#/$defs/bubbleClosePolicies"},
     "variables": {"$ref": "#/$defs/variables"},
     "loading": {"$ref": "#/$defs/loadingScreen"},
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
@@ -103,6 +104,7 @@
       "minLength": 1,
       "pattern": "^(?!\\s)(?!.*\\s$)[^\\p{Cc}\\p{Cs}\\p{Zl}\\p{Zp}]+$"
     },
+    "bubbleClosePolicyName": {"$ref": "#/$defs/bubbleStyleName"},
     "stableId": {"$ref": "#/$defs/id"},
     "compactAsset": {
       "type": "string",
@@ -563,6 +565,23 @@
       "type": "object",
       "propertyNames": {"$ref": "#/$defs/bubbleStyleName"},
       "additionalProperties": {"$ref": "#/$defs/bubbleStyle"}
+    },
+    "bubbleClosePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {"required": ["seconds"], "properties": {"seconds": true}},
+        {"required": ["waitFor"], "properties": {"waitFor": true}}
+      ],
+      "properties": {
+        "seconds": {"type": "number", "minimum": 0},
+        "waitFor": {"const": "advance"}
+      }
+    },
+    "bubbleClosePolicies": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/bubbleClosePolicyName"},
+      "additionalProperties": {"$ref": "#/$defs/bubbleClosePolicy"}
     },
     "variableValue": {
       "oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}]
@@ -1066,12 +1085,18 @@
       "additionalProperties": false,
       "required": ["text"],
       "anyOf": [
+        {"required": ["closePolicy"], "properties": {"closePolicy": true}},
         {"required": ["seconds"], "properties": {"seconds": true}},
         {"required": ["waitFor"], "properties": {"waitFor": true}}
+      ],
+      "allOf": [
+        {"not": {"required": ["closePolicy", "seconds"]}},
+        {"not": {"required": ["closePolicy", "waitFor"]}}
       ],
       "properties": {
         "stableId": {"$ref": "#/$defs/stableId"},
         "text": {"type": "string"},
+        "closePolicy": {"$ref": "#/$defs/bubbleClosePolicyName"},
         "seconds": {"type": "number", "minimum": 0},
         "waitFor": {"const": "advance"},
         "styles": {

@@ -112,6 +112,10 @@ scenes:
 
 `scenes`はsource上の記述順が通常の実行順です。sceneを自動で並べ替えるformatterを使わず、現行実装では数字だけのscene IDも避けてください。正式な契約と既知制約は[DSL 4.0表層仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序)にあります。
 
+`Actor.say`／`Actor.think`の終了条件を再利用する場合は、トップレベルの`bubbleClosePolicies`に
+`seconds`、`waitFor: advance`、または両方を定義し、actionから`closePolicy`名で参照します。表示用の
+`bubbleStyles`とは独立しており、action内の`seconds`／`waitFor`との併用はできません。
+
 より実用的な台本、アセット参照、ポーズモデル、分岐、吹き出しについては[作者ガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/)と[サンプルリポジトリ](https://github.com/kubohiroya/tmpose-kamishibai-samples)を参照してください。
 
 ### CLIで検証・preview・buildする

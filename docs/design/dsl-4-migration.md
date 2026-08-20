@@ -103,6 +103,11 @@ arityや曖昧なcolon区切りは、意味を推測せずerrorにします。
 空文字の`Actor.say:`／`Actor.think:`だけは3.2で吹き出しを消去する操作なので、`text: ""`、`seconds: 0`へ
 決定的に変換します。
 
+converterは既存speechの表示秒数をaction内の`seconds`として保持し、終了条件の意味や再利用単位を推測して
+`bubbleClosePolicies`を自動生成しません。変換後、同じ`seconds`／`waitFor`指定が繰り返されている場合は、作者が
+それらを名前付きpolicyへ切り出し、各actionを`closePolicy`参照へ置き換えられます。`closePolicy`とaction内の
+`seconds`／`waitFor`は排他的なので、置換時はinline指定を削除します。
+
 custom Scratch block、Scratch variable／broadcastへ直接依存する作品固有code、block順に依存する副作用は台本
 sourceだけから検出できません。converter成功後も作品固有blockをレビューします。引数・結果・DSL4 contextを
 渡さず、単一messageを送信して全receiverの完了を待つだけでよい処理は、起動時固定・既定OFFの

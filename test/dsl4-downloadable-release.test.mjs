@@ -655,7 +655,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   ).toString('utf8');
 
   assert.equal(toolchainPackage.version, '0.8.0');
-  assert.equal(bubblePackage.version, '0.7.0');
+  assert.equal(bubblePackage.version, '0.9.0');
   assert.equal(bubblePackage.exports['./reveal'].import, './dist/reveal.js');
   assert.deepEqual(Object.keys(reveal).sort(), [
     'bubbleRevealUnits',
@@ -683,7 +683,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   assert.deepEqual(Object.keys(project.extensionURLs), [bundleExtensionId]);
   assert.match(
     extensionSource,
-    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.7\.0/u,
+    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.9\.0/u,
   );
   assert.doesNotMatch(extensionSource, /@kubohiroya\/turbowarp-bubble@0\.4\.0/u);
 });

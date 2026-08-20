@@ -303,6 +303,14 @@ export function createDsl4RuntimeController({
   const bubbleStyles = /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
     bubbleStylesValue
   );
+  const bubbleClosePoliciesValue = storyDocument.bubbleClosePolicies ?? {};
+  if (!isRecord(bubbleClosePoliciesValue)) {
+    throw new TypeError('DSL 4.0 StoryDocument bubbleClosePolicies must be an object');
+  }
+  const bubbleClosePolicies =
+    /** @type {Readonly<Record<string, Readonly<Record<string, unknown>>>>} */ (
+      bubbleClosePoliciesValue
+    );
   if (
     !bubbleAdvanceIndicatorEnabled &&
     !turboWarpBubbleEnabled &&
@@ -332,9 +340,13 @@ export function createDsl4RuntimeController({
         if (action.command === 'think') return true;
         if (action.command !== 'say') return false;
         const args = /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {});
-        return ['waitFor', 'startSound', 'styles', ...speechPresentationArgumentNames].some((key) =>
-          Object.hasOwn(args, key),
-        );
+        return [
+          'closePolicy',
+          'waitFor',
+          'startSound',
+          'styles',
+          ...speechPresentationArgumentNames,
+        ].some((key) => Object.hasOwn(args, key));
       });
     if (extendedSpeechAction) {
       throw new TypeError(
@@ -1071,8 +1083,25 @@ export function createDsl4RuntimeController({
    * @param {Record<string, unknown>} args
    */
   function resolveSpeechStyle(command, args) {
-    if (!Object.hasOwn(args, 'styles')) return args;
-    const styleIds = args.styles;
+    let resolvedArgs = args;
+    if (Object.hasOwn(args, 'closePolicy')) {
+      const policyId = args.closePolicy;
+      const policy = typeof policyId === 'string' ? bubbleClosePolicies[policyId] : undefined;
+      if (!isRecord(policy)) {
+        const error = new Error(`${command}.closePolicy is unavailable: ${String(policyId)}`);
+        Object.defineProperty(error, 'code', {
+          value: 'K4-RUNTIME-SPEECH-CLOSE-POLICY-001',
+        });
+        throw error;
+      }
+      const actionArgs = Object.fromEntries(
+        Object.entries(args).filter(([key]) => key !== 'closePolicy'),
+      );
+      const resolvedPolicy = /** @type {Record<string, unknown>} */ (cloneValue(policy));
+      resolvedArgs = {...resolvedPolicy, ...actionArgs};
+    }
+    if (!Object.hasOwn(resolvedArgs, 'styles')) return resolvedArgs;
+    const styleIds = resolvedArgs.styles;
     if (
       !Array.isArray(styleIds) ||
       styleIds.length === 0 ||
@@ -1083,7 +1112,9 @@ export function createDsl4RuntimeController({
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-SPEECH-STYLE-001'});
       throw error;
     }
-    const actionArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'styles'));
+    const actionArgs = Object.fromEntries(
+      Object.entries(resolvedArgs).filter(([key]) => key !== 'styles'),
+    );
     const resolvedStyle = composeBubbleStyles(styleIds, bubbleStyles);
     const presentation = Object.fromEntries(
       speechPresentationArgumentNames

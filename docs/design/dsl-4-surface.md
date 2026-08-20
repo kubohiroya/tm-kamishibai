@@ -41,20 +41,21 @@ Copyright © 2026 Hiroya Kubo.
 台本はUTF-8で記述した単一のYAML 1.2文書です。トップレベルで使用できるキーは次だけです。
 未知のキーは警告ではなくエラーにします。
 
-| キー              | 必須 | 役割                              |
-| ----------------- | ---- | --------------------------------- |
-| `kamishibai`      | 必須 | 文字列`'4.0'`                     |
-| `assets`          | 任意 | 型付きアセットの宣言              |
-| `actors`          | 任意 | actorと初期costumeの対応          |
-| `cover`           | 任意 | 表紙の背景とBGM                   |
-| `textStyles`      | 任意 | SVG Textの名前付きstyle           |
-| `bubbleStyles`    | 任意 | say／thinkの名前付き吹き出しstyle |
-| `variables`       | 任意 | string、number、booleanの初期値   |
-| `loading`         | 任意 | 読み込み中の背景とcostume列       |
-| `poseRecognition` | 任意 | 待機中と認識成功時の音・認識設定  |
-| `controls`        | 任意 | 環境別の開発・チート機能用keymap  |
-| `branches`        | 任意 | 順序付き条件分岐                  |
-| `scenes`          | 必須 | 一つ以上のscene                   |
+| キー                  | 必須 | 役割                              |
+| --------------------- | ---- | --------------------------------- |
+| `kamishibai`          | 必須 | 文字列`'4.0'`                     |
+| `assets`              | 任意 | 型付きアセットの宣言              |
+| `actors`              | 任意 | actorと初期costumeの対応          |
+| `cover`               | 任意 | 表紙の背景とBGM                   |
+| `textStyles`          | 任意 | SVG Textの名前付きstyle           |
+| `bubbleStyles`        | 任意 | say／thinkの名前付き吹き出しstyle |
+| `bubbleClosePolicies` | 任意 | say／thinkの名前付き終了条件      |
+| `variables`           | 任意 | string、number、booleanの初期値   |
+| `loading`             | 任意 | 読み込み中の背景とcostume列       |
+| `poseRecognition`     | 任意 | 待機中と認識成功時の音・認識設定  |
+| `controls`            | 任意 | 環境別の開発・チート機能用keymap  |
+| `branches`            | 任意 | 順序付き条件分岐                  |
+| `scenes`              | 必須 | 一つ以上のscene                   |
 
 actor、style、variable、branch、action、parameterなど、DSL構文上の識別子にはUnicodeの文字、数字、
 `_`、`-`を使用できます。先頭は文字または`_`とし、`.`はactor actionの区切りとして予約します。
@@ -65,8 +66,8 @@ Unicodeの正規化形式、C0制御文字、DELを含められます。YAML sou
 escapeを使います。parser、converter、runtimeは値をtrim、NFC変換、alias化しません。`__proto__`など
 object pollutionを生じるmapping keyは、文字種とは別の安全境界として引き続き拒否します。
 
-`bubbleStyles`の名前だけは人が読むclass名として扱い、内部の空白と日本語を使用できます。空文字、
-先頭・末尾の空白、改行、tab、制御文字は使用できず、Unicode NFCでなければなりません。
+`bubbleStyles`と`bubbleClosePolicies`の名前は人が読むclass名として扱い、内部の空白と日本語を
+使用できます。空文字、先頭・末尾の空白、改行、tab、制御文字は使用できず、Unicode NFCでなければなりません。
 
 YAMLのduplicate key、anchor、alias、merge key、custom tag、複数文書を認めません。実装は
 YAMLの構文位置を保持し、schema検証に成功するまでアセット読込などの副作用を開始しません。
@@ -403,6 +404,15 @@ bubbleStyles:
       - {name: shake, direction: right, count: 2, ease: easeInOut}
       - {name: animateBubbleShape, visualStyle: YELLING, speed: 1.5, durationSeconds: 0.3}
     hideAnimation: {name: floatOut, durationSeconds: 0.15, direction: down}
+
+bubbleClosePolicies:
+  three seconds:
+    seconds: 3
+  user advance:
+    waitFor: advance
+  advance or timeout:
+    seconds: 10
+    waitFor: advance
 ```
 
 `poseRecognition.idleSound`と`chargeSound`はそれぞれ任意です。両方を省略した無音、`idleSound`だけの
@@ -469,8 +479,18 @@ activeな`sound`だけを停止します。三commandは最初に受理した入
 `bubbleStyles`は`Actor.say`／`Actor.think`の文字送りpresentationを、再利用可能な部分styleとして
 宣言します。各styleは単独で完結している必要はありません。`styles`から参照した全styleとaction内指定を
 合成したeffective styleに対して、`characterSound`には`characterIntervalSeconds`が必要、などの相互依存を
-検証します。本文、完了条件、吹き出し開始時の音声はセリフごとに異なるため、`text`、`seconds`、
-`waitFor`、`startSound`をstyleへ含めません。
+検証します。本文、終了条件、吹き出し開始時の音声は表示styleではないため、`text`、`seconds`、
+`waitFor`、`startSound`を`bubbleStyles`へ含めません。
+
+`bubbleClosePolicies`は、吹き出しを閉じてspeech actionを完了する条件だけを名前付きで再利用します。各policyは
+`seconds`、`waitFor: advance`、または両方を持ちます。両方なら入力とtimeoutのうち先に成立した方を使います。
+policyの継承・合成は行わず、actionは`closePolicy`で1件だけ参照します。`closePolicy`とaction内の`seconds`／
+`waitFor`は排他的です。runtime controllerはActor portへ渡す前にpolicyを既存の`{seconds, waitFor}`へ展開し、
+platform adapterやTurboWarp Bubbleのblock registryはDSLのpolicy registryを参照しません。
+
+registryはparse済みStoryDocumentの世代に属します。live reload中のspeechは開始時に解決した値を使い続け、
+更新後のpolicyは次に開始するstory generationから適用します。skip、stop、scene遷移、live reloadによるcancelと
+terminal cleanupはinlineの`seconds`／`waitFor`と同じです。
 
 style定義自身の`styles`配列から既存styleを参照し、名前付き合成styleを定義できます。参照先を配列順に
 合成した後、その定義自身に記述したpropertyを適用します。名前付き合成は再帰的に使用できますが、直接・
@@ -823,24 +843,42 @@ OFFに戻し、台本を標準core actionまたはCustom actionへ戻します�
 
 ### 7.2 Actor action
 
-| action                     | 引数                                                                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                              |
-| `Actor.hide`               | `{stableId?}`                                                                                                                                                                 |
-| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                      |
-| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                         |
-| `Actor.say`／`Actor.think` | `{text, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                    |
-| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                      |
-| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                  |
-| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                    |
-| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                          |
+| action                     | 引数                                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                                            |
+| `Actor.hide`               | `{stableId?}`                                                                                                                                                                               |
+| `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                                    |
+| `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                                       |
+| `Actor.say`／`Actor.think` | `{text, closePolicy?, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                                  |
+| `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                                    |
+| `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                                |
+| `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                                  |
+| `Actor.pose`               | `{steps, stableId?}`                                                                                                                                                                        |
 
-`Actor.say`と`Actor.think`は、`seconds`または`waitFor: advance`の少なくとも一方を指定します。
-`seconds`だけなら吹き出しの表示開始から指定秒数後、`waitFor`だけならステージのprimary pointer入力または
-修飾キーを伴わないany key入力後に完了します。両方を指定した場合は入力とタイムアウトのうち先に成立した方で
-完了します。入力待機は吹き出しを表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を
-再利用しません。
+`Actor.say`と`Actor.think`は、`closePolicy`を1件指定するか、action内で`seconds`または
+`waitFor: advance`の少なくとも一方を指定します。`closePolicy`はトップレベルの`bubbleClosePolicies`に
+存在する名前であり、action内の`seconds`／`waitFor`とは併用できません。`seconds`だけなら吹き出しの表示開始から
+指定秒数後、`waitFor`だけならステージのprimary pointer入力または修飾キーを伴わないany key入力後に完了します。
+両方を持つpolicyまたはinline指定では、入力とtimeoutのうち先に成立した方で完了します。入力待機は吹き出しを
+表示した直後のmicrotaskで有効になり、そのactionを開始した同じ入力を再利用しません。
+
+```yaml
+bubbleClosePolicies:
+  after-3-seconds: {seconds: 3}
+  user-advance: {waitFor: advance}
+  advance-or-timeout: {seconds: 10, waitFor: advance}
+
+scenes:
+  opening:
+    - Hero.say:
+        text: 次へ進みます
+        closePolicy: user-advance
+```
+
+policyはdispatch前に同じ`seconds`／`waitFor`へ解決されるため、入力購読、timeout、`continueIndicator`、cancel、
+hide animationを含むlifecycleはinline指定と同じです。未定義名はsource上の`closePolicy`位置を指す
+`K4-REF-001`で拒否します。
 
 `styles`にはトップレベルの`bubbleStyles`で宣言した名前を1件以上のYAML配列として指定します。1件でも
 配列が必要であり、スペース区切り文字列は受理しません。記載順にdeep mergeし、同じpropertyは後のstyleを
@@ -850,7 +888,8 @@ OFFに戻し、台本を標準core actionまたはCustom actionへ戻します�
 registryを参照しません。asset依存も合成後のeffective styleから収集します。旧単数形`style`はaliasとして
 残さず未知keyとして拒否します。
 
-`continueIndicator`は`waitFor: advance`で全文が表示済み、かつ入力待機が継続している間だけ本文末尾へ
+`continueIndicator`は、直接指定または`closePolicy`から解決した`waitFor: advance`で全文が表示済み、かつ
+入力待機が継続している間だけ本文末尾へ
 表示します。frameは宣言順に`frameIntervalSeconds`間隔で循環します。文字送り中、`seconds`だけのspeech、
 入力やtimeoutの成立後、cancel、stop、scene遷移後は非表示です。入力で文字送り途中を完了させる場合も、
 残り全文を一括表示して直ちにactionを終えるためindicatorは開始しません。renderer hookとtimerはspeechの
@@ -877,7 +916,7 @@ Bubbleはtypewriter中を`talking`、全文表示後のadvance待機中を`await
 sound停止はAsset Managerのasset ID単位です。speechに指定したsound asset IDはそのspeechが排他的に
 使用し、BGMや別presentationとの同時再生には別のasset IDを割り当てます。terminal cleanupは、その
 speechが実際に再生を開始したasset IDだけを停止します。
-`dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、OFFでは従来の
+`dsl4SpeechAdvanceTypewriter`は起動時固定・既定OFFで、`closePolicy`もこのflagの対象です。OFFでは従来の
 `Actor.say: {text, seconds}`だけを受理します。
 `dsl4TurboWarpBubble`も起動時固定・既定OFFで、`dsl4Runtime`、`dsl4AppShell`、
 `dsl4SpeechAdvanceTypewriter`を必要とします。OFFでは従来のTurboWarp looks rendererへ切り戻します。

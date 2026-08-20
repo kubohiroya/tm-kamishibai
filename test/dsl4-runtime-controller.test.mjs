@@ -110,6 +110,50 @@ scenes:
   ]);
 });
 
+test('resolves named Bubble close policies before dispatching speech', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+bubbleClosePolicies:
+  timed: {seconds: 3}
+  advance: {waitFor: advance}
+  first: {seconds: 10, waitFor: advance}
+scenes:
+  opening:
+    - Hero.say: {text: timed, closePolicy: timed}
+    - Hero.say: {text: advance, closePolicy: advance}
+    - Hero.think: {text: first, closePolicy: first}
+`);
+  const calls = [];
+  const port = {
+    async say(payload) {
+      calls.push(payload);
+    },
+    async think(payload) {
+      calls.push(payload);
+    },
+  };
+
+  assert.throws(
+    () => createDsl4RuntimeController({storyDocument, port}),
+    /dsl4SpeechAdvanceTypewriter/u,
+  );
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    port,
+    speechAdvanceTypewriterEnabled: true,
+  });
+  await controller.start();
+
+  assert.deepEqual(calls, [
+    {target: 'Hero', text: 'timed', seconds: 3},
+    {target: 'Hero', text: 'advance', waitFor: 'advance'},
+    {target: 'Hero', text: 'first', seconds: 10, waitFor: 'advance'},
+  ]);
+});
+
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;

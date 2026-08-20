@@ -30,7 +30,7 @@ export const dsl4RuntimeProvenance = Object.freeze([
   {
     title: 'Bubble',
     source: '@kubohiroya/turbowarp-bubble',
-    version: '0.7.0',
+    version: '0.9.0',
     copyright: 'Hiroya Kubo',
     license: 'MPL-2.0',
   },
