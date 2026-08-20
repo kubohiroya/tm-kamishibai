@@ -5,7 +5,14 @@ import {
 } from './action-registry.js';
 import {composeBubbleStyles} from './bubble-style.js';
 
-const identifierSections = ['actors', 'textStyles', 'bubbleStyles', 'variables', 'branches'];
+const identifierSections = [
+  'actors',
+  'textStyles',
+  'bubbleStyles',
+  'bubbleClosePolicies',
+  'variables',
+  'branches',
+];
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 const speechPresentationFields = [
   'characterIntervalSeconds',
@@ -182,6 +189,9 @@ export function validateDsl4Semantics(
   const textStyles = /** @type {Record<string, unknown>} */ (story.textStyles ?? {});
   const bubbleStyles = /** @type {Record<string, Record<string, unknown>>} */ (
     story.bubbleStyles ?? {}
+  );
+  const bubbleClosePolicies = /** @type {Record<string, Record<string, unknown>>} */ (
+    story.bubbleClosePolicies ?? {}
   );
   const stableIds = new Map();
   const storyInputCodes = new Map();
@@ -553,6 +563,13 @@ export function validateDsl4Semantics(
           addReferenceIssue(issues, textStyles, style, undefined, `${actionPath}.style`);
         } else if (opcode === 'say' || opcode === 'think') {
           const speech = /** @type {Record<string, unknown>} */ (value);
+          addReferenceIssue(
+            issues,
+            bubbleClosePolicies,
+            speech.closePolicy,
+            undefined,
+            `${actionPath}.closePolicy`,
+          );
           const styleIds = Array.isArray(speech.styles)
             ? /** @type {string[]} */ (speech.styles)
             : [];

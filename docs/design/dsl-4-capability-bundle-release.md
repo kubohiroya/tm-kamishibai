@@ -34,22 +34,22 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 
 ## 2. capability inventory
 
-| capability         | provider／version                                | repository                                | Standalone ID                        | 4.0 Standardでの境界               |
-| ------------------ | ------------------------------------------------ | ----------------------------------------- | ------------------------------------ | ---------------------------------- |
-| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`             | `./composition`                    |
-| Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`               | `./composition`                    |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.7.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`                   | `./reveal` + `./turbowarp-adapter` |
-| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression`        | `./composition`                    |
-| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`                  | `./composition`                    |
-| TMPose             | `@kubohiroya/turbowarp-tmpose@1.12.0`           | `kubohiroya/turbowarp-tmpose`             | `tmpose`                             | `./composition` + `./posenet`      |
+| capability         | provider／version                                | repository                                | Standalone ID                 | 4.0 Standardでの境界               |
+| ------------------ | ------------------------------------------------ | ----------------------------------------- | ----------------------------- | ---------------------------------- |
+| Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`      | `./composition`                    |
+| Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.9.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
+| Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
+| SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
+| TMPose             | `@kubohiroya/turbowarp-tmpose@1.12.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                      | `./composition` + `./posenet`      |
 
 TMPose 1.12.0では公開block opcodeの`startPredict`、`stopPredict`、`isPredicting`、
 `firstPredictMsReporter`を削除し、`startRecognition`、`stopRecognition`、`isRecognizing`、
 `firstRecognitionMsReporter`へ置き換えました。Standard bundleは旧opcodeの互換aliasを追加せず、
 Composition APIの既存recognition名へ直接接続します。
-| Structured Data    | first-party source v1                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1`              | internal composition               |
-| Structured debug   | Structured Dataと同じ                            | `kubohiroya/tmpose-kamishibai`            | `kubohiroyastructdata1debug`         | Standardから除外                   |
-| Action Context     | first-party source                               | `kubohiroya/tmpose-kamishibai`            | `kubohiroyakamishibai4actioncontext` | Standardから除外                   |
+| Structured Data | first-party source v1 | `kubohiroya/tmpose-kamishibai` | `kubohiroyastructdata1` | internal composition |
+| Structured debug | Structured Dataと同じ | `kubohiroya/tmpose-kamishibai` | `kubohiroyastructdata1debug` | Standardから除外 |
+| Action Context | first-party source | `kubohiroya/tmpose-kamishibai` | `kubohiroyakamishibai4actioncontext` | Standardから除外 |
 
 package versionはrangeを使わず、lockfileのnpm integrityと一致させます。Runtime memberのcomposition rootは
 6つのserviceを構成し、同じ6 packageのStandalone成果物はコード画面用の静的bundle memberとして提供します。

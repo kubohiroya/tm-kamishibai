@@ -224,6 +224,93 @@ scenes:
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/stableId']);
 });
 
+test('normalizes named bubble close policies and rejects ambiguous completion', () => {
+  const source = `
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors:
+  Hero: HeroIdle
+bubbleClosePolicies:
+  three seconds:
+    seconds: 3
+  user advance:
+    waitFor: advance
+  advance or timeout:
+    seconds: 10
+    waitFor: advance
+scenes:
+  opening:
+    - Hero.say:
+        text: 時間で閉じる
+        closePolicy: three seconds
+    - Hero.say:
+        text: 入力で閉じる
+        closePolicy: user advance
+    - Hero.think:
+        text: 先に成立した方で閉じる
+        closePolicy: advance or timeout
+`;
+  const result = frontend.parse(source, {sourceId: 'close-policy.kamishibai.yaml'});
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.bubbleClosePolicies, {
+    'three seconds': {seconds: 3},
+    'user advance': {waitFor: 'advance'},
+    'advance or timeout': {seconds: 10, waitFor: 'advance'},
+  });
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map(({args}) => args),
+    [
+      {text: '時間で閉じる', closePolicy: 'three seconds'},
+      {text: '入力で閉じる', closePolicy: 'user advance'},
+      {text: '先に成立した方で閉じる', closePolicy: 'advance or timeout'},
+    ],
+  );
+  for (const path of [
+    '/bubbleClosePolicies',
+    '/bubbleClosePolicies/three seconds',
+    '/bubbleClosePolicies/three seconds/seconds',
+    '/bubbleClosePolicies/user advance/waitFor',
+    '/bubbleClosePolicies/advance or timeout/seconds',
+    '/bubbleClosePolicies/advance or timeout/waitFor',
+    '/scenes/opening/actions/0/args/closePolicy',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+
+  const missing = frontend.parse(
+    source.replace('closePolicy: user advance', 'closePolicy: missing'),
+  );
+  assert.equal(missing.ok, false);
+  assert.ok(
+    missing.diagnostics.some(
+      ({code, path}) =>
+        code === 'K4-REF-001' && path === '$.scenes["opening"][1]["Hero.say"].closePolicy',
+    ),
+    JSON.stringify(missing.diagnostics),
+  );
+
+  for (const replacement of [
+    '        closePolicy: three seconds\n        seconds: 3',
+    '        closePolicy: three seconds\n        waitFor: advance',
+  ]) {
+    const ambiguous = frontend.parse(
+      source.replace('        closePolicy: three seconds', replacement),
+    );
+    assert.equal(ambiguous.ok, false, replacement);
+    assert.ok(ambiguous.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+
+  for (const replacement of [
+    '  three seconds: {}',
+    '  three seconds: {seconds: 3, unexpected: true}',
+    '  " three seconds": {seconds: 3}',
+  ]) {
+    const invalid = frontend.parse(source.replace('  three seconds:\n    seconds: 3', replacement));
+    assert.equal(invalid.ok, false, replacement);
+  }
+});
+
 test('normalizes and composes reusable bubble styles with human-readable names', () => {
   const source = `
 kamishibai: '4.0'
