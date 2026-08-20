@@ -19,7 +19,7 @@ Copyright © 2026 Hiroya Kubo.
 
 ## 1. 結論
 
-4.0.0-rc.7のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
+4.0.0-rc.8のStandard成果物は、`sb3-toolchain@0.8.0`の静的bundleにより、Runtime memberと
 6つのcapability拡張を`kubohiroyakamishibai4`一件へ集約して生成します。
 公式WebサイトボタンはこのRuntimeの固定URL用`openOfficialWebsite`を呼び、任意URLを受け取るWeb Link拡張を
 組み込みません。release generatorは7 memberの展開sourceを一時生成しますが、Gitには保存しません。
@@ -38,7 +38,7 @@ Gallery形式のmember headerと、内部構成要素のtitle、copyright、lice
 | ------------------ | ------------------------------------------------ | ----------------------------------------- | ----------------------------- | ---------------------------------- |
 | Asset Manager      | `@kubohiroya/turbowarp-asset-manager@0.11.0`     | `kubohiroya/turbowarp-asset-manager`      | `kubohiroyaassetmanager`      | `./composition`                    |
 | Async Input        | `@kubohiroya/turbowarp-async-input@0.4.0`        | `kubohiroya/turbowarp-async-input`        | `kubohiroyaasyncinput`        | `./composition`                    |
-| Bubble             | `@kubohiroya/turbowarp-bubble@0.9.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
+| Bubble             | `@kubohiroya/turbowarp-bubble@0.10.0`             | `kubohiroya/turbowarp-bubble`             | `kubohiroyabubble`            | `./reveal` + `./turbowarp-adapter` |
 | Runtime Expression | `@kubohiroya/turbowarp-runtime-expression@0.4.0` | `kubohiroya/turbowarp-runtime-expression` | `kubohiroyaruntimeexpression` | `./composition`                    |
 | SVG Text           | `@kubohiroya/turbowarp-svg-text@0.5.0`           | `kubohiroya/turbowarp-svg-text`           | `kubohiroyasvgtext`           | `./composition`                    |
 | TMPose             | `@kubohiroya/turbowarp-tmpose@1.12.0`            | `kubohiroya/turbowarp-tmpose`             | `tmpose`                      | `./composition` + `./posenet`      |
@@ -166,7 +166,7 @@ cleanupを継続します。
 
 ## 7. releaseとrollback
 
-4.0.0-rc.7 releaseは必ず次の順で行います。
+4.0.0-rc.8 releaseは必ず次の順で行います。
 
 1. capability packageを個別repositoryでtestしreleaseする
 2. Kamishibaiの`package.json`とlockfileを完全固定versionへ更新する
@@ -175,7 +175,7 @@ cleanupを継続します。
 5. `pnpm release:dsl4:check`と`pnpm verify:full`でsource一致とSB3決定性を非破壊検証する
 6. candidate PRをmainへ統合し、clean mainで`pnpm verify:full && pnpm release:check`を再実行する
 7. `pnpm release:dsl4:freeze`でsource identityとartifact SHA-256を固定し、mainへ統合する
-8. frozen commitへannotated `v4.0.0-rc.7` tagを作成する
+8. frozen commitへannotated `v4.0.0-rc.8` tagを作成する
 9. npm packageをdist-tag `next`で公開し、`latest=3.2.3`を維持する
 10. 一時生成したSB3をversion付きassetとしてGitHub prereleaseへ公開する
 11. npm、GitHub、PagesのURLをmetadataへ記録してpublishedへ遷移する
@@ -187,7 +187,7 @@ assetを差し替えません。`main` checkoutは公開済み／candidateの展
 source identity、asset URL、size、SHA-256、公開状態だけを`release-metadata/`へ保持します。Pages buildは
 GitHub Releasesからbounded downloadし、size、SHA-256、ZIP、Title metadataを照合します。
 `frozen`または`published`ではupdateをfail closedにし、修正は
-4.0.0-rc.8、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
+4.0.0-rc.9、正式安定版は4.0.0として新しいmetadata、source identity、artifact hashを作成します。
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 過去の3.1／3.2はGitHub Release assetだけを配布正本とし、現在のtoolchainやsourceから再構築しません。
 

@@ -98,7 +98,7 @@ function buildCurrentRuntimeRelease() {
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.7',
+        version: '4.0.0-rc.8',
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -655,7 +655,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   ).toString('utf8');
 
   assert.equal(toolchainPackage.version, '0.8.0');
-  assert.equal(bubblePackage.version, '0.9.0');
+  assert.equal(bubblePackage.version, '0.10.0');
   assert.equal(bubblePackage.exports['./reveal'].import, './dist/reveal.js');
   assert.deepEqual(Object.keys(reveal).sort(), [
     'bubbleRevealUnits',
@@ -683,7 +683,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   assert.deepEqual(Object.keys(project.extensionURLs), [bundleExtensionId]);
   assert.match(
     extensionSource,
-    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.9\.0/u,
+    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.10\.0/u,
   );
   assert.doesNotMatch(extensionSource, /@kubohiroya\/turbowarp-bubble@0\.4\.0/u);
 });
@@ -1434,7 +1434,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.7');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.8');
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,

@@ -60,12 +60,12 @@ test('stamps the transient current DSL 4 release source without a tracked app di
       faviconPath: path.join(projectRoot, 'site/favicon.png'),
       packageJsonPath: path.join(projectRoot, 'package.json'),
       sourceDirectory,
-      version: '4.0.0-rc.7',
+      version: '4.0.0-rc.8',
     });
     assert.deepEqual(readTitleBuildMetadataFromSb3(built.archive), {
       buildDate: '2026-08-15',
-      label: 'Version 4.0.0-rc.7 (2026/08/15)',
-      version: '4.0.0-rc.7',
+      label: 'Version 4.0.0-rc.8 (2026/08/15)',
+      version: '4.0.0-rc.8',
     });
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});
