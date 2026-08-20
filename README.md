@@ -22,15 +22,15 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.7                                                    |
+|                 | 3.2.3                                           | 4.0.0-rc.8                                                    |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc7]                                      |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc8]                                      |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.7 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.8 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -42,7 +42,7 @@ To open a project in TurboWarp, download an SB3 for the series you need from the
 
 ### Browser-only authoring
 
-The 4.0.0-rc.7 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
+The 4.0.0-rc.8 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
 
 1. [Download the 4.0 SB3][downloads] and open it in the [TurboWarp Editor](https://turbowarp.org/editor).
 2. Click the green flag, then choose **Open** and select a story file or project directory.
@@ -122,10 +122,10 @@ For practical scripts, asset references, pose models, branches, and speech bubbl
 
 ### Validate, preview, and build with the CLI
 
-The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.7) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.8) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.7
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.8
 pnpm exec tmpose-kamishibai --help
 ```
 
@@ -292,7 +292,7 @@ neither `app/` nor `release-sources/` is part of the repository layout.
 - [Documentation source](https://github.com/kubohiroya/tmpose-kamishibai-docs): source documents and issues
 - [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
 - [DSL 4.0 migration design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
-- [v4.0.0-rc.7 release notes][rc7]: publication status, compatibility, and verified artifacts
+- [v4.0.0-rc.8 release notes][rc8]: publication status, compatibility, and verified artifacts
 
 ## Related Projects
 
@@ -307,4 +307,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
-[rc7]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.7.md
+[rc8]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.8.md

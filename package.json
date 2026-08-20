@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "4.0.0-rc.7",
+  "version": "4.0.0-rc.8",
   "private": false,
   "type": "module",
   "description": "TMPose Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine for pose recognition",
@@ -84,7 +84,7 @@
   "dependencies": {
     "@kubohiroya/turbowarp-asset-manager": "0.11.0",
     "@kubohiroya/turbowarp-async-input": "0.4.0",
-    "@kubohiroya/turbowarp-bubble": "0.9.0",
+    "@kubohiroya/turbowarp-bubble": "0.10.0",
     "@kubohiroya/turbowarp-runtime-expression": "0.4.0",
     "@kubohiroya/turbowarp-svg-text": "0.5.0",
     "@kubohiroya/turbowarp-tmpose": "1.12.0",

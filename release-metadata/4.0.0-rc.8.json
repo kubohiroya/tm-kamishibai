@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "series": "4.0",
+  "version": "4.0.0-rc.8",
+  "channel": "next",
+  "state": "candidate",
+  "buildDate": "2026-08-20",
+  "sourceIdentity": "sha256:8edbc02a06b3770cce0a89cf658367df129d974d53f401258b69f0713762014a",
+  "artifact": {
+    "filename": "kamishibai-4.0.0-rc.8.sb3",
+    "url": "https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v4.0.0-rc.8/kamishibai-4.0.0-rc.8.sb3",
+    "sha256": "91d7f594aaf922450fba359a90c7c26e7c1dfda51cf002534cb4605dbb0d7041",
+    "size": 6749955
+  },
+  "publication": {
+    "npm": {
+      "distTag": "next"
+    },
+    "github": {
+      "prerelease": true,
+      "tag": "v4.0.0-rc.8"
+    },
+    "pages": {
+      "recommended": false
+    }
+  }
+}

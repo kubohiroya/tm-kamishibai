@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.7",
+    "version": "4.0.0-rc.8",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -102,7 +102,7 @@
     {
       "id": "bubble",
       "package": "@kubohiroya/turbowarp-bubble",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-bubble",
       "compositionExport": "./turbowarp-adapter",
@@ -190,7 +190,7 @@
       "unbundle": "regenerate-current-source",
       "provenance": [
         "scripts/sb3/dsl4-downloadable-release.mjs",
-        "release-metadata/4.0.0-rc.7.json",
+        "release-metadata/4.0.0-rc.8.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
@@ -255,16 +255,16 @@
     "verify-publication"
   ],
   "releaseLifecycle": {
-    "metadata": "release-metadata/4.0.0-rc.7.json",
+    "metadata": "release-metadata/4.0.0-rc.8.json",
     "states": ["candidate", "frozen", "published"],
     "updateCommand": "pnpm release:dsl4:update",
     "checkCommand": "pnpm release:dsl4:check",
     "freezeCommand": "pnpm release:dsl4:freeze",
     "publicationCommand": "pnpm release:dsl4:record-publication",
     "immutableStates": ["frozen", "published"],
-    "nextCandidateVersion": "4.0.0-rc.8",
+    "nextCandidateVersion": "4.0.0-rc.9",
     "npmDistTag": "next",
-    "gitTag": "v4.0.0-rc.7",
+    "gitTag": "v4.0.0-rc.8",
     "githubPrerelease": true,
     "recommendedStableVersion": "3.2.3"
   },

@@ -20,8 +20,8 @@ importers:
         specifier: 0.4.0
         version: 0.4.0
       '@kubohiroya/turbowarp-bubble':
-        specifier: 0.9.0
-        version: 0.9.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)
+        specifier: 0.10.0
+        version: 0.10.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.4.0
         version: 0.4.0
@@ -353,8 +353,8 @@ packages:
   '@kubohiroya/turbowarp-async-input@0.4.0':
     resolution: {integrity: sha512-V8io/dZpNu8HJM/QHymcm8V//PNNa7eUzeSDrxHINKeISNl+QCaqPGgjNIaSdgSEaJGqYQNZsRZnxZvRH2TFew==}
 
-  '@kubohiroya/turbowarp-bubble@0.9.0':
-    resolution: {integrity: sha512-we04WcRrygork02ffIVzXEO2EXZo97qWkIck7EjFEewzpOCx67E3pzWmalKtqrfEA4FxPXjhU6P/eKhBeyt+Bw==}
+  '@kubohiroya/turbowarp-bubble@0.10.0':
+    resolution: {integrity: sha512-oUWYviP4ELIXZZ/1wefY81sRw6qoS/3YN9T/yIPkNHTPRJak0Bdm2HIBrbCB9i6Hese8YhkKxsRVlTbGhDSAAQ==}
     peerDependencies:
       '@kubohiroya/turbowarp-asset-manager': '>=0.7.0 <1'
       '@kubohiroya/turbowarp-async-input': '>=0.3.0 <1'
@@ -2929,7 +2929,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-async-input@0.4.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.9.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)':
+  '@kubohiroya/turbowarp-bubble@0.10.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.8.1

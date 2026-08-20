@@ -10,7 +10,7 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const expectedVersions = Object.freeze({
   '@kubohiroya/turbowarp-async-input': '0.4.0',
   '@kubohiroya/turbowarp-asset-manager': '0.11.0',
-  '@kubohiroya/turbowarp-bubble': '0.9.0',
+  '@kubohiroya/turbowarp-bubble': '0.10.0',
   '@kubohiroya/turbowarp-runtime-expression': '0.4.0',
   '@kubohiroya/turbowarp-svg-text': '0.5.0',
   '@kubohiroya/turbowarp-tmpose': '1.12.0',
