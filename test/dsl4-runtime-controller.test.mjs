@@ -297,6 +297,104 @@ scenes:
   );
 });
 
+test('discards a scene crossfade prepared after the runtime stops', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - goto: ending
+  ending:
+    entryTransition: 0.2
+    actions:
+      - wait: 0
+`);
+  const capture = deferred();
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    crossfadeTransitionsEnabled: true,
+    port: {
+      createSceneCrossfade() {
+        calls.push('capture');
+        return capture.promise;
+      },
+      wait() {},
+    },
+  });
+
+  const running = controller.start();
+  await waitFor(() => calls.includes('capture'), 'scene capture did not start');
+  const stopped = controller.stop();
+  capture.resolve({
+    start() {
+      calls.push('start');
+    },
+    finish() {
+      calls.push('finish');
+    },
+  });
+  await running;
+
+  assert.equal(stopped.status, 'stopped');
+  assert.equal(controller.getState().status, 'stopped');
+  assert.equal(controller.getState().sceneId, 'opening');
+  assert.deepEqual(calls, ['capture', 'finish']);
+});
+
+test('applies scene crossfade when navigate runs without an asset lifecycle', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - wait: 1
+  ending:
+    entryTransition: 0.2
+    actions:
+      - wait: 0
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    crossfadeTransitionsEnabled: true,
+    port: {
+      wait(payload, context) {
+        if (context.sceneId !== 'opening') return;
+        calls.push('wait');
+        return new Promise((resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('cancelled');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            {once: true},
+          );
+        });
+      },
+      createSceneCrossfade() {
+        calls.push('capture');
+        return {
+          start() {
+            calls.push('start');
+          },
+          finish() {
+            calls.push('finish');
+          },
+        };
+      },
+    },
+  });
+
+  void controller.start();
+  await waitFor(() => calls.includes('wait'), 'opening action did not start');
+  const state = await controller.navigate('ending');
+
+  assert.equal(state.status, 'finished');
+  assert.equal(state.sceneId, 'ending');
+  assert.deepEqual(calls, ['wait', 'capture', 'start']);
+});
+
 const allCoreActionsStory = `
 kamishibai: '4.0'
 assets:

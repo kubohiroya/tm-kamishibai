@@ -455,7 +455,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   const stableId =
     typeof argumentRecord?.stableId === 'string' ? argumentRecord.stableId : undefined;
   delete args.stableId;
-  if (Object.hasOwn(args, 'transition')) {
+  if (!customAction && Object.hasOwn(args, 'transition')) {
     args.transition =
       command === 'bgm'
         ? normalizeDsl4AudioTransition(args.transition, `${actionPath}/args/transition`)

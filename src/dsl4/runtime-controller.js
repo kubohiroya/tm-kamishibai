@@ -1152,14 +1152,24 @@ export function createDsl4RuntimeController({
     }
     const nextIndex = sceneIndex.get(sceneId);
     const nextScene = nextIndex === undefined ? null : scenes[nextIndex];
+    let preparedSceneCrossfade = null;
     try {
-      pendingSceneCrossfade = nextScene
+      preparedSceneCrossfade = nextScene
         ? await prepareSceneCrossfade(nextScene, reason, actionIndex)
         : null;
     } catch (error) {
       if (runId === activeRunId && status === 'running') fail(error);
       return false;
     }
+    if (runId !== activeRunId || status !== 'running') {
+      try {
+        preparedSceneCrossfade?.operation.finish(reason);
+      } catch {
+        // A superseded run cannot publish a cleanup failure into the active run.
+      }
+      return false;
+    }
+    pendingSceneCrossfade = preparedSceneCrossfade;
     try {
       transitionTo(sceneId, reason, actionIndex);
     } catch (error) {
@@ -2350,16 +2360,6 @@ export function createDsl4RuntimeController({
     }
     runId += 1;
     const activeRunId = runId;
-    if (!assetCoordinator) {
-      try {
-        transitionTo(sceneId, reason, actionIndex);
-      } catch (error) {
-        fail(error);
-        return Promise.resolve(snapshot());
-      }
-      runPromise = run(activeRunId);
-      return runPromise;
-    }
     runPromise = (async () => {
       if (!(await enterScene(sceneId, reason, activeRunId, actionIndex))) return snapshot();
       return run(activeRunId);

@@ -163,6 +163,26 @@ scenes:
   assert.deepEqual(noArguments.storyDocument.scenes[0].actions[0].args, {});
 });
 
+test('preserves a custom action parameter named transition', () => {
+  const transitionRegistry = createDsl4ActionRegistrySnapshot([
+    registryEntry('animate', [{name: 'transition', type: 'number'}]),
+  ]);
+  const frontend = createDsl4SourceFrontend(schema, {actionRegistry: transitionRegistry});
+  const result = frontend.parse(`
+kamishibai: '4.0'
+assets:
+  HeroIdle: costume:Hero
+actors: {Hero: HeroIdle}
+scenes:
+  opening:
+    - Hero.animate:
+        arguments: {transition: 1}
+`);
+
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.scenes[0].actions[0].args, {transition: 1});
+});
+
 test('rejects unregistered commands, unknown parameters, missing parameters, and wrong types', async () => {
   const unregistered = createDsl4SourceFrontend(schema).parse(customStory);
   assert.equal(unregistered.ok, false);

@@ -3,6 +3,16 @@ import test from 'node:test';
 
 import {createDsl4TurboWarpCrossfadePlatform} from '../src/dsl4/platform/index.js';
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, resolve, reject};
+}
+
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
@@ -231,6 +241,113 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
   ]);
 });
 
+test('cancels a drawable crossfade while the replacement is still applying', async () => {
+  const clock = manualScheduler();
+  const applying = deferred();
+  const calls = [];
+  const renderer = {
+    _groupOrdering: ['sprite'],
+    _layerGroups: {sprite: {groupIndex: 0, drawListOffset: 0}},
+    _drawList: [1],
+    _allDrawables: {
+      1: {
+        skin: {id: 11},
+        _position: [0, 0],
+        _direction: 90,
+        _scale: [100, 100],
+        _visible: true,
+      },
+    },
+    getDrawableOrder(id) {
+      return this._drawList.indexOf(id);
+    },
+    createDrawable() {
+      this._drawList.push(2);
+      return 2;
+    },
+    updateDrawableSkinId() {},
+    updateDrawableProperties() {},
+    setDrawableOrder() {},
+    destroyDrawable(id) {
+      calls.push(['destroyDrawable', id]);
+      this._drawList = this._drawList.filter((candidate) => candidate !== id);
+    },
+  };
+  const target = {
+    drawableID: 1,
+    visible: true,
+    effects: {ghost: 0},
+    setEffect(effect, value) {
+      calls.push(['targetEffect', effect, value]);
+    },
+  };
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtime: {renderer},
+    scheduler: clock.scheduler,
+  });
+
+  const pending = platform.crossfadeActorSkin(target, () => applying.promise, {
+    effect: 'crossfade',
+    seconds: 1,
+  });
+  platform.finishAll();
+  applying.resolve();
+  await pending;
+
+  assert.deepEqual(renderer._drawList, [1]);
+  assert.equal(clock.pendingCount(), 0);
+  assert.deepEqual(calls, [
+    ['targetEffect', 'ghost', 0],
+    ['destroyDrawable', 2],
+  ]);
+});
+
+test('aborts a drawable crossfade while the replacement is still applying', async () => {
+  const applying = deferred();
+  const controller = new AbortController();
+  const destroyed = [];
+  const renderer = {
+    _groupOrdering: ['sprite'],
+    _layerGroups: {sprite: {groupIndex: 0, drawListOffset: 0}},
+    _drawList: [1],
+    _allDrawables: {
+      1: {
+        skin: {id: 11},
+        _position: [0, 0],
+        _direction: 90,
+        _scale: [100, 100],
+        _visible: true,
+      },
+    },
+    getDrawableOrder(id) {
+      return this._drawList.indexOf(id);
+    },
+    createDrawable() {
+      this._drawList.push(2);
+      return 2;
+    },
+    updateDrawableSkinId() {},
+    updateDrawableProperties() {},
+    setDrawableOrder() {},
+    destroyDrawable(id) {
+      destroyed.push(id);
+    },
+  };
+  const platform = createDsl4TurboWarpCrossfadePlatform({runtime: {renderer}});
+  const pending = platform.crossfadeActorSkin(
+    {drawableID: 1, visible: true, effects: {}, setEffect() {}},
+    () => applying.promise,
+    {effect: 'crossfade', seconds: 1},
+    controller.signal,
+  );
+
+  controller.abort();
+  applying.resolve();
+
+  await assert.rejects(pending, (error) => error?.name === 'AbortError');
+  assert.deepEqual(destroyed, [2]);
+});
+
 test('captures and releases one scene frame around the committed destination', async () => {
   const clock = manualScheduler();
   const calls = [];
@@ -333,4 +450,35 @@ test('releases scene capture resources when drawable setup fails', async () => {
     /drawable setup failed/u,
   );
   assert.deepEqual(calls, ['bitmap.close', ['destroyDrawable', 3, 'sprite'], ['destroySkin', 9]]);
+});
+
+test('does not allocate scene capture resources after disposal', async () => {
+  const capture = deferred();
+  const calls = [];
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtime: {
+      renderer: {
+        canvas: {width: 480, height: 360},
+        _groupOrdering: ['sprite'],
+        createBitmapSkin() {
+          calls.push('createBitmapSkin');
+          return 9;
+        },
+        createDrawable() {
+          calls.push('createDrawable');
+          return 3;
+        },
+      },
+    },
+    createImageBitmap() {
+      return capture.promise;
+    },
+  });
+
+  const pending = platform.createSceneCrossfade({effect: 'crossfade', seconds: 1});
+  platform.dispose();
+  capture.resolve({close: () => calls.push('bitmap.close')});
+
+  await assert.rejects(pending, /disposed/u);
+  assert.deepEqual(calls, ['bitmap.close']);
 });

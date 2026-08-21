@@ -14,6 +14,17 @@ function platformError(message) {
   return error;
 }
 
+function abortError() {
+  const error = new Error('DSL 4.0 crossfade was cancelled');
+  error.name = 'AbortError';
+  return error;
+}
+
+const completedOperation = Object.freeze({
+  start: () => Promise.resolve(),
+  finish() {},
+});
+
 function defaultScheduler() {
   return Object.freeze({
     now: () => performance.now(),
@@ -173,13 +184,16 @@ export function createDsl4TurboWarpCrossfadePlatform(options) {
     return operation;
   }
 
-  /** @param {Record<string, any>} target @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition */
-  async function crossfadeDrawable(target, apply, transition) {
+  /** @param {Record<string, any>} target @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition @param {AbortSignal} [signal] */
+  async function crossfadeDrawable(target, apply, transition, signal) {
     if (disposed) throw platformError('Crossfade platform is disposed');
+    if (signal?.aborted) throw abortError();
     if (target.visible === false) return apply();
     const baseline = Math.max(0, Math.min(100, Number(target.effects?.ghost ?? 0)));
     const copy = createDrawableCopy(renderer, target);
     let cleaned = false;
+    let cancelled = false;
+    let aborted = false;
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
@@ -187,8 +201,28 @@ export function createDsl4TurboWarpCrossfadePlatform(options) {
       renderer.destroyDrawable(copy.drawableId, copy.group);
       runtime.requestRedraw?.();
     };
+    let finishCurrent = cleanup;
+    const preparation = Object.freeze({
+      finish() {
+        cancelled = true;
+        active.delete(preparation);
+        cleanup();
+      },
+    });
+    const onAbort = () => {
+      aborted = true;
+      cancelled = true;
+      finishCurrent();
+    };
+    active.add(preparation);
+    signal?.addEventListener('abort', onAbort, {once: true});
     try {
       await apply();
+      active.delete(preparation);
+      if (cancelled || disposed) {
+        if (aborted) throw abortError();
+        return;
+      }
       target.setEffect?.('ghost', 100);
       const duration = Number(transition.seconds) * 1000;
       const operation = timeline(
@@ -205,10 +239,15 @@ export function createDsl4TurboWarpCrossfadePlatform(options) {
         },
         cleanup,
       );
+      finishCurrent = () => operation.finish();
       await operation.start();
+      if (aborted) throw abortError();
     } catch (error) {
       cleanup();
       throw error;
+    } finally {
+      active.delete(preparation);
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -220,7 +259,25 @@ export function createDsl4TurboWarpCrossfadePlatform(options) {
     }
     const canvas = renderer.canvas ?? renderer._gl?.canvas;
     if (!canvas) throw platformError('The renderer canvas is unavailable');
-    const bitmap = await bitmapFactory(canvas);
+    let cancelled = false;
+    const preparation = Object.freeze({
+      finish() {
+        cancelled = true;
+        active.delete(preparation);
+      },
+    });
+    active.add(preparation);
+    let bitmap;
+    try {
+      bitmap = await bitmapFactory(canvas);
+    } finally {
+      active.delete(preparation);
+    }
+    if (disposed || cancelled) {
+      bitmap.close?.();
+      if (disposed) throw platformError('Crossfade platform is disposed');
+      return completedOperation;
+    }
     let skinId;
     try {
       skinId = renderer.createBitmapSkin(bitmap, 1);
@@ -346,17 +403,17 @@ export function createDsl4TurboWarpCrossfadePlatform(options) {
   }
 
   return Object.freeze({
-    /** @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition */
-    crossfadeStage(apply, transition) {
+    /** @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition @param {AbortSignal} [signal] */
+    crossfadeStage(apply, transition, signal) {
       const stage = runtime.targets?.find(
         /** @param {Record<string, any>} target */ (target) => target?.isStage === true,
       );
       if (!stage) throw platformError('The Stage target is unavailable');
-      return crossfadeDrawable(stage, apply, transition);
+      return crossfadeDrawable(stage, apply, transition, signal);
     },
-    /** @param {Record<string, any>} target @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition */
-    crossfadeActorSkin(target, apply, transition) {
-      return crossfadeDrawable(target, apply, transition);
+    /** @param {Record<string, any>} target @param {() => unknown | Promise<unknown>} apply @param {Record<string, any>} transition @param {AbortSignal} [signal] */
+    crossfadeActorSkin(target, apply, transition, signal) {
+      return crossfadeDrawable(target, apply, transition, signal);
     },
     createSceneCrossfade,
     replaceBgm,
