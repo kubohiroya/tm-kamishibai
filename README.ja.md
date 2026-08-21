@@ -22,15 +22,15 @@ TMPose紙芝居は、カメラの前で取ったポーズをきっかけに、�
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.8                                   |
+|                      | 3.2.3                                | 4.0.0-rc.9                                   |
 | -------------------- | ------------------------------------ | -------------------------------------------- |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                                 |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証   |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                                 |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]／npmの`next` |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc8]                     |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc9]                     |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.8は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.9は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -42,7 +42,7 @@ TMPose紙芝居は、カメラの前で取ったポーズをきっかけに、�
 
 ### ブラウザだけで作る
 
-4.0.0-rc.8のStandard SB3には、台本の選択、検証、live preview、配布用SB3生成までを行う作者用ランナーが入っています。
+4.0.0-rc.9のStandard SB3には、台本の選択、検証、live preview、配布用SB3生成までを行う作者用ランナーが入っています。
 
 1. [4.0のSB3をダウンロード][downloads]し、[TurboWarp Editor](https://turbowarp.org/editor)で開く。
 2. 緑の旗を押し、メニューの「開く」から台本ファイルまたはproject directoryを選ぶ。
@@ -140,10 +140,10 @@ runtime hostで機能を切り戻す場合は`dsl4CrossfadeTransitions: false`�
 
 ### CLIで検証・preview・buildする
 
-[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.8)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.12.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
+[`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.9)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.12.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.8
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.9
 pnpm exec tmpose-kamishibai --help
 ```
 
@@ -301,7 +301,7 @@ Git管理外の`tmp/`だけへ一時生成し、`app/`と`release-sources/`はre
 - [ドキュメントsource](https://github.com/kubohiroya/tmpose-kamishibai-docs): 公開文書の原稿とissue
 - [DSL 4.0表層仕様](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAMLのschema外契約とaction surface
 - [DSL 4.0移行設計](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): 3.2との違いと移行方針
-- [v4.0.0-rc.8リリースノート][rc8]: 公開状態、互換性、検証済みartifact
+- [v4.0.0-rc.9リリースノート][rc9]: 公開状態、互換性、検証済みartifact
 
 ## 関連プロジェクト
 
@@ -316,4 +316,4 @@ Git管理外の`tmp/`だけへ一時生成し、`app/`と`release-sources/`はre
 
 [docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
-[rc8]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.8.md
+[rc9]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.9.md

@@ -111,8 +111,8 @@ test('regenerates candidate and frozen inputs, then verifies the GitHub asset af
 
     const published = await recordDsl4Publication(
       {
-        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.8',
-        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.8',
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.9',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.9',
         pagesUrl: 'https://example.github.io/project/downloads/',
       },
       {root, fetchReleaseArtifact},
@@ -140,8 +140,8 @@ test('rejects a published GitHub Release asset with different bytes', async () =
     await freezeDsl4Release(options(root));
     await recordDsl4Publication(
       {
-        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.8',
-        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.8',
+        npmUrl: 'https://www.npmjs.com/package/example/v/4.0.0-rc.9',
+        githubReleaseUrl: 'https://github.com/example/project/releases/tag/v4.0.0-rc.9',
         pagesUrl: 'https://example.github.io/project/downloads/',
       },
       {root, fetchReleaseArtifact},
