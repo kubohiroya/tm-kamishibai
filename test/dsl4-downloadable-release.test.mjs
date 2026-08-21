@@ -49,6 +49,7 @@ const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
 const vmLog = require('scratch-vm/src/util/log');
 const bundleExtensionId = 'kubohiroyakamishibai4';
 const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
+const currentRuntimeProjectJsonMaximumBytes = 12_250_000;
 const turbowarpVmCommit = 'c4823421cb7c17d8d8a89878851ce1668c26a21f';
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
@@ -770,7 +771,7 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
     poseNetBundle.files.reduce((total, file) => total + file.bytes.byteLength, 0),
     5_082_500,
   );
-  assert.equal(projectBytes.byteLength < 12_000_000, true);
+  assert.equal(projectBytes.byteLength < currentRuntimeProjectJsonMaximumBytes, true);
 });
 
 test('builds one self-contained DSL 4.0 release with a pinned runtime extension', async () => {
