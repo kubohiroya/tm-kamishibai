@@ -678,8 +678,10 @@ runtime接続はStandalone blockを経由せず、`showPoseOverlay()`／`hidePos
 
 `dsl4CrossfadeTransitions`が有効なruntimeでは、scene、背景、actorのskin／表示、BGMに共通の
 transition指定を使用できます。互換性を維持するため、組み込み既定値はすべて`cut`（0秒）です。
-flagも起動時固定・既定OFFであり、OFFのruntimeはcrossfade構文を
-`K4-TRANSITION-FLAG-001`で実行前に拒否します。既存台本のport payloadと再生経路は変更しません。
+flagは起動時固定です。DSL4 runtime自体が無効な汎用default flagsではOFFを維持しますが、公式の
+Standard production／non-embedded development profileでは既定ONです。明示的にOFFにしたruntimeは
+crossfade構文を`K4-TRANSITION-FLAG-001`で実行前に拒否します。既存台本のport payloadと再生経路は
+変更しません。
 
 ```yaml
 presentation:
@@ -740,9 +742,10 @@ equal-powerでは進行率`p`に対して旧gainを`cos(πp/2)`、新gainを`sin
 `retention: scene`のBGMも進行中voiceをasset解放で停止しないよう、flag ON中はBGM参照assetを
 story終了／stop／disposeまでtransition leaseとして保持します。
 
-ロールバックは`dsl4CrossfadeTransitions=false`で行います。台本にcrossfade指定が残る場合はcutへ戻すか
-指定を削除してからflagをOFFにします。flag OFFではframe capture、一時drawable、BGM voice channelを
-作成しません。
+ロールバックはStandard profileで`dsl4CrossfadeTransitions=false`を明示してruntime bundleを再生成します。
+台本にcrossfade指定が残る場合はcutへ戻すか指定を削除してからflagをOFFにします。flag OFFではframe
+capture、一時drawable、BGM voice channelを作成しません。transition未指定台本は組み込み既定値がcutの
+ため、profileのON／OFFによって表示やtimingが変わりません。
 
 ## 5. 環境別keymap
 

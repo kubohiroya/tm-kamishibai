@@ -52,9 +52,10 @@ export const dsl4DefaultFeatureFlags = deepFreeze({
   structuredDataIntegrationEnabled: false,
 });
 
-// Standard release capabilities are explicit and independent from the default-off rollout policy.
+// Standard release capabilities are explicit and independent from the globally disabled runtime.
 export const dsl4StandardProductionFeatureFlags = deepFreeze({
   dsl4Runtime: true,
+  dsl4CrossfadeTransitions: true,
   dsl4AppShell: true,
   dsl4PoseFeedbackModes: true,
   dsl4SpeechAdvanceTypewriter: true,

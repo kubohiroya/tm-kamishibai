@@ -191,7 +191,7 @@ test('defaults OFF and does not inspect runtime inputs or adapters', async () =>
   assert.equal(integrationWithoutRuntime.featureFlags.structuredDataIntegrationEnabled, true);
 });
 
-test('rejects crossfade syntax before environment creation unless its startup flag is enabled', async () => {
+test('enables crossfade syntax in the Standard profile and preserves explicit rollback', async () => {
   const source = sourceText.replace(
     'scenes:\n',
     'presentation:\n  transitions: {scene: 0.5}\nscenes:\n',
@@ -200,6 +200,10 @@ test('rejects crossfade syntax before environment creation unless its startup fl
   let environmentCalls = 0;
   const disabled = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
+      featureFlags: {
+        ...dsl4StandardProductionFeatureFlags,
+        dsl4CrossfadeTransitions: false,
+      },
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
@@ -215,7 +219,7 @@ test('rejects crossfade syntax before environment creation unless its startup fl
 
   const enabled = await createDsl4RuntimeStartup(
     enabledOptions(component.project, {
-      featureFlags: {dsl4Runtime: true, dsl4CrossfadeTransitions: true},
+      featureFlags: dsl4StandardProductionFeatureFlags,
       port: undefined,
       createRuntimeEnvironment() {
         environmentCalls += 1;
@@ -231,6 +235,7 @@ test('rejects crossfade syntax before environment creation unless its startup fl
 test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.deepEqual(dsl4StandardProductionFeatureFlags, {
     dsl4Runtime: true,
+    dsl4CrossfadeTransitions: true,
     dsl4AppShell: true,
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
@@ -243,6 +248,7 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   );
   assert.deepEqual(dsl4NonEmbeddedDevelopmentFeatureFlags, {
     dsl4Runtime: true,
+    dsl4CrossfadeTransitions: true,
     dsl4AppShell: true,
     dsl4PoseFeedbackModes: true,
     dsl4SpeechAdvanceTypewriter: true,
@@ -256,6 +262,13 @@ test('strictly resolves one immutable startup flag snapshot', async () => {
   assert.equal(
     resolveDsl4FeatureFlags(dsl4NonEmbeddedDevelopmentFeatureFlags).dsl4WebPreviewAdapter,
     true,
+  );
+  assert.equal(
+    resolveDsl4FeatureFlags({
+      ...dsl4StandardProductionFeatureFlags,
+      dsl4CrossfadeTransitions: false,
+    }).dsl4CrossfadeTransitions,
+    false,
   );
   assert.throws(
     () => resolveDsl4FeatureFlags({dsl4SessionBinaryBacking: true}),

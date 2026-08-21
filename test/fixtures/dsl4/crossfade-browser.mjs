@@ -1,6 +1,9 @@
 /* global document, ImageBitmap */
 
-import {resolveDsl4FeatureFlags} from '../../../src/dsl4/feature-flags.js';
+import {
+  dsl4StandardProductionFeatureFlags,
+  resolveDsl4FeatureFlags,
+} from '../../../src/dsl4/feature-flags.js';
 import {createDsl4TurboWarpCrossfadePlatform} from '../../../src/dsl4/platform/turbowarp-crossfade-platform.js';
 
 const calls = [];
@@ -113,10 +116,7 @@ const runtime = {
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 try {
-  const flags = resolveDsl4FeatureFlags({
-    dsl4Runtime: true,
-    dsl4CrossfadeTransitions: true,
-  });
+  const flags = resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags);
   const platform = createDsl4TurboWarpCrossfadePlatform({
     runtime,
     frameMilliseconds: 5,

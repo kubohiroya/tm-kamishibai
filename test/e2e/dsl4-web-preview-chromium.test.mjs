@@ -235,7 +235,7 @@ test(
 );
 
 test(
-  'runs feature-enabled scene, actor, and BGM crossfades through Chromium platform boundaries',
+  'runs Standard-profile scene, actor, and BGM crossfades through Chromium platform boundaries',
   {timeout: 30_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
