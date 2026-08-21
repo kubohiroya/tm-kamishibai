@@ -1,3 +1,5 @@
+/* global document, ImageBitmap */
+
 import {resolveDsl4FeatureFlags} from '../../../src/dsl4/feature-flags.js';
 import {createDsl4TurboWarpCrossfadePlatform} from '../../../src/dsl4/platform/turbowarp-crossfade-platform.js';
 
