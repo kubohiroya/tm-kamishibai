@@ -188,7 +188,7 @@ test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asse
     unbundle: 'regenerate-current-source',
     provenance: [
       'scripts/sb3/dsl4-downloadable-release.mjs',
-      'release-metadata/4.0.0-rc.8.json',
+      'release-metadata/4.0.0-rc.9.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -258,7 +258,7 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const metadata = JSON.parse(await readRepositoryFile(contract.releaseLifecycle.metadata));
   assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
-  assert.match(metadata.artifact.url, /\/releases\/download\/v4\.0\.0-rc\.8\//u);
+  assert.match(metadata.artifact.url, /\/releases\/download\/v4\.0\.0-rc\.9\//u);
   if (metadata.state === 'published') {
     assert.deepEqual(release.artifact, {
       buildDate: metadata.buildDate,
@@ -274,16 +274,16 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   }
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-metadata/4.0.0-rc.8.json',
+    metadata: 'release-metadata/4.0.0-rc.9.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.9',
+    nextCandidateVersion: '4.0.0-rc.10',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.8',
+    gitTag: 'v4.0.0-rc.9',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });

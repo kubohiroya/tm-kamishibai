@@ -638,7 +638,7 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   }
   const release = await createKamishibaiSb3({
     sourceDirectory: releaseSourceDirectory,
-    version: '4.0.0-rc.8',
+    version: '4.0.0-rc.9',
     buildDate: '2026-08-16',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
   });
