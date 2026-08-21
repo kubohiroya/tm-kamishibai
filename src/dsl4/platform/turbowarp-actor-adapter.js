@@ -1017,6 +1017,131 @@ export function createDsl4TurboWarpActorPlatform(options) {
       return operation;
     },
 
+    /** @param {unknown} target @param {unknown} transition */
+    createVisibilityTransition(target, transition) {
+      ensureActive();
+      const actor = validateEffectActor(target);
+      const value = validateSpec(
+        transition,
+        ['visible', 'seconds', 'easing'],
+        'visibilityTransition',
+      );
+      if (typeof value.visible !== 'boolean') {
+        throw adapterError('K4-TW-ACTOR-002', 'visibilityTransition.visible must be boolean');
+      }
+      const duration = durationMilliseconds(
+        /** @type {number} */ (value.seconds),
+        'visibilityTransition',
+      );
+      const easing = String(value.easing ?? 'easeInOut');
+      if (easing !== 'linear' && easing !== 'easeInOut') {
+        throw adapterError(
+          'K4-TW-ACTOR-002',
+          'visibilityTransition.easing must be linear or easeInOut',
+        );
+      }
+      const effects = isRecord(actor.effects) ? actor.effects : {};
+      const baseline = Math.max(0, Math.min(100, Number(effects.ghost ?? 0)));
+      let state = 'idle';
+      /** @type {unknown} */
+      let timer;
+      /** @type {(() => void) | undefined} */
+      let resolveOperation;
+      /** @type {((error: unknown) => void) | undefined} */
+      let rejectOperation;
+
+      const remove = () => {
+        if (activeTransparencyTransitions.get(actor)?.finish === finish) {
+          activeTransparencyTransitions.delete(actor);
+        }
+      };
+      const cancelTimer = () => {
+        if (timer === undefined) return;
+        scheduler.clearTimeout(timer);
+        timer = undefined;
+      };
+      const finish = () => {
+        if (state === 'completed') return;
+        cancelTimer();
+        if (value.visible) {
+          actor.setVisible(true);
+          actor.setEffect('ghost', baseline);
+        } else {
+          actor.setEffect('ghost', 100);
+          actor.setVisible(false);
+          actor.setEffect('ghost', baseline);
+        }
+        state = 'completed';
+        remove();
+        resolveOperation?.();
+      };
+      /** @param {unknown} error */
+      const fail = (error) => {
+        if (state !== 'running') return;
+        try {
+          finish();
+        } catch (finishError) {
+          rejectOperation?.(
+            new AggregateError(
+              [error, finishError],
+              'TurboWarp actor visibility transition cleanup failed',
+            ),
+          );
+          return;
+        }
+        rejectOperation?.(error);
+      };
+      const operation = Object.freeze({
+        start() {
+          if (state !== 'idle') {
+            throw adapterError('K4-TW-ACTOR-003', 'visibility transition can only start once');
+          }
+          activeTransparencyTransitions.get(actor)?.finish();
+          const startTime = finiteNumber(scheduler.now(), 'scheduler.now()');
+          state = 'running';
+          activeTransparencyTransitions.set(actor, operation);
+          actor.setVisible(true);
+          actor.setEffect('ghost', value.visible ? 100 : baseline);
+          return new Promise((resolve, reject) => {
+            resolveOperation = () => resolve(undefined);
+            rejectOperation = reject;
+            if (duration === 0) {
+              finish();
+              return;
+            }
+            const tick = () => {
+              timer = undefined;
+              if (state !== 'running') return;
+              try {
+                const elapsed = Math.max(
+                  0,
+                  finiteNumber(scheduler.now(), 'scheduler.now()') - startTime,
+                );
+                const progress = Math.min(elapsed / duration, 1);
+                if (progress >= 1) {
+                  finish();
+                  return;
+                }
+                const eased = applyDsl4MoveEasing(easing, progress);
+                actor.setEffect(
+                  'ghost',
+                  value.visible
+                    ? 100 + (baseline - 100) * eased
+                    : baseline + (100 - baseline) * eased,
+                );
+                timer = scheduler.setTimeout(tick, Math.min(frameMilliseconds, duration - elapsed));
+              } catch (error) {
+                fail(error);
+              }
+            };
+            timer = scheduler.setTimeout(tick, Math.min(frameMilliseconds, duration));
+          });
+        },
+        finish,
+      });
+      return operation;
+    },
+
     /** @param {unknown} target @param {unknown} destination */
     createMove(target, destination) {
       const actor = validateActor(target);

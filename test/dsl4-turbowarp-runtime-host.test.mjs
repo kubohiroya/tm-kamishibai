@@ -702,6 +702,66 @@ test('gates broadcastMessageAndWait and dispatches it through the built-in Turbo
   await enabled.host.dispose('broadcast-test');
 });
 
+test('connects flagged DSL 4 BGM replacement to Asset Manager createAudioVoice', async () => {
+  const project = await packagedProject(`
+kamishibai: '4.0'
+controls:
+  keymaps:
+    production:
+      Space: navigation.nextAction
+assets:
+  OpeningSound: sound
+  EndingSound: sound
+scenes:
+  opening:
+    - bgm: OpeningSound
+    - bgm: {sound: EndingSound, transition: 0.5}
+`);
+  const log = [];
+  const fixture = platformFixture(log);
+  fixture.runtime.renderer = {};
+  const voices = [];
+  fixture.assetManagerComposition.getMimeType = (name) =>
+    name === 'OpeningSound' || name === 'EndingSound' ? 'audio/wav' : 'image/svg+xml';
+  fixture.assetManagerComposition.createAudioVoice = async (name, options) => {
+    const calls = [];
+    const voice = {
+      ended: new Promise(() => {}),
+      setGain(value) {
+        calls.push(['gain', value]);
+      },
+      stop() {
+        calls.push(['stop']);
+      },
+    };
+    voices.push({name, options, calls});
+    return voice;
+  };
+
+  const result = await createDsl4TurboWarpRuntimeHost(
+    enabledOptions(project, fixture, {
+      featureFlags: {dsl4Runtime: true, dsl4CrossfadeTransitions: true},
+    }),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.equal((await result.host.start()).status, 'finished');
+  assert.deepEqual(
+    voices.map(({name, options}) => ({name, options})),
+    [
+      {name: 'OpeningSound', options: {gain: 1}},
+      {name: 'EndingSound', options: {gain: 0}},
+    ],
+  );
+  assert.equal(
+    log.some(([type]) => type === 'media.play'),
+    false,
+  );
+
+  await result.host.dispose('crossfade-test');
+  assert.deepEqual(voices[0].calls.at(-1), ['stop']);
+  assert.deepEqual(voices[1].calls.at(-1), ['stop']);
+});
+
 test('resolves one startup-fixed session backing policy behind its default-off flag', () => {
   const direct = resolveDsl4SessionBackingConfig(
     {},

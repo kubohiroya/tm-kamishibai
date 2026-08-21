@@ -214,6 +214,49 @@ test('linearly interpolates transparency from 0 to 50', async () => {
   assert.equal(clock.pendingCount(), 0);
 });
 
+test('crossfades actor visibility and restores the authored ghost baseline', async () => {
+  const hero = fakeActor();
+  hero.target.effects = {ghost: 20};
+  const fake = fakeRuntime([hero.target]);
+  const clock = manualScheduler();
+  const platform = createDsl4TurboWarpActorPlatform({
+    runtime: fake.runtime,
+    scheduler: clock.scheduler,
+    frameMilliseconds: 500,
+  });
+
+  const show = platform.host.createVisibilityTransition(hero.target, {
+    visible: true,
+    seconds: 1,
+    easing: 'linear',
+  });
+  const showing = show.start();
+  clock.advance(500);
+  assert.deepEqual(hero.calls.at(-1), ['setEffect', 'ghost', 60]);
+  clock.advance(500);
+  await showing;
+  assert.deepEqual(hero.calls.slice(-2), [
+    ['setVisible', true],
+    ['setEffect', 'ghost', 20],
+  ]);
+
+  const hide = platform.host.createVisibilityTransition(hero.target, {
+    visible: false,
+    seconds: 1,
+    easing: 'linear',
+  });
+  const hiding = hide.start();
+  clock.advance(500);
+  assert.deepEqual(hero.calls.at(-1), ['setEffect', 'ghost', 60]);
+  clock.advance(500);
+  await hiding;
+  assert.deepEqual(hero.calls.slice(-3), [
+    ['setEffect', 'ghost', 100],
+    ['setVisible', false],
+    ['setEffect', 'ghost', 20],
+  ]);
+});
+
 test('transparency finish synchronously commits the final state and cancels its timer', async () => {
   const hero = fakeActor();
   const fake = fakeRuntime([hero.target]);

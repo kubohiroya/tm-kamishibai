@@ -18,6 +18,8 @@
     "poseRecognition": {"$ref": "#/$defs/poseRecognition"},
     "controls": {"$ref": "#/$defs/controls"},
     "branches": {"$ref": "#/$defs/branches"},
+    "presentation": {"$ref": "#/$defs/presentation"},
+    "audio": {"$ref": "#/$defs/audio"},
     "scenes": {"$ref": "#/$defs/scenes"}
   },
   "$defs": {
@@ -106,6 +108,75 @@
     },
     "bubbleClosePolicyName": {"$ref": "#/$defs/bubbleStyleName"},
     "stableId": {"$ref": "#/$defs/id"},
+    "visualTransition": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 60},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["effect"],
+          "properties": {"effect": {"const": "cut"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["effect", "seconds"],
+          "properties": {
+            "effect": {"const": "crossfade"},
+            "seconds": {"type": "number", "minimum": 0, "maximum": 60},
+            "easing": {"enum": ["linear", "easeInOut"]}
+          }
+        }
+      ]
+    },
+    "audioTransition": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 60},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["effect"],
+          "properties": {"effect": {"const": "cut"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["effect", "seconds"],
+          "properties": {
+            "effect": {"const": "crossfade"},
+            "seconds": {"type": "number", "minimum": 0, "maximum": 60},
+            "curve": {"enum": ["linear", "equalPower"]}
+          }
+        }
+      ]
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transitions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scene": {"$ref": "#/$defs/visualTransition"},
+            "backdrop": {"$ref": "#/$defs/visualTransition"},
+            "actorSkin": {"$ref": "#/$defs/visualTransition"},
+            "actorVisibility": {"$ref": "#/$defs/visualTransition"}
+          }
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bgm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"transition": {"$ref": "#/$defs/audioTransition"}}
+        }
+      }
+    },
     "compactAsset": {
       "type": "string",
       "pattern": "^(?:backdrop|sound|costume:[\\p{L}_][\\p{L}\\p{N}_-]*)$"
@@ -885,7 +956,24 @@
           "required": ["backdrop"],
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
-            "backdrop": {"$ref": "#/$defs/assetId"}
+            "backdrop": {"$ref": "#/$defs/assetId"},
+            "transition": {"$ref": "#/$defs/visualTransition"}
+          }
+        }
+      ]
+    },
+    "bgmArgs": {
+      "oneOf": [
+        {"$ref": "#/$defs/assetId"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sound"],
+          "properties": {
+            "stableId": {"$ref": "#/$defs/stableId"},
+            "sound": {"$ref": "#/$defs/assetId"},
+            "transition": {"$ref": "#/$defs/audioTransition"},
+            "restart": {"type": "boolean"}
           }
         }
       ]
@@ -1039,7 +1127,8 @@
         "skin": {"$ref": "#/$defs/assetId"},
         "x": {"type": "number"},
         "y": {"type": "number"},
-        "scale": {"type": "number", "exclusiveMinimum": 0}
+        "scale": {"type": "number", "exclusiveMinimum": 0},
+        "transition": {"$ref": "#/$defs/visualTransition"}
       }
     },
     "setTransparencyArgs": {
@@ -1123,7 +1212,8 @@
           "properties": {
             "stableId": {"$ref": "#/$defs/stableId"},
             "skin": {"$ref": "#/$defs/assetId"},
-            "scale": {"type": "number", "exclusiveMinimum": 0}
+            "scale": {"type": "number", "exclusiveMinimum": 0},
+            "transition": {"$ref": "#/$defs/visualTransition"}
           }
         }
       ]
@@ -1131,7 +1221,10 @@
     "hideArgs": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"stableId": {"$ref": "#/$defs/stableId"}}
+      "properties": {
+        "stableId": {"$ref": "#/$defs/stableId"},
+        "transition": {"$ref": "#/$defs/visualTransition"}
+      }
     },
     "setLayerArgs": {
       "oneOf": [
@@ -1231,7 +1324,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["bgm"],
-      "properties": {"bgm": {"$ref": "#/$defs/soundArgs"}}
+      "properties": {"bgm": {"$ref": "#/$defs/bgmArgs"}}
     },
     "soundAction": {
       "type": "object",
@@ -1452,6 +1545,7 @@
       "properties": {
         "poseModel": {"$ref": "#/$defs/assetId"},
         "posePreview": {"$ref": "#/$defs/scenePosePreview"},
+        "entryTransition": {"$ref": "#/$defs/visualTransition"},
         "actions": {"$ref": "#/$defs/actions"}
       }
     },

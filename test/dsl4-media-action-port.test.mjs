@@ -114,6 +114,68 @@ test('maps stage, bgm, sound, and setSkin to one shared Asset Manager compositio
   assert.deepEqual(resolved, [['Hero', 'opening']]);
 });
 
+test('delegates visual transitions and every managed BGM replacement to one transition host', async () => {
+  const fake = fakeComposition();
+  const actor = Object.freeze({id: 'hero-target', isStage: false});
+  const calls = [];
+  const transitionHost = {
+    async crossfadeStage(apply, transition) {
+      calls.push(['crossfadeStage', transition]);
+      await apply();
+    },
+    async crossfadeActorSkin(target, apply, transition) {
+      calls.push(['crossfadeActorSkin', target.id, transition]);
+      await apply();
+    },
+    async replaceBgm(sound, transition, options) {
+      calls.push(['replaceBgm', sound, transition, options.restart]);
+    },
+    finishAll(reason) {
+      calls.push(['finishAll', reason]);
+    },
+  };
+  const port = createDsl4MediaActionPort({
+    composition: fake.composition,
+    resolveActor: () => actor,
+    transitionHost,
+  });
+
+  await port.stage(
+    {backdrop: 'Beach', transition: {effect: 'crossfade', seconds: 0.5}},
+    actionContext(),
+  );
+  await port.setSkin(
+    {target: 'Hero', skin: 'HeroHappy', transition: {effect: 'crossfade', seconds: 0.25}},
+    actionContext(),
+  );
+  await port.bgm(
+    {sound: 'OpeningSound', managed: true, transition: {effect: 'cut'}},
+    actionContext(),
+  );
+  await port.bgm(
+    {
+      sound: 'OpeningSound',
+      managed: true,
+      restart: true,
+      transition: {effect: 'crossfade', seconds: 1, curve: 'equalPower'},
+    },
+    actionContext(),
+  );
+
+  assert.deepEqual(calls, [
+    ['crossfadeStage', {effect: 'crossfade', seconds: 0.5}],
+    ['crossfadeActorSkin', 'hero-target', {effect: 'crossfade', seconds: 0.25}],
+    ['replaceBgm', 'OpeningSound', {effect: 'cut'}, false],
+    ['replaceBgm', 'OpeningSound', {effect: 'crossfade', seconds: 1, curve: 'equalPower'}, true],
+  ]);
+  assert.deepEqual(actionCalls(fake.calls), [
+    ['applyToStage', 'Beach'],
+    ['applyToTarget', 'HeroHappy', 'hero-target'],
+  ]);
+  await port.dispose();
+  assert.deepEqual(calls.at(-1), ['finishAll', 'dispose']);
+});
+
 test('applies setSkin scale and runs a cancellable deterministic background costume loop', async () => {
   const fake = fakeComposition();
   const clock = manualScheduler();

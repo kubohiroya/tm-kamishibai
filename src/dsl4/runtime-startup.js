@@ -4,7 +4,8 @@ import {
   loadDsl4RuntimeComponent,
 } from './runtime-artifact-loader.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
-import {deepFreeze} from './story-document.js';
+import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
+import {dsl4FirstCrossfadeStoryPath} from './transition-spec.js';
 
 export {
   dsl4DefaultFeatureFlags,
@@ -196,6 +197,28 @@ export async function createDsl4RuntimeStartup(options = {}) {
     /** @type {{channel: 'bundled' | 'unbundled', storyDocument: Readonly<Record<string, unknown>>, runtimeArtifact: Readonly<Record<string, any>>}} */ (
       /** @type {unknown} */ (loaded)
     );
+  const crossfadeStoryPath = dsl4FirstCrossfadeStoryPath(component.storyDocument);
+  if (crossfadeStoryPath !== null && !featureFlags.dsl4CrossfadeTransitions) {
+    const origin = sourceOriginForStoryPath(component.storyDocument, crossfadeStoryPath);
+    return deepFreeze({
+      ok: false,
+      enabled: true,
+      featureFlags,
+      diagnostics: [
+        {
+          version: 1,
+          code: 'K4-TRANSITION-FLAG-001',
+          severity: 'error',
+          message: 'dsl4CrossfadeTransitions must be enabled for crossfade transitions',
+          sourceId: origin.sourceId,
+          range: origin.range,
+          storyPath: crossfadeStoryPath,
+          path: crossfadeStoryPath,
+          related: [],
+        },
+      ],
+    });
+  }
   const startupContext = deepFreeze({channel: component.channel, featureFlags});
   /** @type {RuntimeEnvironment | null} */
   let runtimeEnvironment = null;
@@ -290,6 +313,7 @@ export async function createDsl4RuntimeStartup(options = {}) {
         featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
       broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
       storyVariableWriteEnabled: featureFlags.dsl4TurboWarpStoryVariableWrite,
+      crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
       inputArbitration: runtimeEnvironment?.inputArbitration,
     });
   } catch (error) {

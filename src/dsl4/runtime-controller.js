@@ -5,6 +5,11 @@ import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
+import {
+  dsl4CutTransition,
+  dsl4StoryUsesCrossfade,
+  resolveDsl4TransitionDefaults,
+} from './transition-spec.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -156,6 +161,7 @@ function runtimeDiagnostic(storyDocument, storyPath, sourcePath, code, message) 
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {boolean} [options.storyVariableWriteEnabled]
+ * @param {boolean} [options.crossfadeTransitionsEnabled]
  * @param {number} [options.quiesceTimeoutMs]
  * @param {(callback: () => void, milliseconds: number) => (() => void)} [options.scheduleQuiesceTimeout]
  */
@@ -176,6 +182,7 @@ export function createDsl4RuntimeController({
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   storyVariableWriteEnabled = false,
+  crossfadeTransitionsEnabled = false,
   quiesceTimeoutMs = dsl4RuntimeQuiesceDefaults.quiesceTimeoutMs,
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }) {
@@ -254,6 +261,16 @@ export function createDsl4RuntimeController({
   if (typeof storyVariableWriteEnabled !== 'boolean') {
     throw new TypeError('storyVariableWriteEnabled must be boolean');
   }
+  if (typeof crossfadeTransitionsEnabled !== 'boolean') {
+    throw new TypeError('crossfadeTransitionsEnabled must be boolean');
+  }
+  if (!crossfadeTransitionsEnabled && dsl4StoryUsesCrossfade(storyDocument)) {
+    const error = new TypeError(
+      'dsl4CrossfadeTransitions must be enabled for crossfade transitions',
+    );
+    Object.defineProperty(error, 'code', {value: 'K4-TRANSITION-FLAG-001'});
+    throw error;
+  }
   if (
     !Number.isSafeInteger(quiesceTimeoutMs) ||
     quiesceTimeoutMs < dsl4RuntimeQuiesceDefaults.minimumQuiesceTimeoutMs ||
@@ -273,10 +290,16 @@ export function createDsl4RuntimeController({
   if (port.hideSceneActors !== undefined && typeof port.hideSceneActors !== 'function') {
     throw new TypeError('hideSceneActors runtime port method must be a function');
   }
+  if (port.createSceneCrossfade !== undefined && typeof port.createSceneCrossfade !== 'function') {
+    throw new TypeError('createSceneCrossfade runtime port method must be a function');
+  }
 
   const scenes = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
     storyDocument.scenes
   );
+  const transitionDefaults = resolveDsl4TransitionDefaults(storyDocument);
+  /** @type {{sceneId: string, prefixEnd: number, operation: Readonly<{start: Function, finish: Function}>} | null} */
+  let pendingSceneCrossfade = null;
   if (
     !broadcastMessageAndWaitEnabled &&
     scenes.some((scene) =>
@@ -437,6 +460,9 @@ export function createDsl4RuntimeController({
         storyDocument,
         lifecycle: assetLifecycle,
         onEvent: (type, details) => emit(type, details),
+        ...(crossfadeTransitionsEnabled
+          ? {persistentAssetIds: createDsl4AssetDependencyIndex(storyDocument).bgm}
+          : {}),
         ...(cameraPreviewControlsEnabled
           ? {}
           : {
@@ -957,7 +983,107 @@ export function createDsl4RuntimeController({
 
   /** @param {string} reason */
   function finishPresentationTransitions(reason) {
-    port.finishPresentationTransitions?.(reason);
+    const errors = [];
+    try {
+      pendingSceneCrossfade?.operation.finish(reason);
+    } catch (error) {
+      errors.push(error);
+    }
+    pendingSceneCrossfade = null;
+    try {
+      port.finishPresentationTransitions?.(reason);
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Presentation transition finalization failed');
+    }
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} scene */
+  function sceneEntryPrefixEnd(scene) {
+    const eligible = new Set([
+      'stage',
+      'bgm',
+      'show',
+      'hide',
+      'setSkin',
+      'setLayer',
+      'setTransparency',
+      'setText',
+    ]);
+    const actions = /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
+      scene.actions ?? []
+    );
+    let end = 0;
+    for (const action of actions) {
+      if (!eligible.has(String(action.command))) break;
+      if (
+        action.command === 'setTransparency' &&
+        isRecord(action.args) &&
+        Number(action.args.seconds ?? 0) > 0
+      ) {
+        break;
+      }
+      end += 1;
+    }
+    return end;
+  }
+
+  /** @param {string} reason @param {number} actionIndex */
+  function sceneCrossfadeAllowed(reason, actionIndex) {
+    if (actionIndex !== 0) return false;
+    return ![
+      'start',
+      'restart',
+      'rehearsal',
+      'history',
+      'live-reload',
+      'resume',
+      'reposition',
+    ].some((token) => reason.includes(token));
+  }
+
+  /** @param {Readonly<Record<string, unknown>>} scene @param {string} reason @param {number} actionIndex */
+  async function prepareSceneCrossfade(scene, reason, actionIndex) {
+    if (!crossfadeTransitionsEnabled || !sceneCrossfadeAllowed(reason, actionIndex)) return null;
+    const transition = scene.entryTransition ?? transitionDefaults.scene;
+    if (!isRecord(transition) || transition.effect !== 'crossfade') return null;
+    const prefixEnd = sceneEntryPrefixEnd(scene);
+    if (typeof port.createSceneCrossfade !== 'function') {
+      const error = new Error('Scene crossfade platform capability is unavailable');
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});
+      throw error;
+    }
+    const operation = await port.createSceneCrossfade(transition, {
+      from: currentScene()?.id ?? null,
+      to: scene.id,
+      reason,
+    });
+    if (
+      !isRecord(operation) ||
+      typeof operation.start !== 'function' ||
+      typeof operation.finish !== 'function'
+    ) {
+      const error = new Error('Scene crossfade operation is invalid');
+      Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});
+      throw error;
+    }
+    return {
+      sceneId: String(scene.id),
+      prefixEnd,
+      operation: /** @type {Readonly<{start: Function, finish: Function}>} */ (
+        /** @type {unknown} */ (operation)
+      ),
+    };
+  }
+
+  async function startPendingSceneCrossfade() {
+    const pending = pendingSceneCrossfade;
+    if (!pending) return;
+    pendingSceneCrossfade = null;
+    await pending.operation.start();
   }
 
   /** @param {Readonly<Record<string, unknown>>} scene */
@@ -1024,6 +1150,26 @@ export function createDsl4RuntimeController({
         return false;
       }
     }
+    const nextIndex = sceneIndex.get(sceneId);
+    const nextScene = nextIndex === undefined ? null : scenes[nextIndex];
+    let preparedSceneCrossfade = null;
+    try {
+      preparedSceneCrossfade = nextScene
+        ? await prepareSceneCrossfade(nextScene, reason, actionIndex)
+        : null;
+    } catch (error) {
+      if (runId === activeRunId && status === 'running') fail(error);
+      return false;
+    }
+    if (runId !== activeRunId || status !== 'running') {
+      try {
+        preparedSceneCrossfade?.operation.finish(reason);
+      } catch {
+        // A superseded run cannot publish a cleanup failure into the active run.
+      }
+      return false;
+    }
+    pendingSceneCrossfade = preparedSceneCrossfade;
     try {
       transitionTo(sceneId, reason, actionIndex);
     } catch (error) {
@@ -1038,6 +1184,14 @@ export function createDsl4RuntimeController({
         return false;
       }
       if (runId !== activeRunId || status !== 'running') return false;
+    }
+    if (pendingSceneCrossfade?.prefixEnd === 0) {
+      try {
+        await startPendingSceneCrossfade();
+      } catch (error) {
+        if (runId === activeRunId && status === 'running') fail(error);
+        return false;
+      }
     }
     return true;
   }
@@ -1237,10 +1391,35 @@ export function createDsl4RuntimeController({
   /**
    * @param {Readonly<Record<string, unknown>>} action
    * @param {ActionContext} context
-   * @param {{rehearsalSceneSkip?: boolean}} [options]
+   * @param {{rehearsalSceneSkip?: boolean, sceneEntryStaging?: boolean}} [options]
    */
   function dispatch(action, context, options) {
-    return runtimeActionDispatcher.dispatch(action, context, options);
+    const transitionKey =
+      /** @type {'backdrop' | 'bgm' | 'actorVisibility' | 'actorSkin' | undefined} */ (
+        {
+          stage: 'backdrop',
+          bgm: 'bgm',
+          show: 'actorVisibility',
+          hide: 'actorVisibility',
+          setSkin: 'actorSkin',
+        }[String(action.command)]
+      );
+    if (!crossfadeTransitionsEnabled || !transitionKey || !isRecord(action.args)) {
+      return runtimeActionDispatcher.dispatch(action, context, options);
+    }
+    const args = action.args;
+    const transition =
+      options?.sceneEntryStaging && transitionKey !== 'bgm'
+        ? dsl4CutTransition
+        : (args.transition ?? transitionDefaults[transitionKey]);
+    return runtimeActionDispatcher.dispatch(
+      deepFreeze({
+        ...action,
+        args: {...args, transition, ...(transitionKey === 'bgm' ? {managed: true} : {})},
+      }),
+      context,
+      options,
+    );
   }
 
   /** @param {string} code @param {string} message */
@@ -1433,6 +1612,11 @@ export function createDsl4RuntimeController({
       return;
     }
     let terminalError = error;
+    try {
+      finishPresentationTransitions('runtime-failed');
+    } catch {
+      // The triggering runtime error remains authoritative after best-effort cleanup.
+    }
     if (cleanupStructuredData && structuredDataIntegration) {
       try {
         endStructuredStory('runtime-failed');
@@ -1614,8 +1798,12 @@ export function createDsl4RuntimeController({
         nestedNavigationCommand = null;
         activeNestedInvocations.clear();
         try {
+          const stagingTransition = pendingSceneCrossfade;
           transition = await dispatch(currentAction(), context, {
             rehearsalSceneSkip: applyingRehearsalSceneState,
+            sceneEntryStaging:
+              stagingTransition?.sceneId === scene.id &&
+              currentActionIndex < (stagingTransition?.prefixEnd ?? 0),
           });
           await waitForNestedInvocations();
         } catch (error) {
@@ -1641,6 +1829,19 @@ export function createDsl4RuntimeController({
         commitVariableWrites(actionGeneration);
         emit('action.commit');
         actionAbortController = null;
+        const completingSceneTransition = pendingSceneCrossfade;
+        if (
+          completingSceneTransition?.sceneId === scene.id &&
+          currentActionIndex + 1 >= (completingSceneTransition?.prefixEnd ?? Infinity)
+        ) {
+          try {
+            await startPendingSceneCrossfade();
+          } catch (error) {
+            if (runId === activeRunId && status === 'running') fail(error);
+            break;
+          }
+          if (runId !== activeRunId || status !== 'running') break;
+        }
         if (transition && !(await enterScene(transition.sceneId, transition.reason, activeRunId))) {
           break;
         }
@@ -2159,16 +2360,6 @@ export function createDsl4RuntimeController({
     }
     runId += 1;
     const activeRunId = runId;
-    if (!assetCoordinator) {
-      try {
-        transitionTo(sceneId, reason, actionIndex);
-      } catch (error) {
-        fail(error);
-        return Promise.resolve(snapshot());
-      }
-      runPromise = run(activeRunId);
-      return runPromise;
-    }
     runPromise = (async () => {
       if (!(await enterScene(sceneId, reason, activeRunId, actionIndex))) return snapshot();
       return run(activeRunId);

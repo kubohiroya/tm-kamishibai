@@ -42,6 +42,7 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
   assert.deepEqual(index.loading, ['Loading1', 'Loading2', 'LoadingBackground']);
   assert.deepEqual(index.poseRecognition, ['ClockTicking', 'Success']);
   assert.deepEqual(index.posePreviewControls, []);
+  assert.deepEqual(index.bgm, ['OpeningSound']);
   assert.deepEqual(index.sceneRetained, ['救助Pose']);
   assert.deepEqual(index.scenes, {
     opening: {
@@ -375,6 +376,7 @@ scenes:
   assert.equal(Object.isFrozen(index.scenes.first.lazy), true);
   assert.equal(Object.isFrozen(index.loading), true);
   assert.equal(Object.isFrozen(index.sceneRetained), true);
+  assert.equal(Object.isFrozen(index.bgm), true);
   assert.throws(
     () => createDsl4AssetDependencyIndex({kind: 'StoryDocument', version: '3.2'}),
     /StoryDocument version 4\.0/u,

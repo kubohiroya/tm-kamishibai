@@ -73,6 +73,87 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
+test('normalizes transition defaults and per-scene or per-action overrides', () => {
+  const result = frontend.parse(
+    `
+kamishibai: '4.0'
+presentation:
+  transitions:
+    scene: 0
+    backdrop: 0.4
+    actorSkin: {effect: crossfade, seconds: 0.3, easing: linear}
+    actorVisibility: {effect: cut}
+audio:
+  bgm:
+    transition: 0.8
+assets:
+  Beach: backdrop
+  HeroIdle: costume:Hero
+  HeroHappy: costume:Hero
+  OpeningSound: sound
+actors: {Hero: HeroIdle}
+scenes:
+  opening:
+    entryTransition: 0.5
+    actions:
+      - stage: {backdrop: Beach, transition: 0.2}
+      - bgm: {sound: OpeningSound, transition: {effect: crossfade, seconds: 1, curve: linear}, restart: true}
+      - Hero.show: {skin: HeroIdle, x: 0, y: 0, scale: 100, transition: 0.15}
+      - Hero.setSkin: {skin: HeroHappy, transition: 0}
+      - Hero.hide: {transition: {effect: crossfade, seconds: 0.25}}
+`,
+    {sourceId: 'transitions.kamishibai.yaml'},
+  );
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.storyDocument.presentation.transitions, {
+    scene: {effect: 'cut'},
+    backdrop: {effect: 'crossfade', seconds: 0.4, easing: 'easeInOut'},
+    actorSkin: {effect: 'crossfade', seconds: 0.3, easing: 'linear'},
+    actorVisibility: {effect: 'cut'},
+  });
+  assert.deepEqual(result.storyDocument.audio.bgm.transition, {
+    effect: 'crossfade',
+    seconds: 0.8,
+    curve: 'equalPower',
+  });
+  assert.deepEqual(result.storyDocument.scenes[0].entryTransition, {
+    effect: 'crossfade',
+    seconds: 0.5,
+    easing: 'easeInOut',
+  });
+  assert.deepEqual(
+    result.storyDocument.scenes[0].actions.map((action) => action.args.transition),
+    [
+      {effect: 'crossfade', seconds: 0.2, easing: 'easeInOut'},
+      {effect: 'crossfade', seconds: 1, curve: 'linear'},
+      {effect: 'crossfade', seconds: 0.15, easing: 'easeInOut'},
+      {effect: 'cut'},
+      {effect: 'crossfade', seconds: 0.25, easing: 'easeInOut'},
+    ],
+  );
+  for (const path of [
+    '/presentation/transitions/scene',
+    '/audio/bgm/transition',
+    '/scenes/opening/entryTransition',
+    '/scenes/opening/actions/1/args/transition/curve',
+  ]) {
+    assert.ok(result.storyDocument.sourceMap[path], path);
+  }
+});
+
+test('rejects transition fields that belong to a different transition kind', () => {
+  for (const source of [
+    'presentation:\n  transitions:\n    scene: {effect: crossfade, seconds: 1, curve: linear}',
+    'audio:\n  bgm:\n    transition: {effect: crossfade, seconds: 1, easing: linear}',
+  ]) {
+    const result = frontend.parse(`kamishibai: '4.0'\n${source}\nscenes:\n  opening: []\n`, {
+      sourceId: 'invalid-transition.kamishibai.yaml',
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(({code}) => code.startsWith('K4-SCHEMA')));
+  }
+});
+
 test('normalizes compact and named broadcastMessageAndWait actions with exact message text', () => {
   const source = `
 kamishibai: '4.0'

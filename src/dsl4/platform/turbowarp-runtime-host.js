@@ -21,6 +21,7 @@ import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adap
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 import {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
+import {createDsl4TurboWarpCrossfadePlatform} from './turbowarp-crossfade-platform.js';
 
 /**
  * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
@@ -378,6 +379,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let bubbleAdvanceIndicatorPresenter = null;
   /** @type {ReturnType<typeof createDsl4MediaActionPort> | null} */
   let mediaPort = null;
+  /** @type {ReturnType<typeof createDsl4TurboWarpCrossfadePlatform> | null} */
+  let crossfadePlatform = null;
   /** @type {ReturnType<typeof createDsl4SvgTextPlatform> | null} */
   let svgTextPlatform = null;
   /** @type {ReturnType<typeof createDsl4BubblePlatform> | null} */
@@ -605,6 +608,28 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     });
     await assetSession.binaryAssetBacking?.ready;
     publishBinarySessionBacking(assetSession.binaryAssetBacking);
+    if (featureFlags.dsl4CrossfadeTransitions) {
+      const composition = assetSession.assetManagerComposition;
+      const createAudioVoice =
+        options.createAudioVoice ??
+        (typeof composition.createAudioVoice === 'function'
+          ? composition.createAudioVoice.bind(composition)
+          : undefined);
+      crossfadePlatform = createDsl4TurboWarpCrossfadePlatform({
+        runtime: options.runtime,
+        ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
+        ...(options.actorFrameMilliseconds === undefined
+          ? {}
+          : {frameMilliseconds: options.actorFrameMilliseconds}),
+        ...(createAudioVoice === undefined ? {} : {createAudioVoice}),
+        ...(options.createImageBitmap === undefined
+          ? {}
+          : {createImageBitmap: options.createImageBitmap}),
+        ...(options.onBackgroundActionError === undefined
+          ? {}
+          : {onBackgroundError: options.onBackgroundActionError}),
+      });
+    }
     mediaPort = createDsl4MediaActionPort({
       composition: assetSession.assetManagerComposition,
       resolveActor: actorPlatform.resolveActor,
@@ -613,6 +638,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(options.onBackgroundActionError === undefined
         ? {}
         : {onBackgroundError: options.onBackgroundActionError}),
+      ...(crossfadePlatform === null ? {} : {transitionHost: crossfadePlatform}),
     });
     if (standaloneAdvanceIndicatorEnabled) {
       const activeAssetSession = assetSession;
@@ -777,7 +803,27 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       }
     };
     port.hideSceneActors = hideStoryActors;
-    port.finishPresentationTransitions = actorPlatform.finishTransparencyTransitions;
+    const activeActorPlatformForTransitions = actorPlatform;
+    port.finishPresentationTransitions = () => {
+      const errors = [];
+      for (const finish of [
+        activeActorPlatformForTransitions.finishTransparencyTransitions,
+        crossfadePlatform?.finishAll,
+      ]) {
+        try {
+          finish?.();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'Presentation transition cleanup failed');
+      }
+    };
+    if (crossfadePlatform) {
+      port.createSceneCrossfade = crossfadePlatform.createSceneCrossfade;
+    }
     addPortMethods(port, svgTextPlatform.port, ['setText'], 'SVG text action port');
     addPortMethods(
       port,
@@ -1069,6 +1115,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           for (const release of [
             () => broadcastActionPort?.dispose(),
             () => mediaPort?.dispose(),
+            () => crossfadePlatform?.dispose(),
             () => bubbleAdvanceIndicatorPresenter?.dispose(),
             () => actorPlatform?.dispose(),
             () => scratchPoseFeedbackAdapter?.dispose(),
@@ -1101,6 +1148,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     for (const release of [
       () => broadcastActionPort?.dispose(),
       () => mediaPort?.dispose(),
+      () => crossfadePlatform?.dispose(),
       () => bubbleAdvanceIndicatorPresenter?.dispose(),
       () => actorPlatform?.dispose(),
       () => scratchPoseFeedbackAdapter?.dispose(),

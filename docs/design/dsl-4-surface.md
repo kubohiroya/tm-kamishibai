@@ -55,6 +55,8 @@ Copyright © 2026 Hiroya Kubo.
 | `poseRecognition`     | 任意 | 待機中と認識成功時の音・認識設定  |
 | `controls`            | 任意 | 環境別の開発・チート機能用keymap  |
 | `branches`            | 任意 | 順序付き条件分岐                  |
+| `presentation`        | 任意 | scene・背景・actorの遷移既定値    |
+| `audio`               | 任意 | BGM遷移の既定値                   |
 | `scenes`              | 必須 | 一つ以上のscene                   |
 
 actor、style、variable、branch、action、parameterなど、DSL構文上の識別子にはUnicodeの文字、数字、
@@ -672,6 +674,76 @@ runtime接続はStandalone blockを経由せず、`showPoseOverlay()`／`hidePos
 `hidePoseOverlay()`で従来表示へ戻し、設定ありで必要methodが不足する場合はstartupでfail closedにします。
 表示の配置・左右反転・preview非表示・camera停止・recognition停止のDOM lifecycleはTMPoseが所有します。
 
+### 4.4 クロスフェード
+
+`dsl4CrossfadeTransitions`が有効なruntimeでは、scene、背景、actorのskin／表示、BGMに共通の
+transition指定を使用できます。互換性を維持するため、組み込み既定値はすべて`cut`（0秒）です。
+flagも起動時固定・既定OFFであり、OFFのruntimeはcrossfade構文を
+`K4-TRANSITION-FLAG-001`で実行前に拒否します。既存台本のport payloadと再生経路は変更しません。
+
+```yaml
+presentation:
+  transitions:
+    scene: 0.5
+    backdrop: 0.3
+    actorSkin: 0.2
+    actorVisibility: 0.15
+audio:
+  bgm:
+    transition:
+      effect: crossfade
+      seconds: 1.5
+      curve: equalPower
+```
+
+visual transitionは数値、`{effect: cut}`、または
+`{effect: crossfade, seconds, easing?}`で指定します。`easing`は`linear | easeInOut`、省略時は
+`easeInOut`です。BGMは数値、`{effect: cut}`、または
+`{effect: crossfade, seconds, curve?}`を使い、`curve`は`linear | equalPower`、省略時は
+`equalPower`です。秒数は0〜60の有限数で、数値短縮形とcrossfade objectの`seconds: 0`は
+正規化時に`{effect: cut}`となります。
+
+作品既定値は`presentation.transitions.scene | backdrop | actorSkin | actorVisibility`と
+`audio.bgm.transition`に分けます。BGM curveをvisual easingと混在させません。actionの`transition`が
+作品既定値を上書きします。
+
+```yaml
+scenes:
+  ending:
+    entryTransition: 0.8
+    actions:
+      - stage: {backdrop: Sunset, transition: 0.4}
+      - Hero.setSkin: {skin: HeroSmile, transition: 0.2}
+      - Hero.hide: {transition: 0.15}
+      - bgm: {sound: EndingTheme, transition: 1.2, restart: true}
+```
+
+`entryTransition`はdestination scene所有の設定で、長形式sceneだけに記述します。通常のscene遷移では
+遷移元renderer frameをcaptureし、遷移先先頭の即時presentation prefixを旧frameの下でcut適用してから、
+旧frameを透明化します。prefixには`stage`、`bgm`、`Actor.show`／`hide`／`setSkin`／`setLayer`、
+即時`Actor.setTransparency`、`Actor.setText`を連続して含めます。BGMはvisual staging中も固有のtransitionを
+保持し、visual用のcutへ上書きしません。prefixが空でもscene crossfadeは実行します。
+
+初回start、restart、rehearsal、history、live reload、resume、repositionは状態復元を優先してscene
+crossfadeを行いません。stop、skip、restart、failure、dispose、新しい同scope transitionでは進行中の
+transitionを終端状態へ確定し、timer、一時drawable、skinを回収します。
+
+actor visibilityは元のghost effectをbaselineとして復元します。actor skinと背景は旧drawableを
+platform所有の非interactive一時drawableへ複製し、完了後に破棄します。actor loop、pose step、loading
+costumeへ`actorSkin`既定値を暗黙適用しません。
+
+BGMは`@kubohiroya/turbowarp-asset-manager` 0.13.0以降の`createAudioVoice()`を使用し、flag ON中の
+全BGMを単一のlogical channelとしてvoice管理します。cutもこのchannelを通すため、後続crossfadeは
+直前のBGMを確実にfade-outできます。同じasset IDは`restart: true`がなければno-opです。
+equal-powerでは進行率`p`に対して旧gainを`cos(πp/2)`、新gainを`sin(πp/2)`とし、完了時に旧voiceだけを
+停止します。speechとsound effectは別voice／従来経路のままで、BGM切替によって誤停止しません。
+`retention: scene`のBGMも進行中voiceをasset解放で停止しないよう、flag ON中はBGM参照assetを
+story終了／stop／disposeまでtransition leaseとして保持します。
+
+ロールバックは`dsl4CrossfadeTransitions=false`で行います。台本にcrossfade指定が残る場合はcutへ戻すか
+指定を削除してからflagをOFFにします。flag OFFではframe capture、一時drawable、BGM voice channelを
+作成しません。
+
 ## 5. 環境別keymap
 
 開発用の巻き戻しや早送りは固定キーをシステム的に占有せず、台本の環境別keymapで割り当てます。
@@ -775,19 +847,20 @@ iconへ反映します。
 
 ### 7.1 Global action
 
-| action                    | 引数                                        |
-| ------------------------- | ------------------------------------------- |
-| `stage`                   | backdrop ID、または`{backdrop, stableId?}`  |
-| `bgm` / `sound`           | sound ID、または`{sound, stableId?}`        |
-| `wait`                    | 秒数、または`{seconds, stableId?}`          |
-| `debugger`                | 引数なし（`debugger:`）                     |
-| `broadcastMessageAndWait` | message名、または`{message, stableId?}`     |
-| `transition`              | `{effect, seconds, stableId?}`              |
-| `goto`                    | scene ID、または`{scene, stableId?}`        |
-| `branch`                  | branch ID、または`{branch, stableId?}`      |
-| `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping |
-| `touchInputToChangeScene` | actor IDからscene IDへのmapping             |
-| `poseInputToChangeScene`  | pose IDからscene IDへのmapping              |
+| action                    | 引数                                                        |
+| ------------------------- | ----------------------------------------------------------- |
+| `stage`                   | backdrop ID、または`{backdrop, transition?, stableId?}`     |
+| `bgm`                     | sound ID、または`{sound, transition?, restart?, stableId?}` |
+| `sound`                   | sound ID、または`{sound, stableId?}`                        |
+| `wait`                    | 秒数、または`{seconds, stableId?}`                          |
+| `debugger`                | 引数なし（`debugger:`）                                     |
+| `broadcastMessageAndWait` | message名、または`{message, stableId?}`                     |
+| `transition`              | `{effect, seconds, stableId?}`                              |
+| `goto`                    | scene ID、または`{scene, stableId?}`                        |
+| `branch`                  | branch ID、または`{branch, stableId?}`                      |
+| `keyInputToChangeScene`   | `KeyboardEvent.code`からscene IDへのmapping                 |
+| `touchInputToChangeScene` | actor IDからscene IDへのmapping                             |
+| `poseInputToChangeScene`  | pose IDからscene IDへのmapping                              |
 
 `transition`は見た目の効果だけを実行し、scene遷移を暗黙に行いません。scene移動には別の`goto`、
 `branch`または入力actionを使います。
@@ -845,12 +918,12 @@ OFFに戻し、台本を標準core actionまたはCustom actionへ戻します�
 
 | action                     | 引数                                                                                                                                                                                        |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Actor.show`               | `{skin, x, y, scale, stableId?}`                                                                                                                                                            |
-| `Actor.hide`               | `{stableId?}`                                                                                                                                                                               |
+| `Actor.show`               | `{skin, x, y, scale, transition?, stableId?}`                                                                                                                                               |
+| `Actor.hide`               | `{transition?, stableId?}`                                                                                                                                                                  |
 | `Actor.setTransparency`    | 0〜100、`{transparency, stableId?}`、または`{from, to, seconds, background?, stableId?}`                                                                                                    |
 | `Actor.moveTo`             | `{x, y, seconds, easing?, stableId?}`                                                                                                                                                       |
 | `Actor.say`／`Actor.think` | `{text, closePolicy?, seconds?, waitFor?, styles?, characterIntervalSeconds?, startSound?, characterSound?, noSoundCharacters?, restCharacters?, restCharacterIntervalSeconds?, stableId?}` |
-| `Actor.setSkin`            | skin ID、または`{skin, scale?, stableId?}`                                                                                                                                                  |
+| `Actor.setSkin`            | skin ID、または`{skin, scale?, transition?, stableId?}`                                                                                                                                     |
 | `Actor.setLayer`           | `front`／`back`／相対layer数、または`{layer, stableId?}`                                                                                                                                    |
 | `Actor.loop`               | `{steps: [{skin, seconds}, ...], stableId?}`                                                                                                                                                |
 | `Actor.setText`            | `{text, style, stableId?}`                                                                                                                                                                  |

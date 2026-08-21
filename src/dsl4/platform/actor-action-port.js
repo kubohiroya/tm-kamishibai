@@ -229,7 +229,7 @@ async function runCancellable(start, signal) {
   }
 }
 
-/** @param {unknown} value @param {'setTransparency' | 'moveTo' | 'say' | 'think'} command */
+/** @param {unknown} value @param {'setTransparency' | 'moveTo' | 'say' | 'think' | 'show' | 'hide'} command */
 function validatePresentationOperation(value, command) {
   if (!isRecord(value) || typeof value.start !== 'function' || typeof value.finish !== 'function') {
     throw portError(
@@ -710,7 +710,14 @@ export function createDsl4ActorActionPort(options) {
   return Object.freeze({
     /** @param {unknown} payload @param {unknown} context */
     async show(payload, context) {
-      const value = validatePayloadShape(payload, ['target', 'skin', 'x', 'y', 'scale'], 'show');
+      const value =
+        isRecord(payload) && Object.hasOwn(payload, 'transition')
+          ? validatePayloadShape(
+              payload,
+              ['target', 'skin', 'x', 'y', 'scale', 'transition'],
+              'show',
+            )
+          : validatePayloadShape(payload, ['target', 'skin', 'x', 'y', 'scale'], 'show');
       const target = requireNonEmptyString(value.target, 'target', 'show');
       const skin = requireNonEmptyString(value.skin, 'skin', 'show');
       const x = requireFiniteNumber(value.x, 'x', 'show');
@@ -732,11 +739,32 @@ export function createDsl4ActorActionPort(options) {
         () => host.showActor(actor, Object.freeze({x, y, scale}), actionContext),
         signal,
       );
+      if (isRecord(value.transition) && value.transition.effect === 'crossfade') {
+        if (typeof host.createVisibilityTransition !== 'function') {
+          throw portError('K4-ACTOR-PORT-004', 'Actor visibility crossfade is unavailable');
+        }
+        const operation = validatePresentationOperation(
+          host.createVisibilityTransition(
+            actor,
+            Object.freeze({
+              visible: true,
+              seconds: value.transition.seconds,
+              easing: value.transition.easing,
+            }),
+            actionContext,
+          ),
+          'show',
+        );
+        await runPresentationOperation(operation, signal);
+      }
     },
 
     /** @param {unknown} payload @param {unknown} context */
     async hide(payload, context) {
-      const value = validatePayloadShape(payload, ['target'], 'hide');
+      const value =
+        isRecord(payload) && Object.hasOwn(payload, 'transition')
+          ? validatePayloadShape(payload, ['target', 'transition'], 'hide')
+          : validatePayloadShape(payload, ['target'], 'hide');
       const target = requireNonEmptyString(value.target, 'target', 'hide');
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
@@ -744,6 +772,25 @@ export function createDsl4ActorActionPort(options) {
         /** @type {unknown} */ (context)
       );
       const actor = await resolveTarget(target, actionContext, signal);
+      if (isRecord(value.transition) && value.transition.effect === 'crossfade') {
+        if (typeof host.createVisibilityTransition !== 'function') {
+          throw portError('K4-ACTOR-PORT-004', 'Actor visibility crossfade is unavailable');
+        }
+        const operation = validatePresentationOperation(
+          host.createVisibilityTransition(
+            actor,
+            Object.freeze({
+              visible: false,
+              seconds: value.transition.seconds,
+              easing: value.transition.easing,
+            }),
+            actionContext,
+          ),
+          'hide',
+        );
+        await runPresentationOperation(operation, signal);
+        return;
+      }
       await runCancellable(() => host.hideActor(actor, actionContext), signal);
     },
 

@@ -190,6 +190,17 @@ export {createDsl4ReloadPlan} from './reload-planner.js';
 export {createDsl4RuntimeController, dsl4RuntimeQuiesceDefaults} from './runtime-controller.js';
 export {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 export {
+  dsl4BuiltInTransitionDefaults,
+  dsl4CutTransition,
+  dsl4FirstCrossfadeStoryPath,
+  dsl4StoryUsesCrossfade,
+  dsl4TransitionMaximumSeconds,
+  isDsl4CrossfadeTransition,
+  normalizeDsl4AudioTransition,
+  normalizeDsl4VisualTransition,
+  resolveDsl4TransitionDefaults,
+} from './transition-spec.js';
+export {
   createDsl4RuntimeStartup,
   dsl4DefaultFeatureFlags,
   dsl4NonEmbeddedDevelopmentFeatureFlags,
