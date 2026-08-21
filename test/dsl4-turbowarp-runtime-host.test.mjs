@@ -2397,6 +2397,7 @@ test('wires Standard production think advance through the TurboWarp runtime host
   const project = await packagedProject(speechStory);
   const log = [];
   const fixture = platformFixture(log);
+  fixture.runtime.renderer = {};
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: dsl4StandardProductionFeatureFlags,

@@ -118,6 +118,28 @@ both under the top-level `bubbleClosePolicies` registry, then reference its name
 Close policies are separate from visual `bubbleStyles` and cannot be combined with inline `seconds`
 or `waitFor` on the same action.
 
+The Standard Runtime enables crossfade transitions by default. Durations can smoothly replace a
+scene, backdrop, actor skin or visibility state, and BGM. Existing scripts that omit transitions
+continue to use a zero-second `cut`.
+
+```yaml
+presentation:
+  transitions:
+    scene: 0.5
+    backdrop: 0.4
+    actorSkin: 0.2
+    actorVisibility: 0.15
+audio:
+  bgm:
+    transition: {effect: crossfade, seconds: 1, curve: equalPower}
+```
+
+Individual `stage`, `bgm`, and `Actor.show`, `Actor.hide`, or `Actor.setSkin` actions may also set
+`transition`. To roll back the capability in a runtime host, explicitly set
+`dsl4CrossfadeTransitions: false` and remove crossfade syntax or replace it with `cut`. See the
+[transition section of the DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#44-transition共通化)
+for the complete contract.
+
 For practical scripts, asset references, pose models, branches, and speech bubbles, continue with the [author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tmpose-kamishibai-samples).
 
 ### Validate, preview, and build with the CLI

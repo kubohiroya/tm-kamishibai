@@ -116,6 +116,26 @@ scenes:
 `seconds`、`waitFor: advance`、または両方を定義し、actionから`closePolicy`名で参照します。表示用の
 `bubbleStyles`とは独立しており、action内の`seconds`／`waitFor`との併用はできません。
 
+Standard Runtimeではcrossfade transitionが既定で有効です。秒数を指定すると、scene、背景、
+actorのskin／表示、BGMを滑らかに切り替えられます。transitionを省略した既存台本は引き続き
+`cut`（0秒）で動作します。
+
+```yaml
+presentation:
+  transitions:
+    scene: 0.5
+    backdrop: 0.4
+    actorSkin: 0.2
+    actorVisibility: 0.15
+audio:
+  bgm:
+    transition: {effect: crossfade, seconds: 1, curve: equalPower}
+```
+
+個別の`stage`、`bgm`、`Actor.show`／`hide`／`setSkin` actionにも`transition`を指定できます。
+runtime hostで機能を切り戻す場合は`dsl4CrossfadeTransitions: false`を明示し、crossfade指定を
+`cut`へ戻すか削除してください。詳細は[DSL 4.0表層仕様のtransition節](./docs/design/dsl-4-surface.md#44-transition共通化)を参照してください。
+
 より実用的な台本、アセット参照、ポーズモデル、分岐、吹き出しについては[作者ガイド](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/)と[サンプルリポジトリ](https://github.com/kubohiroya/tmpose-kamishibai-samples)を参照してください。
 
 ### CLIで検証・preview・buildする
