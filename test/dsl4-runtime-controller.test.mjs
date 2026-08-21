@@ -162,6 +162,141 @@ async function waitFor(predicate, message) {
   assert.fail(message);
 }
 
+test('stages scene-entry presentation before starting the scene crossfade', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+presentation:
+  transitions: {scene: 0.5}
+audio:
+  bgm: {transition: 0.75}
+assets:
+  Beach: backdrop
+  HeroIdle: costume:Hero
+  OpeningSound: sound
+actors: {Hero: HeroIdle}
+scenes:
+  opening:
+    - goto: ending
+  ending:
+    - bgm: OpeningSound
+    - stage: Beach
+    - Hero.show: {skin: HeroIdle, x: 0, y: 0, scale: 100}
+    - wait: 0
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    crossfadeTransitionsEnabled: true,
+    port: {
+      hideSceneActors(payload) {
+        calls.push(['hideSceneActors', payload.from, payload.to]);
+      },
+      createSceneCrossfade(transition, context) {
+        calls.push(['captureScene', transition, context.from, context.to]);
+        return {
+          start() {
+            calls.push(['startSceneCrossfade']);
+          },
+          finish() {
+            calls.push(['finishSceneCrossfade']);
+          },
+        };
+      },
+      bgm(payload) {
+        calls.push(['bgm', payload]);
+      },
+      stage(payload) {
+        calls.push(['stage', payload]);
+      },
+      show(payload) {
+        calls.push(['show', payload]);
+      },
+      wait() {
+        calls.push(['wait']);
+      },
+    },
+  });
+
+  await controller.start();
+
+  assert.deepEqual(calls, [
+    ['hideSceneActors', null, 'opening'],
+    ['captureScene', {effect: 'crossfade', seconds: 0.5, easing: 'easeInOut'}, 'opening', 'ending'],
+    ['hideSceneActors', 'opening', 'ending'],
+    [
+      'bgm',
+      {
+        sound: 'OpeningSound',
+        transition: {effect: 'crossfade', seconds: 0.75, curve: 'equalPower'},
+        managed: true,
+      },
+    ],
+    ['stage', {backdrop: 'Beach', transition: {effect: 'cut'}}],
+    [
+      'show',
+      {
+        target: 'Hero',
+        skin: 'HeroIdle',
+        x: 0,
+        y: 0,
+        scale: 100,
+        transition: {effect: 'cut'},
+      },
+    ],
+    ['startSceneCrossfade'],
+    ['wait'],
+  ]);
+});
+
+test('starts a scene crossfade even when the destination has no staging prefix', async () => {
+  const storyDocument = parseStory(`
+kamishibai: '4.0'
+scenes:
+  opening:
+    - goto: ending
+  ending:
+    entryTransition: 0.2
+    actions:
+      - wait: 0
+`);
+  const calls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument,
+    crossfadeTransitionsEnabled: true,
+    port: {
+      hideSceneActors(payload) {
+        calls.push(['hideSceneActors', payload.to]);
+      },
+      createSceneCrossfade() {
+        calls.push(['captureScene']);
+        return {
+          start() {
+            calls.push(['startSceneCrossfade']);
+          },
+          finish() {},
+        };
+      },
+      wait() {
+        calls.push(['wait']);
+      },
+    },
+  });
+
+  await controller.start();
+  assert.deepEqual(calls, [
+    ['hideSceneActors', 'opening'],
+    ['captureScene'],
+    ['hideSceneActors', 'ending'],
+    ['startSceneCrossfade'],
+    ['wait'],
+  ]);
+
+  assert.throws(
+    () => createDsl4RuntimeController({storyDocument, port: {}}),
+    (error) => error?.code === 'K4-TRANSITION-FLAG-001',
+  );
+});
+
 const allCoreActionsStory = `
 kamishibai: '4.0'
 assets:
@@ -2061,6 +2196,70 @@ scenes:
   );
   assert.equal(controller.getTrace().filter(({type}) => type === 'navigation.advance').length, 0);
   assert.equal(controller.getTrace().filter(({type}) => type === 'pose.step.skip').length, 1);
+});
+
+test('keeps scene-retained BGM assets leased while crossfade voice ownership is enabled', async () => {
+  const story = parseStory(`
+kamishibai: '4.0'
+assets:
+  TrackA:
+    kind: sound
+    name: TrackA
+    loading: lazy
+    retention: scene
+  TrackB:
+    kind: sound
+    name: TrackB
+    loading: lazy
+    retention: scene
+scenes:
+  opening:
+    - bgm: TrackA
+    - goto: ending
+  ending:
+    - bgm: {sound: TrackB, transition: 0.5}
+    - wait: 0
+`);
+  const lifecycleCalls = [];
+  const controller = createDsl4RuntimeController({
+    storyDocument: story,
+    crossfadeTransitionsEnabled: true,
+    port: {bgm() {}, wait() {}},
+    assetLifecycle: {
+      prepare(payload) {
+        lifecycleCalls.push(['prepare', payload]);
+      },
+      setLoading() {},
+      releaseAssets(payload) {
+        lifecycleCalls.push(['releaseAssets', payload]);
+      },
+      release(payload) {
+        lifecycleCalls.push(['release', payload]);
+      },
+    },
+  });
+
+  await controller.start();
+  assert.equal(controller.getState().status, 'finished');
+  assert.deepEqual(
+    lifecycleCalls
+      .filter(([method]) => method === 'prepare')
+      .map(([, payload]) => [payload.sceneId, payload.assetIds]),
+    [
+      [null, []],
+      ['opening', ['TrackA']],
+      ['ending', ['TrackB']],
+    ],
+  );
+  assert.equal(
+    lifecycleCalls.some(
+      ([method, payload]) =>
+        method === 'releaseAssets' &&
+        payload.assetIds.some((assetId) => assetId === 'TrackA' || assetId === 'TrackB'),
+    ),
+    false,
+  );
+  controller.stop('test-cleanup');
 });
 
 test('restart invalidates an old pose cleanup lock without waiting for it', async () => {

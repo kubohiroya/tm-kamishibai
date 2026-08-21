@@ -2,6 +2,7 @@ import {deepFreeze} from './story-document.js';
 
 const featureFlagKeys = new Set([
   'dsl4Runtime',
+  'dsl4CrossfadeTransitions',
   'dsl4BroadcastMessageAndWait',
   'dsl4SessionBinaryBacking',
   'dsl4SourceIncludes',
@@ -27,6 +28,7 @@ const featureFlagKeys = new Set([
 
 export const dsl4DefaultFeatureFlags = deepFreeze({
   dsl4Runtime: false,
+  dsl4CrossfadeTransitions: false,
   dsl4BroadcastMessageAndWait: false,
   dsl4SessionBinaryBacking: false,
   dsl4SourceIncludes: false,
@@ -90,6 +92,9 @@ export function resolveDsl4FeatureFlags(input = {}) {
   }
   if (resolved.dsl4AppShell && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4AppShell requires dsl4Runtime');
+  }
+  if (resolved.dsl4CrossfadeTransitions && !resolved.dsl4Runtime) {
+    throw new TypeError('dsl4CrossfadeTransitions requires dsl4Runtime');
   }
   if (resolved.dsl4BroadcastMessageAndWait && !resolved.dsl4Runtime) {
     throw new TypeError('dsl4BroadcastMessageAndWait requires dsl4Runtime');

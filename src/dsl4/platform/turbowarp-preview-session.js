@@ -224,6 +224,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
           featureFlags.dsl4TurboWarpBubbleAdvancedPresentation,
         broadcastMessageAndWaitEnabled: featureFlags.dsl4BroadcastMessageAndWait,
         storyVariableWriteEnabled: featureFlags.dsl4TurboWarpStoryVariableWrite,
+        crossfadeTransitionsEnabled: featureFlags.dsl4CrossfadeTransitions,
       });
     } catch (error) {
       try {

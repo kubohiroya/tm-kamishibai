@@ -1,5 +1,6 @@
 import {dsl4ActorCoreActionNames} from './action-registry.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
+import {normalizeDsl4AudioTransition, normalizeDsl4VisualTransition} from './transition-spec.js';
 
 const actorCoreActionNames = new Set(dsl4ActorCoreActionNames);
 
@@ -36,8 +37,9 @@ function cloneValue(value) {
  * @param {import('yaml').LineCounter} lineCounter
  * @param {Array<string | number>} yamlPath
  * @param {string} storyPath
+ * @param {any} [node]
  */
-function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, storyPath) {
+function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, storyPath, node) {
   if (typeof value !== 'object' || value === null) return;
   const entries = Array.isArray(value)
     ? value.map((child, index) => [index, child])
@@ -46,11 +48,38 @@ function mapNestedSource(sourceMap, value, document, lineCounter, yamlPath, stor
     const segment = encodeDsl4StoryPathSegment(String(key));
     const childStoryPath = `${storyPath}/${segment}`;
     const childYamlPath = [...yamlPath, key];
-    sourceMap[childStoryPath] = sourceRangeForNode(
-      document.getIn(childYamlPath, true),
+    const childNode = document.getIn(childYamlPath, true) ?? node;
+    sourceMap[childStoryPath] = sourceRangeForNode(childNode, lineCounter);
+    mapNestedSource(
+      sourceMap,
+      child,
+      document,
       lineCounter,
+      childYamlPath,
+      childStoryPath,
+      childNode,
     );
-    mapNestedSource(sourceMap, child, document, lineCounter, childYamlPath, childStoryPath);
+  }
+}
+
+/**
+ * @param {Record<string, SourceRange>} sourceMap
+ * @param {unknown} value
+ * @param {any} node
+ * @param {import('yaml').LineCounter} lineCounter
+ * @param {string} storyPath
+ */
+function mapNestedNode(sourceMap, value, node, lineCounter, storyPath) {
+  if (typeof value !== 'object' || value === null) return;
+  const entries = Array.isArray(value)
+    ? value.map((child, index) => [index, child])
+    : Object.entries(/** @type {Record<string, unknown>} */ (value));
+  for (const [key, child] of entries) {
+    const segment = encodeDsl4StoryPathSegment(String(key));
+    const childPath = `${storyPath}/${segment}`;
+    const childNode = node?.get?.(key, true) ?? node;
+    sourceMap[childPath] = sourceRangeForNode(childNode, lineCounter);
+    mapNestedNode(sourceMap, child, childNode, lineCounter, childPath);
   }
 }
 
@@ -426,6 +455,12 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
   const stableId =
     typeof argumentRecord?.stableId === 'string' ? argumentRecord.stableId : undefined;
   delete args.stableId;
+  if (Object.hasOwn(args, 'transition')) {
+    args.transition =
+      command === 'bgm'
+        ? normalizeDsl4AudioTransition(args.transition, `${actionPath}/args/transition`)
+        : normalizeDsl4VisualTransition(args.transition, `${actionPath}/args/transition`);
+  }
   const argsNode = customAction
     ? (argumentNode?.get?.('arguments', true) ?? argumentNode)
     : argumentNode;
@@ -445,6 +480,15 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       fieldNode,
       lineCounter,
     );
+    if (field === 'transition') {
+      mapNestedNode(
+        sourceMap,
+        args[field],
+        fieldNode,
+        lineCounter,
+        `${actionPath}/args/transition`,
+      );
+    }
     if (field === 'styles' && Array.isArray(args[field])) {
       args[field].forEach((_, styleIndex) => {
         sourceMap[`${actionPath}/args/styles/${styleIndex}`] = sourceRangeForNode(
@@ -539,6 +583,44 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
       );
     }
   }
+  const presentation = Object.hasOwn(story, 'presentation')
+    ? /** @type {Record<string, unknown>} */ (cloneValue(story.presentation))
+    : undefined;
+  const audio = Object.hasOwn(story, 'audio')
+    ? /** @type {Record<string, unknown>} */ (cloneValue(story.audio))
+    : undefined;
+  if (
+    presentation &&
+    typeof presentation.transitions === 'object' &&
+    presentation.transitions !== null
+  ) {
+    const transitions = /** @type {Record<string, unknown>} */ (presentation.transitions);
+    for (const field of ['scene', 'backdrop', 'actorSkin', 'actorVisibility']) {
+      if (!Object.hasOwn(transitions, field)) continue;
+      transitions[field] = normalizeDsl4VisualTransition(
+        transitions[field],
+        `/presentation/transitions/${field}`,
+      );
+    }
+  }
+  if (audio && typeof audio.bgm === 'object' && audio.bgm !== null) {
+    const bgm = /** @type {Record<string, unknown>} */ (audio.bgm);
+    if (Object.hasOwn(bgm, 'transition')) {
+      bgm.transition = normalizeDsl4AudioTransition(bgm.transition, '/audio/bgm/transition');
+    }
+  }
+  for (const [
+    field,
+    value,
+  ] of /** @type {Array<[string, Record<string, unknown> | undefined]>} */ ([
+    ['presentation', presentation],
+    ['audio', audio],
+  ])) {
+    if (value === undefined) continue;
+    const node = document.getIn([field], true);
+    sourceMap[`/${field}`] = sourceRangeForNode(node, lineCounter);
+    mapNestedSource(sourceMap, value, document, lineCounter, [field], `/${field}`);
+  }
 
   const sourceScenes = /** @type {Record<string, unknown>} */ (story.scenes);
   const scenes = Object.entries(sourceScenes).map(([sceneId, sourceScene]) => {
@@ -566,6 +648,10 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     const longScene = /** @type {Record<string, unknown>} */ (sourceScene);
     const poseModel = isShortScene ? null : (longScene.poseModel ?? null);
     const posePreview = isShortScene ? null : cloneValue(longScene.posePreview ?? null);
+    const entryTransition =
+      !isShortScene && Object.hasOwn(longScene, 'entryTransition')
+        ? normalizeDsl4VisualTransition(longScene.entryTransition, `${scenePath}/entryTransition`)
+        : undefined;
     if (poseModel) {
       sourceMap[`${scenePath}/poseModel`] = sourceRangeForNode(
         document.getIn([...sourceScenePath, 'poseModel'], true),
@@ -580,7 +666,28 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
         lineCounter,
       );
     }
-    return {kind: 'Scene', id: sceneId, poseModel, posePreview, actions};
+    if (entryTransition !== undefined) {
+      const entryTransitionNode = document.getIn([...sourceScenePath, 'entryTransition'], true);
+      sourceMap[`${scenePath}/entryTransition`] = sourceRangeForNode(
+        entryTransitionNode,
+        lineCounter,
+      );
+      mapNestedNode(
+        sourceMap,
+        entryTransition,
+        entryTransitionNode,
+        lineCounter,
+        `${scenePath}/entryTransition`,
+      );
+    }
+    return {
+      kind: 'Scene',
+      id: sceneId,
+      poseModel,
+      posePreview,
+      ...(entryTransition === undefined ? {} : {entryTransition}),
+      actions,
+    };
   });
 
   const result = {
@@ -598,6 +705,8 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),
     controls: cloneValue(story.controls ?? null),
     branches: cloneValue(sourceBranches),
+    ...(presentation === undefined ? {} : {presentation}),
+    ...(audio === undefined ? {} : {audio}),
     scenes,
     sourceMap,
   };

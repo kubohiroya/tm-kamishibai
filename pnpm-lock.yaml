@@ -14,14 +14,14 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-asset-manager':
-        specifier: 0.11.0
-        version: 0.11.0
+        specifier: 0.13.0
+        version: 0.13.0
       '@kubohiroya/turbowarp-async-input':
         specifier: 0.4.0
         version: 0.4.0
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.10.0
-        version: 0.10.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)
+        version: 0.10.0(@kubohiroya/turbowarp-asset-manager@0.13.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.4.0
         version: 0.4.0
@@ -347,8 +347,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-asset-manager@0.11.0':
-    resolution: {integrity: sha512-1+ez0LmyytRBbb6vUgNn14nWDkcdI9JddGpjqMrAPm/CXc/UVFr1JM+1x81tpMyGODZw3+Q+UYxAuGUdjb4Qxw==}
+  '@kubohiroya/turbowarp-asset-manager@0.13.0':
+    resolution: {integrity: sha512-xAXrT4PR/O7vPW0ZMt+37e/cA32GHt2yTI20zO+yTt/gLhLykdKFGFimmdIM5kJkW0hmxzYLRgRC2v7EyLDDhA==}
 
   '@kubohiroya/turbowarp-async-input@0.4.0':
     resolution: {integrity: sha512-V8io/dZpNu8HJM/QHymcm8V//PNNa7eUzeSDrxHINKeISNl+QCaqPGgjNIaSdgSEaJGqYQNZsRZnxZvRH2TFew==}
@@ -2925,16 +2925,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-asset-manager@0.11.0': {}
+  '@kubohiroya/turbowarp-asset-manager@0.13.0': {}
 
   '@kubohiroya/turbowarp-async-input@0.4.0': {}
 
-  '@kubohiroya/turbowarp-bubble@0.10.0(@kubohiroya/turbowarp-asset-manager@0.11.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)':
+  '@kubohiroya/turbowarp-bubble@0.10.0(@kubohiroya/turbowarp-asset-manager@0.13.0)(@kubohiroya/turbowarp-async-input@0.4.0)(@kubohiroya/turbowarp-runtime-expression@0.4.0)':
     dependencies:
       '@cto.af/linebreak': 4.0.3
       '@kubohiroya/turbowarp-svg-text': 0.8.1
     optionalDependencies:
-      '@kubohiroya/turbowarp-asset-manager': 0.11.0
+      '@kubohiroya/turbowarp-asset-manager': 0.13.0
       '@kubohiroya/turbowarp-async-input': 0.4.0
       '@kubohiroya/turbowarp-runtime-expression': 0.4.0
 

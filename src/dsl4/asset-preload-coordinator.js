@@ -67,12 +67,14 @@ function validateLifecycle(lifecycle) {
  * @param {unknown} options.lifecycle
  * @param {(type: string, details: Record<string, unknown>) => void} options.onEvent
  * @param {ReadonlyArray<string>} [options.excludedStartupAssetIds]
+ * @param {ReadonlyArray<string>} [options.persistentAssetIds]
  */
 export function createDsl4AssetPreloadCoordinator({
   storyDocument,
   lifecycle,
   onEvent,
   excludedStartupAssetIds = [],
+  persistentAssetIds = [],
 }) {
   const port = validateLifecycle(lifecycle);
   if (typeof onEvent !== 'function')
@@ -83,6 +85,12 @@ export function createDsl4AssetPreloadCoordinator({
     excludedStartupAssetIds.some((id) => typeof id !== 'string')
   ) {
     throw new TypeError('excludedStartupAssetIds must contain strings');
+  }
+  if (
+    !Array.isArray(persistentAssetIds) ||
+    persistentAssetIds.some((id) => typeof id !== 'string')
+  ) {
+    throw new TypeError('persistentAssetIds must contain strings');
   }
   const excludedStartup = new Set(excludedStartupAssetIds);
   const startupAssetIds = sortedUnique([...index.startup, ...index.cover, ...index.actors]).filter(
@@ -97,6 +105,7 @@ export function createDsl4AssetPreloadCoordinator({
     ...index.loading,
     ...index.actors,
     ...index.posePreviewControls,
+    ...persistentAssetIds,
   ]);
   const loading = storyDocument.loading ?? null;
   /** @type {Preparation | null} */

@@ -59,6 +59,16 @@ function validateComposition(value) {
   return /** @type {Record<string, Function>} */ (value);
 }
 
+/** @param {unknown} value */
+function validateTransitionHost(value) {
+  if (value === undefined) return null;
+  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'];
+  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
+    throw new TypeError(`Media transition host must provide ${methods.join(', ')}`);
+  }
+  return /** @type {Record<string, Function>} */ (value);
+}
+
 /** @param {unknown} value @param {string[]} keys @param {string} command */
 function validatePayload(value, keys, command) {
   if (
@@ -152,6 +162,7 @@ async function runCancellable(start, signal, cancel) {
  * @param {(actor: unknown, scale: number, context: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>} [options.setActorScale]
  * @param {unknown} [options.scheduler]
  * @param {(error: unknown) => unknown} [options.onBackgroundError]
+ * @param {unknown} [options.transitionHost]
  */
 export function createDsl4MediaActionPort(options) {
   if (!isRecord(options)) throw new TypeError('media action port options must be an object');
@@ -169,6 +180,7 @@ export function createDsl4MediaActionPort(options) {
   }
   const onBackgroundError = options.onBackgroundError ?? (() => {});
   const scheduler = validateScheduler(options.scheduler ?? createDefaultScheduler());
+  const transitionHost = validateTransitionHost(options.transitionHost);
   /** @type {Map<string, {timer?: unknown, active: boolean}>} */
   const actorLoops = new Map();
   /** @type {Map<string, Promise<unknown>>} */
@@ -243,19 +255,48 @@ export function createDsl4MediaActionPort(options) {
   return Object.freeze({
     /** @param {unknown} payload @param {unknown} context */
     stage(payload, context) {
-      const {backdrop} = validatePayload(payload, ['backdrop'], 'stage');
+      if (!isRecord(payload) || !Object.hasOwn(payload, 'backdrop')) {
+        throw portError('K4-MEDIA-PORT-001', 'stage payload must provide backdrop');
+      }
+      const {backdrop} = validatePayload({backdrop: payload.backdrop}, ['backdrop'], 'stage');
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
       requireAsset(backdrop, 'image');
+      if (isRecord(payload.transition) && payload.transition.effect === 'crossfade') {
+        if (!transitionHost) {
+          throw portError('K4-MEDIA-PORT-004', 'Backdrop crossfade is unavailable');
+        }
+        return transitionHost.crossfadeStage(
+          () => composition.applyToStage(backdrop),
+          payload.transition,
+          signal,
+        );
+      }
       return runCancellable(() => composition.applyToStage(backdrop), signal);
     },
 
     /** @param {unknown} payload @param {unknown} context */
     bgm(payload, context) {
-      const {sound} = validatePayload(payload, ['sound'], 'bgm');
+      if (!isRecord(payload) || !Object.hasOwn(payload, 'sound')) {
+        throw portError('K4-MEDIA-PORT-001', 'bgm payload must provide sound');
+      }
+      const {sound} = validatePayload({sound: payload.sound}, ['sound'], 'bgm');
       const signal = validateContext(context);
       if (signal.aborted) throw abortError();
       requireAsset(sound, 'audio');
+      if (payload.managed === true) {
+        if (!transitionHost) {
+          throw portError('K4-MEDIA-PORT-004', 'Managed BGM playback is unavailable');
+        }
+        return runCancellable(
+          () =>
+            transitionHost.replaceBgm(sound, payload.transition, {
+              restart: payload.restart === true,
+              signal,
+            }),
+          signal,
+        );
+      }
       return runCancellable(
         () => composition.playSound(sound),
         signal,
@@ -280,13 +321,15 @@ export function createDsl4MediaActionPort(options) {
     async setSkin(payload, context) {
       if (
         !isRecord(payload) ||
-        Object.keys(payload).some((key) => !['target', 'skin', 'scale'].includes(key)) ||
+        Object.keys(payload).some(
+          (key) => !['target', 'skin', 'scale', 'transition'].includes(key),
+        ) ||
         !Object.hasOwn(payload, 'target') ||
         !Object.hasOwn(payload, 'skin')
       ) {
         throw portError(
           'K4-MEDIA-PORT-001',
-          'setSkin payload must provide target, skin, and only optional scale',
+          'setSkin payload must provide target, skin, and only optional scale or transition',
         );
       }
       const target = payload.target;
@@ -315,10 +358,16 @@ export function createDsl4MediaActionPort(options) {
         target,
       );
       await runCancellable(() => stopLoop(target), signal);
-      await runCancellable(
-        () => enqueueActorSkin(target, () => composition.applyToTarget(skin, actor)),
-        signal,
-      );
+      const applySkin = () =>
+        enqueueActorSkin(target, () => composition.applyToTarget(skin, actor));
+      if (isRecord(payload.transition) && payload.transition.effect === 'crossfade') {
+        if (!transitionHost) {
+          throw portError('K4-MEDIA-PORT-004', 'Actor skin crossfade is unavailable');
+        }
+        await transitionHost.crossfadeActorSkin(actor, applySkin, payload.transition, signal);
+      } else {
+        await runCancellable(applySkin, signal);
+      }
       if (scale !== undefined) {
         await runCancellable(
           () => /** @type {Function} */ (setActorScale)(actor, scale, actionContext),
@@ -409,6 +458,12 @@ export function createDsl4MediaActionPort(options) {
 
     stopActorLoop: stopLoop,
     stopAllLoops,
-    dispose: stopAllLoops,
+    finishTransitions(reason = 'finish') {
+      return transitionHost?.finishAll(reason);
+    },
+    async dispose() {
+      await stopAllLoops();
+      await transitionHost?.finishAll('dispose');
+    },
   });
 }

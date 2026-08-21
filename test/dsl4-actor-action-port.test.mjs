@@ -165,6 +165,61 @@ test('maps show, hide, layer, transparency, move, and speech through one present
   ]);
 });
 
+test('runs actor show and hide crossfades through visibility presentation operations', async () => {
+  const calls = [];
+  const host = fakeHost({
+    showActor(actor) {
+      calls.push(['showActor', actor.id]);
+    },
+    hideActor(actor) {
+      calls.push(['hideActor', actor.id]);
+    },
+    createVisibilityTransition(actor, transition) {
+      calls.push(['createVisibilityTransition', actor.id, transition]);
+      return {
+        start() {
+          calls.push(['startVisibilityTransition']);
+        },
+        finish() {
+          calls.push(['finishVisibilityTransition']);
+        },
+      };
+    },
+  });
+  const port = actorPort({host: host.host});
+
+  await port.show(
+    {
+      target: 'Hero',
+      skin: 'HeroHappy',
+      x: 0,
+      y: 0,
+      scale: 100,
+      transition: {effect: 'crossfade', seconds: 0.5, easing: 'linear'},
+    },
+    actionContext(),
+  );
+  await port.hide(
+    {
+      target: 'Hero',
+      transition: {effect: 'crossfade', seconds: 0.25, easing: 'easeInOut'},
+    },
+    actionContext(),
+  );
+
+  assert.deepEqual(calls, [
+    ['showActor', 'hero-target'],
+    ['createVisibilityTransition', 'hero-target', {visible: true, seconds: 0.5, easing: 'linear'}],
+    ['startVisibilityTransition'],
+    [
+      'createVisibilityTransition',
+      'hero-target',
+      {visible: false, seconds: 0.25, easing: 'easeInOut'},
+    ],
+    ['startVisibilityTransition'],
+  ]);
+});
+
 test('waits for an in-flight loop skin before applying a show skin', async () => {
   const loopStopped = deferred();
   const loopStopStarted = deferred();

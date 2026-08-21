@@ -77,6 +77,7 @@ function historyFailure(result) {
  * @param {boolean} [options.turboWarpBubbleAdvancedPresentationEnabled]
  * @param {boolean} [options.broadcastMessageAndWaitEnabled]
  * @param {boolean} [options.storyVariableWriteEnabled]
+ * @param {boolean} [options.crossfadeTransitionsEnabled]
  * @param {unknown} [options.inputArbitration]
  * @param {(action: Readonly<Record<string, unknown>> | null) => 'finish-only' | 'cancel-replay-safe'} [options.resolveActionQuiesceMode]
  * @param {unknown} [options.actionRegistrySnapshot]
@@ -105,6 +106,7 @@ export function createDsl4NavigationSession({
   turboWarpBubbleAdvancedPresentationEnabled = false,
   broadcastMessageAndWaitEnabled = false,
   storyVariableWriteEnabled = false,
+  crossfadeTransitionsEnabled = false,
   inputArbitration,
   resolveActionQuiesceMode,
   actionRegistrySnapshot,
@@ -283,6 +285,7 @@ export function createDsl4NavigationSession({
       turboWarpBubbleAdvancedPresentationEnabled,
       broadcastMessageAndWaitEnabled,
       storyVariableWriteEnabled,
+      crossfadeTransitionsEnabled,
       quiesceTimeoutMs,
       scheduleQuiesceTimeout,
     });

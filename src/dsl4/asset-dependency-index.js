@@ -159,6 +159,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
   }
 
   const startupAssets = sortedUnique(startup);
+  const bgmDependencies = new Set();
   /** @type {Record<string, Readonly<Record<string, ReadonlyArray<string>>>>} */
   const scenes = {};
   for (const scene of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
@@ -170,6 +171,12 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     for (const action of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       scene.actions ?? []
     )) {
+      if (action.command === 'bgm') {
+        addDependency(
+          /** @type {Readonly<Record<string, unknown>>} */ (action.args ?? {}).sound,
+          bgmDependencies,
+        );
+      }
       usesPoseRecognition =
         addActionDependencies(action, dependencies, bubbleStyles) || usesPoseRecognition;
     }
@@ -193,6 +200,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     loading: sortedUnique(loadingDependencies),
     poseRecognition: sortedUnique(poseRecognitionDependencies),
     posePreviewControls: sortedUnique(posePreviewControlDependencies),
+    bgm: sortedUnique(bgmDependencies),
     sceneRetained: sortedUnique(sceneRetainedAssets),
     scenes,
   });
