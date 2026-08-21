@@ -235,6 +235,67 @@ test(
 );
 
 test(
+  'runs feature-enabled scene, actor, and BGM crossfades through Chromium platform boundaries',
+  {timeout: 30_000},
+  async () => {
+    const chromeExecutable = await resolveChromeExecutable();
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-crossfade-chromium-'));
+    const {server, url} = await startFixtureServer('/test/fixtures/dsl4/crossfade-browser.html');
+    const chrome = spawn(
+      chromeExecutable,
+      [
+        '--headless=new',
+        '--disable-background-networking',
+        '--disable-dev-shm-usage',
+        '--use-angle=swiftshader',
+        '--no-first-run',
+        '--no-sandbox',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profileDirectory}`,
+        url,
+      ],
+      {stdio: ['ignore', 'pipe', 'pipe']},
+    );
+    let client = null;
+    try {
+      const browserWebSocketUrl = await waitForDevTools(chrome);
+      const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
+      client = await CdpClient.connect(pageWebSocketUrl);
+      await client.send('Runtime.enable');
+      await waitForEvaluation(
+        client,
+        'globalThis.dsl4CrossfadeBrowserFixture?.ready === true',
+        'DSL4 crossfade browser fixture',
+      );
+      const fixture = await client.evaluate('globalThis.dsl4CrossfadeBrowserFixture');
+      assert.equal(fixture.ok, true, fixture.error);
+      assert.deepEqual(fixture.flags, {runtime: true, crossfade: true});
+      assert.equal(fixture.backdropApplied, 1);
+      assert.equal(fixture.stageGhost, 0);
+      assert.equal(fixture.actorApplied, 1);
+      assert.equal(fixture.actorGhost, 10);
+      assert.deepEqual(fixture.bitmap, [true, 480, 360, 1]);
+      assert.deepEqual(fixture.destroyedSkins, [91]);
+      assert.equal(fixture.createdDrawables, 3);
+      assert.equal(fixture.destroyedDrawables, 3);
+      assert.equal(fixture.noninteractiveDrawables, 3);
+      assert.equal(fixture.voices.length, 2);
+      assert.deepEqual(fixture.voices[0].options, {gain: 1});
+      assert.deepEqual(fixture.voices[1].options, {gain: 0});
+      assert.deepEqual(fixture.voices[0].calls.at(-1), ['stop']);
+      assert.deepEqual(fixture.voices[1].calls.at(-2), ['setGain', 1]);
+      assert.deepEqual(fixture.voices[1].calls.at(-1), ['stop']);
+      assert.deepEqual(client.exceptions, []);
+    } finally {
+      client?.close();
+      await stopChrome(chrome);
+      await new Promise((resolve) => server.close(resolve));
+      await rm(profileDirectory, {recursive: true, force: true, maxRetries: 10, retryDelay: 100});
+    }
+  },
+);
+
+test(
   'loads the pinned TurboWarp browser platform bundle in real Chromium',
   {timeout: 30_000},
   async () => {
