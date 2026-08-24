@@ -3,81 +3,81 @@
   "contractVersion": "1.0.0",
   "status": "active",
   "siteSettings": {
-    "tmpose-kamishibai": {
-      "repository": "https://github.com/kubohiroya/tmpose-kamishibai",
-      "repositoryLabel": "tmpose-kamishibai"
+    "tm-kamishibai": {
+      "repository": "https://github.com/kubohiroya/tm-kamishibai",
+      "repositoryLabel": "tm-kamishibai"
     },
-    "tmpose-kamishibai-docs": {
-      "repository": "https://github.com/kubohiroya/tmpose-kamishibai-docs",
-      "repositoryLabel": "tmpose-kamishibai-docs"
+    "tm-kamishibai-docs": {
+      "repository": "https://github.com/kubohiroya/tm-kamishibai-docs",
+      "repositoryLabel": "tm-kamishibai-docs"
     },
-    "tmpose-kamishibai-samples": {
-      "repository": "https://github.com/kubohiroya/tmpose-kamishibai-samples",
-      "repositoryLabel": "tmpose-kamishibai-samples"
+    "tm-kamishibai-samples": {
+      "repository": "https://github.com/kubohiroya/tm-kamishibai-samples",
+      "repositoryLabel": "tm-kamishibai-samples"
     }
   },
   "items": [
     {
       "id": "home",
       "label": "トップ",
-      "href": "https://kubohiroya.github.io/tmpose-kamishibai/"
+      "href": "https://kubohiroya.github.io/tm-kamishibai/"
     },
     {
       "id": "documents",
       "label": "ドキュメント",
-      "href": "https://kubohiroya.github.io/tmpose-kamishibai-docs/"
+      "href": "https://kubohiroya.github.io/tm-kamishibai-docs/"
     },
     {
       "id": "workshops",
       "label": "ワークショップ",
-      "href": "https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/"
+      "href": "https://kubohiroya.github.io/tm-kamishibai-docs/workshops/"
     },
     {
       "id": "samples",
       "label": "作品",
-      "href": "https://kubohiroya.github.io/tmpose-kamishibai-samples/"
+      "href": "https://kubohiroya.github.io/tm-kamishibai-samples/"
     },
     {
       "id": "downloads",
       "label": "ダウンロード",
-      "href": "https://kubohiroya.github.io/tmpose-kamishibai/downloads/"
+      "href": "https://kubohiroya.github.io/tm-kamishibai/downloads/"
     }
   ],
   "currentSectionRules": [
     {
-      "site": "tmpose-kamishibai",
-      "pathPrefix": "/tmpose-kamishibai/downloads/",
+      "site": "tm-kamishibai",
+      "pathPrefix": "/tm-kamishibai/downloads/",
       "current": "downloads"
     },
     {
-      "site": "tmpose-kamishibai",
-      "pathPrefix": "/tmpose-kamishibai/docs/",
+      "site": "tm-kamishibai",
+      "pathPrefix": "/tm-kamishibai/docs/",
       "current": "documents"
     },
     {
-      "site": "tmpose-kamishibai",
-      "pathPrefix": "/tmpose-kamishibai/",
+      "site": "tm-kamishibai",
+      "pathPrefix": "/tm-kamishibai/",
       "current": "home"
     },
     {
-      "site": "tmpose-kamishibai-docs",
-      "pathPrefix": "/tmpose-kamishibai-docs/workshops/",
+      "site": "tm-kamishibai-docs",
+      "pathPrefix": "/tm-kamishibai-docs/workshops/",
       "current": "workshops"
     },
     {
-      "site": "tmpose-kamishibai-docs",
-      "pathPrefix": "/tmpose-kamishibai-docs/",
+      "site": "tm-kamishibai-docs",
+      "pathPrefix": "/tm-kamishibai-docs/",
       "current": "documents"
     },
     {
-      "site": "tmpose-kamishibai-samples",
-      "pathPrefix": "/tmpose-kamishibai-samples/",
+      "site": "tm-kamishibai-samples",
+      "pathPrefix": "/tm-kamishibai-samples/",
       "current": "samples"
     }
   ],
   "changeLocations": [
     {
-      "repository": "kubohiroya/tmpose-kamishibai",
+      "repository": "kubohiroya/tm-kamishibai",
       "paths": [
         "site/index.html",
         "site/downloads/index.html",
@@ -90,7 +90,7 @@
       ]
     },
     {
-      "repository": "kubohiroya/tmpose-kamishibai-docs",
+      "repository": "kubohiroya/tm-kamishibai-docs",
       "paths": [
         "site/index.html",
         "scripts/site-appbar.mjs",
@@ -102,7 +102,7 @@
       ]
     },
     {
-      "repository": "kubohiroya/tmpose-kamishibai-samples",
+      "repository": "kubohiroya/tm-kamishibai-samples",
       "paths": [
         "scripts/build-site.mjs",
         "scripts/site-navigation.mjs",
