@@ -26,8 +26,8 @@ importers:
         specifier: 0.4.0
         version: 0.4.0
       '@kubohiroya/turbowarp-svg-text':
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.8.1
+        version: 0.8.1
       '@kubohiroya/turbowarp-tmpose':
         specifier: 1.12.0
         version: 1.12.0
@@ -369,9 +369,6 @@ packages:
 
   '@kubohiroya/turbowarp-runtime-expression@0.4.0':
     resolution: {integrity: sha512-jhFvnwmKEl3LLadsJUgKEoYDr+vfkY1Xx1ZgMqNVou964Gew6+5wvjsAC2JvzzhQvJYvTSNxtoT0fvoCLzylAg==}
-
-  '@kubohiroya/turbowarp-svg-text@0.5.0':
-    resolution: {integrity: sha512-LHyKtLMtP+AKESZPX6C4ws17aI8yyjCsbSj09YNyK0YskYSIs2bSHkaBSgQv7+WgJEmL3H7toDxSrc3fJdCwfw==}
 
   '@kubohiroya/turbowarp-svg-text@0.8.1':
     resolution: {integrity: sha512-xfGfkJuoPl7ZyRtzm2LZjJCvBAX6WaELaTXXoY1PI+c4rDgA/AkOP1siRi73Vfd1hwl1uFg05lzS5cf51CwyEg==}
@@ -2939,8 +2936,6 @@ snapshots:
       '@kubohiroya/turbowarp-runtime-expression': 0.4.0
 
   '@kubohiroya/turbowarp-runtime-expression@0.4.0': {}
-
-  '@kubohiroya/turbowarp-svg-text@0.5.0': {}
 
   '@kubohiroya/turbowarp-svg-text@0.8.1': {}
 
