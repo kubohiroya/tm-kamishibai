@@ -1,15 +1,10 @@
 import assert from 'node:assert/strict';
-import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {installDsl4PackagedRuntimeComponent} from '../src/builder/index.js';
 import {
-  createDsl4EmbeddedAssetBundle,
-  createDsl4EmbeddedSourceDescriptor,
-  createDsl4RuntimeArtifactDescriptor,
   createDsl4RuntimeStartup,
   createDsl4SourceFrontend,
   dsl4DefaultFeatureFlags,
@@ -17,13 +12,18 @@ import {
   dsl4StandardProductionFeatureFlags,
   resolveDsl4FeatureFlags,
 } from '../src/dsl4/index.js';
+import {
+  createDsl4EmptyProject,
+  createDsl4InstalledRuntimeFixture,
+  dsl4TestSubtleCrypto,
+} from './helpers/dsl4-runtime-fixtures.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
   await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(schema);
-const subtleCrypto = webcrypto.subtle;
+const subtleCrypto = dsl4TestSubtleCrypto;
 const maxSourceBytes = 8192;
 const maxAssetFiles = 10;
 const maxAssetBytes = 8192;
@@ -66,59 +66,15 @@ function keyEvent(code) {
   };
 }
 
-function baseProject() {
-  return {extensionStorage: {}, targets: [], monitors: []};
-}
-
 async function packagedProject(profile, historyNavigationAvailable = false, source = sourceText) {
-  const parsed = frontend.parse(source, {sourceId: 'main'});
-  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
-    sourceId: 'main',
-    displayName: 'story.kamishibai.yaml',
-    maxSourceBytes,
+  const {project, runtimeArtifact} = await createDsl4InstalledRuntimeFixture(source, {
+    sourceFrontend: frontend,
+    profile,
+    historyNavigationAvailable,
+    limits: {maxSourceBytes, maxAssetFiles, maxAssetBytes},
     subtleCrypto,
   });
-  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
-    parsed.storyDocument,
-    sourceDescriptor,
-    profile,
-    {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
-  );
-  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
-  const snapshotAssets = Object.values(parsed.storyDocument.assets)
-    .map((asset) => ({
-      id: asset.id,
-      kind: asset.kind,
-      loading: asset.loading,
-      ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-      source:
-        asset.delivery === 'remote'
-          ? {type: 'remote', ...asset.source}
-          : {type: 'project', name: asset.name},
-    }))
-    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
-  const assetBundle = await createDsl4EmbeddedAssetBundle(
-    parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
-    {maxFiles: maxAssetFiles, maxTotalBytes: maxAssetBytes, subtleCrypto},
-  );
-  const project = await installDsl4PackagedRuntimeComponent(
-    baseProject(),
-    parsed.storyDocument,
-    sourceDescriptor,
-    artifactResult.artifact,
-    assetBundle,
-    {
-      channel: 'unbundled',
-      maxSourceBytes,
-      maxAssetFiles,
-      maxAssetBytes,
-      historyNavigationAvailable,
-      subtleCrypto,
-    },
-  );
-  return {project, runtimeArtifact: artifactResult.artifact};
+  return {project, runtimeArtifact};
 }
 
 const enabledOptions = (project, extra = {}) => ({
@@ -852,7 +808,7 @@ test('enables internal Structured Data independently without exposing a generic 
 test('withholds component and session when enabled startup validation fails', async () => {
   let factoryCalls = 0;
   const result = await createDsl4RuntimeStartup(
-    enabledOptions(baseProject(), {
+    enabledOptions(createDsl4EmptyProject(), {
       createAssetLifecycle() {
         factoryCalls += 1;
       },

@@ -732,7 +732,7 @@ test('builds separate authoring and playback runtime profiles', async () => {
     true,
   );
   const checkedInPlayback = await readFile(
-    new URL('../src/builder/runtime/dsl4-playback-runtime-extension.js', import.meta.url),
+    new URL('../src/builder/generated/dsl4-playback-runtime-extension.js', import.meta.url),
   );
   // deepEqual tries to format the entire binary diff when this artifact is stale.
   assert.equal(

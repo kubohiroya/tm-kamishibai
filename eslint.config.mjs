@@ -13,7 +13,7 @@ export default [
       'node_modules/**',
       'tmp/**',
       'src/dsl4/platform/posenet-bundle-assets.js',
-      'src/builder/runtime/dsl4-playback-runtime-extension.js',
+      'src/builder/generated/dsl4-playback-runtime-extension.js',
     ],
   },
   {

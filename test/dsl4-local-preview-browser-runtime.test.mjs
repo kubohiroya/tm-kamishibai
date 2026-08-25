@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
@@ -9,20 +8,18 @@ import {
   createDsl4LocalPreviewBrowserRuntime,
   createDsl4ProductionSourceFrontend,
   Dsl4LocalPreviewBrowserRuntimeError,
-  installDsl4PackagedRuntimeComponent,
 } from '../src/builder/index.js';
 import {
-  createDsl4EmbeddedAssetBundle,
-  createDsl4EmbeddedSourceDescriptor,
-  createDsl4RuntimeArtifactDescriptor,
-} from '../src/dsl4/index.js';
+  createDsl4PackagedRuntimeProject,
+  dsl4TestSubtleCrypto,
+} from './helpers/dsl4-runtime-fixtures.mjs';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';
 
 const schema = JSON.parse(
   await readFile(new URL('../schema/dsl-4.schema.json', import.meta.url), 'utf8'),
 );
 const frontend = createDsl4ProductionSourceFrontend(schema);
-const subtleCrypto = webcrypto.subtle;
+const subtleCrypto = dsl4TestSubtleCrypto;
 const limits = {maxSourceBytes: 16_384, maxAssetFiles: 16, maxAssetBytes: 65_536};
 const source = `
 kamishibai: '4.0'
@@ -48,34 +45,13 @@ function sb3(project) {
 }
 
 async function packagedProject() {
-  const parsed = frontend.parse(source, {sourceId: 'main'});
-  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(source, {
-    sourceId: 'main',
+  return createDsl4PackagedRuntimeProject(source, {
+    sourceFrontend: frontend,
     displayName: 'preview.k4.yml',
-    maxSourceBytes: limits.maxSourceBytes,
+    limits,
+    baseProject: baseProject(),
     subtleCrypto,
   });
-  const artifact = await createDsl4RuntimeArtifactDescriptor(
-    parsed.storyDocument,
-    sourceDescriptor,
-    'production',
-    {maxSourceBytes: limits.maxSourceBytes, subtleCrypto},
-  );
-  assert.equal(artifact.ok, true, JSON.stringify(artifact.diagnostics));
-  const assets = await createDsl4EmbeddedAssetBundle(
-    parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: []}, getFile() {}},
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
-  );
-  return installDsl4PackagedRuntimeComponent(
-    baseProject(),
-    parsed.storyDocument,
-    sourceDescriptor,
-    artifact.artifact,
-    assets,
-    {channel: 'unbundled', ...limits, subtleCrypto},
-  );
 }
 
 function domFixture() {

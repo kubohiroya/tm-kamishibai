@@ -2,7 +2,10 @@ import {readFile} from 'node:fs/promises';
 
 import {createDsl4PoseNetProjectBundleFromLoader} from '../dsl4/platform/posenet-bundle.js';
 
-const playbackRuntimeUrl = new URL('./runtime/dsl4-playback-runtime-extension.js', import.meta.url);
+const playbackRuntimeUrl = new URL(
+  './generated/dsl4-playback-runtime-extension.js',
+  import.meta.url,
+);
 let pendingSource;
 let pendingPoseNetProjectBundle;
 

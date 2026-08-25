@@ -22,6 +22,10 @@ import {
   createDsl4TurboWarpRuntimeHost,
   resolveDsl4SessionBackingConfig,
 } from '../src/dsl4/platform/index.js';
+import {
+  createDsl4EmptyProject,
+  createDsl4PackagedRuntimeProject,
+} from './helpers/dsl4-runtime-fixtures.mjs';
 import {createFakeDocument} from './helpers/fake-dom.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -167,10 +171,6 @@ function findByDataset(root, key, value) {
   return null;
 }
 
-function baseProject() {
-  return {extensionStorage: {}, targets: [], monitors: []};
-}
-
 function manualScheduler() {
   let currentTime = 0;
   let nextId = 1;
@@ -210,55 +210,13 @@ async function packagedProject(
   sourceText = waitStory,
   {cacheIdentity, historyNavigationAvailable = false, sourceFrontend = frontend} = {},
 ) {
-  const parsed = sourceFrontend.parse(sourceText, {sourceId: 'main', historyNavigationAvailable});
-  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
-    sourceId: 'main',
-    displayName: 'story.kamishibai.yaml',
-    maxSourceBytes: limits.maxSourceBytes,
-    ...(cacheIdentity === undefined ? {} : {cacheIdentity}),
+  return createDsl4PackagedRuntimeProject(sourceText, {
+    sourceFrontend,
+    historyNavigationAvailable,
+    limits,
+    cacheIdentity,
     subtleCrypto,
   });
-  const artifactResult = await createDsl4RuntimeArtifactDescriptor(
-    parsed.storyDocument,
-    sourceDescriptor,
-    'production',
-    {maxSourceBytes: limits.maxSourceBytes, historyNavigationAvailable, subtleCrypto},
-  );
-  assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
-  const snapshotAssets = Object.values(parsed.storyDocument.assets)
-    .map((asset) => {
-      const source =
-        asset.delivery === 'remote'
-          ? {type: 'remote', ...asset.source}
-          : {type: 'project', name: asset.name};
-      return {
-        id: asset.id,
-        kind: asset.kind,
-        loading: asset.loading,
-        ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
-        source,
-      };
-    })
-    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
-  const assetBundle = await createDsl4EmbeddedAssetBundle(
-    parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: snapshotAssets}, getFile() {}},
-    {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
-  );
-  return installDsl4PackagedRuntimeComponent(
-    baseProject(),
-    parsed.storyDocument,
-    sourceDescriptor,
-    artifactResult.artifact,
-    assetBundle,
-    {
-      channel: 'unbundled',
-      ...limits,
-      historyNavigationAvailable,
-      subtleCrypto,
-    },
-  );
 }
 
 async function packagedPoseProject(sourceText) {
@@ -316,7 +274,7 @@ async function packagedPoseProject(sourceText) {
     {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
   );
   return installDsl4PackagedRuntimeComponent(
-    baseProject(),
+    createDsl4EmptyProject(),
     parsed.storyDocument,
     sourceDescriptor,
     artifactResult.artifact,
@@ -1195,7 +1153,7 @@ test('cancels preview initialization after reset without creating a late environ
 test('withholds every platform dependency until the packaged component validates', async () => {
   const log = [];
   const result = await createDsl4TurboWarpRuntimeHost(
-    enabledOptions(baseProject(), platformFixture(log), {
+    enabledOptions(createDsl4EmptyProject(), platformFixture(log), {
       createRuntimeExpressionComposition() {
         log.push(['expression.create']);
         return {evaluateCondition() {}, releaseAll() {}};
