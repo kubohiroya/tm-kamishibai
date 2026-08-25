@@ -41,6 +41,13 @@ import {
   loadDsl4PoseNetProjectBundleData,
 } from '../src/dsl4/platform/posenet-bundle.js';
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
+import {
+  createBrowserDirectoryHandle,
+  createBrowserFile,
+  createBrowserFileHandle,
+  createMutablePreviewProject,
+  installPreviewBrowserGlobals,
+} from './helpers/browser-file-system.mjs';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
 
 const releasePins = JSON.parse(
@@ -110,145 +117,6 @@ function buildCurrentRuntimeRelease() {
     }
   })();
   return pendingCurrentRuntimeRelease;
-}
-
-function browserFile(name, contents) {
-  const bytes = new Uint8Array(contents);
-  return {
-    name,
-    size: bytes.byteLength,
-    async arrayBuffer() {
-      return bytes.slice().buffer;
-    },
-  };
-}
-
-function browserFileHandle(name, file) {
-  return {
-    kind: 'file',
-    name,
-    async getFile() {
-      return file;
-    },
-  };
-}
-
-function browserDirectoryHandle(name, entries) {
-  return {
-    kind: 'directory',
-    name,
-    async *entries() {
-      for (const entry of entries) yield entry;
-    },
-  };
-}
-
-function mutablePreviewProject(initialSource) {
-  const encoder = new TextEncoder();
-  let source = initialSource;
-  const manifest =
-    'formatVersion: 1\nmode: external\nsourceId: main\npath: story.kamishibai.yaml\n';
-  const fileHandle = (read) => ({
-    kind: 'file',
-    async getFile() {
-      const bytes = encoder.encode(read());
-      return {
-        size: bytes.byteLength,
-        async arrayBuffer() {
-          return bytes.slice().buffer;
-        },
-      };
-    },
-  });
-  return {
-    root: {
-      kind: 'directory',
-      async queryPermission() {
-        return 'granted';
-      },
-      async getFileHandle(name) {
-        if (name === 'project.source.yaml') return fileHandle(() => manifest);
-        if (name === 'story.kamishibai.yaml') return fileHandle(() => source);
-        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
-      },
-      async getDirectoryHandle() {
-        throw Object.assign(new Error('NotFoundError'), {name: 'NotFoundError'});
-      },
-    },
-    setSource(value) {
-      source = value;
-    },
-  };
-}
-
-function installPreviewBrowserGlobals(projectRoot, {storyFileHandle, saveFileHandle} = {}) {
-  const names = [
-    'isSecureContext',
-    'self',
-    'top',
-    'showDirectoryPicker',
-    'showOpenFilePicker',
-    'showSaveFilePicker',
-  ];
-  const previous = new Map(
-    names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
-  );
-  Object.defineProperties(globalThis, {
-    isSecureContext: {configurable: true, value: true},
-    self: {configurable: true, value: globalThis},
-    top: {configurable: true, value: globalThis},
-    showDirectoryPicker: {
-      configurable: true,
-      value: async (options) => {
-        assert.deepEqual(options, {mode: 'read'});
-        return projectRoot;
-      },
-    },
-    ...(storyFileHandle === undefined
-      ? {}
-      : {
-          showOpenFilePicker: {
-            configurable: true,
-            value: async (options) => {
-              assert.deepEqual(options, {
-                multiple: false,
-                types: [
-                  {
-                    description: 'Kamishibai DSL 4.0 YAML',
-                    accept: {'application/yaml': ['.yml', '.yaml']},
-                  },
-                ],
-              });
-              return [storyFileHandle];
-            },
-          },
-        }),
-    ...(saveFileHandle === undefined
-      ? {}
-      : {
-          showSaveFilePicker: {
-            configurable: true,
-            value: async (options) => {
-              assert.deepEqual(options, {
-                suggestedName: 'story.sb3',
-                types: [
-                  {
-                    description: 'Scratch 3 project',
-                    accept: {'application/x.scratch.sb3': ['.sb3']},
-                  },
-                ],
-              });
-              return saveFileHandle;
-            },
-          },
-        }),
-  });
-  return () => {
-    for (const [name, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
-    }
-  };
 }
 
 async function buildEmbeddedStoryRelease({navigationFixture = false} = {}) {
@@ -1061,16 +929,16 @@ scenes:
     entries: [
       {
         path: 'story-project/story.k4.yml',
-        file: browserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
+        file: createBrowserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
       },
-      {path: 'story-project/assets/card.svg', file: browserFile('card.svg', card)},
+      {path: 'story-project/assets/card.svg', file: createBrowserFile('card.svg', card)},
       {
         path: 'story-project/models/rescue.zip',
-        file: browserFile('rescue.zip', poseArchive),
+        file: createBrowserFile('rescue.zip', poseArchive),
       },
       {
         path: 'story-project/private.txt',
-        file: browserFile('private.txt', new Uint8Array([1, 2, 3])),
+        file: createBrowserFile('private.txt', new Uint8Array([1, 2, 3])),
       },
     ],
     sourceFrontend: frontend,
@@ -1128,7 +996,7 @@ scenes:
       entries: [
         {
           path: 'story-project/story.k4.yml',
-          file: browserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
+          file: createBrowserFile('story.k4.yml', new TextEncoder().encode(sourceText)),
         },
       ],
       sourceFrontend: frontend,
@@ -1157,13 +1025,13 @@ test('keeps the selected source suffix strict after the native chooser accepts Y
   assert.throws(
     () =>
       selectDsl4BrowserStorySource([
-        {path: 'story.yml', file: browserFile('story.yml', new Uint8Array())},
+        {path: 'story.yml', file: createBrowserFile('story.yml', new Uint8Array())},
       ]),
     /No \.k4\.yml file was selected/u,
   );
   assert.equal(
     selectDsl4BrowserStorySource([
-      {path: 'story.k4.yml', file: browserFile('story.k4.yml', new Uint8Array())},
+      {path: 'story.k4.yml', file: createBrowserFile('story.k4.yml', new Uint8Array())},
     ]).path,
     'story.k4.yml',
   );
@@ -1171,7 +1039,7 @@ test('keeps the selected source suffix strict after the native chooser accepts Y
     selectDsl4BrowserStorySource([
       {
         path: 'story.kamishibai.yaml',
-        file: browserFile('story.kamishibai.yaml', new Uint8Array()),
+        file: createBrowserFile('story.kamishibai.yaml', new Uint8Array()),
       },
     ]).path,
     'story.kamishibai.yaml',
@@ -1179,13 +1047,15 @@ test('keeps the selected source suffix strict after the native chooser accepts Y
 });
 
 test('collects a dropped DSL 4.0 project directory without flattening asset paths', async () => {
-  const source = browserFile('story.k4.yml', new TextEncoder().encode("kamishibai: '4.0'\n"));
-  const card = browserFile('card.svg', new TextEncoder().encode('<svg/>'));
-  const root = browserDirectoryHandle('story-project', [
-    ['story.k4.yml', browserFileHandle('story.k4.yml', source)],
+  const source = createBrowserFile('story.k4.yml', new TextEncoder().encode("kamishibai: '4.0'\n"));
+  const card = createBrowserFile('card.svg', new TextEncoder().encode('<svg/>'));
+  const root = createBrowserDirectoryHandle('story-project', [
+    ['story.k4.yml', createBrowserFileHandle('story.k4.yml', source)],
     [
       'assets',
-      browserDirectoryHandle('assets', [['card.svg', browserFileHandle('card.svg', card)]]),
+      createBrowserDirectoryHandle('assets', [
+        ['card.svg', createBrowserFileHandle('card.svg', card)],
+      ]),
     ],
   ]);
   const entries = await collectDsl4BrowserDroppedFiles({
@@ -1210,7 +1080,7 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
     name,
     async getFile() {
       fileReads += 1;
-      return browserFile(name, new Uint8Array([1]));
+      return createBrowserFile(name, new Uint8Array([1]));
     },
   });
   const wideRoot = {
@@ -1239,13 +1109,13 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
   );
   assert.equal(fileReads, 0, 'The collector must reject before reading a bounded-out file.');
 
-  const nestedRoot = browserDirectoryHandle('root', [
+  const nestedRoot = createBrowserDirectoryHandle('root', [
     [
       'first',
-      browserDirectoryHandle('first', [
+      createBrowserDirectoryHandle('first', [
         [
           'second',
-          browserDirectoryHandle('second', [['story.k4.yml', fileHandle('story.k4.yml')]]),
+          createBrowserDirectoryHandle('second', [['story.k4.yml', fileHandle('story.k4.yml')]]),
         ],
       ]),
     ],
@@ -1282,7 +1152,7 @@ test('stops dropped-directory enumeration at the configured entry and depth boun
       {
         files: [
           {
-            ...browserFile('story.k4.yml', new Uint8Array([1])),
+            ...createBrowserFile('story.k4.yml', new Uint8Array([1])),
             webkitRelativePath: 'root/one/two/story.k4.yml',
           },
         ],
@@ -1842,7 +1712,7 @@ test('returns an external-source story built from the minimal SB3 to the menu', 
 test('opens a selected .k4.yml project from the menu without adding Scratch targets', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
-  const source = browserFile(
+  const source = createBrowserFile(
     'selected.k4.yml',
     new TextEncoder().encode(`kamishibai: '4.0'
 controls:
@@ -1947,7 +1817,7 @@ test(
     const result = await buildCurrentRuntimeRelease();
     const restoreGlobals = installUnsandboxedScriptDom({withTitleUi: true});
     restoreGlobals.document.visibilityState = 'visible';
-    const project = mutablePreviewProject(`kamishibai: '4.0'
+    const project = createMutablePreviewProject(`kamishibai: '4.0'
 controls:
   keymaps:
     production:
