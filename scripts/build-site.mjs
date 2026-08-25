@@ -40,10 +40,10 @@ async function renderSiteNavigation() {
     const relativePath = path.relative(outputPath, htmlFile).split(path.sep).join('/');
     const pathname =
       relativePath === 'index.html'
-        ? '/tmpose-kamishibai/'
-        : `/tmpose-kamishibai/${relativePath.replace(/(?:index\.html)?$/u, '')}`;
+        ? '/tm-kamishibai/'
+        : `/tm-kamishibai/${relativePath.replace(/(?:index\.html)?$/u, '')}`;
     const updatedHtml = replaceSiteNavigation(sourceHtml, {
-      site: 'tmpose-kamishibai',
+      site: 'tm-kamishibai',
       pathname,
     });
     if (updatedHtml !== sourceHtml) {

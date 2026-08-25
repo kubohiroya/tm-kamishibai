@@ -4,8 +4,8 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #423実装済み（browser-owned runtimeとpublic CLI）
 
-関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
-[#423](https://github.com/kubohiroya/tmpose-kamishibai/issues/423)
+関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
+[#423](https://github.com/kubohiroya/tm-kamishibai/issues/423)
 
 ## 1. runtime所有境界
 

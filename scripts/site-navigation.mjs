@@ -75,7 +75,7 @@ export function renderSiteHeader({assetBase = '', site, pathname}) {
   <div class="site-header__inner">
     <a class="site-brand" href="${escapeHtml(home.href)}">
       <img class="site-brand__symbol" src="${escapeHtml(assetBase)}favicon.png" width="40" height="40" alt="">
-      <span>TMPose紙芝居</span>
+      <span>TM紙芝居</span>
     </a>
     ${renderSiteNavigation({site, pathname})}
   </div>

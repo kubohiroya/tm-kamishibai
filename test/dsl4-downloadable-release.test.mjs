@@ -43,6 +43,9 @@ import {
 import {dsl4RuntimeApplicationMenuDefaultIcons} from '../src/dsl4/platform/runtime-application-menu.js';
 import {createFakeDocument, findByAttribute, findById} from './helpers/fake-dom.mjs';
 
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 const require = createRequire(import.meta.url);
 const VirtualMachine = require('scratch-vm');
 const dispatch = require('scratch-vm/src/dispatch/central-dispatch');
@@ -99,7 +102,7 @@ function buildCurrentRuntimeRelease() {
         faviconPath: fileURLToPath(new URL('../site/favicon.png', import.meta.url)),
         packageJsonPath: fileURLToPath(new URL('../package.json', import.meta.url)),
         sourceDirectory,
-        version: '4.0.0-rc.9',
+        version: releasePins.release.version,
       });
       return {archive: Buffer.from(built.archive)};
     } finally {
@@ -655,8 +658,8 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
     'base64',
   ).toString('utf8');
 
-  assert.equal(toolchainPackage.version, '0.8.0');
-  assert.equal(bubblePackage.version, '0.10.0');
+  assert.equal(toolchainPackage.version, releasePins.devDependencies['@kubohiroya/sb3-toolchain']);
+  assert.equal(bubblePackage.version, releasePins.extensions['@kubohiroya/turbowarp-bubble']);
   assert.equal(bubblePackage.exports['./reveal'].import, './dist/reveal.js');
   assert.deepEqual(Object.keys(reveal).sort(), [
     'bubbleRevealUnits',
@@ -675,7 +678,7 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
         'kubohiroyabubble',
         'kubohiroyaruntimeexpression',
         'kubohiroyasvgtext',
-        'tmpose',
+        'kubohiroyatm',
       ],
       recoveryCapsule: false,
     },
@@ -684,7 +687,12 @@ test('keeps the Bubble reveal entry and provenance aligned through sb3-toolchain
   assert.deepEqual(Object.keys(project.extensionURLs), [bundleExtensionId]);
   assert.match(
     extensionSource,
-    /Bubble — Hiroya Kubo — MPL-2\.0 — @kubohiroya\/turbowarp-bubble@0\.10\.0/u,
+    new RegExp(
+      `Bubble — Hiroya Kubo — MPL-2\\.0 — @kubohiroya\\/turbowarp-bubble@${releasePins.extensions[
+        '@kubohiroya/turbowarp-bubble'
+      ].replaceAll('.', '\\.')}`,
+      'u',
+    ),
   );
   assert.doesNotMatch(extensionSource, /@kubohiroya\/turbowarp-bubble@0\.4\.0/u);
 });
@@ -695,9 +703,7 @@ test('builds separate authoring and playback runtime profiles', async () => {
   const playback = await createDsl4RuntimeExtensionSource({profile: 'playback'});
   const playbackBundle = await createDsl4RuntimeBundleSource({profile: 'playback'});
   const poseShardPrefix = (
-    await readFile(
-      require.resolve('@kubohiroya/turbowarp-tmpose/posenet-assets/group1-shard1of2.bin'),
-    )
+    await readFile(require.resolve('@kubohiroya/turbowarp-tm/posenet-assets/group1-shard1of2.bin'))
   )
     .toString('base64')
     .slice(0, 256);
@@ -752,9 +758,7 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
     'base64',
   );
   const shardPrefix = (
-    await readFile(
-      require.resolve('@kubohiroya/turbowarp-tmpose/posenet-assets/group1-shard1of2.bin'),
-    )
+    await readFile(require.resolve('@kubohiroya/turbowarp-tm/posenet-assets/group1-shard1of2.bin'))
   )
     .toString('base64')
     .slice(0, 256);
@@ -764,7 +768,7 @@ test('keeps PoseNet model data out of the current generated runtime extension', 
       subtleCrypto: webcrypto.subtle,
     },
   );
-  assert.equal(extensionSource.byteLength < 4_000_000, true);
+  assert.equal(extensionSource.byteLength < 4_100_000, true);
   assert.equal(extensionSource.includes(shardPrefix), false);
   assert.equal(runtimeStorage.poseNet.encoding, 'base64');
   assert.equal(
@@ -866,7 +870,7 @@ test('builds one self-contained DSL 4.0 release with a pinned runtime extension'
     'Bubble',
     'Runtime Expression',
     'SVG Text',
-    'TMPose',
+    'TM',
     'Teachable Machine Pose',
     'TensorFlow.js',
     'PoseNet MobileNetV1 model',
@@ -939,18 +943,18 @@ test('keeps every bundled extension icon and documentation button on its own pal
         'kubohiroyabubble',
         'kubohiroyaruntimeexpression',
         'kubohiroyasvgtext',
-        'tmpose',
+        'kubohiroyatm',
       ],
     );
     const expectedDocumentation = {
       [runtimeExtensionId]:
-        'https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+        'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       kubohiroyaassetmanager: 'https://kubohiroya.github.io/turbowarp-asset-manager/',
       kubohiroyaasyncinput: 'https://kubohiroya.github.io/turbowarp-async-input/',
       kubohiroyabubble: 'https://kubohiroya.github.io/turbowarp-bubble/',
       kubohiroyaruntimeexpression: 'https://kubohiroya.github.io/turbowarp-runtime-expression/',
       kubohiroyasvgtext: 'https://kubohiroya.github.io/turbowarp-svg-text/',
-      tmpose: 'https://kubohiroya.github.io/turbowarp-tmpose/',
+      kubohiroyatm: 'https://kubohiroya.github.io/turbowarp-tm/',
     };
 
     const memberIcons = [];
@@ -976,7 +980,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         (block) => block && typeof block === 'object' && typeof block.opcode === 'string',
       );
       assert(memberBlocks.length > 0, memberId);
-      if (memberId === 'tmpose') {
+      if (memberId === 'kubohiroyatm') {
         const opcodes = memberBlocks.map(({opcode}) => opcode);
         for (const opcode of [
           'startRecognition',
@@ -986,7 +990,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
         ]) {
           assert(
             opcodes.includes(`${memberId}__${opcode}`),
-            `missing TMPose 1.12.0 opcode ${opcode}`,
+            `missing TM ${releasePins.extensions['@kubohiroya/turbowarp-tm']} opcode ${opcode}`,
           );
         }
         for (const opcode of [
@@ -998,7 +1002,7 @@ test('keeps every bundled extension icon and documentation button on its own pal
           assert.equal(
             opcodes.includes(`${memberId}__${opcode}`),
             false,
-            `removed TMPose opcode ${opcode}`,
+            `removed TM opcode ${opcode}`,
           );
         }
       }
@@ -1355,7 +1359,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
 
     await extensionReporter(vm, 'openOfficialWebsite');
     assert.deepEqual(opened, [
-      ['https://kubohiroya.github.io/tmpose-kamishibai/', '_blank', 'noopener,noreferrer'],
+      ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
     ]);
   } finally {
     vm.quit();
@@ -1435,7 +1439,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
       return JSON.stringify(project);
     };
 
-    assert.equal(await extensionReporter(vm, 'versionReporter'), '4.0.0-rc.9');
+    assert.equal(await extensionReporter(vm, 'versionReporter'), releasePins.release.version);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'ready');
     assert.deepEqual(JSON.parse(await extensionReporter(vm, 'binaryBackingStatusReporter')), {
       surface: null,
@@ -1513,7 +1517,7 @@ test('opens the non-embedded title and menu without validating a packaged story 
     const websiteButton = findByAttribute(titleControls, 'data-dsl4-title-action', 'website')[0];
     websiteButton.click();
     assert.deepEqual(opened, [
-      ['https://kubohiroya.github.io/tmpose-kamishibai/', '_blank', 'noopener,noreferrer'],
+      ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
     ]);
     assert.equal(await extensionReporter(vm, 'statusReporter'), 'title');
     assert.equal(

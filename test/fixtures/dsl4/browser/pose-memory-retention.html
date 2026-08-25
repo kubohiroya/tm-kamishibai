@@ -12,13 +12,13 @@
     <script type="importmap">
       {
         "imports": {
-          "@kubohiroya/turbowarp-tmpose/composition": "/node_modules/@kubohiroya/turbowarp-tmpose/dist/composition.js"
+          "@kubohiroya/turbowarp-tm/composition": "/node_modules/@kubohiroya/turbowarp-tm/dist/composition.js"
         }
       }
     </script>
     <script type="module">
-      import {createTMPoseComposition} from '/node_modules/@kubohiroya/turbowarp-tmpose/dist/composition.js';
-      import {createDsl4TMPoseModelAdapter} from '/src/dsl4/platform/tmpose-model-adapter.js';
+      import {createTMComposition} from '/node_modules/@kubohiroya/turbowarp-tm/dist/composition.js';
+      import {createDsl4TMModelAdapter} from '/src/dsl4/platform/tm-model-adapter.js';
 
       const status = document.querySelector('#status');
       const resultElement = document.querySelector('#result');
@@ -73,8 +73,8 @@
           };
         },
       };
-      const composition = createTMPoseComposition({runtime});
-      const adapter = createDsl4TMPoseModelAdapter({composition});
+      const composition = createTMComposition({runtime});
+      const adapter = createDsl4TMModelAdapter({composition});
       const files = (label) => [
         {path: 'metadata.json', bytes: new TextEncoder().encode(`{"labels":["${label}"]}`)},
         {path: 'model.json', bytes: new TextEncoder().encode(`{"model":"${label}"}`)},

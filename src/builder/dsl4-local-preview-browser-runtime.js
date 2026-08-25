@@ -61,7 +61,7 @@ function boundedInteger(value, name, maximum) {
 }
 
 /** @param {unknown} value */
-function validateTMPoseRuntime(value) {
+function validateTMRuntime(value) {
   if (
     !isRecord(value) ||
     typeof value.Webcam !== 'function' ||
@@ -305,7 +305,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
         if (!component.ok) throw componentError(component);
         if (disposeRequested) throw disposedError();
         const runtimeOptions = {...options.runtimeOptions};
-        validateTMPoseRuntime(runtimeOptions.tmPoseRuntime);
+        validateTMRuntime(runtimeOptions.tmPoseRuntime);
         requiredFunction(runtimeOptions.setLoading, 'runtimeOptions.setLoading');
 
         const activeStage = createDsl4BrowserTurboWarpStage({
@@ -391,7 +391,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput) {
           },
           onWebsite() {
             globalObject.open?.(
-              'https://kubohiroya.github.io/tmpose-kamishibai/',
+              'https://kubohiroya.github.io/tm-kamishibai/',
               '_blank',
               'noopener,noreferrer',
             );

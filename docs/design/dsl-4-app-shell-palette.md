@@ -4,11 +4,11 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #265の実装基準をIssue #579の双方向parity方針で更新
 
-関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)、
-[#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
-[#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#579](https://github.com/kubohiroya/tmpose-kamishibai/issues/579)
+関連Issue: [#199](https://github.com/kubohiroya/tm-kamishibai/issues/199)、
+[#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
+[#265](https://github.com/kubohiroya/tm-kamishibai/issues/265)、
+[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
+[#579](https://github.com/kubohiroya/tm-kamishibai/issues/579)
 
 機械可読な契約:
 [`app-shell-contract.json`](../../test/fixtures/dsl4/app-shell-contract.json)

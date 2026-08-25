@@ -22,7 +22,7 @@ import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
-const poseModelContentType = 'application/vnd.tmpose.pose-model';
+const poseModelContentType = 'application/vnd.tm.pose-model';
 const defaultMaxCompressionRatio = 100;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */

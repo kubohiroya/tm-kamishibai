@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/kubohiroya/tmpose-kamishibai/schema/dsl-4-asset-config.schema.json",
-  "title": "TMPose Kamishibai DSL 4.0 asset distribution configuration",
+  "$id": "https://github.com/kubohiroya/tm-kamishibai/schema/dsl-4-asset-config.schema.json",
+  "title": "TM Kamishibai DSL 4.0 asset distribution configuration",
   "type": "object",
   "additionalProperties": false,
   "required": ["formatVersion", "profiles", "providers"],

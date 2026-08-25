@@ -2,7 +2,7 @@ export const appShellCommon = Object.freeze({
   about: Object.freeze({
     author: Object.freeze({email: 'hiroya@cuc.ac.jp'}),
     officialWebsite: Object.freeze({
-      url: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+      url: 'https://kubohiroya.github.io/tm-kamishibai/',
     }),
   }),
 });

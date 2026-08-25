@@ -141,7 +141,7 @@ test('Standard app shell restores localized title controls and lifecycle visibil
       mount: document.body,
       title: {
         version: '4.0.0-dev',
-        officialWebsiteUrl: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+        officialWebsiteUrl: 'https://kubohiroya.github.io/tm-kamishibai/',
         initialLocale: 'en',
         locales: {
           en: {
@@ -194,7 +194,7 @@ test('Standard app shell restores localized title controls and lifecycle visibil
     assert.equal(official.textContent, '公式Webサイト');
     official.click();
     assert.deepEqual(opened, [
-      ['https://kubohiroya.github.io/tmpose-kamishibai/', '_blank', 'noopener,noreferrer'],
+      ['https://kubohiroya.github.io/tm-kamishibai/', '_blank', 'noopener,noreferrer'],
     ]);
     shell.showTitle();
     titleRoot.click();
@@ -239,7 +239,7 @@ test('selects Japanese as the default title locale from browser preferences', as
       mount: document.body,
       title: {
         version: '4.0.0-dev',
-        officialWebsiteUrl: 'https://kubohiroya.github.io/tmpose-kamishibai/',
+        officialWebsiteUrl: 'https://kubohiroya.github.io/tm-kamishibai/',
         locales: {
           en: {
             title: 'Participatory AI Kamishibai',

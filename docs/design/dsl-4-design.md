@@ -6,9 +6,9 @@ Copyright © 2026 Hiroya Kubo.
 
 対象: DSL設計者、Scratch／TurboWarp実装者、教材設計者
 
-関連Issue: [#199](https://github.com/kubohiroya/tmpose-kamishibai/issues/199)
+関連Issue: [#199](https://github.com/kubohiroya/tm-kamishibai/issues/199)
 
-移行基準: 公開済み[`tmpose-kamishibai 3.2.3`](https://github.com/kubohiroya/tmpose-kamishibai/releases/tag/v3.2.3)
+移行基準: 公開済み[`tm-kamishibai 3.2.3`](https://github.com/kubohiroya/tm-kamishibai/releases/tag/v3.2.3)
 調査基準日: 2026-08-05
 
 この文書は、紙芝居DSL 4.0とその実行基盤の全体architectureをレビューするための資料です。
@@ -61,7 +61,7 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 以下は公開済み3.2.3 SB3から調査したhistorical baselineです。3.2の展開sourceと個別extension copyは
 現行branchへ保持せず、GitHub Release assetを配布正本とします。
 
-`tmposebundle`のmemberは次の4件です。
+`tmBundle`のmemberは次の4件です。
 
 | member                        | source provider | 現行の役割                                 |
 | ----------------------------- | --------------- | ------------------------------------------ |
@@ -108,9 +108,9 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
 
 現行ベースラインの変更履歴と固定仕様は、次を参照します。
 
-- [`tmpose-kamishibai` PR #246](https://github.com/kubohiroya/tmpose-kamishibai/pull/246):
+- [`tm-kamishibai` PR #246](https://github.com/kubohiroya/tm-kamishibai/pull/246):
   Animated Textを含む静的bundleとmember間動的opcode変換
-- [`tmpose-kamishibai` PR #252](https://github.com/kubohiroya/tmpose-kamishibai/pull/252):
+- [`tm-kamishibai` PR #252](https://github.com/kubohiroya/tm-kamishibai/pull/252):
   DSL 3.2、SVG Text、npm source provider
 - [`turbowarp-svg-text` PR #14](https://github.com/kubohiroya/turbowarp-svg-text/pull/14):
   SVG Textのblock登録なし`./composition` API
@@ -120,8 +120,8 @@ Issue #199の初回着手後にDSL 3.2、埋め込み機能拡張、SB3ツール
   DSL設計から分離する既定OFFのblock cleanup
 - [`sb3-toolchain` PR #38](https://github.com/kubohiroya/sb3-toolchain/pull/38):
   完全固定npm sourceの`status`／`sync`／`update`
-- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.8.0/docs/ja/extension-bundles.md)
-- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.8.0/docs/ja/source-format-v1.md)
+- [固定toolchainの静的bundle仕様](https://github.com/kubohiroya/sb3-toolchain/blob/v0.9.0/docs/ja/extension-bundles.md)
+- [固定toolchainの展開source形式](https://github.com/kubohiroya/sb3-toolchain/blob/v0.9.0/docs/ja/source-format-v1.md)
 
 ## 1. 設計の目的
 
@@ -574,8 +574,8 @@ policy有効sessionの受理するkeymap commandはすべて同じ同期dispatch
 `preview.mirroring`はcamera preview canvasのstory既定で、`mirrored | unmirrored`だけを受け付けます。
 省略時は`mirrored`です。長形式sceneは`posePreview.mirroring`でそのsceneだけを上書きでき、scene入場ごとに
 effective値を再適用します。上書きのないsceneではstory既定へ戻し、前sceneの値を引き継ぎません。
-`dsl4PosePreviewMirroring`は起動時固定・既定OFFとし、OFFではTMPoseの新methodを検査・呼出しません。
-ONでは`@kubohiroya/turbowarp-tmpose/composition`の
+`dsl4PosePreviewMirroring`は起動時固定・既定OFFとし、OFFではTMの新methodを検査・呼出しません。
+ONでは`@kubohiroya/turbowarp-tm/composition`の
 `setPreviewMirroring('mirrored' | 'unmirrored')`を直接使い、method欠落時はstartupでfail closedにします。
 preview transformはrecognition入力の`flipHorizontal`、confidence、sequence／selection判定から分離します。
 Web player、通常editor、Packager、development previewは同じconsumerを使い、surface固有の暗黙値を
@@ -597,7 +597,7 @@ story owner scopeで解放します。自然終了またはfail時はrendererと
 巻き戻しに備えてDOMとasset・Object URL leaseをsession内に保持します。`navigation.reposition`または
 `runtime.resume`で同じrendererを再開し、明示的なstory stopまたはhost disposeで初めて所有resourceを解放します。
 起動時固定・既定OFFの`dsl4CameraPreviewControls`がOFFならcontrol専用assetを
-startup準備から除外し、TMPose camera APIもDOM rendererも検査しません。これはStandard productionの固定UI
+startup準備から除外し、TM camera APIもDOM rendererも検査しません。これはStandard productionの固定UI
 であり、台本製作者の必須block 0、camera control専用palette block 0を維持します。`mirroring` controlが
 あるsessionは#387の
 story／scene effective mirroringを同じcompositionへ適用し、外部の反転変更もtarget-state iconへ同期します。
@@ -1549,7 +1549,7 @@ budgetは`test/fixtures/dsl4/custom-action-block-budget.json`で8 block以下を
 | materialized resource  | renderer image、audio、PoseNet、TensorFlow | `retention` (`scene` / `story`)       | scene transition commit、story stop／restart／dispose |
 
 関数scopeを抜けたことや参照を`null`へしたことは物理メモリの即時消去を意味しません。applicationから到達可能な
-参照を残さずGC対象にすることと、renderer／audio／TMPoseが提供する明示的release／disposeを一度だけ呼ぶことを
+参照を残さずGC対象にすることと、renderer／audio／TMが提供する明示的release／disposeを一度だけ呼ぶことを
 runtimeの保証範囲とします。厳密なheap分離が必要なprofileではtransferable `ArrayBuffer`とingestion Workerを
 使用できますが、標準作者がblockで管理する機能にはしません。
 
@@ -1601,7 +1601,7 @@ poseを使わないsceneへskipした場合は最新待機も破棄します。c
 
 カメラ準備とモデル準備は独立して開始し、最初の推論でだけ同期します。記述子のdecodeとfileごとのSHA検証、
 classifier loadは可能な範囲で並行しますが、未検証byte列はTensorFlow／PoseNetへ渡しません。モデル要求のcancelは
-カメラを停止しません。hostはasset lifecycleの`AbortSignal`をTMPose 1.10.0以降の
+カメラを停止しません。hostはasset lifecycleの`AbortSignal`をTM 1.10.0以降の
 `registerPoseModel(input, {signal})`へ渡します。`parallel: false`と`policy: legacy`は従来経路です。
 
 #### 10.5.3 台本単位のIndexedDB identity
@@ -1690,7 +1690,7 @@ clear操作は変更しません。
 player runtime componentはmanifestだけを保持し、ingest後のproviderやdecoded byte copyを公開snapshotへ含めません。
 editorが再保存するときだけsession backingまたはdirect sourceからentryを一時materializeし、元descriptorと同じcontent-addressed entryを
 再構成します。保存処理の`releaseEntries()`後は一時copyを破棄します。互換用Base64 loader／writerは既定のままで、
-binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TMPose 1.10.0のrelease完了待ちと
+binary-entry経路、DSL 4.0 runtime、app shellを暗黙にONへしません。TM 1.10.0のrelease完了待ちと
 latest-needed policyにより、重いmodel初期化はactive 1件＋最新pending 1件へ制限します。
 
 実ブラウザ回帰は`test/fixtures/dsl4/browser/pose-memory-retention.html`をreal Chromiumで実行します。
@@ -1784,7 +1784,7 @@ unsupported browser fallbackの正本は
 
 ### 11.0 3.2 legacy Bundle契約 `[現行事実]`
 
-3.2の`tmposebundle`によって、Issue初回着手時に想定していた「合成専用entrypointがなければ
+3.2の`tmBundle`によって、Issue初回着手時に想定していた「合成専用entrypointがなければ
 Standalone拡張を静的bundle化できない」という前提は解消されました。`sb3-toolchain`は個別の
 classic拡張成果物をbuild入力とし、各`Scratch.extensions.register()`をproxyで捕捉して一つの
 Compositeを登録します。ビルド中にmember JavaScriptを実行せず、生成SB3のランタイムwrapperだけが
@@ -1818,7 +1818,7 @@ opcode文字列を運ぶ未対応API、非同期register、XML block、未分類
 
 ### 11.1 開発・配布・登録単位を分ける `[決定済み]`
 
-再利用可能な機能を`tmpose-kamishibai`内のprivate moduleとしてだけ実装しません。すでに採用している
+再利用可能な機能を`tm-kamishibai`内のprivate moduleとしてだけ実装しません。すでに採用している
 「一つの機能拡張ごとに独立した公開GitHub repositoryとTurboWarp extension IDを持ち、必要な成果物は
 GitHub commitまたは完全固定npm versionから同期する」構成を維持します。npm公開と合成専用entrypointは、
 各capabilityに必須とはしません。
@@ -1836,7 +1836,7 @@ GitHub commitまたは完全固定npm versionから同期する」構成を維�
 public capability repository／npm package
   └─ Standalone artifact + own extension ID ─────────┐
                                                      ↓
-@kubohiroya/tmpose-kamishibai
+kubohiroya/tm-kamishibai repository
   ├─ embedded-extensions.json: provider + exact provenance
   ├─ individual extension artifacts
   ├─ Kamishibai-specific adapters
@@ -1864,7 +1864,7 @@ package名、Standalone extension IDを置き換えず、4.0でも個別更新�
 | Runtime Expression | GitHub固定commit            | `kubohiroyaruntimeexpression` | branch条件の事前検証と実行      |
 | Async Input        | GitHub固定commit            | `kubohiroyaasyncinput`        | scene遷移とskip制御             |
 | Text Lines         | GitHub固定commit            | `kubohiroyatextlines`         | 4.0 parserでは使用しない        |
-| TMPose             | GitHub固定commit            | `tmpose`                      | `TMPoseURL`と`pose` action      |
+| TM                 | GitHub固定commit            | `kubohiroyatm`                | `TMURL`と`pose` action          |
 | Structured Data    | 新規project／providerは未決 | `kubohiroyastructdata1`       | StoryDocumentと実行時viewの保持 |
 
 Asset Manager、Runtime Expression、Async Input、Text Linesは公開npm packageも持ちますが、3.2.3の
@@ -1885,7 +1885,7 @@ turbowarp-structured-data
   └─ packages/standalone-extension
 ```
 
-Runtime Expression、Asset Manager、TMPose、Async Input、SVG Textは既存の独立projectを出発点とし、
+Runtime Expression、Asset Manager、TM、Async Input、SVG Textは既存の独立projectを出発点とし、
 現行静的bundle契約を満たすStandalone成果物を維持します。Text Linesは4.0 parserの依存にはしませんが、
 独立した汎用拡張としての公開・保守を妨げません。
 
@@ -1923,11 +1923,11 @@ fixtureで再現してから検討します。
 | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
 | `getOpcodeFunction()`         | Asset Manager→Animated Text、Kamishibai Runtime→Text等 | 同一bundle memberのopcodeをComposite namespaceへ変換    |
 | `startHats()`                 | Runtime Expression／Async Input／Kamishibai Runtime    | 呼出元member自身のhat opcodeを変換                      |
-| `runtime.ext_*`               | Temporary Variables、TMPose                            | 文書化されたmember間互換契約ではない。個別監査が必要    |
-| timer／listener／camera state | Animated Text、Asset Manager、TMPose、Async Input      | member実装をそのまま保持するが、統一disposeは提供しない |
+| `runtime.ext_*`               | Temporary Variables、TM                                | 文書化されたmember間互換契約ではない。個別監査が必要    |
+| timer／listener／camera state | Animated Text、Asset Manager、TM、Async Input          | member実装をそのまま保持するが、統一disposeは提供しない |
 
-現在の`tmposebundle`は、bundle内依存を`getOpcodeFunction()`で表現しているため現行契約で動作します。
-4.0でAsync InputとTMPoseなどを同じbundleへ追加する場合、`runtime.ext_*`の発見、初期化順、終了処理が
+現在の`tmBundle`は、bundle内依存を`getOpcodeFunction()`で表現しているため現行契約で動作します。
+4.0でAsync InputとTMなどを同じbundleへ追加する場合、`runtime.ext_*`の発見、初期化順、終了処理が
 wrapperの保証範囲に入るかをfixtureで確認します。保証できない依存を、偶然動くglobal propertyとして
 残してはいけません。
 
@@ -2100,7 +2100,7 @@ referenceも共有しません。
 
 ### 11.5 Kamishibai固有adapterと依存性逆転 `[決定済み]`
 
-Kamishibai固有adapterは`tmpose-kamishibai`repositoryに置きます。独立capability projectへ
+Kamishibai固有adapterは`tm-kamishibai`repositoryに置きます。独立capability projectへ
 Kamishibai用コードを追加しません。
 
 ```text
@@ -2116,9 +2116,9 @@ Runtime Expression library
   ↓ KamishibaiExpressionAdapter
 registerBranchの構文検証と評価
 
-TMPose library
+TM library
   ↓ KamishibaiPoseAdapter
-TMPoseURL／pose action
+TMURL／pose action
 ```
 
 Kamishibai Runtimeは具体的なextension IDや`runtime.ext_*`へ依存せず、次のようなportへ依存します。
@@ -2136,7 +2136,7 @@ DiagnosticRenderPort
 
 ### 11.6 Kamishibai固有ソースとBundle構成 `[決定済み／提案]`
 
-`tmpose-kamishibai`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
+`tm-kamishibai`repositoryが直接所有するのは、紙芝居固有の意味と統合部分です。
 
 ```text
 kamishibai/parser
@@ -2170,7 +2170,7 @@ block contributionとして公開することをmodule分割の目標にしま�
 dependencies:
   '@kubohiroya/turbowarp-svg-text': 'github:kubohiroya/turbowarp-svg-text#<commit>'
 devDependencies:
-  '@kubohiroya/sb3-toolchain': '0.8.0'
+  '@kubohiroya/sb3-toolchain': '0.9.0'
 ```
 
 GitHub providerのcapabilityは`package.json`／lockfileまたは`embedded-extensions.json`でresolved commitと
@@ -2263,7 +2263,7 @@ member順は`extensionBundles[].members`、block順は実行時`getInfo().blocks
 | `kubohiroyaassetmanager`      | 現行成果物をAsset Adapterから利用し、旧Text Asset責務を分離        |
 | `text`                        | 3.2診断／旧Text互換との依存を監査し、4.0 bundle member要否を決める |
 | `kubohiroyasvgtext`           | 4.0の標準テキスト表示memberとして継続する                          |
-| `tmpose`                      | 現行成果物をPose Adapterから利用。必要時だけ公開APIを追加          |
+| `kubohiroyatm`                | 現行成果物をPose Adapterから利用。必要時だけ公開APIを追加          |
 | `kubohiroyaasyncinput`        | 現行成果物をInput Adapterから利用。必要時だけ公開APIを追加         |
 | `kubohiroyaweblink`           | app shell capabilityとしてbundleへ含めるかを別途判断               |
 | `lmsTempVars2`                | Object Storeは依存しない。4.0 adapterから除去できるか監査する      |
@@ -2283,7 +2283,7 @@ metadataをtransactionで更新します。外部projectのsourceを由来情報
 - 現行`sb3-toolchain`静的bundle契約で扱えない4.0 memberが存在するか
 - Web Link、file picker、local storage、timer、text renderingをBundleへ含める範囲
 - Gallery／標準拡張を含めた最終的なSB3 extension依存一覧
-- Structured DataとTMPoseのnpm package名、各capabilityのrelease順序
+- Structured DataとTMのnpm package名、各capabilityのrelease順序
 - `./composition`が必要になった場合、その共通型をどのpackageが公開するか
 - Standalone blockからComposite blockへの変換toolを初版で提供するか
 
@@ -2525,7 +2525,7 @@ block cleanupの検証は`sb3-toolchain`側に置き、DSL 4.0のfixtureや受�
 - [ ] 現行bundle契約で扱えない4.0 memberがある場合、toolchainを拡張するか`./composition`を追加するか
 - [ ] app shellとGallery／標準拡張を含む最終依存一覧を決める
 - [ ] Standalone blockからComposite blockへの変換toolを初版で提供するか
-- [ ] Structured DataとTMPoseのpackage名、各capabilityのrelease順序を決める
+- [ ] Structured DataとTMのpackage名、各capabilityのrelease順序を決める
 - [ ] `./composition`が必要になった場合、その共通型の公開元を決める
 
 ## 16. レビュー時の判断基準

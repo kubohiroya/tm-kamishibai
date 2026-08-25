@@ -215,7 +215,7 @@ test('loads, verifies, registers, caches, and releases an explicitly enabled rem
   assert.deepEqual(released, [['Remote', 'stop']]);
 });
 
-test('loads an unpinned TMPose directory lazily without requiring integrity metadata', async () => {
+test('loads an unpinned TM directory lazily without requiring integrity metadata', async () => {
   const encoder = new TextEncoder();
   const files = new Map([
     [
@@ -253,7 +253,7 @@ test('loads an unpinned TMPose directory lazily without requiring integrity meta
   await lifecycle.release({reason: 'stop'});
 });
 
-test('loads and extracts an unpinned TMPose zip URL as one bounded archive', async () => {
+test('loads and extracts an unpinned TM zip URL as one bounded archive', async () => {
   const archive = zipSync({
     'metadata.json': strToU8('{"labels":["rescue"]}'),
     'model.json': strToU8('{"weightsManifest":[{"paths":["weights.bin"]}]}'),
@@ -298,7 +298,7 @@ test('loads and extracts an unpinned TMPose zip URL as one bounded archive', asy
     prepared[0].files.map((file) => file.path),
     ['metadata.json', 'model.json', 'weights.bin'],
   );
-  assert.equal(prepared[0].archiveBinding.extractorFormat, 'tmpose-zip-v1');
+  assert.equal(prepared[0].archiveBinding.extractorFormat, 'tm-zip-v1');
   await lifecycle.release({reason: 'stop'});
 });
 
@@ -451,7 +451,7 @@ test('materializes remote pose files only from an archive-bound trusted extracto
       size: file.bytes.byteLength,
       integrity: integrity(file.bytes),
       archiveIntegrity,
-      extractorFormat: 'tmpose-zip-v1',
+      extractorFormat: 'tm-zip-v1',
     }),
   );
   const extractions = [];
@@ -475,7 +475,7 @@ test('materializes remote pose files only from an archive-bound trusted extracto
       extractions.push({payload, signal: extractContext.signal});
       return {
         archiveIntegrity,
-        extractorFormat: 'tmpose-zip-v1',
+        extractorFormat: 'tm-zip-v1',
         files: extractedFiles,
       };
     },
@@ -504,7 +504,7 @@ test('materializes remote pose files only from an archive-bound trusted extracto
   assert.deepEqual(prepared[0].files, extractedFiles);
   assert.deepEqual(prepared[0].archiveBinding, {
     integrity: archiveIntegrity,
-    extractorFormat: 'tmpose-zip-v1',
+    extractorFormat: 'tm-zip-v1',
   });
   assert.equal(
     prepared[0].files.some((file) => file.path === 'untrusted.bin'),
@@ -529,7 +529,7 @@ test('rejects extractor results not bound to the verified archive', async () => 
     loadRemoteAsset: async () => ({bytes: archive, contentType: 'application/zip'}),
     extractRemotePoseArchive: async () => ({
       archiveIntegrity: `sha256-${'0'.repeat(64)}`,
-      extractorFormat: 'tmpose-zip-v1',
+      extractorFormat: 'tm-zip-v1',
       files: [],
     }),
     adapter: {prepare() {}, release() {}},

@@ -25,6 +25,9 @@ import {
 import {createEmbeddedReference} from '../src/builder/script.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 const fixtureAssetsDirectory = path.join(projectRoot, 'test', 'fixtures', 'assets');
 const actorPopFixturePath = path.join(fixtureAssetsDirectory, 'actor-pop.wav');
 const loadingChirpFixturePath = path.join(fixtureAssetsDirectory, 'loading-chirp.wav');
@@ -979,7 +982,7 @@ test('exposes one CLI contract and a fixed installable package version', async (
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@kubohiroya/tmpose-kamishibai');
-  assert.equal(packageJson.version, '4.0.0-rc.9');
+  assert.equal(packageJson.version, releasePins.release.version);
   assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');

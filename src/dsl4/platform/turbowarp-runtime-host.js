@@ -564,9 +564,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(options.onBinarySessionBackingFatalError === undefined
         ? {}
         : {onBinarySessionBackingFatalError: options.onBinarySessionBackingFatalError}),
-      ...(options.createTMPoseComposition === undefined
+      ...(options.createTMComposition === undefined
         ? {}
-        : {createTMPoseComposition: options.createTMPoseComposition}),
+        : {createTMComposition: options.createTMComposition}),
       ...(options.createAsyncInputComposition === undefined
         ? {}
         : {createAsyncInputComposition: options.createAsyncInputComposition}),
@@ -875,12 +875,12 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       Object.freeze({
         getState() {
           const registeredPoseModelCount = poseModelAssetIds.filter((assetId) =>
-            activeAssetSession.tmposeComposition.isPoseModelRegistered(assetId),
+            activeAssetSession.tmComposition.isPoseModelRegistered(assetId),
           ).length;
           return Object.freeze({
             registeredPoseModelCount,
             activePoseModelCount:
-              activeAssetSession.tmposeComposition.getActivePoseModelName() === null ? 0 : 1,
+              activeAssetSession.tmComposition.getActivePoseModelName() === null ? 0 : 1,
           });
         },
       }),
@@ -1212,7 +1212,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * @param {Function} [options.waitSchedule]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
- * @param {Function} [options.createTMPoseComposition]
+ * @param {Function} [options.createTMComposition]
  * @param {Function} [options.createAsyncInputComposition]
  * @param {unknown} [options.keySource]
  * @param {unknown} [options.actorTouchSource]

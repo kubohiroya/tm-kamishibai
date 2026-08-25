@@ -508,7 +508,7 @@ function platformFixture(log) {
       log.push(['cache.release-lease']);
     },
   };
-  const tmposeComposition = {
+  const tmComposition = {
     registerPoseModel() {
       return {name: 'Pose', labels: ['pose']};
     },
@@ -594,7 +594,7 @@ function platformFixture(log) {
   return {
     runtime,
     assetManagerComposition,
-    tmposeComposition,
+    tmComposition,
     poseConfidence,
     poseProgress,
     monitorRecords,
@@ -606,9 +606,9 @@ function platformFixture(log) {
       log.push(['media.create', args[1]]);
       return assetManagerComposition;
     },
-    createTMPoseComposition() {
+    createTMComposition() {
       log.push(['pose.create']);
-      return tmposeComposition;
+      return tmComposition;
     },
     createAsyncInputComposition() {
       log.push(['input.create']);
@@ -666,9 +666,9 @@ test('defaults OFF without inspecting project or any TurboWarp dependency', asyn
     project: new Proxy({}, {get: () => assert.fail('project must not be read')}),
     sourceFrontend: new Proxy({}, {get: () => assert.fail('frontend must not be read')}),
     runtime: new Proxy({}, {get: () => assert.fail('runtime must not be read')}),
-    tmPoseRuntime: new Proxy({}, {get: () => assert.fail('TMPose must not be read')}),
+    tmPoseRuntime: new Proxy({}, {get: () => assert.fail('TM must not be read')}),
     createAssetManagerComposition: failFactory,
-    createTMPoseComposition: failFactory,
+    createTMComposition: failFactory,
     createSvgTextComposition: failFactory,
     createRuntimeExpressionComposition: failFactory,
     createHostPort: failFactory,
@@ -1347,8 +1347,8 @@ scenes:
   let confidence = 0;
   let now = 0;
   let scheduled = null;
-  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
-  fixture.tmposeComposition.confidenceOf = () => confidence;
+  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmComposition.confidenceOf = () => confidence;
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
       featureFlags: {dsl4Runtime: true, dsl4PoseFeedbackModes: true},
@@ -1453,52 +1453,52 @@ scenes:
   let activeModel = null;
   let now = 0;
   const scheduled = [];
-  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
-  fixture.tmposeComposition.activatePoseModel = (name) => {
+  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmComposition.activatePoseModel = (name) => {
     activeModel = name;
   };
-  fixture.tmposeComposition.getActivePoseModelName = () => activeModel;
-  fixture.tmposeComposition.startCamera = async () => {
+  fixture.tmComposition.getActivePoseModelName = () => activeModel;
+  fixture.tmComposition.startCamera = async () => {
     assert.equal(previewVisible, false, 'story camera startup must keep preview hidden');
     assert.equal(previewOpacity, 0.2, 'story camera must preserve the DSL 3.2 preview opacity');
     assert.equal(previewPosition, 'full-stage', 'story camera must prepare full-stage preview');
     log.push(['camera.start']);
     cameraRunning = true;
   };
-  fixture.tmposeComposition.stopCamera = () => {
+  fixture.tmComposition.stopCamera = () => {
     log.push(['camera.stop']);
     cameraRunning = false;
   };
-  fixture.tmposeComposition.isCameraRunning = () => cameraRunning;
-  fixture.tmposeComposition.showPreview = () => {
+  fixture.tmComposition.isCameraRunning = () => cameraRunning;
+  fixture.tmComposition.showPreview = () => {
     assert.equal(cameraRunning, true, 'preview must not appear before the story camera is ready');
     log.push(['preview.show']);
     previewVisible = true;
   };
-  fixture.tmposeComposition.hidePreview = () => {
+  fixture.tmComposition.hidePreview = () => {
     log.push(['preview.hide']);
     previewVisible = false;
   };
-  fixture.tmposeComposition.isPreviewVisible = () => previewVisible;
-  fixture.tmposeComposition.setPreviewOpacity = (opacity) => {
+  fixture.tmComposition.isPreviewVisible = () => previewVisible;
+  fixture.tmComposition.setPreviewOpacity = (opacity) => {
     log.push(['preview.opacity', opacity]);
     previewOpacity = opacity;
   };
-  fixture.tmposeComposition.setPreviewPosition = (position) => {
+  fixture.tmComposition.setPreviewPosition = (position) => {
     log.push(['preview.position', position]);
     previewPosition = position;
   };
-  fixture.tmposeComposition.startRecognition = async () => {
+  fixture.tmComposition.startRecognition = async () => {
     assert.equal(cameraRunning, true, 'recognition must reuse the story-owned camera');
     log.push(['recognition.start']);
     recognizing = true;
   };
-  fixture.tmposeComposition.stopRecognition = () => {
+  fixture.tmComposition.stopRecognition = () => {
     log.push(['recognition.stop']);
     recognizing = false;
   };
-  fixture.tmposeComposition.isRecognizing = () => recognizing;
-  fixture.tmposeComposition.confidenceOf = () => 1;
+  fixture.tmComposition.isRecognizing = () => recognizing;
+  fixture.tmComposition.confidenceOf = () => 1;
 
   const result = await createDsl4TurboWarpRuntimeHost(
     enabledOptions(project, fixture, {
@@ -1564,8 +1564,8 @@ test('does not request a camera for a story without a pose recognition action', 
   const project = await packagedProject(waitStory);
   const log = [];
   const fixture = platformFixture(log);
-  fixture.tmposeComposition.startCamera = async () => log.push(['camera.start']);
-  fixture.tmposeComposition.stopCamera = () => log.push(['camera.stop']);
+  fixture.tmComposition.startCamera = async () => log.push(['camera.start']);
+  fixture.tmComposition.stopCamera = () => log.push(['camera.stop']);
   const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 
@@ -1615,8 +1615,8 @@ scenes:
   let now = 0;
   const scheduled = [];
   const pendingChargeSound = new Promise(() => {});
-  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
-  fixture.tmposeComposition.confidenceOf = () => 1;
+  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmComposition.confidenceOf = () => 1;
   fixture.assetManagerComposition.playSound = (name, playOptions) => {
     log.push(['media.play', name, playOptions]);
     if (name === 'Charge') return pendingChargeSound;
@@ -2019,13 +2019,13 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
 
   const disabledLog = [];
   const disabledFixture = platformFixture(disabledLog);
-  const disabledCreateTMPose = disabledFixture.createTMPoseComposition;
-  disabledFixture.createTMPoseComposition = (...args) => {
-    const composition = disabledCreateTMPose(...args);
+  const disabledCreateTM = disabledFixture.createTMComposition;
+  disabledFixture.createTMComposition = (...args) => {
+    const composition = disabledCreateTM(...args);
     delete composition.setPreviewMirroring;
     Object.defineProperty(composition, 'setPreviewMirroring', {
       get() {
-        assert.fail('disabled host must not inspect the TMPose mirroring method');
+        assert.fail('disabled host must not inspect the TM mirroring method');
       },
     });
     return composition;
@@ -2040,9 +2040,9 @@ test('applies scene pose preview mirroring only through its startup-fixed featur
   await disabled.host.dispose('pose-preview-disabled');
 
   const missingFixture = platformFixture([]);
-  const missingCreateTMPose = missingFixture.createTMPoseComposition;
-  missingFixture.createTMPoseComposition = (...args) => {
-    const composition = missingCreateTMPose(...args);
+  const missingCreateTM = missingFixture.createTMComposition;
+  missingFixture.createTMComposition = (...args) => {
+    const composition = missingCreateTM(...args);
     delete composition.setPreviewMirroring;
     return composition;
   };
@@ -2083,9 +2083,9 @@ test('connects camera preview controls, assets, and upstream methods only behind
 
   const disabledLog = [];
   const disabledFixture = platformFixture(disabledLog);
-  const disabledCreateTMPose = disabledFixture.createTMPoseComposition;
-  disabledFixture.createTMPoseComposition = (...args) => {
-    const composition = disabledCreateTMPose(...args);
+  const disabledCreateTM = disabledFixture.createTMComposition;
+  disabledFixture.createTMComposition = (...args) => {
+    const composition = disabledCreateTM(...args);
     for (const method of [
       'setPreviewMirroring',
       'listCameraDevices',
@@ -2125,9 +2125,9 @@ test('connects camera preview controls, assets, and upstream methods only behind
   const enabledLog = [];
   const enabledFixture = platformFixture(enabledLog);
   let selection = 'default';
-  const enabledCreateTMPose = enabledFixture.createTMPoseComposition;
-  enabledFixture.createTMPoseComposition = (...args) => {
-    const composition = enabledCreateTMPose(...args);
+  const enabledCreateTM = enabledFixture.createTMComposition;
+  enabledFixture.createTMComposition = (...args) => {
+    const composition = enabledCreateTM(...args);
     return {
       ...composition,
       isCameraRunning: () => true,
@@ -2207,9 +2207,9 @@ test('releases every control Object URL when renderer DOM disposal fails', async
   });
   const log = [];
   const fixture = platformFixture(log);
-  const createTMPoseComposition = fixture.createTMPoseComposition;
-  fixture.createTMPoseComposition = (...args) => ({
-    ...createTMPoseComposition(...args),
+  const createTMComposition = fixture.createTMComposition;
+  fixture.createTMComposition = (...args) => ({
+    ...createTMComposition(...args),
     isCameraRunning: () => true,
     async listCameraDevices() {
       return [];
@@ -2280,9 +2280,9 @@ test('suspends camera controls at natural finish and resumes the same leases for
   });
   const log = [];
   const fixture = platformFixture(log);
-  const createTMPoseComposition = fixture.createTMPoseComposition;
-  fixture.createTMPoseComposition = (...args) => ({
-    ...createTMPoseComposition(...args),
+  const createTMComposition = fixture.createTMComposition;
+  fixture.createTMComposition = (...args) => ({
+    ...createTMComposition(...args),
     isCameraRunning: () => true,
     async listCameraDevices() {
       return [];
@@ -2801,20 +2801,20 @@ scenes:
   ending: []
 `);
   const fixture = platformFixture([]);
-  fixture.tmposeComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
+  fixture.tmComposition.registerPoseModel = ({name}) => ({name, labels: ['help']});
   let finishCameraStart = null;
   let cameraRunning = false;
-  fixture.tmposeComposition.startCamera = () =>
+  fixture.tmComposition.startCamera = () =>
     new Promise((resolve) => {
       finishCameraStart = () => {
         cameraRunning = true;
         resolve();
       };
     });
-  fixture.tmposeComposition.stopCamera = () => {
+  fixture.tmComposition.stopCamera = () => {
     cameraRunning = false;
   };
-  fixture.tmposeComposition.isCameraRunning = () => cameraRunning;
+  fixture.tmComposition.isCameraRunning = () => cameraRunning;
   const result = await createDsl4TurboWarpRuntimeHost(enabledOptions(project, fixture));
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 

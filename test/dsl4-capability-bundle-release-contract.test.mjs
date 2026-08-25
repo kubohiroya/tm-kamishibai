@@ -18,6 +18,9 @@ const contract = JSON.parse(
     'utf8',
   ),
 );
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 const readRepositoryFile = (filePath) => readFile(path.join(repositoryRoot, filePath), 'utf8');
 
@@ -28,6 +31,7 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     readRepositoryFile('LICENSES.md'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  assert.equal(contract.standardArtifact.version, releasePins.release.version);
   assert.equal(packageJson.version, contract.standardArtifact.version);
   assert.equal(packageJson.publishConfig.tag, contract.releaseLifecycle.npmDistTag);
   const lockfile = parse(lockfileSource);
@@ -49,13 +53,13 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     }
 
     if (capability.provider !== 'npm') continue;
-    assert.equal(packageJson.dependencies[capability.package], capability.version);
-    const patchHash = lockfile.patchedDependencies?.[`${capability.package}@${capability.version}`];
-    const lockedVersion = patchHash
-      ? `${capability.version}(patch_hash=${patchHash})`
-      : capability.version;
+    const pinnedVersion = releasePins.extensions[capability.package];
+    assert.equal(typeof pinnedVersion, 'string', `${capability.package} release pin`);
+    assert.equal(packageJson.dependencies[capability.package], pinnedVersion);
+    const patchHash = lockfile.patchedDependencies?.[`${capability.package}@${pinnedVersion}`];
+    const lockedVersion = patchHash ? `${pinnedVersion}(patch_hash=${patchHash})` : pinnedVersion;
     const importerDependency = lockfile.importers['.'].dependencies[capability.package];
-    assert.equal(importerDependency.specifier, capability.version);
+    assert.equal(importerDependency.specifier, pinnedVersion);
     assert.equal(
       importerDependency.version === lockedVersion ||
         importerDependency.version.startsWith(`${lockedVersion}(`),
@@ -63,7 +67,7 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
       `${capability.package} lock version`,
     );
     assert.match(
-      lockfile.packages[`${capability.package}@${capability.version}`].resolution.integrity,
+      lockfile.packages[`${capability.package}@${pinnedVersion}`].resolution.integrity,
       /^sha512-/u,
     );
     assert.match(licenses, new RegExp(`${capability.package.replaceAll('/', '\\/')}\\s+\\|`));
@@ -188,7 +192,7 @@ test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asse
     unbundle: 'regenerate-current-source',
     provenance: [
       'scripts/sb3/dsl4-downloadable-release.mjs',
-      'release-metadata/4.0.0-rc.9.json',
+      'release-metadata/{release.version}.json',
       'package.json',
       'pnpm-lock.yaml',
       'LICENSES.md',
@@ -198,7 +202,7 @@ test('generates Standard 4.0 transiently and treats legacy 3.2 as a release asse
     kind: 'github-release-asset',
     unbundle: 'release-asset',
     provenance: [
-      'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
+      'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
     ],
   });
   assert.equal(contract.assetPolicy.remoteExtensionCode, 'forbidden');
@@ -255,10 +259,14 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   const release = downloadCatalog.find(
     ({version}) => version === contract.standardArtifact.version,
   );
-  const metadata = JSON.parse(await readRepositoryFile(contract.releaseLifecycle.metadata));
+  const releaseMetadataPath = `release-metadata/${releasePins.release.version}.json`;
+  const metadata = JSON.parse(await readRepositoryFile(releaseMetadataPath));
   assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
-  assert.match(metadata.artifact.url, /\/releases\/download\/v4\.0\.0-rc\.9\//u);
+  assert(
+    metadata.artifact.url.includes(`/releases/download/v${releasePins.release.version}/`),
+    'Release URL must use the pinned candidate version.',
+  );
   if (metadata.state === 'published') {
     assert.deepEqual(release.artifact, {
       buildDate: metadata.buildDate,
@@ -274,16 +282,13 @@ test('pins a deterministic release, publication, and rollback sequence', async (
   }
 
   assert.deepEqual(contract.releaseLifecycle, {
-    metadata: 'release-metadata/4.0.0-rc.9.json',
     states: ['candidate', 'frozen', 'published'],
     updateCommand: 'pnpm release:dsl4:update',
     checkCommand: 'pnpm release:dsl4:check',
     freezeCommand: 'pnpm release:dsl4:freeze',
     publicationCommand: 'pnpm release:dsl4:record-publication',
     immutableStates: ['frozen', 'published'],
-    nextCandidateVersion: '4.0.0-rc.10',
     npmDistTag: 'next',
-    gitTag: 'v4.0.0-rc.9',
     githubPrerelease: true,
     recommendedStableVersion: '3.2.3',
   });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -14,6 +14,9 @@ import {
 } from '../scripts/sb3/title-build-metadata.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 test('resolves the Title build date in Asia/Tokyo and accepts a reproducible override', () => {
   assert.deepEqual(
@@ -60,12 +63,12 @@ test('stamps the transient current DSL 4 release source without a tracked app di
       faviconPath: path.join(projectRoot, 'site/favicon.png'),
       packageJsonPath: path.join(projectRoot, 'package.json'),
       sourceDirectory,
-      version: '4.0.0-rc.9',
+      version: releasePins.release.version,
     });
     assert.deepEqual(readTitleBuildMetadataFromSb3(built.archive), {
       buildDate: '2026-08-15',
-      label: 'Version 4.0.0-rc.9 (2026/08/15)',
-      version: '4.0.0-rc.9',
+      label: `Version ${releasePins.release.version} (2026/08/15)`,
+      version: releasePins.release.version,
     });
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});

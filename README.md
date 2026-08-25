@@ -1,16 +1,16 @@
-# TMPose Kamishibai
+# TM Kamishibai
 
 English | [日本語](README.ja.md)
 
 **Participatory AI storytelling driven by body poses**
 
-TMPose Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TMPose for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
+TM Kamishibai is an interactive storytelling system in which participants move a story forward by posing in front of a camera. It uses TM for pose recognition and TurboWarp for authoring and playback, turning scripts and assets into stories that run on the Web or as SB3 projects.
 
-This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tmpose-kamishibai-docs/) is the source of truth for operating instructions and script references.
+This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, distributable SB3 projects, and the public website. The [documentation site](https://kubohiroya.github.io/tm-kamishibai-docs/) is the source of truth for operating instructions and script references.
 
-![TMPose Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
+![TM Kamishibai showing Urashima Taro and a turtle over a camera feed while pose recognition advances the story](site/images/image01.png)
 
-[Project website](https://kubohiroya.github.io/tmpose-kamishibai/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/tmpose-kamishibai/downloads/) · [Read the documentation](https://kubohiroya.github.io/tmpose-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tmpose-kamishibai-samples/)
+[Project website](https://kubohiroya.github.io/tm-kamishibai/) · [Try the Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) · [Download an SB3](https://kubohiroya.github.io/tm-kamishibai/downloads/) · [Read the documentation](https://kubohiroya.github.io/tm-kamishibai-docs/) · [Explore samples](https://kubohiroya.github.io/tm-kamishibai-samples/)
 
 ## What You Can Build
 
@@ -22,34 +22,34 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.9                                                    |
+|                 | 3.2.3                                           | 4.0.0-rc.10                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc9]                                      |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc10]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.9 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.10 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
-Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
+Open the [published Web app](https://sqs.prof.cuc.ac.jp/kamishibai/) or the [Urashima Taro sample](https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/) to try a story in your browser. Allow camera access, then follow the on-screen instructions and perform the requested poses.
 
-To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/tmpose-kamishibai-docs/workshops/).
+To open a project in TurboWarp, download an SB3 for the series you need from the [downloads page][downloads]. Materials for running an event are organized on the [workshops page](https://kubohiroya.github.io/tm-kamishibai-docs/workshops/).
 
 ## Build a Story with DSL 4.0
 
 ### Browser-only authoring
 
-The 4.0.0-rc.9 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
+The 4.0.0-rc.10 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
 
 1. [Download the 4.0 SB3][downloads] and open it in the [TurboWarp Editor](https://turbowarp.org/editor).
 2. Click the green flag, then choose **Open** and select a story file or project directory.
 3. Edit YAML or local assets in an external editor. Valid saves are checked and applied automatically.
 4. Choose **Build distributable SB3** to save a story with its script and assets embedded.
 
-Watching a project directory requires the File System Access API in a top-level HTTPS page on desktop Chrome or Edge. When a native save picker is unavailable, the runner falls back to a browser download. Other unsupported authoring operations can use single-file selection or the CLI below. See the [DSL 4.0 author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) for browser requirements, UI instructions, and troubleshooting.
+Watching a project directory requires the File System Access API in a top-level HTTPS page on desktop Chrome or Edge. When a native save picker is unavailable, the runner falls back to a browser download. Other unsupported authoring operations can use single-file selection or the CLI below. See the [DSL 4.0 author guide](https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) for browser requirements, UI instructions, and troubleshooting.
 
 ### Minimal project
 
@@ -62,7 +62,7 @@ my-story/
 └── opening.k4.yml
 ```
 
-When exactly one root-level `.k4.yml` file exists, TMPose Kamishibai selects it automatically and
+When exactly one root-level `.k4.yml` file exists, TM Kamishibai selects it automatically and
 `project.source.yml` is unnecessary. With two or more scripts, select the entry script either with
 `project.source.yml` or the CLI `--source` option instead of relying on a fixed filename.
 
@@ -111,7 +111,7 @@ scenes:
   ending: []
 ```
 
-The source order of `scenes` defines the normal execution order. Do not use formatters that sort scene keys, and avoid scene IDs made only of digits with the current implementation. See the [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序) for the formal contract and known limitation.
+The source order of `scenes` defines the normal execution order. Do not use formatters that sort scene keys, and avoid scene IDs made only of digits with the current implementation. See the [DSL 4.0 surface specification](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-surface.md#21-scenes-mappingの順序) for the formal contract and known limitation.
 
 To reuse an `Actor.say` or `Actor.think` completion rule, define `seconds`, `waitFor: advance`, or
 both under the top-level `bubbleClosePolicies` registry, then reference its name with `closePolicy`.
@@ -140,14 +140,18 @@ Individual `stage`, `bgm`, and `Actor.show`, `Actor.hide`, or `Actor.setSkin` ac
 [transition section of the DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#44-transition共通化)
 for the complete contract.
 
-For practical scripts, asset references, pose models, branches, and speech bubbles, continue with the [author guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tmpose-kamishibai-samples).
+For practical scripts, asset references, pose models, branches, and speech bubbles, continue with the [author guide](https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/) and the [sample repository](https://github.com/kubohiroya/tm-kamishibai-samples).
 
 ### Validate, preview, and build with the CLI
 
-The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.9) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.10) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
+
+The npm package name and `tmpose-kamishibai` executable are retained for 4.0.0-rc.10 compatibility.
+Repository names, public site URLs, documentation links, and the TurboWarp pose extension use the
+current `tm` naming.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.9
+pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.10
 pnpm exec tmpose-kamishibai --help
 ```
 
@@ -197,7 +201,7 @@ Asset overrides remain available for exceptional projects, but preview values ab
 Source Graph includes remain opt-in and require their separate file-count, total-source-byte, and
 depth limits because their topology cannot be inferred safely.
 
-The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tmpose-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
+The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
 
 | Command               | Purpose                                                       |
 | --------------------- | ------------------------------------------------------------- |
@@ -210,24 +214,24 @@ The CLI also provides the following commands. See `tmpose-kamishibai --help` and
 
 DSL 4.0 can select the backward-compatible `legacy` model initialization policy or
 `latest-needed`, which cancels an obsolete model preparation and keeps only the latest request.
-TMPose 1.12.0 owns initialization of the camera canvas context and intentionally uses a normal
+TM 2.0.0 owns initialization of the camera canvas context and intentionally uses a normal
 Canvas2D context. Physical-camera measurements of its 320×240, one-draw/one-read path did not show
 a repeatable end-to-end benefit from `willReadFrequently`. The same rule applies to scratch-render:
 each `Silhouette.unlazy()` materialization performs one read and then caches the pixel array, while
 Chromium warns on the second read accumulated by the shared canvas without measuring read rate or
 latency. Kamishibai therefore patches neither upstream implementation merely to suppress the
-warning. To roll back the TMPose boundary, use the rc.5 artifact pinned to TMPose 1.10.0. See the
+warning. To roll back the TM boundary, use the rc.5 artifact pinned to TM 1.10.0. See the
 [DSL 4.0 surface specification](./docs/design/dsl-4-surface.md#41-poseモデル初期化) for the schema,
 defaults, and cancellation boundary.
 
-TMPose 1.12.0 also supplies the configurable SVG pose overlay used by DSL 4.0. Opt in under
+TM 2.0.0 also supplies the configurable SVG pose overlay used by DSL 4.0. Opt in under
 `poseRecognition.preview.overlay`; you can show or hide it, style any of the 17 joints, style the
 shared bones, set the minimum keypoint confidence, and scale joint or bone properties by
 confidence. Existing scripts omit this object and keep the overlay hidden. The complete YAML
 example and defaults are in the
 [pose overlay surface contract](./docs/design/dsl-4-surface.md#43-pose-overlay).
 
-TMPose 1.12.0 also aligns its public TurboWarp opcodes with the block wording:
+TM 2.0.0 also aligns its public TurboWarp opcodes with the block wording:
 `startRecognition`, `stopRecognition`, `isRecognizing`, and `firstRecognitionMsReporter` replace
 the former `*Predict*` names without aliases. DSL 4.0 already used the recognition-named
 Composition API, so the YAML schema and runtime behavior are unchanged; hand-authored TurboWarp
@@ -248,7 +252,7 @@ browser preview / CLI build
     ↓
 self-contained SB3
     ↓
-TurboWarp runtime + TMPose
+TurboWarp runtime + TM
 ```
 
 - The selected YAML script and, when present, `project.source.yml` remain the editable sources of truth
@@ -256,7 +260,7 @@ TurboWarp runtime + TMPose
 - Local assets are embedded in the story SB3; remote assets declare integrity and a distribution profile
 - Failed builds preserve existing output and replace it only with a validated candidate
 
-See the [DSL 4.0 processing architecture](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-processing-architecture.md) for processing boundaries and the [asset distribution profile design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md) for delivery behavior.
+See the [DSL 4.0 processing architecture](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-processing-architecture.md) for processing boundaries and the [asset distribution profile design](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-asset-distribution-profiles.md) for delivery behavior.
 
 ## Develop This Repository
 
@@ -283,7 +287,7 @@ pnpm verify:quick
 | `pnpm sb3:build`    | Generate the current candidate into ignored `tmp/` storage          |
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate         |
 
-Before implementation, record the scope, dependencies, acceptance criteria, and rollback in a GitHub Issue, then keep each pull request small. Use [GitHub Issues](https://github.com/kubohiroya/tmpose-kamishibai/issues) for bug reports and proposals.
+Before implementation, record the scope, dependencies, acceptance criteria, and rollback in a GitHub Issue, then keep each pull request small. Use [GitHub Issues](https://github.com/kubohiroya/tm-kamishibai/issues) for bug reports and proposals.
 
 ### Key directories
 
@@ -310,23 +314,23 @@ neither `app/` nor `release-sources/` is part of the repository layout.
 
 ## Documentation
 
-- [Published documentation](https://kubohiroya.github.io/tmpose-kamishibai-docs/): operating instructions, author guides, commands, and workshop materials
-- [Documentation source](https://github.com/kubohiroya/tmpose-kamishibai-docs): source documents and issues
-- [DSL 4.0 surface specification](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
-- [DSL 4.0 migration design](https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
-- [v4.0.0-rc.9 release notes][rc9]: publication status, compatibility, and verified artifacts
+- [Published documentation](https://kubohiroya.github.io/tm-kamishibai-docs/): operating instructions, author guides, commands, and workshop materials
+- [Documentation source](https://github.com/kubohiroya/tm-kamishibai-docs): source documents and issues
+- [DSL 4.0 surface specification](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
+- [DSL 4.0 migration design](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
+- [v4.0.0-rc.10 release notes][rc10]: publication status, compatibility, and verified artifacts
 
 ## Related Projects
 
-- [`kubohiroya/tmpose-kamishibai-samples`](https://github.com/kubohiroya/tmpose-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
-- [`kubohiroya/tmpose-kamishibai-docs`](https://github.com/kubohiroya/tmpose-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
+- [`kubohiroya/tm-kamishibai-samples`](https://github.com/kubohiroya/tm-kamishibai-samples): sample scripts, images, audio, SB3 projects, and Web stories
+- [`kubohiroya/tm-kamishibai-docs`](https://github.com/kubohiroya/tm-kamishibai-docs): documentation for participants, authors, developers, and workshop staff
 - [`kubohiroya/sb3-toolchain`](https://github.com/kubohiroya/sb3-toolchain): SB3 extraction, validation, rebuilding, and embedded-extension management
-- [`kubohiroya/turbowarp-tmpose`](https://github.com/kubohiroya/turbowarp-tmpose): pose-recognition extension for TurboWarp
+- [`kubohiroya/turbowarp-tm`](https://github.com/kubohiroya/turbowarp-tm): pose-recognition extension for TurboWarp
 
 ## License
 
 Software and assets copyrighted by this project are licensed under MPL-2.0 unless marked otherwise. See [`LICENSES.md`](LICENSES.md) for third-party works and asset-specific terms. Documentation and samples are governed by the terms in their respective repositories.
 
-[docs]: https://kubohiroya.github.io/tmpose-kamishibai-docs/
-[downloads]: https://kubohiroya.github.io/tmpose-kamishibai/downloads/
-[rc9]: https://github.com/kubohiroya/tmpose-kamishibai/blob/main/docs/releases/v4.0.0-rc.9.md
+[docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
+[downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
+[rc10]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.10.md

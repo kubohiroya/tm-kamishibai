@@ -128,7 +128,7 @@ Copyright © 2026 Hiroya Kubo.
 | dispose                     | ownerが保持するresourceを、途中の解放失敗があっても残りを継続しながら一度だけ解放する終了操作                        |
 | scope                       | story、scene、action等の有効範囲。scope終了時にその範囲専用のvariableやresourceを解放する                            |
 | embedded asset              | asset byte列をSB3内へ格納し、実行時にnetworkを使わずmaterializeするdelivery                                          |
-| remote pose asset           | TMPose directory URL、またはpathname末尾が`.zip`のarchive URLを正本として、必要時にmodel filesを取得するdelivery     |
+| remote pose asset           | TM directory URL、またはpathname末尾が`.zip`のarchive URLを正本として、必要時にmodel filesを取得するdelivery     |
 | verified remote asset       | 台本がHTTPS URL、期待SHA-256 integrity、media type、sizeを明示し、取得後のbyte列を再検証してから使用するdelivery     |
 | asset dependency index      | story開始時または各sceneで必要になるasset IDを、`StoryDocument`から事前計算した対応表                                |
 | Asset Preload Coordinator   | dependency indexに従って遷移先assetのprepareを開始し、成功時のcommitと不要resourceのreleaseを調整するcore object     |
@@ -213,7 +213,7 @@ flowchart TB
     PORTS["Actor / media / SVG text / input / pose ports"]
     LIFECYCLE["Platform asset session<br/>embedded / remote materialization"]
     EXPR["Runtime Expression evaluator"]
-    VM["Scratch VM / renderer / audio / TMPose"]
+    VM["Scratch VM / renderer / audio / TM"]
   end
 
   MANIFEST --> CLI
@@ -448,7 +448,7 @@ sequenceDiagram
   participant Expr as Condition Evaluator
   participant Structured as Optional Structured Data
   participant Port as Runtime Port
-  participant Platform as TurboWarp / TMPose / UI
+  participant Platform as TurboWarp / TM / UI
 
   Session->>Controller: start(sceneId?, actionIndex?, variables?)
   Controller->>Controller: reset generation, trace, variables and failure state
@@ -674,9 +674,9 @@ rollback条件を同時にreviewしてください。
 
 | 状態       | 項目                             | 実装結果                                                                                                                                                                                                                                                                                                                                       |
 | ---------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 解消済み   | included sourceのruntime診断位置 | [PR #446](https://github.com/kubohiroya/tmpose-kamishibai/pull/446)で、versionと有限上限を持つallowlist形式の`sourceOrigins`をpackaged source descriptorへ保存した。memory候補、disk候補、runtime startupの各共有loader境界で、project-relativeな元`sourceId`／rangeを同じ`storyPath`へ復元する                                                |
-| 解消済み   | entry／composed sourceのbyte上限 | [PR #447](https://github.com/kubohiroya/tmpose-kamishibai/pull/447)で、`maxSourceBytes`を1 source fileごと、`maxTotalSourceBytes`をgraph全体、composed source、packaged include sourceに適用する契約へ統一した。`resolveDsl4BuildSourceLimits`で各境界の上限を導出し、境界値と超過1 byteを回帰testで固定する                                   |
-| 契約済み   | input経路のarbitration           | [PR #448](https://github.com/kubohiroya/tmpose-kamishibai/pull/448)で`createDsl4InputArbitration`を導入した。active actionのexact story keyはnavigationをdeferし、それ以外のmapped keyはactive actionを一度だけcancelする。受理したactor touchに続くreleaseは一度だけ抑止し、focus／IME／modifier／repeatとhistory／poseの既存policyを維持する |
+| 解消済み   | included sourceのruntime診断位置 | [PR #446](https://github.com/kubohiroya/tm-kamishibai/pull/446)で、versionと有限上限を持つallowlist形式の`sourceOrigins`をpackaged source descriptorへ保存した。memory候補、disk候補、runtime startupの各共有loader境界で、project-relativeな元`sourceId`／rangeを同じ`storyPath`へ復元する                                                |
+| 解消済み   | entry／composed sourceのbyte上限 | [PR #447](https://github.com/kubohiroya/tm-kamishibai/pull/447)で、`maxSourceBytes`を1 source fileごと、`maxTotalSourceBytes`をgraph全体、composed source、packaged include sourceに適用する契約へ統一した。`resolveDsl4BuildSourceLimits`で各境界の上限を導出し、境界値と超過1 byteを回帰testで固定する                                   |
+| 契約済み   | input経路のarbitration           | [PR #448](https://github.com/kubohiroya/tm-kamishibai/pull/448)で`createDsl4InputArbitration`を導入した。active actionのexact story keyはnavigationをdeferし、それ以外のmapped keyはactive actionを一度だけcancelする。受理したactor touchに続くreleaseは一度だけ抑止し、focus／IME／modifier／repeatとhistory／poseの既存policyを維持する |
 | 文書化済み | SB3とmanifestのtransaction境界   | SB3候補はatomicに置換するが、新規cache identityのmanifest保存は別transactionである。project全体のatomic updateとは呼ばない                                                                                                                                                                                                                     |
 | 意図的     | packaged componentの複数回検証   | build coreのmemory候補、disk候補、runtime startupで共有loaderを再実行する。独立build API、disk mutation検出、runtime trust boundaryを守る防御的重複である                                                                                                                                                                                      |
 | 意図的     | feature flagの二段階正規化       | platform hostは早期OFF gate、runtime startupはcore API境界として同じflag snapshotを再検証する。片方を省略する場合は各APIの単独利用時の契約を維持する                                                                                                                                                                                           |

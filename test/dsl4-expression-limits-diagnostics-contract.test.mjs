@@ -27,6 +27,9 @@ const contract = JSON.parse(
     'utf8',
   ),
 );
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 const expressionPackage = JSON.parse(
   await readFile(
     fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-runtime-expression/package.json')),
@@ -46,7 +49,10 @@ function validation(expression) {
 test('pins the Runtime Expression composition grammar and security exclusions', () => {
   assert.equal(contract.formatVersion, 1);
   assert.equal(expressionPackage.name, contract.runtimeExpression.package);
-  assert.equal(expressionPackage.version, contract.runtimeExpression.version);
+  assert.equal(
+    expressionPackage.version,
+    releasePins.extensions[contract.runtimeExpression.package],
+  );
   assert.ok(expressionPackage.exports[contract.runtimeExpression.entrypoint]);
 
   for (const expression of contract.runtimeExpression.allowed) {

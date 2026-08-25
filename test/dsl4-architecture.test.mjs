@@ -171,7 +171,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
     'media-action-port.js',
     'platform-asset-session.js',
     'svg-text-action-port.js',
-    'tmpose-model-adapter.js',
+    'tm-model-adapter.js',
     'turbowarp-actor-adapter.js',
     'turbowarp-broadcast-action-port.js',
   ]) {

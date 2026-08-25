@@ -3,7 +3,7 @@ import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
 import {dsl4StandardProductionFeatureFlags} from '../../src/dsl4/feature-flags.js';
 import {createDsl4BrowserRemoteAssetLoader} from '../../src/dsl4/platform/browser-remote-asset-loader.js';
-import {createDsl4ProjectTMPoseRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
+import {createDsl4ProjectTMRuntime} from '../../src/dsl4/platform/posenet-bundle.js';
 import {createDsl4PackagedBinaryRuntimeBridge} from '../../src/dsl4/platform/packaged-binary-runtime.js';
 import {createDsl4RuntimeErrorIndicator} from '../../src/dsl4/platform/runtime-error-indicator.js';
 import {createDsl4RuntimeApplicationMenu} from '../../src/dsl4/platform/runtime-application-menu.js';
@@ -30,7 +30,7 @@ import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profi
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_AUTHORING_PROFILE, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.9';
+const extensionVersion = '4.0.0-rc.10';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -85,7 +85,7 @@ function resolveRuntimeMount(Scratch) {
   return globalThis.document?.body;
 }
 
-function resolveBundledTMPoseRuntime() {
+function resolveBundledTMRuntime() {
   const runtime = typeof tmPose === 'object' && tmPose !== null ? tmPose : globalThis.tmPose;
   if (
     typeof runtime !== 'object' ||
@@ -191,7 +191,7 @@ class KamishibaiDsl4RuntimeExtension {
       description:
         'Participatory AI Kamishibai runtime. This source-composed extension preserves the original component notices in its source header.',
       docsURI:
-        'https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
+        'https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/',
       blockIconURI,
       creator: 'Hiroya Kubo',
       license: 'MPL-2.0',
@@ -1005,8 +1005,8 @@ class KamishibaiDsl4RuntimeExtension {
             });
           },
           createHostPort: async ({runtime}) => createDsl4TurboWarpTransitionPort({runtime}),
-          tmPoseRuntime: createDsl4ProjectTMPoseRuntime({
-            runtime: resolveBundledTMPoseRuntime(),
+          tmPoseRuntime: createDsl4ProjectTMRuntime({
+            runtime: resolveBundledTMRuntime(),
             globalObject: globalThis,
             project,
           }),
@@ -1066,10 +1066,10 @@ if (DSL4_AUTHORING_PROFILE) {
     runtimeVersion: extensionVersion,
     limits,
     resolveRuntimeMount,
-    resolveBundledTMPoseRuntime,
+    resolveBundledTMRuntime,
     loggedError,
     createRemoteAssetLoader: createDsl4BrowserRemoteAssetLoader,
-    createProjectTMPoseRuntime: createDsl4ProjectTMPoseRuntime,
+    createProjectTMRuntime: createDsl4ProjectTMRuntime,
     createTransitionPort: createDsl4TurboWarpTransitionPort,
   });
 }

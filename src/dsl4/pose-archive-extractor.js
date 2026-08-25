@@ -2,7 +2,7 @@ import {unzipSync} from 'fflate';
 
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 
-export const DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT = 'tmpose-zip-v1';
+export const DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT = 'tm-zip-v1';
 export const DSL4_POSE_ARCHIVE_MAX_COMPRESSION_RATIO = 100;
 export const dsl4PoseArchiveDefaultLimits = Object.freeze({
   maxArchiveBytes: 64 * 1024 * 1024,

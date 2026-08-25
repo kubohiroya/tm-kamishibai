@@ -117,7 +117,7 @@ function lock() {
       RescuePose: {
         kind: 'poseModel',
         contentIntegrity: hash('3'),
-        contentType: 'application/vnd.tmpose.pose-model',
+        contentType: 'application/vnd.tm.pose-model',
         size: 1000,
         providers: {
           embedded: {file: 'models/rescue'},

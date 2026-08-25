@@ -24,8 +24,8 @@ jobs:
       - name: Check canonical docs contract
         uses: actions/checkout@v7
         with:
-          repository: kubohiroya/tmpose-kamishibai-docs
-          ref: 12f0b7989534d98fe12654ecea756b664d75398b
+          repository: kubohiroya/tm-kamishibai-docs
+          ref: 8c6f0b3e804e11060e7ad456985f22c47a52d462
           path: .navigation-contract-source
           fetch-depth: 1
       - name: Compare generated contract and renderer

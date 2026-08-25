@@ -1440,7 +1440,7 @@ test('remote delivery rejects malformed or credential-bearing HTTPS URLs semanti
   }
 });
 
-test('accepts an unpinned TMPose directory URL while keeping partial verification metadata invalid', async () => {
+test('accepts an unpinned TM directory URL while keeping partial verification metadata invalid', async () => {
   const result = frontend.parse(`
 kamishibai: '4.0'
 assets:

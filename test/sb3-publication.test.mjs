@@ -20,8 +20,10 @@ import {
 import {renderSiteVersion, siteVersionPlaceholder} from '../scripts/site-version.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const urashimaWebUrl =
-  'https://kubohiroya.github.io/tmpose-kamishibai-samples/stories/urashima/web/';
+const urashimaWebUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/stories/urashima/web/';
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 test('keeps static distribution sources free of SB3 binaries', async () => {
   const downloadEntries = await readdir(path.join(projectRoot, 'site/downloads'));
@@ -95,7 +97,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
-    '0.8.0',
+    releasePins.devDependencies['@kubohiroya/sb3-toolchain'],
     'SB3 toolchain dependency must use the reviewed exact npm version.',
   );
   assert.equal(packageJson.devDependencies['@kubohiroya/sb3-toolchain-legacy'], undefined);
@@ -110,10 +112,10 @@ test('renders ordered versioned download cards from one release catalog', async 
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
   assert.doesNotMatch(readme, /allowBuilds/u);
-  assert.match(readme, /github\.com\/kubohiroya\/tmpose-kamishibai-samples/u);
-  assert.match(readme, /kubohiroya\.github\.io\/tmpose-kamishibai-samples\//u);
-  assert.match(readme, /github\.com\/kubohiroya\/tmpose-kamishibai-docs/u);
-  assert.match(readme, /kubohiroya\.github\.io\/tmpose-kamishibai-docs\//u);
+  assert.match(readme, /github\.com\/kubohiroya\/tm-kamishibai-samples/u);
+  assert.match(readme, /kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
+  assert.match(readme, /github\.com\/kubohiroya\/tm-kamishibai-docs/u);
+  assert.match(readme, /kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
   assert.doesNotMatch(readme, /\]\(docs\//u);
   assert.doesNotMatch(readme, /setLoadingCostume=/u);
   assert.match(readme, /English \| \[日本語\]\(README\.ja\.md\)/u);
@@ -189,7 +191,7 @@ test('downloads a bounded GitHub Release asset and verifies its catalog identity
     filename: 'kamishibai-9.8.7.sb3',
     series: '9.8',
     version: '9.8.7',
-    url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v9.8.7/kamishibai-9.8.7.sb3',
+    url: `https://github.com${releasePins.release.repositoryPath}/releases/download/v9.8.7/kamishibai-9.8.7.sb3`,
     size: archive.byteLength,
     sha256: createHash('sha256').update(archive).digest('hex'),
   };
@@ -261,7 +263,7 @@ test('opens the Urashima web sample from the top-page Web card', async () => {
   assert.doesNotMatch(siteContentsCards, /Web版を開く|stories\/urashima\/web/u);
   assert.match(
     siteContentsCards,
-    /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-docs\/workshops\/"/u,
+    /href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\/workshops\/"/u,
   );
   assert.match(siteContentsCards, /ワークショップ一覧へ/u);
   assert.match(webCard, /class="content-card featured-web-card"/u);
@@ -280,7 +282,7 @@ test('links the public sample site without restoring the retired local page', as
   );
 
   for (const page of pages) {
-    assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/tmpose-kamishibai-samples\/"/u);
+    assert.match(page, /href="https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\/"/u);
     assert.doesNotMatch(page, /href="(?:\.\.\/)*samples\/"/u);
   }
 });

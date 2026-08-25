@@ -138,7 +138,7 @@ function poseArchiveLimits() {
 
 function factories(log, overrides = {}) {
   const assetManagerCreateArguments = [];
-  const tmposeCreateArguments = [];
+  const tmCreateArguments = [];
   const assetManagerComposition = {
     async registerProjectAsset(input) {
       log.push(['media.register-project', input.name]);
@@ -194,7 +194,7 @@ function factories(log, overrides = {}) {
     },
     ...overrides.assetManager,
   };
-  const tmposeComposition = {
+  const tmComposition = {
     async registerPoseModel(input) {
       log.push(['pose.register', input.name]);
       return {name: input.name, labels: ['idle', 'rescue']};
@@ -242,22 +242,22 @@ function factories(log, overrides = {}) {
     subscribeAccumulatedPose() {
       return () => {};
     },
-    ...overrides.tmpose,
+    ...overrides.tm,
   };
   return {
     assetManagerComposition,
     assetManagerCreateArguments,
-    tmposeCreateArguments,
-    tmposeComposition,
+    tmCreateArguments,
+    tmComposition,
     createAssetManagerComposition(...args) {
       assetManagerCreateArguments.push(args);
       log.push(['media.create']);
       return assetManagerComposition;
     },
-    createTMPoseComposition(options) {
-      tmposeCreateArguments.push(options);
+    createTMComposition(options) {
+      tmCreateArguments.push(options);
       log.push(['pose.create', options.runtime]);
-      return tmposeComposition;
+      return tmComposition;
     },
   };
 }
@@ -275,7 +275,7 @@ function options(component, log, overrides = {}) {
         log.push(['loading', payload.visible]);
       },
       createAssetManagerComposition: created.createAssetManagerComposition,
-      createTMPoseComposition: created.createTMPoseComposition,
+      createTMComposition: created.createTMComposition,
     },
   };
 }
@@ -290,7 +290,7 @@ test('creates one shared composition pair and routes a complete lifecycle throug
   const session = createDsl4PlatformAssetSession(setup.value);
 
   assert.strictEqual(session.assetManagerComposition, setup.created.assetManagerComposition);
-  assert.strictEqual(session.tmposeComposition, setup.created.tmposeComposition);
+  assert.strictEqual(session.tmComposition, setup.created.tmComposition);
   assert.equal(typeof session.asyncInputComposition.waitForPoseCandidate, 'function');
   assert.equal(typeof session.asyncInputComposition.waitForKeyCandidate, 'function');
   assert.equal(typeof session.asyncInputComposition.waitForActorTouchCandidate, 'function');
@@ -325,7 +325,7 @@ test('creates one shared composition pair and routes a complete lifecycle throug
   );
 });
 
-test('maps the DSL pose model initialization policy into TMPose composition options', async () => {
+test('maps the DSL pose model initialization policy into TM composition options', async () => {
   const component = runtimeComponent();
   component.storyDocument.poseRecognition = {
     modelInitialization: {policy: 'latest-needed', parallel: true},
@@ -334,7 +334,7 @@ test('maps the DSL pose model initialization policy into TMPose composition opti
   const setup = options(component, log);
   const session = createDsl4PlatformAssetSession(setup.value);
 
-  assert.deepEqual(setup.created.tmposeCreateArguments, [
+  assert.deepEqual(setup.created.tmCreateArguments, [
     {
       runtime: setup.tmPoseRuntime,
       modelInitializationPolicy: 'latest-needed',
@@ -369,7 +369,7 @@ test('passes pose, key, and actor touch sources into one Async Input composition
     },
   });
 
-  assert.strictEqual(receivedOptions.poseSource, setup.created.tmposeComposition);
+  assert.strictEqual(receivedOptions.poseSource, setup.created.tmComposition);
   assert.strictEqual(receivedOptions.keySource, keySource);
   assert.strictEqual(receivedOptions.actorTouchSource, actorTouchSource);
   await session.dispose('source-forwarding-complete');
@@ -431,9 +431,9 @@ test('keeps pose feedback observer behind an explicit default-off session gate',
 test('gates pose preview mirroring and uses one composition method before or during camera use', async () => {
   const disabledLog = [];
   const disabledSetup = options(runtimeComponent(), disabledLog);
-  Object.defineProperty(disabledSetup.created.tmposeComposition, 'setPreviewMirroring', {
+  Object.defineProperty(disabledSetup.created.tmComposition, 'setPreviewMirroring', {
     get() {
-      assert.fail('disabled pose preview mirroring must not inspect the TMPose method');
+      assert.fail('disabled pose preview mirroring must not inspect the TM method');
     },
   });
   const disabled = createDsl4PlatformAssetSession(disabledSetup.value);
@@ -453,7 +453,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
   let cameraRunning = false;
   const enabledLog = [];
   const enabledSetup = options(runtimeComponent(), enabledLog, {
-    tmpose: {
+    tm: {
       startCamera() {
         cameraRunning = true;
       },
@@ -470,7 +470,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
     posePreviewMirroringEnabled: true,
   });
   enabled.posePreviewPort.setPosePreviewMirroring('mirrored');
-  await enabled.tmposeComposition.startCamera();
+  await enabled.tmComposition.startCamera();
   enabled.posePreviewPort.setPosePreviewMirroring('unmirrored');
   assert.deepEqual(
     enabledLog.filter(([event]) => event === 'pose.preview-mirroring'),
@@ -487,7 +487,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
   );
 });
 
-test('keeps the pose overlay source opt-in and maps normalized DSL settings to TMPose 1.12 APIs', async () => {
+test('keeps the pose overlay source opt-in and maps normalized DSL settings to TM 2.0 APIs', async () => {
   const component = runtimeComponent();
   component.storyDocument.poseRecognition = {
     preview: {
@@ -518,7 +518,7 @@ test('keeps the pose overlay source opt-in and maps normalized DSL settings to T
 
   const enabledLog = [];
   const enabledSetup = options(component, enabledLog, {
-    tmpose: {
+    tm: {
       showPoseOverlay() {
         enabledLog.push(['overlay.show']);
       },
@@ -558,7 +558,7 @@ test('keeps the pose overlay source opt-in and maps normalized DSL settings to T
 
   const noConfigLog = [];
   const noConfigSetup = options(runtimeComponent(), noConfigLog, {
-    tmpose: {
+    tm: {
       hidePoseOverlay() {
         noConfigLog.push(['overlay.hide']);
       },
@@ -581,7 +581,7 @@ test('gates camera preview control methods and exposes leased image URLs only wh
     'getCameraSelection',
     'getActiveCamera',
   ]) {
-    Object.defineProperty(disabledSetup.created.tmposeComposition, method, {
+    Object.defineProperty(disabledSetup.created.tmComposition, method, {
       get() {
         assert.fail(`disabled camera preview controls must not inspect ${method}`);
       },
@@ -602,7 +602,7 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   );
 
   const mirroringOnlySetup = options(runtimeComponent(), [], {
-    tmpose: {setPreviewMirroring() {}},
+    tm: {setPreviewMirroring() {}},
   });
   const mirroringOnly = createDsl4PlatformAssetSession({
     ...mirroringOnlySetup.value,
@@ -619,7 +619,7 @@ test('gates camera preview control methods and exposes leased image URLs only wh
   let selection = 'default';
   const revoked = [];
   const enabledSetup = options(runtimeComponent(), log, {
-    tmpose: {
+    tm: {
       setPreviewMirroring(mode) {
         log.push(['control.mirroring', mode]);
       },
@@ -799,7 +799,7 @@ test('extracts a verified remote pose archive inside the platform boundary', asy
   const log = [];
   let registration;
   const setup = options(component, log, {
-    tmpose: {
+    tm: {
       async registerPoseModel(input) {
         registration = input;
         log.push(['pose.register', input.name]);
@@ -838,7 +838,7 @@ test('extracts an unpinned zip URL with the platform finite defaults', async () 
   const log = [];
   let registration;
   const setup = options(component, log, {
-    tmpose: {
+    tm: {
       async registerPoseModel(input) {
         registration = input;
         return {name: input.name, labels: ['rescue']};
@@ -879,7 +879,7 @@ test('bounds repeated remote pose materialization and persistent cache bytes', a
   let registrations = 0;
   let modelReleases = 0;
   const setup = options(component, log, {
-    tmpose: {
+    tm: {
       async registerPoseModel(input) {
         registrations += 1;
         activeModels += 1;
@@ -963,7 +963,7 @@ test('attempts every final cleanup and aggregates lifecycle and composition fail
         throw new Error('media releaseAll failed');
       },
     },
-    tmpose: {
+    tm: {
       async releasePoseModel(name) {
         log.push(['pose.release', name]);
         throw failure;
@@ -1039,11 +1039,11 @@ test('rejects invalid input before factories and cleans an incomplete factory ch
     () =>
       createDsl4PlatformAssetSession({
         ...setup.value,
-        createTMPoseComposition() {
-          throw new Error('TMPose creation failed');
+        createTMComposition() {
+          throw new Error('TM creation failed');
         },
       }),
-    /TMPose creation failed/u,
+    /TM creation failed/u,
   );
   assert.deepEqual(log, [['media.create'], ['media.release-all']]);
 

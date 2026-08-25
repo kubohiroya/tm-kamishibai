@@ -4,12 +4,12 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #390／#538実装済み
 
-関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
-[#262](https://github.com/kubohiroya/tmpose-kamishibai/issues/262)、
-[#265](https://github.com/kubohiroya/tmpose-kamishibai/issues/265)、
-[#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#390](https://github.com/kubohiroya/tmpose-kamishibai/issues/390)、
-[#538](https://github.com/kubohiroya/tmpose-kamishibai/issues/538)
+関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
+[#262](https://github.com/kubohiroya/tm-kamishibai/issues/262)、
+[#265](https://github.com/kubohiroya/tm-kamishibai/issues/265)、
+[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
+[#390](https://github.com/kubohiroya/tm-kamishibai/issues/390)、
+[#538](https://github.com/kubohiroya/tm-kamishibai/issues/538)
 
 機械可読な契約:
 [`web-preview-adapter-contract.json`](../../test/fixtures/dsl4/web-preview-adapter-contract.json)

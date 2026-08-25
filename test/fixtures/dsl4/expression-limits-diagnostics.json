@@ -2,7 +2,6 @@
   "formatVersion": 1,
   "runtimeExpression": {
     "package": "@kubohiroya/turbowarp-runtime-expression",
-    "version": "0.4.0",
     "entrypoint": "./composition",
     "limits": {
       "maxExpressionCodeUnits": 4096,
@@ -56,7 +55,9 @@
     },
     "structuredData": {
       "source": "src/dsl4/structured-data.js",
-      "values": {"maxActiveIterators": 1024}
+      "values": {
+        "maxActiveIterators": 1024
+      }
     },
     "actionDiscovery": {
       "source": "src/dsl4/action-hat-detector.js",

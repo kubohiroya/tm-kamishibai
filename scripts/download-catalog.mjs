@@ -3,9 +3,9 @@ import {readFileSync} from 'node:fs';
 
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
-  'https://kubohiroya.github.io/tmpose-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
+  'https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(new URL('../release-metadata/4.0.0-rc.9.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../release-metadata/4.0.0-rc.10.json', import.meta.url), 'utf8'),
 );
 const dsl4PublishedArtifact =
   dsl4ReleaseMetadata.state === 'published'
@@ -42,7 +42,7 @@ export const downloadCatalog = deepFreeze([
     artifact: {
       buildDate: '2026-08-06',
       filename: 'kamishibai-3.2.sb3',
-      url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
+      url: 'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3',
       sha256: '9c94368b68297e68c3b37a0e2b15a81c07461dd78a2d0c876b0805ef07ea1d11',
       size: 853_938,
       sourceCommit: '28015ac9ff5221f371e8bd0357a7750ce40bbf7c',
@@ -60,7 +60,7 @@ export const downloadCatalog = deepFreeze([
     artifact: {
       buildDate: '2026-08-04',
       filename: 'kamishibai-3.1.sb3',
-      url: 'https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.1.9/kamishibai-3.1.sb3',
+      url: 'https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.1.9/kamishibai-3.1.sb3',
       sha256: '31a4358a459407624aabe748e9b3ba74d08667d0550f06078a72da100d3ae018',
       size: 633_465,
       sourceCommit: '96b1fe66e052f10da2938389f98fd15c95fcfdee',
@@ -114,7 +114,7 @@ for (const entry of downloadCatalog) {
     assert.match(
       entry.artifact.url,
       new RegExp(
-        `^https://github\\.com/kubohiroya/tmpose-kamishibai/releases/download/v${entry.version.replaceAll('.', '\\.')}/${entry.artifact.filename.replaceAll('.', '\\.')}$`,
+        `^https://github\\.com/kubohiroya/tm-kamishibai/releases/download/v${entry.version.replaceAll('.', '\\.')}/${entry.artifact.filename.replaceAll('.', '\\.')}$`,
         'u',
       ),
       `${entry.series} release asset URL is invalid.`,
