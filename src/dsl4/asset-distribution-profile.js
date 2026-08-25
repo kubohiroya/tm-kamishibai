@@ -1,6 +1,6 @@
 import {deepFreeze} from './story-document.js';
 
-const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
+const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
 const deliveryPolicies = new Set(['embedded', 'remote']);
 const networkPolicies = new Set(['allowed', 'forbidden']);
 const configKeys = new Set(['formatVersion', 'profiles', 'providers']);
@@ -341,7 +341,7 @@ function lockAsset(input, name) {
   const remote = normalized.providers.remote;
   if (
     remote &&
-    normalized.kind !== 'poseModel' &&
+    normalized.kind !== 'recognitionModel' &&
     (normalized.contentIntegrity !== remote.transportIntegrity ||
       normalized.contentType !== remote.contentType ||
       normalized.size !== remote.size)

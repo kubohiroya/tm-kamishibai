@@ -261,9 +261,9 @@ test('requires the runtime and App Shell flags and remains development-only', ()
       'dsl4Debugger',
     ],
     fallbackCommands: [
-      'tmpose-kamishibai preview-dsl4 --watch',
-      'tmpose-kamishibai validate-dsl4',
-      'tmpose-kamishibai build-dsl4',
+      'tm-kamishibai preview-dsl4 --watch',
+      'tm-kamishibai validate-dsl4',
+      'tm-kamishibai build-dsl4',
     ],
   });
 });

@@ -46,7 +46,7 @@ kamishibai: '4.0'
 assets:
   Project: backdrop
   Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/pose
     loading: eager
 controls:
@@ -89,7 +89,7 @@ function fixtureSnapshot() {
       assets: [
         {
           id: 'Pose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'eager',
           source: {
             type: 'file',
@@ -145,7 +145,7 @@ function baseProject(descriptor, source, artifact) {
     ],
     monitors: [],
     extensions: [],
-    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'tmpose-kamishibai test'},
+    meta: {semver: '3.0.0', vm: '11.3.0', agent: 'tm-kamishibai test'},
   };
 }
 

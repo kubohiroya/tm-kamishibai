@@ -50,7 +50,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
         channel: 'bundled',
       },
       version: releasePins.release.version,
-      package: '@kubohiroya/tmpose-kamishibai',
+      package: '@kubohiroya/tm-kamishibai',
     },
     extensionBundle: {
       integrity: fixture.input.extensionBundle.integrity,

@@ -87,7 +87,7 @@ kamishibai: '4.0'
 assets:
   Tick: sound
   Charge: sound
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:
@@ -132,7 +132,7 @@ assets:
       integrity: sha256-2222222222222222222222222222222222222222222222222222222222222222
       contentType: image/svg+xml
       size: 6
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:
@@ -252,7 +252,7 @@ async function packagedPoseProject(sourceText) {
       loading: asset.loading,
       ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
       source:
-        asset.kind === 'poseModel'
+        asset.kind === 'recognitionModel'
           ? {
               type: 'file',
               inputPath: asset.file,
@@ -1189,7 +1189,7 @@ kamishibai: '4.0'
 assets:
   Tick: sound
   Charge: sound
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -1230,7 +1230,7 @@ kamishibai: '4.0'
 assets:
   Tick: sound
   Charge: sound
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -1274,11 +1274,11 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   sequence:
@@ -1293,7 +1293,7 @@ controls:
       Space: navigation.nextAction
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1374,11 +1374,11 @@ kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   sequence:
     confidenceThreshold: 0.5
     fullConfidenceHoldSeconds: 0.1
@@ -1389,13 +1389,13 @@ controls:
       Space: navigation.nextAction
 scenes:
   first:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
             - pose: help
   second:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1543,11 +1543,11 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -1560,7 +1560,7 @@ controls:
       Space: navigation.nextAction
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1688,7 +1688,7 @@ kamishibai: '4.0'
 assets:
   Tick: sound
   Charge: sound
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -2739,7 +2739,7 @@ kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
@@ -2751,7 +2751,7 @@ scenes:
   opening:
     - goto: ending
   unreachablePose:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:

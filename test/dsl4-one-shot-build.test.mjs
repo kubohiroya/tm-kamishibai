@@ -44,7 +44,7 @@ assets:
     file: assets/opening.svg
     loading: lazy
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 controls:
   keymaps:
@@ -52,7 +52,7 @@ controls:
       Space: navigation.nextAction
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - stage: OpeningImage
 `;
@@ -217,7 +217,7 @@ test('builds and startup-validates one deterministic self-contained component pe
   });
 });
 
-test('builds a local poseModel zip into the same three-file runtime bundle', async () => {
+test('builds a local recognitionModel zip into the same three-file runtime bundle', async () => {
   await withProject(localPoseArchiveSource, async (directory) => {
     const built = await buildDsl4RuntimeComponent(buildOptions(directory, 'unbundled'));
     const pose = built.runtimeComponent.assetBundle.manifest.assets.find(

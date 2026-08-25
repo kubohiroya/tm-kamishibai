@@ -142,7 +142,7 @@ assets:
     loading: lazy
     retention: story
   救助Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: rescue-pose
     loading: lazy
     retention: scene
@@ -157,7 +157,7 @@ assets:
       contentType: image/webp
       size: 654321
   LivePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     retention: scene
@@ -191,10 +191,10 @@ TM 3.2と同じdirectory URLを`url`だけで指定できます。この通常�
 | `loading`   | `eager` / `lazy`      | いつ実行可能なresourceへmaterializeするか         |
 | `retention` | `scene` / `story`     | materialize済みresourceをメモリ上でいつまで保つか |
 
-`backdrop`、`costume`、`sound`、`poseModel`の名前付き形式には`loading`と`retention`を指定できます。
-`loading`の省略時と短形式は`eager`です。`retention`の既定値は`poseModel`が`scene`、それ以外が
+`backdrop`、`costume`、`image`、`sound`、`recognitionModel`の名前付き形式には`loading`と`retention`を指定できます。
+`loading`の省略時と短形式は`eager`です。`retention`の既定値は`recognitionModel`が`scene`、それ以外が
 `story`です。未知の値はschema errorとします。モデル数に比例してPoseNet／TensorFlow resourceが
-蓄積しないよう、`poseModel`には`retention: scene`を推奨します。
+蓄積しないよう、`recognitionModel`には`retention: scene`を推奨します。
 
 `eager`なremote assetはentry sceneへ入る前に準備します。`lazy`はembedded byte列のdecode、登録、
 モデル初期化、またはremote byte列の取得と検証を遅延させます。controllerが次の遷移先sceneを
@@ -213,7 +213,7 @@ scene遷移は二段階でcommitします。controllerは遷移先を一つに�
 assetだけを先読みします。準備に失敗した場合はcurrent sceneとそのresourceを維持し、遷移をcommitしません。
 準備に成功した場合はcurrent／nextのdependencyを比較し、nextでも必要なresourceは再登録せず、
 `retention: scene`でnextが必要としないresourceだけをcommit時に解放します。履歴移動で解放済みsceneへ
-戻る場合は永続cacheまたはembedded sourceから再materializeします。poseModelは先読み中にcurrentとselected
+戻る場合は永続cacheまたはembedded sourceから再materializeします。recognitionModelは先読み中にcurrentとselected
 nextの最大二つが一時共存し得ますが、訪問済みmodelをすべて保持しません。
 
 ### 3.4 runtime境界と失敗
@@ -254,7 +254,7 @@ IndexedDBへ保存した検証済みbyte列の寿命は`retention`とは別に�
 最終利用からのTTL、LRU、byte budget、format versionによりboundedに掃除し、保存失敗時は機械可読warningを
 返します。verified remote assetはvalid cache hitならnetworkを呼ばず、missまたは不正recordの場合だけ取得と
 再検証を行います。
-裸URL poseModelはsession内のmaterialize済みresourceだけを再利用し、解放後の再materializeではURLから
+裸URL recognitionModelはsession内のmaterialize済みresourceだけを再利用し、解放後の再materializeではURLから
 現在のmodelを取得します。
 
 DSL 4.0は台本をまたいでcacheを共有しません。builderは初回にstable story IDと台本ファイルのbasenameから
@@ -332,14 +332,14 @@ baseline + 8 MiBです。WebGL／WASM allocatorが解放済み領域をpoolへ�
 
 ## 4. 共通設定
 
-表紙、ポーズ認識音、SVG Textは、各値の意味が名前から分かるmappingで記述します。
+表紙、認識音、SVG Textは、各値の意味が名前から分かるmappingで記述します。
 
 ```yaml
 cover:
   backdrop: Beach
   bgm: OpeningSound
 
-poseRecognition:
+recognition:
   idleSound: ClockTicking
   chargeSound: Success
   modelInitialization:
@@ -537,7 +537,7 @@ native `reveal`と旧`characterIntervalSeconds`系を同じeffective styleへ混
 
 `sequence`は`Actor.pose.steps`を順番に成立させる対象pose専用チャージです。
 `fullConfidenceHoldSeconds: 1`はconfidence 1.0で完了まで1秒、0.5なら約2秒を意味します。
-`selection`は`poseInputToChangeScene`が候補から1件を選ぶ時間減衰付き蓄積スコアであり、
+`selection`は`poseInputToChangeScene`または`imageInputToChangeScene`が候補から1件を選ぶ時間減衰付き蓄積スコアであり、
 `sequence`のチャージとは状態を共有しません。省略した数値には上の例の値を既定値として使います。
 
 sequenceの進捗は、対象poseのconfidenceが`confidenceThreshold`以上なら
@@ -550,7 +550,7 @@ sequenceの進捗は、対象poseのconfidenceが`confidenceThreshold`以上な�
 selection待機があればcancelします。sequence中に開始されたselection待機は購読せず、sequence
 終了後にだけ開始します。この間のselection eventでscene遷移してはいけません。
 
-selectionの有効期限は`poseInputToChangeScene`の1回のaction実行です。開始時に以前のselection
+selectionの有効期限は`poseInputToChangeScene`または`imageInputToChangeScene`の1回のaction実行です。開始時に以前のselection
 待機を解除し、selection用の蓄積scoreを0へresetしてから購読します。同じruntimeでselectionを
 重ねた場合は直近の1回だけを残し、以前の待機を自動cancelします。候補決定、scene移動、巻き戻し、
 停止、live reload、`Actor.pose`開始、runtime解放で失効し、同じsceneへ再入場した場合も新しい
@@ -798,7 +798,7 @@ branches:
     - else: ending
 ```
 
-scene固有設定がなければaction列を直接書きます。`poseModel`などを持つ場合は長形式を使います。
+scene固有設定がなければaction列を直接書きます。`recognitionModel`などを持つ場合は長形式を使います。
 
 ```yaml
 scenes:
@@ -807,12 +807,31 @@ scenes:
     - wait: 1
 
   rescue:
-    poseModel: 救助Pose
+    recognitionModel: 救助Pose
+    recognitionMode: pose
     posePreview:
       mirroring: unmirrored
     actions:
       - stage: Ocean
       - branch: rescueResult
+```
+
+画像認識でscene遷移する場合も同じ`recognitionModel` assetを参照し、`recognitionMode: image`を明示します。
+
+```yaml
+assets:
+  FoodClassifier:
+    kind: recognitionModel
+    file: food-image-model
+
+scenes:
+  quiz:
+    recognitionModel: FoodClassifier
+    recognitionMode: image
+    actions:
+      - imageInputToChangeScene:
+          apple: appleScene
+          banana: bananaScene
 ```
 
 pose preview mirroringのsurface境界は次のとおりです。いずれも台本値を個別解釈せず、同じschema、
@@ -1069,7 +1088,9 @@ duration数を同じ構造に固定し、少なくとも一つのdurationを正�
 
 `Actor.pose.steps`は配列の全要素を上から順に実行します。各stepは`skin`を先に適用し、`pose`の
 チャージ完了を待ち、`sound`を鳴らしてから次へ進みます。`skin`と`sound`は省略できます。
-`poseInputToChangeScene`は同時に待つ候補であり、最初に選ばれた1件だけのsceneへ移動します。
+`poseInputToChangeScene`と`imageInputToChangeScene`は同時に待つ候補であり、最初に選ばれた1件だけの
+sceneへ移動します。どちらもsceneの`recognitionModel`を使い、画像認識では`recognitionMode: image`を
+明示します。
 
 一つのaction mappingに複数のaction keyを置けません。`stableId`は任意ですが、指定した場合は
 文書全体で一意にします。

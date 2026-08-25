@@ -42,9 +42,9 @@ function manifest(storyDocument, integrities = {}) {
             ? {
                 type: 'file',
                 inputPath: asset.file,
-                mode: asset.kind === 'poseModel' ? 'directory' : 'file',
+                mode: asset.kind === 'recognitionModel' ? 'directory' : 'file',
                 files:
-                  asset.kind === 'poseModel'
+                  asset.kind === 'recognitionModel'
                     ? [
                         {path: 'metadata.json', size: 20, integrity: sri(`${id}:metadata`)},
                         {path: 'model.json', size: 20, integrity: sri(`${id}:model`)},

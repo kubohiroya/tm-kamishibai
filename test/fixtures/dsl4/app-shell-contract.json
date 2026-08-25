@@ -17,6 +17,7 @@
       "keyInputToChangeScene",
       "touchInputToChangeScene",
       "poseInputToChangeScene",
+      "imageInputToChangeScene",
       "show",
       "hide",
       "setTransparency",

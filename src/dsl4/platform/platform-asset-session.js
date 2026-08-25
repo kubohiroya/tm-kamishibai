@@ -230,7 +230,7 @@ export function createDsl4PlatformAssetSession(options) {
   const remotePoseArchiveRequired = componentAssetBundle.manifest.assets.some(
     /** @param {unknown} asset */ (asset) =>
       isRecord(asset) &&
-      asset.kind === 'poseModel' &&
+      asset.kind === 'recognitionModel' &&
       isRecord(asset.source) &&
       asset.source.type === 'remote' &&
       (typeof asset.source.integrity === 'string' || isDsl4RemotePoseArchiveUrl(asset.source.url)),
@@ -459,13 +459,11 @@ export function createDsl4PlatformAssetSession(options) {
     });
 
     const storyDocument = /** @type {Record<string, unknown>} */ (runtimeComponent.storyDocument);
-    const poseRecognition = isRecord(storyDocument.poseRecognition)
-      ? storyDocument.poseRecognition
-      : {};
-    const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : {};
+    const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
     const poseOverlay = isRecord(posePreview.overlay) ? posePreview.overlay : null;
-    const modelInitialization = isRecord(poseRecognition.modelInitialization)
-      ? poseRecognition.modelInitialization
+    const modelInitialization = isRecord(recognition.modelInitialization)
+      ? recognition.modelInitialization
       : {};
     const modelInitializationPolicy =
       modelInitialization.policy === 'latest-needed' ? 'latest-needed' : 'legacy';

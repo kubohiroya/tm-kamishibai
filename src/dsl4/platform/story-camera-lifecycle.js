@@ -3,7 +3,7 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const poseRecognitionCommands = new Set(['pose', 'poseInputToChangeScene']);
+const recognitionCommands = new Set(['pose', 'poseInputToChangeScene', 'imageInputToChangeScene']);
 const dsl32FullStagePreviewOpacity = 0.2;
 
 /** @param {unknown} storyDocument */
@@ -14,7 +14,7 @@ export function storyUsesPoseRecognition(storyDocument) {
       isRecord(scene) &&
       Array.isArray(scene.actions) &&
       scene.actions.some(
-        (action) => isRecord(action) && poseRecognitionCommands.has(String(action.command)),
+        (action) => isRecord(action) && recognitionCommands.has(String(action.command)),
       ),
   );
 }

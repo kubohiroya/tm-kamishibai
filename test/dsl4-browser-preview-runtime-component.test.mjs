@@ -223,11 +223,11 @@ test('extracts a local pose archive during watched browser preview capture', asy
   const result = await sourceResult(`kamishibai: '4.0'
 assets:
   Rescue:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue.ZIP
 scenes:
   opening:
-    poseModel: Rescue
+    recognitionModel: Rescue
     actions: []
 `);
   const component = await createDsl4BrowserPreviewRuntimeComponent({

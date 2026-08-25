@@ -181,10 +181,8 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput) {
     /** @type {Record<string, any>} */
     let created;
     try {
-      const poseRecognition = isRecord(storyDocument.poseRecognition)
-        ? storyDocument.poseRecognition
-        : {};
-      const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+      const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : {};
+      const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
       const posePreviewControls = isRecord(posePreview.controls) ? posePreview.controls : {};
       const cameraMirroringControlEnabled =
         featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);

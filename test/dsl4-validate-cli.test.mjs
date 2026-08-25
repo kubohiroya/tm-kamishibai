@@ -11,7 +11,7 @@ import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builde
 import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
-const binPath = path.join(repositoryRoot, 'bin', 'tmpose-kamishibai.mjs');
+const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
 const schema = JSON.parse(
   await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
 );

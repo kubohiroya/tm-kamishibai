@@ -388,15 +388,14 @@ export function validateDsl4Semantics(
     );
   }
 
-  const poseRecognition = /** @type {Record<string, unknown> | undefined} */ (
-    story.poseRecognition
-  );
-  if (poseRecognition) {
+  const recognition = /** @type {Record<string, unknown> | undefined} */ (story.recognition);
+  if (recognition) {
+    const recognitionPath = '$.recognition';
     for (const key of ['idleSound', 'chargeSound']) {
-      if (!Object.hasOwn(poseRecognition, key)) continue;
-      addReferenceIssue(issues, assets, poseRecognition[key], 'sound', `$.poseRecognition.${key}`);
+      if (!Object.hasOwn(recognition, key)) continue;
+      addReferenceIssue(issues, assets, recognition[key], 'sound', `${recognitionPath}.${key}`);
     }
-    const preview = /** @type {Record<string, unknown>} */ (poseRecognition.preview ?? {});
+    const preview = /** @type {Record<string, unknown>} */ (recognition.preview ?? {});
     const previewControls = /** @type {Record<string, unknown>} */ (preview.controls ?? {});
     const mirroringControl = /** @type {Record<string, unknown>} */ (
       previewControls.mirroring ?? {}
@@ -408,14 +407,14 @@ export function validateDsl4Semantics(
     /** @type {Array<[string, unknown]>} */
     const controlAssetReferences = [
       [
-        '$.poseRecognition.preview.controls.mirroring.assets.showMirrored',
+        `${recognitionPath}.preview.controls.mirroring.assets.showMirrored`,
         mirroringAssets.showMirrored,
       ],
       [
-        '$.poseRecognition.preview.controls.mirroring.assets.showUnmirrored',
+        `${recognitionPath}.preview.controls.mirroring.assets.showUnmirrored`,
         mirroringAssets.showUnmirrored,
       ],
-      ['$.poseRecognition.preview.controls.cameraMenu.buttonAsset', cameraMenuControl.buttonAsset],
+      [`${recognitionPath}.preview.controls.cameraMenu.buttonAsset`, cameraMenuControl.buttonAsset],
     ];
     for (const [path, id] of controlAssetReferences) {
       if (typeof id !== 'string') continue;
@@ -454,15 +453,15 @@ export function validateDsl4Semantics(
     const sceneRecord = Array.isArray(scene)
       ? null
       : /** @type {Record<string, unknown>} */ (scene);
-    const scenePoseModel = sceneRecord?.poseModel;
+    const sceneRecognitionModel = sceneRecord?.recognitionModel;
     if (!Array.isArray(scene)) {
-      if (scenePoseModel) {
+      if (sceneRecord?.recognitionModel) {
         addReferenceIssue(
           issues,
           assets,
-          scenePoseModel,
-          'poseModel',
-          `${propertyPath('$.scenes', sceneId)}.poseModel`,
+          sceneRecognitionModel,
+          'recognitionModel',
+          `${propertyPath('$.scenes', sceneId)}.recognitionModel`,
         );
       }
     }
@@ -501,7 +500,8 @@ export function validateDsl4Semantics(
       } else if (
         key === 'keyInputToChangeScene' ||
         key === 'touchInputToChangeScene' ||
-        key === 'poseInputToChangeScene'
+        key === 'poseInputToChangeScene' ||
+        key === 'imageInputToChangeScene'
       ) {
         const argumentRecord = /** @type {Record<string, unknown>} */ (value);
         const routes = /** @type {Record<string, string>} */ (
@@ -511,7 +511,9 @@ export function validateDsl4Semantics(
           if (key === 'keyInputToChangeScene') storyInputCodes.set(route, `${actionPath}.${route}`);
           addReferenceIssue(issues, scenes, destination, undefined, `${actionPath}.${route}`);
         }
-        if (key === 'poseInputToChangeScene') usesPoseRecognition = true;
+        if (key === 'poseInputToChangeScene' || key === 'imageInputToChangeScene') {
+          usesPoseRecognition = true;
+        }
       } else if (key.includes('.')) {
         const separator = key.lastIndexOf('.');
         const actor = key.slice(0, separator);
@@ -701,11 +703,12 @@ export function validateDsl4Semantics(
         }
       }
     });
-    if (usesPoseRecognition && typeof scenePoseModel !== 'string') {
+    if (usesPoseRecognition && typeof sceneRecognitionModel !== 'string') {
       issues.push({
         code: 'K4-POSE-MODEL-001',
         path: scenePath,
-        message: 'A scene with pose actions must use the long form and declare poseModel',
+        message:
+          'A scene with recognition actions must use the long form and declare recognitionModel',
       });
     }
   }

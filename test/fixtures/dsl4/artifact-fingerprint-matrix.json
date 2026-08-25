@@ -6,7 +6,7 @@
     "assetBundleIntegrity": "sha256-i/cp/+B0yu5iLAKSgXNGfmWOGeKCM8/4pEWBnjyuTVA=",
     "appShell": {
       "id": "standard",
-      "templateVersion": "4.0.0-rc.10",
+      "templateVersion": "4.0.0-rc.11",
       "integrity": "sha256-tO2WMkUv0S/WKX+7O3SAizXztOWoM99FnkmtFtCKQao="
     },
     "extensionBundle": {
@@ -15,8 +15,8 @@
       "integrity": "sha256-IO93OehCPxFImbdnkJoiDF3EFp1zo4GW16Lb+sUWbE4="
     },
     "builder": {
-      "package": "@kubohiroya/tmpose-kamishibai",
-      "version": "4.0.0-rc.10",
+      "package": "@kubohiroya/tm-kamishibai",
+      "version": "4.0.0-rc.11",
       "settings": {
         "channel": "bundled",
         "maxSourceBytes": 1048576,

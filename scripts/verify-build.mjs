@@ -201,7 +201,7 @@ async function verifySiteIndex() {
   assert(images.includes('images/image01.png'), 'The top page does not reference the hero image.');
   assert(
     altTexts.includes(
-      'カメラ映像の上に浦島太郎とカメを重ね、ポーズ認識で紙芝居を進めているアプリ画面',
+      'カメラ映像の上に浦島太郎とカメを重ね、認識入力で紙芝居を進めているアプリ画面',
     ),
     'The top-page hero image does not have the expected alternative text.',
   );

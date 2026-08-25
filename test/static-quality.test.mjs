@@ -6,7 +6,7 @@ import {ESLint} from 'eslint';
 const projectRoot = new URL('../', import.meta.url);
 const expectedRules = ['eqeqeq', 'no-undef', 'no-unused-vars'];
 const firstPartyFiles = [
-  'bin/tmpose-kamishibai.mjs',
+  'bin/tm-kamishibai.mjs',
   'eslint.config.mjs',
   'scripts/build-site.mjs',
   'scripts/download-catalog.mjs',

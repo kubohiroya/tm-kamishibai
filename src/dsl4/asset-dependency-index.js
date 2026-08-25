@@ -135,17 +135,15 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     addDependency(costume, actorDependencies);
   }
 
-  const poseRecognition = /** @type {Readonly<Record<string, unknown>> | null} */ (
-    storyDocument.poseRecognition ?? null
+  const recognition = /** @type {Readonly<Record<string, unknown>> | null} */ (
+    storyDocument.recognition ?? null
   );
-  const poseRecognitionDependencies = new Set();
+  const recognitionDependencies = new Set();
   const posePreviewControlDependencies = new Set();
-  if (poseRecognition) {
-    addDependency(poseRecognition.idleSound, poseRecognitionDependencies);
-    addDependency(poseRecognition.chargeSound, poseRecognitionDependencies);
-    const preview = /** @type {Readonly<Record<string, unknown>>} */ (
-      poseRecognition.preview ?? {}
-    );
+  if (recognition) {
+    addDependency(recognition.idleSound, recognitionDependencies);
+    addDependency(recognition.chargeSound, recognitionDependencies);
+    const preview = /** @type {Readonly<Record<string, unknown>>} */ (recognition.preview ?? {});
     const controls = /** @type {Readonly<Record<string, unknown>>} */ (preview.controls ?? {});
     const mirroring = /** @type {Readonly<Record<string, unknown>>} */ (controls.mirroring ?? {});
     const mirroringAssets = /** @type {Readonly<Record<string, unknown>>} */ (
@@ -166,7 +164,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     storyDocument.scenes ?? []
   )) {
     const dependencies = new Set();
-    addDependency(scene.poseModel, dependencies);
+    addDependency(scene.recognitionModel, dependencies);
     let usesPoseRecognition = false;
     for (const action of /** @type {ReadonlyArray<Readonly<Record<string, unknown>>>} */ (
       scene.actions ?? []
@@ -181,7 +179,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
         addActionDependencies(action, dependencies, bubbleStyles) || usesPoseRecognition;
     }
     if (usesPoseRecognition) {
-      for (const assetId of poseRecognitionDependencies) dependencies.add(assetId);
+      for (const assetId of recognitionDependencies) dependencies.add(assetId);
     }
     const all = sortedUnique(dependencies);
     scenes[String(scene.id)] = deepFreeze({
@@ -198,7 +196,7 @@ export function createDsl4AssetDependencyIndex(storyDocument) {
     cover: sortedUnique(coverDependencies),
     actors: sortedUnique(actorDependencies),
     loading: sortedUnique(loadingDependencies),
-    poseRecognition: sortedUnique(poseRecognitionDependencies),
+    recognition: sortedUnique(recognitionDependencies),
     posePreviewControls: sortedUnique(posePreviewControlDependencies),
     bgm: sortedUnique(bgmDependencies),
     sceneRetained: sortedUnique(sceneRetainedAssets),

@@ -384,35 +384,33 @@ export function createDsl4RuntimeController({
   const initialVariables = /** @type {Record<string, string | number | boolean>} */ (
     storyDocument.variables ?? {}
   );
-  const poseRecognition = /** @type {Readonly<Record<string, unknown>>} */ (
-    storyDocument.poseRecognition ?? {}
+  const recognition = /** @type {Readonly<Record<string, unknown>>} */ (
+    storyDocument.recognition ?? {}
   );
   const poseSequenceRecognition = deepFreeze({
     ...defaultPoseSequenceRecognition,
-    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.sequence ?? {}),
-    idleSound: typeof poseRecognition.idleSound === 'string' ? poseRecognition.idleSound : null,
-    chargeSound:
-      typeof poseRecognition.chargeSound === 'string' ? poseRecognition.chargeSound : null,
+    .../** @type {Readonly<Record<string, number>>} */ (recognition.sequence ?? {}),
+    idleSound: typeof recognition.idleSound === 'string' ? recognition.idleSound : null,
+    chargeSound: typeof recognition.chargeSound === 'string' ? recognition.chargeSound : null,
     feedback: {
       mode:
-        typeof (
-          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.feedback)?.mode
-        ) === 'string'
-          ? /** @type {Readonly<Record<string, string>>} */ (poseRecognition.feedback).mode
+        typeof (/** @type {Readonly<Record<string, unknown>>} */ (recognition.feedback)?.mode) ===
+        'string'
+          ? /** @type {Readonly<Record<string, string>>} */ (recognition.feedback).mode
           : 'scratchMirror',
     },
     navigation: {
       allowSkip:
         typeof (
-          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.navigation)?.allowSkip
+          /** @type {Readonly<Record<string, unknown>>} */ (recognition.navigation)?.allowSkip
         ) === 'boolean'
-          ? /** @type {Readonly<Record<string, boolean>>} */ (poseRecognition.navigation).allowSkip
+          ? /** @type {Readonly<Record<string, boolean>>} */ (recognition.navigation).allowSkip
           : false,
     },
   });
   const poseSelectionRecognition = deepFreeze({
     ...defaultPoseSelectionRecognition,
-    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.selection ?? {}),
+    .../** @type {Readonly<Record<string, number>>} */ (recognition.selection ?? {}),
   });
   /** @type {Record<string, string | number | boolean>} */
   let variables = /** @type {Record<string, string | number | boolean>} */ (
@@ -1090,7 +1088,7 @@ export function createDsl4RuntimeController({
   function applyPosePreviewMirroring(scene) {
     if (!posePreviewMirroringEnabled) return;
     const operation = port.setPosePreviewMirroring;
-    const storyPreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const storyPreview = isRecord(recognition.preview) ? recognition.preview : {};
     const scenePreview = isRecord(scene.posePreview) ? scene.posePreview : {};
     const mode = scenePreview.mirroring ?? storyPreview.mirroring ?? 'mirrored';
     if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
@@ -1298,7 +1296,7 @@ export function createDsl4RuntimeController({
    */
   async function dispatchPose({target, args}, context) {
     const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
-    const poseModel = String(currentScene()?.poseModel ?? '');
+    const recognitionModel = String(currentScene()?.recognitionModel ?? '');
     for (const [stepIndex, step] of steps.entries()) {
       const stepController = new AbortController();
       const handleActionAbort = () => stepController.abort(context.signal.reason);
@@ -1340,7 +1338,8 @@ export function createDsl4RuntimeController({
             pose: step.pose,
             stepIndex,
             stepCount: steps.length,
-            poseModel,
+            recognitionModel,
+            recognitionMode: 'pose',
             recognition: cloneValue(poseSequenceRecognition),
           },
           stepContext,
@@ -1383,7 +1382,7 @@ export function createDsl4RuntimeController({
     invokePort,
     resolveBranch,
     resolveSpeechStyle,
-    getPoseModel: () => String(currentScene()?.poseModel ?? ''),
+    getRecognitionModel: () => String(currentScene()?.recognitionModel ?? ''),
     poseSelectionRecognition,
     dispatchPose,
   });

@@ -324,10 +324,8 @@ function validateBroadcastMessageAndWaitFeature(storyDocument, enabled) {
 
 /** @param {Readonly<Record<string, unknown>>} storyDocument */
 function resolvePoseFeedbackMode(storyDocument) {
-  const poseRecognition = isRecord(storyDocument.poseRecognition)
-    ? storyDocument.poseRecognition
-    : null;
-  const feedback = isRecord(poseRecognition?.feedback) ? poseRecognition.feedback : null;
+  const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : null;
+  const feedback = isRecord(recognition?.feedback) ? recognition.feedback : null;
   const mode = feedback?.mode ?? 'scratchMirror';
   if (!['scratchMirror', 'scratchBinding', 'presenter'].includes(String(mode))) {
     throw hostError('K4-HOST-POSE-FEEDBACK-001', 'Pose feedback mode is unsupported');
@@ -417,8 +415,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         },
       })
     : null;
-  const preview = isRecord(component.storyDocument.poseRecognition)
-    ? /** @type {Record<string, any>} */ (component.storyDocument.poseRecognition).preview
+  const preview = isRecord(component.storyDocument.recognition)
+    ? /** @type {Record<string, any>} */ (component.storyDocument.recognition).preview
     : null;
   const hasConfiguredPreviewControls =
     cameraPreviewControlsEnabled && isRecord(preview) && isRecord(preview.controls);
@@ -828,7 +826,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     addPortMethods(
       port,
       assetSession.poseActionPort,
-      ['waitForPose', 'poseInputToChangeScene'],
+      ['waitForPose', 'poseInputToChangeScene', 'imageInputToChangeScene'],
       'pose action port',
     );
     if (assetSession.posePreviewPort) {
@@ -869,7 +867,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
 
     const activeAssetSession = assetSession;
     const poseModelAssetIds = Object.values(component.storyDocument.assets ?? {})
-      .filter((asset) => isRecord(asset) && asset.kind === 'poseModel')
+      .filter((asset) => isRecord(asset) && asset.kind === 'recognitionModel')
       .map((asset) => String(asset.id));
     publishRuntimeDiagnostics(
       Object.freeze({

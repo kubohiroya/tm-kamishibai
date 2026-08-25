@@ -28,7 +28,7 @@ test('freezes the #265 Standard author and template-internal palette boundary', 
     contract.standardRuntime.visibleOpcodes,
     dsl4CoreActionManifest.map(({command}) => command),
   );
-  assert.equal(new Set(contract.standardRuntime.visibleOpcodes).size, 23);
+  assert.equal(new Set(contract.standardRuntime.visibleOpcodes).size, 24);
   assert.deepEqual(contract.standardRuntime.hiddenOpcodes, [
     'versionReporter',
     'statusReporter',

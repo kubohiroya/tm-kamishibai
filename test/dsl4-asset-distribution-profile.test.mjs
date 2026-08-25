@@ -45,11 +45,11 @@ function story() {
       '    file: assets/narration.mp3',
       '    loading: lazy',
       '  RescuePose:',
-      '    kind: poseModel',
+      '    kind: recognitionModel',
       '    file: models/rescue',
       'scenes:',
       '  opening:',
-      '    poseModel: RescuePose',
+      '    recognitionModel: RescuePose',
       '    actions: []',
     ].join('\n'),
     {sourceId: 'asset-distribution-test'},
@@ -84,7 +84,7 @@ function lock() {
     formatVersion: 1,
     assets: {
       RescuePose: {
-        kind: 'poseModel',
+        kind: 'recognitionModel',
         contentIntegrity: hash('3'),
         contentType: 'application/vnd.tm.pose-model',
         size: 1000,

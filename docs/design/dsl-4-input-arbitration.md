@@ -20,10 +20,10 @@ raw DOM event、source本文、session historyは保持しない。
 | active actor touch待機中                            | pointer sequence        | actor touch候補sourceを優先する                                                                     |
 | actor touch成立後の同一release                      | pointerup               | 一度だけprevent／stopし、navigation／speech advanceへ再利用しない                                   |
 | pointercancel                                       | pointer sequence        | 保留中のrelease抑止を破棄し、次のgestureへ持ち越さない                                              |
-| active pose step                                    | `rehearsal.skipPose`    | `poseRecognition.navigation.allowSkip`が`true`の場合だけ現在stepを終了する                          |
+| active pose step                                    | `rehearsal.skipPose`    | `recognition.navigation.allowSkip`が`true`の場合だけ現在stepを終了する                          |
 | active pose action／active action                   | `rehearsal.skipAction`  | 現在actionを最終状態へ完了する。poseでは残りstepも実行しない                                        |
 | active action／action間／scene内                    | `rehearsal.skipScene`   | 現在sceneの残りを3.2互換のstateful tail規則で終了する                                               |
-| active pose sequence                                | `navigation.nextAction` | 既存の`poseRecognition.navigation.allowSkip`と`canAdvance()`を変更せず最終決定とする                |
+| active pose sequence                                | `navigation.nextAction` | 既存の`recognition.navigation.allowSkip`と`canAdvance()`を変更せず最終決定とする                |
 
 schema／semantic検証の`K4-KEY-001`は、navigation keymapと作品内key routeの静的衝突を引き続き拒否する。
 runtime arbitrationのexact候補優先は、injected portや境界の防御としても同じ単一consumer規則を維持する。

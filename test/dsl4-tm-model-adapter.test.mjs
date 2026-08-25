@@ -16,7 +16,7 @@ function poseModel(
   ],
 ) {
   return {
-    asset: {id, kind: 'poseModel', loading: 'lazy', source: {type: 'file'}},
+    asset: {id, kind: 'recognitionModel', loading: 'lazy', source: {type: 'file'}},
     files,
   };
 }
@@ -62,7 +62,7 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
   assert.deepEqual(resource, {
     adapter: 'tm',
     assetId: 'RescuePose',
-    kind: 'poseModel',
+    kind: 'recognitionModel',
     name: 'RescuePose',
     labels: ['idle', 'rescue'],
   });
@@ -96,9 +96,9 @@ test('rejects malformed pose model bundles before TM registration', async () => 
   const validFiles = poseModel().files;
   const invalid = [
     {},
-    {asset: {id: '', kind: 'poseModel', source: {type: 'file'}}, files: validFiles},
+    {asset: {id: '', kind: 'recognitionModel', source: {type: 'file'}}, files: validFiles},
     {asset: {id: 'Image', kind: 'backdrop', source: {type: 'file'}}, files: validFiles},
-    {asset: {id: 'ProjectPose', kind: 'poseModel', source: {type: 'project'}}, files: []},
+    {asset: {id: 'ProjectPose', kind: 'recognitionModel', source: {type: 'project'}}, files: []},
     poseModel('MissingFile', validFiles.slice(0, 2)),
     poseModel('ExtraFile', [...validFiles, {path: 'extra.bin', bytes: new Uint8Array([4])}]),
     poseModel('DuplicateFile', [validFiles[0], validFiles[0], validFiles[2]]),
@@ -246,14 +246,14 @@ test('routes media and pose assets to their owners and preserves release ownersh
   };
   const router = createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter});
   const resources = [];
-  for (const kind of ['backdrop', 'costume', 'sound', 'poseModel']) {
+  for (const kind of ['backdrop', 'costume', 'sound', 'recognitionModel']) {
     resources.push(await router.prepare({asset: {kind}}));
   }
   assert.deepEqual(calls.slice(0, 4), [
     ['prepare-media', 'backdrop'],
     ['prepare-media', 'costume'],
     ['prepare-media', 'sound'],
-    ['prepare-pose', 'poseModel'],
+    ['prepare-pose', 'recognitionModel'],
   ]);
 
   for (const resource of resources) await router.release(resource);
@@ -262,7 +262,7 @@ test('routes media and pose assets to their owners and preserves release ownersh
     ['release-media', 'backdrop'],
     ['release-media', 'costume'],
     ['release-media', 'sound'],
-    ['release-pose', 'poseModel'],
+    ['release-pose', 'recognitionModel'],
   ]);
   await assert.rejects(router.prepare({asset: {kind: 'video'}}), /Unsupported/u);
   const otherRouter = createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter});

@@ -1038,13 +1038,13 @@ assets:
     kind: backdrop
     file: assets/card.svg
   Rescue:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue.zip
 cover:
   backdrop: Card
 scenes:
   opening:
-    poseModel: Rescue
+    recognitionModel: Rescue
     actions:
       - wait: 0
 `;
@@ -1369,7 +1369,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   }
 });
 
-test('registers all 23 core action blocks as visible VM primitives', async () => {
+test('registers all 24 core action blocks as visible VM primitives', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();

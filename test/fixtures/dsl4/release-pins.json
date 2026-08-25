@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "release": {
     "repositoryPath": "/kubohiroya/tm-kamishibai",
-    "version": "4.0.0-rc.10"
+    "version": "4.0.0-rc.11"
   },
   "extensions": {
     "@kubohiroya/turbowarp-asset-manager": "0.14.0",
@@ -16,6 +16,6 @@
     "@kubohiroya/sb3-toolchain": "0.9.0"
   },
   "artifactFingerprint": {
-    "expected": "sha256-niC+Q5ah4aINV7v8SmebFFHrooKrH7WbBii9n7b4De8="
+    "expected": "sha256-st6XdD0j8WNe/UQ+9pk0c4cMyGhjV9eS7fqTGZOeg+8="
   }
 }

@@ -37,7 +37,8 @@ export function createDsl4PlatformAssetAdapter({mediaAdapter, poseAdapter}) {
         throw new TypeError('platform asset payload must provide an asset record');
       }
       const kind = payload.asset.kind;
-      const owner = kind === 'poseModel' ? pose : mediaKinds.has(String(kind)) ? media : null;
+      const owner =
+        kind === 'recognitionModel' ? pose : mediaKinds.has(String(kind)) ? media : null;
       if (!owner) throw new TypeError(`Unsupported platform asset kind: ${String(kind)}`);
       const resource = await owner.prepare(payload, context);
       if (!isRecord(resource)) {

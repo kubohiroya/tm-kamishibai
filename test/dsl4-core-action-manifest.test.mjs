@@ -26,7 +26,7 @@ function definitionFromRef(reference) {
 
 test('defines one immutable TurboWarp block requirement for every core action', () => {
   assert.equal(Object.isFrozen(dsl4CoreActionManifest), true);
-  assert.equal(dsl4CoreActionManifest.length, 23);
+  assert.equal(dsl4CoreActionManifest.length, 24);
 
   const commands = dsl4CoreActionManifest.map(({command}) => command);
   const schemaDefinitions = dsl4CoreActionManifest.map(({schemaDefinition}) => schemaDefinition);

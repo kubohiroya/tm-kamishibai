@@ -171,7 +171,7 @@ function normalizeAsset(asset, id) {
       ...(kind === 'backdrop' || kind === 'costume' ? {bitmapResolution: 1} : {}),
       delivery: 'embedded',
       loading: 'eager',
-      retention: kind === 'poseModel' ? 'scene' : 'story',
+      retention: kind === 'recognitionModel' ? 'scene' : 'story',
       ...(target ? {target} : {}),
     };
   }
@@ -180,7 +180,7 @@ function normalizeAsset(asset, id) {
     id,
     delivery: 'embedded',
     loading: 'eager',
-    retention: sourceAsset.kind === 'poseModel' ? 'scene' : 'story',
+    retention: sourceAsset.kind === 'recognitionModel' ? 'scene' : 'story',
     ...(sourceAsset.kind === 'backdrop' || sourceAsset.kind === 'costume'
       ? {bitmapResolution: sourceAsset.bitmapResolution ?? 1}
       : {}),
@@ -189,7 +189,7 @@ function normalizeAsset(asset, id) {
 }
 
 /** @param {unknown} value */
-function normalizePoseRecognition(value) {
+function normalizeRecognition(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const source = /** @type {Record<string, unknown>} */ (cloneValue(value));
   const modelInitialization = /** @type {Record<string, unknown>} */ (
@@ -273,9 +273,9 @@ function normalizePoseRecognition(value) {
  * @param {import('yaml').LineCounter} lineCounter
  */
 function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
-  const poseRecognitionNode = document.getIn(['poseRecognition'], true);
-  if (!poseRecognitionNode) return;
-  sourceMap['/poseRecognition'] = sourceRangeForNode(poseRecognitionNode, lineCounter);
+  const recognitionNode = document.getIn(['recognition'], true);
+  if (!recognitionNode) return;
+  sourceMap['/recognition'] = sourceRangeForNode(recognitionNode, lineCounter);
   for (const field of [
     'idleSound',
     'chargeSound',
@@ -286,9 +286,9 @@ function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
     'navigation',
     'preview',
   ]) {
-    const fieldNode = document.getIn(['poseRecognition', field], true);
+    const fieldNode = document.getIn(['recognition', field], true);
     if (!fieldNode) continue;
-    sourceMap[`/poseRecognition/${field}`] = sourceRangeForNode(fieldNode, lineCounter);
+    sourceMap[`/recognition/${field}`] = sourceRangeForNode(fieldNode, lineCounter);
     const nestedFields = {
       modelInitialization: ['policy', 'parallel'],
       sequence: ['confidenceThreshold', 'fullConfidenceHoldSeconds', 'idleChargePerSecond'],
@@ -298,9 +298,9 @@ function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
       preview: ['mirroring', 'overlay', 'controls'],
     }[field];
     for (const nestedField of nestedFields ?? []) {
-      const nestedNode = document.getIn(['poseRecognition', field, nestedField], true);
+      const nestedNode = document.getIn(['recognition', field, nestedField], true);
       if (nestedNode) {
-        sourceMap[`/poseRecognition/${field}/${nestedField}`] = sourceRangeForNode(
+        sourceMap[`/recognition/${field}/${nestedField}`] = sourceRangeForNode(
           nestedNode,
           lineCounter,
         );
@@ -327,15 +327,15 @@ function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
           preview.overlay,
           document,
           lineCounter,
-          ['poseRecognition', 'preview', 'overlay'],
-          '/poseRecognition/preview/overlay',
+          ['recognition', 'preview', 'overlay'],
+          '/recognition/preview/overlay',
         );
       }
       for (const controlName of ['mirroring', 'cameraMenu']) {
-        const controlPath = ['poseRecognition', 'preview', 'controls', controlName];
+        const controlPath = ['recognition', 'preview', 'controls', controlName];
         const controlNode = document.getIn(controlPath, true);
         if (!controlNode) continue;
-        sourceMap[`/poseRecognition/preview/controls/${controlName}`] = sourceRangeForNode(
+        sourceMap[`/recognition/preview/controls/${controlName}`] = sourceRangeForNode(
           controlNode,
           lineCounter,
         );
@@ -346,7 +346,7 @@ function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
         for (const controlField of controlFields) {
           const controlFieldNode = document.getIn([...controlPath, controlField], true);
           if (controlFieldNode) {
-            sourceMap[`/poseRecognition/preview/controls/${controlName}/${controlField}`] =
+            sourceMap[`/recognition/preview/controls/${controlName}/${controlField}`] =
               sourceRangeForNode(controlFieldNode, lineCounter);
           }
         }
@@ -354,7 +354,7 @@ function mapPoseRecognitionSource(sourceMap, value, document, lineCounter) {
           for (const assetField of ['showMirrored', 'showUnmirrored']) {
             const assetNode = document.getIn([...controlPath, 'assets', assetField], true);
             if (assetNode) {
-              sourceMap[`/poseRecognition/preview/controls/mirroring/assets/${assetField}`] =
+              sourceMap[`/recognition/preview/controls/mirroring/assets/${assetField}`] =
                 sourceRangeForNode(assetNode, lineCounter);
             }
           }
@@ -431,6 +431,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
       'keyInputToChangeScene',
       'touchInputToChangeScene',
       'poseInputToChangeScene',
+      'imageInputToChangeScene',
     ].includes(command);
     args = /** @type {Record<string, unknown>} */ (
       cloneValue(routeCommand && !argumentRecord.routes ? {routes: argumentRecord} : argumentRecord)
@@ -527,7 +528,7 @@ function normalizeAction(sourceAction, sceneId, actionIndex, actionNode, lineCou
 export function createStoryDocument(story, document, lineCounter, sourceId) {
   /** @type {Record<string, SourceRange>} */
   const sourceMap = {'/': sourceRangeForNode(document.contents, lineCounter)};
-  mapPoseRecognitionSource(sourceMap, story.poseRecognition, document, lineCounter);
+  mapPoseRecognitionSource(sourceMap, story.recognition, document, lineCounter);
   const sourceBranches = /** @type {Record<string, unknown>} */ (story.branches ?? {});
   mapBranchSources(sourceMap, sourceBranches, document, lineCounter);
   const sourceAssets = /** @type {Record<string, unknown>} */ (story.assets ?? {});
@@ -646,15 +647,15 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
       );
     });
     const longScene = /** @type {Record<string, unknown>} */ (sourceScene);
-    const poseModel = isShortScene ? null : (longScene.poseModel ?? null);
+    const recognitionModel = isShortScene ? null : (longScene.recognitionModel ?? null);
     const posePreview = isShortScene ? null : cloneValue(longScene.posePreview ?? null);
     const entryTransition =
       !isShortScene && Object.hasOwn(longScene, 'entryTransition')
         ? normalizeDsl4VisualTransition(longScene.entryTransition, `${scenePath}/entryTransition`)
         : undefined;
-    if (poseModel) {
-      sourceMap[`${scenePath}/poseModel`] = sourceRangeForNode(
-        document.getIn([...sourceScenePath, 'poseModel'], true),
+    if (recognitionModel) {
+      sourceMap[`${scenePath}/recognitionModel`] = sourceRangeForNode(
+        document.getIn([...sourceScenePath, 'recognitionModel'], true),
         lineCounter,
       );
     }
@@ -683,7 +684,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     return {
       kind: 'Scene',
       id: sceneId,
-      poseModel,
+      recognitionModel,
       posePreview,
       ...(entryTransition === undefined ? {} : {entryTransition}),
       actions,
@@ -702,7 +703,7 @@ export function createStoryDocument(story, document, lineCounter, sourceId) {
     bubbleClosePolicies,
     variables: cloneValue(story.variables ?? {}),
     loading: cloneValue(story.loading ?? null),
-    poseRecognition: normalizePoseRecognition(story.poseRecognition ?? null),
+    recognition: normalizeRecognition(story.recognition ?? story.poseRecognition ?? null),
     controls: cloneValue(story.controls ?? null),
     branches: cloneValue(sourceBranches),
     ...(presentation === undefined ? {} : {presentation}),

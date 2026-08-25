@@ -2268,11 +2268,11 @@ assets:
   Idle: sound
   Charge: sound
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroSkin
-poseRecognition:
+recognition:
   idleSound: Idle
   chargeSound: Charge
   sequence:
@@ -2289,7 +2289,7 @@ controls:
       ArrowDown: rehearsal.skipScene
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.show:
           skin: HeroSkin
@@ -2359,7 +2359,7 @@ scenes:
         loading: asset.loading,
         ...(typeof asset.target === 'string' ? {target: asset.target} : {}),
         source:
-          asset.kind === 'poseModel'
+          asset.kind === 'recognitionModel'
             ? {
                 type: 'file',
                 inputPath: asset.file,

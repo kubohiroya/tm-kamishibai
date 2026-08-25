@@ -45,7 +45,7 @@ function runtimeComponent() {
           },
           {
             id: 'RescuePose',
-            kind: 'poseModel',
+            kind: 'recognitionModel',
             loading: 'eager',
             source: {
               type: 'file',
@@ -100,7 +100,7 @@ function remotePoseRuntimeComponent(remoteBytes) {
         assets: [
           {
             id: 'RemotePose',
-            kind: 'poseModel',
+            kind: 'recognitionModel',
             loading: 'lazy',
             source: {
               type: 'remote',
@@ -327,7 +327,7 @@ test('creates one shared composition pair and routes a complete lifecycle throug
 
 test('maps the DSL pose model initialization policy into TM composition options', async () => {
   const component = runtimeComponent();
-  component.storyDocument.poseRecognition = {
+  component.storyDocument.recognition = {
     modelInitialization: {policy: 'latest-needed', parallel: true},
   };
   const log = [];
@@ -489,7 +489,7 @@ test('gates pose preview mirroring and uses one composition method before or dur
 
 test('keeps the pose overlay source opt-in and maps normalized DSL settings to TM 2.0 APIs', async () => {
   const component = runtimeComponent();
-  component.storyDocument.poseRecognition = {
+  component.storyDocument.recognition = {
     preview: {
       mirroring: 'mirrored',
       overlay: {

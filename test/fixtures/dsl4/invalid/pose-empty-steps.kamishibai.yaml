@@ -2,13 +2,13 @@ kamishibai: '4.0'
 assets:
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps: []

@@ -339,9 +339,10 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
       continue;
     }
     const inputPath = safePath(asset.file, `asset ${id} file`);
-    const archiveMode = asset.kind === 'poseModel' && isDsl4PoseArchivePath(inputPath);
+    const recognitionModel = asset.kind === 'recognitionModel';
+    const archiveMode = recognitionModel && isDsl4PoseArchivePath(inputPath);
     const selected =
-      asset.kind === 'poseModel' && !archiveMode
+      recognitionModel && !archiveMode
         ? [...normalizedEntries]
             .filter(
               ([path]) =>
@@ -360,8 +361,8 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
         storyDocument,
       });
     }
-    if (asset.kind === 'poseModel' && !archiveMode && selected.length !== 3) {
-      throw new TypeError(`Pose model ${id} must contain exactly three files`);
+    if (recognitionModel && !archiveMode && selected.length !== 3) {
+      throw new TypeError(`Recognition model ${id} must contain exactly three files`);
     }
     const materialized = [];
     if (archiveMode) {
@@ -401,7 +402,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options) {
       source: {
         type: 'file',
         inputPath,
-        mode: archiveMode ? 'archive' : asset.kind === 'poseModel' ? 'directory' : 'file',
+        mode: archiveMode ? 'archive' : recognitionModel ? 'directory' : 'file',
         files,
       },
     });

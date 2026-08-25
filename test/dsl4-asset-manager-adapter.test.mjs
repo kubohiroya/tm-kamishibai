@@ -515,7 +515,7 @@ test('rejects unsupported kinds and malformed materialization before registratio
   const fake = fakeComposition();
   const adapter = createDsl4AssetManagerAdapter({composition: fake.composition});
   const invalid = [
-    {asset: {id: 'Pose', kind: 'poseModel', source: {type: 'file'}}, files: []},
+    {asset: {id: 'Pose', kind: 'recognitionModel', source: {type: 'file'}}, files: []},
     {asset: {id: 'Unknown', kind: 'video', source: {type: 'file'}}, files: []},
     {asset: {id: 'Empty', kind: 'sound', source: {type: 'file'}}, files: []},
     {

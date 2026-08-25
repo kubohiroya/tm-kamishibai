@@ -695,7 +695,7 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     source:
@@ -705,14 +705,14 @@ assets:
       size: 1024
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: false
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:

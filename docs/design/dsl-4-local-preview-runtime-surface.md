@@ -202,7 +202,7 @@ actor／soundだけの作品へnetwork依存を追加しません。公式Teacha
 modelを外部取得するため、self-contained runtimeとremote code／asset policyを満たすまではproduction entryの暗黙依存にしません。
 
 代表fixtureはcamera／model推論境界だけを決定的な実装へ差し替え、同一のproduction source frontend、base SB3 loader、実TurboWarp
-VM／renderer／audio、Standard Runtime composition、embedded pose model fileを使ってactor表示、sound再生、pose action完了を検証します。
+VM／renderer／audio、Standard Runtime composition、embedded recognition model fileを使ってactor表示、sound再生、pose action完了を検証します。
 startupは20秒以下、強制GC後のJavaScript heapは192 MiB以下を有限上限とし、camera／modelの作成回数、prediction、classifier／PoseNet
 の一回だけの解放、canvas／`Scratch` global／transportのcleanupもassertします。2026-08-07にarm64 macOS 27.0、Google Chrome
 151.0.7922.76で確認し、実測値はtest diagnosticへ毎回記録します。sourceは64 KiB、assetは既定64件／64 MiB（推奨上限128 MiB）、
