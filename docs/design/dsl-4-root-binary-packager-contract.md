@@ -12,10 +12,10 @@ Scratch project asset、remote assetの永続cache、実行sessionだけのembed
 | root binary entry       | builder／SB3 entry source | SB3 rootの`k4asset-v1-<sha256-hex>`                                                      |
 | persistent remote cache | Asset Manager             | 検証済みremote assetを次回起動でも再利用するstory単位cache                               |
 | session backing store   | Asset Manager             | 現在の実行sessionだけでembedded bytesを保持する一時store                                 |
-| materialized resource   | renderer／Audio／TMPose   | skin、AudioBuffer、classifier、PoseNet等                                                 |
+| materialized resource   | renderer／Audio／TM   | skin、AudioBuffer、classifier、PoseNet等                                                 |
 
-Kamishibai RuntimeがTMPoseへ渡す公開入力は従来どおり
-`files: [{path, bytes}]`です。SB3 entry名、ZIP reader、Packager object、IndexedDB keyをTMPose、
+Kamishibai RuntimeがTMへ渡す公開入力は従来どおり
+`files: [{path, bytes}]`です。SB3 entry名、ZIP reader、Packager object、IndexedDB keyをTM、
 Teachable Machine、TensorFlow.jsへ公開しません。
 
 ## 2. descriptor format
@@ -216,7 +216,7 @@ bounded cleanupし、別tabのactive sessionを削除しません。remote persi
 | quota                                | 起動失敗または安全停止                               | site data整理、direct mode、通常ZIP／Electron、asset削減      |
 | session record missing／corrupt      | 安全停止                                             | session backingを破棄してアプリを再読み込み                   |
 | source size／integrity不一致         | fail closed                                          | 正本assetからSB3を再build                                     |
-| image／Audio／TMPose materialize失敗 | storage errorと区別して安全停止                      | 対象asset形式と実行環境を確認                                 |
+| image／Audio／TM materialize失敗 | storage errorと区別して安全停止                      | 対象asset形式と実行環境を確認                                 |
 
 診断は安定したcode、asset label、failure分類を持ちます。binary本文や機密になり得るsource pathは表示しません。
 
@@ -226,7 +226,7 @@ absolute pathを含めません。
 
 ## 9. 実Packager／offline smoke
 
-浦島太郎の正本台本とassetは、隣接する`tmpose-kamishibai-samples/stories/urashima`を使用します。
+浦島太郎の正本台本とassetは、隣接する`tm-kamishibai-samples/stories/urashima`を使用します。
 smokeは次の正式経路だけで一時成果物を作成します。
 
 1. current release generatorで一時sourceを生成し、基礎SB3を作る
@@ -249,7 +249,7 @@ pnpm smoke:dsl4-packager-binary-memory -- \
   --target electron-linux64
 ```
 
-samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/tmpose-kamishibai-samples`を指定します。
+samples repositoryが隣接していない場合は`--samples-root /absolute/path/to/tm-kamishibai-samples`を指定します。
 `--measure-browser`はChrome／Chromiumを使用し、必要なら`CHROME_BIN`で実行ファイルを指定します。ローカルorigin以外の
 名前解決をloopbackへ固定し、観測したrequest URLにも外部originがないことを検証します。
 

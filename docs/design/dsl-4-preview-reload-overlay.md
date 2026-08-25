@@ -111,7 +111,7 @@ migration; the browser-local anchor value is ignored while the flag is off.
 
 ## Tutorial screenshot handoff
 
-The deterministic handoff for `kubohiroya/tmpose-kamishibai-docs#31` is
+The deterministic handoff for `kubohiroya/tm-kamishibai-docs#31` is
 `test/fixtures/dsl4/preview-reload-overlay-screenshot.json`. Capture every listed frame at
 1280 x 720 CSS pixels, device scale factor 1, Japanese locale, and reduced motion. Use the fixed
 acknowledgement time only as display data, keep local source paths redacted, and use the same fixture

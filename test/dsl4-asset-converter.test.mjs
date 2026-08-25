@@ -645,7 +645,7 @@ test('keeps a Teachable Machine pose ZIP opaque across remote, local, and rsync 
   assert.equal(remoteSource.size, opaquePoseZip.length);
 });
 
-test('converts a URL-only TMPose directory to local and rsync forms', async (t) => {
+test('converts a URL-only TM directory to local and rsync forms', async (t) => {
   const root = await fixture(t);
   await writeFile(path.join(root, 'story.k4.yml'), remotePoseDirectorySourceText());
   const requests = [];
@@ -718,7 +718,7 @@ test('converts a URL-only TMPose directory to local and rsync forms', async (t) 
   }
 });
 
-test('rejects malformed URL-only TMPose directories without output', async (t) => {
+test('rejects malformed URL-only TM directories without output', async (t) => {
   const cases = [
     {
       output: 'remote-pose-invalid-json-output',

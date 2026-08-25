@@ -137,7 +137,7 @@ test('generates a canonical lock from stable local and allowlisted remote provid
     assert.deepEqual(Object.keys(result.lock.assets), ['Logo', 'Narration', 'RescuePose']);
     assert.equal(result.lock.assets.Logo.contentType, 'image/svg+xml');
     assert.equal(result.lock.assets.Narration.contentType, 'audio/mpeg');
-    assert.equal(result.lock.assets.RescuePose.contentType, 'application/vnd.tmpose.pose-model');
+    assert.equal(result.lock.assets.RescuePose.contentType, 'application/vnd.tm.pose-model');
     assert.equal(result.lock.assets.RescuePose.providers.remote.contentType, 'application/zip');
     assert.equal(
       result.lock.assets.RescuePose.contentIntegrity,

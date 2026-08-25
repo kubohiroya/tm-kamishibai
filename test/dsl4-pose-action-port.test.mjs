@@ -92,7 +92,7 @@ function manualClock() {
   };
 }
 
-function fakeTMPose(overrides = {}) {
+function fakeTM(overrides = {}) {
   const listeners = new Set();
   const log = [];
   const labels = new Map([['RescuePose', ['help', 'stand']]]);
@@ -173,13 +173,13 @@ function fakeTMPose(overrides = {}) {
 }
 
 function setup(overrides = {}) {
-  const {tmpose: tmposeOverrides = {}, ...portOverrides} = overrides;
-  const pose = fakeTMPose(tmposeOverrides);
+  const {tm: tmOverrides = {}, ...portOverrides} = overrides;
+  const pose = fakeTM(tmOverrides);
   const asyncInput = createAsyncInputComposition({poseSource: pose.composition});
   const clock = manualClock();
   const sounds = [];
   const port = createDsl4PoseActionPort({
-    tmposeComposition: pose.composition,
+    tmComposition: pose.composition,
     asyncInputComposition: asyncInput,
     getPoseModelLabels: (name) => pose.labels.get(name) ?? null,
     playSound(sound, playOptions) {
@@ -452,7 +452,7 @@ test('aborts during recognition startup and reuses the pending startup for the n
   let recognizing = false;
   let startCalls = 0;
   const {pose, clock, port} = setup({
-    tmpose: {
+    tm: {
       isRecognizing: () => recognizing,
       async startRecognition() {
         startCalls += 1;

@@ -53,10 +53,10 @@ function filePickerSupported() {
  * @param {string} dependencies.runtimeVersion
  * @param {Readonly<Record<string, number>>} dependencies.limits
  * @param {(Scratch: any) => any} dependencies.resolveRuntimeMount
- * @param {() => any} dependencies.resolveBundledTMPoseRuntime
+ * @param {() => any} dependencies.resolveBundledTMRuntime
  * @param {(failure: unknown) => Error} dependencies.loggedError
  * @param {(options: object) => any} dependencies.createRemoteAssetLoader
- * @param {(options: object) => any} dependencies.createProjectTMPoseRuntime
+ * @param {(options: object) => any} dependencies.createProjectTMRuntime
  * @param {(options: object) => Promise<any>} dependencies.createTransitionPort
  */
 export function installDsl4RuntimeAuthoringProfile(
@@ -65,10 +65,10 @@ export function installDsl4RuntimeAuthoringProfile(
     runtimeVersion,
     limits,
     resolveRuntimeMount,
-    resolveBundledTMPoseRuntime,
+    resolveBundledTMRuntime,
     loggedError,
     createRemoteAssetLoader,
-    createProjectTMPoseRuntime,
+    createProjectTMRuntime,
     createTransitionPort,
   },
 ) {
@@ -178,8 +178,8 @@ export function installDsl4RuntimeAuthoringProfile(
         inputTarget: Scratch.vm.renderer?.canvas,
         stagePointerTarget: Scratch.vm.renderer?.canvas,
         createHostPort: async ({runtime}) => createTransitionPort({runtime}),
-        tmPoseRuntime: createProjectTMPoseRuntime({
-          runtime: resolveBundledTMPoseRuntime(),
+        tmPoseRuntime: createProjectTMRuntime({
+          runtime: resolveBundledTMRuntime(),
           globalObject: globalThis,
           project,
         }),

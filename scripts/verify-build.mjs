@@ -26,9 +26,9 @@ const downloadIndexPath = path.join(downloadDirectory, 'index.html');
 const licensesIndexPath = path.join(outputDirectory, 'licenses', 'index.html');
 const siteShellCssPath = path.join(outputDirectory, 'site-shell.css');
 const siteShellScriptPath = path.join(outputDirectory, 'site-shell.js');
-const docsSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-docs/';
+const docsSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-docs/';
 const workshopSiteUrl = `${docsSiteUrl}workshops/`;
-const sampleSiteUrl = 'https://kubohiroya.github.io/tmpose-kamishibai-samples/';
+const sampleSiteUrl = 'https://kubohiroya.github.io/tm-kamishibai-samples/';
 const urashimaWebUrl = `${sampleSiteUrl}stories/urashima/web/`;
 
 function assert(condition, message) {
@@ -128,7 +128,7 @@ async function verifySiteAppBars() {
       'The site footer is missing its individual-rights notice.',
     );
     assert(
-      footer.includes('href="https://kubohiroya.github.io/tmpose-kamishibai/licenses/"'),
+      footer.includes('href="https://kubohiroya.github.io/tm-kamishibai/licenses/"'),
       'The site footer is missing its rights page.',
     );
     assert(!footer.includes('github.com'), 'The site footer must not duplicate the GitHub link.');
@@ -147,7 +147,7 @@ async function verifySiteAppBars() {
       );
     }
     assert(
-      !html.includes('href="https://kubohiroya.github.io/tmpose-kamishibai/docs/"'),
+      !html.includes('href="https://kubohiroya.github.io/tm-kamishibai/docs/"'),
       `${path.relative(outputDirectory, htmlFile)} still uses the old documentation URL.`,
     );
     await Promise.all([

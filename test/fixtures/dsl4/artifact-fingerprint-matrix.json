@@ -1,13 +1,12 @@
 {
   "formatVersion": 1,
-  "expectedFingerprint": "sha256-NijpBu/5gXQn/K2JIEzuiEzVOLxCyJW0BQzP6wkRn+s=",
   "input": {
     "formatVersion": 1,
     "baseSb3Integrity": "sha256-7fS0A6BPhTzDnaWGhtroUdCdBilFgACUDkVvv21Um+c=",
     "assetBundleIntegrity": "sha256-i/cp/+B0yu5iLAKSgXNGfmWOGeKCM8/4pEWBnjyuTVA=",
     "appShell": {
       "id": "standard",
-      "templateVersion": "4.0.0-rc.9",
+      "templateVersion": "4.0.0-rc.10",
       "integrity": "sha256-tO2WMkUv0S/WKX+7O3SAizXztOWoM99FnkmtFtCKQao="
     },
     "extensionBundle": {
@@ -17,7 +16,7 @@
     },
     "builder": {
       "package": "@kubohiroya/tmpose-kamishibai",
-      "version": "4.0.0-rc.9",
+      "version": "4.0.0-rc.10",
       "settings": {
         "channel": "bundled",
         "maxSourceBytes": 1048576,

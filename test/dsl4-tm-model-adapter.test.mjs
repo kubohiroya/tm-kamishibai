@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import {
   createDsl4PlatformAssetAdapter,
-  createDsl4TMPoseModelAdapter,
-  createDsl4TMPosePlatform,
+  createDsl4TMModelAdapter,
+  createDsl4TMPlatform,
 } from '../src/dsl4/platform/index.js';
 
 function poseModel(
@@ -48,7 +48,7 @@ function deferred() {
 
 test('registers one embedded Teachable Machine pose model and returns immutable metadata', async () => {
   const fake = fakeComposition();
-  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const payload = poseModel();
   const resource = await adapter.prepare(payload);
 
@@ -60,7 +60,7 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
   );
   assert.strictEqual(fake.calls.register[0].files[0].bytes, payload.files[0].bytes);
   assert.deepEqual(resource, {
-    adapter: 'tmpose',
+    adapter: 'tm',
     assetId: 'RescuePose',
     kind: 'poseModel',
     name: 'RescuePose',
@@ -78,11 +78,11 @@ test('registers one embedded Teachable Machine pose model and returns immutable 
 
 test('registers an extracted verified remote pose model through the same owner', async () => {
   const fake = fakeComposition();
-  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const payload = poseModel();
   payload.asset.source = {type: 'remote', url: 'https://cdn.example.com/pose.zip'};
   const resource = await adapter.prepare(payload);
-  assert.equal(resource.adapter, 'tmpose');
+  assert.equal(resource.adapter, 'tm');
   assert.deepEqual(
     fake.calls.register[0].files.map(({path: filePath}) => filePath),
     ['metadata.json', 'model.json', 'weights.bin'],
@@ -90,9 +90,9 @@ test('registers an extracted verified remote pose model through the same owner',
   await adapter.release(resource);
 });
 
-test('rejects malformed pose model bundles before TMPose registration', async () => {
+test('rejects malformed pose model bundles before TM registration', async () => {
   const fake = fakeComposition();
-  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const validFiles = poseModel().files;
   const invalid = [
     {},
@@ -133,7 +133,7 @@ test('releases invalid or aborted registrations without publishing a resource', 
       return registration.promise;
     },
   });
-  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const controller = new AbortController();
   const pending = adapter.prepare(poseModel(), {signal: controller.signal});
   controller.abort('scene-superseded');
@@ -148,12 +148,12 @@ test('releases invalid or aborted registrations without publishing a resource', 
       return {name: input.name, labels: [42]};
     },
   });
-  const malformedAdapter = createDsl4TMPoseModelAdapter({composition: malformed.composition});
+  const malformedAdapter = createDsl4TMModelAdapter({composition: malformed.composition});
   await assert.rejects(malformedAdapter.prepare(poseModel()), /invalid registration/u);
   assert.deepEqual(malformed.calls.release, ['RescuePose']);
 });
 
-test('forwards the preparation AbortSignal to TMPose registration', async () => {
+test('forwards the preparation AbortSignal to TM registration', async () => {
   let registrationOptions;
   const fake = fakeComposition({
     async registerPoseModel(input, options) {
@@ -162,7 +162,7 @@ test('forwards the preparation AbortSignal to TMPose registration', async () => 
       return {name: input.name, labels: ['rescue']};
     },
   });
-  const adapter = createDsl4TMPoseModelAdapter({composition: fake.composition});
+  const adapter = createDsl4TMModelAdapter({composition: fake.composition});
   const controller = new AbortController();
 
   await adapter.prepare(poseModel(), {signal: controller.signal});
@@ -170,12 +170,12 @@ test('forwards the preparation AbortSignal to TMPose registration', async () => 
   assert.strictEqual(registrationOptions.signal, controller.signal);
 });
 
-test('creates an app-shell-scoped TMPose composition and adapter pair', async () => {
+test('creates an app-shell-scoped TM composition and adapter pair', async () => {
   const fake = fakeComposition();
   const runtime = {Webcam: class {}, loadFromFiles() {}};
   const createFile = () => ({name: 'file'});
   const calls = [];
-  const platform = createDsl4TMPosePlatform({
+  const platform = createDsl4TMPlatform({
     runtime,
     createFile,
     modelInitializationPolicy: 'latest-needed',
@@ -201,12 +201,12 @@ test('creates an app-shell-scoped TMPose composition and adapter pair', async ()
   assert.deepEqual(fake.calls.release, ['RescuePose']);
 });
 
-test('rejects invalid TMPose model initialization options', () => {
+test('rejects invalid TM model initialization options', () => {
   const runtime = {Webcam: class {}, loadFromFiles() {}};
   const createComposition = () => fakeComposition().composition;
   assert.throws(
     () =>
-      createDsl4TMPosePlatform({
+      createDsl4TMPlatform({
         runtime,
         createComposition,
         modelInitializationPolicy: 'newest',
@@ -215,7 +215,7 @@ test('rejects invalid TMPose model initialization options', () => {
   );
   assert.throws(
     () =>
-      createDsl4TMPosePlatform({
+      createDsl4TMPlatform({
         runtime,
         createComposition,
         parallelModelInitialization: 'yes',

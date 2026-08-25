@@ -4,12 +4,12 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #260で合意した実装基準
 
-関連Issue: [#260](https://github.com/kubohiroya/tmpose-kamishibai/issues/260)、
-[#264](https://github.com/kubohiroya/tmpose-kamishibai/issues/264)、
-[#266](https://github.com/kubohiroya/tmpose-kamishibai/issues/266)、
-[#267](https://github.com/kubohiroya/tmpose-kamishibai/issues/267)、
-[#284](https://github.com/kubohiroya/tmpose-kamishibai/issues/284)、
-[TMPose #63](https://github.com/kubohiroya/turbowarp-tmpose/issues/63)
+関連Issue: [#260](https://github.com/kubohiroya/tm-kamishibai/issues/260)、
+[#264](https://github.com/kubohiroya/tm-kamishibai/issues/264)、
+[#266](https://github.com/kubohiroya/tm-kamishibai/issues/266)、
+[#267](https://github.com/kubohiroya/tm-kamishibai/issues/267)、
+[#284](https://github.com/kubohiroya/tm-kamishibai/issues/284)、
+[TM #63](https://github.com/kubohiroya/turbowarp-tm/issues/63)
 
 機械可読な構造仕様: [`schema/dsl-4.schema.json`](../../schema/dsl-4.schema.json)
 
@@ -172,7 +172,7 @@ assets:
 
 `delivery: remote`はSB3の初期download量を減らす必要がある作品だけが使用するopt-inです。
 `source.url`はhostnameを持つ絶対HTTPS URLだけを認め、credentialとfragmentを禁止します。poseModelは
-TMPose 3.2と同じdirectory URLを`url`だけで指定できます。この通常モードは取得時点のmodel内容を正本とし、
+TM 3.2と同じdirectory URLを`url`だけで指定できます。この通常モードは取得時点のmodel内容を正本とし、
 `model.json`、`metadata.json`、model manifestが宣言するweights fileをlazy取得します。
 
 内容を固定する場合はmodel directoryをlocalへ取得して`file`で指定し、SB3へembedded化します。remoteの
@@ -235,7 +235,7 @@ URL credentialはsource frontendで拒否するため、認証情報を作品へ
 byte列に加え、実際のContent-Typeを返します。lifecycleがarchiveのsize・Content-Type・SHA-256を検証した後、trusted
 extractorが`model.json`、`metadata.json`、weights fileを展開します。path traversal、duplicate entry、
 file数、圧縮前後と展開後の合計byte数へ上限を適用し、各fileをarchive integrityとextractor format versionへ
-bindingしてからTMPose adapterへ登録します。loaderが別経路で渡した未検証の展開fileは受理しません。
+bindingしてからTM adapterへ登録します。loaderが別経路で渡した未検証の展開fileは受理しません。
 通常の裸URL poseModelはarchiveを要求せず、同じdirectory配下の三fileをhost loader経由で取得します。
 この経路は内容同一性を主張しないため、verified remote cacheへ保存しません。
 
@@ -304,14 +304,14 @@ runtimeが扱う寿命は次の四段階です。
 1. SB3 ZIPまたはremote loaderが供給するsource bytes
 2. 台本単位のIndexedDBに保存する検証済みbytes
 3. 登録処理中だけ使用する一時`ArrayBuffer`／`File`
-4. renderer、audio、TMPose／PoseNetが所有するmaterialized resource
+4. renderer、audio、TM／PoseNetが所有するmaterialized resource
 
 source bytesと一時objectはtransactionまたは登録完了後にapplicationからの参照を破棄してGC対象にします。
 物理メモリから即時消去されることは保証しません。2はstorage policy、4は`retention`で解放します。この契約の
 実ブラウザ検証には`test/fixtures/dsl4/browser/remote-cache-retention.html`を使います。repository rootを
 HTTPで配信してfixtureを開くと、12回のposeModel再materializeで同時保持数が1、解放後が0、IndexedDBが
 1 entry／archive byte数のまま増えないこと、および明示cleanup後に0 entry／0 bytesとなることを表示します。
-runtime／schema接続はIssue #284で実装済みです。TMPose 1.10.0の`releasePoseModel()`／`releaseAll()`は
+runtime／schema接続はIssue #284で実装済みです。TM 1.10.0の`releasePoseModel()`／`releaseAll()`は
 classifierとPoseNet双方のdispose完了を待ちます。
 
 self-contained 4.0 SB3の新規`binary-entry`形式は`dsl4RootBinaryEntryPackaging`による明示opt-inです。
@@ -426,7 +426,7 @@ bubbleClosePolicies:
 `poseRecognition.modelInitialization`は、scene遷移で不要になったPoseモデルの初期化を止め、直近で
 必要なモデルだけを準備する方法を指定します。
 
-| DSL 4.0                                     | TMPose 1.10 Composition                      | 既定値   |
+| DSL 4.0                                     | TM 1.10 Composition                          | 既定値   |
 | ------------------------------------------- | -------------------------------------------- | -------- |
 | `modelInitialization.policy: legacy`        | `modelInitializationPolicy: 'legacy'`        | `legacy` |
 | `modelInitialization.policy: latest-needed` | `modelInitializationPolicy: 'latest-needed'` |          |
@@ -446,8 +446,8 @@ cancelだけでカメラは停止しません。
 
 既定の`legacy`／`parallel: false`は従来動作を維持する安全なrollbackです。Web CryptoやTensorFlow.jsが
 すでに開始した処理を物理的に中断できない場合でも、後続phaseを開始せず、完了した一時resourceを解放します。
-この実行契約にはTMPose 1.10.0以降が必要です。npm公開前はSchemaとhost接続だけを先行でき、配布runtimeの
-TMPose pinは1.10.0公開後に更新します。
+この実行契約にはTM 1.10.0以降が必要です。npm公開前はSchemaとhost接続だけを先行でき、配布runtimeの
+TM pinは1.10.0公開後に更新します。
 
 `cover`は物語終了時に実行されます。runtimeは全story actorを隠してbackdropとBGMを適用し、続けて
 3.2互換の`showCover`、`showMenu`通知を発行します。台本埋め込み版のタイトル終了は物語開始へ、
@@ -629,14 +629,14 @@ sceneへ移ると必ずstory既定へ戻り、前sceneの値をstickyにしま�
 
 この値が変更するのはpreview canvasの表示transformだけです。recognitionへ渡すframeの
 `flipHorizontal`、pose confidence、sequence／selectionの計算と成立時刻は変更しません。実行時接続は
-`@kubohiroya/turbowarp-tmpose/composition`の`setPreviewMirroring`だけを使い、Standalone block opcodeや
+`@kubohiroya/turbowarp-tm/composition`の`setPreviewMirroring`だけを使い、Standalone block opcodeや
 paletteを呼びません。起動時固定・既定OFFの`dsl4PosePreviewMirroring`がOFFなら新methodを検査・呼出し
 せず、現行のmirrored表示を維持します。ONでmethodが不足する場合はstartupでfail closedにします。
 
 ### 4.3 Pose overlay
 
-TMPose 1.12.0のSVG pose overlayは`poseRecognition.preview.overlay`で明示的に有効化・設定します。
-既存台本との互換性を保つため、`overlay`を省略した場合はTMPose側の既定値にかかわらず非表示です。
+TM 2.0.0のSVG pose overlayは`poseRecognition.preview.overlay`で明示的に有効化・設定します。
+既存台本との互換性を保つため、`overlay`を省略した場合はTM側の既定値にかかわらず非表示です。
 
 ```yaml
 poseRecognition:
@@ -664,7 +664,7 @@ poseRecognition:
 ```
 
 `jointStyles`のkeyはPoseNetの17 keypoint名です。各joint styleと`boneStyle`は部分指定でき、省略した
-style値はTMPose 1.12.0の既定値（jointは`#00e5ff`／1／4、boneは`#00e5ff`／0.9／3）へ
+style値はTM 2.0.0の既定値（jointは`#00e5ff`／1／4、boneは`#00e5ff`／0.9／3）へ
 正規化します。`minimumConfidence`は0〜1で、省略時は0.5です。`confidenceScaling`の省略値は4項目とも
 `false`です。boneのconfidenceは両端jointの低い方を使用します。
 
@@ -672,7 +672,7 @@ runtime接続はStandalone blockを経由せず、`showPoseOverlay()`／`hidePos
 `setPoseJointStyle()`、`setPoseBoneStyle()`、`setPoseOverlayMinimumConfidence()`、
 `setPoseOverlayConfidenceScaling()`だけを呼びます。専用feature flagは設けません。`overlay`省略時は
 `hidePoseOverlay()`で従来表示へ戻し、設定ありで必要methodが不足する場合はstartupでfail closedにします。
-表示の配置・左右反転・preview非表示・camera停止・recognition停止のDOM lifecycleはTMPoseが所有します。
+表示の配置・左右反転・preview非表示・camera停止・recognition停止のDOM lifecycleはTMが所有します。
 
 ### 4.4 クロスフェード
 
@@ -825,7 +825,7 @@ StoryDocument、scene-entry consumerを使います。
 | Packager             | bundled        | package済みruntimeの起動時flagがONの場合だけ      |
 | development preview  | unbundled      | preview hostが同じ起動時flagをONにしたsessionだけ |
 
-development preview専用の暗黙上書きは設けません。flag OFF時とDSL 3.1／3.2 SB3は対象外で、TMPoseの
+development preview専用の暗黙上書きは設けません。flag OFF時とDSL 3.1／3.2 SB3は対象外で、TMの
 既存mirrored表示、recognition入力、Standalone paletteを変更しません。
 
 camera preview操作UIは`poseRecognition.preview.controls`で任意に構成します。`mirroring`は

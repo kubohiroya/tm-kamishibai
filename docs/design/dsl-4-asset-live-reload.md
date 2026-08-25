@@ -87,7 +87,7 @@ one new monotonic candidate.
   duration, channel count, and sample rate must pass.
 - Pose models require `model.json`, `metadata.json`, and exactly one weights `.bin`. JSON parsing,
   declared weight metadata, labels, and StoryDocument pose references must agree. The candidate uses a
-  generation-specific TMPose namespace and never overwrites the active registration in place.
+  generation-specific TM namespace and never overwrites the active registration in place.
 
 ## Transaction and protocol
 

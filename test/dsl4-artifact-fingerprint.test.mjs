@@ -11,6 +11,9 @@ const fixture = JSON.parse(
     'utf8',
   ),
 );
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 function setPath(target, path, value) {
   const segments = path.split('.');
@@ -46,7 +49,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
         maxSourceBytes: 1_048_576,
         channel: 'bundled',
       },
-      version: '4.0.0-rc.9',
+      version: releasePins.release.version,
       package: '@kubohiroya/tmpose-kamishibai',
     },
     extensionBundle: {
@@ -56,7 +59,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
     },
     appShell: {
       integrity: fixture.input.appShell.integrity,
-      templateVersion: '4.0.0-rc.9',
+      templateVersion: releasePins.release.version,
       id: 'standard',
     },
     assetBundleIntegrity: fixture.input.assetBundleIntegrity,
@@ -66,7 +69,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
   const reorderedResult = await fingerprint(reordered);
 
   assert.equal(created.formatVersion, 1);
-  assert.equal(created.integrity, fixture.expectedFingerprint);
+  assert.equal(created.integrity, releasePins.artifactFingerprint.expected);
   assert.equal(reorderedResult.integrity, created.integrity);
   assert.deepEqual(reorderedResult.inputs, created.inputs);
   assert.equal(Object.isFrozen(created), true);

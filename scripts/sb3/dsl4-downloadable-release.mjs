@@ -44,7 +44,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaassetmanager',
       name: 'Asset Manager',
       package: '@kubohiroya/turbowarp-asset-manager',
-      version: '0.11.0',
+      version: '0.14.0',
       artifact: 'dist/asset-manager.js',
       sourcePath: path.join(
         path.dirname(
@@ -57,7 +57,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaasyncinput',
       name: 'Async Input',
       package: '@kubohiroya/turbowarp-async-input',
-      version: '0.4.0',
+      version: '0.6.0',
       artifact: 'dist/async-input.js',
       sourcePath: path.join(
         path.dirname(
@@ -70,7 +70,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyabubble',
       name: 'Bubble',
       package: '@kubohiroya/turbowarp-bubble',
-      version: '0.10.0',
+      version: '0.11.0',
       artifact: 'dist/turbowarp-bubble.js',
       sourcePath: path.join(
         path.dirname(
@@ -83,7 +83,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyaruntimeexpression',
       name: 'Runtime Expression',
       package: '@kubohiroya/turbowarp-runtime-expression',
-      version: '0.4.0',
+      version: '0.5.0',
       artifact: 'dist/runtime-expression.js',
       sourcePath: path.join(
         path.dirname(
@@ -98,7 +98,7 @@ const externalExtensionMembers = Object.freeze(
       id: 'kubohiroyasvgtext',
       name: 'SVG Text',
       package: '@kubohiroya/turbowarp-svg-text',
-      version: '0.5.0',
+      version: '0.9.0',
       artifact: 'dist/svg-text.js',
       sourcePath: path.join(
         path.dirname(
@@ -108,16 +108,14 @@ const externalExtensionMembers = Object.freeze(
       ),
     },
     {
-      id: 'tmpose',
-      name: 'TMPose',
-      package: '@kubohiroya/turbowarp-tmpose',
-      version: '1.12.0',
-      artifact: 'dist/tmpose.js',
+      id: 'kubohiroyatm',
+      name: 'TM',
+      package: '@kubohiroya/turbowarp-tm',
+      version: '2.0.0',
+      artifact: 'dist/tm.js',
       sourcePath: path.join(
-        path.dirname(
-          fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-tmpose/composition')),
-        ),
-        'tmpose.js',
+        path.dirname(fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-tm/composition'))),
+        'tm.js',
       ),
     },
   ].map((member) => Object.freeze({...member, path: `extensions/${member.id}.js`})),
@@ -406,7 +404,7 @@ async function createProject(assets) {
     meta: {
       semver: '3.0.0',
       vm: '0.2.0-turbowarp-c4823421cb7c17d8d8a89878851ce1668c26a21f',
-      agent: 'tmpose-kamishibai DSL 4.0 release generator',
+      agent: 'tm-kamishibai DSL 4.0 release generator',
     },
   };
   const schema = JSON.parse(
@@ -498,7 +496,7 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     },
     format: 'iife',
     banner: {
-      // Compatibility fallback until turbowarp-tmpose publishes one reviewed browser runtime.
+      // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
       // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
       js:
         `${formatDsl4RuntimeExtensionHeader()}\n` +

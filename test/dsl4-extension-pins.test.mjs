@@ -7,14 +7,9 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'yaml';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
-const expectedVersions = Object.freeze({
-  '@kubohiroya/turbowarp-async-input': '0.4.0',
-  '@kubohiroya/turbowarp-asset-manager': '0.13.0',
-  '@kubohiroya/turbowarp-bubble': '0.10.0',
-  '@kubohiroya/turbowarp-runtime-expression': '0.4.0',
-  '@kubohiroya/turbowarp-svg-text': '0.5.0',
-  '@kubohiroya/turbowarp-tmpose': '1.12.0',
-});
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 test('pins every DSL4 extension to an exact npm release and matching lock entry', async () => {
   const [packageJsonSource, lockfileSource, workspaceSource] = await Promise.all([
@@ -28,7 +23,8 @@ test('pins every DSL4 extension to an exact npm release and matching lock entry'
   const allowedBuilds = Object.keys(workspace.allowBuilds ?? {});
   const ageExclusions = new Set(workspace.minimumReleaseAgeExclude ?? []);
 
-  for (const [name, version] of Object.entries(expectedVersions)) {
+  assert.equal(releasePins.formatVersion, 1);
+  for (const [name, version] of Object.entries(releasePins.extensions)) {
     assert.equal(packageJson.dependencies[name], version, `${name} package pin`);
     const patchHash = lockfile.patchedDependencies?.[`${name}@${version}`];
     const lockedVersion = patchHash ? `${version}(patch_hash=${patchHash})` : version;

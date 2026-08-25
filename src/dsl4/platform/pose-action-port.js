@@ -100,7 +100,7 @@ function validateContext(value) {
 }
 
 /** @param {unknown} value */
-function validateTMPoseComposition(value) {
+function validateTMComposition(value) {
   const methods = [
     'activatePoseModel',
     'isPoseModelRegistered',
@@ -118,7 +118,7 @@ function validateTMPoseComposition(value) {
     'subscribeAccumulatedPose',
   ];
   if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`TMPose composition must provide ${methods.join(', ')}`);
+    throw new TypeError(`TM composition must provide ${methods.join(', ')}`);
   }
   return /** @type {Record<string, Function>} */ (value);
 }
@@ -244,7 +244,7 @@ function defaultSchedule(callback, delayMilliseconds) {
  * Create the two mutually exclusive DSL 4.0 pose action methods.
  *
  * @param {object} options
- * @param {unknown} options.tmposeComposition
+ * @param {unknown} options.tmComposition
  * @param {unknown} options.asyncInputComposition
  * @param {(poseModel: string) => ReadonlyArray<string> | null} options.getPoseModelLabels
  * @param {(sound: string, options?: Readonly<{untilDone?: boolean}>) => unknown | Promise<unknown>} [options.playSound]
@@ -259,7 +259,7 @@ function defaultSchedule(callback, delayMilliseconds) {
  */
 export function createDsl4PoseActionPort(options) {
   if (!isRecord(options)) throw new TypeError('pose action port options must be an object');
-  const tmpose = validateTMPoseComposition(options.tmposeComposition);
+  const tmComposition = validateTMComposition(options.tmComposition);
   const asyncInput = validateAsyncInputComposition(options.asyncInputComposition);
   if (typeof options.getPoseModelLabels !== 'function') {
     throw new TypeError('getPoseModelLabels must be a function');
@@ -317,18 +317,18 @@ export function createDsl4PoseActionPort(options) {
   /** @param {unknown} owner */
   function claimPreview(owner) {
     previewOwners.add(owner);
-    tmpose.setPreviewPosition('full-stage');
+    tmComposition.setPreviewPosition('full-stage');
   }
 
   /** @param {unknown} owner */
   function showClaimedPreview(owner) {
-    if (previewOwners.has(owner)) tmpose.showPreview();
+    if (previewOwners.has(owner)) tmComposition.showPreview();
   }
 
   /** @param {unknown} owner */
   function releasePreview(owner) {
     previewOwners.delete(owner);
-    if (previewOwners.size === 0) tmpose.hidePreview();
+    if (previewOwners.size === 0) tmComposition.hidePreview();
   }
 
   /** @param {object} owner */
@@ -480,7 +480,7 @@ export function createDsl4PoseActionPort(options) {
 
   /** @param {string} poseModel @param {ReadonlyArray<string>} poses */
   function requireKnownPoses(poseModel, poses) {
-    if (!tmpose.isPoseModelRegistered(poseModel)) {
+    if (!tmComposition.isPoseModelRegistered(poseModel)) {
       throw portError('K4-POSE-PORT-002', `Pose model is not registered: ${poseModel}`);
     }
     const labels = getPoseModelLabels(poseModel);
@@ -530,7 +530,7 @@ export function createDsl4PoseActionPort(options) {
   }
 
   /**
-   * Serialize camera/model startup because TMPose does not accept an AbortSignal. Each caller may
+   * Serialize camera/model startup because TM does not accept an AbortSignal. Each caller may
    * stop waiting immediately while an already-started camera request remains shared by later steps.
    *
    * @param {string} poseModel
@@ -549,19 +549,19 @@ export function createDsl4PoseActionPort(options) {
       .catch(() => {})
       .then(async () => {
         if (signal.aborted) throw abortError(cancelMessage);
-        if (restart && tmpose.isRecognizing()) tmpose.stopRecognition();
-        if (tmpose.getActivePoseModelName() !== poseModel) {
-          if (tmpose.isRecognizing()) tmpose.stopRecognition();
-          tmpose.activatePoseModel(poseModel);
+        if (restart && tmComposition.isRecognizing()) tmComposition.stopRecognition();
+        if (tmComposition.getActivePoseModelName() !== poseModel) {
+          if (tmComposition.isRecognizing()) tmComposition.stopRecognition();
+          tmComposition.activatePoseModel(poseModel);
         }
         configure();
         if (signal.aborted) throw abortError(cancelMessage);
-        if (!tmpose.isRecognizing()) {
+        if (!tmComposition.isRecognizing()) {
           if (ensureCameraStarted) {
             await ensureCameraStarted();
-            await tmpose.startRecognition();
+            await tmComposition.startRecognition();
           } else {
-            await withCameraBusy(() => tmpose.startRecognition());
+            await withCameraBusy(() => tmComposition.startRecognition());
           }
         }
         if (signal.aborted) throw abortError(cancelMessage);
@@ -581,7 +581,7 @@ export function createDsl4PoseActionPort(options) {
       restart: true,
       cancelMessage: 'pose candidate wait was cancelled',
       configure() {
-        tmpose.configureAccumulatedPose({
+        tmComposition.configureAccumulatedPose({
           accumulationPerSecond: input.accumulationPerSecond,
           decayPerSecond: input.decayPerSecond,
           scoreThreshold: input.scoreThreshold,
@@ -690,13 +690,13 @@ export function createDsl4PoseActionPort(options) {
           const elapsedSeconds = Math.max(0, (timestamp - previousTime) / 1000);
           previousTime = timestamp;
           const binding = input.feedbackMode === 'scratchBinding' ? readPoseBinding() : null;
-          const measuredConfidence = Number(tmpose.confidenceOf(input.pose));
+          const measuredConfidence = Number(tmComposition.confidenceOf(input.pose));
           if (
             !Number.isFinite(measuredConfidence) ||
             measuredConfidence < 0 ||
             measuredConfidence > 1
           ) {
-            throw portError('K4-POSE-PORT-007', 'TMPose returned an invalid confidence');
+            throw portError('K4-POSE-PORT-007', 'TM returned an invalid confidence');
           }
           confidence = binding?.confidence ?? measuredConfidence;
           progress = binding?.progress ?? progress;

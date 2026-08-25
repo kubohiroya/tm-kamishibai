@@ -1,5 +1,5 @@
 import {
-  createBundledTMPoseRuntime,
+  createBundledTMRuntime,
   createPoseNetProjectBundle,
   createPoseNetProjectBundleFromLoader,
   loadPoseNetProjectBundle,
@@ -7,14 +7,14 @@ import {
   poseNetModelDefaults,
   validatePoseNetProjectBundle,
   verifyPoseNetBundle,
-} from '@kubohiroya/turbowarp-tmpose/posenet';
+} from '@kubohiroya/turbowarp-tm/posenet';
 
 export const dsl4PoseNetBundleStoragePaths = Object.freeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.poseNet',
   unbundled: 'extensionStorage.kubohiroyakamishibairuntime4.poseNet',
 });
 
-export const createDsl4BundledTMPoseRuntime = createBundledTMPoseRuntime;
+export const createDsl4BundledTMRuntime = createBundledTMRuntime;
 export const createDsl4PoseNetProjectBundle = createPoseNetProjectBundle;
 export const createDsl4PoseNetProjectBundleFromLoader = createPoseNetProjectBundleFromLoader;
 export const dsl4PoseNetBundleManifest = poseNetBundleManifest;
@@ -54,7 +54,7 @@ function storedProjectBundles(project) {
 
 /**
  * Locate the one explicit PoseNet model-data descriptor stored in an SB3 project.
- * TMPose owns descriptor decoding, integrity verification, and runtime fetch interception.
+ * TM owns descriptor decoding, integrity verification, and runtime fetch interception.
  *
  * @param {unknown} project
  */
@@ -73,7 +73,7 @@ export function loadDsl4PoseNetProjectBundle(project) {
 }
 
 /**
- * Delay both SB3 storage lookup and TMPose project-bundle decoding until pose recognition starts.
+ * Delay both SB3 storage lookup and TM project-bundle decoding until pose recognition starts.
  *
  * @param {object} options
  * @param {unknown} options.runtime
@@ -81,17 +81,17 @@ export function loadDsl4PoseNetProjectBundle(project) {
  * @param {Record<PropertyKey, unknown>} [options.globalObject]
  * @param {Pick<SubtleCrypto, 'digest'>} [options.subtleCrypto]
  */
-export function createDsl4ProjectTMPoseRuntime(options) {
+export function createDsl4ProjectTMRuntime(options) {
   if (!isRecord(options) || !isRecord(options.runtime)) {
-    throw new TypeError('DSL 4.0 project TMPose runtime options are required');
+    throw new TypeError('DSL 4.0 project TM runtime options are required');
   }
   const runtime = options.runtime;
   if (typeof runtime.Webcam !== 'function' || typeof runtime.loadFromFiles !== 'function') {
-    throw new TypeError('DSL 4.0 project TMPose runtime must provide Webcam and loadFromFiles');
+    throw new TypeError('DSL 4.0 project TM runtime must provide Webcam and loadFromFiles');
   }
   let bundledRuntime;
   const loadRuntime = () => {
-    bundledRuntime ??= createBundledTMPoseRuntime({
+    bundledRuntime ??= createBundledTMRuntime({
       runtime: /** @type {any} */ (runtime),
       globalObject: /** @type {any} */ (options.globalObject),
       projectBundle: /** @type {any} */ (loadDsl4PoseNetProjectBundle(options.project)),

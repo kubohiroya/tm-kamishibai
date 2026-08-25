@@ -80,12 +80,10 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput) {
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  const getTMPoseRuntime =
-    typeof options.getTMPoseRuntime === 'function'
-      ? options.getTMPoseRuntime
-      : () => options.tmPoseRuntime;
+  const getTMRuntime =
+    typeof options.getTMRuntime === 'function' ? options.getTMRuntime : () => options.tmPoseRuntime;
   if (
-    typeof options.getTMPoseRuntime !== 'function' &&
+    typeof options.getTMRuntime !== 'function' &&
     (!isRecord(options.tmPoseRuntime) ||
       typeof options.tmPoseRuntime.Webcam !== 'function' ||
       typeof options.tmPoseRuntime.loadFromFiles !== 'function')
@@ -106,7 +104,7 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput) {
     platform: createLazyTurboWarpPlatform(),
     runtimeOptions: {
       get tmPoseRuntime() {
-        return getTMPoseRuntime();
+        return getTMRuntime();
       },
       setLoading() {},
     },

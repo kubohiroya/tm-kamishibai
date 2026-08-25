@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "release": {
+    "repositoryPath": "/kubohiroya/tm-kamishibai",
+    "version": "4.0.0-rc.10"
+  },
+  "extensions": {
+    "@kubohiroya/turbowarp-asset-manager": "0.14.0",
+    "@kubohiroya/turbowarp-async-input": "0.6.0",
+    "@kubohiroya/turbowarp-bubble": "0.11.0",
+    "@kubohiroya/turbowarp-runtime-expression": "0.5.0",
+    "@kubohiroya/turbowarp-svg-text": "0.9.0",
+    "@kubohiroya/turbowarp-tm": "2.0.0"
+  },
+  "devDependencies": {
+    "@kubohiroya/sb3-toolchain": "0.9.0"
+  },
+  "artifactFingerprint": {
+    "expected": "sha256-niC+Q5ah4aINV7v8SmebFFHrooKrH7WbBii9n7b4De8="
+  }
+}

@@ -165,7 +165,7 @@ Without an explicit source, the CLI uses the manifest path or the only root-leve
 *.k4.yml file. Zero or multiple candidates fail instead of choosing a fixed filename.
 
 convert-dsl4 options:
-  --pose-models FILE      Optionally embed exact TMPoseURL values as local poseModel assets
+  --pose-models FILE      Optionally embed exact TMURL values as local poseModel assets
 
 convert-dsl4-assets options:
   --asset ASSET_ID             Convert one asset (repeatable; omitted means all assets)

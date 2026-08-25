@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
 import {
-  createBundledTMPoseRuntime,
+  createBundledTMRuntime,
   createPoseNetProjectBundle,
   createPoseNetProjectBundleFromLoader,
   loadPoseNetProjectBundle,
@@ -13,13 +13,13 @@ import {
   poseNetModelDefaults,
   validatePoseNetProjectBundle,
   verifyPoseNetBundle,
-} from '@kubohiroya/turbowarp-tmpose/posenet';
+} from '@kubohiroya/turbowarp-tm/posenet';
 
 import {
-  createDsl4BundledTMPoseRuntime,
+  createDsl4BundledTMRuntime,
   createDsl4PoseNetProjectBundle,
   createDsl4PoseNetProjectBundleFromLoader,
-  createDsl4ProjectTMPoseRuntime,
+  createDsl4ProjectTMRuntime,
   dsl4PoseNetBundleManifest,
   dsl4PoseNetModelDefaults,
   loadDsl4PoseNetProjectBundle,
@@ -29,6 +29,9 @@ import {
 } from '../src/dsl4/platform/posenet-bundle.js';
 
 let pendingPoseNetFiles;
+const releasePins = JSON.parse(
+  await readFile(new URL('fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 
 function loadPublishedPoseNetFiles() {
   pendingPoseNetFiles ??= Promise.all(
@@ -41,8 +44,8 @@ function loadPublishedPoseNetFiles() {
   return pendingPoseNetFiles;
 }
 
-test('delegates the PoseNet manifest, verification, storage, and runtime contract to TMPose 1.12', () => {
-  assert.equal(createDsl4BundledTMPoseRuntime, createBundledTMPoseRuntime);
+test('delegates the PoseNet manifest, verification, storage, and runtime contract to TM 2.0', () => {
+  assert.equal(createDsl4BundledTMRuntime, createBundledTMRuntime);
   assert.equal(createDsl4PoseNetProjectBundle, createPoseNetProjectBundle);
   assert.equal(createDsl4PoseNetProjectBundleFromLoader, createPoseNetProjectBundleFromLoader);
   assert.equal(dsl4PoseNetBundleManifest, poseNetBundleManifest);
@@ -50,10 +53,13 @@ test('delegates the PoseNet manifest, verification, storage, and runtime contrac
   assert.equal(loadDsl4PoseNetProjectBundleData, loadPoseNetProjectBundle);
   assert.equal(validateDsl4PoseNetProjectBundle, validatePoseNetProjectBundle);
   assert.equal(verifyDsl4PoseNetBundle, verifyPoseNetBundle);
-  assert.equal(dsl4PoseNetBundleManifest.distribution.version, '1.12.0');
+  assert.equal(
+    dsl4PoseNetBundleManifest.distribution.version,
+    releasePins.extensions['@kubohiroya/turbowarp-tm'],
+  );
 });
 
-test('verifies the PoseNet supply published by TMPose', async () => {
+test('verifies the PoseNet supply published by TM', async () => {
   const result = await verifyDsl4PoseNetBundle(await loadPublishedPoseNetFiles(), {
     subtleCrypto: webcrypto.subtle,
   });
@@ -79,11 +85,11 @@ test('rejects missing and tampered PoseNet supply with upstream error codes', as
   tampered[1].bytes[0] ^= 0xff;
   await assert.rejects(
     verifyDsl4PoseNetBundle(tampered, {subtleCrypto: webcrypto.subtle}),
-    (error) => error.code === 'TMPOSE-POSENET-ASSET-003',
+    (error) => error.code === 'TM-POSENET-ASSET-003',
   );
   await assert.rejects(
     verifyDsl4PoseNetBundle(valid.files.slice(0, 2), {subtleCrypto: webcrypto.subtle}),
-    (error) => error.code === 'TMPOSE-POSENET-ASSET-004',
+    (error) => error.code === 'TM-POSENET-ASSET-004',
   );
 });
 
@@ -100,7 +106,7 @@ test('uses the upstream runtime wrapper for verified offline PoseNet responses',
   };
   const originalFetch = globalObject.fetch;
   const responseSizes = [];
-  const wrapped = createDsl4BundledTMPoseRuntime({
+  const wrapped = createDsl4BundledTMRuntime({
     runtime: {
       Webcam: class {},
       async loadFromFiles() {
@@ -108,7 +114,7 @@ test('uses the upstream runtime wrapper for verified offline PoseNet responses',
         responseSizes.push((await response.arrayBuffer()).byteLength);
         await assert.rejects(
           globalObject.fetch('https://example.invalid/not-posenet.bin'),
-          (error) => error.code === 'TMPOSE-POSENET-FETCH-001',
+          (error) => error.code === 'TM-POSENET-FETCH-001',
         );
         return {labels: ['ok']};
       },
@@ -158,7 +164,7 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
     subtleCrypto: webcrypto.subtle,
   });
   let runtimeCalls = 0;
-  const wrapped = createDsl4BundledTMPoseRuntime({
+  const wrapped = createDsl4BundledTMRuntime({
     runtime: {
       Webcam: class {},
       async loadFromFiles() {
@@ -173,7 +179,7 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
   assert.deepEqual(await wrapped.loadFromFiles({}, {}, {}), {ok: true});
   assert.equal(runtimeCalls, 1);
 
-  const missing = createDsl4ProjectTMPoseRuntime({
+  const missing = createDsl4ProjectTMRuntime({
     runtime: {Webcam: class {}, async loadFromFiles() {}},
     globalObject: {Response, crypto: webcrypto, fetch() {}},
     project: {},
@@ -189,14 +195,14 @@ test('decodes project model data lazily and rejects ambiguous storage', async ()
       index === 0 ? {...file, sha256: '0'.repeat(64)} : file,
     ),
   };
-  const invalid = createDsl4BundledTMPoseRuntime({
+  const invalid = createDsl4BundledTMRuntime({
     runtime: {Webcam: class {}, async loadFromFiles() {}},
     globalObject: {Response, crypto: webcrypto, fetch() {}},
     projectBundle: invalidDescriptor,
   });
   await assert.rejects(
     invalid.loadFromFiles({}, {}, {}),
-    (error) => error.code === 'TMPOSE-POSENET-ASSET-001',
+    (error) => error.code === 'TM-POSENET-ASSET-001',
   );
 
   assert.throws(

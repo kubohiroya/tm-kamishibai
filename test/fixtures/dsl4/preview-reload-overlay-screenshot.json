@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "ownerIssue": 394,
-  "consumerIssue": "kubohiroya/tmpose-kamishibai-docs#31",
+  "consumerIssue": "kubohiroya/tm-kamishibai-docs#31",
   "surface": "web-and-cli-shared",
   "environment": "development",
   "featureFlags": {

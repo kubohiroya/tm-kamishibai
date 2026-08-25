@@ -227,7 +227,7 @@ function completeAssetManagerComposition(binary) {
   });
 }
 
-function completeTMPoseComposition(calls) {
+function completeTMComposition(calls) {
   let active = null;
   return Object.freeze({
     async registerPoseModel(input) {
@@ -359,8 +359,8 @@ test('establishes one session, bounds alternating scene models, and re-exports i
     createAssetManagerComposition() {
       return assetManager;
     },
-    createTMPoseComposition() {
-      return completeTMPoseComposition(poseCalls);
+    createTMComposition() {
+      return completeTMComposition(poseCalls);
     },
   });
 
@@ -464,8 +464,8 @@ test('disabled policy never opens IndexedDB and re-reads a released scene from t
     createAssetManagerComposition() {
       return assetManager;
     },
-    createTMPoseComposition() {
-      return completeTMPoseComposition(poseCalls);
+    createTMComposition() {
+      return completeTMComposition(poseCalls);
     },
   });
 

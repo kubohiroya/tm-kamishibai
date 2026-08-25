@@ -1620,7 +1620,7 @@ test(
 );
 
 test(
-  'bounds TMPose classifier, PoseNet, and JavaScript heap across repeated scene retention',
+  'bounds TM classifier, PoseNet, and JavaScript heap across repeated scene retention',
   {timeout: 30_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();

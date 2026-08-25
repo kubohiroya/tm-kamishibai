@@ -4,9 +4,9 @@ Copyright © 2026 Hiroya Kubo.
 
 文書状態: Issue #258実装済み（public local preview CLI）
 
-関連Issue: [#258](https://github.com/kubohiroya/tmpose-kamishibai/issues/258)、
-[#390](https://github.com/kubohiroya/tmpose-kamishibai/issues/390)、
-[#394](https://github.com/kubohiroya/tmpose-kamishibai/issues/394)
+関連Issue: [#258](https://github.com/kubohiroya/tm-kamishibai/issues/258)、
+[#390](https://github.com/kubohiroya/tm-kamishibai/issues/390)、
+[#394](https://github.com/kubohiroya/tm-kamishibai/issues/394)
 
 ## 1. 責務
 

@@ -1,4 +1,4 @@
-/* This file is generated from @kubohiroya/turbowarp-tmpose/posenet-assets. */
+/* This file is generated from @kubohiroya/turbowarp-tm/posenet-assets. */
 /** @param {string} value */
 function decodeBase64(value) {
   if (typeof atob !== 'function') throw new Error('K4-POSENET-ASSET-001: atob is required');

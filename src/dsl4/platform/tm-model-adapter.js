@@ -1,4 +1,4 @@
-import {createTMPoseComposition} from '@kubohiroya/turbowarp-tmpose/composition';
+import {createTMComposition} from '@kubohiroya/turbowarp-tm/composition';
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -13,7 +13,7 @@ function adapterError(code, message) {
 }
 
 function abortError() {
-  const error = new Error('TMPose model preparation was cancelled');
+  const error = new Error('TM model preparation was cancelled');
   error.name = 'AbortError';
   return error;
 }
@@ -21,7 +21,7 @@ function abortError() {
 /** @param {unknown} value @param {string} label */
 function requireNonEmptyString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
-    throw adapterError('K4-TMPOSE-ADAPTER-001', `${label} must be a non-empty string`);
+    throw adapterError('K4-TM-ADAPTER-001', `${label} must be a non-empty string`);
   }
   return value;
 }
@@ -33,7 +33,7 @@ function validateComposition(value) {
     typeof value.registerPoseModel !== 'function' ||
     typeof value.releasePoseModel !== 'function'
   ) {
-    throw new TypeError('TMPose composition must provide registerPoseModel and releasePoseModel');
+    throw new TypeError('TM composition must provide registerPoseModel and releasePoseModel');
   }
   return /** @type {Record<string, Function>} */ (value);
 }
@@ -47,7 +47,7 @@ function validateSignal(value) {
     typeof value.addEventListener !== 'function' ||
     typeof value.removeEventListener !== 'function'
   ) {
-    throw adapterError('K4-TMPOSE-ADAPTER-001', 'pose model preparation signal is invalid');
+    throw adapterError('K4-TM-ADAPTER-001', 'pose model preparation signal is invalid');
   }
   return /** @type {AbortSignal} */ (/** @type {unknown} */ (value));
 }
@@ -56,7 +56,7 @@ function validateSignal(value) {
 function validateFiles(files, assetId) {
   if (files.length !== 3) {
     throw adapterError(
-      'K4-TMPOSE-ADAPTER-002',
+      'K4-TM-ADAPTER-002',
       `Pose model ${assetId} must contain exactly three files`,
     );
   }
@@ -73,27 +73,27 @@ function validateFiles(files, assetId) {
       !(candidate.bytes instanceof Uint8Array) ||
       candidate.bytes.byteLength === 0
     ) {
-      throw adapterError('K4-TMPOSE-ADAPTER-002', `Pose model ${assetId} files are invalid`);
+      throw adapterError('K4-TM-ADAPTER-002', `Pose model ${assetId} files are invalid`);
     }
     paths.add(candidate.path);
     if (candidate.path.endsWith('.bin')) weights += 1;
   }
   if (!paths.has('model.json') || !paths.has('metadata.json') || weights !== 1) {
     throw adapterError(
-      'K4-TMPOSE-ADAPTER-002',
+      'K4-TM-ADAPTER-002',
       `Pose model ${assetId} requires model.json, metadata.json, and one weights file`,
     );
   }
 }
 
 /**
- * Adapt a validated DSL 4.0 poseModel materialization to one TMPose composition.
+ * Adapt a validated DSL 4.0 poseModel materialization to one TM composition.
  *
  * @param {object} options
  * @param {unknown} options.composition
  */
-export function createDsl4TMPoseModelAdapter(options) {
-  if (!isRecord(options)) throw new TypeError('TMPose adapter options must be an object');
+export function createDsl4TMModelAdapter(options) {
+  if (!isRecord(options)) throw new TypeError('TM adapter options must be an object');
   const composition = validateComposition(options.composition);
   const ownedResources = new WeakSet();
   const releasedResources = new WeakSet();
@@ -104,19 +104,19 @@ export function createDsl4TMPoseModelAdapter(options) {
     async prepare(payload, context = {}) {
       if (!isRecord(payload) || !isRecord(payload.asset) || !Array.isArray(payload.files)) {
         throw adapterError(
-          'K4-TMPOSE-ADAPTER-001',
-          'TMPose payload must provide an asset record and files array',
+          'K4-TM-ADAPTER-001',
+          'TM payload must provide an asset record and files array',
         );
       }
       if (!isRecord(context)) {
-        throw adapterError('K4-TMPOSE-ADAPTER-001', 'pose model context must be an object');
+        throw adapterError('K4-TM-ADAPTER-001', 'pose model context must be an object');
       }
       const asset = payload.asset;
       const assetId = requireNonEmptyString(asset.id, 'pose model asset id');
       if (asset.kind !== 'poseModel') {
         throw adapterError(
-          'K4-TMPOSE-ADAPTER-003',
-          `TMPose adapter does not support asset kind: ${String(asset.kind)}`,
+          'K4-TM-ADAPTER-003',
+          `TM adapter does not support asset kind: ${String(asset.kind)}`,
         );
       }
       if (
@@ -124,7 +124,7 @@ export function createDsl4TMPoseModelAdapter(options) {
         (asset.source.type !== 'file' && asset.source.type !== 'remote')
       ) {
         throw adapterError(
-          'K4-TMPOSE-ADAPTER-001',
+          'K4-TM-ADAPTER-001',
           `Pose model ${assetId} must use a materialized file source`,
         );
       }
@@ -170,12 +170,12 @@ export function createDsl4TMPoseModelAdapter(options) {
           cancelRegistration();
           await cancellation;
           throw adapterError(
-            'K4-TMPOSE-ADAPTER-004',
-            `TMPose returned an invalid registration for ${assetId}`,
+            'K4-TM-ADAPTER-004',
+            `TM returned an invalid registration for ${assetId}`,
           );
         }
         const resource = Object.freeze({
-          adapter: 'tmpose',
+          adapter: 'tm',
           assetId,
           kind: 'poseModel',
           name: registration.name,
@@ -192,7 +192,7 @@ export function createDsl4TMPoseModelAdapter(options) {
     /** @param {unknown} resource */
     async release(resource) {
       if (!isRecord(resource) || !ownedResources.has(resource)) {
-        throw adapterError('K4-TMPOSE-ADAPTER-005', 'TMPose resource is not owned by this adapter');
+        throw adapterError('K4-TM-ADAPTER-005', 'TM resource is not owned by this adapter');
       }
       if (releasedResources.has(resource)) return;
       releasedResources.add(resource);
@@ -211,7 +211,7 @@ export function createDsl4TMPoseModelAdapter(options) {
 }
 
 /**
- * Create a TMPose composition and adapter pair for one app-shell runtime instance.
+ * Create a TM composition and adapter pair for one app-shell runtime instance.
  *
  * @param {object} options
  * @param {unknown} options.runtime
@@ -220,9 +220,9 @@ export function createDsl4TMPoseModelAdapter(options) {
  * @param {'legacy' | 'latest-needed'} [options.modelInitializationPolicy]
  * @param {boolean} [options.parallelModelInitialization]
  */
-export function createDsl4TMPosePlatform(options) {
-  if (!isRecord(options)) throw new TypeError('TMPose platform options must be an object');
-  const createComposition = options.createComposition ?? createTMPoseComposition;
+export function createDsl4TMPlatform(options) {
+  if (!isRecord(options)) throw new TypeError('TM platform options must be an object');
+  const createComposition = options.createComposition ?? createTMComposition;
   if (typeof createComposition !== 'function') {
     throw new TypeError('createComposition must be a function');
   }
@@ -251,6 +251,6 @@ export function createDsl4TMPosePlatform(options) {
   });
   return Object.freeze({
     composition,
-    adapter: createDsl4TMPoseModelAdapter({composition}),
+    adapter: createDsl4TMModelAdapter({composition}),
   });
 }

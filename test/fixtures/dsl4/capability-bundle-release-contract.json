@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.9",
+    "version": "4.0.0-rc.10",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -16,19 +16,19 @@
       "kubohiroyabubble",
       "kubohiroyaruntimeexpression",
       "kubohiroyasvgtext",
-      "tmpose"
+      "kubohiroyatm"
     ],
     "blockIconPolicy": "member-blockIconURI",
     "memberDocumentation": {
       "policy": "member-docsURI-button",
       "urls": {
-        "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/tmpose-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
+        "kubohiroyakamishibairuntime4": "https://kubohiroya.github.io/tm-kamishibai-docs/4.0/turbowarp-programmer-guides/dsl-4.0-runtime-block-reference/",
         "kubohiroyaassetmanager": "https://kubohiroya.github.io/turbowarp-asset-manager/",
         "kubohiroyaasyncinput": "https://kubohiroya.github.io/turbowarp-async-input/",
         "kubohiroyabubble": "https://kubohiroya.github.io/turbowarp-bubble/",
         "kubohiroyaruntimeexpression": "https://kubohiroya.github.io/turbowarp-runtime-expression/",
         "kubohiroyasvgtext": "https://kubohiroya.github.io/turbowarp-svg-text/",
-        "tmpose": "https://kubohiroya.github.io/turbowarp-tmpose/"
+        "kubohiroyatm": "https://kubohiroya.github.io/turbowarp-tm/"
       }
     },
     "runtimeVisibleOpcodes": [
@@ -80,7 +80,6 @@
     {
       "id": "asset-manager",
       "package": "@kubohiroya/turbowarp-asset-manager",
-      "version": "0.13.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-asset-manager",
       "compositionExport": "./composition",
@@ -91,7 +90,6 @@
     {
       "id": "async-input",
       "package": "@kubohiroya/turbowarp-async-input",
-      "version": "0.4.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-async-input",
       "compositionExport": "./composition",
@@ -102,7 +100,6 @@
     {
       "id": "bubble",
       "package": "@kubohiroya/turbowarp-bubble",
-      "version": "0.10.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-bubble",
       "compositionExport": "./turbowarp-adapter",
@@ -113,7 +110,6 @@
     {
       "id": "runtime-expression",
       "package": "@kubohiroya/turbowarp-runtime-expression",
-      "version": "0.4.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-runtime-expression",
       "compositionExport": "./composition",
@@ -124,7 +120,6 @@
     {
       "id": "svg-text",
       "package": "@kubohiroya/turbowarp-svg-text",
-      "version": "0.5.0",
       "provider": "npm",
       "repository": "https://github.com/kubohiroya/turbowarp-svg-text",
       "compositionExport": "./composition",
@@ -133,14 +128,13 @@
       "role": "text actor rendering and Bubble internal text layer"
     },
     {
-      "id": "tmpose",
-      "package": "@kubohiroya/turbowarp-tmpose",
-      "version": "1.12.0",
+      "id": "kubohiroyatm",
+      "package": "@kubohiroya/turbowarp-tm",
       "provider": "npm",
-      "repository": "https://github.com/kubohiroya/turbowarp-tmpose",
+      "repository": "https://github.com/kubohiroya/turbowarp-tm",
       "compositionExport": "./composition",
       "poseNetExport": "./posenet",
-      "standaloneExtensionId": "tmpose",
+      "standaloneExtensionId": "kubohiroyatm",
       "license": "MPL-2.0",
       "role": "pose model and recognition lifecycle"
     },
@@ -149,7 +143,7 @@
       "package": null,
       "version": "1",
       "provider": "first-party-source",
-      "repository": "https://github.com/kubohiroya/tmpose-kamishibai",
+      "repository": "https://github.com/kubohiroya/tm-kamishibai",
       "compositionExport": "src/dsl4/structured-data.js",
       "standaloneExtensionId": "kubohiroyastructdata1",
       "debugExtensionId": "kubohiroyastructdata1debug",
@@ -181,8 +175,8 @@
       "src/dsl4/platform/turbowarp-runtime-host.js"
     ],
     "@kubohiroya/turbowarp-svg-text/composition": ["src/dsl4/platform/svg-text-action-port.js"],
-    "@kubohiroya/turbowarp-tmpose/composition": ["src/dsl4/platform/tmpose-model-adapter.js"],
-    "@kubohiroya/turbowarp-tmpose/posenet": ["src/dsl4/platform/posenet-bundle.js"]
+    "@kubohiroya/turbowarp-tm/composition": ["src/dsl4/platform/tm-model-adapter.js"],
+    "@kubohiroya/turbowarp-tm/posenet": ["src/dsl4/platform/posenet-bundle.js"]
   },
   "bundleBoundaries": {
     "standard4": {
@@ -190,7 +184,7 @@
       "unbundle": "regenerate-current-source",
       "provenance": [
         "scripts/sb3/dsl4-downloadable-release.mjs",
-        "release-metadata/4.0.0-rc.9.json",
+        "release-metadata/{release.version}.json",
         "package.json",
         "pnpm-lock.yaml",
         "LICENSES.md"
@@ -200,7 +194,7 @@
       "kind": "github-release-asset",
       "unbundle": "release-asset",
       "provenance": [
-        "https://github.com/kubohiroya/tmpose-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3"
+        "https://github.com/kubohiroya/tm-kamishibai/releases/download/v3.2.3/kamishibai-3.2.sb3"
       ]
     }
   },
@@ -228,7 +222,7 @@
     "embeddedStory": "production-no-preview"
   },
   "titleLifecycle": {
-    "reference": "https://kubohiroya.github.io/tmpose-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
+    "reference": "https://kubohiroya.github.io/tm-kamishibai-docs/3.2/developer-guides/internal-specification/document.html#%E7%8A%B6%E6%85%8B%E9%81%B7%E7%A7%BB",
     "greenFlag": ["initialize", "showTitle", "title"],
     "closeInputs": ["stage-click", "close-button"],
     "sharedBroadcast": "closeTitle",
@@ -255,16 +249,13 @@
     "verify-publication"
   ],
   "releaseLifecycle": {
-    "metadata": "release-metadata/4.0.0-rc.9.json",
     "states": ["candidate", "frozen", "published"],
     "updateCommand": "pnpm release:dsl4:update",
     "checkCommand": "pnpm release:dsl4:check",
     "freezeCommand": "pnpm release:dsl4:freeze",
     "publicationCommand": "pnpm release:dsl4:record-publication",
     "immutableStates": ["frozen", "published"],
-    "nextCandidateVersion": "4.0.0-rc.10",
     "npmDistTag": "next",
-    "gitTag": "v4.0.0-rc.9",
     "githubPrerelease": true,
     "recommendedStableVersion": "3.2.3"
   },

@@ -61,7 +61,7 @@ function normalizeSelection(value) {
 }
 
 /**
- * Render fixed app-shell controls around the current TMPose preview rectangle.
+ * Render fixed app-shell controls around the current TM preview rectangle.
  *
  * The renderer owns its DOM listeners and nodes. Asset bytes and Object URLs remain owned by the
  * platform asset session; this renderer only borrows URLs until stop/dispose.

@@ -88,7 +88,7 @@ test('keeps every transient overlay field out of production artifacts', () => {
 });
 
 test('provides a deterministic reduced-motion screenshot contract to docs #31', () => {
-  assert.equal(screenshotContract.consumerIssue, 'kubohiroya/tmpose-kamishibai-docs#31');
+  assert.equal(screenshotContract.consumerIssue, 'kubohiroya/tm-kamishibai-docs#31');
   assert.deepEqual(screenshotContract.capture.viewport, {width: 1280, height: 720});
   assert.equal(screenshotContract.capture.reducedMotion, true);
   assert.equal(screenshotContract.capture.sourcePathsVisible, false);

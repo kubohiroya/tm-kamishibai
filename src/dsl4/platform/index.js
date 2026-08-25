@@ -28,12 +28,12 @@ export {
 } from './pose-archive-extractor.js';
 export {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 export {createDsl4BubblePlatform} from './bubble-platform.js';
-export {createDsl4TMPoseModelAdapter, createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
+export {createDsl4TMModelAdapter, createDsl4TMPlatform} from './tm-model-adapter.js';
 export {
   createDsl4PoseNetProjectBundle,
   createDsl4PoseNetProjectBundleFromLoader,
-  createDsl4BundledTMPoseRuntime,
-  createDsl4ProjectTMPoseRuntime,
+  createDsl4BundledTMRuntime,
+  createDsl4ProjectTMRuntime,
   dsl4PoseNetBundleManifest,
   dsl4PoseNetBundleStoragePaths,
   dsl4PoseNetModelDefaults,

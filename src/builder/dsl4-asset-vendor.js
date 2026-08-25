@@ -24,7 +24,7 @@ import {installBundleTransactionally} from './atomic-output.js';
 import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
 
-const poseModelContentType = 'application/vnd.tmpose.pose-model';
+const poseModelContentType = 'application/vnd.tm.pose-model';
 const defaultVendorDirectory = '.kamishibai/vendor/dsl4-assets';
 const defaultMaxCompressionRatio = 100;
 

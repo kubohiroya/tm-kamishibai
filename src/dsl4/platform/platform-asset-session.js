@@ -15,7 +15,7 @@ import {
   dsl4PoseArchiveDefaultLimits,
   isDsl4RemotePoseArchiveUrl,
 } from './pose-archive-extractor.js';
-import {createDsl4TMPosePlatform} from './tmpose-model-adapter.js';
+import {createDsl4TMPlatform} from './tm-model-adapter.js';
 import {
   createDsl4StoryCameraLifecycle,
   storyUsesPoseRecognition,
@@ -56,7 +56,7 @@ function validateRuntimeComponent(value, binaryEntryEnabled) {
 }
 
 /** @param {unknown} value */
-function validateTMPoseRuntime(value) {
+function validateTMRuntime(value) {
   if (
     !isRecord(value) ||
     typeof value.Webcam !== 'function' ||
@@ -165,7 +165,7 @@ function configurePoseOverlay(composition, overlay) {
  * @param {{digest: Function}} [options.subtleCrypto]
  * @param {Function} [options.createFile]
  * @param {Function} [options.createAssetManagerComposition]
- * @param {Function} [options.createTMPoseComposition]
+ * @param {Function} [options.createTMComposition]
  * @param {Function} [options.createAsyncInputComposition]
  * @param {unknown} [options.keySource]
  * @param {unknown} [options.actorTouchSource]
@@ -186,7 +186,7 @@ export function createDsl4PlatformAssetSession(options) {
   if (!isRecord(options)) throw new TypeError('platform asset session options must be an object');
   const binaryEntryEnabled = options.binaryEntryProvider !== undefined;
   const runtimeComponent = validateRuntimeComponent(options.runtimeComponent, binaryEntryEnabled);
-  const tmPoseRuntime = validateTMPoseRuntime(options.tmPoseRuntime);
+  const tmPoseRuntime = validateTMRuntime(options.tmPoseRuntime);
   if (typeof options.setLoading !== 'function') {
     throw new TypeError('setLoading must be a function');
   }
@@ -288,10 +288,10 @@ export function createDsl4PlatformAssetSession(options) {
     throw new TypeError('createAssetManagerComposition must be a function');
   }
   if (
-    options.createTMPoseComposition !== undefined &&
-    typeof options.createTMPoseComposition !== 'function'
+    options.createTMComposition !== undefined &&
+    typeof options.createTMComposition !== 'function'
   ) {
-    throw new TypeError('createTMPoseComposition must be a function');
+    throw new TypeError('createTMComposition must be a function');
   }
   const createAsyncInput =
     options.createAsyncInputComposition ?? createDefaultAsyncInputComposition;
@@ -472,17 +472,17 @@ export function createDsl4PlatformAssetSession(options) {
     const parallelModelInitialization =
       typeof modelInitialization.parallel === 'boolean' ? modelInitialization.parallel : false;
 
-    const tmpose = createDsl4TMPosePlatform({
+    const tmPlatform = createDsl4TMPlatform({
       runtime: tmPoseRuntime,
       modelInitializationPolicy,
       parallelModelInitialization,
       ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
-      ...(options.createTMPoseComposition === undefined
+      ...(options.createTMComposition === undefined
         ? {}
-        : {createComposition: options.createTMPoseComposition}),
+        : {createComposition: options.createTMComposition}),
     });
-    created.push(tmpose.composition);
-    const tmposeComposition = validateCompositionMethods(tmpose.composition, 'TMPose composition', [
+    created.push(tmPlatform.composition);
+    const tmComposition = validateCompositionMethods(tmPlatform.composition, 'TM composition', [
       'registerPoseModel',
       'activatePoseModel',
       'releasePoseModel',
@@ -522,15 +522,15 @@ export function createDsl4PlatformAssetSession(options) {
         ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
         : []),
     ]);
-    configurePoseOverlay(tmposeComposition, poseOverlay);
+    configurePoseOverlay(tmComposition, poseOverlay);
     const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)
       ? createDsl4StoryCameraLifecycle({
-          composition: tmposeComposition,
+          composition: tmComposition,
           ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
         })
       : null;
     const asyncInputCandidate = createAsyncInput({
-      poseSource: tmposeComposition,
+      poseSource: tmComposition,
       ...(options.keySource === undefined ? {} : {keySource: options.keySource}),
       ...(options.actorTouchSource === undefined
         ? {}
@@ -543,9 +543,9 @@ export function createDsl4PlatformAssetSession(options) {
       ['waitForPoseCandidate', 'waitForKeyCandidate', 'waitForActorTouchCandidate', 'releaseAll'],
     );
     const poseActionPort = createDsl4PoseActionPort({
-      tmposeComposition,
+      tmComposition,
       asyncInputComposition,
-      getPoseModelLabels: (poseModel) => tmpose.adapter.getPoseModelLabels(poseModel),
+      getPoseModelLabels: (poseModel) => tmPlatform.adapter.getPoseModelLabels(poseModel),
       playSound: (sound, playOptions) => assetManagerComposition.playSound(sound, playOptions),
       stopSound: (sound) => assetManagerComposition.stopSound(sound),
       ...(options.poseSchedule === undefined
@@ -571,7 +571,7 @@ export function createDsl4PlatformAssetSession(options) {
     });
     const adapter = createDsl4PlatformAssetAdapter({
       mediaAdapter,
-      poseAdapter: tmpose.adapter,
+      poseAdapter: tmPlatform.adapter,
     });
     /** @type {Readonly<Record<string, unknown>>[]} */
     const cacheWarnings = [];
@@ -663,7 +663,7 @@ export function createDsl4PlatformAssetSession(options) {
             if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
               throw new TypeError('pose preview mirroring mode is invalid');
             }
-            tmposeComposition.setPreviewMirroring(mode);
+            tmComposition.setPreviewMirroring(mode);
             options.onPreviewMirroringChange?.(/** @type {'mirrored' | 'unmirrored'} */ (mode));
           },
         })
@@ -678,7 +678,7 @@ export function createDsl4PlatformAssetSession(options) {
                   if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
                     throw new TypeError('pose preview mirroring mode is invalid');
                   }
-                  const result = tmposeComposition.setPreviewMirroring(mode);
+                  const result = tmComposition.setPreviewMirroring(mode);
                   options.onPreviewMirroringChange?.(
                     /** @type {'mirrored' | 'unmirrored'} */ (mode),
                   );
@@ -690,26 +690,26 @@ export function createDsl4PlatformAssetSession(options) {
             ? {
                 listCameraDevices() {
                   if (disposePromise) throw disposedError();
-                  return withCameraBusy(() => tmposeComposition.listCameraDevices());
+                  return withCameraBusy(() => tmComposition.listCameraDevices());
                 },
                 /** @param {unknown} selection */
                 selectCamera(selection) {
                   if (disposePromise) throw disposedError();
-                  return withCameraBusy(() => tmposeComposition.selectCamera(selection));
+                  return withCameraBusy(() => tmComposition.selectCamera(selection));
                 },
                 getCameraSelection() {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.getCameraSelection();
+                  return tmComposition.getCameraSelection();
                 },
                 getActiveCamera() {
                   if (disposePromise) throw disposedError();
-                  return tmposeComposition.getActiveCamera();
+                  return tmComposition.getActiveCamera();
                 },
               }
             : {}),
           isCameraRunning() {
             if (disposePromise) return false;
-            return tmposeComposition.isCameraRunning();
+            return tmComposition.isCameraRunning();
           },
         })
       : null;
@@ -796,7 +796,7 @@ export function createDsl4PlatformAssetSession(options) {
           ...(binaryAssetBacking ? [() => binaryAssetBacking.dispose()] : []),
           () => assetLifecycle.release({reason}),
           () => asyncInputComposition.releaseAll(),
-          () => tmposeComposition.releaseAll(),
+          () => tmComposition.releaseAll(),
           ...(verifiedRemoteEnabled
             ? [() => assetManagerComposition.releaseVerifiedRemoteStoryCacheLease()]
             : []),
@@ -818,7 +818,7 @@ export function createDsl4PlatformAssetSession(options) {
     return Object.freeze({
       lifecycle,
       assetManagerComposition,
-      tmposeComposition,
+      tmComposition,
       asyncInputComposition,
       poseActionPort,
       storyCameraLifecycle,

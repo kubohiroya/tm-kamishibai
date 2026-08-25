@@ -21,7 +21,7 @@ import {
 import {loadDsl4BinaryEntryRuntimeComponent} from '../../src/dsl4/runtime-artifact-loader.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
-const defaultSamplesRoot = path.resolve(repositoryRoot, '../tmpose-kamishibai-samples');
+const defaultSamplesRoot = path.resolve(repositoryRoot, '../tm-kamishibai-samples');
 const runtimeLimits = Object.freeze({
   maxSourceBytes: 1024 * 1024,
   maxAssetFileBytes: 8 * 1024 * 1024,
@@ -638,7 +638,7 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   }
   const release = await createKamishibaiSb3({
     sourceDirectory: releaseSourceDirectory,
-    version: '4.0.0-rc.9',
+    version: '4.0.0-rc.10',
     buildDate: '2026-08-16',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
   });

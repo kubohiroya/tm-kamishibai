@@ -123,13 +123,11 @@ function isSafePoseModelFile(file) {
 function normalizePoseModels(input) {
   if (input === undefined) return Object.freeze({});
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    throw new TypeError(
-      'poseModels must be an object keyed by exact DSL 3.1/3.2 TMPoseURL values.',
-    );
+    throw new TypeError('poseModels must be an object keyed by exact DSL 3.1/3.2 TMURL values.');
   }
   const normalized = new Map();
   for (const [sourceUrl, rawReplacement] of Object.entries(input)) {
-    if (!sourceUrl) throw new TypeError('poseModels must not contain an empty TMPoseURL key.');
+    if (!sourceUrl) throw new TypeError('poseModels must not contain an empty TMURL key.');
     if (
       typeof rawReplacement !== 'object' ||
       rawReplacement === null ||
@@ -725,17 +723,13 @@ class Converter {
   /** @param {Dsl32Command} command */
   parsePoseModel(command) {
     if (!this.currentScene) {
-      this.error(
-        'K4-CONVERT-POSE-MODEL-SCENE',
-        'TMPoseURL must follow a sceneLabel command.',
-        command,
-      );
+      this.error('K4-CONVERT-POSE-MODEL-SCENE', 'TMURL must follow a sceneLabel command.', command);
       return;
     }
     if (this.scenePoseModels.has(this.currentScene)) {
       this.error(
         'K4-CONVERT-DUPLICATE',
-        `TMPoseURL is declared more than once in scene ${this.currentScene}.`,
+        `TMURL is declared more than once in scene ${this.currentScene}.`,
         command,
       );
       return;
@@ -751,7 +745,7 @@ class Converter {
       } catch {
         this.error(
           'K4-CONVERT-POSE-MODEL',
-          `TMPoseURL must be an absolute HTTPS URL or have an exact --pose-models replacement: ${sourceUrl || '(empty)'}`,
+          `TMURL must be an absolute HTTPS URL or have an exact --pose-models replacement: ${sourceUrl || '(empty)'}`,
           command,
         );
         return;
@@ -765,7 +759,7 @@ class Converter {
       ) {
         this.error(
           'K4-CONVERT-POSE-MODEL',
-          `TMPoseURL must be an absolute HTTPS URL without credentials or fragment, or have an exact --pose-models replacement: ${sourceUrl}`,
+          `TMURL must be an absolute HTTPS URL without credentials or fragment, or have an exact --pose-models replacement: ${sourceUrl}`,
           command,
         );
         return;
@@ -1474,7 +1468,7 @@ class Converter {
         case 'action':
           this.parseAction(command);
           break;
-        case 'TMPoseURL':
+        case 'TMURL':
           this.parsePoseModel(command);
           break;
         default:
@@ -1506,7 +1500,7 @@ class Converter {
       if (!this.scenePoseModels.has(sceneId)) {
         this.error(
           'K4-CONVERT-POSE-MODEL',
-          `Scene ${sceneId} uses Actor.pose but has no convertible TMPoseURL. Add a TMPoseURL or an exact --pose-models replacement.`,
+          `Scene ${sceneId} uses Actor.pose but has no convertible TMURL. Add a TMURL or an exact --pose-models replacement.`,
           command,
         );
       }

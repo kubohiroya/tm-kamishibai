@@ -9,8 +9,7 @@ import {readTitleBuildMetadataFromSb3} from './title-build-metadata.mjs';
 
 export {downloadableReleases};
 
-const releaseAssetPath =
-  /^\/kubohiroya\/tmpose-kamishibai\/releases\/download\/v[^/]+\/[^/]+\.sb3$/u;
+const releaseAssetPrefix = '/kubohiroya/tm-kamishibai/releases/download/';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -24,7 +23,7 @@ function assertImmutableReleaseUrl(release) {
     'github.com',
     `${release.version} release URL must use GitHub Releases.`,
   );
-  assert.match(url.pathname, releaseAssetPath, `${release.version} release URL is invalid.`);
+  assert(url.pathname.startsWith(releaseAssetPrefix), `${release.version} release URL is invalid.`);
   assert.equal(
     decodeURIComponent(path.posix.basename(url.pathname)),
     release.filename,
