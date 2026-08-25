@@ -15,6 +15,7 @@ import {
   serializeDsl4ExternalSourceManifestSource,
   validateDsl4ExternalSourceManifestContract,
 } from '../src/dsl4/index.js';
+import {createBrowserFileHandleFromBytes} from './helpers/browser-file-system.mjs';
 
 const encoder = new TextEncoder();
 const validManifest = Object.freeze({
@@ -99,18 +100,7 @@ function createDocument() {
 }
 
 function createFileHandle(readBytes) {
-  return {
-    kind: 'file',
-    async getFile() {
-      const bytes = await readBytes();
-      return {
-        size: bytes.byteLength,
-        async arrayBuffer() {
-          return bytes.slice().buffer;
-        },
-      };
-    },
-  };
+  return createBrowserFileHandleFromBytes('fixture', readBytes);
 }
 
 function createProject({
