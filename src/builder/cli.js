@@ -58,6 +58,63 @@ function resolveDsl4CliDefaultLimit(values, option) {
   return value;
 }
 
+/**
+ * @param {string[]} arguments_
+ * @param {{flagOptions: Set<string>, valueOptions: Set<string>}} options
+ */
+function parseCliFlagAndValueOptions(arguments_, {flagOptions, valueOptions}) {
+  const values = new Map();
+  const flags = new Set();
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const option = arguments_[index];
+    if (flagOptions.has(option)) {
+      if (flags.has(option)) {
+        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+      }
+      flags.add(option);
+      continue;
+    }
+    if (!valueOptions.has(option)) {
+      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
+    }
+    const value = arguments_[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
+    }
+    if (values.has(option)) {
+      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
+    }
+    values.set(option, value);
+    index += 1;
+  }
+  return {flags, values};
+}
+
+/**
+ * @param {Map<string, string>} values
+ * @param {Iterable<string>} requiredOptions
+ */
+function requireCliValueOptions(values, requiredOptions) {
+  for (const required of requiredOptions) {
+    if (!values.has(required)) {
+      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
+    }
+  }
+}
+
+/**
+ * @param {Map<string, string>} values
+ * @param {string} option
+ * @param {number} minimum
+ */
+function readCliInteger(values, option, minimum) {
+  const value = Number(values.get(option));
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Sb3BuilderError(`${option} must be an integer >= ${minimum}.`, {stage: 'cli'});
+  }
+  return value;
+}
+
 export function usage() {
   return `Usage:
   tmpose-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
@@ -945,8 +1002,6 @@ function parseBuildSb3Arguments(rest) {
  * @returns {Dsl4CliOptions}
  */
 function parseBuildDsl4Arguments(rest) {
-  const values = new Map();
-  const flags = new Set();
   const booleanOptions = new Set([
     '--enable-source-includes',
     '--enable-root-binary-entries',
@@ -981,52 +1036,20 @@ function parseBuildDsl4Arguments(rest) {
     '--max-asset-config-bytes',
     '--max-asset-lock-bytes',
   ]);
-  for (let index = 0; index < rest.length; index += 1) {
-    const option = rest[index];
-    if (booleanOptions.has(option)) {
-      if (flags.has(option)) {
-        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
-      }
-      flags.add(option);
-      continue;
-    }
-    if (!valueOptions.has(option)) {
-      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
-    }
-    const value = rest[index + 1];
-    if (!value || value.startsWith('--')) {
-      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
-    }
-    if (values.has(option)) {
-      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
-    }
-    values.set(option, value);
-    index += 1;
-  }
-  for (const required of requiredValueOptions) {
-    if (!values.has(required)) {
-      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
-    }
-  }
+  const {flags, values} = parseCliFlagAndValueOptions(rest, {
+    flagOptions: booleanOptions,
+    valueOptions,
+  });
+  requireCliValueOptions(values, requiredValueOptions);
   if (flags.has('--enable-source-includes')) {
-    for (const required of [
+    requireCliValueOptions(values, [
       '--max-source-files',
       '--max-total-source-bytes',
       '--max-include-depth',
-    ]) {
-      if (!values.has(required)) {
-        throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
-      }
-    }
+    ]);
   }
   /** @param {string} option */
-  const positiveInteger = (option) => {
-    const value = Number(values.get(option));
-    if (!Number.isSafeInteger(value) || value < 1) {
-      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
-    }
-    return value;
-  };
+  const positiveInteger = (option) => readCliInteger(values, option, 1);
   const channel = values.get('--channel');
   if (channel !== 'bundled' && channel !== 'unbundled') {
     throw new Sb3BuilderError('--channel must be either bundled or unbundled.', {stage: 'cli'});
@@ -1117,8 +1140,6 @@ function parseBuildDsl4Arguments(rest) {
  * @returns {Dsl4PreviewCliOptions}
  */
 function parsePreviewDsl4Arguments(rest) {
-  const values = new Map();
-  const flags = new Set();
   const booleanOptions = new Set([
     '--watch',
     '--replace-existing',
@@ -1153,43 +1174,17 @@ function parsePreviewDsl4Arguments(rest) {
     '--max-project-json-bytes',
     '--port',
   ]);
-  for (let index = 0; index < rest.length; index += 1) {
-    const option = rest[index];
-    if (booleanOptions.has(option)) {
-      if (flags.has(option)) {
-        throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
-      }
-      flags.add(option);
-      continue;
-    }
-    if (!valueOptions.has(option)) {
-      throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
-    }
-    const value = rest[index + 1];
-    if (!value || value.startsWith('--')) {
-      throw new Sb3BuilderError(`${option} requires a value.`, {stage: 'cli'});
-    }
-    if (values.has(option)) {
-      throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
-    }
-    values.set(option, value);
-    index += 1;
-  }
+  const {flags, values} = parseCliFlagAndValueOptions(rest, {
+    flagOptions: booleanOptions,
+    valueOptions,
+  });
   if (!flags.has('--watch')) {
     throw new Sb3BuilderError('Missing required option: --watch', {stage: 'cli'});
   }
-  for (const required of requiredValueOptions) {
-    if (!values.has(required)) {
-      throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
-    }
-  }
+  requireCliValueOptions(values, requiredValueOptions);
   const sourceIncludesEnabled = flags.has('--enable-source-includes');
   if (sourceIncludesEnabled) {
-    for (const required of graphValueOptions) {
-      if (!values.has(required)) {
-        throw new Sb3BuilderError(`Missing required option: ${required}`, {stage: 'cli'});
-      }
-    }
+    requireCliValueOptions(values, graphValueOptions);
   } else {
     for (const option of graphValueOptions) {
       if (values.has(option)) {
@@ -1198,13 +1193,7 @@ function parsePreviewDsl4Arguments(rest) {
     }
   }
   /** @param {string} option */
-  const positiveInteger = (option) => {
-    const value = Number(values.get(option));
-    if (!Number.isSafeInteger(value) || value < 1) {
-      throw new Sb3BuilderError(`${option} must be an integer >= 1.`, {stage: 'cli'});
-    }
-    return value;
-  };
+  const positiveInteger = (option) => readCliInteger(values, option, 1);
   const port = values.has('--port') ? Number(values.get('--port')) : 0;
   if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
     throw new Sb3BuilderError('--port must be an integer between 0 and 65535.', {stage: 'cli'});
