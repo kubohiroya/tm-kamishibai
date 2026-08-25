@@ -1,35 +1,16 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {
-  createDsl4RuntimeController,
-  createDsl4SourceFrontend,
-  dsl4CoreActionNames,
-} from '../src/dsl4/index.js';
+import {createDsl4RuntimeController, dsl4CoreActionNames} from '../src/dsl4/index.js';
+import {deferred} from './helpers/async-test-helpers.mjs';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const frontend = dsl4TestSourceFrontend;
 
 function parseStory(source) {
   const result = frontend.parse(source, {sourceId: 'runtime-test.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   return result.storyDocument;
-}
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
 }
 
 test('gates Bubble native reveal and motion behind the startup-fixed advanced flag', () => {
