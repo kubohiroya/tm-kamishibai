@@ -28,7 +28,7 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
 | Script format   | 3.1/3.2 text DSL                                | DSL 4.0 YAML                                                  |
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
-| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc10]                                     |
+| Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc11]                                     |
 
 If you are unsure, use 3.2.3. Version 4.0.0-rc.11 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
