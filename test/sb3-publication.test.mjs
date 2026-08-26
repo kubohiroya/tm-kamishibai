@@ -105,7 +105,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(
     readme,
     new RegExp(
-      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
+      `pnpm add --save-exact ${packageJson.name}@${packageJson.version.replaceAll('.', '\\.')}`,
       'u',
     ),
     'README installation must use the current fixed npm version.',
@@ -140,7 +140,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(
     readmeJapanese,
     new RegExp(
-      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
+      `pnpm add --save-exact @kubohiroya/tm-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
       'u',
     ),
     'Japanese README installation must use the current fixed npm version.',

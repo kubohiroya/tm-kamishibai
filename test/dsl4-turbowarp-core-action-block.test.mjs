@@ -23,7 +23,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 23);
+  assert.equal(new Set(commands).size, 24);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -53,7 +53,7 @@ test('defines one distinct public block for every manifest core action', () => {
   ]);
 });
 
-test('normalizes all 23 block inputs through their manifest Schema definitions', () => {
+test('normalizes all 24 block inputs through their manifest Schema definitions', () => {
   const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
   const cases = [
     ['stage', {BACKDROP: 'Beach'}, null, {backdrop: 'Beach'}],

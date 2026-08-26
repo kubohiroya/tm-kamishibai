@@ -8,7 +8,7 @@ Scratch project asset、remote assetの永続cache、実行sessionだけのembed
 | 用語                    | 所有者                    | 内容                                                                                     |
 | ----------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
 | Scratch project asset   | Scratch VM／storage       | `targets[].costumes`と`targets[].sounds`から参照される通常asset。Stage costumeはbackdrop |
-| DSL embedded asset      | Kamishibai Runtime        | `k4.yml assets`のfileから作るimage、sound、poseModel等                                   |
+| DSL embedded asset      | Kamishibai Runtime        | `k4.yml assets`のfileから作るimage、sound、recognitionModel等                                   |
 | root binary entry       | builder／SB3 entry source | SB3 rootの`k4asset-v1-<sha256-hex>`                                                      |
 | persistent remote cache | Asset Manager             | 検証済みremote assetを次回起動でも再利用するstory単位cache                               |
 | session backing store   | Asset Manager             | 現在の実行sessionだけでembedded bytesを保持する一時store                                 |
@@ -124,7 +124,7 @@ StoryDocument／v3 descriptor、全archive／asset上限、Packager package meta
 `K4-PACKAGER-TEMPLATE-001`でbuildを失敗させます。`zip-one-asset`で再構築するのはPackagerの外側の配布ZIPだけであり、
 内側の`project.zip`／SB3は変更しません。SB3を構成・更新する正式経路は引き続きsb3-toolchainだけです。
 
-登録先は`Symbol.for('@kubohiroya/tmpose-kamishibai/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
+登録先は`Symbol.for('@kubohiroya/tm-kamishibai/dsl4-packager-entry-source/v1')`で識別するsingle-use registryです。
 Kamishibai側は`claimDsl4PackagerEntrySource()`で一度だけsourceを取得し、
 `createDsl4BinaryEntryProviderFromPackagerSource()`でdescriptor、archive集計、entry metadata、展開後size、SHA-256を再検証します。
 claim時にglobal slotを削除し、providerの明示releaseまでZIP closureを保持します。現在の30日persistent backingへは接続せず、

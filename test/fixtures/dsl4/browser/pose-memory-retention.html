@@ -87,7 +87,7 @@
         for (let visit = 0; visit < 24; visit += 1) {
           const name = visit % 2 === 0 ? 'FirstPose' : 'NextPose';
           const resource = await adapter.prepare({
-            asset: {id: name, kind: 'poseModel', source: {type: 'file'}},
+            asset: {id: name, kind: 'recognitionModel', source: {type: 'file'}},
             files: files(name),
           });
           composition.activatePoseModel(name);

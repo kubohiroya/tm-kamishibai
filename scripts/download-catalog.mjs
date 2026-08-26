@@ -5,7 +5,7 @@ export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
 const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(new URL('../release-metadata/4.0.0-rc.10.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../release-metadata/4.0.0-rc.11.json', import.meta.url), 'utf8'),
 );
 const dsl4PublishedArtifact =
   dsl4ReleaseMetadata.state === 'published'

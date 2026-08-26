@@ -108,7 +108,7 @@ adapterは選択されたroot直下で`project.source.yml`、`project.source.yam
 manifest選択後、選択済みroot handleへ`getFileHandle()`を呼び、root直下のentry YAMLを取得します。文字列pathをOS pathへ変換せず、
 root外handle、URL、symlink解決API、任意file pickerへfallbackしません。
 
-一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。pose modelはbundle自体を
+一般作者向けの最小構成は次のflat layoutです。画像・音声もroot直下へ置けます。recognition modelはbundle自体を
 directoryにしますが、`assets/`、`images/`、`sounds/`、`pose-models/`等の分類directoryは任意です。
 
 ```text
@@ -295,7 +295,7 @@ UIの固定要旨は次です。
 projectの設定値を表示します。
 
 ```bash
-pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+pnpm exec tm-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \
@@ -304,11 +304,11 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-project-bytes N \
   --max-project-json-bytes N
 
-pnpm exec tmpose-kamishibai validate-dsl4 \
+pnpm exec tm-kamishibai validate-dsl4 \
   --input story.k4.yml \
   --format pretty
 
-pnpm exec tmpose-kamishibai build-dsl4 \
+pnpm exec tm-kamishibai build-dsl4 \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \

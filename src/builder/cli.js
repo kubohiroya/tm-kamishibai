@@ -117,10 +117,10 @@ function readCliInteger(values, option, minimum) {
 
 export function usage() {
   return `Usage:
-  tmpose-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
+  tm-kamishibai build-sb3 --base BASE.sb3 --script SOURCE.txt \\
     --assets assets.lock.json --output dist/sample --profile editor [options]
 
-  tmpose-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
+  tm-kamishibai build-dsl4 --base BASE.sb3 --project-root DIR \\
     --output dist/story.sb3 --control-profile production --channel bundled \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] \\
@@ -128,10 +128,10 @@ export function usage() {
      --max-asset-config-bytes N --max-asset-lock-bytes N] \\
     [--max-project-bytes N] [--max-project-json-bytes N] [options]
 
-  tmpose-kamishibai convert-dsl4 --input SOURCE.txt \\
+  tm-kamishibai convert-dsl4 --input SOURCE.txt \\
     --output STORY.k4.yml [--pose-models REPLACEMENTS.json]
 
-  tmpose-kamishibai convert-dsl4-assets --project-root DIR \\
+  tm-kamishibai convert-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] --base BASE.sb3 \\
     --output-dir converted --to local|remote|project \\
@@ -143,10 +143,10 @@ export function usage() {
     [--rsync-ssh-port N] [--rsync-timeout-ms N] \\
     [--allow-host HOST] [--output-name NAME]
 
-  tmpose-kamishibai validate-dsl4 --input STORY.k4.yml \\
+  tm-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json]
 
-  tmpose-kamishibai audit-dsl4-assets --project-root DIR \\
+  tm-kamishibai audit-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
@@ -154,17 +154,17 @@ export function usage() {
     --max-asset-config-bytes N \\
     --max-asset-lock-bytes N [--format pretty|json] [options]
 
-  tmpose-kamishibai lock-dsl4-assets --project-root DIR \\
+  tm-kamishibai lock-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] --asset-config project.assets.json \\
     --output project.assets.lock.json --allow-host HOST [options]
 
-  tmpose-kamishibai vendor-dsl4-assets --project-root DIR \\
+  tm-kamishibai vendor-dsl4-assets --project-root DIR \\
     --asset-config project.assets.json --asset-lock project.assets.lock.json \\
     --output-config project.assets.offline.json --output-lock project.assets.offline.lock.json \\
     --allow-host HOST [options]
 
-  tmpose-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
+  tm-kamishibai preview-dsl4 --watch --base BASE.sb3 --project-root DIR \\
     --control-profile production --channel bundled \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] [options]

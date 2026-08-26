@@ -35,7 +35,7 @@ assets:
     file: assets/image.svg
     loading: lazy
   Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/pose
 scenes:
   opening: []
@@ -75,7 +75,7 @@ function snapshot(imageBytes = new TextEncoder().encode('<svg/>')) {
         },
         {
           id: 'Pose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'eager',
           source: {
             type: 'file',
@@ -397,14 +397,14 @@ test('stores an unpinned remote pose URL without inventing verification metadata
 kamishibai: '4.0'
 assets:
   RemotePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     source:
       url: https://cdn.example.com/pose/
 scenes:
   opening:
-    poseModel: RemotePose
+    recognitionModel: RemotePose
     actions: []
 `,
     {sourceId: 'bare-remote-pose-bundle-test'},
@@ -416,7 +416,7 @@ scenes:
       assets: [
         {
           id: 'RemotePose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'lazy',
           source: {type: 'remote', url: 'https://cdn.example.com/pose/'},
         },

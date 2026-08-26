@@ -228,7 +228,8 @@ function readLocalMaterial(snapshot, assetId, asset) {
     fail(`Local asset snapshot is missing ${assetId}`, 'K4-ASSET-CONVERT-LOCAL-001');
   }
   const sourceFiles = /** @type {Readonly<Record<string, any>>[]} */ (manifestAsset.source.files);
-  const opaquePoseArchive = asset.kind === 'poseModel' && manifestAsset.source.mode === 'archive';
+  const recognitionModel = asset.kind === 'recognitionModel';
+  const opaquePoseArchive = recognitionModel && manifestAsset.source.mode === 'archive';
   if (opaquePoseArchive) {
     return Object.freeze({
       opaquePoseArchive: true,
@@ -246,9 +247,7 @@ function readLocalMaterial(snapshot, assetId, asset) {
     return Object.freeze({
       path: file.path,
       bytes,
-      ...(asset.kind === 'poseModel'
-        ? {}
-        : {contentType: contentTypeFor(bytes, file.path, asset.kind)}),
+      ...(recognitionModel ? {} : {contentType: contentTypeFor(bytes, file.path, asset.kind)}),
     });
   });
   return Object.freeze({files: Object.freeze(files)});
@@ -256,7 +255,7 @@ function readLocalMaterial(snapshot, assetId, asset) {
 
 /** @param {Readonly<Record<string, any>>} left @param {Readonly<Record<string, any>>} right @param {string} assetId @param {string} kind */
 function assertSameMaterial(left, right, assetId, kind) {
-  if (kind === 'poseModel') {
+  if (kind === 'recognitionModel') {
     const leftBytes = createRemotePayload(assetId, {kind}, left).bytes;
     const rightBytes = createRemotePayload(assetId, {kind}, right).bytes;
     if (!leftBytes.equals(rightBytes)) {
@@ -290,7 +289,7 @@ function createRemotePayload(assetId, asset, material) {
   let bytes;
   let contentType;
   let extension;
-  if (asset.kind === 'poseModel') {
+  if (asset.kind === 'recognitionModel') {
     if (material.opaquePoseArchive === true) {
       if (material.files.length !== 1) {
         fail(
@@ -718,8 +717,9 @@ export async function convertDsl4ProjectAssets(options) {
         };
         const verified = sourceValue.integrity !== undefined;
         const poseArchive =
-          asset.kind === 'poseModel' && (verified || isDsl4RemotePoseArchiveUrl(sourceValue.url));
-        if (asset.kind === 'poseModel' && !poseArchive) {
+          asset.kind === 'recognitionModel' &&
+          (verified || isDsl4RemotePoseArchiveUrl(sourceValue.url));
+        if (asset.kind === 'recognitionModel' && !poseArchive) {
           try {
             const [modelResponse, metadataResponse] = await Promise.all([
               fetchFile(dsl4RemotePoseFileUrl(sourceValue.url, 'model.json')),
@@ -876,7 +876,7 @@ export async function convertDsl4ProjectAssets(options) {
     if (options.to === 'local') {
       const material = await originMaterial(assetId);
       const assetRoot = `assets/${assetDirectoryName(assetId)}`;
-      if (asset.kind === 'poseModel') {
+      if (asset.kind === 'recognitionModel') {
         if (material.opaquePoseArchive === true) {
           if (material.files.length !== 1) {
             fail(

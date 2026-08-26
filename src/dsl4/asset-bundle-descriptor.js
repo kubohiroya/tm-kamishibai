@@ -12,7 +12,7 @@ const remoteSourceKeys = new Set(['contentType', 'integrity', 'size', 'type', 'u
 const bareRemoteSourceKeys = new Set(['type', 'url']);
 const fileMetadataKeys = new Set(['integrity', 'path', 'size']);
 const payloadKeys = new Set(['assetId', 'data', 'encoding', 'integrity', 'path', 'size']);
-const assetKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
+const assetKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
 
 export const dsl4AssetBundleStoragePaths = deepFreeze({
   bundled: 'extensionStorage.kubohiroyakamishibai4.components.kubohiroyakamishibairuntime4.assets',
@@ -240,7 +240,7 @@ export function validateDsl4AssetBundleManifest(storyDocument, inputManifest) {
       if (
         inputPath !== storyAsset.file ||
         !['file', 'directory', 'archive'].includes(String(candidate.source.mode)) ||
-        (storyAsset.kind !== 'poseModel' && candidate.source.mode !== 'file') ||
+        (storyAsset.kind !== 'recognitionModel' && candidate.source.mode !== 'file') ||
         (candidate.source.mode === 'archive' && !/\.zip$/iu.test(inputPath)) ||
         !Array.isArray(candidate.source.files) ||
         candidate.source.files.length === 0

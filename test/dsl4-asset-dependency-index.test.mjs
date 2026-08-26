@@ -37,7 +37,7 @@ test('indexes every direct dependency in the comprehensive DSL 4.0 fixture', asy
   assert.deepEqual(index.cover, ['Beach', 'OpeningSound']);
   assert.deepEqual(index.actors, ['CaptionIdle', 'HeroIdle']);
   assert.deepEqual(index.loading, ['Loading1', 'Loading2', 'LoadingBackground']);
-  assert.deepEqual(index.poseRecognition, ['ClockTicking', 'Success']);
+  assert.deepEqual(index.recognition, ['ClockTicking', 'Success']);
   assert.deepEqual(index.posePreviewControls, []);
   assert.deepEqual(index.bgm, ['OpeningSound']);
   assert.deepEqual(index.sceneRetained, ['救助Pose']);
@@ -79,7 +79,7 @@ assets:
   CameraMenu:
     kind: image
     file: ui/camera.svg
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:

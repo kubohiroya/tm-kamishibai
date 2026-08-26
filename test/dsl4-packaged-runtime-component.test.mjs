@@ -40,7 +40,7 @@ assets:
     file: assets/opening.svg
     loading: lazy
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 controls:
   keymaps:
@@ -118,7 +118,7 @@ function assetSnapshot() {
         },
         {
           id: 'RescuePose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'eager',
           source: {
             type: 'file',

@@ -10,7 +10,7 @@ PoseModel prepareと認識ループを開始できることを確認するため
 - macOSまたはLinuxのdesktop Chrome
 - 動作する物理カメラと、カメラ権限を許可できるユーザーセッション
 - `pnpm install` 済みのリポジトリ
-- poseModelを参照するDSL 4.0 project root（`project.source.yaml` と `.k4.yml`）
+- recognitionModelを参照するDSL 4.0 project root（`project.source.yaml` と `.k4.yml`）
 - DSL 4.0 base SB3
 
 Chromeはtop-levelの`localhost`またはHTTPS originで起動します。HTTPのremote hostや
@@ -27,7 +27,7 @@ pnpm sb3:dsl4-release:check
 project rootでlocal previewを起動します。`BASE.sb3`はDSL 4.0 base SB3の実体へ置き換えます。
 
 ```bash
-pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+pnpm exec tm-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root . \
   --source-manifest project.source.yaml \

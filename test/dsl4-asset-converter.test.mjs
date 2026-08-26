@@ -106,7 +106,7 @@ assets:
     kind: sound
     file: assets/effect.wav
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue
 scenes:
   opening: []
@@ -135,7 +135,7 @@ function opaqueRemotePoseSourceText() {
   return `kamishibai: '4.0'
 assets:
   OpaquePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     source:
       url: https://cdn.example.com/opaque-pose.zip
@@ -151,7 +151,7 @@ function remotePoseDirectorySourceText() {
   return `kamishibai: '4.0'
 assets:
   DirectoryPose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     source:
       url: https://cdn.example.com/pose?revision=1

@@ -247,7 +247,7 @@ function safeRelativePath(filePath, name) {
 
 /** @param {Buffer} bytes @param {string} filePath @param {string} kind */
 function localContentType(bytes, filePath, kind) {
-  if (kind === 'poseModel') return poseModelContentType;
+  if (kind === 'recognitionModel') return poseModelContentType;
   if (kind === 'backdrop' || kind === 'costume' || kind === 'image') {
     if (
       bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
@@ -447,11 +447,12 @@ async function inspectLocalProvider(asset, provider, options) {
   }
   if (!isWithin(options.canonicalRoot, canonicalPath))
     fail(`Asset ${asset.id} escapes the project root`, 'K4-ASSET-PATH-001');
-  if (asset.kind !== 'poseModel' && !state.isFile())
+  const recognitionModel = asset.kind === 'recognitionModel';
+  if (!recognitionModel && !state.isFile())
     fail(`Asset ${asset.id} must be a regular file`, 'K4-ASSET-FILE-001');
-  if (asset.kind === 'poseModel' && !state.isFile() && !state.isDirectory())
-    fail(`PoseModel ${asset.id} must be a file or directory`, 'K4-ASSET-FILE-001');
-  if (asset.kind === 'poseModel' && state.isFile() && isDsl4PoseArchivePath(inputPath)) {
+  if (recognitionModel && !state.isFile() && !state.isDirectory())
+    fail(`RecognitionModel ${asset.id} must be a file or directory`, 'K4-ASSET-FILE-001');
+  if (recognitionModel && state.isFile() && isDsl4PoseArchivePath(inputPath)) {
     const archiveBytes = await readStableFile(
       canonicalPath,
       options.maxFileBytes,
@@ -483,7 +484,8 @@ async function inspectLocalProvider(asset, provider, options) {
   const entries = state.isDirectory()
     ? await enumerateLocalFiles(canonicalPath, asset.id, options.fileSystem)
     : [{path: path.posix.basename(inputPath), absolutePath: canonicalPath}];
-  if (entries.length === 0) fail(`PoseModel ${asset.id} directory is empty`, 'K4-ASSET-FILE-001');
+  if (entries.length === 0)
+    fail(`RecognitionModel ${asset.id} directory is empty`, 'K4-ASSET-FILE-001');
   const files = [];
   const contentsByPath = new Map();
   for (const entry of entries) {
@@ -501,18 +503,13 @@ async function inspectLocalProvider(asset, provider, options) {
     contentsByPath.set(entry.path, bytes);
   }
   files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const logical =
-    asset.kind === 'poseModel'
-      ? logicalBundle(files)
-      : {
-          contentIntegrity: files[0].integrity,
-          contentType: localContentType(
-            contentsByPath.get(files[0].path),
-            files[0].path,
-            asset.kind,
-          ),
-          size: files[0].size,
-        };
+  const logical = recognitionModel
+    ? logicalBundle(files)
+    : {
+        contentIntegrity: files[0].integrity,
+        contentType: localContentType(contentsByPath.get(files[0].path), files[0].path, asset.kind),
+        size: files[0].size,
+      };
   return {provider: {file: inputPath}, logical};
 }
 
@@ -522,7 +519,7 @@ async function inspectRemoteProvider(asset, provider, options) {
   options.totalBytes += remote.bytes.length;
   if (options.totalBytes > options.maxTotalBytes)
     fail('Asset lock exceeds maxTotalAssetBytes', 'K4-ASSET-TOTAL-SIZE-001');
-  if (asset.kind === 'poseModel') {
+  if (asset.kind === 'recognitionModel') {
     const archiveIntegrity = `sha256-${sha256(remote.bytes)}`;
     let extracted;
     try {

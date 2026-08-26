@@ -6,8 +6,8 @@
 runtime外の移行toolです。4.0 parserは3.1／3.2構文を受理せず、3.1／3.2 runtimeも変更しません。
 
 変換元は常に不変です。正常時だけ新しい出力をatomicに置換し、error時はpartial YAMLを返さず既存出力を
-維持します。CLIは本repositoryの`@kubohiroya/tmpose-kamishibai/converter`と
-`tmpose-kamishibai convert-dsl4`で公開します。
+維持します。CLIは本repositoryの`@kubohiroya/tm-kamishibai/converter`と
+`tm-kamishibai convert-dsl4`で公開します。
 
 DSL 3.1は、3.2.3 runtimeが維持する3.2互換grammarとして解釈し、
 `K4-CONVERT-VERSION-31-COMPAT` warningを必ず返します。これは4.0 runtimeへlegacy parserを追加する意味では

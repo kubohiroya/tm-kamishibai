@@ -300,18 +300,18 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: false
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -374,14 +374,14 @@ controls:
 assets:
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors: {Hero: HeroIdle}
-poseRecognition:
+recognition:
   navigation: {allowSkip: true}
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:

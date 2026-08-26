@@ -290,7 +290,7 @@ async function captureAssetSnapshot(storyDocument, projectRoot, options) {
     let files;
     try {
       files =
-        asset.kind === 'poseModel'
+        asset.kind === 'recognitionModel'
           ? await readPoseSource(
               projectRoot,
               id,
@@ -335,9 +335,9 @@ async function captureAssetSnapshot(storyDocument, projectRoot, options) {
         type: 'file',
         inputPath: asset.file,
         mode:
-          asset.kind === 'poseModel' && isDsl4PoseArchivePath(asset.file)
+          asset.kind === 'recognitionModel' && isDsl4PoseArchivePath(asset.file)
             ? 'archive'
-            : asset.kind === 'poseModel'
+            : asset.kind === 'recognitionModel'
               ? 'directory'
               : 'file',
         files: metadata,

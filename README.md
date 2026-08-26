@@ -22,7 +22,7 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 
 ## Choose a Version
 
-|                 | 3.2.3                                           | 4.0.0-rc.10                                                   |
+|                 | 3.2.3                                           | 4.0.0-rc.11                                                   |
 | --------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | Status          | Stable and currently recommended                | Release candidate                                             |
 | Best for        | Workshops, stable use, existing 3.1/3.2 stories | Evaluating YAML authoring, browser workflows, and the CLI/API |
@@ -30,7 +30,7 @@ This repository contains the Kamishibai runtime, DSL, CLI and JavaScript APIs, d
 | Get it          | [Downloads][downloads]                          | [Downloads][downloads] or the npm `next` tag                  |
 | Read on updates | [Published documentation][docs]                 | [4.0 release notes][rc10]                                     |
 
-If you are unsure, use 3.2.3. Version 4.0.0-rc.10 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
+If you are unsure, use 3.2.3. Version 4.0.0-rc.11 is a public candidate for evaluating the 4.0 authoring workflow and APIs before the stable release. Published 3.1 and 3.2 stories continue to work without migrating to 4.0.
 
 ## Try It First
 
@@ -42,7 +42,7 @@ To open a project in TurboWarp, download an SB3 for the series you need from the
 
 ### Browser-only authoring
 
-The 4.0.0-rc.10 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
+The 4.0.0-rc.11 Standard SB3 includes an authoring runner that selects and validates a script, provides live preview, and builds a distributable SB3.
 
 1. [Download the 4.0 SB3][downloads] and open it in the [TurboWarp Editor](https://turbowarp.org/editor).
 2. Click the green flag, then choose **Open** and select a story file or project directory.
@@ -144,21 +144,19 @@ For practical scripts, asset references, pose models, branches, and speech bubbl
 
 ### Validate, preview, and build with the CLI
 
-The [`@kubohiroya/tmpose-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tmpose-kamishibai/v/4.0.0-rc.10) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
+The [`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.11) CLI is intended for CI, reproducible builds, larger projects, and distribution-profile management. Use Node.js 22.12.0 or later and pnpm 11, and install the exact version you have validated.
 
-The npm package name and `tmpose-kamishibai` executable are retained for 4.0.0-rc.10 compatibility.
-Repository names, public site URLs, documentation links, and the TurboWarp pose extension use the
-current `tm` naming.
+The npm package name and `tm-kamishibai` executable use the current `tm` naming in 4.0.0-rc.11.
 
 ```bash
-pnpm add --save-exact @kubohiroya/tmpose-kamishibai@4.0.0-rc.10
-pnpm exec tmpose-kamishibai --help
+pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.11
+pnpm exec tm-kamishibai --help
 ```
 
 Validate a script without building it.
 
 ```bash
-pnpm exec tmpose-kamishibai validate-dsl4 \
+pnpm exec tm-kamishibai validate-dsl4 \
   --input opening.k4.yml \
   --format pretty
 ```
@@ -166,7 +164,7 @@ pnpm exec tmpose-kamishibai validate-dsl4 \
 Watch the complete project and preview it in a browser.
 
 ```bash
-pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+pnpm exec tm-kamishibai preview-dsl4 --watch \
   --base kamishibai-4-base.sb3 \
   --project-root . \
   --control-profile production \
@@ -176,7 +174,7 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
 Build a self-contained SB3 from the same input.
 
 ```bash
-pnpm exec tmpose-kamishibai build-dsl4 \
+pnpm exec tm-kamishibai build-dsl4 \
   --base kamishibai-4-base.sb3 \
   --project-root . \
   --output dist/my-story.sb3 \
@@ -201,7 +199,7 @@ Asset overrides remain available for exceptional projects, but preview values ab
 Source Graph includes remain opt-in and require their separate file-count, total-source-byte, and
 depth limits because their topology cannot be inferred safely.
 
-The CLI also provides the following commands. See `tmpose-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
+The CLI also provides the following commands. See `tm-kamishibai --help` and the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for arguments and exit statuses.
 
 | Command               | Purpose                                                       |
 | --------------------- | ------------------------------------------------------------- |
@@ -225,7 +223,7 @@ warning. To roll back the TM boundary, use the rc.5 artifact pinned to TM 1.10.0
 defaults, and cancellation boundary.
 
 TM 2.0.0 also supplies the configurable SVG pose overlay used by DSL 4.0. Opt in under
-`poseRecognition.preview.overlay`; you can show or hide it, style any of the 17 joints, style the
+`recognition.preview.overlay`; you can show or hide it, style any of the 17 joints, style the
 shared bones, set the minimum keypoint confidence, and scale joint or bone properties by
 confidence. Existing scripts omit this object and keep the overlay hidden. The complete YAML
 example and defaults are in the
@@ -237,7 +235,7 @@ the former `*Predict*` names without aliases. DSL 4.0 already used the recogniti
 Composition API, so the YAML schema and runtime behavior are unchanged; hand-authored TurboWarp
 scripts that stored the removed opcodes must be rebuilt with the rc.7 palette.
 
-JavaScript consumers can import the package exports `@kubohiroya/tmpose-kamishibai/builder`, `@kubohiroya/tmpose-kamishibai/dsl4`, and `@kubohiroya/tmpose-kamishibai/converter` as needed.
+JavaScript consumers can import the package exports `@kubohiroya/tm-kamishibai/builder`, `@kubohiroya/tm-kamishibai/dsl4`, and `@kubohiroya/tm-kamishibai/converter` as needed.
 
 ## How It Works
 
@@ -318,7 +316,7 @@ neither `app/` nor `release-sources/` is part of the repository layout.
 - [Documentation source](https://github.com/kubohiroya/tm-kamishibai-docs): source documents and issues
 - [DSL 4.0 surface specification](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-surface.md): YAML contracts beyond the schema and the action surface
 - [DSL 4.0 migration design](https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/design/dsl-4-migration.md): differences from 3.2 and the migration policy
-- [v4.0.0-rc.10 release notes][rc10]: publication status, compatibility, and verified artifacts
+- [v4.0.0-rc.11 release notes][rc11]: publication status, compatibility, and verified artifacts
 
 ## Related Projects
 
@@ -333,4 +331,4 @@ Software and assets copyrighted by this project are licensed under MPL-2.0 unles
 
 [docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
-[rc10]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.10.md
+[rc11]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.11.md

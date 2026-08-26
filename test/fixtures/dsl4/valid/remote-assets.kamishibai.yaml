@@ -20,7 +20,7 @@ assets:
       contentType: image/webp
       size: 654321
   RemotePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     source:
@@ -38,6 +38,6 @@ scenes:
     - bgm: OpeningMusic
     - goto: ocean
   ocean:
-    poseModel: RemotePose
+    recognitionModel: RemotePose
     actions:
       - stage: Ocean

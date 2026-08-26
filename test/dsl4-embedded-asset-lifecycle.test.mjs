@@ -43,7 +43,7 @@ assets:
     file: assets/opening.wav
     loading: lazy
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroCostume
@@ -111,7 +111,7 @@ scenes:
         },
         {
           id: 'RescuePose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'eager',
           source: {
             type: 'file',
@@ -189,7 +189,7 @@ test('materializes every kind in stable order with project refs and file byte co
       ['backdrop', 'lazy', undefined],
       ['sound', 'lazy', undefined],
       ['backdrop', 'eager', undefined],
-      ['poseModel', 'eager', undefined],
+      ['recognitionModel', 'eager', undefined],
     ],
   );
   assert.deepEqual(prepared[3].files, []);

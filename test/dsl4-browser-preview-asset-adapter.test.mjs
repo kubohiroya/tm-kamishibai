@@ -128,14 +128,14 @@ assets:
     kind: sound
     file: bell.wav
   Rescue:
-    kind: poseModel
+    kind: recognitionModel
     file: ${poseFile}
   Skin: costume:Hero
 ${extra ? '  Extra:\n    kind: image\n    file: extra.svg\n' : ''}actors:
   Hero: Skin
 scenes:
   opening:
-    poseModel: Rescue
+    recognitionModel: Rescue
     actions:
       - Hero.pose:
           steps:

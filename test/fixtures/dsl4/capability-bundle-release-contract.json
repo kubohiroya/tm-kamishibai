@@ -3,7 +3,7 @@
   "issue": 266,
   "standardArtifact": {
     "series": "4.0",
-    "version": "4.0.0-rc.10",
+    "version": "4.0.0-rc.11",
     "extensionId": "kubohiroyakamishibai4",
     "runtimeComponentId": "kubohiroyakamishibairuntime4",
     "integration": "static-extension-bundle",
@@ -44,6 +44,7 @@
       "keyInputToChangeScene",
       "touchInputToChangeScene",
       "poseInputToChangeScene",
+      "imageInputToChangeScene",
       "show",
       "hide",
       "setTransparency",

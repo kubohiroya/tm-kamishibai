@@ -40,6 +40,9 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   block('poseInputToChangeScene', 'wait for pose routes [ROUTES]', [
     argument('ROUTES', 'string', '{"pose":"next"}'),
   ]),
+  block('imageInputToChangeScene', 'wait for image label routes [ROUTES]', [
+    argument('ROUTES', 'string', '{"label":"next"}'),
+  ]),
   block('show', 'show actor [TARGET] skin [SKIN] x [X] y [Y] scale [SCALE] %', [
     argument('TARGET', 'string', 'Actor'),
     argument('SKIN', 'string', 'Skin'),
@@ -225,6 +228,7 @@ function sourceValueForBlock(command, args, limits) {
     case 'keyInputToChangeScene':
     case 'touchInputToChangeScene':
     case 'poseInputToChangeScene':
+    case 'imageInputToChangeScene':
       return {routes: parseJson(args.ROUTES, limits)};
     case 'show':
       return {
@@ -296,7 +300,7 @@ function normalizeBlockArguments(command, sourceValue) {
 }
 
 /**
- * Create the 23 public block definitions from the core action manifest.
+ * Create the public block definitions from the core action manifest.
  *
  * @param {Readonly<{ArgumentType: Readonly<Record<string, string>>, BlockType: Readonly<Record<string, string>>}>} Scratch
  * @param {{visible?: boolean}} [options]

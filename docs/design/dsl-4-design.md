@@ -238,7 +238,7 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 | D-30 | 決定済み | Object Store／Iterator等の汎用blockを標準作者経路へ露出させない          |
 | D-31 | 決定済み | 標準Composite、Standalone汎用palette、developer debug配布を分離する      |
 | D-32 | 決定済み | delivery、loading、memory retention、永続cacheの寿命を独立させる         |
-| D-33 | 決定済み | poseModelの既定retentionをscene、mediaの既定をstoryとする                |
+| D-33 | 決定済み | recognitionModelの既定retentionをscene、mediaの既定をstoryとする         |
 | D-34 | 決定済み | binary DBを台本単位で分離し、可読名と共通metadata catalogで管理する      |
 | D-35 | 決定済み | selected next sceneだけを先読みし、遷移commit時に不要resourceを解放する  |
 | D-36 | 決定済み | Storeはlease／RefValueをcountし、外部参照が残るclosureをatomicに拒否する |
@@ -267,7 +267,7 @@ DSL 4.0は、3.2の実装をJavaScriptへ移植するだけの変更にはしま
 ## 3. DSL 4.0の表層構文
 
 > **この章の3.1〜3.15は初期案を残した設計履歴であり、実装仕様ではありません。**
-> `cover`、複数引数action、pose recognition、pose model、asset loadingなどはIssue #260で
+> `cover`、複数引数action、pose recognition、recognition model、asset loadingなどはIssue #260で
 > 見直されました。実装と新しいレビューでは
 > [`紙芝居DSL 4.0 表層仕様`](dsl-4-surface.md)および
 > [`JSON Schema`](../../schema/dsl-4.schema.json)を参照してください。
@@ -278,7 +278,7 @@ DSL 4.0はYAML 1.2を基礎とします。ただし、実装が受け付ける�
 定義した構造だけです。YAMLタグによるオブジェクト生成や任意型の復元は許可しません。
 
 この表層構文を、通常の台本製作者にとって唯一の必須programming surfaceとします。標準的な背景、
-登場人物、台詞、音声、待機、分岐、入力、ポーズ認識、遷移、SVG Textは台本だけで記述できなければ
+登場人物、台詞、音声、待機、分岐、入力、認識入力、遷移、SVG Textは台本だけで記述できなければ
 なりません。これらを成立させるためにTurboWarp blockの追加を要求する仕様はcore actionの不足として
 扱い、block操作手順を利用者文書へ追加することで解決しません。
 
@@ -416,12 +416,18 @@ scenes:
     - wait: 1
 ```
 
-ポーズモデルなどの設定がある場合は、長形式を使います。
+認識モデルなどの設定がある場合は、長形式を使います。
 
 ```yaml
+assets:
+  救助Pose:
+    kind: recognitionModel
+    file: rescue-pose
+
 scenes:
   rescue:
-    poseModel: https://example.com/pose-model/
+    recognitionModel: 救助Pose
+    recognitionMode: pose
     actions:
       - stage: Ocean
       - Hero.pose: [HeroHelp, help, SquishPop]
@@ -453,7 +459,7 @@ assets:
     loading: lazy
     retention: story
   救助Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: rescue-pose
     loading: lazy
     retention: scene
@@ -514,14 +520,14 @@ variables:
 YAMLのBoolean、数値、文字列を保持します。ただし式評価側へ渡す型とScratch変数へ
 投影する型の規則は別途定義します。
 
-### 3.10 Loadingとポーズ認識音 `[提案]`
+### 3.10 Loadingと認識設定 `[提案]`
 
 ```yaml
 loading:
   backdrop: LoadingBackground
   costumes: [Loading1, Loading2, Loading3]
 
-poseRecognition:
+recognition:
   idleSound: ClockTicking
   chargeSound: Success
   modelInitialization:
@@ -544,7 +550,7 @@ poseRecognition:
 ```
 
 3.2の`setLoadingBackdrop`、`setLoadingCostume`、`setPoseRecognitionSound`を、関連項目ごとの
-mappingへまとめます。sequenceとselectionは排他でActor sequenceを優先し、selectionはaction
+mappingへまとめます。`recognition`はポーズ認識と画像認識で共有する設定名前空間です。sequenceとselectionは排他でActor sequenceを優先し、selectionはaction
 実行ごとに蓄積scoreをresetします。重複するselectionは直近の1回だけを有効にします。
 
 `feedback.mode`は`scratchMirror | scratchBinding | presenter`の3値に限定し、省略時は
@@ -640,7 +646,7 @@ branches:
 
 入力と遷移先の個数不一致が構造上発生しない形にします。
 
-### 3.13 ポーズ認識 `[提案]`
+### 3.13 認識入力 `[提案]`
 
 単一ポーズ:
 
@@ -658,6 +664,8 @@ branches:
 
 3.2のスキン名リスト、ポーズ名リスト、効果音リストという三つの並行配列を、
 一ポーズごとの組へ変換します。これによりリスト長不一致を構造上防ぎます。
+画像認識による遷移は`recognitionModel`と`recognitionMode: image`をsceneに指定し、
+`imageInputToChangeScene`のlabel mappingで遷移先を宣言します。
 
 ### 3.14 YAML利用範囲と安全制限 `[提案]`
 
@@ -675,7 +683,7 @@ branches:
 
 ### 3.15 総合例 `[提案]`
 
-次は、アセット、SVG Text、アクター、シーン、アクション、分岐、入力、ポーズ認識を一つに
+次は、アセット、SVG Text、アクター、シーン、アクション、分岐、入力、認識入力を一つに
 まとめたレビュー用例です。個々の短形式は3.2に対応しますが、YAML schema自体は未実装です。
 
 ```yaml
@@ -688,6 +696,9 @@ assets:
   HeroJump: costume:Hero
   ClockTicking: sound
   Success: sound
+  救助Pose:
+    kind: recognitionModel
+    file: rescue-pose
 
 textStyles:
   title:
@@ -706,7 +717,7 @@ cover: [Beach, Success]
 variables:
   score: 1
 
-poseRecognition:
+recognition:
   idleSound: ClockTicking
   chargeSound: Success
   sequence:
@@ -735,7 +746,8 @@ scenes:
     - branch: chooseRoute
 
   rescue:
-    poseModel: https://example.com/pose-model/
+    recognitionModel: 救助Pose
+    recognitionMode: pose
     actions:
       - stage: Ocean
       - Hero.pose: [HeroJump, jump, Success]
@@ -790,7 +802,7 @@ validate、startを別々のblockとして接続させたりしません。
 - actorの初期skinが定義済み画像アセットか
 - `stage`が定義済みbackdropアセットを参照しているか
 - `show`、`setSkin`、`pose`、`loop`、`sequence`が定義済みアセットを参照しているか
-- `bgm`、`sound`、ポーズ認識音が定義済みsoundアセットか
+- `bgm`、`sound`、認識音が定義済みsoundアセットか
 - `setText`が定義済みSVG Text styleを参照しているか
 - `branch`が定義済みbranchを参照しているか
 - branch、key、touch、gotoが定義済みsceneを参照しているか
@@ -824,7 +836,7 @@ YAML構造を回復できない構文エラーでは、その地点で意味検�
 5. 同じテンプレートからWeb版またはPackager成果物を生成する
 
 この手順にTurboWarpのコード領域を開く操作、blockの複製、接続、broadcast名や変数名の入力を含めません。
-最小台本、全core action台本、分岐・入力・ポーズ認識を含む台本のいずれも、台本sourceを変更するだけで
+最小台本、全core action台本、分岐・入力・認識入力を含む台本のいずれも、台本sourceを変更するだけで
 実行できることをfixtureで検証します。
 
 台本Aから台本Bへ差し替えたとき、標準テンプレートの`targets[].blocks`はbyte-for-byteで同一であることを
@@ -882,7 +894,7 @@ source channelの具体形式は実装前に決めますが、このblock graph�
 
 1. パーサーが`DiagnosticList`参照を返す
 2. Kamishibai controllerが通常の開始処理へ進まない
-3. 進行中のLoading、入力待ち、ポーズ認識、紙芝居用threadを停止する
+3. 進行中のLoading、入力待ち、認識入力、紙芝居用threadを停止する
 4. 一時的に作成したscene/action scopeを解放する
 5. 診断情報をXML escapeしてSVGへ描画する
 6. 専用Error表示targetまたはStageへSVG costumeとして表示する
@@ -912,7 +924,7 @@ SVG生成部は入力文字列をmarkupとして連結せず、必ずescapeし�
   "scenes": [
     {
       "id": "opening",
-      "poseModel": null,
+      "recognitionModel": null,
       "actions": []
     }
   ],
@@ -1475,7 +1487,7 @@ command name -> argument schema -> validator -> executor
 これにより、パーサー、検証器、実行器が同じcommand定義を参照できます。
 
 標準core actionをScratch procedure、broadcast dispatcher、Temporary Variablesで実装する経路は4.0へ
-持ち込みません。Stage、Actor、入力、ポーズ認識にまたがる標準actionの状態と待機はcontrollerとadapterが
+持ち込みません。Stage、Actor、入力、認識入力にまたがる標準actionの状態と待機はcontrollerとadapterが
 所有します。Scratch custom handlerだけを`waitingAction`として待機し、core actionはJavaScript handlerの
 完了結果で状態機械を進めます。
 
@@ -1560,7 +1572,7 @@ runtimeの保証範囲とします。厳密なheap分離が必要なprofileで�
 ```yaml
 assets:
   救助Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: rescue-pose
     loading: lazy
     retention: scene
@@ -1568,7 +1580,7 @@ assets:
 
 - `loading: eager | lazy`はmaterializeを開始する時期だけを決める
 - `retention: scene | story`はmaterialize済みresourceのメモリ保持期間だけを決める
-- `poseModel`の既定値と推奨値は`scene`
+- `recognitionModel`の既定値と推奨値は`scene`
 - `backdrop`、`costume`、`sound`の既定値は`story`
 - unknown valueはschema error
 - `retention`を変更してもIndexedDB recordのTTL／LRUは変えない
@@ -1676,7 +1688,7 @@ duplicate ZIP entry、予約prefix内の余剰／欠落entry、descriptorとの�
 展開後の実size／integrity不一致はruntimeへの引渡し前にfail closedとします。
 
 実装は少なくとも、archive／file／展開後合計byte数、file数、path traversal、duplicate entry、圧縮比、
-同時materialize poseModel数、IndexedDB budgetを制限します。verified remote pose archiveはarchive自体の検証後にtrusted
+同時materialize recognitionModel数、IndexedDB budgetを制限します。verified remote recognition model archiveはarchive自体の検証後にtrusted
 extractorで展開し、派生fileをarchive integrityとextractor format versionへbindingします。未検証のarchiveと
 別経路で渡された展開fileを同じmodelとして登録しません。
 
@@ -2399,7 +2411,7 @@ runtimeで追加コードをdownloadしません。
 
 - 最小台本
 - 3.2相当の全core actionを含む台本
-- 分岐、key／touch入力、ポーズ認識を含み、追加Scratch blockを必要としない台本
+- 分岐、key／touch入力、認識入力を含み、追加Scratch blockを必要としない台本
 - 旧Text Assetを含む3.1／3.2入力のconverter warningとSVG Text変換
 - compact表記とnamed表記が同じStoryDocumentになること
 - 行末、空行、コメント、引用符、Unicode

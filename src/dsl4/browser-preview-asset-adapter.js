@@ -414,7 +414,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
         let files;
         try {
           files =
-            asset.kind === 'poseModel'
+            asset.kind === 'recognitionModel'
               ? await readPoseBundle(
                   root,
                   id,
@@ -471,9 +471,9 @@ export function createDsl4BrowserPreviewAssetAdapter(options) {
             type: 'file',
             inputPath: asset.file,
             mode:
-              asset.kind === 'poseModel' && isDsl4PoseArchivePath(asset.file)
+              asset.kind === 'recognitionModel' && isDsl4PoseArchivePath(asset.file)
                 ? 'archive'
-                : asset.kind === 'poseModel'
+                : asset.kind === 'recognitionModel'
                   ? 'directory'
                   : 'file',
             files: metadata,

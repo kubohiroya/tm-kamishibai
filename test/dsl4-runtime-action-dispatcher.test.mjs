@@ -14,6 +14,7 @@ function createHarness(overrides = {}) {
     async invokePort(method, payload, context) {
       calls.push({method, payload, context});
       if (method === 'poseInputToChangeScene') return 'safe';
+      if (method === 'imageInputToChangeScene') return 'ready';
       return null;
     },
     async resolveBranch(branchId) {
@@ -22,8 +23,8 @@ function createHarness(overrides = {}) {
     resolveSpeechStyle(command, args) {
       return {...args, kind: command};
     },
-    getPoseModel() {
-      return 'SafetyPose';
+    getRecognitionModel() {
+      return 'SafetyModel';
     },
     poseSelectionRecognition: recognition,
     async dispatchPose(payload, context) {
@@ -73,8 +74,27 @@ test('dispatches normalized port, navigation, selection, speech, and pose action
   assert.deepEqual(calls.shift(), {
     method: 'poseInputToChangeScene',
     payload: {
-      poses: ['safe'],
-      poseModel: 'SafetyPose',
+      labels: ['safe'],
+      recognitionModel: 'SafetyModel',
+      recognitionMode: 'pose',
+      recognition: {scoreThreshold: 0.5},
+    },
+    context,
+  });
+
+  assert.deepEqual(
+    await dispatcher.dispatch(
+      action('imageInputToChangeScene', {routes: {ready: 'camera-ok'}}),
+      context,
+    ),
+    {sceneId: 'camera-ok', reason: 'imageInput'},
+  );
+  assert.deepEqual(calls.shift(), {
+    method: 'imageInputToChangeScene',
+    payload: {
+      labels: ['ready'],
+      recognitionModel: 'SafetyModel',
+      recognitionMode: 'image',
       recognition: {scoreThreshold: 0.5},
     },
     context,

@@ -87,7 +87,7 @@ function validateFiles(files, assetId) {
 }
 
 /**
- * Adapt a validated DSL 4.0 poseModel materialization to one TM composition.
+ * Adapt a validated DSL 4.0 recognitionModel materialization to one TM composition.
  *
  * @param {object} options
  * @param {unknown} options.composition
@@ -112,8 +112,8 @@ export function createDsl4TMModelAdapter(options) {
         throw adapterError('K4-TM-ADAPTER-001', 'pose model context must be an object');
       }
       const asset = payload.asset;
-      const assetId = requireNonEmptyString(asset.id, 'pose model asset id');
-      if (asset.kind !== 'poseModel') {
+      const assetId = requireNonEmptyString(asset.id, 'recognition model asset id');
+      if (asset.kind !== 'recognitionModel') {
         throw adapterError(
           'K4-TM-ADAPTER-003',
           `TM adapter does not support asset kind: ${String(asset.kind)}`,
@@ -125,7 +125,7 @@ export function createDsl4TMModelAdapter(options) {
       ) {
         throw adapterError(
           'K4-TM-ADAPTER-001',
-          `Pose model ${assetId} must use a materialized file source`,
+          `Recognition model ${assetId} must use a materialized file source`,
         );
       }
       validateFiles(payload.files, assetId);
@@ -177,7 +177,7 @@ export function createDsl4TMModelAdapter(options) {
         const resource = Object.freeze({
           adapter: 'tm',
           assetId,
-          kind: 'poseModel',
+          kind: asset.kind,
           name: registration.name,
           labels: Object.freeze([...registration.labels]),
         });

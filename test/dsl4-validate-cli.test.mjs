@@ -10,7 +10,7 @@ import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builde
 import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
 const repositoryRoot = dsl4TestProjectRoot;
-const binPath = path.join(repositoryRoot, 'bin', 'tmpose-kamishibai.mjs');
+const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
 const frontend = dsl4TestSourceFrontend;
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n";
 

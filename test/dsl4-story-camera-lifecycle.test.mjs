@@ -68,7 +68,7 @@ test('detects only story actions that consume pose recognition', () => {
   assert.equal(
     storyUsesPoseRecognition({
       ...story('wait'),
-      poseRecognition: {preview: {mirroring: 'mirrored'}},
+      recognition: {preview: {mirroring: 'mirrored'}},
     }),
     false,
   );

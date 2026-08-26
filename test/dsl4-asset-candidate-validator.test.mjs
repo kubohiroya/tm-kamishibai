@@ -24,14 +24,14 @@ assets:
     kind: sound
     file: bell.wav
   Rescue:
-    kind: poseModel
+    kind: recognitionModel
     file: rescue
   Skin: costume:Hero
 actors:
   Hero: Skin
 scenes:
   opening:
-    poseModel: Rescue
+    recognitionModel: Rescue
     actions:
       - Hero.pose:
           steps:
@@ -182,7 +182,7 @@ test('validates one complete pose bundle and every referenced label', async () =
   });
   assert.deepEqual(result.summary, {
     assetId: 'Rescue',
-    kind: 'poseModel',
+    kind: 'recognitionModel',
     fileCount: 3,
     labelCount: 2,
   });

@@ -44,11 +44,11 @@ const sourceText = `
 kamishibai: '4.0'
 assets:
   FirstPose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/first
     loading: lazy
   NextPose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/next
     loading: lazy
 controls:
@@ -57,11 +57,11 @@ controls:
       Space: navigation.nextAction
 scenes:
   first:
-    poseModel: FirstPose
+    recognitionModel: FirstPose
     actions:
       - goto: next
   next:
-    poseModel: NextPose
+    recognitionModel: NextPose
     actions: []
 `;
 const cacheIdentity = Object.freeze({
@@ -110,7 +110,7 @@ function assetSnapshot() {
       formatVersion: 1,
       assets: ['FirstPose', 'NextPose'].map((assetId) => ({
         id: assetId,
-        kind: 'poseModel',
+        kind: 'recognitionModel',
         loading: 'lazy',
         source: {
           type: 'file',
