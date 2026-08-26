@@ -6,10 +6,19 @@ import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 import {
+  createDsl4QuiesceToken,
+  createDsl4RuntimeQuiesceError,
+  defaultScheduleQuiesceTimeout,
+  dsl4RuntimeQuiesceDefaults,
+  retagDsl4QuiesceToken,
+} from './runtime-quiesce.js';
+import {
   dsl4CutTransition,
   dsl4StoryUsesCrossfade,
   resolveDsl4TransitionDefaults,
 } from './transition-spec.js';
+
+export {dsl4RuntimeQuiesceDefaults} from './runtime-quiesce.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -36,19 +45,6 @@ const advancedBubbleStyleNames = Object.freeze([
   'hideAnimation',
   'visibleAnimations',
 ]);
-export const dsl4RuntimeQuiesceDefaults = Object.freeze({
-  quiesceTimeoutMs: 5_000,
-  minimumQuiesceTimeoutMs: 100,
-  maximumQuiesceTimeoutMs: 30_000,
-});
-
-/** @param {() => void} callback @param {number} milliseconds */
-function defaultScheduleQuiesceTimeout(callback, milliseconds) {
-  const timer = setTimeout(callback, milliseconds);
-  if (typeof timer.unref === 'function') timer.unref();
-  return () => clearTimeout(timer);
-}
-
 function deferred() {
   /** @type {(value: unknown) => void} */
   let resolve = () => {};
@@ -522,18 +518,7 @@ export function createDsl4RuntimeController({
 
   /** @param {string} code @param {string} message */
   function quiesceError(code, message) {
-    const error = new Error(message);
-    Object.defineProperty(error, 'code', {value: code});
-    const action = currentAction();
-    if (typeof action?.id === 'string') {
-      Object.defineProperty(error, 'storyPath', {value: action.id});
-    }
-    return error;
-  }
-
-  /** @param {Readonly<Record<string, unknown>>} token @param {number} candidateId */
-  function retagQuiesceToken(token, candidateId) {
-    return deepFreeze({...token, candidateId});
+    return createDsl4RuntimeQuiesceError(code, message, currentAction());
   }
 
   /**
@@ -560,22 +545,14 @@ export function createDsl4RuntimeController({
         : sceneId
           ? `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`
           : '/';
-    const token = deepFreeze({
-      kind: 'Dsl4QuiesceToken',
-      version: 1,
+    const token = createDsl4QuiesceToken({
       candidateId: request.candidateId,
       runtimeGeneration: generation,
       storyPath,
-      actionSignature: action
-        ? {
-            command: String(action.command),
-            target: action.target === null ? null : String(action.target),
-            handler: String(action.handler ?? 'core'),
-          }
-        : null,
       sceneId,
       actionIndex: actionPosition,
-      variables: cloneValue(variables),
+      action,
+      variables: /** @type {Readonly<Record<string, unknown>>} */ (cloneValue(variables)),
       resumeMode,
     });
     request.phase = 'token';
@@ -2439,7 +2416,7 @@ export function createDsl4RuntimeController({
     if (quiesceRequest) {
       quiesceRequest.candidateId = candidateId;
       if (quiesceRequest.phase === 'token') {
-        quiesceRequest.token = retagQuiesceToken(quiesceRequest.token, candidateId);
+        quiesceRequest.token = retagDsl4QuiesceToken(quiesceRequest.token, candidateId);
         return Promise.resolve(quiesceRequest.token);
       }
       return quiesceRequest.completion.promise;

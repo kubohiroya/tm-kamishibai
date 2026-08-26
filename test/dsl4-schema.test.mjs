@@ -2,16 +2,11 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const fixtureRoot = path.join(projectRoot, 'test', 'fixtures', 'dsl4');
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const fixtureRoot = path.join(dsl4TestProjectRoot, 'test', 'fixtures', 'dsl4');
+const frontend = dsl4TestSourceFrontend;
 
 async function validateFixture(group, name) {
   const source = await readFile(path.join(fixtureRoot, group, name), 'utf8');

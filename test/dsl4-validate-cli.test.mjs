@@ -1,21 +1,17 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {dsl4CliDefaultLimits, parseCliArguments, runCli, usage} from '../src/builder/cli.js';
 import {Dsl4ValidationInternalError, validateDsl4SourceFile} from '../src/builder/dsl4-validate.js';
-import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const repositoryRoot = dsl4TestProjectRoot;
 const binPath = path.join(repositoryRoot, 'bin', 'tm-kamishibai.mjs');
-const schema = JSON.parse(
-  await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const frontend = dsl4TestSourceFrontend;
 const validSource = "kamishibai: '4.0'\nscenes:\n  opening:\n    - wait: 0\n";
 
 async function withFixture(callback) {

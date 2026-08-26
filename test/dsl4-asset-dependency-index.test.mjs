@@ -2,15 +2,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {createDsl4AssetDependencyIndex, createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {createDsl4AssetDependencyIndex} from '../src/dsl4/index.js';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const projectRoot = dsl4TestProjectRoot;
+const frontend = dsl4TestSourceFrontend;
 
 function parse(source) {
   const result = frontend.parse(source, {sourceId: 'asset-index-test'});
