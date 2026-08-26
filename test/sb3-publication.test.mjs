@@ -52,6 +52,7 @@ test('renders ordered versioned download cards from one release catalog', async 
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  const releaseInstallSpecifier = `${releasePins.release.package}@${releasePins.release.version}`;
   const downloadPage = renderDownloadCards(downloadTemplate);
 
   assert.deepEqual(
@@ -96,6 +97,16 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.equal(
+    packageJson.name,
+    releasePins.release.package,
+    'Package name must match the reviewed release contract.',
+  );
+  assert.equal(
+    packageJson.version,
+    releasePins.release.version,
+    'Package version must match the reviewed release contract.',
+  );
+  assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
     releasePins.devDependencies['@kubohiroya/sb3-toolchain'],
     'SB3 toolchain dependency must use the reviewed exact npm version.',
@@ -104,10 +115,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
     readme,
-    new RegExp(
-      `pnpm add --save-exact ${packageJson.name}@${packageJson.version.replaceAll('.', '\\.')}`,
-      'u',
-    ),
+    new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
     'README installation must use the current fixed npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
@@ -139,10 +147,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.deepEqual(headingLevels(readmeJapanese), headingLevels(readme));
   assert.match(
     readmeJapanese,
-    new RegExp(
-      `pnpm add --save-exact @kubohiroya/tm-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
-      'u',
-    ),
+    new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
     'Japanese README installation must use the current fixed npm version.',
   );
 });

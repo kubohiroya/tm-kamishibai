@@ -31,9 +31,12 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
     readRepositoryFile('LICENSES.md'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  assert.equal(packageJson.name, releasePins.release.package);
   assert.equal(contract.standardArtifact.version, releasePins.release.version);
+  assert.equal(contract.standardArtifact.series, releasePins.release.series);
   assert.equal(packageJson.version, contract.standardArtifact.version);
-  assert.equal(packageJson.publishConfig.tag, contract.releaseLifecycle.npmDistTag);
+  assert.equal(packageJson.publishConfig.tag, releasePins.release.channel);
+  assert.equal(contract.releaseLifecycle.npmDistTag, releasePins.release.channel);
   const lockfile = parse(lockfileSource);
   const ids = new Set();
   const extensionIds = new Set([contract.standardArtifact.extensionId]);
@@ -74,7 +77,11 @@ test('freezes the #266 capability inventory to exact packages and lock integrity
   }
 
   for (const dependency of contract.supportPackages) {
-    assert.equal(packageJson.dependencies[dependency.package], dependency.version);
+    assert.equal(releasePins.supportDependencies[dependency.package], dependency.version);
+    assert.equal(
+      packageJson.dependencies[dependency.package],
+      releasePins.supportDependencies[dependency.package],
+    );
     assert.match(licenses, new RegExp(`\\| ${dependency.package}\\s+\\|`));
   }
 });
@@ -256,17 +263,23 @@ test('pins a deterministic release, publication, and rollback sequence', async (
     'release-fix-as-next-patch',
   ]);
 
-  const release = downloadCatalog.find(
-    ({version}) => version === contract.standardArtifact.version,
-  );
+  const release = downloadCatalog.find(({version}) => version === releasePins.release.version);
   const releaseMetadataPath = `release-metadata/${releasePins.release.version}.json`;
   const metadata = JSON.parse(await readRepositoryFile(releaseMetadataPath));
+  const releaseTag = `v${releasePins.release.version}`;
+  const releaseFilename = `kamishibai-${releasePins.release.version}.sb3`;
+  assert.equal(metadata.series, releasePins.release.series);
+  assert.equal(metadata.version, releasePins.release.version);
+  assert.equal(metadata.channel, releasePins.release.channel);
+  assert.equal(metadata.artifact.filename, releaseFilename);
+  assert.equal(
+    metadata.artifact.url,
+    `https://github.com${releasePins.release.repositoryPath}/releases/download/${releaseTag}/${releaseFilename}`,
+  );
+  assert.deepEqual(metadata.publication?.npm, {distTag: releasePins.release.channel});
+  assert.deepEqual(metadata.publication?.github, {prerelease: true, tag: releaseTag});
   assert.match(metadata.artifact.sha256, /^[0-9a-f]{64}$/u);
   assert.match(metadata.sourceIdentity, /^sha256:[0-9a-f]{64}$/u);
-  assert(
-    metadata.artifact.url.includes(`/releases/download/v${releasePins.release.version}/`),
-    'Release URL must use the pinned candidate version.',
-  );
   if (metadata.state === 'published') {
     assert.deepEqual(release.artifact, {
       buildDate: metadata.buildDate,
