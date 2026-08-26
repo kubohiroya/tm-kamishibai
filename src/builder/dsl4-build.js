@@ -15,8 +15,13 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from '../dsl4/source-descriptor.js';
+import {createDsl4SourceGraph, Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import {
+  Dsl4BlockSourceError,
+  extractDsl4BlockSourcesFromProject,
+} from '../dsl4/turbowarp-yaml-json-block-source.js';
 import {
   Dsl4AssetDistributionError,
   resolveDsl4AssetDistributionProfile,
@@ -32,6 +37,7 @@ import {embedDsl4BinaryEntryRuntimeComponentInSb3} from './dsl4-binary-entry-sb3
 import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {embedDsl4PackagedRuntimeComponentInSb3} from './dsl4-source.js';
 import {Sb3BuilderError} from './errors.js';
+import {readSb3} from './sb3.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
   /**
@@ -69,12 +75,97 @@ function failDiagnostics(diagnostics, stage) {
 }
 
 /**
+ * @param {Buffer | Uint8Array} baseSb3Bytes
+ * @param {{maxSourceBytes: number, subtleCrypto?: {digest: Function}}} options
+ */
+async function loadDsl4BlockSourceFromSb3(baseSb3Bytes, {maxSourceBytes, subtleCrypto}) {
+  let blockSourceSet;
+  try {
+    const {project} = readSb3(baseSb3Bytes);
+    blockSourceSet = extractDsl4BlockSourcesFromProject(project);
+  } catch (error) {
+    if (error instanceof Dsl4BlockSourceError) {
+      throw new Dsl4BuildError(error.message, {
+        stage: 'dsl4-block-source',
+        code: error.code,
+        cause: error,
+      });
+    }
+    throw error;
+  }
+  const text = blockSourceSet.sources[blockSourceSet.entryPath];
+  if (typeof text !== 'string') {
+    throw new Dsl4BuildError('Root block DSL source is missing', {
+      stage: 'dsl4-block-source',
+      code: 'K4-BLOCK-SOURCE-MISSING-001',
+    });
+  }
+  try {
+    const descriptor = await createDsl4EmbeddedSourceDescriptor(text, {
+      sourceId: blockSourceSet.entryPath,
+      displayName: blockSourceSet.entryPath,
+      maxSourceBytes,
+      subtleCrypto,
+    });
+    return {
+      manifest: {path: blockSourceSet.entryPath},
+      descriptor,
+      blockSourceSet,
+    };
+  } catch (error) {
+    if (error instanceof Dsl4SourceDescriptorError) {
+      throw new Dsl4BuildError(error.message, {
+        stage: 'dsl4-block-source',
+        code: error.code,
+        cause: error,
+      });
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {Readonly<{entryPath: string, sources: Readonly<Record<string, string>>}>} blockSourceSet
+ * @param {Partial<{maxSourceFiles: number, maxSourceBytes: number, maxTotalSourceBytes: number, maxIncludeDepth: number}>} limits
+ */
+async function createDsl4VirtualBlockSourceGraph(blockSourceSet, limits) {
+  try {
+    return await createDsl4SourceGraph(blockSourceSet.entryPath, {
+      limits,
+      readSource(sourcePath) {
+        const source = blockSourceSet.sources[sourcePath];
+        if (typeof source !== 'string') {
+          throw new Dsl4SourceGraphError(
+            'K4-SOURCE-MISSING',
+            'Included block DSL source is missing',
+            {
+              sourceId: sourcePath,
+              sourcePath,
+            },
+          );
+        }
+        return source;
+      },
+    });
+  } catch (error) {
+    if (error instanceof Dsl4SourceGraphError) {
+      throw new Dsl4BuildError(error.message, {
+        stage: 'dsl4-block-source-graph',
+        code: error.code,
+        cause: error,
+      });
+    }
+    throw error;
+  }
+}
+
+/**
  * Build one complete, self-contained DSL 4.0 runtime component in memory.
  *
  * @param {object} options
  * @param {Buffer | Uint8Array} options.baseSb3Bytes
  * @param {string} options.projectRoot
- * @param {unknown} options.sourceManifest
+ * @param {unknown} [options.sourceManifest]
  * @param {{parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>}} options.sourceFrontend
  * @param {string} options.controlProfile
  * @param {'bundled' | 'unbundled'} options.channel
@@ -141,36 +232,53 @@ export async function buildDsl4RuntimeComponent(options) {
   nonEmptyString(channel, 'channel');
   const buildFeatureFlags = resolveDsl4BuildFeatureFlags(inputFeatureFlags);
   const featureFlags = buildFeatureFlags.runtimeFeatureFlags;
+  const usesBlockSource = sourceManifest === undefined || sourceManifest === null;
+  const sourceGraphEnabled = featureFlags.dsl4SourceIncludes || usesBlockSource;
   const sourceLimits = resolveDsl4BuildSourceLimits({
-    sourceIncludesEnabled: featureFlags.dsl4SourceIncludes,
+    sourceIncludesEnabled: sourceGraphEnabled,
     maxSourceBytes,
     maxTotalSourceBytes,
   });
 
-  const source = await loadDsl4ExternalSource(projectRoot, sourceManifest, {
-    maxSourceBytes: sourceLimits.maxSourceFileBytes,
-    subtleCrypto,
-    fileSystem,
-    readSource,
-  });
+  let blockSourceSet = null;
+  const source = usesBlockSource
+    ? await loadDsl4BlockSourceFromSb3(baseSb3Bytes, {
+        maxSourceBytes: sourceLimits.maxSourceFileBytes,
+        subtleCrypto,
+      })
+    : await loadDsl4ExternalSource(projectRoot, sourceManifest, {
+        maxSourceBytes: sourceLimits.maxSourceFileBytes,
+        subtleCrypto,
+        fileSystem,
+        readSource,
+      });
+  if (usesBlockSource) {
+    blockSourceSet =
+      /** @type {{blockSourceSet: Readonly<{entryPath: string, sources: Readonly<Record<string, string>>}>}} */ (
+        source
+      ).blockSourceSet;
+  }
   /** @type {Readonly<Record<string, any>>} */
   let parsed;
   let sourceDescriptor = source.descriptor;
-  if (featureFlags.dsl4SourceIncludes) {
-    const sourceGraph = await loadDsl4BuildSourceGraph(projectRoot, source, {
-      limits: {
-        maxSourceBytes: sourceLimits.maxSourceFileBytes,
-        maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
-        ...(maxSourceFiles === undefined ? {} : {maxSourceFiles}),
-        ...(maxIncludeDepth === undefined ? {} : {maxIncludeDepth}),
-      },
-      fileSystem,
-      readSource,
-    });
+  if (sourceGraphEnabled) {
+    const graphLimits = {
+      maxSourceBytes: sourceLimits.maxSourceFileBytes,
+      maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
+      ...(maxSourceFiles === undefined ? {} : {maxSourceFiles}),
+      ...(maxIncludeDepth === undefined ? {} : {maxIncludeDepth}),
+    };
+    const sourceGraph = blockSourceSet
+      ? await createDsl4VirtualBlockSourceGraph(blockSourceSet, graphLimits)
+      : await loadDsl4BuildSourceGraph(projectRoot, source, {
+          limits: graphLimits,
+          fileSystem,
+          readSource,
+        });
     const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
     parsed = /** @type {Readonly<Record<string, any>>} */ (
       graphFrontend.parse(sourceGraph, {
-        featureFlags,
+        featureFlags: {...featureFlags, dsl4SourceIncludes: true},
         sourceId: source.descriptor.sourceId,
         maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
       })

@@ -26,6 +26,8 @@ import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
+  dsl4BlockSourceCommandOpcode,
+  dsl4BlockSourceHatOpcode,
   dsl4CoreActionManifest,
   loadDsl4RuntimeComponent,
 } from '../src/dsl4/index.js';
@@ -1239,7 +1241,7 @@ test('opens the fixed official website through the Runtime 4 opcode', async () =
   }
 });
 
-test('registers all 24 core action blocks as visible VM primitives', async () => {
+test('registers all DSL 4.0 runtime blocks as visible VM primitives', async () => {
   const result = await buildRelease();
   const restoreGlobals = installUnsandboxedScriptDom();
   const vm = new VirtualMachine();
@@ -1252,7 +1254,11 @@ test('registers all 24 core action blocks as visible VM primitives', async () =>
     await loadProjectQuietly(vm, result.archive);
 
     const commands = dsl4CoreActionManifest.map(({command}) => command);
-    const bundledCommands = commands.map((command) => `${runtimeExtensionId}__${command}`);
+    const bundledCommands = [
+      dsl4BlockSourceHatOpcode,
+      dsl4BlockSourceCommandOpcode,
+      ...commands,
+    ].map((command) => `${runtimeExtensionId}__${command}`);
     const category = vm.runtime._blockInfo.find(({id}) => id === bundleExtensionId);
     assert(category, 'The embedded DSL 4.0 runtime category was not registered.');
     assert.deepEqual(

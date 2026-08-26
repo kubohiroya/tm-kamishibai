@@ -15,6 +15,7 @@ import {
 } from '../../src/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {
+  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
 } from '../../src/dsl4/platform/turbowarp-core-action-block.js';
@@ -185,6 +186,10 @@ class KamishibaiDsl4RuntimeExtension {
         writeVisible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite === true,
       },
     );
+    const blockSourceSurface = createDsl4TurboWarpBlockSourceSurface(
+      {ArgumentType, BlockType},
+      {visible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpActionSurface},
+    );
     return {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
@@ -202,6 +207,7 @@ class KamishibaiDsl4RuntimeExtension {
         )
         .join('\n'),
       blocks: [
+        ...blockSourceSurface.blocks,
         ...coreActionSurface.blocks,
         ...runtimeVariableSurface.blocks,
         {
@@ -280,6 +286,14 @@ class KamishibaiDsl4RuntimeExtension {
 
   versionReporter() {
     return extensionVersion;
+  }
+
+  whenDsl4Source() {
+    return false;
+  }
+
+  dsl4SourceFromYamlJson() {
+    return undefined;
   }
 
   runtimeVersionReporter() {
