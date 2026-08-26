@@ -46,6 +46,7 @@ export {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 export {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 export {createDsl4TurboWarpCrossfadePlatform} from './turbowarp-crossfade-platform.js';
 export {
+  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
   dsl4TurboWarpCoreActionBlockSpecs,
