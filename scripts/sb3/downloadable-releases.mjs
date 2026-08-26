@@ -6,10 +6,11 @@ import process from 'node:process';
 
 import {downloadableReleases} from '../download-catalog.mjs';
 import {readTitleBuildMetadataFromSb3} from './title-build-metadata.mjs';
+import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type: 'json'};
 
 export {downloadableReleases};
 
-const releaseAssetPrefix = '/kubohiroya/tm-kamishibai/releases/download/';
+const releaseAssetPrefix = `${releasePins.release.repositoryPath}/releases/download/`;
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');

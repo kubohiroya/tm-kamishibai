@@ -1,7 +1,10 @@
 {
   "formatVersion": 1,
   "release": {
+    "package": "@kubohiroya/tm-kamishibai",
     "repositoryPath": "/kubohiroya/tm-kamishibai",
+    "series": "4.0",
+    "channel": "next",
     "version": "4.0.0-rc.11"
   },
   "extensions": {
@@ -14,6 +17,12 @@
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.9.0"
+  },
+  "supportDependencies": {
+    "@teachablemachine/pose": "0.8.6",
+    "@tensorflow/tfjs": "1.3.1",
+    "fflate": "0.8.3",
+    "yaml": "2.9.0"
   },
   "artifactFingerprint": {
     "expected": "sha256-st6XdD0j8WNe/UQ+9pk0c4cMyGhjV9eS7fqTGZOeg+8="
