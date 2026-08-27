@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+
+import {
+  assertSb3ReleaseSnapshotMetadata,
+  computeReleaseSourceIdentity,
+  createSb3ReleaseSnapshot,
+  freezeSb3ReleaseSnapshot,
+  recordPublishedSb3ReleaseSnapshot,
+  verifySb3ReleaseSnapshot,
+  writeSb3ReleaseCandidate,
+} from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from './build.mjs';
 import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.mjs';
@@ -25,28 +34,16 @@ export const dsl4ReleaseAssetUrl =
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const validReleaseStates = new Set(['candidate', 'frozen', 'published']);
 
-function sha256(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
-}
-
 function normalizedSourceFiles(files) {
   return [...files.entries()].sort(([left], [right]) => left.localeCompare(right, 'en'));
 }
 
 export function createDsl4ReleaseSourceIdentity(files) {
-  const hash = createHash('sha256');
-  for (const [relativePath, contents] of normalizedSourceFiles(files)) {
-    const pathBytes = Buffer.from(relativePath);
-    hash.update(Buffer.from(`${pathBytes.byteLength}:`));
-    hash.update(pathBytes);
-    hash.update(Buffer.from(`:${contents.byteLength}:`));
-    hash.update(contents);
-  }
-  return `sha256:${hash.digest('hex')}`;
+  return computeReleaseSourceIdentity(files);
 }
 
 export function assertDsl4ReleaseMetadata(metadata) {
-  assert.equal(metadata?.formatVersion, 1, 'DSL 4 release metadata format is invalid.');
+  assertSb3ReleaseSnapshotMetadata(metadata);
   assert.equal(metadata.series, dsl4ReleaseSeries, 'DSL 4 release series is invalid.');
   assert.equal(metadata.version, dsl4ReleaseVersion, 'DSL 4 release version is invalid.');
   assert.equal(metadata.channel, dsl4ReleaseChannel, 'DSL 4 release channel is invalid.');
@@ -93,29 +90,6 @@ export function assertDsl4ReleaseCanUpdate(metadata) {
     'candidate',
     `${dsl4ReleaseVersion} is ${metadata.state} and immutable. Create ${dsl4NextReleaseVersion} instead.`,
   );
-}
-
-function createMetadata(files, archive, state = 'candidate') {
-  return {
-    formatVersion: 1,
-    series: dsl4ReleaseSeries,
-    version: dsl4ReleaseVersion,
-    channel: dsl4ReleaseChannel,
-    state,
-    buildDate: dsl4ReleaseBuildDate,
-    sourceIdentity: createDsl4ReleaseSourceIdentity(files),
-    artifact: {
-      filename: dsl4ReleaseFilename,
-      url: dsl4ReleaseAssetUrl,
-      sha256: sha256(archive),
-      size: archive.byteLength,
-    },
-    publication: {
-      npm: {distTag: dsl4ReleaseChannel},
-      github: {prerelease: true, tag: dsl4ReleaseTag},
-      pages: {recommended: false},
-    },
-  };
 }
 
 async function readMetadata(root) {
@@ -180,10 +154,7 @@ async function defaultFetchReleaseArtifact(metadata) {
 }
 
 async function verifyRemoteArtifact(metadata, fetchReleaseArtifact = defaultFetchReleaseArtifact) {
-  const archive = Buffer.from(await fetchReleaseArtifact(metadata));
-  assert.equal(archive.byteLength, metadata.artifact.size, 'Published release size is invalid.');
-  assert.equal(sha256(archive), metadata.artifact.sha256, 'Published release SHA-256 is invalid.');
-  return archive;
+  await verifySb3ReleaseSnapshot({metadata, fetchPublishedArtifact: fetchReleaseArtifact});
 }
 
 export async function updateDsl4Release({
@@ -194,13 +165,32 @@ export async function updateDsl4Release({
   const previousMetadata = await readMetadata(root);
   assertDsl4ReleaseCanUpdate(previousMetadata);
   const files = await createSourceFiles();
-  const built = await createCandidate(root, files, createSb3);
-  const metadata = assertDsl4ReleaseMetadata(createMetadata(files, built.archive));
-  await writeAtomically(
-    path.join(root, dsl4ReleaseMetadataPath),
-    `${JSON.stringify(metadata, null, 2)}\n`,
-  );
-  await writeAtomically(path.join(root, dsl4ReleaseCandidateArtifactPath), built.archive);
+  const built = await createSb3ReleaseSnapshot({
+    artifact: {
+      filename: dsl4ReleaseFilename,
+      url: dsl4ReleaseAssetUrl,
+    },
+    createSb3: () => createCandidate(root, files, createSb3),
+    metadata: {
+      series: dsl4ReleaseSeries,
+      version: dsl4ReleaseVersion,
+      channel: dsl4ReleaseChannel,
+      buildDate: dsl4ReleaseBuildDate,
+    },
+    publication: {
+      npm: {distTag: dsl4ReleaseChannel},
+      github: {prerelease: true, tag: dsl4ReleaseTag},
+      pages: {recommended: false},
+    },
+    sourceFiles: files,
+  });
+  const metadata = assertDsl4ReleaseMetadata(built.metadata);
+  await writeSb3ReleaseCandidate({
+    archive: built.archive,
+    artifactPath: path.join(root, dsl4ReleaseCandidateArtifactPath),
+    metadata,
+    metadataPath: path.join(root, dsl4ReleaseMetadataPath),
+  });
   return {
     artifactPath: path.join(root, dsl4ReleaseCandidateArtifactPath),
     metadata,
@@ -222,21 +212,11 @@ export async function verifyDsl4ReleaseSnapshot({
     await verifyRemoteArtifact(metadata, fetchReleaseArtifact);
   } else {
     const files = await createSourceFiles();
-    assert.equal(
-      createDsl4ReleaseSourceIdentity(files),
-      metadata.sourceIdentity,
-      `DSL 4 release source changed. Run pnpm release:dsl4:update for ${dsl4ReleaseVersion}.`,
-    );
-    const [first, second] = await Promise.all([
-      createCandidate(root, files, createSb3),
-      createCandidate(root, files, createSb3),
-    ]);
-    assert(
-      Buffer.from(first.archive).equals(Buffer.from(second.archive)),
-      `${dsl4ReleaseVersion} SB3 generation is not deterministic.`,
-    );
-    assert.equal(sha256(first.archive), metadata.artifact.sha256, 'Candidate SHA-256 is stale.');
-    assert.equal(first.archive.byteLength, metadata.artifact.size, 'Candidate size is stale.');
+    await verifySb3ReleaseSnapshot({
+      createSb3: () => createCandidate(root, files, createSb3),
+      metadata,
+      sourceFiles: files,
+    });
   }
   if (verifyPackageVersion) {
     const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
@@ -277,7 +257,7 @@ export async function freezeDsl4Release(options = {}) {
   const metadata = await checkDsl4Release(options);
   if (metadata.state === 'frozen') return metadata;
   assert.equal(metadata.state, 'candidate', `${dsl4ReleaseVersion} is already published.`);
-  const frozen = assertDsl4ReleaseMetadata({...metadata, state: 'frozen'});
+  const frozen = assertDsl4ReleaseMetadata(freezeSb3ReleaseSnapshot(metadata));
   await writeMetadataAtomically(options.root ?? repositoryRoot, frozen);
   return frozen;
 }
@@ -300,19 +280,17 @@ export async function recordDsl4Publication(
     'frozen',
     `${dsl4ReleaseVersion} must be frozen before publication.`,
   );
-  await verifyRemoteArtifact(metadata, fetchReleaseArtifact);
-  const published = assertDsl4ReleaseMetadata({
-    ...metadata,
-    state: 'published',
-    publication: {
-      ...metadata.publication,
-      urls: {
+  const published = assertDsl4ReleaseMetadata(
+    await recordPublishedSb3ReleaseSnapshot(
+      metadata,
+      {
         npm: publicationUrl('--npm-url', npmUrl),
         githubRelease: publicationUrl('--github-release-url', githubReleaseUrl),
         pages: publicationUrl('--pages-url', pagesUrl),
       },
-    },
-  });
+      {fetchPublishedArtifact: fetchReleaseArtifact},
+    ),
+  );
   await writeMetadataAtomically(root, published);
   return published;
 }

@@ -103,7 +103,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@kubohiroya/sb3-toolchain": "0.9.0",
+    "@kubohiroya/sb3-toolchain": "0.10.0",
     "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",
     "@types/node": "^26.2.0",
