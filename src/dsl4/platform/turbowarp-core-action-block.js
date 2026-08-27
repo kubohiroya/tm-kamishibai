@@ -1,3 +1,4 @@
+import {createTurboWarpBlockDefinitions} from '@kubohiroya/turbowarp-extension-manifest';
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
@@ -314,22 +315,25 @@ export function createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible = fa
     throw new TypeError('TurboWarp action block surface requires ArgumentType and BlockType');
   }
   if (typeof visible !== 'boolean') throw new TypeError('visible must be boolean');
-  const blocks = dsl4TurboWarpCoreActionBlockSpecs.map((spec) => ({
-    opcode: spec.command,
-    blockType: Scratch.BlockType.COMMAND,
-    text: spec.text,
-    arguments: Object.fromEntries(
-      spec.arguments.map((input) => [
-        input.name,
-        {
-          type: input.type === 'number' ? Scratch.ArgumentType.NUMBER : Scratch.ArgumentType.STRING,
-          defaultValue: input.defaultValue,
-          ...(input.menu ? {menu: input.menu} : {}),
-        },
-      ]),
-    ),
-    ...(visible ? {} : {hideFromPalette: true}),
-  }));
+  const blocks = createTurboWarpBlockDefinitions(
+    Scratch,
+    dsl4TurboWarpCoreActionBlockSpecs.map((spec) => ({
+      opcode: spec.command,
+      blockType: 'COMMAND',
+      text: spec.text,
+      arguments: Object.fromEntries(
+        spec.arguments.map((input) => [
+          input.name,
+          {
+            type: input.type === 'number' ? 'NUMBER' : 'STRING',
+            defaultValue: input.defaultValue,
+            ...(input.menu ? {menu: input.menu} : {}),
+          },
+        ]),
+      ),
+    })),
+    {hideFromPalette: !visible},
+  );
   return deepFreeze({
     blocks,
     menus: {
@@ -359,26 +363,32 @@ export function createDsl4TurboWarpBlockSourceSurface(Scratch, {visible = false}
     throw new TypeError('TurboWarp block source surface requires HAT and COMMAND block types');
   }
   if (typeof visible !== 'boolean') throw new TypeError('visible must be boolean');
-  const hidden = visible ? {} : {hideFromPalette: true};
   return deepFreeze({
-    blocks: [
-      {
-        opcode: dsl4BlockSourceHatOpcode,
-        blockType: Scratch.BlockType.HAT,
-        text: 'when kamishibai DSL source',
-        isEdgeActivated: false,
-        ...hidden,
-      },
-      {
-        opcode: dsl4BlockSourceCommandOpcode,
-        blockType: Scratch.BlockType.COMMAND,
-        text: 'use YAML/JSON fragment [FRAGMENT] as kamishibai DSL source',
-        arguments: {
-          FRAGMENT: {type: Scratch.ArgumentType.STRING, defaultValue: ''},
+    blocks: createTurboWarpBlockDefinitions(
+      Scratch,
+      [
+        {
+          opcode: dsl4BlockSourceHatOpcode,
+          blockType: 'HAT',
+          text: 'when kamishibai DSL source',
+          arguments: {},
         },
-        ...hidden,
+        {
+          opcode: dsl4BlockSourceCommandOpcode,
+          blockType: 'COMMAND',
+          text: 'use YAML/JSON fragment [FRAGMENT] as kamishibai DSL source',
+          arguments: {
+            FRAGMENT: {type: 'STRING', defaultValue: ''},
+          },
+        },
+      ],
+      {
+        hideFromPalette: !visible,
+        decorateBlock(definition) {
+          return definition.blockType === 'HAT' ? {isEdgeActivated: false} : {};
+        },
       },
-    ],
+    ),
     menus: {},
   });
 }

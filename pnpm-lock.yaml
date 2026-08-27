@@ -25,6 +25,9 @@ importers:
       '@kubohiroya/turbowarp-bubble':
         specifier: 0.11.0
         version: 0.11.0(@kubohiroya/turbowarp-asset-manager@0.14.0)(@kubohiroya/turbowarp-async-input@0.6.0)(@kubohiroya/turbowarp-runtime-expression@0.5.0)
+      '@kubohiroya/turbowarp-extension-manifest':
+        specifier: 0.2.0
+        version: 0.2.0
       '@kubohiroya/turbowarp-local-preview':
         specifier: 0.1.0
         version: 0.1.0
@@ -392,6 +395,10 @@ packages:
         optional: true
       '@kubohiroya/turbowarp-runtime-expression':
         optional: true
+
+  '@kubohiroya/turbowarp-extension-manifest@0.2.0':
+    resolution: {integrity: sha512-FI2Ei2dSZjIGJWJTXZYnpIwzqVtlg8KRNcRZLdydDdV53I2Yri8Mz6susCuNjSm4awbRPBgNx4ALDawr8M90cw==}
+    engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-local-preview@0.1.0':
     resolution: {integrity: sha512-vHvrT+jKBivLiKK86j8bIwzw2iSq5Sj4FbPkXxfByqMnuZszKCgMzlvM7CBaTo8hPvqcmMisoRGoDOXsOHGRBg==}
@@ -2978,6 +2985,8 @@ snapshots:
       '@kubohiroya/turbowarp-asset-manager': 0.14.0
       '@kubohiroya/turbowarp-async-input': 0.6.0
       '@kubohiroya/turbowarp-runtime-expression': 0.5.0
+
+  '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
   '@kubohiroya/turbowarp-local-preview@0.1.0': {}
 

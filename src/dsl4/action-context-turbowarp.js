@@ -1,3 +1,5 @@
+import {createTurboWarpExtensionInfo} from '@kubohiroya/turbowarp-extension-manifest';
+
 const notRegisteredResult = Object.freeze({registered: false});
 const registeredResult = Object.freeze({registered: true});
 const featureFlagKeys = new Set(['dsl4CustomActionsEnabled']);
@@ -171,30 +173,16 @@ export function createDsl4ActionContextTurboWarpSurface(options = {}) {
 
   const extension = Object.freeze({
     getInfo() {
-      return {
-        id: dsl4ActionContextManifest.id,
-        name: dsl4ActionContextManifest.name,
+      return createTurboWarpExtensionInfo(Scratch, dsl4ActionContextManifest, {
         blockIconURI: dsl4ActionContextBlockIconURI,
         color1: '#6c4eb6',
         color2: '#593f99',
         color3: '#47327a',
-        blocks: dsl4ActionContextManifest.blocks.map((definition) => ({
-          opcode: definition.opcode,
-          blockType: Scratch.BlockType[definition.blockType],
-          text: definition.text,
-          ...(definition.blockType === 'HAT' ? {isEdgeActivated: false} : {}),
-          ...(definition.blockType === 'REPORTER' ? {disableMonitor: true} : {}),
-          arguments: Object.fromEntries(
-            Object.entries(definition.arguments).map(([name, argument]) => [
-              name,
-              {
-                type: Scratch.ArgumentType[argument.type],
-                defaultValue: argument.defaultValue,
-              },
-            ]),
-          ),
-        })),
-      };
+        disableReporterMonitors: true,
+        decorateBlock(definition) {
+          return definition.blockType === 'HAT' ? {isEdgeActivated: false} : {};
+        },
+      });
     },
     whenCustomAction() {
       return true;

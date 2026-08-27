@@ -5,7 +5,11 @@ import {createServer} from 'node:http';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-import {resolveServedBrowserModulePath} from '@kubohiroya/turbowarp-local-preview';
+import {
+  resolveServedBrowserModulePath,
+  resolveServedBrowserVendorModulePath,
+  rewriteServedBrowserModuleSource,
+} from '@kubohiroya/turbowarp-local-preview';
 
 import {createDsl4PreviewSourceProtocolPort} from '../dsl4/preview-source-protocol-port.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
@@ -35,6 +39,15 @@ import {
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = ['builder', 'dsl4'];
+const browserVendorModules = new Map([
+  [
+    '/vendor/turbowarp-preview-runtime.js',
+    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-preview-runtime')),
+  ],
+]);
+const browserModuleSpecifierReplacements = new Map([
+  ['@kubohiroya/turbowarp-preview-runtime', '/vendor/turbowarp-preview-runtime.js'],
+]);
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
 const runtimeOwners = new Set(['protocol', 'browser']);
 const maximumRequestBytes = 4 * 1024;
@@ -232,6 +245,19 @@ function modulePath(requestPath) {
     sourceRoot,
     allowedDirectories: allowedModuleDirectories,
   });
+}
+
+/** @param {string} requestPath */
+function vendorModulePath(requestPath) {
+  return resolveServedBrowserVendorModulePath({
+    requestPath,
+    vendorModules: browserVendorModules,
+  });
+}
+
+/** @param {string} source */
+function rewriteServedModuleSource(source) {
+  return rewriteServedBrowserModuleSource(source, browserModuleSpecifierReplacements);
 }
 
 /**
@@ -1051,14 +1077,19 @@ export function createDsl4LocalPreviewHost(options) {
         else response.end(browserRuntimeBundleBytes);
         return;
       }
-      const requestedModule = modulePath(requestUrl.pathname);
+      const requestedModule =
+        modulePath(requestUrl.pathname) ?? vendorModulePath(requestUrl.pathname);
       if (!requestedModule) {
         writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
         return;
       }
       let body;
       try {
-        body = await readFile(requestedModule);
+        const source = await readFile(requestedModule, 'utf8');
+        body = Buffer.from(
+          requestUrl.pathname.startsWith('/modules/') ? rewriteServedModuleSource(source) : source,
+          'utf8',
+        );
       } catch {
         writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
         return;

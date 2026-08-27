@@ -207,7 +207,19 @@ test('connects the loopback browser host, Node watcher, and injected runtime pro
     const clientModule = await fetch(`${origin}/modules/builder/dsl4-local-preview-client.js`);
     assert.equal(clientModule.status, 200);
     assert.match(await clientModule.text(), /createDsl4CliPreviewShell/u);
+    const previewReloadPolicyModule = await fetch(
+      `${origin}/modules/dsl4/preview-reload-policy.js`,
+    );
+    assert.equal(previewReloadPolicyModule.status, 200);
+    assert.match(
+      await previewReloadPolicyModule.text(),
+      /from '\/vendor\/turbowarp-preview-runtime\.js'/u,
+    );
+    const previewRuntimeVendorModule = await fetch(`${origin}/vendor/turbowarp-preview-runtime.js`);
+    assert.equal(previewRuntimeVendorModule.status, 200);
+    assert.match(await previewRuntimeVendorModule.text(), /resolveReloadAnchor/u);
     assert.equal((await fetch(`${origin}/modules/builder/../../package.json`)).status, 404);
+    assert.equal((await fetch(`${origin}/vendor/package.json`)).status, 404);
 
     const connected = await request(origin, '/api/connect', {body: {token}});
     assert.equal(connected.snapshot.status, 'connected');
