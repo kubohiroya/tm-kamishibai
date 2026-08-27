@@ -187,7 +187,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
         : /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\b|\bstartHats\b|getInfo\s*\()/u;
     assert.doesNotMatch(source, forbiddenPlatformDependency, relative);
     if (relative === 'turbowarp-broadcast-action-port.js') {
-      assert.match(source, /runtime\.startHats\(/u, relative);
+      assert.match(source, /@kubohiroya\/turbowarp-runtime-host/u, relative);
     }
   }
 });
