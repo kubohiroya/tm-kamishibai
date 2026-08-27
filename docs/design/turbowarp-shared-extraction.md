@@ -33,48 +33,18 @@ Does not own:
 
 Migration status:
 
-- `src/dsl4/platform/turbowarp-broadcast-action-port.js` now delegates to `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})`.
-- Related `tm-kamishibai` checks pass: `pnpm typecheck`, `pnpm lint`, and `node --test test/dsl4-turbowarp-broadcast-action-port.test.mjs test/dsl4-architecture.test.mjs test/dsl4-turbowarp-runtime-host.test.mjs`.
+- `src/dsl4/platform/turbowarp-runtime-host.js` now creates the shared `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})` directly.
+- The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
+- Related `tm-kamishibai` checks pass: `pnpm typecheck`, `pnpm lint`, and `node --test test/dsl4-architecture.test.mjs test/dsl4-turbowarp-runtime-host.test.mjs`.
 
 Remaining migration candidates:
 
 - runtime access pieces from `src/dsl4/platform/turbowarp-runtime-host.js`
 - generic VM subscription patterns used by runtime shutdown handling
 
-Compatibility wrapper:
-
-```js
-import {createTurboWarpBroadcastPort} from '@kubohiroya/turbowarp-runtime-host';
-
-function isRecord(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function broadcastError(code, message) {
-  const error = new Error(message);
-  Object.defineProperty(error, 'code', {value: code});
-  return error;
-}
-
-export function createDsl4TurboWarpBroadcastActionPort(options) {
-  if (!isRecord(options)) {
-    throw broadcastError(
-      'K4-BROADCAST-RUNTIME-001',
-      'TurboWarp broadcast action port options must be an object',
-    );
-  }
-  return createTurboWarpBroadcastPort({
-    runtime: options.runtime,
-    errorCodePrefix: 'K4',
-  });
-}
-```
-
-The wrapper keeps the public DSL 4.0 factory name and `K4-BROADCAST-*` diagnostic surface while moving the exact broadcast/wait mechanics to the shared package.
-
 Acceptance criteria:
 
-- Existing broadcast action tests still pass.
+- Existing runtime host broadcast action tests still pass.
 - Scratch VM access in app code is reduced to an injected runtime host interface.
 - `tm-3d-app` can reuse the same runtime host for 3D scene graph operations.
 
