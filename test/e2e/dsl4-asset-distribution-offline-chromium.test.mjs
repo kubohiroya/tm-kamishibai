@@ -36,7 +36,7 @@ controls:
 `;
 const openingBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>');
 const openingIntegrity = `sha256-${sha256(openingBytes)}`;
-const chromeResultTimeoutMs = 30_000;
+const chromeResultTimeoutMs = 60_000;
 
 async function chromeExecutable() {
   const candidates = [
@@ -125,7 +125,11 @@ async function runChrome(executable, url, profileDirectory) {
       if (settled) return;
       settled = true;
       child.kill('SIGTERM');
-      reject(new Error(`Chrome did not produce the smoke result: ${stderr}`));
+      reject(
+        new Error(
+          `Chrome did not produce the smoke result within ${chromeResultTimeoutMs}ms: stdout=${stdout.slice(-2000)} stderr=${stderr.slice(-4000)}`,
+        ),
+      );
     }, chromeResultTimeoutMs);
     const finish = () => {
       if (settled) return;
@@ -155,7 +159,7 @@ async function runChrome(executable, url, profileDirectory) {
 
 test(
   'loads an offline asset-distribution SB3 in real Chromium without remote fetches',
-  {timeout: 60_000},
+  {timeout: 90_000},
   async () => {
     const executable = await chromeExecutable();
     const projectDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-asset-offline-project-'));

@@ -14,6 +14,7 @@ const firstPartyFiles = [
   'site/site-shell.js',
   'src/builder/index.js',
   'test/dsl4-turbowarp-runtime-host.test.mjs',
+  'test/dsl4-runtime-error-indicator.test.mjs',
 ];
 
 test('applies static quality rules to every first-party code area', async () => {

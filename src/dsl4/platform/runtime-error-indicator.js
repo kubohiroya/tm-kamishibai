@@ -1,3 +1,5 @@
+import {resolveAppShellLocale} from '@kubohiroya/turbowarp-app-shell';
+
 const localeKeys = new Set(['en', 'ja']);
 const interfaceLocales = Object.freeze({
   en: Object.freeze({
@@ -53,19 +55,6 @@ function requireLocales(value) {
     }
   }
   return /** @type {Readonly<Record<'en' | 'ja', {title: string}>>} */ (value);
-}
-
-/** @returns {'en' | 'ja'} */
-function resolveBrowserLocale() {
-  const browserNavigator = globalThis.navigator;
-  const preferred =
-    typeof browserNavigator?.language === 'string'
-      ? browserNavigator.language
-      : Array.isArray(browserNavigator?.languages) &&
-          typeof browserNavigator.languages[0] === 'string'
-        ? browserNavigator.languages[0]
-        : '';
-  return /^ja(?:-|$)/iu.test(preferred) ? 'ja' : 'en';
 }
 
 /** @param {unknown} value */
@@ -189,7 +178,7 @@ export function createDsl4RuntimeErrorIndicator(options) {
   root.appendChild(panel);
   mount.appendChild(root);
 
-  const locale = /** @type {'en' | 'ja'} */ (options.initialLocale ?? resolveBrowserLocale());
+  const locale = /** @type {'en' | 'ja'} */ (options.initialLocale ?? resolveAppShellLocale());
   const labels = interfaceLocales[locale];
   heading.textContent = locales[locale].title;
   returnButton.textContent = labels.returnToMenu;

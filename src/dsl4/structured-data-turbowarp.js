@@ -1,3 +1,5 @@
+import {createTurboWarpExtensionInfo} from '@kubohiroya/turbowarp-extension-manifest';
+
 const standaloneId = 'kubohiroyastructdata1';
 const developerId = 'kubohiroyastructdata1debug';
 export const dsl4StructuredDataBlockIconURI = `data:image/svg+xml,${encodeURIComponent(
@@ -263,35 +265,23 @@ export function resolveDsl4StructuredDataFeatureFlags(input = {}) {
   return deepFreeze(resolved);
 }
 
-/** @param {any} Scratch @param {Readonly<Record<string, any>>} manifest @param {Record<string, Function>} handlers */
+/**
+ * @param {any} Scratch
+ * @param {Readonly<{id: string, name: string, developer: boolean, blocks: readonly any[]}>} manifest
+ * @param {Record<string, Function>} handlers
+ */
 function createExtension(Scratch, manifest, handlers) {
   return Object.freeze({
     getInfo() {
-      return {
-        id: manifest.id,
-        name: manifest.name,
+      return createTurboWarpExtensionInfo(Scratch, manifest, {
         blockIconURI: manifest.developer
           ? dsl4StructuredDataDebugBlockIconURI
           : dsl4StructuredDataBlockIconURI,
         color1: manifest.developer ? '#555555' : '#2f6f9f',
         color2: manifest.developer ? '#444444' : '#275f88',
         color3: manifest.developer ? '#333333' : '#1f4f70',
-        blocks: manifest.blocks.map((/** @type {any} */ definition) => ({
-          opcode: definition.opcode,
-          blockType: Scratch.BlockType[definition.blockType],
-          text: definition.text,
-          ...(definition.blockType === 'REPORTER' ? {disableMonitor: true} : {}),
-          arguments: Object.fromEntries(
-            Object.entries(definition.arguments).map(([name, argument]) => [
-              name,
-              {
-                type: Scratch.ArgumentType[argument.type],
-                defaultValue: argument.defaultValue,
-              },
-            ]),
-          ),
-        })),
-      };
+        disableReporterMonitors: true,
+      });
     },
     ...handlers,
   });

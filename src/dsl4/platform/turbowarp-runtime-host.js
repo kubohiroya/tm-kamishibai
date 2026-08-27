@@ -1,5 +1,6 @@
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
+import {createTurboWarpBroadcastPort} from '@kubohiroya/turbowarp-runtime-host';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -20,7 +21,6 @@ import {createDsl4PoseFeedbackPresenter} from './pose-feedback-presenter.js';
 import {createDsl4ScratchPoseFeedbackAdapter} from './scratch-pose-feedback-adapter.js';
 import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
-import {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 import {createDsl4TurboWarpCrossfadePlatform} from './turbowarp-crossfade-platform.js';
 import {
   createDsl4RuntimeCacheLeaseLifecycle,
@@ -388,7 +388,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let runtimeExpressionComposition = null;
   /** @type {ReturnType<typeof createDsl4CameraPreviewControls> | null} */
   let cameraPreviewControls = null;
-  /** @type {ReturnType<typeof createDsl4TurboWarpBroadcastActionPort> | null} */
+  /** @type {ReturnType<typeof createTurboWarpBroadcastPort> | null} */
   let broadcastActionPort = null;
   /** @type {Readonly<Record<string, unknown>> | null} */
   let latestPoseState = null;
@@ -446,7 +446,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
 
   try {
     if (broadcastMessageAndWaitEnabled) {
-      broadcastActionPort = createDsl4TurboWarpBroadcastActionPort({runtime: options.runtime});
+      broadcastActionPort = createTurboWarpBroadcastPort({
+        runtime: options.runtime,
+        errorCodePrefix: 'K4',
+      });
     }
     actorPlatform = createDsl4TurboWarpActorPlatform({
       runtime: options.runtime,
@@ -750,7 +753,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     if (broadcastActionPort) {
       addPortMethods(
         port,
-        broadcastActionPort,
+        /** @type {Record<string, Function>} */ (/** @type {unknown} */ (broadcastActionPort)),
         ['broadcastMessageAndWait'],
         'TurboWarp broadcast action port',
       );
