@@ -21,9 +21,12 @@
     },
     "assetKind": {
       "type": "string",
-      "enum": ["backdrop", "costume", "image", "poseModel", "sound"]
+      "enum": ["backdrop", "costume", "image", "recognitionModel", "sound"]
     },
-    "integrity": {"type": "string", "pattern": "^sha256-[0-9a-f]{64}$"},
+    "integrity": {
+      "type": "string",
+      "pattern": "^sha256-[0-9a-f]{64}$"
+    },
     "contentType": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
@@ -43,13 +46,21 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["file"],
-          "properties": {"file": {"$ref": "#/$defs/filePath"}}
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/filePath"
+            }
+          }
         },
         {
           "type": "object",
           "additionalProperties": false,
           "required": ["name"],
-          "properties": {"name": {"$ref": "#/$defs/assetId"}}
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/assetId"
+            }
+          }
         }
       ]
     },
@@ -58,10 +69,19 @@
       "additionalProperties": false,
       "required": ["url", "transportIntegrity", "contentType", "size"],
       "properties": {
-        "url": {"$ref": "#/$defs/httpsUrl"},
-        "transportIntegrity": {"$ref": "#/$defs/integrity"},
-        "contentType": {"$ref": "#/$defs/contentType"},
-        "size": {"type": "integer", "minimum": 1}
+        "url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "transportIntegrity": {
+          "$ref": "#/$defs/integrity"
+        },
+        "contentType": {
+          "$ref": "#/$defs/contentType"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "providerSet": {
@@ -69,8 +89,12 @@
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "embedded": {"$ref": "#/$defs/embeddedProvider"},
-        "remote": {"$ref": "#/$defs/remoteProvider"}
+        "embedded": {
+          "$ref": "#/$defs/embeddedProvider"
+        },
+        "remote": {
+          "$ref": "#/$defs/remoteProvider"
+        }
       }
     },
     "asset": {
@@ -78,11 +102,22 @@
       "additionalProperties": false,
       "required": ["kind", "contentIntegrity", "contentType", "size", "providers"],
       "properties": {
-        "kind": {"$ref": "#/$defs/assetKind"},
-        "contentIntegrity": {"$ref": "#/$defs/integrity"},
-        "contentType": {"$ref": "#/$defs/contentType"},
-        "size": {"type": "integer", "minimum": 0},
-        "providers": {"$ref": "#/$defs/providerSet"}
+        "kind": {
+          "$ref": "#/$defs/assetKind"
+        },
+        "contentIntegrity": {
+          "$ref": "#/$defs/integrity"
+        },
+        "contentType": {
+          "$ref": "#/$defs/contentType"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "providers": {
+          "$ref": "#/$defs/providerSet"
+        }
       }
     }
   }

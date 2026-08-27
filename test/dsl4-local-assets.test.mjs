@@ -82,21 +82,21 @@ assets:
     kind: sound
     file: assets/effect.wav
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue
     loading: lazy
 actors:
   Actor: Hero
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - stage: Ocean
       - sound: Effect
 `);
 }
 
-test('snapshots project refs, image, sound, and a poseModel directory deterministically', async (t) => {
+test('snapshots project refs, image, sound, and a recognitionModel directory deterministically', async (t) => {
   const fixture = await workspace(t);
   const storyDocument = comprehensiveStory();
   const originalStory = structuredClone(storyDocument);
@@ -187,17 +187,17 @@ scenes:
   );
 });
 
-test('extracts a local poseModel zip file into the embedded three-file bundle', async (t) => {
+test('extracts a local recognitionModel zip file into the embedded three-file bundle', async (t) => {
   const fixture = await workspace(t);
   const storyDocument = parseStory(`
 kamishibai: '4.0'
 assets:
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue.ZIP
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions: []
 `);
   const snapshot = await loadDsl4LocalAssetSnapshot(fixture.root, storyDocument, {
@@ -281,7 +281,7 @@ test('rejects root escape, asset symlinks, nested symlinks, and wrong file kinds
   const cases = [
     ['assets/link.svg', 'backdrop', 'K4-ASSET-SYMLINK-001'],
     ['assets/escape/outside.svg', 'backdrop', 'K4-ASSET-PATH-001'],
-    ['models/rescue', 'poseModel', 'K4-ASSET-SYMLINK-001'],
+    ['models/rescue', 'recognitionModel', 'K4-ASSET-SYMLINK-001'],
     ['models/rescue', 'backdrop', 'K4-ASSET-FILE-001'],
   ];
   for (const [file, kind, code] of cases) {
@@ -333,7 +333,7 @@ test('enforces explicit file, count, and total byte limits', async (t) => {
   }
 });
 
-test('fails closed when bytes or a poseModel directory changes during snapshot', async (t) => {
+test('fails closed when bytes or a recognitionModel directory changes during snapshot', async (t) => {
   const fixture = await workspace(t);
   const story = parseStory(`
 kamishibai: '4.0'
@@ -362,7 +362,7 @@ scenes:
 kamishibai: '4.0'
 assets:
   Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue
 scenes:
   opening: []

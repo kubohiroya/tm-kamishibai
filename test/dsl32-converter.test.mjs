@@ -277,7 +277,7 @@ test('converts Actor.pose as ordered steps and preserves optional skin and sound
     {pose: 'help', skin: 'Hero', sound: 'Success'},
     {pose: 'jump'},
   ]);
-  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
+  assert.deepEqual(result.document?.recognition.navigation, {allowSkip: true});
 });
 
 test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', () => {
@@ -300,12 +300,12 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
   );
 
   assert.equal(result.ok, true);
-  assert.deepEqual(result.document?.poseRecognition.sequence, {
+  assert.deepEqual(result.document?.recognition.sequence, {
     confidenceThreshold: 0.75,
     fullConfidenceHoldSeconds: 0.5,
     idleChargePerSecond: 0,
   });
-  assert.deepEqual(result.document?.poseRecognition.navigation, {allowSkip: true});
+  assert.deepEqual(result.document?.recognition.navigation, {allowSkip: true});
   assert.equal(result.document?.variables.poseCharge, 20);
 
   const incompatible = convertDsl32ToDsl4(
@@ -341,9 +341,9 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     {sourceId: 'silent-pose-config.txt', poseModels},
   );
   assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
-  assert.equal(silent.document?.poseRecognition.sequence.confidenceThreshold, 0.75);
-  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'idleSound'), false);
-  assert.equal(Object.hasOwn(silent.document?.poseRecognition, 'chargeSound'), false);
+  assert.equal(silent.document?.recognition.sequence.confidenceThreshold, 0.75);
+  assert.equal(Object.hasOwn(silent.document?.recognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.document?.recognition, 'chargeSound'), false);
 
   const idleOnly = convertDsl32ToDsl4(
     [
@@ -359,8 +359,8 @@ test('maps DSL 3.2 pose runtime tuning to elapsed-time sequence configuration', 
     {sourceId: 'idle-only-pose-config.txt', poseModels},
   );
   assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
-  assert.equal(idleOnly.document?.poseRecognition.idleSound, 'Idle');
-  assert.equal(Object.hasOwn(idleOnly.document?.poseRecognition, 'chargeSound'), false);
+  assert.equal(idleOnly.document?.recognition.idleSound, 'Idle');
+  assert.equal(Object.hasOwn(idleOnly.document?.recognition, 'chargeSound'), false);
 });
 
 test('preserves TMURL as a lazy remote pose model unless an embedded replacement is selected', async () => {
@@ -368,12 +368,12 @@ test('preserves TMURL as a lazy remote pose model unless an embedded replacement
   const remote = convertDsl32ToDsl4(source, {sourceId: 'full.dsl32.txt'});
   assert.equal(remote.ok, true, JSON.stringify(remote.diagnostics));
   assert.deepEqual(remote.document?.assets.PoseModel1, {
-    kind: 'poseModel',
+    kind: 'recognitionModel',
     delivery: 'remote',
     source: {url: 'https://example.com/models/rescue/'},
     loading: 'lazy',
   });
-  assert.equal(remote.document?.scenes.rescue.poseModel, 'PoseModel1');
+  assert.equal(remote.document?.scenes.rescue.recognitionModel, 'PoseModel1');
 
   const zipUrl = 'https://example.com/models/rescue.ZIP?download=1';
   const remoteZip = convertDsl32ToDsl4(
@@ -394,7 +394,7 @@ test('preserves TMURL as a lazy remote pose model unless an embedded replacement
     },
   });
   assert.equal(embedded.ok, true, JSON.stringify(embedded.diagnostics));
-  assert.equal(embedded.document?.scenes.rescue.poseModel, literalId);
+  assert.equal(embedded.document?.scenes.rescue.recognitionModel, literalId);
   assert.equal(embedded.document?.assets[literalId].file, 'pose-models/rescue.zip');
 
   const malformed = convertDsl32ToDsl4(source, {

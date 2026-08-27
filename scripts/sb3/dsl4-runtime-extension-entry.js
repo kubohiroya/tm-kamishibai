@@ -15,6 +15,7 @@ import {
 } from '../../src/dsl4/platform/session-backing-diagnostic.js';
 import {createDsl4StandardAppShell} from '../../src/dsl4/platform/standard-app-shell.js';
 import {
+  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
 } from '../../src/dsl4/platform/turbowarp-core-action-block.js';
@@ -30,7 +31,7 @@ import {installDsl4RuntimeAuthoringProfile} from './dsl4-runtime-authoring-profi
 /* global DSL4_APPLICATION_MENU_ICONS, DSL4_AUTHORING_PROFILE, DSL4_OFFICIAL_WEBSITE_ICON, Scratch, tmPose */
 
 const extensionId = 'kubohiroyakamishibairuntime4';
-const extensionVersion = '4.0.0-rc.10';
+const extensionVersion = '4.0.0-rc.11';
 const blockIconURI = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="10" width="48" height="44" rx="4"/><path d="M8 21h48"/></g><path fill="#fff" d="m27 29 15 8-15 8Z"/></svg>',
 )}`;
@@ -185,6 +186,10 @@ class KamishibaiDsl4RuntimeExtension {
         writeVisible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpStoryVariableWrite === true,
       },
     );
+    const blockSourceSurface = createDsl4TurboWarpBlockSourceSurface(
+      {ArgumentType, BlockType},
+      {visible: dsl4StandardProductionFeatureFlags.dsl4TurboWarpActionSurface},
+    );
     return {
       id: extensionId,
       name: 'Kamishibai DSL 4.0 Runtime',
@@ -202,6 +207,7 @@ class KamishibaiDsl4RuntimeExtension {
         )
         .join('\n'),
       blocks: [
+        ...blockSourceSurface.blocks,
         ...coreActionSurface.blocks,
         ...runtimeVariableSurface.blocks,
         {
@@ -280,6 +286,14 @@ class KamishibaiDsl4RuntimeExtension {
 
   versionReporter() {
     return extensionVersion;
+  }
+
+  whenDsl4Source() {
+    return false;
+  }
+
+  dsl4SourceFromYamlJson() {
+    return undefined;
   }
 
   runtimeVersionReporter() {
@@ -567,6 +581,10 @@ class KamishibaiDsl4RuntimeExtension {
 
   poseInputToChangeScene(args) {
     return this.invokeCoreActionBlock('poseInputToChangeScene', args);
+  }
+
+  imageInputToChangeScene(args) {
+    return this.invokeCoreActionBlock('imageInputToChangeScene', args);
   }
 
   show(args) {

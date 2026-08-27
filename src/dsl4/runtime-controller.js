@@ -6,10 +6,19 @@ import {mapDsl4RuntimeExpressionError} from './expression-diagnostics.js';
 import {encodeDsl4StoryPathSegment} from './story-path.js';
 import {createDsl4RuntimeActionDispatcher} from './runtime-action-dispatcher.js';
 import {
+  createDsl4QuiesceToken,
+  createDsl4RuntimeQuiesceError,
+  defaultScheduleQuiesceTimeout,
+  dsl4RuntimeQuiesceDefaults,
+  retagDsl4QuiesceToken,
+} from './runtime-quiesce.js';
+import {
   dsl4CutTransition,
   dsl4StoryUsesCrossfade,
   resolveDsl4TransitionDefaults,
 } from './transition-spec.js';
+
+export {dsl4RuntimeQuiesceDefaults} from './runtime-quiesce.js';
 
 const defaultPoseSequenceRecognition = Object.freeze({
   confidenceThreshold: 0.5,
@@ -36,19 +45,6 @@ const advancedBubbleStyleNames = Object.freeze([
   'hideAnimation',
   'visibleAnimations',
 ]);
-export const dsl4RuntimeQuiesceDefaults = Object.freeze({
-  quiesceTimeoutMs: 5_000,
-  minimumQuiesceTimeoutMs: 100,
-  maximumQuiesceTimeoutMs: 30_000,
-});
-
-/** @param {() => void} callback @param {number} milliseconds */
-function defaultScheduleQuiesceTimeout(callback, milliseconds) {
-  const timer = setTimeout(callback, milliseconds);
-  if (typeof timer.unref === 'function') timer.unref();
-  return () => clearTimeout(timer);
-}
-
 function deferred() {
   /** @type {(value: unknown) => void} */
   let resolve = () => {};
@@ -384,35 +380,33 @@ export function createDsl4RuntimeController({
   const initialVariables = /** @type {Record<string, string | number | boolean>} */ (
     storyDocument.variables ?? {}
   );
-  const poseRecognition = /** @type {Readonly<Record<string, unknown>>} */ (
-    storyDocument.poseRecognition ?? {}
+  const recognition = /** @type {Readonly<Record<string, unknown>>} */ (
+    storyDocument.recognition ?? {}
   );
   const poseSequenceRecognition = deepFreeze({
     ...defaultPoseSequenceRecognition,
-    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.sequence ?? {}),
-    idleSound: typeof poseRecognition.idleSound === 'string' ? poseRecognition.idleSound : null,
-    chargeSound:
-      typeof poseRecognition.chargeSound === 'string' ? poseRecognition.chargeSound : null,
+    .../** @type {Readonly<Record<string, number>>} */ (recognition.sequence ?? {}),
+    idleSound: typeof recognition.idleSound === 'string' ? recognition.idleSound : null,
+    chargeSound: typeof recognition.chargeSound === 'string' ? recognition.chargeSound : null,
     feedback: {
       mode:
-        typeof (
-          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.feedback)?.mode
-        ) === 'string'
-          ? /** @type {Readonly<Record<string, string>>} */ (poseRecognition.feedback).mode
+        typeof (/** @type {Readonly<Record<string, unknown>>} */ (recognition.feedback)?.mode) ===
+        'string'
+          ? /** @type {Readonly<Record<string, string>>} */ (recognition.feedback).mode
           : 'scratchMirror',
     },
     navigation: {
       allowSkip:
         typeof (
-          /** @type {Readonly<Record<string, unknown>>} */ (poseRecognition.navigation)?.allowSkip
+          /** @type {Readonly<Record<string, unknown>>} */ (recognition.navigation)?.allowSkip
         ) === 'boolean'
-          ? /** @type {Readonly<Record<string, boolean>>} */ (poseRecognition.navigation).allowSkip
+          ? /** @type {Readonly<Record<string, boolean>>} */ (recognition.navigation).allowSkip
           : false,
     },
   });
   const poseSelectionRecognition = deepFreeze({
     ...defaultPoseSelectionRecognition,
-    .../** @type {Readonly<Record<string, number>>} */ (poseRecognition.selection ?? {}),
+    .../** @type {Readonly<Record<string, number>>} */ (recognition.selection ?? {}),
   });
   /** @type {Record<string, string | number | boolean>} */
   let variables = /** @type {Record<string, string | number | boolean>} */ (
@@ -524,18 +518,7 @@ export function createDsl4RuntimeController({
 
   /** @param {string} code @param {string} message */
   function quiesceError(code, message) {
-    const error = new Error(message);
-    Object.defineProperty(error, 'code', {value: code});
-    const action = currentAction();
-    if (typeof action?.id === 'string') {
-      Object.defineProperty(error, 'storyPath', {value: action.id});
-    }
-    return error;
-  }
-
-  /** @param {Readonly<Record<string, unknown>>} token @param {number} candidateId */
-  function retagQuiesceToken(token, candidateId) {
-    return deepFreeze({...token, candidateId});
+    return createDsl4RuntimeQuiesceError(code, message, currentAction());
   }
 
   /**
@@ -562,22 +545,14 @@ export function createDsl4RuntimeController({
         : sceneId
           ? `/scenes/${encodeDsl4StoryPathSegment(sceneId)}`
           : '/';
-    const token = deepFreeze({
-      kind: 'Dsl4QuiesceToken',
-      version: 1,
+    const token = createDsl4QuiesceToken({
       candidateId: request.candidateId,
       runtimeGeneration: generation,
       storyPath,
-      actionSignature: action
-        ? {
-            command: String(action.command),
-            target: action.target === null ? null : String(action.target),
-            handler: String(action.handler ?? 'core'),
-          }
-        : null,
       sceneId,
       actionIndex: actionPosition,
-      variables: cloneValue(variables),
+      action,
+      variables: /** @type {Readonly<Record<string, unknown>>} */ (cloneValue(variables)),
       resumeMode,
     });
     request.phase = 'token';
@@ -1090,7 +1065,7 @@ export function createDsl4RuntimeController({
   function applyPosePreviewMirroring(scene) {
     if (!posePreviewMirroringEnabled) return;
     const operation = port.setPosePreviewMirroring;
-    const storyPreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const storyPreview = isRecord(recognition.preview) ? recognition.preview : {};
     const scenePreview = isRecord(scene.posePreview) ? scene.posePreview : {};
     const mode = scenePreview.mirroring ?? storyPreview.mirroring ?? 'mirrored';
     if (typeof mode !== 'string' || !posePreviewMirroringModes.has(mode)) {
@@ -1298,7 +1273,7 @@ export function createDsl4RuntimeController({
    */
   async function dispatchPose({target, args}, context) {
     const steps = /** @type {ReadonlyArray<Readonly<Record<string, string>>>} */ (args.steps);
-    const poseModel = String(currentScene()?.poseModel ?? '');
+    const recognitionModel = String(currentScene()?.recognitionModel ?? '');
     for (const [stepIndex, step] of steps.entries()) {
       const stepController = new AbortController();
       const handleActionAbort = () => stepController.abort(context.signal.reason);
@@ -1340,7 +1315,8 @@ export function createDsl4RuntimeController({
             pose: step.pose,
             stepIndex,
             stepCount: steps.length,
-            poseModel,
+            recognitionModel,
+            recognitionMode: 'pose',
             recognition: cloneValue(poseSequenceRecognition),
           },
           stepContext,
@@ -1383,7 +1359,7 @@ export function createDsl4RuntimeController({
     invokePort,
     resolveBranch,
     resolveSpeechStyle,
-    getPoseModel: () => String(currentScene()?.poseModel ?? ''),
+    getRecognitionModel: () => String(currentScene()?.recognitionModel ?? ''),
     poseSelectionRecognition,
     dispatchPose,
   });
@@ -2440,7 +2416,7 @@ export function createDsl4RuntimeController({
     if (quiesceRequest) {
       quiesceRequest.candidateId = candidateId;
       if (quiesceRequest.phase === 'token') {
-        quiesceRequest.token = retagQuiesceToken(quiesceRequest.token, candidateId);
+        quiesceRequest.token = retagDsl4QuiesceToken(quiesceRequest.token, candidateId);
         return Promise.resolve(quiesceRequest.token);
       }
       return quiesceRequest.completion.promise;

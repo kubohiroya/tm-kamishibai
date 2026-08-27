@@ -329,15 +329,16 @@ export async function loadDsl4LocalAssetSnapshot(
     if (!isWithin(canonicalRoot, canonicalPath)) {
       fail(`Asset ${assetId} escapes the project root`, 'K4-ASSET-PATH-001');
     }
-    if (asset.kind !== 'poseModel' && !requestedState.isFile()) {
+    const recognitionModel = asset.kind === 'recognitionModel';
+    if (!recognitionModel && !requestedState.isFile()) {
       fail(`Asset ${assetId} must be a regular file`, 'K4-ASSET-FILE-001');
     }
-    if (asset.kind === 'poseModel' && !requestedState.isFile() && !requestedState.isDirectory()) {
-      fail(`PoseModel ${assetId} must be a file or directory`, 'K4-ASSET-FILE-001');
+    if (recognitionModel && !requestedState.isFile() && !requestedState.isDirectory()) {
+      fail(`RecognitionModel ${assetId} must be a file or directory`, 'K4-ASSET-FILE-001');
     }
 
     const archiveMode =
-      asset.kind === 'poseModel' && requestedState.isFile() && isDsl4PoseArchivePath(inputPath);
+      recognitionModel && requestedState.isFile() && isDsl4PoseArchivePath(inputPath);
     if (archiveMode) {
       const archiveBytes = await readStableFile(
         canonicalPath,

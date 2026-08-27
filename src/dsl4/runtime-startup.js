@@ -280,10 +280,10 @@ export async function createDsl4RuntimeStartup(options = {}) {
 
   let created;
   try {
-    const poseRecognition = isRecord(component.storyDocument.poseRecognition)
-      ? component.storyDocument.poseRecognition
+    const recognition = isRecord(component.storyDocument.recognition)
+      ? component.storyDocument.recognition
       : {};
-    const posePreview = isRecord(poseRecognition.preview) ? poseRecognition.preview : {};
+    const posePreview = isRecord(recognition.preview) ? recognition.preview : {};
     const posePreviewControls = isRecord(posePreview.controls) ? posePreview.controls : {};
     const cameraMirroringControlEnabled =
       featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);

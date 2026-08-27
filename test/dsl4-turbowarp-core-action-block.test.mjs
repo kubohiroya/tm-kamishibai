@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {dsl4CoreActionManifest} from '../src/dsl4/core-action-manifest.js';
 import {
+  createDsl4TurboWarpBlockSourceSurface,
   createDsl4TurboWarpCoreActionBlockAdapter,
   createDsl4TurboWarpCoreActionBlockSurface,
   dsl4TurboWarpCoreActionBlockSpecs,
@@ -14,7 +15,7 @@ const schema = JSON.parse(
 );
 const Scratch = Object.freeze({
   ArgumentType: Object.freeze({NUMBER: 'number', STRING: 'string'}),
-  BlockType: Object.freeze({COMMAND: 'command'}),
+  BlockType: Object.freeze({COMMAND: 'command', HAT: 'hat'}),
 });
 
 test('defines one distinct public block for every manifest core action', () => {
@@ -23,7 +24,7 @@ test('defines one distinct public block for every manifest core action', () => {
     dsl4TurboWarpCoreActionBlockSpecs.map(({command}) => command),
     commands,
   );
-  assert.equal(new Set(commands).size, 23);
+  assert.equal(new Set(commands).size, 24);
 
   const enabled = createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible: true});
   assert.deepEqual(
@@ -53,7 +54,23 @@ test('defines one distinct public block for every manifest core action', () => {
   ]);
 });
 
-test('normalizes all 23 block inputs through their manifest Schema definitions', () => {
+test('defines authoring-only block DSL source declaration blocks', () => {
+  const enabled = createDsl4TurboWarpBlockSourceSurface(Scratch, {visible: true});
+  assert.deepEqual(
+    enabled.blocks.map(({opcode}) => opcode),
+    ['whenDsl4Source', 'dsl4SourceFromYamlJson'],
+  );
+  assert.equal(enabled.blocks[0].blockType, Scratch.BlockType.HAT);
+  assert.equal(enabled.blocks[1].blockType, Scratch.BlockType.COMMAND);
+  assert.ok(enabled.blocks.every((definition) => !Object.hasOwn(definition, 'hideFromPalette')));
+
+  const disabled = createDsl4TurboWarpBlockSourceSurface(Scratch);
+  assert.ok(disabled.blocks.every(({hideFromPalette}) => hideFromPalette === true));
+  assert.equal(Object.isFrozen(enabled), true);
+  assert.equal(Object.isFrozen(enabled.blocks), true);
+});
+
+test('normalizes all 24 block inputs through their manifest Schema definitions', () => {
   const adapter = createDsl4TurboWarpCoreActionBlockAdapter(schema);
   const cases = [
     ['stage', {BACKDROP: 'Beach'}, null, {backdrop: 'Beach'}],

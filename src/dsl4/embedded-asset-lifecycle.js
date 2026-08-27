@@ -218,7 +218,8 @@ export function createDsl4EmbeddedAssetLifecycle({
       return (async () => {
         const verified = isVerifiedRemoteSource(source);
         const usesVerifiedResolver = verified && verifiedRemoteResolver !== null;
-        const archiveUrl = asset.kind === 'poseModel' && isDsl4RemotePoseArchiveUrl(source.url);
+        const recognitionModel = asset.kind === 'recognitionModel';
+        const archiveUrl = recognitionModel && isDsl4RemotePoseArchiveUrl(source.url);
         if (!usesVerifiedResolver && remoteLoader === null) {
           throw assetError(
             asset.id,
@@ -238,7 +239,7 @@ export function createDsl4EmbeddedAssetLifecycle({
         }
         if (!verified) {
           const unverifiedRemoteLoader = /** @type {Function} */ (remoteLoader);
-          if (asset.kind !== 'poseModel') {
+          if (!recognitionModel) {
             try {
               const loaded = await unverifiedRemoteLoader(
                 Object.freeze({assetId: asset.id, url: source.url}),
@@ -418,7 +419,7 @@ export function createDsl4EmbeddedAssetLifecycle({
             `Remote asset integrity does not match: ${asset.id}`,
           );
         }
-        if (asset.kind === 'poseModel') {
+        if (asset.kind === 'recognitionModel') {
           return materializePoseArchive(
             asset,
             bytes,

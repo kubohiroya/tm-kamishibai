@@ -8,7 +8,7 @@ import {
 
 export const dsl4PackagerEntrySourceContractVersion = 1;
 export const dsl4PackagerEntrySourceRegistryName =
-  '@kubohiroya/tmpose-kamishibai/dsl4-packager-entry-source/v1';
+  '@kubohiroya/tm-kamishibai/dsl4-packager-entry-source/v1';
 
 const supportedSurfaces = new Set(['plain-html', 'zip', 'zip-one-asset', 'electron']);
 

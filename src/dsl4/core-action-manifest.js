@@ -73,6 +73,13 @@ export const dsl4CoreActionManifest = Object.freeze([
     'cancel-replay-safe',
     'selection',
   ),
+  defineCoreAction(
+    'imageInputToChangeScene',
+    'global',
+    'imageInputAction',
+    'cancel-replay-safe',
+    'selection',
+  ),
   defineCoreAction('show', 'actor', 'showAction', 'finish-only', 'port'),
   defineCoreAction('hide', 'actor', 'hideAction', 'finish-only', 'port'),
   defineCoreAction('setTransparency', 'actor', 'setTransparencyAction', 'finish-only', 'port'),

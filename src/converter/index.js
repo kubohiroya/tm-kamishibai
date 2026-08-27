@@ -34,8 +34,8 @@ const bubbleDirections = new Set([
  * @typedef {{start: SourcePosition, end: SourcePosition}} SourceRange
  * @typedef {{key: string, value: string, lineNumber: number, columnNumber: number, sourceLine: string}} Dsl32Command
  * @typedef {{code: string, severity: 'error' | 'warning', message: string, sourceId: string, range: SourceRange, command: string | null}} ConversionDiagnostic
- * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'poseModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command} | {kind: 'poseModel', delivery: 'remote', source: {url: string}, loading: 'lazy', command: Dsl32Command}} ConvertedAsset
- * @typedef {{kind: 'asset' | 'actor' | 'branch' | 'scene' | 'style', id: string, expectedKind?: 'backdrop' | 'costume' | 'sound' | 'poseModel', actor?: string, command: Dsl32Command}} ConversionReference
+ * @typedef {{kind: 'backdrop', name: string, command: Dsl32Command} | {kind: 'sound', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'costume', name: string, sourceTarget: string, command: Dsl32Command} | {kind: 'recognitionModel', file: string, loading?: 'eager' | 'lazy', command: Dsl32Command} | {kind: 'recognitionModel', delivery: 'remote', source: {url: string}, loading: 'lazy', command: Dsl32Command}} ConvertedAsset
+ * @typedef {{kind: 'asset' | 'actor' | 'branch' | 'scene' | 'style', id: string, expectedKind?: 'backdrop' | 'costume' | 'sound' | 'recognitionModel', actor?: string, command: Dsl32Command}} ConversionReference
  * @typedef {{ok: boolean, source: string, document: Record<string, any> | null, yaml: string | null, diagnostics: ConversionDiagnostic[]}} ConversionResult
  * @typedef {{id: string, file: string, loading?: 'eager' | 'lazy'}} PoseModelReplacement
  */
@@ -212,7 +212,7 @@ class Converter {
     /** @type {{backdrop?: string, costumes?: string[]} | null} */
     this.loading = null;
     /** @type {{idleSound?: string, chargeSound?: string, sequence?: Record<string, number>} | null} */
-    this.poseRecognition = null;
+    this.recognition = null;
     /** @type {string | null} */
     this.currentScene = null;
     this.poseModels = poseModels;
@@ -519,7 +519,7 @@ class Converter {
     }
     if (!valid) return;
 
-    this.poseRecognition ??= {};
+    this.recognition ??= {};
 
     /** @type {Record<string, number>} */
     const sequence = {};
@@ -530,7 +530,7 @@ class Converter {
       sequence.fullConfidenceHoldSeconds = 10 / /** @type {number} */ (poseCharge);
     }
     if (this.variables.has('poseIdle')) sequence.idleChargePerSecond = 0;
-    this.poseRecognition.sequence = sequence;
+    this.recognition.sequence = sequence;
   }
 
   /** @param {Dsl32Command} command */
@@ -580,7 +580,7 @@ class Converter {
       );
       return;
     }
-    if (this.poseRecognition) {
+    if (this.recognition) {
       this.error(
         'K4-CONVERT-DUPLICATE',
         'setPoseRecognitionSound is declared more than once.',
@@ -588,7 +588,7 @@ class Converter {
       );
       return;
     }
-    this.poseRecognition = {
+    this.recognition = {
       idleSound: ids[0],
       ...(ids[1] ? {chargeSound: ids[1]} : {}),
     };
@@ -773,7 +773,7 @@ class Converter {
           this.nextRemotePoseModelId += 1;
         } while (this.assets.has(assetId));
         this.assets.set(assetId, {
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           delivery: 'remote',
           source: {url: normalizedUrl},
           loading: 'lazy',
@@ -797,7 +797,7 @@ class Converter {
     const existing = this.assets.get(replacement.id);
     if (existing) {
       if (
-        existing.kind !== 'poseModel' ||
+        existing.kind !== 'recognitionModel' ||
         !('file' in existing) ||
         existing.file !== replacement.file ||
         (existing.loading ?? 'eager') !== (replacement.loading ?? 'eager')
@@ -811,7 +811,7 @@ class Converter {
       }
     } else {
       this.assets.set(replacement.id, {
-        kind: 'poseModel',
+        kind: 'recognitionModel',
         file: replacement.file,
         ...(replacement.loading ? {loading: replacement.loading} : {}),
         command,
@@ -1316,17 +1316,17 @@ class Converter {
     /** @type {Map<string, any>} */
     const rendered = new Map();
     for (const [id, asset] of this.assets) {
-      if (asset.kind === 'poseModel') {
+      if (asset.kind === 'recognitionModel') {
         if ('delivery' in asset && asset.delivery === 'remote') {
           rendered.set(id, {
-            kind: 'poseModel',
+            kind: 'recognitionModel',
             delivery: 'remote',
             source: asset.source,
             loading: asset.loading,
           });
         } else if ('file' in asset) {
           rendered.set(id, {
-            kind: 'poseModel',
+            kind: 'recognitionModel',
             file: asset.file,
             ...(asset.loading ? {loading: asset.loading} : {}),
           });
@@ -1365,8 +1365,8 @@ class Converter {
   renderScenes() {
     return ownObject(
       [...this.scenes].map(([sceneId, actions]) => {
-        const poseModel = this.scenePoseModels.get(sceneId);
-        return [sceneId, poseModel ? {poseModel, actions} : actions];
+        const recognitionModel = this.scenePoseModels.get(sceneId);
+        return [sceneId, recognitionModel ? {recognitionModel, actions} : actions];
       }),
     );
   }
@@ -1410,9 +1410,9 @@ class Converter {
     if (this.loading?.backdrop && this.loading.costumes) {
       document.loading = {backdrop: this.loading.backdrop, costumes: this.loading.costumes};
     }
-    if (this.poseRecognition || this.scenesUsingPose.size > 0) {
-      document.poseRecognition = {
-        ...(this.poseRecognition ?? {}),
+    if (this.recognition || this.scenesUsingPose.size > 0) {
+      document.recognition = {
+        ...(this.recognition ?? {}),
         ...(this.scenesUsingPose.size > 0 ? {navigation: {allowSkip: true}} : {}),
       };
     }

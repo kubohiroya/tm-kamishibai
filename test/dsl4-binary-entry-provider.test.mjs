@@ -75,7 +75,7 @@ assets:
     file: assets/image.svg
     loading: lazy
   Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/pose
 controls:
   keymaps:
@@ -198,7 +198,7 @@ function assetSnapshot() {
         },
         {
           id: 'Pose',
-          kind: 'poseModel',
+          kind: 'recognitionModel',
           loading: 'eager',
           source: {
             type: 'file',

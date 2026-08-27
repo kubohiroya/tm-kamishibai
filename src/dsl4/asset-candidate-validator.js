@@ -122,20 +122,26 @@ function decodedMetrics(value, name) {
 }
 
 /** @param {Readonly<Record<string, any>>} storyDocument @param {string} assetId */
-function referencedPoseLabels(storyDocument, assetId) {
+function referencedRecognitionLabels(storyDocument, assetId) {
   const labels = new Set();
   for (const scene of /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
     storyDocument.scenes ?? []
   )) {
-    if (scene.poseModel !== assetId) continue;
+    if (scene.recognitionModel !== assetId) continue;
     for (const action of /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
       scene.actions ?? []
     )) {
-      if (action.command !== 'pose') continue;
-      for (const step of /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
-        action.args?.steps ?? []
-      )) {
-        if (typeof step.pose === 'string') labels.add(step.pose);
+      if (action.command === 'pose') {
+        for (const step of /** @type {ReadonlyArray<Readonly<Record<string, any>>>} */ (
+          action.args?.steps ?? []
+        )) {
+          if (typeof step.pose === 'string') labels.add(step.pose);
+        }
+      } else if (
+        action.command === 'poseInputToChangeScene' ||
+        action.command === 'imageInputToChangeScene'
+      ) {
+        for (const label of Object.keys(action.args?.routes ?? {})) labels.add(label);
       }
     }
   }
@@ -314,7 +320,7 @@ export async function validateDsl4AssetCandidate({
       });
     }
 
-    if (asset.kind !== 'poseModel') {
+    if (asset.kind !== 'recognitionModel') {
       throw new TypeError(`unsupported asset candidate kind: ${String(asset.kind)}`);
     }
     const byPath = new Map(files.map((file) => [file.path, file.bytes]));
@@ -349,7 +355,7 @@ export async function validateDsl4AssetCandidate({
     ) {
       fail('K4-ASSET-POSE-BUNDLE-001', `Pose model ${asset.id} manifest is inconsistent`);
     }
-    const missingLabels = referencedPoseLabels(storyDocument, asset.id).filter(
+    const missingLabels = referencedRecognitionLabels(storyDocument, asset.id).filter(
       (label) => !labels.includes(label),
     );
     if (missingLabels.length > 0) {
@@ -359,7 +365,7 @@ export async function validateDsl4AssetCandidate({
     return Object.freeze({
       summary: deepFreeze({
         assetId: asset.id,
-        kind: 'poseModel',
+        kind: asset.kind,
         fileCount: 3,
         labelCount: labels.length,
       }),

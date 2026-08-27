@@ -1,24 +1,18 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
 import {
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
-  createDsl4SourceFrontend,
   dsl4PreviewOptionalCapabilities,
   dsl4PreviewProtocolVersion,
   dsl4PreviewRequiredCapabilities,
   Dsl4PreviewProtocolError,
 } from '../src/dsl4/index.js';
+import {deferred, waitUntil} from './helpers/async-test-helpers.mjs';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const frontend = dsl4TestSourceFrontend;
 
 const initialSource = `
 kamishibai: '4.0'
@@ -36,24 +30,6 @@ function parsedSnapshot(source, integrity) {
     ...frontend.parse(source, {sourceId: 'main'}),
     sourceSnapshot: {sourceId: 'main', integrity},
   };
-}
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
-}
-
-async function waitUntil(predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.fail('condition was not reached');
 }
 
 function fakeSession(storyDocument, events, name) {

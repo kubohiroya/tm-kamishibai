@@ -17,18 +17,19 @@ import {
 
 import {createKamishibaiSb3} from './build.mjs';
 import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.mjs';
+import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type: 'json'};
 
-export const dsl4ReleaseVersion = '4.0.0-rc.10';
-export const dsl4NextReleaseVersion = '4.0.0-rc.11';
-export const dsl4ReleaseSeries = '4.0';
+export const dsl4ReleaseVersion = releasePins.release.version;
+export const dsl4NextReleaseVersion = '4.0.0-rc.12';
+export const dsl4ReleaseSeries = releasePins.release.series;
 export const dsl4ReleaseBuildDate = '2026-08-26';
-export const dsl4ReleaseChannel = 'next';
+export const dsl4ReleaseChannel = releasePins.release.channel;
 export const dsl4ReleaseTag = `v${dsl4ReleaseVersion}`;
 export const dsl4ReleaseFilename = `kamishibai-${dsl4ReleaseVersion}.sb3`;
 export const dsl4ReleaseMetadataPath = `release-metadata/${dsl4ReleaseVersion}.json`;
 export const dsl4ReleaseCandidateArtifactPath = `tmp/release-candidates/${dsl4ReleaseFilename}`;
 export const dsl4ReleaseAssetUrl =
-  `https://github.com/kubohiroya/tm-kamishibai/releases/download/` +
+  `https://github.com${releasePins.release.repositoryPath}/releases/download/` +
   `${dsl4ReleaseTag}/${dsl4ReleaseFilename}`;
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));

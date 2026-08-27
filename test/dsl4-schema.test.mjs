@@ -2,16 +2,11 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {createDsl4SourceFrontend} from '../src/dsl4/index.js';
+import {dsl4TestProjectRoot, dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const fixtureRoot = path.join(projectRoot, 'test', 'fixtures', 'dsl4');
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const fixtureRoot = path.join(dsl4TestProjectRoot, 'test', 'fixtures', 'dsl4');
+const frontend = dsl4TestSourceFrontend;
 
 async function validateFixture(group, name) {
   const source = await readFile(path.join(fixtureRoot, group, name), 'utf8');
@@ -23,7 +18,7 @@ function semanticProjection(storyDocument) {
     assets: storyDocument.assets,
     scenes: storyDocument.scenes.map((scene) => ({
       id: scene.id,
-      poseModel: scene.poseModel,
+      recognitionModel: scene.recognitionModel,
       actions: scene.actions.map(({command, target, args, stableId}) => ({
         command,
         target,
@@ -55,21 +50,21 @@ test('the approved comprehensive DSL 4.0 example satisfies schema and semantics'
   assert.equal(result.storyDocument.scenes[0].actions[2].id, '/scenes/opening/actions/2');
   assert.equal(result.storyDocument.scenes[0].actions[2].stableId, 'openingTitle');
   assert.ok(result.storyDocument.sourceMap['/scenes/opening/actions/2/args/text']);
-  assert.deepEqual(result.storyDocument.poseRecognition.modelInitialization, {
+  assert.deepEqual(result.storyDocument.recognition.modelInitialization, {
     policy: 'latest-needed',
     parallel: false,
   });
-  assert.deepEqual(result.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
-  assert.deepEqual(result.storyDocument.poseRecognition.navigation, {allowSkip: false});
-  assert.deepEqual(result.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
+  assert.deepEqual(result.storyDocument.recognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(result.storyDocument.recognition.navigation, {allowSkip: false});
+  assert.deepEqual(result.storyDocument.recognition.preview, {mirroring: 'mirrored'});
   assert.equal(result.storyDocument.scenes[0].posePreview, null);
   assert.deepEqual(result.storyDocument.scenes[1].posePreview, {mirroring: 'unmirrored'});
   assert.equal(result.storyDocument.scenes[2].posePreview, null);
-  assert.ok(result.storyDocument.sourceMap['/poseRecognition/feedback/mode']);
-  assert.ok(result.storyDocument.sourceMap['/poseRecognition/modelInitialization/policy']);
-  assert.ok(result.storyDocument.sourceMap['/poseRecognition/modelInitialization/parallel']);
-  assert.ok(result.storyDocument.sourceMap['/poseRecognition/navigation/allowSkip']);
-  assert.ok(result.storyDocument.sourceMap['/poseRecognition/preview/mirroring']);
+  assert.ok(result.storyDocument.sourceMap['/recognition/feedback/mode']);
+  assert.ok(result.storyDocument.sourceMap['/recognition/modelInitialization/policy']);
+  assert.ok(result.storyDocument.sourceMap['/recognition/modelInitialization/parallel']);
+  assert.ok(result.storyDocument.sourceMap['/recognition/navigation/allowSkip']);
+  assert.ok(result.storyDocument.sourceMap['/recognition/preview/mirroring']);
   assert.ok(result.storyDocument.sourceMap['/scenes/rescue/posePreview/mirroring']);
 });
 
@@ -940,7 +935,7 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
     'assets:',
     '  Tick: sound',
     '  Charge: sound',
-    'poseRecognition:',
+    'recognition:',
     '  idleSound: Tick',
     '  chargeSound: Charge',
     'scenes:',
@@ -948,18 +943,18 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
   ].join('\n');
   const valid = frontend.parse(base);
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
-  assert.deepEqual(valid.storyDocument.poseRecognition.feedback, {mode: 'scratchMirror'});
-  assert.deepEqual(valid.storyDocument.poseRecognition.modelInitialization, {
+  assert.deepEqual(valid.storyDocument.recognition.feedback, {mode: 'scratchMirror'});
+  assert.deepEqual(valid.storyDocument.recognition.modelInitialization, {
     policy: 'legacy',
     parallel: false,
   });
-  assert.deepEqual(valid.storyDocument.poseRecognition.navigation, {allowSkip: false});
-  assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'mirrored'});
+  assert.deepEqual(valid.storyDocument.recognition.navigation, {allowSkip: false});
+  assert.deepEqual(valid.storyDocument.recognition.preview, {mirroring: 'mirrored'});
 
   const silent = frontend.parse(
     [
       "kamishibai: '4.0'",
-      'poseRecognition:',
+      'recognition:',
       '  navigation:',
       '    allowSkip: true',
       'scenes:',
@@ -967,13 +962,13 @@ test('normalizes pose policy defaults and rejects unknown keys, values, or types
     ].join('\n'),
   );
   assert.equal(silent.ok, true, JSON.stringify(silent.diagnostics));
-  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'idleSound'), false);
-  assert.equal(Object.hasOwn(silent.storyDocument.poseRecognition, 'chargeSound'), false);
+  assert.equal(Object.hasOwn(silent.storyDocument.recognition, 'idleSound'), false);
+  assert.equal(Object.hasOwn(silent.storyDocument.recognition, 'chargeSound'), false);
 
   const idleOnly = frontend.parse(base.replace('  chargeSound: Charge\n', ''));
   assert.equal(idleOnly.ok, true, JSON.stringify(idleOnly.diagnostics));
-  assert.equal(idleOnly.storyDocument.poseRecognition.idleSound, 'Tick');
-  assert.equal(Object.hasOwn(idleOnly.storyDocument.poseRecognition, 'chargeSound'), false);
+  assert.equal(idleOnly.storyDocument.recognition.idleSound, 'Tick');
+  assert.equal(Object.hasOwn(idleOnly.storyDocument.recognition, 'chargeSound'), false);
 
   for (const policy of [
     ['feedback', '    mode: hidden\n'],
@@ -1000,7 +995,7 @@ test('normalizes a scene pose preview override and maps its source position', ()
     'assets:',
     '  Tick: sound',
     '  Charge: sound',
-    'poseRecognition:',
+    'recognition:',
     '  idleSound: Tick',
     '  chargeSound: Charge',
     '  preview:',
@@ -1014,7 +1009,7 @@ test('normalizes a scene pose preview override and maps its source position', ()
   ].join('\n');
   const valid = frontend.parse(source, {sourceId: 'pose-preview.kamishibai.yaml'});
   assert.equal(valid.ok, true, JSON.stringify(valid.diagnostics));
-  assert.deepEqual(valid.storyDocument.poseRecognition.preview, {mirroring: 'unmirrored'});
+  assert.deepEqual(valid.storyDocument.recognition.preview, {mirroring: 'unmirrored'});
   assert.deepEqual(valid.storyDocument.scenes[0].posePreview, {mirroring: 'mirrored'});
   assert.equal(valid.storyDocument.scenes[1].posePreview, null);
   assert.equal(
@@ -1039,7 +1034,7 @@ test('normalizes a scene pose preview override and maps its source position', ()
 test('normalizes pose overlay styles and confidence controls with source ranges', () => {
   const source = `
 kamishibai: '4.0'
-poseRecognition:
+recognition:
   preview:
     mirroring: mirrored
     overlay:
@@ -1063,7 +1058,7 @@ scenes:
 `;
   const result = frontend.parse(source, {sourceId: 'pose-overlay.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.storyDocument.poseRecognition.preview.overlay, {
+  assert.deepEqual(result.storyDocument.recognition.preview.overlay, {
     visible: true,
     minimumConfidence: 0.25,
     jointStyles: {
@@ -1079,14 +1074,14 @@ scenes:
     },
   });
   for (const path of [
-    '/poseRecognition/preview/overlay',
-    '/poseRecognition/preview/overlay/visible',
-    '/poseRecognition/preview/overlay/jointStyles/leftWrist/color',
-    '/poseRecognition/preview/overlay/jointStyles/rightWrist/radius',
-    '/poseRecognition/preview/overlay/boneStyle/width',
-    '/poseRecognition/preview/overlay/minimumConfidence',
-    '/poseRecognition/preview/overlay/confidenceScaling/jointOpacity',
-    '/poseRecognition/preview/overlay/confidenceScaling/boneWidth',
+    '/recognition/preview/overlay',
+    '/recognition/preview/overlay/visible',
+    '/recognition/preview/overlay/jointStyles/leftWrist/color',
+    '/recognition/preview/overlay/jointStyles/rightWrist/radius',
+    '/recognition/preview/overlay/boneStyle/width',
+    '/recognition/preview/overlay/minimumConfidence',
+    '/recognition/preview/overlay/confidenceScaling/jointOpacity',
+    '/recognition/preview/overlay/confidenceScaling/boneWidth',
   ]) {
     assert.ok(result.storyDocument.sourceMap[path], path);
   }
@@ -1130,7 +1125,7 @@ assets:
   CameraMenu:
     kind: image
     file: ui/camera.svg
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:
@@ -1152,7 +1147,7 @@ scenes:
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   assert.equal(result.storyDocument.assets.ShowMirrored.kind, 'image');
   assert.equal(result.storyDocument.assets.ShowMirrored.retention, 'story');
-  assert.deepEqual(result.storyDocument.poseRecognition.preview.controls, {
+  assert.deepEqual(result.storyDocument.recognition.preview.controls, {
     mirroring: {
       opacity: 0.8,
       position: 'top-center',
@@ -1161,13 +1156,13 @@ scenes:
     cameraMenu: {opacity: 1, position: 'bottom-right', buttonAsset: 'CameraMenu'},
   });
   for (const path of [
-    '/poseRecognition/preview/controls',
-    '/poseRecognition/preview/controls/mirroring/position',
-    '/poseRecognition/preview/controls/mirroring/opacity',
-    '/poseRecognition/preview/controls/mirroring/assets/showMirrored',
-    '/poseRecognition/preview/controls/mirroring/assets/showUnmirrored',
-    '/poseRecognition/preview/controls/cameraMenu/position',
-    '/poseRecognition/preview/controls/cameraMenu/buttonAsset',
+    '/recognition/preview/controls',
+    '/recognition/preview/controls/mirroring/position',
+    '/recognition/preview/controls/mirroring/opacity',
+    '/recognition/preview/controls/mirroring/assets/showMirrored',
+    '/recognition/preview/controls/mirroring/assets/showUnmirrored',
+    '/recognition/preview/controls/cameraMenu/position',
+    '/recognition/preview/controls/cameraMenu/buttonAsset',
   ]) {
     assert.ok(result.storyDocument.sourceMap[path], path);
   }
@@ -1213,7 +1208,7 @@ assets:
     file: ui/icon.svg
     loading: lazy
   Wrong: sound
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:
@@ -1336,7 +1331,7 @@ test('verified remote delivery preserves metadata and stays independent from loa
   assert.equal(result.storyDocument.assets.Ocean.delivery, 'remote');
   assert.equal(result.storyDocument.assets.Ocean.loading, 'lazy');
   assert.equal(result.storyDocument.assets.Ocean.retention, 'story');
-  assert.equal(result.storyDocument.assets.RemotePose.kind, 'poseModel');
+  assert.equal(result.storyDocument.assets.RemotePose.kind, 'recognitionModel');
   assert.equal(result.storyDocument.assets.RemotePose.delivery, 'remote');
   assert.equal(result.storyDocument.assets.RemotePose.retention, 'scene');
   assert.equal(result.storyDocument.assets.HeroIdle.delivery, 'embedded');
@@ -1353,12 +1348,12 @@ assets:
     name: SceneImage
     retention: scene
   StoryPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/story
     retention: story
   DefaultSound: sound
   DefaultPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/default
 scenes:
   opening: []
@@ -1445,14 +1440,14 @@ test('accepts an unpinned TM directory URL while keeping partial verification me
 kamishibai: '4.0'
 assets:
   LivePose:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     source:
       url: https://teachablemachine.withgoogle.com/models/example/
 scenes:
   opening:
-    poseModel: LivePose
+    recognitionModel: LivePose
     actions: []
 `);
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));

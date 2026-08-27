@@ -4,8 +4,14 @@ import {readFileSync} from 'node:fs';
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
+const releasePins = JSON.parse(
+  readFileSync(new URL('../test/fixtures/dsl4/release-pins.json', import.meta.url), 'utf8'),
+);
 const dsl4ReleaseMetadata = JSON.parse(
-  readFileSync(new URL('../release-metadata/4.0.0-rc.10.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL(`../release-metadata/${releasePins.release.version}.json`, import.meta.url),
+    'utf8',
+  ),
 );
 const dsl4PublishedArtifact =
   dsl4ReleaseMetadata.state === 'published'
@@ -22,6 +28,10 @@ function deepFreeze(value) {
     for (const nested of Object.values(value)) deepFreeze(nested);
   }
   return value;
+}
+
+function escapeRegExp(value) {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 export const downloadCatalog = deepFreeze([
@@ -114,7 +124,11 @@ for (const entry of downloadCatalog) {
     assert.match(
       entry.artifact.url,
       new RegExp(
-        `^https://github\\.com/kubohiroya/tm-kamishibai/releases/download/v${entry.version.replaceAll('.', '\\.')}/${entry.artifact.filename.replaceAll('.', '\\.')}$`,
+        `^https://github\\.com${escapeRegExp(
+          releasePins.release.repositoryPath,
+        )}/releases/download/v${escapeRegExp(entry.version)}/${escapeRegExp(
+          entry.artifact.filename,
+        )}$`,
         'u',
       ),
       `${entry.series} release asset URL is invalid.`,

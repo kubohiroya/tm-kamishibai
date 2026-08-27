@@ -638,7 +638,7 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   }
   const release = await createKamishibaiSb3({
     sourceDirectory: releaseSourceDirectory,
-    version: '4.0.0-rc.10',
+    version: '4.0.0-rc.11',
     buildDate: '2026-08-16',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
   });
@@ -654,7 +654,7 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   run(
     process.execPath,
     [
-      path.join(repositoryRoot, 'bin/tmpose-kamishibai.mjs'),
+      path.join(repositoryRoot, 'bin/tm-kamishibai.mjs'),
       'build-dsl4',
       '--base',
       actorBasePath,

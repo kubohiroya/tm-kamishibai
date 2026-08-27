@@ -513,7 +513,7 @@ export function createDsl4AssetDistributionAudit({storyDocument, config, lock, p
       cover: phase(dependencies.cover),
       actors: phase(dependencies.actors),
       loading: phase(dependencies.loading),
-      poseRecognition: phase(dependencies.poseRecognition),
+      recognition: phase(dependencies.recognition),
       posePreviewControls: phase(dependencies.posePreviewControls),
     },
     scenes,

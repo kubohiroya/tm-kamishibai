@@ -36,7 +36,7 @@ function requireFunction(value, name) {
  * @param {(method: string, payload: Record<string, unknown>, context: any) => unknown | Promise<unknown>} options.invokePort
  * @param {(branchId: string, context: any) => string | Promise<string>} options.resolveBranch
  * @param {(command: 'say' | 'think', args: Record<string, unknown>) => Record<string, unknown>} options.resolveSpeechStyle
- * @param {() => string} options.getPoseModel
+ * @param {() => string} options.getRecognitionModel
  * @param {Readonly<Record<string, unknown>>} options.poseSelectionRecognition
  * @param {(payload: Readonly<{target: string | null, args: Record<string, unknown>}>, context: any) => unknown | Promise<unknown>} options.dispatchPose
  */
@@ -46,7 +46,7 @@ export function createDsl4RuntimeActionDispatcher(options) {
   const invokePort = requireFunction(options.invokePort, 'invokePort');
   const resolveBranch = requireFunction(options.resolveBranch, 'resolveBranch');
   const resolveSpeechStyle = requireFunction(options.resolveSpeechStyle, 'resolveSpeechStyle');
-  const getPoseModel = requireFunction(options.getPoseModel, 'getPoseModel');
+  const getRecognitionModel = requireFunction(options.getRecognitionModel, 'getRecognitionModel');
   const dispatchPose = requireFunction(options.dispatchPose, 'dispatchPose');
   if (!isRecord(options.poseSelectionRecognition)) {
     throw new TypeError('poseSelectionRecognition must be an object');
@@ -116,8 +116,9 @@ export function createDsl4RuntimeActionDispatcher(options) {
       const selected = await invokePort(
         command,
         {
-          poses: Object.keys(routes),
-          poseModel: getPoseModel(),
+          labels: Object.keys(routes),
+          recognitionModel: getRecognitionModel(),
+          recognitionMode: 'pose',
           recognition: cloneValue(poseSelectionRecognition),
         },
         context,
@@ -126,6 +127,23 @@ export function createDsl4RuntimeActionDispatcher(options) {
         throw invalidResult(`Invalid pose input result: ${String(selected)}`);
       }
       return {sceneId: routes[selected], reason: 'poseInput'};
+    }
+    if (command === 'imageInputToChangeScene') {
+      const routes = /** @type {Record<string, string>} */ (args.routes);
+      const selected = await invokePort(
+        command,
+        {
+          labels: Object.keys(routes),
+          recognitionModel: getRecognitionModel(),
+          recognitionMode: 'image',
+          recognition: cloneValue(poseSelectionRecognition),
+        },
+        context,
+      );
+      if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
+        throw invalidResult(`Invalid image input result: ${String(selected)}`);
+      }
+      return {sceneId: routes[selected], reason: 'imageInput'};
     }
     if (command === 'pose') {
       await dispatchPose({target, args}, context);

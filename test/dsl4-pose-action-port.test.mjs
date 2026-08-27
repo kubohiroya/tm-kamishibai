@@ -22,7 +22,7 @@ function sequencePayload(overrides = {}) {
     pose: 'help',
     stepIndex: 0,
     stepCount: 1,
-    poseModel: 'RescuePose',
+    recognitionModel: 'RescuePose',
     recognition: {
       confidenceThreshold: 0.5,
       fullConfidenceHoldSeconds: 1,
@@ -47,8 +47,8 @@ function sequencePayloadWithFeedback(mode) {
 
 function selectionPayload(overrides = {}) {
   return {
-    poses: ['help', 'stand'],
-    poseModel: 'RescuePose',
+    labels: ['help', 'stand'],
+    recognitionModel: 'RescuePose',
     recognition: {
       accumulationPerSecond: 2,
       decayPerSecond: 0.8,
@@ -718,10 +718,13 @@ test('selects one candidate in a reset action session and applies selection conf
 
 test('keeps only the latest overlapping candidate wait', async () => {
   const {pose, port} = setup();
-  const first = port.poseInputToChangeScene(selectionPayload({poses: ['help']}), actionContext());
+  const first = port.poseInputToChangeScene(selectionPayload({labels: ['help']}), actionContext());
   const firstRejected = assert.rejects(first, (error) => error.name === 'AbortError');
   await flush();
-  const second = port.poseInputToChangeScene(selectionPayload({poses: ['stand']}), actionContext());
+  const second = port.poseInputToChangeScene(
+    selectionPayload({labels: ['stand']}),
+    actionContext(),
+  );
   await firstRejected;
   await flush();
 
@@ -735,7 +738,7 @@ test('keeps only the latest overlapping candidate wait', async () => {
 test('cancels active selection for Actor sequence and queues selection until sequence ends', async () => {
   const {pose, clock, port} = setup();
   const displaced = port.poseInputToChangeScene(
-    selectionPayload({poses: ['help']}),
+    selectionPayload({labels: ['help']}),
     actionContext(),
   );
   const displacedRejected = assert.rejects(displaced, (error) => error.name === 'AbortError');
@@ -758,7 +761,7 @@ test('cancels active selection for Actor sequence and queues selection until seq
     actionContext(),
   );
   const queuedSelection = port.poseInputToChangeScene(
-    selectionPayload({poses: ['stand']}),
+    selectionPayload({labels: ['stand']}),
     actionContext(),
   );
   await displacedRejected;
@@ -802,11 +805,11 @@ test('rejects unavailable models, unknown labels, invalid confidence, and concur
     (error) => error.code === 'K4-POSE-PORT-001',
   );
   await assert.rejects(
-    port.waitForPose(sequencePayload({poseModel: 'Missing'}), actionContext()),
+    port.waitForPose(sequencePayload({recognitionModel: 'Missing'}), actionContext()),
     (error) => error.code === 'K4-POSE-PORT-002',
   );
   await assert.rejects(
-    port.poseInputToChangeScene(selectionPayload({poses: ['unknown']}), actionContext()),
+    port.poseInputToChangeScene(selectionPayload({labels: ['unknown']}), actionContext()),
     (error) => error.code === 'K4-POSE-PORT-003',
   );
 

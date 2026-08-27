@@ -52,6 +52,13 @@ test('renders ordered versioned download cards from one release catalog', async 
     readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
+  const releaseMetadata = JSON.parse(
+    await readFile(path.join(projectRoot, `release-metadata/${packageJson.version}.json`), 'utf8'),
+  );
+  const currentCandidate = downloadCatalog.find(({series}) => series === '4.0');
+  const recommendedStable = downloadCatalog.find(({recommended}) => recommended);
+  const readmeSources = [readme, readmeJapanese];
+  const releaseInstallSpecifier = `${releasePins.release.package}@${releasePins.release.version}`;
   const downloadPage = renderDownloadCards(downloadTemplate);
 
   assert.deepEqual(
@@ -96,6 +103,16 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(downloadPage, /kamishibai-3_1a1\.sb3/u);
   assert.match(readme, /github\.com\/kubohiroya\/sb3-toolchain/u);
   assert.equal(
+    packageJson.name,
+    releasePins.release.package,
+    'Package name must match the reviewed release contract.',
+  );
+  assert.equal(
+    packageJson.version,
+    releasePins.release.version,
+    'Package version must match the reviewed release contract.',
+  );
+  assert.equal(
     packageJson.devDependencies['@kubohiroya/sb3-toolchain'],
     releasePins.devDependencies['@kubohiroya/sb3-toolchain'],
     'SB3 toolchain dependency must use the reviewed exact npm version.',
@@ -104,10 +121,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.doesNotMatch(readme, /github:kubohiroya\/sb3-toolchain#[0-9a-f]{40}/u);
   assert.match(
     readme,
-    new RegExp(
-      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
-      'u',
-    ),
+    new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
     'README installation must use the current fixed npm version.',
   );
   assert.doesNotMatch(readme, /github:kubohiroya\/tmpose-kamishibai#v3\.1\.0/u);
@@ -122,6 +136,47 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.match(readmeJapanese, /\[English\]\(README\.md\) \| 日本語/u);
   assert(packageJson.files.includes('README.md'));
   assert(packageJson.files.includes('README.ja.md'));
+  assert.equal(currentCandidate?.version, packageJson.version);
+  assert.equal(currentCandidate?.status, 'リリース候補');
+  assert.equal(currentCandidate?.updatedAt, releaseMetadata.buildDate);
+  assert.equal(recommendedStable?.version, '3.2.3');
+  assert.equal(recommendedStable?.status, '安定版');
+  assert.equal(releaseMetadata.publication.npm.distTag, packageJson.publishConfig.tag);
+  assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
+  assert.equal(packageJson.engines.node, '>=22.12.0');
+  assert.match(packageJson.packageManager, /^pnpm@11\./u);
+  for (const source of readmeSources) {
+    assert.match(source, new RegExp(`\\| 3\\.2\\.3 [^\\n]*\\| ${packageJson.version}`, 'u'));
+    assert.match(
+      source,
+      new RegExp(
+        `npmjs\\.com/package/${packageJson.name}/v/${packageJson.version.replaceAll('.', '\\.')}`,
+        'u',
+      ),
+    );
+    assert.match(source, /pnpm exec tm-kamishibai --help/u);
+    assert.match(source, /Node\.js 22\.12\.0/u);
+    assert.match(source, /pnpm 11/u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai\/downloads\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-docs\//u);
+    assert.match(source, /https:\/\/kubohiroya\.github\.io\/tm-kamishibai-samples\//u);
+    assert.match(source, /https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/issues/u);
+    assert.match(source, /@kubohiroya\/turbowarp-tm@2\.0\.0/u);
+    assert.match(source, /kubohiroyatm/u);
+    assert.doesNotMatch(
+      source,
+      /--max-source-bytes|modelInitialization|willReadFrequently|startRecognition/u,
+    );
+    assert(source.split('\n').length <= 190, 'README must remain a visitor entry point.');
+  }
+  for (const source of readmeSources) {
+    const releaseNotePath = source.match(
+      /\[rc11\]: https:\/\/github\.com\/kubohiroya\/tm-kamishibai\/blob\/main\/([^\s]+)/u,
+    )?.[1];
+    assert.equal(releaseNotePath, `docs/releases/v${packageJson.version}.md`);
+    await readFile(path.join(projectRoot, releaseNotePath), 'utf8');
+  }
 
   const examples = (source) =>
     [...source.matchAll(/```(?:bash|json|yaml)\n([\s\S]*?)```/gu)].map((match) => match[1]);
@@ -139,10 +194,7 @@ test('renders ordered versioned download cards from one release catalog', async 
   assert.deepEqual(headingLevels(readmeJapanese), headingLevels(readme));
   assert.match(
     readmeJapanese,
-    new RegExp(
-      `pnpm add --save-exact @kubohiroya/tmpose-kamishibai@${packageJson.version.replaceAll('.', '\\.')}`,
-      'u',
-    ),
+    new RegExp(`pnpm add --save-exact ${releaseInstallSpecifier.replaceAll('.', '\\.')}`, 'u'),
     'Japanese README installation must use the current fixed npm version.',
   );
 });

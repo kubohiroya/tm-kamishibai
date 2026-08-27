@@ -8,16 +8,7 @@ import {
   dsl4PreviewOptionalCapabilities,
   dsl4PreviewRequiredCapabilities,
 } from '../src/dsl4/index.js';
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
-}
+import {deferred} from './helpers/async-test-helpers.mjs';
 
 function sourceResult(integrity, {ok = true} = {}) {
   const sourceSnapshot = Object.freeze({integrity, text: `source:${integrity}`});

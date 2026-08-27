@@ -7,6 +7,7 @@ function isRecord(value) {
 
 const feedbackModes = new Set(['scratchMirror', 'scratchBinding', 'presenter']);
 const poseBindingKeys = new Set(['confidence', 'progress']);
+const recognitionModes = new Set(['pose', 'image']);
 
 /** @param {string} code @param {string} message */
 function portError(code, message) {
@@ -173,7 +174,7 @@ function validateSequencePayload(value) {
     pose: requireString(value.pose, 'pose'),
     stepIndex,
     stepCount,
-    poseModel: requireString(value.poseModel, 'poseModel'),
+    recognitionModel: requireString(value.recognitionModel, 'recognitionModel'),
     confidenceThreshold: requireNumber(
       recognition.confidenceThreshold,
       'confidenceThreshold',
@@ -205,17 +206,27 @@ function validateSequencePayload(value) {
 
 /** @param {unknown} value */
 function validateSelectionPayload(value) {
-  if (!isRecord(value) || !Array.isArray(value.poses) || !isRecord(value.recognition)) {
+  if (!isRecord(value) || !Array.isArray(value.labels) || !isRecord(value.recognition)) {
     throw portError('K4-POSE-PORT-001', 'poseInputToChangeScene payload is invalid');
   }
-  const poses = value.poses.map((pose) => requireString(pose, 'pose candidate'));
-  if (poses.length === 0 || new Set(poses).size !== poses.length) {
-    throw portError('K4-POSE-PORT-001', 'pose candidates must be non-empty and unique');
+  const labels = /** @type {unknown[]} */ (value.labels).map((label) =>
+    requireString(label, 'recognition label'),
+  );
+  if (labels.length === 0 || new Set(labels).size !== labels.length) {
+    throw portError('K4-POSE-PORT-001', 'recognition labels must be non-empty and unique');
   }
   const recognition = value.recognition;
+  const recognitionMode =
+    value.recognitionMode === undefined
+      ? 'pose'
+      : requireString(value.recognitionMode, 'recognitionMode');
+  if (!recognitionModes.has(recognitionMode)) {
+    throw portError('K4-POSE-PORT-001', 'recognitionMode is unsupported');
+  }
   return {
-    poses,
-    poseModel: requireString(value.poseModel, 'poseModel'),
+    labels,
+    recognitionModel: requireString(value.recognitionModel, 'recognitionModel'),
+    recognitionMode,
     accumulationPerSecond: requireNumber(
       recognition.accumulationPerSecond,
       'accumulationPerSecond',
@@ -533,7 +544,8 @@ export function createDsl4PoseActionPort(options) {
    * Serialize camera/model startup because TM does not accept an AbortSignal. Each caller may
    * stop waiting immediately while an already-started camera request remains shared by later steps.
    *
-   * @param {string} poseModel
+   * @param {string} recognitionModel
+   * @param {string} recognitionMode
    * @param {AbortSignal} signal
    * @param {object} options
    * @param {boolean} [options.restart]
@@ -541,7 +553,8 @@ export function createDsl4PoseActionPort(options) {
    * @param {string} options.cancelMessage
    */
   function queueRecognition(
-    poseModel,
+    recognitionModel,
+    recognitionMode,
     signal,
     {restart = false, configure = () => {}, cancelMessage},
   ) {
@@ -550,9 +563,9 @@ export function createDsl4PoseActionPort(options) {
       .then(async () => {
         if (signal.aborted) throw abortError(cancelMessage);
         if (restart && tmComposition.isRecognizing()) tmComposition.stopRecognition();
-        if (tmComposition.getActivePoseModelName() !== poseModel) {
+        if (tmComposition.getActivePoseModelName() !== recognitionModel) {
           if (tmComposition.isRecognizing()) tmComposition.stopRecognition();
-          tmComposition.activatePoseModel(poseModel);
+          tmComposition.activatePoseModel(recognitionModel);
         }
         configure();
         if (signal.aborted) throw abortError(cancelMessage);
@@ -570,14 +583,16 @@ export function createDsl4PoseActionPort(options) {
     return waitForAbortableOperation(operation, signal, cancelMessage);
   }
 
-  /** @param {string} poseModel @param {AbortSignal} signal */
-  function ensureRecognition(poseModel, signal) {
-    return queueRecognition(poseModel, signal, {cancelMessage: 'pose action was cancelled'});
+  /** @param {string} recognitionModel @param {AbortSignal} signal */
+  function ensureRecognition(recognitionModel, signal) {
+    return queueRecognition(recognitionModel, 'pose', signal, {
+      cancelMessage: 'pose action was cancelled',
+    });
   }
 
   /** @param {ReturnType<typeof validateSelectionPayload>} input @param {AbortSignal} signal */
   function startSelectionRecognition(input, signal) {
-    return queueRecognition(input.poseModel, signal, {
+    return queueRecognition(input.recognitionModel, input.recognitionMode, signal, {
       restart: true,
       cancelMessage: 'pose candidate wait was cancelled',
       configure() {
@@ -661,7 +676,7 @@ export function createDsl4PoseActionPort(options) {
       if (externalSignal.aborted || actionSignal.aborted) {
         throw abortError('pose sequence was cancelled');
       }
-      requireKnownPoses(input.poseModel, [input.pose]);
+      requireKnownPoses(input.recognitionModel, [input.pose]);
       if (activeSequence) {
         throw portError('K4-POSE-PORT-006', 'another Actor pose sequence is already active');
       }
@@ -680,7 +695,7 @@ export function createDsl4PoseActionPort(options) {
         statePublished = true;
         notifyPoseCursor(true, 'pose-sequence');
         if (displacedSelection) await displacedSelection.done;
-        await ensureRecognition(input.poseModel, operation.controller.signal);
+        await ensureRecognition(input.recognitionModel, operation.controller.signal);
         showClaimedPreview(previewOwner);
         if (input.idleSound) startBackgroundSound(input.idleSound);
         if (operation.controller.signal.aborted) throw abortError('pose sequence was cancelled');
@@ -740,7 +755,7 @@ export function createDsl4PoseActionPort(options) {
       const input = validateSelectionPayload(payload);
       const {signal: externalSignal} = validateContext(context);
       if (externalSignal.aborted) throw abortError('pose candidate wait was cancelled');
-      requireKnownPoses(input.poseModel, input.poses);
+      requireKnownPoses(input.recognitionModel, input.labels);
 
       const operation =
         /** @type {ReturnType<typeof createOperation> & {wake: null | (() => void)}} */ (
@@ -762,14 +777,17 @@ export function createDsl4PoseActionPort(options) {
         await startSelectionRecognition(input, operation.controller.signal);
         showClaimedPreview(operation);
         const selected = await asyncInput.waitForPoseCandidate({
-          candidates: input.poses,
+          candidates: input.labels,
           signal: operation.controller.signal,
         });
         if (operation.controller.signal.aborted) {
           throw abortError('pose candidate wait was cancelled');
         }
-        if (!input.poses.includes(selected)) {
-          throw portError('K4-POSE-PORT-008', `Async Input returned an unknown pose: ${selected}`);
+        if (!input.labels.includes(selected)) {
+          throw portError(
+            'K4-POSE-PORT-008',
+            `Async Input returned an unknown recognition label: ${selected}`,
+          );
         }
         return selected;
       } finally {
@@ -780,6 +798,14 @@ export function createDsl4PoseActionPort(options) {
         if (currentSelection === operation) currentSelection = null;
         operation.finish();
       }
+    },
+
+    /** @param {unknown} payload @param {unknown} context */
+    imageInputToChangeScene(payload, context) {
+      if (!isRecord(payload)) {
+        throw portError('K4-POSE-PORT-001', 'imageInputToChangeScene payload is invalid');
+      }
+      return port.poseInputToChangeScene({...payload, recognitionMode: 'image'}, context);
     },
 
     dispose() {

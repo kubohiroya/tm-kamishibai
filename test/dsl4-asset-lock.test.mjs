@@ -44,11 +44,11 @@ assets:
     kind: sound
     file: assets/narration.mp3
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: models/rescue
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - stage: Logo
       - sound: Narration

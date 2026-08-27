@@ -22,6 +22,11 @@ import {createDsl4SvgTextPlatform} from './svg-text-action-port.js';
 import {createDsl4TurboWarpActorPlatform} from './turbowarp-actor-adapter.js';
 import {createDsl4TurboWarpBroadcastActionPort} from './turbowarp-broadcast-action-port.js';
 import {createDsl4TurboWarpCrossfadePlatform} from './turbowarp-crossfade-platform.js';
+import {
+  createDsl4RuntimeCacheLeaseLifecycle,
+  defaultCacheLeaseHeartbeatMs,
+  defaultCacheLeaseHeartbeatSchedule,
+} from './turbowarp-runtime-cache-lease.js';
 
 /**
  * @typedef {Readonly<{runtime: unknown, storyDocument: Readonly<Record<string, unknown>>}>} HostPortContext
@@ -38,16 +43,8 @@ const hostPortMethods = new Set([
 const controllerCommands = new Set(['goto', 'branch', 'pose']);
 const terminalRuntimeEvents = new Set(['runtime.finish', 'runtime.fail', 'runtime.stop']);
 const terminalRuntimeStatuses = new Set(['finished', 'failed', 'stopped']);
-const defaultCacheLeaseHeartbeatMs = 30_000;
 const sessionBackingPolicies = new Set(['prefer', 'required', 'disabled']);
 let fallbackSessionIdCounter = 0;
-
-/** @param {() => void} callback @param {number} milliseconds */
-function defaultCacheLeaseHeartbeatSchedule(callback, milliseconds) {
-  const timer = setInterval(callback, milliseconds);
-  if (typeof timer.unref === 'function') timer.unref();
-  return () => clearInterval(timer);
-}
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
@@ -324,10 +321,8 @@ function validateBroadcastMessageAndWaitFeature(storyDocument, enabled) {
 
 /** @param {Readonly<Record<string, unknown>>} storyDocument */
 function resolvePoseFeedbackMode(storyDocument) {
-  const poseRecognition = isRecord(storyDocument.poseRecognition)
-    ? storyDocument.poseRecognition
-    : null;
-  const feedback = isRecord(poseRecognition?.feedback) ? poseRecognition.feedback : null;
+  const recognition = isRecord(storyDocument.recognition) ? storyDocument.recognition : null;
+  const feedback = isRecord(recognition?.feedback) ? recognition.feedback : null;
   const mode = feedback?.mode ?? 'scratchMirror';
   if (!['scratchMirror', 'scratchBinding', 'presenter'].includes(String(mode))) {
     throw hostError('K4-HOST-POSE-FEEDBACK-001', 'Pose feedback mode is unsupported');
@@ -417,8 +412,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
         },
       })
     : null;
-  const preview = isRecord(component.storyDocument.poseRecognition)
-    ? /** @type {Record<string, any>} */ (component.storyDocument.poseRecognition).preview
+  const preview = isRecord(component.storyDocument.recognition)
+    ? /** @type {Record<string, any>} */ (component.storyDocument.recognition).preview
     : null;
   const hasConfiguredPreviewControls =
     cameraPreviewControlsEnabled && isRecord(preview) && isRecord(preview.controls);
@@ -828,7 +823,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     addPortMethods(
       port,
       assetSession.poseActionPort,
-      ['waitForPose', 'poseInputToChangeScene'],
+      ['waitForPose', 'poseInputToChangeScene', 'imageInputToChangeScene'],
       'pose action port',
     );
     if (assetSession.posePreviewPort) {
@@ -869,7 +864,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
 
     const activeAssetSession = assetSession;
     const poseModelAssetIds = Object.values(component.storyDocument.assets ?? {})
-      .filter((asset) => isRecord(asset) && asset.kind === 'poseModel')
+      .filter((asset) => isRecord(asset) && asset.kind === 'recognitionModel')
       .map((asset) => String(asset.id));
     publishRuntimeDiagnostics(
       Object.freeze({
@@ -1474,58 +1469,12 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
   );
   /** @type {Promise<void> | null} */
   let disposePromise = null;
-  /** @type {null | (() => void)} */
-  let cancelCacheHeartbeat = null;
-  let cacheLeaseOperation = Promise.resolve();
-  /** @type {unknown} */
-  let cacheLeaseError = null;
-  let cacheLeaseActive = cachePort !== null;
   let cacheExecutionId = 0;
-
-  /** @param {() => unknown | Promise<unknown>} operation */
-  function queueCacheLeaseOperation(operation, clearErrorOnSuccess = false) {
-    if (!cachePort) return cacheLeaseOperation;
-    cacheLeaseOperation = cacheLeaseOperation.then(async () => {
-      try {
-        await operation();
-        if (clearErrorOnSuccess) cacheLeaseError = null;
-      } catch (error) {
-        cacheLeaseError = error;
-      }
-    });
-    return cacheLeaseOperation;
-  }
-
-  function startCacheHeartbeat() {
-    if (!cachePort || cancelCacheHeartbeat) return;
-    const cancel = scheduleCacheLeaseHeartbeat(() => {
-      void queueCacheLeaseOperation(() => cachePort.renewLease(), true);
-    }, cacheLeaseHeartbeatMs);
-    if (typeof cancel !== 'function') {
-      throw new TypeError('scheduleCacheLeaseHeartbeat must return a cancellation function');
-    }
-    cancelCacheHeartbeat = cancel;
-  }
-
-  async function activateCacheLease() {
-    if (!cachePort) return;
-    await queueCacheLeaseOperation(() => cachePort.renewLease(), true);
-    cacheLeaseActive = true;
-    startCacheHeartbeat();
-  }
-
-  async function deactivateCacheLease() {
-    const cancel = cancelCacheHeartbeat;
-    cancelCacheHeartbeat = null;
-    try {
-      cancel?.();
-    } catch (error) {
-      cacheLeaseError = error;
-    }
-    if (!cachePort || !cacheLeaseActive) return;
-    cacheLeaseActive = false;
-    await queueCacheLeaseOperation(() => cachePort.releaseLease());
-  }
+  const cacheLeaseLifecycle = createDsl4RuntimeCacheLeaseLifecycle({
+    cachePort,
+    heartbeatMs: cacheLeaseHeartbeatMs,
+    scheduleHeartbeat: scheduleCacheLeaseHeartbeat,
+  });
   function ensureActive() {
     if (disposePromise) throw hostError('K4-HOST-DISPOSED', 'DSL 4.0 TurboWarp host is disposed');
   }
@@ -1537,7 +1486,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       const activeCacheExecutionId = cacheExecutionId;
       return (async () => {
         try {
-          await activateCacheLease();
+          await cacheLeaseLifecycle.activate();
           if (cacheExecutionId !== activeCacheExecutionId) return session.getState().runtime;
           ensureActive();
           const result = await startSessionUntilTerminal(startOptions);
@@ -1550,7 +1499,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
             // Releasing an IndexedDB cache lease is maintenance work. A stalled browser
             // transaction must not keep the terminal story result — and therefore the
             // application menu — from being published.
-            void deactivateCacheLease();
+            void cacheLeaseLifecycle.deactivate();
           }
         }
       })();
@@ -1560,7 +1509,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
       ensureActive();
       cacheExecutionId += 1;
       const state = session.stop(reason);
-      void deactivateCacheLease();
+      void cacheLeaseLifecycle.deactivate();
       return state;
     },
     /** @param {Readonly<Record<string, unknown>>} action */
@@ -1653,7 +1602,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
             pruneStoryCaches: cachePort.pruneStoryCaches,
             deleteStoryCache: cachePort.deleteStoryCache,
             getHeartbeatError() {
-              return cacheLeaseError;
+              return cacheLeaseLifecycle.getError();
             },
           }),
     diagnostics: Object.freeze({
@@ -1704,7 +1653,7 @@ export async function createDsl4TurboWarpRuntimeHost(options = {}) {
           errors.push(error);
         }
         try {
-          pending.push(Promise.resolve(deactivateCacheLease()));
+          pending.push(Promise.resolve(cacheLeaseLifecycle.deactivate()));
         } catch (error) {
           errors.push(error);
         }

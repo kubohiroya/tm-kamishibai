@@ -42,7 +42,7 @@ project asset `name`、remote `source`はprimary providerになる。profileを�
       "defaultDelivery": "embedded",
       "kinds": {
         "sound": "remote",
-        "poseModel": "remote"
+        "recognitionModel": "remote"
       },
       "assets": {
         "OpeningNarration": "embedded"
@@ -75,7 +75,7 @@ profileの解決優先順位は次で固定する。
 
 embedded providerは次のどちらか一つを持つ。
 
-- `file`: project-root-relativeのlocal fileまたはposeModel directory
+- `file`: project-root-relativeのlocal fileまたはrecognitionModel directory
 - `name`: base SB3内にすでに存在するproject asset
 
 remote providerはcredentialとfragmentを持たないabsolute HTTPS URLだけを許可する。
@@ -112,7 +112,7 @@ absolute path、asset bytesを入れない。
 ```
 
 単一file assetではlogical contentとremote transportが同一byte列なので、integrity、Content-Type、
-sizeの一致を必須にする。poseModelではlogical contentが展開後bundle、remote transportがarchiveで
+sizeの一致を必須にする。recognitionModelではlogical contentが展開後bundle、remote transportがarchiveで
 あるため、両者のintegrityとsizeは異なってよい。lock生成とvendor実装がtrusted extractorで展開し、
 canonical bundle digestへbindingする。
 
@@ -140,7 +140,7 @@ resolverはprofile名、network policy、asset別content identityとproviderを�
 解決する。HTTP request、remote asset取得、cache参照、file書き込みは行わない。
 
 ```bash
-pnpm exec tmpose-kamishibai audit-dsl4-assets \
+pnpm exec tm-kamishibai audit-dsl4-assets \
   --project-root . \
   --source-manifest project.source.yaml \
   --asset-config project.assets.json \
@@ -163,7 +163,7 @@ source includeを使うprojectでは、`--enable-source-includes`と次の三上
 auditは次を返す。
 
 - profile全体、embedded／remote、eager／lazy、kind別のasset数とlogical byte数
-- remote transport byte数。poseModel archiveではlogical byte数と異なってよい
+- remote transport byte数。recognitionModel archiveではlogical byte数と異なってよい
 - startup、cover、actors、loading、pose recognition、preview controlの準備集合
 - scene別のall／eager／lazy／scene-retained集合と容量
 - 同一logical content hashを持つasset ID群と重複削減可能量
@@ -184,7 +184,7 @@ path、source本文、machine-local absolute pathを含めない。
 置換する唯一のnetwork使用コマンドである。remote providerはHTTPS、明示的なhost allowlist、timeout、
 redirect数、asset単位・全体byte数の有限上限を満たす必要がある。redirect先もHTTPSとallowlistを再検証する。
 
-poseModel archiveは既存のbounded trusted extractorで展開し、展開後file path／size／digestからlogical
+recognitionModel archiveは既存のbounded trusted extractorで展開し、展開後file path／size／digestからlogical
 bundle digestを作る。local fileとremote providerが同時にある場合、logical content integrity、Content-Type、
 sizeが一致しなければ`K4-ASSET-CONTENT-MISMATCH-001`で拒否する。
 
@@ -192,7 +192,7 @@ project assetの`name`は既存SB3のbytesを参照できないため、remote a
 推測値を書き込まない。
 
 ```bash
-pnpm exec tmpose-kamishibai lock-dsl4-assets \
+pnpm exec tm-kamishibai lock-dsl4-assets \
   --project-root . \
   --source-manifest project.source.yaml \
   --asset-config project.assets.json \
@@ -218,7 +218,7 @@ pnpm exec tmpose-kamishibai lock-dsl4-assets \
 | `K4-ASSET-REMOTE-HOST-001`      | remote hostがallowlist外                                |
 | `K4-ASSET-REMOTE-REDIRECT-001`  | HTTPS redirectまたはredirect上限が不正                  |
 | `K4-ASSET-REMOTE-SIZE-001`      | remote responseが有限byte上限を超過                     |
-| `K4-ASSET-ARCHIVE-001`          | poseModel archiveのtrusted extractionに失敗             |
+| `K4-ASSET-ARCHIVE-001`          | recognitionModel archiveのtrusted extractionに失敗             |
 | `K4-ASSET-VENDOR-INTEGRITY-001` | remote bytesがlockのtransport／logical identityと不一致 |
 | `K4-ASSET-VENDOR-SIZE-001`      | vendorの総download byte上限を超過                       |
 | `K4-ASSET-VENDOR-COUNT-001`     | vendorのfile／pose entry数上限を超過                    |
@@ -239,7 +239,7 @@ pnpm exec tmpose-kamishibai lock-dsl4-assets \
 
 `vendor-dsl4-assets`は既存lockのremote providerだけを取得し、transport integrity、Content-Type、
 sizeを再検証する。single-file assetはcontent integrityをディレクトリ名にした一つのlocal fileへ、
-poseModelはtrusted extractorで展開した3ファイルbundleへ固定する。mirrorのrootにはlockのcanonical
+recognitionModelはtrusted extractorで展開した3ファイルbundleへ固定する。mirrorのrootにはlockのcanonical
 digestを含めるため、別lockの生成物を上書きせず、同じ入力に対して再実行できる。
 
 configとlockは作者入力を直接上書きせず、`--output-config`／`--output-lock`へ生成する。generated
@@ -247,7 +247,7 @@ configにはmirrorのembedded providerを追加し、generated lockにも同じr
 各JSONはcandidate検証後にatomic置換し、mirror directoryはcandidateを検証してからatomic renameする。
 
 ```bash
-pnpm exec tmpose-kamishibai vendor-dsl4-assets \
+pnpm exec tm-kamishibai vendor-dsl4-assets \
   --project-root . \
   --asset-config project.assets.json \
   --asset-lock project.assets.lock.json \
@@ -268,7 +268,7 @@ resolved `StoryDocument`をruntime／asset bundleへ渡す。profileを指定し
 削除し、従来のsource deliveryへ戻る。
 
 ```bash
-pnpm exec tmpose-kamishibai build-dsl4 \
+pnpm exec tm-kamishibai build-dsl4 \
   --base BASE.sb3 --project-root . \
   --source-manifest project.source.yaml --output dist/story.sb3 \
   --control-profile production --channel bundled \

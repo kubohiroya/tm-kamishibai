@@ -241,11 +241,11 @@ test('keeps the current scene resources until the next scene is ready and bounds
 kamishibai: '4.0'
 assets:
   FirstPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/first
     loading: lazy
   NextPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/next
     loading: lazy
   PersistentSound:
@@ -254,11 +254,11 @@ assets:
     loading: lazy
 scenes:
   first:
-    poseModel: FirstPose
+    recognitionModel: FirstPose
     actions:
       - goto: next
   next:
-    poseModel: NextPose
+    recognitionModel: NextPose
     actions:
       - sound: PersistentSound
 `),
@@ -326,20 +326,20 @@ test('reports scene-retained release failures with a stable asset diagnostic', a
 kamishibai: '4.0'
 assets:
   FirstPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/first
     loading: lazy
   NextPose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/next
     loading: lazy
 scenes:
   first:
-    poseModel: FirstPose
+    recognitionModel: FirstPose
     actions:
       - goto: next
   next:
-    poseModel: NextPose
+    recognitionModel: NextPose
     actions:
       - wait: 0
 `),

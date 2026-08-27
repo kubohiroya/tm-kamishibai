@@ -141,7 +141,7 @@ folder APIがない、secure contextではない、またはpermissionを得ら�
 使用します。
 
 ```bash
-pnpm exec tmpose-kamishibai preview-dsl4 --watch \
+pnpm exec tm-kamishibai preview-dsl4 --watch \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \
@@ -150,11 +150,11 @@ pnpm exec tmpose-kamishibai preview-dsl4 --watch \
   --max-project-bytes N \
   --max-project-json-bytes N
 
-pnpm exec tmpose-kamishibai validate-dsl4 \
+pnpm exec tm-kamishibai validate-dsl4 \
   --input story.k4.yml \
   --format pretty
 
-pnpm exec tmpose-kamishibai build-dsl4 \
+pnpm exec tm-kamishibai build-dsl4 \
   --base BASE.sb3 \
   --project-root PROJECT_ROOT \
   --source-manifest PROJECT_ROOT/project.source.yaml \

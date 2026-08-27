@@ -50,7 +50,7 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
         channel: 'bundled',
       },
       version: releasePins.release.version,
-      package: '@kubohiroya/tmpose-kamishibai',
+      package: releasePins.release.package,
     },
     extensionBundle: {
       integrity: fixture.input.extensionBundle.integrity,
@@ -69,6 +69,9 @@ test('creates one deterministic deeply immutable structural fingerprint', async 
   const reorderedResult = await fingerprint(reordered);
 
   assert.equal(created.formatVersion, 1);
+  assert.equal(fixture.input.builder.package, releasePins.release.package);
+  assert.equal(fixture.input.builder.version, releasePins.release.version);
+  assert.equal(fixture.input.appShell.templateVersion, releasePins.release.version);
   assert.equal(created.integrity, releasePins.artifactFingerprint.expected);
   assert.equal(reorderedResult.integrity, created.integrity);
   assert.deepEqual(reorderedResult.inputs, created.inputs);

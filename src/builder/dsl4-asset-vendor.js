@@ -387,7 +387,7 @@ export async function vendorDsl4AssetDistribution(options) {
     }
     const assetRootRelative = asset.contentIntegrity;
     const embeddedRoot = `${mirrorRelativeRoot}/${asset.contentIntegrity}`;
-    if (asset.kind === 'poseModel') {
+    if (asset.kind === 'recognitionModel') {
       let extracted;
       try {
         extracted = await poseArchiveExtractor(

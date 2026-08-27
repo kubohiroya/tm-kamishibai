@@ -151,7 +151,7 @@ presenter modeになるまでcontainerとlocaleを検査しません。shell dis
 resourceを先に解放し、最後にshell所有DOMを除去します。
 
 camera previewの反転buttonとcamera menuもDSL actionやScratch spriteではありません。Standard production
-app shellの固定rendererが台本の`poseRecognition.preview.controls`を投影し、locale対応accessible name、
+app shellの固定rendererが台本の`recognition.preview.controls`を投影し、locale対応accessible name、
 focus表示、native button／select keyboard操作を提供します。作者palette／developer paletteのどちらにも
 blockを追加せず、`dsl4CameraPreviewControls=false`ならrendererとcontrol asset leaseを作りません。
 自然終了／fail時はrendererだけを停止して履歴巻き戻しで再開できるようleaseを保持し、明示的な
@@ -168,7 +168,7 @@ story stopまたはhost disposeでDOMとleaseを解放します。
 
 cloneは見た目の反復表現だけに使用でき、parser、実行位置、履歴、asset leaseを所有しません。cloneごとに
 同じruntime scriptを複製する設計は禁止し、固定presentation targetのblock budgetにはclone起動scriptも
-含めます。costume、sound、pose modelを含む作品assetの登録、先読み、retention、解放は機能拡張側が所有し、
+含めます。costume、sound、recognition modelを含む作品assetの登録、先読み、retention、解放は機能拡張側が所有し、
 Scratch targetは登録済みresourceのpresentationだけを担当します。
 
 固定shellは次の順序を持ちます。

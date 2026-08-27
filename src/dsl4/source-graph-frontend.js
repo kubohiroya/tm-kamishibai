@@ -21,7 +21,7 @@ const namedDeclarationNamespaces = new Set([
   'branches',
   'scenes',
 ]);
-const singletonDeclarationNames = new Set(['cover', 'loading', 'poseRecognition', 'controls']);
+const singletonDeclarationNames = new Set(['cover', 'loading', 'recognition', 'controls']);
 const allowedTopLevelKeys = new Set([
   'include',
   'kamishibai',

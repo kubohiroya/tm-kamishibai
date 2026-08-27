@@ -43,7 +43,7 @@ assets:
   ClockTicking: sound
   Success: sound
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
     loading: lazy
 actors:
@@ -68,7 +68,7 @@ loading:
   costumes:
     - Loading1
     - Loading2
-poseRecognition:
+recognition:
   idleSound: ClockTicking
   chargeSound: Success
   navigation:
@@ -100,7 +100,7 @@ scenes:
         Digit1: rescue
         Digit2: ending
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - stage: Ocean
       - Hero.setSkin: HeroHelp

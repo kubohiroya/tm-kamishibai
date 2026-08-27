@@ -35,7 +35,9 @@ function component(overrides = {}, kind = 'backdrop') {
     ...overrides,
   };
   const scene =
-    kind === 'poseModel' ? '    poseModel: Remote\n    actions: []' : '    - stage: Remote';
+    kind === 'recognitionModel'
+      ? '    recognitionModel: Remote\n    actions: []'
+      : '    - stage: Remote';
   const parsed = frontend.parse(
     `
 kamishibai: '4.0'
@@ -76,14 +78,14 @@ function barePoseComponent(url = 'https://cdn.example.com/pose/') {
 kamishibai: '4.0'
 assets:
   Remote:
-    kind: poseModel
+    kind: recognitionModel
     delivery: remote
     loading: lazy
     source:
       url: ${url}
 scenes:
   opening:
-    poseModel: Remote
+    recognitionModel: Remote
     actions: []
 `,
     {sourceId: 'bare-remote-pose-lifecycle-test'},
@@ -97,7 +99,7 @@ scenes:
         assets: [
           {
             id: 'Remote',
-            kind: 'poseModel',
+            kind: 'recognitionModel',
             loading: 'lazy',
             source: {type: 'remote', url},
           },
@@ -414,7 +416,7 @@ test('rejects remote pose files until a trusted archive extractor is connected',
         contentType: 'application/zip',
         size: archive.byteLength,
       },
-      'poseModel',
+      'recognitionModel',
     ),
     loadRemoteAsset: async () => ({
       bytes: archive,
@@ -464,7 +466,7 @@ test('materializes remote pose files only from an archive-bound trusted extracto
         contentType: 'application/zip',
         size: archive.byteLength,
       },
-      'poseModel',
+      'recognitionModel',
     ),
     loadRemoteAsset: async () => ({
       bytes: archive,
@@ -524,7 +526,7 @@ test('rejects extractor results not bound to the verified archive', async () => 
         contentType: 'application/zip',
         size: archive.byteLength,
       },
-      'poseModel',
+      'recognitionModel',
     ),
     loadRemoteAsset: async () => ({bytes: archive, contentType: 'application/zip'}),
     extractRemotePoseArchive: async () => ({

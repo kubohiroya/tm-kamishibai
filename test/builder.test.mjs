@@ -981,10 +981,10 @@ test('exposes one CLI contract and a fixed installable package version', async (
   });
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.name, '@kubohiroya/tmpose-kamishibai');
+  assert.equal(packageJson.name, '@kubohiroya/tm-kamishibai');
   assert.equal(packageJson.version, releasePins.release.version);
   assert.equal(packageVersion, packageJson.version);
   assert.equal(packageJson.private, false);
   assert.equal(packageJson.exports['./builder'], './src/builder/index.js');
-  assert.equal(packageJson.bin['tmpose-kamishibai'], 'bin/tmpose-kamishibai.mjs');
+  assert.equal(packageJson.bin['tm-kamishibai'], 'bin/tm-kamishibai.mjs');
 });

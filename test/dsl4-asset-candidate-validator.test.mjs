@@ -1,16 +1,10 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {createDsl4SourceFrontend, validateDsl4AssetCandidate} from '../src/dsl4/index.js';
+import {validateDsl4AssetCandidate} from '../src/dsl4/index.js';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
-const schema = JSON.parse(
-  await readFile(path.join(repositoryRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const frontend = dsl4TestSourceFrontend;
 const limits = {
   maxImagePixels: 16_777_216,
   maxAudioDurationSeconds: 1_800,
@@ -30,14 +24,14 @@ assets:
     kind: sound
     file: bell.wav
   Rescue:
-    kind: poseModel
+    kind: recognitionModel
     file: rescue
   Skin: costume:Hero
 actors:
   Hero: Skin
 scenes:
   opening:
-    poseModel: Rescue
+    recognitionModel: Rescue
     actions:
       - Hero.pose:
           steps:
@@ -188,7 +182,7 @@ test('validates one complete pose bundle and every referenced label', async () =
   });
   assert.deepEqual(result.summary, {
     assetId: 'Rescue',
-    kind: 'poseModel',
+    kind: 'recognitionModel',
     fileCount: 3,
     labelCount: 2,
   });

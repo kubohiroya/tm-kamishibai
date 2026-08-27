@@ -1,9 +1,9 @@
 {
-  "name": "@kubohiroya/tmpose-kamishibai",
-  "version": "4.0.0-rc.10",
+  "name": "@kubohiroya/tm-kamishibai",
+  "version": "4.0.0-rc.11",
   "private": false,
   "type": "module",
-  "description": "TM Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine for pose recognition",
+  "description": "TM Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine recognition as story input",
   "homepage": "https://kubohiroya.github.io/tm-kamishibai/",
   "repository": {
     "type": "git",
@@ -19,7 +19,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "tmpose-kamishibai": "bin/tmpose-kamishibai.mjs"
+    "tm-kamishibai": "bin/tm-kamishibai.mjs"
   },
   "files": [
     "bin/",
@@ -47,7 +47,7 @@
     "sb3:dsl4-published-snapshot:check": "pnpm release:dsl4:verify-published-snapshot",
     "sb3:dsl4-release:check": "pnpm release:dsl4:check",
     "sb3:dsl4-release:write": "pnpm release:dsl4:update",
-    "dsl4:assets:convert": "node bin/tmpose-kamishibai.mjs convert-dsl4-assets",
+    "dsl4:assets:convert": "node bin/tm-kamishibai.mjs convert-dsl4-assets",
     "dsl4:playback-runtime:generate": "node scripts/generate-dsl4-playback-runtime.mjs",
     "smoke:dsl4-packager-binary-memory": "node scripts/smoke/dsl4-packager-binary-memory.mjs",
     "e2e": "node --test test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs && node --test --test-concurrency=1 test/e2e/dsl4-web-preview-chromium.test.mjs test/e2e/dsl4-asset-distribution-offline-chromium.test.mjs",
@@ -70,13 +70,15 @@
     "release:dsl4:freeze": "node scripts/sb3/dsl4-release-workflow.mjs freeze",
     "release:dsl4:record-publication": "node scripts/sb3/dsl4-release-workflow.mjs record-publication",
     "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
-    "tmpose-kamishibai": "node bin/tmpose-kamishibai.mjs"
+    "tm-kamishibai": "node bin/tm-kamishibai.mjs"
   },
   "keywords": [
     "turbowarp",
     "scratch",
     "teachable-machine",
     "pose-recognition",
+    "image-recognition",
+    "audio-recognition",
     "kamishibai"
   ],
   "author": "Hiroya Kubo",

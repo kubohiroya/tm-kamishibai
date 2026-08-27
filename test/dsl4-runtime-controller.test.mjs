@@ -1,35 +1,16 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import test from 'node:test';
-import {fileURLToPath} from 'node:url';
 
-import {
-  createDsl4RuntimeController,
-  createDsl4SourceFrontend,
-  dsl4CoreActionNames,
-} from '../src/dsl4/index.js';
+import {createDsl4RuntimeController, dsl4CoreActionNames} from '../src/dsl4/index.js';
+import {deferred} from './helpers/async-test-helpers.mjs';
+import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';
 
-const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const schema = JSON.parse(
-  await readFile(path.join(projectRoot, 'schema', 'dsl-4.schema.json'), 'utf8'),
-);
-const frontend = createDsl4SourceFrontend(schema);
+const frontend = dsl4TestSourceFrontend;
 
 function parseStory(source) {
   const result = frontend.parse(source, {sourceId: 'runtime-test.kamishibai.yaml'});
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
   return result.storyDocument;
-}
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return {promise, resolve, reject};
 }
 
 test('gates Bubble native reveal and motion behind the startup-fixed advanced flag', () => {
@@ -404,8 +385,8 @@ assets:
   CaptionIdle: costume:Caption
   Music: sound
   Effect: sound
-  RescuePose:
-    kind: poseModel
+  RescueModel:
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
@@ -416,7 +397,7 @@ textStyles:
 variables:
   firstRoute: false
   score: 1
-poseRecognition:
+recognition:
   idleSound: Effect
   chargeSound: Effect
   sequence:
@@ -436,7 +417,8 @@ branches:
     - else: ending
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescueModel
+    recognitionMode: pose
     actions:
       - stage: Beach
       - bgm: Music
@@ -494,11 +476,17 @@ scenes:
     - touchInputToChangeScene:
         Hero: poseChoice
   poseChoice:
-    poseModel: RescuePose
+    recognitionModel: RescueModel
     actions:
       - poseInputToChangeScene:
-          happy: ending
+          happy: imageChoice
           jump: opening
+  imageChoice:
+    recognitionModel: RescueModel
+    recognitionMode: image
+    actions:
+      - imageInputToChangeScene:
+          ready: ending
   ending: []
 `;
 
@@ -543,6 +531,10 @@ test('dispatches every core action and keeps transition separate from scene move
   port.poseInputToChangeScene = async (payload) => {
     calls.push({method: 'poseInputToChangeScene', payload});
     return 'happy';
+  };
+  port.imageInputToChangeScene = async (payload) => {
+    calls.push({method: 'imageInputToChangeScene', payload});
+    return 'ready';
   };
   const evaluated = [];
   const storyDocument = parseStory(allCoreActionsStory);
@@ -591,6 +583,7 @@ test('dispatches every core action and keeps transition separate from scene move
       'keyInputToChangeScene',
       'touchInputToChangeScene',
       'poseInputToChangeScene',
+      'imageInputToChangeScene',
     ],
   );
   assert.deepEqual(calls.find(({method}) => method === 'setTransparency').payload, {
@@ -607,7 +600,8 @@ test('dispatches every core action and keeps transition separate from scene move
     pose: 'happy',
     stepIndex: 0,
     stepCount: 1,
-    poseModel: 'RescuePose',
+    recognitionModel: 'RescueModel',
+    recognitionMode: 'pose',
     recognition: {
       confidenceThreshold: 0.6,
       fullConfidenceHoldSeconds: 1.5,
@@ -619,8 +613,19 @@ test('dispatches every core action and keeps transition separate from scene move
     },
   });
   assert.deepEqual(calls.find(({method}) => method === 'poseInputToChangeScene').payload, {
-    poses: ['happy', 'jump'],
-    poseModel: 'RescuePose',
+    labels: ['happy', 'jump'],
+    recognitionModel: 'RescueModel',
+    recognitionMode: 'pose',
+    recognition: {
+      accumulationPerSecond: 2,
+      decayPerSecond: 0.8,
+      scoreThreshold: 1,
+    },
+  });
+  assert.deepEqual(calls.find(({method}) => method === 'imageInputToChangeScene').payload, {
+    labels: ['ready'],
+    recognitionModel: 'RescueModel',
+    recognitionMode: 'image',
     recognition: {
       accumulationPerSecond: 2,
       decayPerSecond: 0.8,
@@ -645,8 +650,8 @@ test('dispatches every core action and keeps transition separate from scene move
       .filter(({type}) => type === 'scene.enter')
       .every(({storyPath}) => storyPath.startsWith('/scenes/')),
   );
-  assert.equal(trace.filter(({type}) => type === 'action.start').length, 23);
-  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 23);
+  assert.equal(trace.filter(({type}) => type === 'action.start').length, 24);
+  assert.equal(trace.filter(({type}) => type === 'action.commit').length, 24);
   assert.equal(trace.at(-1).type, 'runtime.finish');
   const transitions = trace
     .filter(({type}) => type === 'scene.transition')
@@ -659,7 +664,8 @@ test('dispatches every core action and keeps transition separate from scene move
       ['keyChoice', 'branch'],
       ['touchChoice', 'keyInput'],
       ['poseChoice', 'touchInput'],
-      ['ending', 'poseInput'],
+      ['imageChoice', 'poseInput'],
+      ['ending', 'imageInput'],
     ],
   );
   assert.equal(
@@ -1065,18 +1071,18 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   preview:
     mirroring: unmirrored
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     posePreview:
       mirroring: mirrored
     actions:
@@ -1084,7 +1090,7 @@ scenes:
           steps:
             - pose: wave
   reset:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions: []
 `);
   const calls = [];
@@ -1190,11 +1196,11 @@ assets:
   Charge: sound
   HeroIdle: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -1203,7 +1209,7 @@ poseRecognition:
     allowSkip: true
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1261,13 +1267,13 @@ assets:
   LastSkin: costume:Hero
   Effect: sound
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1521,13 +1527,13 @@ assets:
   HeroLater: costume:Hero
   Effect: sound
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1706,11 +1712,11 @@ assets:
   HeroIdle: costume:Hero
   Beach: backdrop
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   feedback:
@@ -1719,7 +1725,7 @@ poseRecognition:
     allowSkip: ${allowSkip}
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1758,18 +1764,18 @@ assets:
   HeroReady: costume:Hero
   Beach: backdrop
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: false
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -1943,18 +1949,18 @@ assets:
   HeroReady: costume:Hero
   Beach: backdrop
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: true
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -2061,16 +2067,16 @@ assets:
   HeroIdle: costume:Hero
   HeroReady: costume:Hero
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   navigation:
     allowSkip: true
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -2154,18 +2160,18 @@ assets:
   HeroIdle: costume:Hero
   Beach: backdrop
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: true
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -2215,18 +2221,18 @@ assets:
     name: NextBackdrop
     loading: lazy
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 actors:
   Hero: HeroIdle
-poseRecognition:
+recognition:
   idleSound: Tick
   chargeSound: Charge
   navigation:
     allowSkip: true
 scenes:
   rescue:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - Hero.pose:
           steps:
@@ -3066,11 +3072,11 @@ scenes:
 kamishibai: '4.0'
 assets:
   RescuePose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
 scenes:
   opening:
-    poseModel: RescuePose
+    recognitionModel: RescuePose
     actions:
       - poseInputToChangeScene:
           happy: ending

@@ -1,7 +1,7 @@
 kamishibai: '4.0'
 assets:
   Model:
-    kind: poseModel
+    kind: recognitionModel
     file: pose/model
     retention: session
 scenes:

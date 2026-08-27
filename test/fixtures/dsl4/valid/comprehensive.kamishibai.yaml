@@ -20,7 +20,7 @@ assets:
   ClockTicking: sound
   Success: sound
   救助Pose:
-    kind: poseModel
+    kind: recognitionModel
     file: pose-models/rescue
     loading: lazy
 
@@ -49,7 +49,7 @@ loading:
   backdrop: LoadingBackground
   costumes: [Loading1, Loading2]
 
-poseRecognition:
+recognition:
   idleSound: ClockTicking
   chargeSound: Success
   modelInitialization:
@@ -112,7 +112,7 @@ scenes:
         Digit2: ending
 
   rescue:
-    poseModel: 救助Pose
+    recognitionModel: 救助Pose
     posePreview:
       mirroring: unmirrored
     actions:
@@ -129,7 +129,7 @@ scenes:
       - branch: rescueResult
 
   seaRoute:
-    poseModel: 救助Pose
+    recognitionModel: 救助Pose
     actions:
       - Hero.moveTo:
           x: 40

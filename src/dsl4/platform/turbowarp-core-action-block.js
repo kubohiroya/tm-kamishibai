@@ -2,6 +2,10 @@ import Ajv2020 from 'ajv/dist/2020.js';
 
 import {dsl4CoreActionManifest} from '../core-action-manifest.js';
 import {deepFreeze} from '../story-document.js';
+import {
+  dsl4BlockSourceCommandOpcode,
+  dsl4BlockSourceHatOpcode,
+} from '../turbowarp-yaml-json-block-source.js';
 
 const defaultJsonLimits = Object.freeze({maxCharacters: 16_384, maxDepth: 32, maxNodes: 1_024});
 const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
@@ -39,6 +43,9 @@ export const dsl4TurboWarpCoreActionBlockSpecs = Object.freeze([
   ]),
   block('poseInputToChangeScene', 'wait for pose routes [ROUTES]', [
     argument('ROUTES', 'string', '{"pose":"next"}'),
+  ]),
+  block('imageInputToChangeScene', 'wait for image label routes [ROUTES]', [
+    argument('ROUTES', 'string', '{"label":"next"}'),
   ]),
   block('show', 'show actor [TARGET] skin [SKIN] x [X] y [Y] scale [SCALE] %', [
     argument('TARGET', 'string', 'Actor'),
@@ -225,6 +232,7 @@ function sourceValueForBlock(command, args, limits) {
     case 'keyInputToChangeScene':
     case 'touchInputToChangeScene':
     case 'poseInputToChangeScene':
+    case 'imageInputToChangeScene':
       return {routes: parseJson(args.ROUTES, limits)};
     case 'show':
       return {
@@ -296,7 +304,7 @@ function normalizeBlockArguments(command, sourceValue) {
 }
 
 /**
- * Create the 23 public block definitions from the core action manifest.
+ * Create the public block definitions from the core action manifest.
  *
  * @param {Readonly<{ArgumentType: Readonly<Record<string, string>>, BlockType: Readonly<Record<string, string>>}>} Scratch
  * @param {{visible?: boolean}} [options]
@@ -334,6 +342,44 @@ export function createDsl4TurboWarpCoreActionBlockSurface(Scratch, {visible = fa
         items: ['linear', 'easeIn', 'easeOut', 'easeInOut'],
       },
     },
+  });
+}
+
+/**
+ * Create the authoring-only DSL source declaration blocks.
+ *
+ * @param {Readonly<{ArgumentType: Readonly<Record<string, string>>, BlockType: Readonly<Record<string, string>>}>} Scratch
+ * @param {{visible?: boolean}} [options]
+ */
+export function createDsl4TurboWarpBlockSourceSurface(Scratch, {visible = false} = {}) {
+  if (!isRecord(Scratch) || !isRecord(Scratch.ArgumentType) || !isRecord(Scratch.BlockType)) {
+    throw new TypeError('TurboWarp block source surface requires ArgumentType and BlockType');
+  }
+  if (typeof Scratch.BlockType.HAT !== 'string' || typeof Scratch.BlockType.COMMAND !== 'string') {
+    throw new TypeError('TurboWarp block source surface requires HAT and COMMAND block types');
+  }
+  if (typeof visible !== 'boolean') throw new TypeError('visible must be boolean');
+  const hidden = visible ? {} : {hideFromPalette: true};
+  return deepFreeze({
+    blocks: [
+      {
+        opcode: dsl4BlockSourceHatOpcode,
+        blockType: Scratch.BlockType.HAT,
+        text: 'when kamishibai DSL source',
+        isEdgeActivated: false,
+        ...hidden,
+      },
+      {
+        opcode: dsl4BlockSourceCommandOpcode,
+        blockType: Scratch.BlockType.COMMAND,
+        text: 'use YAML/JSON fragment [FRAGMENT] as kamishibai DSL source',
+        arguments: {
+          FRAGMENT: {type: Scratch.ArgumentType.STRING, defaultValue: ''},
+        },
+        ...hidden,
+      },
+    ],
+    menus: {},
   });
 }
 

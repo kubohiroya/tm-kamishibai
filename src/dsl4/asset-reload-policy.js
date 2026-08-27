@@ -4,7 +4,7 @@ import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
-const liveReloadKinds = new Set(['backdrop', 'costume', 'image', 'poseModel', 'sound']);
+const liveReloadKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
