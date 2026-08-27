@@ -108,6 +108,7 @@ Does not own:
 
 First migration candidates:
 
+- `resolveDsl4ReloadAnchor` in `src/dsl4/preview-reload-policy.js`
 - `src/dsl4/preview-protocol.js`
 - `src/dsl4/preview-reload-policy.js`
 - `src/dsl4/reload-planner.js`
@@ -120,6 +121,12 @@ Acceptance criteria:
 - Existing local/browser preview tests still pass.
 - Preview protocol remains source-compatible for current DSL 4.0 preview clients.
 - `tm-3d-app` can implement live preview without importing DSL 4.0 frontend code.
+
+Migration status:
+
+- `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
+- The broader `createDsl4PreviewProtocolSession` still remains in `tm-kamishibai` because the current DSL 4.0 wire protocol owns candidate ids, restart choices, source integrity, and `preview.source.staged/committed/deferred` events that are not part of `turbowarp-preview-runtime@0.1.0`.
+- Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
 
 ### `@kubohiroya/turbowarp-app-shell`
 

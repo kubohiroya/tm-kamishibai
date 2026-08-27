@@ -1,3 +1,5 @@
+import {resolveReloadAnchor} from '@kubohiroya/turbowarp-preview-runtime';
+
 import {deepFreeze} from './story-document.js';
 
 const preferences = new Set(['story', 'scene', 'action']);
@@ -157,45 +159,10 @@ const defaultClock = Object.freeze({
  * @param {unknown} input.availability
  */
 export function resolveDsl4ReloadAnchor({requestedPreference, availability: inputAvailability}) {
-  const requested = preference(requestedPreference, 'requestedPreference');
-  const anchors = availability(inputAvailability);
-  if (requested === 'story') {
-    return deepFreeze({
-      requestedPreference: requested,
-      actualAnchor: 'story',
-      fallbackReason: null,
-    });
-  }
-  if (requested === 'scene') {
-    return anchors.scene.available
-      ? deepFreeze({requestedPreference: requested, actualAnchor: 'scene', fallbackReason: null})
-      : deepFreeze({
-          requestedPreference: requested,
-          actualAnchor: 'story',
-          fallbackReason: anchors.scene.reason,
-        });
-  }
-  if (anchors.action.available && anchors.action.replaySafe) {
-    return deepFreeze({
-      requestedPreference: requested,
-      actualAnchor: 'action',
-      fallbackReason: null,
-    });
-  }
-  const actionReason = anchors.action.available
-    ? 'The current action is not replay-safe.'
-    : anchors.action.reason;
-  return anchors.scene.available
-    ? deepFreeze({
-        requestedPreference: requested,
-        actualAnchor: 'scene',
-        fallbackReason: actionReason,
-      })
-    : deepFreeze({
-        requestedPreference: requested,
-        actualAnchor: 'story',
-        fallbackReason: `${actionReason} ${anchors.scene.reason}`.slice(0, 300),
-      });
+  return resolveReloadAnchor({
+    requestedPreference: preference(requestedPreference, 'requestedPreference'),
+    availability: availability(inputAvailability),
+  });
 }
 
 /**
