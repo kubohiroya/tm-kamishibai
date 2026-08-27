@@ -5,6 +5,12 @@ import {createServer} from 'node:http';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {
+  resolveServedBrowserModulePath,
+  resolveServedBrowserVendorModulePath,
+  rewriteServedBrowserModuleSource,
+} from '@kubohiroya/turbowarp-local-preview';
+
 import {createDsl4PreviewSourceProtocolPort} from '../dsl4/preview-source-protocol-port.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {
@@ -32,7 +38,7 @@ import {
 } from './dsl4-turbowarp-browser-bundle.js';
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
-const allowedModuleDirectories = new Set(['builder', 'dsl4']);
+const allowedModuleDirectories = ['builder', 'dsl4'];
 const browserVendorModules = new Map([
   [
     '/vendor/turbowarp-preview-runtime.js',
@@ -234,28 +240,24 @@ function safeSourceSummary(input) {
 
 /** @param {string} requestPath */
 function modulePath(requestPath) {
-  const match = /^\/modules\/(builder|dsl4)\/([A-Za-z0-9._/-]+\.js)$/u.exec(requestPath);
-  if (!match || !allowedModuleDirectories.has(match[1])) return null;
-  const directory = path.join(sourceRoot, match[1]);
-  const candidate = path.resolve(directory, match[2]);
-  if (!candidate.startsWith(`${directory}${path.sep}`)) return null;
-  return candidate;
+  return resolveServedBrowserModulePath({
+    requestPath,
+    sourceRoot,
+    allowedDirectories: allowedModuleDirectories,
+  });
 }
 
 /** @param {string} requestPath */
 function vendorModulePath(requestPath) {
-  return browserVendorModules.get(requestPath) ?? null;
+  return resolveServedBrowserVendorModulePath({
+    requestPath,
+    vendorModules: browserVendorModules,
+  });
 }
 
 /** @param {string} source */
 function rewriteServedModuleSource(source) {
-  return source.replace(
-    /\b(from|export\s+\*\s+from)\s*(['"])([^'"]+)\2/gu,
-    (match, keyword, quote, specifier) => {
-      const replacement = browserModuleSpecifierReplacements.get(specifier);
-      return replacement ? `${keyword} ${quote}${replacement}${quote}` : match;
-    },
-  );
+  return rewriteServedBrowserModuleSource(source, browserModuleSpecifierReplacements);
 }
 
 /**
