@@ -17,6 +17,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-runtime-host@0.1.0'
   - '@kubohiroya/turbowarp-preview-runtime@0.1.0'
   - '@kubohiroya/turbowarp-app-shell@0.1.0'
+  - '@kubohiroya/turbowarp-extension-manifest@0.2.0'
 
 overrides:
   'scratch-vm>scratch-parser': 6.0.0
