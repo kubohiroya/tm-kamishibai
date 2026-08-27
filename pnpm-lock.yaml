@@ -13,6 +13,9 @@ importers:
 
   .:
     dependencies:
+      '@kubohiroya/turbowarp-app-shell':
+        specifier: 0.1.0
+        version: 0.1.0
       '@kubohiroya/turbowarp-asset-manager':
         specifier: 0.14.0
         version: 0.14.0
@@ -352,6 +355,10 @@ packages:
     resolution: {integrity: sha512-aB83bUhBvXU5/hYH74uiAgRI80hA/3/ZugDTUHl2YP0bajR8GctKRqz9+rtGDYlr4U+3pbkHxgGUbnMBgLAQQA==}
     engines: {node: '>=22.12.0'}
     hasBin: true
+
+  '@kubohiroya/turbowarp-app-shell@0.1.0':
+    resolution: {integrity: sha512-JZs4sApmz2PV7UgZLgq1y6imgwXlhlH3Ou4uz4SJQu5zg1w+CdVSMGspGOclZPu4kWxqwyWCeUyZHg4ft6CI1Q==}
+    engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-asset-manager@0.14.0':
     resolution: {integrity: sha512-al9+X714l2qAre6HtEUOG8iWeTMEdjvjpslQNPSjkFYUrNhRins9S6kwne8lPXNoXgi69PTQv2SmRzgMOOJ8lA==}
@@ -2949,6 +2956,8 @@ snapshots:
       yaml: 2.9.0
     transitivePeerDependencies:
       - supports-color
+
+  '@kubohiroya/turbowarp-app-shell@0.1.0': {}
 
   '@kubohiroya/turbowarp-asset-manager@0.14.0': {}
 

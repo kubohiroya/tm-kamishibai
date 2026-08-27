@@ -84,6 +84,7 @@
   "author": "Hiroya Kubo",
   "license": "MPL-2.0",
   "dependencies": {
+    "@kubohiroya/turbowarp-app-shell": "0.1.0",
     "@kubohiroya/turbowarp-asset-manager": "0.14.0",
     "@kubohiroya/turbowarp-async-input": "0.6.0",
     "@kubohiroya/turbowarp-bubble": "0.11.0",

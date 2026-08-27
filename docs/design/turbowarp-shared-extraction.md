@@ -166,6 +166,12 @@ First migration candidates:
 - `src/dsl4/platform/runtime-warning-indicator.js`
 - app-neutral pieces of `src/dsl4/platform/runtime-source-chooser.js`
 
+Migration status in `tm-kamishibai`:
+
+- `src/dsl4/platform/runtime-error-indicator.js` now delegates browser locale fallback to `resolveAppShellLocale` from `@kubohiroya/turbowarp-app-shell@0.1.0`.
+- The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
+- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.1.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+
 Acceptance criteria:
 
 - Browser fixture tests keep the same visible behavior.
