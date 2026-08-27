@@ -1753,11 +1753,25 @@ test(
       const pageWebSocketUrl = await waitForPageTarget(browserWebSocketUrl, url);
       client = await CdpClient.connect(pageWebSocketUrl);
       await client.send('Runtime.enable');
-      await waitForEvaluation(
-        client,
-        "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid'",
-        'local preview initial source activation',
-      );
+      try {
+        await waitForEvaluation(
+          client,
+          "document.querySelector('#dsl4-preview-status')?.dataset.validationStatus === 'valid'",
+          'local preview initial source activation',
+        );
+      } catch (error) {
+        const page = await client.evaluate(`({
+          status: document.querySelector('#dsl4-preview-status')?.textContent,
+          validationStatus: document.querySelector('#dsl4-preview-status')?.dataset.validationStatus,
+          current: document.querySelector('[data-summary-value=currentIntegrity]')?.textContent,
+          candidate: document.querySelector('[data-summary-value=candidateIntegrity]')?.textContent,
+          reload: document.querySelector('#dsl4-preview-reload-status-button')?.dataset.reloadState,
+          body: document.body.textContent
+        })`);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({page, host: host.getSnapshot(), hostEvents, exceptions: client.exceptions})}`,
+        );
+      }
       assert.equal(
         await client.evaluate(
           "document.querySelector('#dsl4-preview-reload-overlay')?.dataset.previewSurface",

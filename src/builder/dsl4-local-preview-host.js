@@ -33,6 +33,15 @@ import {
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = new Set(['builder', 'dsl4']);
+const browserVendorModules = new Map([
+  [
+    '/vendor/turbowarp-preview-runtime.js',
+    fileURLToPath(import.meta.resolve('@kubohiroya/turbowarp-preview-runtime')),
+  ],
+]);
+const browserModuleSpecifierReplacements = new Map([
+  ['@kubohiroya/turbowarp-preview-runtime', '/vendor/turbowarp-preview-runtime.js'],
+]);
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
 const runtimeOwners = new Set(['protocol', 'browser']);
 const maximumRequestBytes = 4 * 1024;
@@ -231,6 +240,22 @@ function modulePath(requestPath) {
   const candidate = path.resolve(directory, match[2]);
   if (!candidate.startsWith(`${directory}${path.sep}`)) return null;
   return candidate;
+}
+
+/** @param {string} requestPath */
+function vendorModulePath(requestPath) {
+  return browserVendorModules.get(requestPath) ?? null;
+}
+
+/** @param {string} source */
+function rewriteServedModuleSource(source) {
+  return source.replace(
+    /\b(from|export\s+\*\s+from)\s*(['"])([^'"]+)\2/gu,
+    (match, keyword, quote, specifier) => {
+      const replacement = browserModuleSpecifierReplacements.get(specifier);
+      return replacement ? `${keyword} ${quote}${replacement}${quote}` : match;
+    },
+  );
 }
 
 /**
@@ -1050,14 +1075,19 @@ export function createDsl4LocalPreviewHost(options) {
         else response.end(browserRuntimeBundleBytes);
         return;
       }
-      const requestedModule = modulePath(requestUrl.pathname);
+      const requestedModule =
+        modulePath(requestUrl.pathname) ?? vendorModulePath(requestUrl.pathname);
       if (!requestedModule) {
         writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
         return;
       }
       let body;
       try {
-        body = await readFile(requestedModule);
+        const source = await readFile(requestedModule, 'utf8');
+        body = Buffer.from(
+          requestUrl.pathname.startsWith('/modules/') ? rewriteServedModuleSource(source) : source,
+          'utf8',
+        );
       } catch {
         writeJson(response, 404, {error: {code: 'K4-PREVIEW-HOST-NOT-FOUND'}});
         return;
