@@ -722,8 +722,8 @@ test(
       const initialTitleScale = await client.evaluate(`(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
-        const icon = website?.querySelector('img');
-        const label = website?.querySelector('span');
+        const icon = website?.querySelector('span[aria-hidden=true]');
+        const label = website?.querySelector('span:not([aria-hidden])');
         const close = document.querySelector('[data-dsl4-title-action=close]');
         const closeRect = close?.getBoundingClientRect();
         const closeLineCenterOffsets = closeRect
@@ -763,8 +763,8 @@ test(
       const expandedTitleScale = await client.evaluate(`(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
-        const icon = website?.querySelector('img');
-        const label = website?.querySelector('span');
+        const icon = website?.querySelector('span[aria-hidden=true]');
+        const label = website?.querySelector('span:not([aria-hidden])');
         return {
           titleWidth: title?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -813,8 +813,8 @@ test(
       const initialMenuScale = await client.evaluate(`(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icon = open?.querySelector('img');
-        const label = open?.querySelector('span');
+        const icon = open?.querySelector('span[aria-hidden=true]');
+        const label = open?.querySelector('span:not([aria-hidden])');
         return {
           menuWidth: menu?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -835,8 +835,8 @@ test(
       const expandedMenuScale = await client.evaluate(`(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icon = open?.querySelector('img');
-        const label = open?.querySelector('span');
+        const icon = open?.querySelector('span[aria-hidden=true]');
+        const label = open?.querySelector('span:not([aria-hidden])');
         return {
           menuWidth: menu?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -889,7 +889,7 @@ test(
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
         const build = document.querySelector('[data-dsl4-menu-action=build]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
+        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] span[aria-hidden=true]')];
         const runtime = globalThis.Scratch.vm.runtime;
         const stage = runtime.getTargetForStage();
         open.click();
@@ -2669,7 +2669,8 @@ scenes:
               menu?.style.display === 'block' &&
               buttons.length === 4 &&
               buttons.every((button) => getComputedStyle(button).cursor === 'pointer') &&
-              buttons.every((button) => button.querySelector('img')?.src.startsWith('data:image/svg+xml;base64,'));
+              buttons.every((button) => getComputedStyle(button.querySelector('span[aria-hidden=true]'))
+                .backgroundImage.includes('data:image/svg+xml;base64,'));
           })()`,
           'interactive browser-owned application menu',
         );
