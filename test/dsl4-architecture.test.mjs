@@ -309,6 +309,13 @@ test('reads renderer, monitors, and targets through the shared runtime host', as
     ['runtimeHost = createTurboWarpRuntimeHost({runtime: vm.runtime});'],
   );
 
+  const actorAdapter = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-actor-adapter.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(actorAdapter, /\bruntime\.targets\b/u);
+  assert.match(actorAdapter, /runtimeHost\.targets\s*\(/u);
+
   const variableBlocks = await readFile(
     await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-runtime-variable-block.js')),
     'utf8',
