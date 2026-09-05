@@ -206,15 +206,60 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
   `site/site-shell.js` and `bin/tm-kamishibai.mjs`. Dropping them would silently remove those files
   from the program before they are converted.
-- **Stricter flags, measured on the current tree:** `exactOptionalPropertyTypes` leaves 33 errors and
-  `noUncheckedIndexedAccess` leaves 847. Neither is adopted yet. Do not widen the reported optional
-  properties in bulk to clear the first one: a blanket `| undefined` pass touched 138 declarations
-  and broke the ordinary type check, because names such as `limits` and `onError` appear in many
-  unrelated option types. The one property that was worth widening repository-wide is
-  `subtleCrypto`, whose JSDoc always allowed an explicit `undefined`; that is already done.
+- **`exactOptionalPropertyTypes` is on (done).** The 33 errors were all one shape: an option was
+  forwarded as an explicit `undefined` into a property the callee declares optional. Two fixes,
+  chosen per site:
+  - **Omit the key at the call site** — `...(x === undefined ? {} : {x})` — wherever absence is what
+    the caller means. Ternaries that produced `undefined` (`x.length > 0 ? x : undefined`) became the
+    same shape, and `asset-snapshot-watch` now `delete`s a consumed `release` callback instead of
+    assigning `undefined` to it.
+  - **Declare `?: T | undefined`** on the callee, for the ten properties whose function already
+    treats `undefined` as absent — `diagnostic()` re-emits `storyPath` through
+    `...(storyPath ? {storyPath} : {})`, `createDsl4JsonPathEngine` drops `limits` into
+    `normalizeLimits`, and so on.
+
+  Widening a callee's whole option bag is still the wrong move, and the numbers say so: one such
+  pass over six option types broke the ordinary type check in six places and pushed the
+  `exactOptionalPropertyTypes` count from 23 back up to 29.
+
+- **`noUncheckedIndexedAccess` is on (done).** All 854 errors are gone and the flag is enabled. The
+  measurement is what made the work tractable: 687 of them were not array or record lookups at all
+  but member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
+  collaborator objects — under the flag every member of an index signature is possibly undefined, so
+  the report was mostly about untyped boundaries, which is the same work that gates re-enabling
+  `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type`.
+
+  Eight shapes covered the whole set, and they are worth reaching for in this order:
+  - **Iterate `Object.entries`** instead of looping over `Object.keys` and looking the value back
+    up. The cheapest fix is not making a lookup safe but not making it: thirteen errors in the local
+    asset reader went with one loop.
+  - **Name the collaborator.** Where a runtime validator already lists the members it checks, an
+    interface beside it says the same thing to the type checker.
+  - **Key a validated record by the checked names.** `validateCompositionMethods` in
+    `src/dsl4/platform/composition-contract.ts` is generic over the method-name literals, so asking
+    for a member nobody validated is a compile error. A validator that builds its result with
+    `Object.fromEntries(methods.map(...))` needs only an `as const` list.
+  - **Name a limit bag after its defaults** — `Readonly<typeof dsl4XDefaultLimits>` rather than
+    `Readonly<Record<string, number>>`; a dictionary that starts from defaults and stays open is
+    `Record<string, string> & typeof defaults`.
+  - **Declare the local `assert` as `asserts condition`** so the guard the code already runs
+    narrows the value it checked. One line each in three builder modules.
+  - **Read a bounded array with a default**, and say in a comment why the default is unreachable.
+  - **Guard a nullable collaborator with an accessor that throws**, not with `!`.
+  - **Stop widening.** One frozen lookup table had been cast to `Readonly<Record<string, …>>`,
+    which threw away the literal keys it already had; deleting the cast was the entire fix.
+
+  The flag also reported real design facts rather than style problems. `currentAction()` returns
+  nothing once a scene runs past its last action, and its callers assumed otherwise; the Structured
+  Data iterators handed out positions they had not checked; `createAudioVoice`,
+  `getRuntimeVariableSnapshot`, and four live reload session members were called without any
+  validator requiring them, all genuinely optional; and one placeholder in the camera preview
+  controls was carrying two different rectangles in two different coordinate systems.
+
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.
-- Re-evaluate TypeScript 7 (see Toolchain Decisions).
+- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
+  `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
 
 ## Module Checklist
 

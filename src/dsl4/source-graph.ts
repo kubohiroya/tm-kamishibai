@@ -369,7 +369,7 @@ export async function createDsl4SourceGraph(
       sourcePath: string,
       maxSourceBytes: number,
     ) => Promise<string | Uint8Array> | string | Uint8Array;
-    limits?: Partial<typeof dsl4SourceGraphDefaultLimits>;
+    limits?: Partial<typeof dsl4SourceGraphDefaultLimits> | undefined;
   } = {},
 ) {
   if (typeof readSource !== 'function') throw new TypeError('readSource must be a function');

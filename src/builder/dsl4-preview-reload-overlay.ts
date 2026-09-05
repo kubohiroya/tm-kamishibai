@@ -12,7 +12,7 @@ const statePresentation = Object.freeze({
   diagnostic: {icon: '!', badge: 'Error', label: 'Reload status: preview needs attention'},
   paused: {icon: 'Ⅱ', badge: 'Paused', label: 'Reload status: watching is paused'},
   disconnected: {icon: '×', badge: 'Offline', label: 'Reload status: preview is disconnected'},
-}) as Readonly<Record<string, Readonly<{icon: string; badge: string; label: string}>>>;
+});
 const anchorLabels = Object.freeze({
   'top-left': '左上',
   'top-center': '上中央',
@@ -72,6 +72,36 @@ function requireElement(value: unknown) {
   return value as Record<string, any>;
 }
 
+/**
+ * The surfaces the overlay drives, named rather than indexed.
+ *
+ * Each one is validated at runtime just below, and the interface states exactly what the overlay
+ * calls: an index signature would leave every member possibly undefined and say nothing about its
+ * arguments.
+ */
+interface ReloadPolicySurface {
+  getState(): Readonly<Record<string, any>>;
+  subscribe(listener: (state: Readonly<Record<string, any>>) => unknown): () => void;
+  openDialog(options?: Readonly<{inputId?: string}>): unknown;
+  selectPosition(anchor: string): unknown;
+  applyScope(scope: string, options?: Readonly<{inputId?: string}>): unknown;
+  acknowledge(options?: Readonly<{inputId?: string}>): unknown;
+  whenIdle(): Promise<unknown>;
+}
+
+interface ReloadLayoutSurface {
+  resolve(anchor: string): Readonly<Record<string, any>>;
+  setInteraction(interaction: Readonly<Record<string, unknown>>): unknown;
+  getState(): Readonly<Record<string, any>>;
+}
+
+interface ReloadDebugExecutionSurface {
+  getState(): Readonly<Record<string, any>>;
+  subscribe(listener: (state: Readonly<Record<string, any>>) => unknown): () => void;
+  setMode(mode: string): unknown;
+  resume(): unknown;
+}
+
 function validatePolicy(value: unknown) {
   if (
     !isRecord(value) ||
@@ -85,7 +115,7 @@ function validatePolicy(value: unknown) {
   ) {
     throw new TypeError('reload overlay requires a reload policy');
   }
-  return value as Record<string, Function>;
+  return value as unknown as ReloadPolicySurface;
 }
 
 function validateLayout(value: unknown) {
@@ -97,7 +127,7 @@ function validateLayout(value: unknown) {
   ) {
     throw new TypeError('reload overlay requires a layout coordinator');
   }
-  return value as Record<string, Function>;
+  return value as unknown as ReloadLayoutSurface;
 }
 
 function validateDebugExecution(value: unknown) {
@@ -112,7 +142,7 @@ function validateDebugExecution(value: unknown) {
       'reload overlay debug execution must provide state, subscription, mode, and resume controls',
     );
   }
-  return value as Record<string, Function>;
+  return value as unknown as ReloadDebugExecutionSurface;
 }
 
 function element(document: Record<string, any>, tag: string, text?: string) {
@@ -130,10 +160,10 @@ export function createDsl4PreviewReloadOverlay(options: {
   surface: 'web' | 'cli';
   document: unknown;
   mount: unknown;
-  policy: Record<string, Function>;
-  layoutCoordinator: Record<string, Function>;
-  debugExecution?: Record<string, Function>;
-  storage?: {getItem?: Function; setItem?: Function};
+  policy: ReloadPolicySurface;
+  layoutCoordinator: ReloadLayoutSurface;
+  debugExecution?: ReloadDebugExecutionSurface | undefined;
+  storage?: Pick<Storage, 'getItem' | 'setItem'> | undefined;
   formatTime?: (timestamp: number) => string;
   reducedMotion?: boolean;
   onError?: (error: unknown) => unknown;
@@ -164,7 +194,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     options.formatTime ??
     ((value: number) =>
       new Intl.DateTimeFormat(undefined, {dateStyle: 'short', timeStyle: 'medium'}).format(value));
-  const storage = (options.storage ?? {}) as Record<string, Function>;
+  const storage = options.storage;
 
   function reportError(error: unknown) {
     try {
@@ -176,7 +206,7 @@ export function createDsl4PreviewReloadOverlay(options: {
 
   let selectedAnchor: string = 'top-right';
   try {
-    selectedAnchor = preferredAnchor(storage.getItem?.(storageKey));
+    selectedAnchor = preferredAnchor(storage?.getItem(storageKey));
   } catch (error) {
     reportError(error);
   }
@@ -395,7 +425,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   function setPreferredAnchor(value: string) {
     selectedAnchor = preferredAnchor(value);
     try {
-      storage.setItem?.(storageKey, selectedAnchor);
+      storage?.setItem(storageKey, selectedAnchor);
     } catch (error) {
       reportError(error);
     }
@@ -403,14 +433,16 @@ export function createDsl4PreviewReloadOverlay(options: {
   }
 
   function renderStatusPresentation() {
-    const debugPaused = lastDebugState?.paused === true;
+    const debugState = lastDebugState;
+    const debugPaused = debugState?.paused === true;
     const presentation = debugPaused
       ? {
           icon: 'Ⅱ',
           badge: 'Debug',
-          label: `Debug paused before ${lastDebugState.command} in ${lastDebugState.sceneId}`,
+          label: `Debug paused before ${debugState?.command} in ${debugState?.sceneId}`,
         }
-      : (statePresentation[lastPolicyState.status] ?? statePresentation.watching);
+      : (statePresentation[lastPolicyState.status as keyof typeof statePresentation] ??
+        statePresentation.watching);
     const statusKey = debugPaused ? 'debug-paused' : lastPolicyState.status;
     statusButton.setAttribute('data-reload-state', lastPolicyState.status);
     statusButton.setAttribute(
@@ -422,7 +454,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     badge.textContent = presentation.badge;
     if (lastStatus !== statusKey) {
       polite.textContent = debugPaused
-        ? `Debug paused: ${lastDebugState.sceneId}, action ${Number(lastDebugState.actionIndex) + 1}, ${lastDebugState.command}`
+        ? `Debug paused: ${debugState?.sceneId}, action ${Number(debugState?.actionIndex) + 1}, ${debugState?.command}`
         : `Reload status: ${presentation.badge}`;
       lastStatus = statusKey;
     }
@@ -627,17 +659,20 @@ export function createDsl4PreviewReloadOverlay(options: {
       !event.shiftKey
     ) {
       event.preventDefault();
-      const value = positionShortcuts[event.code];
+      // The code was matched against the shortcut list just above.
+      const value = positionShortcuts[event.code] ?? 'top-right';
       observe(policy.selectPosition(value));
       return;
     }
     const activeAnchor = [...anchorButtons.entries()].find(
       ([, button]) => button === document.activeElement,
     );
-    if (activeAnchor && Object.hasOwn(anchorNeighbors[activeAnchor[0]], event.code)) {
+    const activeNeighbors = activeAnchor ? anchorNeighbors[activeAnchor[0]] : undefined;
+    if (activeNeighbors && Object.hasOwn(activeNeighbors, event.code)) {
       event.preventDefault();
-      const next = anchorNeighbors[activeAnchor[0]][event.code];
-      anchorButtons.get(next).focus();
+      const next = activeNeighbors[event.code];
+      const nextButton = next === undefined ? undefined : anchorButtons.get(next);
+      nextButton?.focus();
       return;
     }
     if (activeAnchor && ['Enter', 'Space'].includes(event.code)) {

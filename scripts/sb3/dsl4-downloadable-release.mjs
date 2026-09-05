@@ -509,7 +509,8 @@ async function buildDsl4RuntimeExtensionSource(profile) {
   const applicationMenuIcons = Object.fromEntries(
     Object.keys(applicationMenuIconPaths).map((action, index) => [
       action,
-      `data:image/svg+xml;base64,${applicationMenuIconFiles[index].toString('base64')}`,
+      // The icon files are read in the same order as their names.
+      `data:image/svg+xml;base64,${applicationMenuIconFiles[index]?.toString('base64')}`,
     ]),
   );
   const tmPoseRuntimeWithSharedTensorflow = tmPoseBrowserRuntime.replace(

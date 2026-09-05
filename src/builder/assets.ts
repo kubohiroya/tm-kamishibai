@@ -44,7 +44,7 @@ function fileUriToPath(uri: string, baseDirectory: string) {
 }
 
 function normalizeContentType(contentType: string) {
-  return contentType.split(';', 1)[0].trim().toLowerCase();
+  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
 
 async function readResponseBody(response: Response, maximumBytes: number) {

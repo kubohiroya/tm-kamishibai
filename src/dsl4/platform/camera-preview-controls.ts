@@ -22,7 +22,31 @@ function assignStyles(element: HTMLElement, values: Readonly<Record<string, stri
   Object.assign(element.style, values);
 }
 
-function anchorStyle(position: string, rect: Readonly<Record<string, number>>) {
+/** The camera preview box the controls are anchored against, in client pixels. */
+interface PreviewAnchorRect {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+  readonly visible?: boolean;
+}
+
+/** The space a control group reserves in the shared preview layout, in stage pixels. */
+interface ReservedRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** The members of the shared preview layout bridge these controls reserve space through. */
+interface PreviewLayoutBridge {
+  registerReservedRect(owner: unknown, rect: ReservedRect): unknown;
+  updateReservedRect(owner: unknown, rect: ReservedRect): unknown;
+  unregisterReservedRect(owner: unknown): unknown;
+}
+
+function anchorStyle(position: string, rect: PreviewAnchorRect) {
   const horizontal = position.includes('left')
     ? rect.left
     : position.includes('right')
@@ -64,13 +88,7 @@ export function createDsl4CameraPreviewControls(options: {
   preview: Readonly<Record<string, unknown>>;
   assetUrls: Readonly<Record<string, string>>;
   port: unknown;
-  getPreviewRect: () => Readonly<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    visible?: boolean;
-  }> | null;
+  getPreviewRect: () => PreviewAnchorRect | null;
   labels?: Readonly<Record<string, string>>;
   schedule?: (callback: () => void) => () => void;
   previewLayout?: {
@@ -89,8 +107,19 @@ export function createDsl4CameraPreviewControls(options: {
     throw new TypeError('camera preview controls require at least one configured control');
   }
   const assetUrls = isRecord(options.assetUrls) ? options.assetUrls : {};
+  /**
+   * The camera members these controls call.
+   *
+   * Which of them must exist depends on the configured controls, checked just below; the type
+   * names all of them so a member nobody validated is a compile error.
+   */
   const port = (isRecord(options.port) ? options.port : {}) as Record<
-    string,
+    | 'isCameraRunning'
+    | 'setPreviewMirroring'
+    | 'listCameraDevices'
+    | 'selectCamera'
+    | 'getCameraSelection'
+    | 'getActiveCamera',
     (...args: any[]) => any
   >;
   const requiredMethods = new Set(['isCameraRunning']);
@@ -105,7 +134,9 @@ export function createDsl4CameraPreviewControls(options: {
       requiredMethods.add(method);
     }
   }
-  for (const method of requiredMethods) requireFunction(port[method], `port.${method}`);
+  for (const method of requiredMethods) {
+    requireFunction((port as Record<string, unknown>)[method], `port.${method}`);
+  }
   const getPreviewRect = requireFunction(options.getPreviewRect, 'getPreviewRect');
   const labels = {
     mirroring: 'Switch camera preview mirroring',
@@ -124,7 +155,7 @@ export function createDsl4CameraPreviewControls(options: {
       return () => clearTimeout(frame);
     });
   requireFunction(schedule, 'schedule');
-  let previewLayout: Record<string, Function> | null = null;
+  let previewLayout: PreviewLayoutBridge | null = null;
   if (options.previewLayout !== undefined) {
     if (!isRecord(options.previewLayout)) {
       throw new TypeError('previewLayout must implement the shared preview layout bridge');
@@ -133,7 +164,7 @@ export function createDsl4CameraPreviewControls(options: {
     for (const method of ['registerReservedRect', 'updateReservedRect', 'unregisterReservedRect']) {
       requireFunction(candidateLayout[method], `previewLayout.${method}`);
     }
-    previewLayout = candidateLayout as Record<string, Function>;
+    previewLayout = candidateLayout as unknown as PreviewLayoutBridge;
   }
   if (options.onError !== undefined) requireFunction(options.onError, 'onError');
   const onError = typeof options.onError === 'function' ? options.onError : () => {};
@@ -459,7 +490,7 @@ export function createDsl4CameraPreviewControls(options: {
     const visible =
       running &&
       cameraRunning &&
-      isRecord(rect) &&
+      rect !== null &&
       rect.visible !== false &&
       Number(rect.width) > 0 &&
       Number(rect.height) > 0;
@@ -470,7 +501,7 @@ export function createDsl4CameraPreviewControls(options: {
     attachListeners();
     for (const [position, group] of groups) {
       assignStyles(group, {
-        ...anchorStyle(position, rect as Readonly<Record<string, number>>),
+        ...anchorStyle(position, rect),
         display: 'flex',
       });
     }

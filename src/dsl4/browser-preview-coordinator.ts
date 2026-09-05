@@ -72,7 +72,7 @@ export function createDsl4BrowserPreviewCoordinator(options: {
     protocolSession: options.protocolSession,
     sessionId: options.sessionId,
     capabilities: options.capabilities,
-    onEvent: options.onProtocolEvent,
+    ...(options.onProtocolEvent === undefined ? {} : {onEvent: options.onProtocolEvent}),
     onError: reportError,
   });
   let protocolReady: Promise<unknown> = Promise.resolve(protocol.getState());
@@ -82,10 +82,12 @@ export function createDsl4BrowserPreviewCoordinator(options: {
     sourceFrontend: options.sourceFrontend,
     maxSourceBytes: options.maxSourceBytes,
     featureFlags: options.featureFlags,
-    maxSourceFiles: options.maxSourceFiles,
-    maxTotalSourceBytes: options.maxTotalSourceBytes,
-    maxIncludeDepth: options.maxIncludeDepth,
-    onProjectRoot: options.onProjectRoot,
+    ...(options.maxSourceFiles === undefined ? {} : {maxSourceFiles: options.maxSourceFiles}),
+    ...(options.maxTotalSourceBytes === undefined
+      ? {}
+      : {maxTotalSourceBytes: options.maxTotalSourceBytes}),
+    ...(options.maxIncludeDepth === undefined ? {} : {maxIncludeDepth: options.maxIncludeDepth}),
+    ...(options.onProjectRoot === undefined ? {} : {onProjectRoot: options.onProjectRoot}),
     async onResult(result) {
       await options.beforeSourceStage?.(result);
       try {
@@ -97,8 +99,8 @@ export function createDsl4BrowserPreviewCoordinator(options: {
       await protocol.stage(result);
       if (result.ok === true) latestValidSourceResult = result;
     },
-    onStatus: options.onSourceStatus,
-    onDiagnostic: options.onSourceDiagnostic,
+    ...(options.onSourceStatus === undefined ? {} : {onStatus: options.onSourceStatus}),
+    ...(options.onSourceDiagnostic === undefined ? {} : {onDiagnostic: options.onSourceDiagnostic}),
     onError: reportError,
   });
 

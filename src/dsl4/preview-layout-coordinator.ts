@@ -59,6 +59,14 @@ function insets(value: unknown) {
   };
 }
 
+/** One rectangle in stage pixels, as `rect()` normalizes it. */
+interface LayoutRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 function rect(value: unknown, name: string) {
   if (!isRecord(value)) throw new TypeError(`${name} must be an object`);
   return {
@@ -69,10 +77,7 @@ function rect(value: unknown, name: string) {
   };
 }
 
-function intersects(
-  left: Readonly<Record<string, number>>,
-  right: Readonly<Record<string, number>>,
-) {
+function intersects(left: LayoutRect, right: LayoutRect) {
   return (
     left.x < right.x + right.width &&
     left.x + left.width > right.x &&
@@ -82,7 +87,7 @@ function intersects(
 }
 
 function inside(
-  candidate: Readonly<Record<string, number>>,
+  candidate: LayoutRect,
   size: {width: number; height: number},
   safe: {top: number; right: number; bottom: number; left: number},
 ) {
@@ -101,7 +106,8 @@ function anchorRect(
   targetSize: number,
   margin: number,
 ) {
-  const [horizontal, vertical] = anchorGrid[value];
+  // `value` is validated against the anchor names before it reaches here.
+  const [horizontal = 0, vertical = 0] = anchorGrid[value] ?? [];
   const horizontalMargin = Math.min(
     margin,
     Math.max(0, (size.width - safe.left - safe.right - targetSize) / 2),
@@ -123,8 +129,8 @@ function anchorRect(
 }
 
 function anchorDistance(left: string, right: string) {
-  const [leftX, leftY] = anchorGrid[left];
-  const [rightX, rightY] = anchorGrid[right];
+  const [leftX = 0, leftY = 0] = anchorGrid[left] ?? [];
+  const [rightX = 0, rightY = 0] = anchorGrid[right] ?? [];
   return (leftX - rightX) ** 2 + (leftY - rightY) ** 2;
 }
 
@@ -180,7 +186,7 @@ export function resolveDsl4PreviewReloadLayout({
   for (let radius = 1; radius <= 12; radius += 1) {
     offsets.push([0, step * radius], [0, -step * radius], [step * radius, 0], [-step * radius, 0]);
   }
-  for (const [offsetX, offsetY] of offsets) {
+  for (const [offsetX = 0, offsetY = 0] of offsets) {
     const candidate = {...origin, x: origin.x + offsetX, y: origin.y + offsetY};
     if (inside(candidate, size, safe) && !reserved.some((entry) => intersects(candidate, entry))) {
       return deepFreeze({

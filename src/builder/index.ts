@@ -213,12 +213,18 @@ export async function buildSb3Bundle(options: {
     loadedManifest.manifest,
     loadedManifest.baseDirectory,
     {
-      allowedFileRoots: options.allowedFileRoots,
-      allowHttp: options.allowHttp,
-      fetchImplementation: options.fetchImplementation,
-      maxAssetBytes: options.maxAssetBytes,
-      maxRedirects: options.maxRedirects,
-      requestTimeoutMs: options.requestTimeoutMs,
+      ...(options.allowedFileRoots === undefined
+        ? {}
+        : {allowedFileRoots: options.allowedFileRoots}),
+      ...(options.allowHttp === undefined ? {} : {allowHttp: options.allowHttp}),
+      ...(options.fetchImplementation === undefined
+        ? {}
+        : {fetchImplementation: options.fetchImplementation}),
+      ...(options.maxAssetBytes === undefined ? {} : {maxAssetBytes: options.maxAssetBytes}),
+      ...(options.maxRedirects === undefined ? {} : {maxRedirects: options.maxRedirects}),
+      ...(options.requestTimeoutMs === undefined
+        ? {}
+        : {requestTimeoutMs: options.requestTimeoutMs}),
     },
   );
   const transformedScript = transformScript(sourceScriptBytes, loadedManifest.manifest);

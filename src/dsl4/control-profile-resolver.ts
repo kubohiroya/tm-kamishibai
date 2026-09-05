@@ -62,7 +62,8 @@ export function resolveDsl4ControlProfile(
       `Control profile ${controlProfile} is not defined`,
     );
   }
-  const selected = keymaps[controlProfile];
+  // The profile is validated against the keymap names above.
+  const selected = keymaps[controlProfile] ?? {};
 
   const entries = Object.entries(selected).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,

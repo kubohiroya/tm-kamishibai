@@ -228,8 +228,9 @@ export async function loadDsl4RuntimeArtifact(
       'DSL 4.0 runtime artifact exists in both bundled and unbundled storage',
     );
   }
-  const stored = artifacts[0];
-  if (stored.channel !== source.channel) {
+  const [stored] = artifacts;
+  // The count checks above leave exactly one artifact.
+  if (!stored || stored.channel !== source.channel) {
     return failure(
       storyDocument,
       source.descriptor.sourceId,
@@ -247,7 +248,8 @@ export async function loadDsl4RuntimeArtifact(
       '$.assetDistribution',
     );
   }
-  if (distributions.length === 1 && distributions[0].channel !== source.channel) {
+  const [onlyDistribution] = distributions;
+  if (distributions.length === 1 && onlyDistribution?.channel !== source.channel) {
     return failure(
       storyDocument,
       source.descriptor.sourceId,
@@ -257,11 +259,11 @@ export async function loadDsl4RuntimeArtifact(
     );
   }
   let effectiveStoryDocument = storyDocument;
-  if (distributions.length === 1) {
+  if (onlyDistribution && distributions.length === 1) {
     try {
       effectiveStoryDocument = validateDsl4AssetDistributionResolution(
         storyDocument,
-        distributions[0].distribution,
+        onlyDistribution.distribution,
       ).storyDocument;
     } catch (error) {
       const diagnosticError = error && typeof error === 'object' ? error : {};
@@ -314,8 +316,9 @@ export async function loadDsl4RuntimeArtifact(
         '$.assets',
       );
     }
-    const storedBundle = bundles[0];
-    if (storedBundle.channel !== source.channel) {
+    const [storedBundle] = bundles;
+    // The count checks above leave exactly one bundle.
+    if (!storedBundle || storedBundle.channel !== source.channel) {
       return failure(
         storyDocument,
         source.descriptor.sourceId,

@@ -47,6 +47,21 @@ function abbreviatedIntegrity(value: unknown, name: string) {
   return `${full.slice(0, 18)}…${full.slice(-8)}`;
 }
 
+/** The asset adapter the transaction prepares candidates through. */
+interface AssetReloadAdapter {
+  getCandidateProvider(...parameters: any[]): any;
+  accept(...parameters: any[]): any;
+  discard(...parameters: any[]): any;
+  dispose(...parameters: any[]): any;
+}
+
+/** One prepared asset generation, ready to swap in or throw away. */
+interface PreparedAssetGeneration {
+  activate(...parameters: any[]): any;
+  rollback(...parameters: any[]): any;
+  release(...parameters: any[]): any;
+}
+
 function validateAssetAdapter(value: unknown) {
   if (
     !isRecord(value) ||
@@ -57,7 +72,7 @@ function validateAssetAdapter(value: unknown) {
   ) {
     throw new TypeError('asset reload transaction requires an asset adapter');
   }
-  return value as Record<string, Function>;
+  return value as unknown as AssetReloadAdapter;
 }
 
 function validateCandidate(value: unknown) {
@@ -154,7 +169,7 @@ function validatePrepared(value: unknown) {
   ) {
     throw new TypeError('prepared asset generation must provide activate, rollback, and release');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreparedAssetGeneration;
 }
 
 function diagnostic(code: string, message: string) {
@@ -166,7 +181,7 @@ function diagnostic(code: string, message: string) {
  * Platform code supplies the safe-boundary and generation-specific runtime implementation.
  */
 export function createDsl4AssetReloadTransaction(options: {
-  assetAdapter: Record<string, Function>;
+  assetAdapter: AssetReloadAdapter;
   prepareGeneration: (
     input: Readonly<{
       summary: Readonly<Record<string, unknown>>;
@@ -209,15 +224,15 @@ export function createDsl4AssetReloadTransaction(options: {
   let generation = 0;
   let candidate: {
     summary: Readonly<Record<string, any>>;
-    prepared: Record<string, Function>;
+    prepared: PreparedAssetGeneration;
   } | null = null;
   let active: {
     summary: Readonly<Record<string, any>>;
-    prepared: Record<string, Function>;
+    prepared: PreparedAssetGeneration;
     generation: number;
     acknowledgement: Readonly<Record<string, unknown>>;
   } | null = null;
-  const pendingReleases = new Set<{prepared: Record<string, Function>} | null>();
+  const pendingReleases = new Set<{prepared: PreparedAssetGeneration} | null>();
   let currentDiagnostic: Readonly<Record<string, unknown>> | null = null;
   let lastEvent: Readonly<Record<string, unknown>> | null = null;
   let operationQueue = Promise.resolve();
@@ -288,7 +303,7 @@ export function createDsl4AssetReloadTransaction(options: {
   }
 
   async function releasePrepared(
-    value: {prepared: Record<string, Function>} | null,
+    value: {prepared: PreparedAssetGeneration} | null,
     reason: string,
   ) {
     if (!value) return;
@@ -296,7 +311,7 @@ export function createDsl4AssetReloadTransaction(options: {
   }
 
   async function discardPrepared(
-    value: {summary: Readonly<Record<string, any>>; prepared: Record<string, Function>} | null,
+    value: {summary: Readonly<Record<string, any>>; prepared: PreparedAssetGeneration} | null,
     reason: string,
   ) {
     if (!value) return;

@@ -104,7 +104,8 @@ function audioType(bytes: Uint8Array) {
   }
   if (startsWith(bytes, [0x4f, 0x67, 0x67, 0x53])) return 'audio/ogg';
   if (startsWith(bytes, [0x49, 0x44, 0x33])) return 'audio/mpeg';
-  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return 'audio/mpeg';
+  if (bytes.length >= 2 && bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0)
+    return 'audio/mpeg';
   return null;
 }
 

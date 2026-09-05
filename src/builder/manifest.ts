@@ -40,7 +40,7 @@ export interface NormalizedAsset {
   };
 }
 
-function assert(condition: unknown, message: string) {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Sb3BuilderError(message, {stage: 'manifest'});
 }
 

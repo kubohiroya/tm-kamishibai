@@ -94,7 +94,7 @@ export function createDsl4NavigationSession({
   controlProfile: string;
   historyNavigationAvailable?: boolean;
   historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
-  port: Record<string, Function>;
+  port: Record<string, (...parameters: any[]) => unknown>;
   debugExecution?: {beforeAction: Function; getState: Function};
   assetLifecycle?: {
     prepare: Function;
@@ -189,7 +189,12 @@ export function createDsl4NavigationSession({
       'inputArbitration must provide key, pointer, and pointer cancellation arbitration',
     );
   }
-  const arbitration = inputArbitration as Record<string, Function> | undefined;
+  const arbitration = inputArbitration as
+    | Record<
+        'shouldDeferNavigationKey' | 'arbitrateNavigationPointer' | 'cancelNavigationPointer',
+        (...parameters: any[]) => any
+      >
+    | undefined;
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
   }
@@ -285,18 +290,21 @@ export function createDsl4NavigationSession({
     controller = createDsl4RuntimeController({
       storyDocument,
       port,
-      debugExecution,
-      assetLifecycle: resolvedAssetLifecycle,
-      evaluateCondition: evaluateCondition as
-        | ((
-            expression: string,
-            variables: Readonly<Record<string, string | number | boolean>>,
-            context: ActionContext,
-          ) => boolean | Promise<boolean>)
-        | undefined,
+      ...(debugExecution === undefined ? {} : {debugExecution}),
+      ...(resolvedAssetLifecycle === undefined ? {} : {assetLifecycle: resolvedAssetLifecycle}),
+      ...(evaluateCondition === undefined
+        ? {}
+        : {
+            // The controller narrows the action context; the session holds the wider record type.
+            evaluateCondition: evaluateCondition as unknown as (
+              expression: string,
+              variables: Readonly<Record<string, string | number | boolean>>,
+              context: ActionContext,
+            ) => boolean | Promise<boolean>,
+          }),
       onEvent: (event: RuntimeEvent) =>
         handleRuntimeEvent(event as unknown as Readonly<Record<string, unknown>>),
-      structuredDataIntegration: structuredDataIntegration ?? undefined,
+      ...(structuredDataIntegration ? {structuredDataIntegration} : {}),
       posePreviewMirroringEnabled,
       cameraPreviewControlsEnabled,
       poseNavigationPolicyEnabled,
@@ -307,8 +315,8 @@ export function createDsl4NavigationSession({
       broadcastMessageAndWaitEnabled,
       storyVariableWriteEnabled,
       crossfadeTransitionsEnabled,
-      quiesceTimeoutMs,
-      scheduleQuiesceTimeout,
+      ...(quiesceTimeoutMs === undefined ? {} : {quiesceTimeoutMs}),
+      ...(scheduleQuiesceTimeout === undefined ? {} : {scheduleQuiesceTimeout}),
     });
   } catch (error) {
     structuredDataIntegration?.dispose();
@@ -460,7 +468,7 @@ export function createDsl4NavigationSession({
       return undefined;
     },
     dispatchImmediately: true,
-    onError: onInputError,
+    ...(onInputError === undefined ? {} : {onError: onInputError}),
   });
 
   const actionsByPath = new Map(

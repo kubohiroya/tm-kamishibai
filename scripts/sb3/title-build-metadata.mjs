@@ -62,10 +62,11 @@ function assertValidBuildDate(/** @type {any} */ buildDate) {
     typeof buildDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(buildDate),
     `${titleBuildDateEnvironmentVariable} must use YYYY-MM-DD: ${buildDate}`,
   );
-  const [year, month, day] = buildDate.split('-').map(Number);
+  // The pattern above has already required three numeric parts.
+  const [year = 0, month = 0, day = 0] = buildDate.split('-').map(Number);
   const daysInMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   assert(
-    month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1],
+    month >= 1 && month <= 12 && day >= 1 && day <= (daysInMonth[month - 1] ?? 0),
     `${titleBuildDateEnvironmentVariable} is not a valid calendar date: ${buildDate}`,
   );
   return buildDate;

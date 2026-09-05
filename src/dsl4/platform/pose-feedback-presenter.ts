@@ -38,7 +38,7 @@ function requireElement(value: unknown, label: string) {
   return value as unknown as HTMLElement;
 }
 
-function resolveLabels(input: unknown): Readonly<Record<string, string>> {
+function resolveLabels(input: unknown): Readonly<typeof defaultLabels> {
   if (input === undefined) return defaultLabels;
   if (!isRecord(input)) throw new TypeError('pose feedback presenter labels must be an object');
   const unknown = Object.keys(input).filter((key) => !labelKeys.has(key));
@@ -52,7 +52,7 @@ function resolveLabels(input: unknown): Readonly<Record<string, string>> {
     }
     labels[name] = value;
   }
-  return Object.freeze(labels);
+  return Object.freeze(labels) as Readonly<typeof defaultLabels>;
 }
 
 function percentage(value: number) {

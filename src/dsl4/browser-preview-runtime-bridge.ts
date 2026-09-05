@@ -1,3 +1,4 @@
+import type {LiveReloadRuntimeSession} from './live-reload-session.js';
 import {createDsl4LiveReloadSession} from './live-reload-session.js';
 import {createDsl4PreviewProtocolSession} from './preview-protocol.js';
 import {
@@ -66,10 +67,10 @@ export function createDsl4BrowserPreviewRuntimeBridge(options: {
   createSession: (
     context: Readonly<{
       storyDocument: Readonly<Record<string, unknown>>;
-      previousSession: Record<string, Function> | null;
+      previousSession: LiveReloadRuntimeSession | null;
       preserveManagedPresentation: boolean;
     }>,
-  ) => Record<string, Function> | Promise<Record<string, Function>>;
+  ) => LiveReloadRuntimeSession | Promise<LiveReloadRuntimeSession>;
   sessionId: string;
   maxGenerationMessageBytes?: number;
   isException?: (value: unknown) => boolean;

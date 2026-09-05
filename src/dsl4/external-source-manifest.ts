@@ -10,7 +10,8 @@ export const dsl4ExternalSourceManifestFilenames = deepFreeze([
   'project.source.yaml',
   'project.source.json',
 ]);
-export const dsl4DefaultExternalSourceManifestFilename = dsl4ExternalSourceManifestFilenames[0];
+export const dsl4DefaultExternalSourceManifestFilename: string =
+  dsl4ExternalSourceManifestFilenames[0] ?? 'sources.yml';
 export const dsl4ExternalSourceManifestDefaults = deepFreeze({
   formatVersion: 1,
   mode: 'external',
@@ -71,7 +72,7 @@ function parseYamlManifest(source: string) {
   }
   if (empty) return {};
   try {
-    const value = documents[0].toJS({mapAsMap: false, maxAliasCount: 0});
+    const value = documents[0]?.toJS({mapAsMap: false, maxAliasCount: 0});
     if (!isRecord(value)) {
       fail('K4-SOURCE-MANIFEST-YAML-001', 'Source manifest YAML must contain one mapping');
     }

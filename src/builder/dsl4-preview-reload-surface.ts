@@ -68,9 +68,9 @@ export function createDsl4PreviewReloadSurface(options: {
   mount: unknown;
   viewport: unknown;
   safeArea?: unknown;
-  debugExecution?: Record<string, Function>;
-  clock?: Readonly<Record<string, Function>>;
-  storage?: {getItem?: Function; setItem?: Function};
+  debugExecution?: Parameters<typeof createDsl4PreviewReloadOverlay>[0]['debugExecution'];
+  clock?: Parameters<typeof createDsl4PreviewReloadPolicy>[0]['clock'];
+  storage?: Parameters<typeof createDsl4PreviewReloadOverlay>[0]['storage'];
   reducedMotion?: boolean;
   formatTime?: (timestamp: number) => string;
   onError?: (error: unknown) => unknown;
@@ -131,9 +131,9 @@ export function createDsl4PreviewReloadSurface(options: {
     policy,
     layoutCoordinator,
     debugExecution: options.debugExecution,
-    storage: options.storage,
-    formatTime: options.formatTime,
-    reducedMotion: options.reducedMotion,
+    ...(options.storage === undefined ? {} : {storage: options.storage}),
+    ...(options.formatTime === undefined ? {} : {formatTime: options.formatTime}),
+    ...(options.reducedMotion === undefined ? {} : {reducedMotion: options.reducedMotion}),
     onError: reportError,
   });
   const document = options.document as Record<string, any>;

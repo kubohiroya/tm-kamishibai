@@ -66,7 +66,10 @@ function validateComposition(value: unknown) {
   if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
     throw new TypeError(`SVG Text composition must provide ${methods.join(', ')}`);
   }
-  return value as Record<string, Function>;
+  return value as Record<
+    'defineStyle' | 'setText' | 'releaseTarget' | 'releaseAll',
+    (...parameters: any[]) => any
+  >;
 }
 
 /**

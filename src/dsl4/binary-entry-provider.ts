@@ -463,7 +463,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
     ) =>
       | Promise<{bytes: Uint8Array; compressedSize: number}>
       | {bytes: Uint8Array; compressedSize: number};
-    releaseEntries?: () => Promise<void> | void;
+    releaseEntries?: () => Promise<void> | void | undefined;
     subtleCrypto?: {digest: Function} | undefined;
   },
 ) {

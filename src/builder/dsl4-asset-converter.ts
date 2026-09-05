@@ -581,6 +581,15 @@ export async function convertDsl4ProjectAssets(options: {
   const storyAssets = (storyDocument.assets ?? {}) as Readonly<
     Record<string, Readonly<Record<string, any>>>
   >;
+  /**
+   * Read one story asset by id.
+   *
+   * Every id comes from `assetIds` below, so a miss is a defect in this module rather than in the
+   * story, and it is reported as one instead of reaching the caller as `undefined`.
+   */
+  const requireStoryAsset = (assetId: string) =>
+    storyAssets[assetId] ??
+    fail(`Story asset is missing while converting: ${assetId}`, 'K4-ASSET-CONVERT-SELECTION-002');
   const assetIds = Object.keys(storyAssets).sort();
   if (assetIds.length === 0)
     fail('Story has no assets to convert', 'K4-ASSET-CONVERT-SELECTION-001');
@@ -615,7 +624,7 @@ export async function convertDsl4ProjectAssets(options: {
   }
   if (options.to === 'remote') {
     for (const assetId of selectedIds) {
-      const asset = storyAssets[assetId];
+      const asset = requireStoryAsset(assetId);
       if (
         !hasRsyncConfiguration &&
         asset.delivery !== 'remote' &&
@@ -797,7 +806,7 @@ export async function convertDsl4ProjectAssets(options: {
   async function originMaterial(assetId: string) {
     const cached = origins.get(assetId);
     if (cached) return cached;
-    const asset = storyAssets[assetId];
+    const asset = requireStoryAsset(assetId);
     let material;
     if (asset.delivery === 'remote') {
       if (!isRecord(asset.source)) {
@@ -870,7 +879,7 @@ export async function convertDsl4ProjectAssets(options: {
   }
 
   for (const assetId of selectedIds) {
-    const asset = storyAssets[assetId];
+    const asset = requireStoryAsset(assetId);
     const current =
       asset.delivery === 'remote' ? 'remote' : typeof asset.file === 'string' ? 'local' : 'project';
     const editable = editableAsset(rawAssets[assetId], asset);
@@ -976,7 +985,7 @@ export async function convertDsl4ProjectAssets(options: {
 
   for (const assetId of assetIds) {
     if (selectedAssetIds.has(assetId)) continue;
-    const asset = storyAssets[assetId];
+    const asset = requireStoryAsset(assetId);
     if (typeof asset.file !== 'string') continue;
     const snapshotAsset = localSnapshot.manifest.assets.find(
       (candidate) => candidate.id === assetId,

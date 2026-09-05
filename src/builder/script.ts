@@ -64,7 +64,8 @@ export function transformScript(
   const seen = new Set();
   const parts = source.split(/(\r\n|\n|\r)/u);
   for (let index = 0; index < parts.length; index += 2) {
-    const line = parts[index];
+    // The loop steps over the separator captures, so every even index is a line.
+    const line = parts[index] ?? '';
     if (!line.startsWith('asset=')) continue;
     const separator = line.indexOf(',', 'asset='.length);
     if (separator < 0) {
@@ -100,10 +101,9 @@ export function transformScript(
   }
   const missing = assetManifest.assets.filter((entry) => !seen.has(entry.name));
   if (missing.length > 0) {
-    const entry = missing[0];
+    const [entry] = missing;
     throw new Sb3BuilderError('Manifest asset is not referenced by an external asset= command.', {
-      assetName: entry.name,
-      inputUri: entry.uri,
+      ...(entry === undefined ? {} : {assetName: entry.name, inputUri: entry.uri}),
       stage: 'transform-script',
     });
   }

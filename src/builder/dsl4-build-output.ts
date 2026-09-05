@@ -226,7 +226,8 @@ export async function buildDsl4RuntimeComponentFile(options: {
     },
   });
   return Object.freeze({
-    outputPath: outputPaths[outputFilename],
+    // The transaction installs the output filename it was given.
+    outputPath: outputPaths[outputFilename] ?? outputFilename,
     runtimeComponent: built.runtimeComponent,
   });
 }

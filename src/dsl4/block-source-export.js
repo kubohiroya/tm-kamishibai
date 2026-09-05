@@ -67,7 +67,7 @@ function assertPortableFilename(value, label, details = {}) {
       details,
     );
   }
-  if (reservedFilenameStems.has(value.split('.')[0].toLowerCase())) {
+  if (reservedFilenameStems.has((value.split('.')[0] ?? '').toLowerCase())) {
     fail('K4-BLOCK-EXPORT-NAME-001', `${label} uses a reserved filename`, details);
   }
 }
@@ -198,7 +198,7 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
     fail(
       'K4-BLOCK-EXPORT-UNREFERENCED-001',
       `No include reaches ${unreferenced.map((sourcePath) => JSON.stringify(sourcePath)).join(', ')}. Add an include for each module, or remove its DSL source hat.`,
-      {sourcePath: unreferenced[0]},
+      unreferenced[0] === undefined ? {} : {sourcePath: unreferenced[0]},
     );
   }
 
