@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 527 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 524 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,11 +234,11 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 527: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 524: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
-  and the TurboWarp runtime host with the preview session and startup helper that share its
-  navigation session. Two shapes recur.
+  the TurboWarp runtime host with the preview session and startup helper that share its navigation
+  session, and the CLI argument parser. Two shapes recur.
   Where a validator lists members inline, an interface next to it names them. Where a validator
   takes a method-name array, `validateCompositionMethods` in
   `src/dsl4/platform/composition-contract.ts` is generic over those literals, so the result is keyed
@@ -249,7 +249,9 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   The genuine lookups have their own two shapes, both settled in the DSL 3.2 converter: reading a
   split command argument that a length check above already required (an `argumentAt` helper that
   returns the empty string, which flows into the same diagnostics an empty argument would), and
-  destructuring after such a check (defaults on the bindings). A runtime dispatch table like the
+  destructuring after such a check (defaults on the bindings), and reading `arguments_[index]`
+  inside a loop the argument count already bounds (the same empty-string default, which would be
+  rejected as an unknown option). A runtime dispatch table like the
   runtime controller's `port` keeps its index signature — it looks methods up by name and already
   handles a missing one — but its element type is now a call signature rather than `Function`.
 

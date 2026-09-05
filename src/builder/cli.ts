@@ -69,7 +69,9 @@ function parseCliFlagAndValueOptions(
   const values = new Map();
   const flags = new Set();
   for (let index = 0; index < arguments_.length; index += 1) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     if (flagOptions.has(option)) {
       if (flags.has(option)) {
         throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
@@ -354,7 +356,9 @@ function parseValidateDsl4Arguments(arguments_: string[]): {
   const values = new Map();
   const allowed = new Set(['--input', '--format', '--max-source-bytes']);
   for (let index = 0; index < arguments_.length; index += 2) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     const value = arguments_[index + 1];
     if (!allowed.has(option)) {
       throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
@@ -424,7 +428,9 @@ function parseAuditDsl4AssetArguments(arguments_: string[]): {
   ]);
 
   for (let index = 0; index < arguments_.length; index += 1) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     if (flagOptions.has(option)) {
       if (flags.has(option)) {
         throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
@@ -576,7 +582,9 @@ function parseLockDsl4AssetArguments(arguments_: string[]): {
     '--allow-host',
   ]);
   for (let index = 0; index < arguments_.length; index += 1) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     if (flagOptions.has(option)) {
       if (flags.has(option))
         throw new Sb3BuilderError(`Duplicate option: ${option}`, {stage: 'cli'});
@@ -728,7 +736,9 @@ function parseVendorDsl4AssetArguments(arguments_: string[]): {
     '--allow-host',
   ]);
   for (let index = 0; index < arguments_.length; index += 2) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     const value = arguments_[index + 1];
     if (!allowed.has(option))
       throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
@@ -795,7 +805,9 @@ function parseVendorDsl4AssetArguments(arguments_: string[]): {
 function parseConvertDsl4Arguments(arguments_: string[]): Parameters<typeof convertDsl32File>[0] {
   const values = new Map();
   for (let index = 0; index < arguments_.length; index += 2) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     const value = arguments_[index + 1];
     if (!['--input', '--output', '--pose-models'].includes(option)) {
       throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
@@ -855,7 +867,9 @@ function parseConvertDsl4AssetsArguments(
     '--max-redirects',
   ]);
   for (let index = 0; index < arguments_.length; index += 2) {
-    const option = arguments_[index];
+    // The loop is bounded by the argument count, so the empty string is unreachable; it would
+    // be rejected as an unknown option like any other unexpected argument.
+    const option = arguments_[index] ?? '';
     const value = arguments_[index + 1];
     if (!allowed.has(option)) {
       throw new Sb3BuilderError(`Unknown option: ${option}`, {stage: 'cli'});
@@ -980,7 +994,8 @@ function parseBuildSb3Arguments(rest: string[]): Parameters<typeof buildSb3Bundl
     '--max-redirects',
   ]);
   for (let index = 0; index < rest.length; index += 1) {
-    const option = rest[index];
+    // Bounded by the argument count above, so the empty string is unreachable here too.
+    const option = rest[index] ?? '';
     if (option === '--allow-http') {
       allowHttp = true;
       continue;
@@ -1298,7 +1313,7 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
       maxProjectJsonBytes,
       dsl4BrowserPreviewArtifactLimits.absoluteMaximums.maxProjectJsonBytes,
     ],
-  ]) {
+  ] as ReadonlyArray<[string, number, number]>) {
     if (value > maximum) {
       throw new Sb3BuilderError(`${option} must be <= ${maximum}.`, {stage: 'cli'});
     }
@@ -1325,7 +1340,7 @@ function parsePreviewDsl4Arguments(rest: string[]): Dsl4PreviewCliOptions {
       maxProjectJsonBytes,
       dsl4BrowserPreviewArtifactLimits.recommendedMaximums.maxProjectJsonBytes,
     ],
-  ]) {
+  ] as ReadonlyArray<[string, number, number]>) {
     if (value > recommendedMaximum && !allowLargePreviewArtifacts) {
       throw new Sb3BuilderError(
         `${option} above ${recommendedMaximum} requires --allow-large-preview-artifacts.`,
