@@ -1,6 +1,15 @@
+import {
+  coerceScalarBlockValue,
+  createBlockSurfaceBuilder,
+} from '@kubohiroya/turbowarp-runtime-host';
+
 /**
  * Define the feature-gated public runtime-variable blocks without coupling their contract to the
  * packaged extension entry.
+ *
+ * Record shape, palette visibility, and the reporter monitor default come from the shared block
+ * surface builder. Every opcode, label, and menu item below stays here, because they are DSL 4.0
+ * story vocabulary rather than TurboWarp mechanics.
  */
 export function createDsl4TurboWarpRuntimeVariableBlockSurface(
   {
@@ -15,35 +24,26 @@ export function createDsl4TurboWarpRuntimeVariableBlockSurface(
   if (writeVisible && !stateVisible) {
     throw new TypeError('story variable write blocks require the state surface');
   }
-  const hiddenState = !stateVisible;
-  const hiddenWrite = !writeVisible;
-  const nameArgument = {type: ArgumentType.STRING, defaultValue: ''};
-  return Object.freeze({
-    blocks: Object.freeze([
-      {
+  const build = createBlockSurfaceBuilder({ArgumentType, BlockType}, {visible: stateVisible});
+  const nameArgument = () => build.stringArgument();
+  return build.surface(
+    [
+      build.reporter({
         opcode: 'storyVariableReporter',
-        blockType: BlockType.REPORTER,
         text: 'story variable [NAME]',
-        arguments: {NAME: nameArgument},
-        hideFromPalette: hiddenState,
-        disableMonitor: true,
-      },
-      {
+        arguments: {NAME: nameArgument()},
+      }),
+      build.boolean({
         opcode: 'storyVariableExists',
-        blockType: BlockType.BOOLEAN,
         text: 'story variable [NAME] exists?',
-        arguments: {NAME: nameArgument},
-        hideFromPalette: hiddenState,
-      },
-      {
+        arguments: {NAME: nameArgument()},
+      }),
+      build.reporter({
         opcode: 'storyVariableType',
-        blockType: BlockType.REPORTER,
         text: 'story variable [NAME] type',
-        arguments: {NAME: nameArgument},
-        hideFromPalette: hiddenState,
-        disableMonitor: true,
-      },
-      ...[
+        arguments: {NAME: nameArgument()},
+      }),
+      ...build.reporters([
         ['storyStatusReporter', 'story status'],
         ['currentSceneIdReporter', 'current scene id'],
         ['currentActionNumberReporter', 'current action number'],
@@ -56,75 +56,42 @@ export function createDsl4TurboWarpRuntimeVariableBlockSurface(
         ['poseStepNumberReporter', 'pose step number'],
         ['runtimeVersionReporter', 'Kamishibai DSL 4.0 runtime version'],
         ['applicationStatusReporter', 'application status'],
-      ].map(([opcode, text]) => ({
-        opcode,
-        blockType: BlockType.REPORTER,
-        text,
-        hideFromPalette: hiddenState,
-        disableMonitor: true,
-      })),
-      {
+      ]),
+      build.boolean({
         opcode: 'canNavigateToPreviousAction',
-        blockType: BlockType.BOOLEAN,
         text: 'can navigate to previous action?',
-        hideFromPalette: hiddenState,
-      },
-      {
-        opcode: 'canNavigateToNextAction',
-        blockType: BlockType.BOOLEAN,
-        text: 'can navigate to next action?',
-        hideFromPalette: hiddenState,
-      },
-      {
+      }),
+      build.boolean({opcode: 'canNavigateToNextAction', text: 'can navigate to next action?'}),
+      build.command({
         opcode: 'setStoryVariable',
-        blockType: BlockType.COMMAND,
         text: 'set story variable [NAME] to [VALUE] as [TYPE]',
         arguments: {
-          NAME: nameArgument,
-          VALUE: {type: ArgumentType.STRING, defaultValue: ''},
-          TYPE: {type: ArgumentType.STRING, menu: 'dsl4StoryVariableTypes'},
+          NAME: nameArgument(),
+          VALUE: build.stringArgument(),
+          TYPE: build.menuArgument('dsl4StoryVariableTypes'),
         },
-        hideFromPalette: hiddenWrite,
-      },
-      {
-        opcode: 'changeNumberStoryVariable',
-        blockType: BlockType.COMMAND,
-        text: 'change number story variable [NAME] by [DELTA]',
-        arguments: {
-          NAME: nameArgument,
-          DELTA: {type: ArgumentType.NUMBER, defaultValue: 1},
-        },
-        hideFromPalette: hiddenWrite,
-      },
-      {
-        opcode: 'lastStoryVariableWriteAccepted',
-        blockType: BlockType.BOOLEAN,
-        text: 'last story variable write accepted?',
-        hideFromPalette: hiddenWrite,
-      },
-    ]),
-    menus: Object.freeze({
-      dsl4StoryVariableTypes: Object.freeze({
-        acceptReporters: false,
-        items: Object.freeze(['string', 'number', 'boolean']),
+        visible: writeVisible,
       }),
-    }),
-  });
+      build.command({
+        opcode: 'changeNumberStoryVariable',
+        text: 'change number story variable [NAME] by [DELTA]',
+        arguments: {NAME: nameArgument(), DELTA: build.numberArgument(1)},
+        visible: writeVisible,
+      }),
+      build.boolean({
+        opcode: 'lastStoryVariableWriteAccepted',
+        text: 'last story variable write accepted?',
+        visible: writeVisible,
+      }),
+    ],
+    {dsl4StoryVariableTypes: build.menu(['string', 'number', 'boolean'])},
+  );
 }
 
+/**
+ * Keep the `K4-VARIABLE-WRITE-*` diagnostics while the string/number/boolean coercion itself comes
+ * from the shared package.
+ */
 export function coerceDsl4StoryVariableBlockValue(value: unknown, type: string) {
-  if (type === 'string') return Object.freeze({ok: true, value: String(value ?? '')});
-  if (type === 'number') {
-    const number = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(number)
-      ? Object.freeze({ok: true, value: number})
-      : Object.freeze({ok: false, code: 'K4-VARIABLE-WRITE-VALUE'});
-  }
-  if (type === 'boolean') {
-    if (typeof value === 'boolean') return Object.freeze({ok: true, value});
-    if (value === 'true') return Object.freeze({ok: true, value: true});
-    if (value === 'false') return Object.freeze({ok: true, value: false});
-    return Object.freeze({ok: false, code: 'K4-VARIABLE-WRITE-VALUE'});
-  }
-  return Object.freeze({ok: false, code: 'K4-VARIABLE-WRITE-TYPE'});
+  return coerceScalarBlockValue(value, type, {errorCodePrefix: 'K4'});
 }

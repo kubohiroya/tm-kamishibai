@@ -600,7 +600,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           ? composition.createAudioVoice.bind(composition)
           : undefined);
       crossfadePlatform = createDsl4TurboWarpCrossfadePlatform({
-        runtime: options.runtime,
+        runtimeHost: turboWarpHost,
         ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
         ...(options.actorFrameMilliseconds === undefined
           ? {}
@@ -627,7 +627,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     if (standaloneAdvanceIndicatorEnabled) {
       const activeAssetSession = assetSession;
       bubbleAdvanceIndicatorPresenter = createDsl4BubbleAdvanceIndicatorPresenter({
-        runtime: options.runtime,
+        runtimeHost: turboWarpHost,
         getAssetResource: (assetId: string) => activeAssetSession.getAssetResource(assetId),
         ...(options.createAdvanceIndicatorImage === undefined
           ? {}

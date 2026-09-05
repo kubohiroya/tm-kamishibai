@@ -5,6 +5,7 @@ import {
   resolveDsl4FeatureFlags,
 } from '../../../dist/dsl4/feature-flags.js';
 import {createDsl4TurboWarpCrossfadePlatform} from '../../../dist/dsl4/platform/turbowarp-crossfade-platform.js';
+import {createTurboWarpRuntimeHost} from '../../../node_modules/@kubohiroya/turbowarp-runtime-host/dist/index.js';
 
 const calls = [];
 const voices = [];
@@ -105,20 +106,25 @@ const stage = {
   },
 };
 
-const runtime = {
-  renderer,
-  targets: [stage, actor],
-  requestRedraw() {
-    calls.push(['redraw']);
+const runtimeHost = createTurboWarpRuntimeHost({
+  runtime: {
+    renderer,
+    targets: [stage, actor],
+    requestRedraw() {
+      calls.push(['redraw']);
+    },
+    on() {},
+    startHats: () => [],
+    getTargetForStage: () => stage,
   },
-};
+});
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 try {
   const flags = resolveDsl4FeatureFlags(dsl4StandardProductionFeatureFlags);
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime,
+    runtimeHost,
     frameMilliseconds: 5,
     createAudioVoice(assetId, options) {
       const voiceCalls = [];

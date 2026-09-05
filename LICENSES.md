@@ -31,7 +31,7 @@ license表示とsource repositoryを正本とします。
 | @kubohiroya/turbowarp-local-preview      | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-local-preview`           |
 | @kubohiroya/turbowarp-preview-runtime    | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-preview-runtime`         |
 | @kubohiroya/turbowarp-runtime-expression | 0.5.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-expression`      |
-| @kubohiroya/turbowarp-runtime-host       | 0.1.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-host`            |
+| @kubohiroya/turbowarp-runtime-host       | 0.2.0             | MPL-2.0      | `kubohiroya/turbowarp-runtime-host`            |
 | @kubohiroya/turbowarp-svg-text           | 0.9.0             | MPL-2.0      | `kubohiroya/turbowarp-svg-text`                |
 | @kubohiroya/turbowarp-tm                 | 2.0.0             | MPL-2.0      | `kubohiroya/turbowarp-tm`                      |
 | @teachablemachine/pose                   | 0.8.6             | Apache-2.0   | `googlecreativelab/teachablemachine-libraries` |

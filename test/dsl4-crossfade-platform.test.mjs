@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4TurboWarpCrossfadePlatform} from '../src/dsl4/platform/index.js';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
 
 function deferred() {
   let resolve;
@@ -72,7 +73,7 @@ test('uses Asset Manager voices for cut and equal-power BGM replacement', async 
   const clock = manualScheduler();
   const factory = voiceFactory();
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer: {}},
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
     createAudioVoice: factory.createAudioVoice,
@@ -109,7 +110,7 @@ test('keeps the outgoing BGM when creation of its replacement fails', async () =
   const first = voiceFactory();
   let attempt = 0;
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer: {}},
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
     createAudioVoice(assetId, options) {
       attempt += 1;
       if (attempt === 2) throw new Error('decode failed');
@@ -130,7 +131,7 @@ test('keeps the outgoing BGM when creation of its replacement fails', async () =
 test('accepts a Promise-compatible Asset Manager voice from another realm', async () => {
   const calls = [];
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer: {}},
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer: {}}),
     createAudioVoice() {
       return {
         ended: {then() {}},
@@ -202,7 +203,10 @@ test('crossfades a drawable with a noninteractive old-skin copy in the same laye
     },
   };
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer, requestRedraw: () => calls.push(['redraw'])},
+    runtimeHost: createTestTurboWarpRuntimeHost({
+      renderer,
+      requestRedraw: () => calls.push(['redraw']),
+    }),
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
   });
@@ -282,7 +286,7 @@ test('cancels a drawable crossfade while the replacement is still applying', asy
     },
   };
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer},
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer}),
     scheduler: clock.scheduler,
   });
 
@@ -333,7 +337,9 @@ test('aborts a drawable crossfade while the replacement is still applying', asyn
       destroyed.push(id);
     },
   };
-  const platform = createDsl4TurboWarpCrossfadePlatform({runtime: {renderer}});
+  const platform = createDsl4TurboWarpCrossfadePlatform({
+    runtimeHost: createTestTurboWarpRuntimeHost({renderer}),
+  });
   const pending = platform.crossfadeActorSkin(
     {drawableID: 1, visible: true, effects: {}, setEffect() {}},
     () => applying.promise,
@@ -389,7 +395,10 @@ test('captures and releases one scene frame around the committed destination', a
     },
   };
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {renderer, requestRedraw: () => calls.push(['redraw'])},
+    runtimeHost: createTestTurboWarpRuntimeHost({
+      renderer,
+      requestRedraw: () => calls.push(['redraw']),
+    }),
     scheduler: clock.scheduler,
     frameMilliseconds: 500,
     async createImageBitmap(input) {
@@ -419,7 +428,7 @@ test('releases scene capture resources when drawable setup fails', async () => {
   const calls = [];
   const bitmap = {close: () => calls.push('bitmap.close')};
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {
+    runtimeHost: createTestTurboWarpRuntimeHost({
       renderer: {
         canvas: {width: 480, height: 360},
         _groupOrdering: ['sprite'],
@@ -439,7 +448,7 @@ test('releases scene capture resources when drawable setup fails', async () => {
           calls.push(['destroySkin', id]);
         },
       },
-    },
+    }),
     async createImageBitmap() {
       return bitmap;
     },
@@ -456,7 +465,7 @@ test('does not allocate scene capture resources after disposal', async () => {
   const capture = deferred();
   const calls = [];
   const platform = createDsl4TurboWarpCrossfadePlatform({
-    runtime: {
+    runtimeHost: createTestTurboWarpRuntimeHost({
       renderer: {
         canvas: {width: 480, height: 360},
         _groupOrdering: ['sprite'],
@@ -469,7 +478,7 @@ test('does not allocate scene capture resources after disposal', async () => {
           return 3;
         },
       },
-    },
+    }),
     createImageBitmap() {
       return capture.promise;
     },
