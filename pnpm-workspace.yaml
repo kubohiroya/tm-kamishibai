@@ -16,7 +16,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-svg-text@0.9.0'
   - '@kubohiroya/turbowarp-tm@2.0.0'
   - '@kubohiroya/turbowarp-runtime-host@0.2.0'
-  - '@kubohiroya/turbowarp-preview-runtime@0.1.0'
+  - '@kubohiroya/turbowarp-preview-runtime@0.2.0'
   - '@kubohiroya/turbowarp-extension-manifest@0.2.0'
   - '@kubohiroya/turbowarp-local-preview@0.1.0'
   - '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0'
