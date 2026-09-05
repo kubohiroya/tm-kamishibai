@@ -8,7 +8,7 @@ The goal is not to move Kamishibai semantics into shared packages. Shared packag
 
 ### `@kubohiroya/turbowarp-runtime-host`
 
-Status: published as `@kubohiroya/turbowarp-runtime-host@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-host>.
+Status: published as `@kubohiroya/turbowarp-runtime-host@0.2.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-host>. 0.2.0 added target enumeration, renderer access, monitor access, `createBlockSurfaceBuilder`, and `coerceScalarBlockValue`.
 
 Verification:
 
@@ -37,12 +37,28 @@ Migration status:
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
 - `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
 - `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
-- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, and `pnpm test:quick`.
+- `createDsl4TurboWarpRuntimeEnvironment` now builds one `createTurboWarpRuntimeHost({runtime})` for the whole session and hands it to the adapters that need the Stage. `HostPortContext` carries `runtimeHost` next to `runtime`, so `createHostPort` implementations receive the adapter instead of resolving the Stage themselves.
+- `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js` take an injected `runtimeHost` and call `getStageTarget()`. Their unit fixtures shrank from a runtime duck-type to the host contract, which is what the acceptance criterion "Scratch VM access in app code is reduced to an injected runtime host interface" asks for. The earlier concern about widening the port contracts does not apply to injection: the ports never construct a host, so they never require `on` or `startHats`.
+- `src/dsl4/browser-turbowarp-stage.js` builds its own host from the VM it creates and uses `getStageTarget()` and `runtimeHost.runtime`. It still reads `vm.runtime.targets` directly for the target-count snapshot, because `targets` is not part of the shared surface.
+- `getTargetForStage` no longer appears anywhere in `tm-kamishibai`, and `test/dsl4-architecture.test.mjs` keeps it out.
+- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
+
+Migrated onto `turbowarp-runtime-host@0.2.0`:
+
+- Renderer access. `src/dsl4/platform/turbowarp-crossfade-platform.js` and `src/dsl4/platform/bubble-advance-indicator.js` take an injected `runtimeHost` and use `getRenderer()` and `requestRedraw()`. The shared `requestRedraw()` is a no-op on a runtime without one, which replaced the `runtime.requestRedraw?.()` feature test at every call site.
+- Monitor access. The Scratch pose feedback adapter uses `getMonitorBlocks()` and `getMonitorState()` instead of validating `runtime.monitorBlocks` and `runtime.getMonitorState` itself. It also stopped passing a second argument to `changeBlock`: TurboWarp's `Blocks` instance holds its own runtime and `changeBlock(args)` takes one parameter, so that argument had always been ignored.
+- Stage lookup in the crossfade platform, which used to hand-roll `runtime.targets.find(isStage)`.
+- Target enumeration in `src/dsl4/browser-turbowarp-stage.js` and the extension entry's `hideAllDisplayTargets`, through `targets()` and `spriteTargets()`.
+- The runtime variable block surface. `src/dsl4/platform/turbowarp-runtime-variable-block.js` builds its 20 blocks through `createBlockSurfaceBuilder`, and `coerceDsl4StoryVariableBlockValue` delegates to `coerceScalarBlockValue` with the `K4` prefix. Record shape, palette visibility, the reporter monitor default, and duplicate-opcode detection now live in the shared package; every opcode, label, and menu item stays here. The rebuilt surface is byte-identical to the previous hand-written one across all three visibility combinations.
 
 Remaining migration candidates:
 
-- Stage target resolution in `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js`. Those ports accept a runtime that only provides `getTargetForStage`, while `createTurboWarpRuntimeHost` also requires `on` and `startHats`. Migrate them once the shared package exposes a stage-only accessor, rather than widening the port contracts to fit the current host validation.
-- `vm.runtime` access in `src/dsl4/browser-turbowarp-stage.js`, which owns its own Scratch VM instance instead of an injected TurboWarp host.
+One of these is blocked by an architecture rule. The other two are cost/benefit calls, and the note says which is which so a later reader does not mistake a judgment for a constraint.
+
+- `src/dsl4/platform/turbowarp-actor-adapter.js`. Not blocked; left alone for cost/benefit. Stage and actor are distinct types in DSL 4.0 — the schema separates `stageAction` from `customActorAction`, the runtime separates `crossfadeStage` from `crossfadeActorSkin`, and `validateActor` additionally requires the sprite-only `setXY` / `setSize` / `setVisible`. So the adapter's `isStage === false` filter expresses the same intent as the shared `spriteTargets()` predicate `isStage !== true`, only more strictly. The two disagree solely on a target carrying no `isStage` property at all, which a real VM never produces: `RenderedTarget` assigns `this.isStage = false` in its constructor and the Stage carries `true`. The one real difference is validation timing — the adapter rejects a non-array `targets` at construction while `targets()` rejects it per call — and one retained construction-time check would cover that. The reason this stayed is that reworking a 46 KB module with a large test surface buys only "receive the target array from the shared package".
+- `src/dsl4/platform/asset-manager-adapter.js`. Its sprite filter already matches `spriteTargets()`, but it treats a missing or malformed runtime as "no project target" and degrades to the logical name or `'unknown'` rather than failing. The shared accessors are deliberately strict, so injecting a host there would turn a tolerated case into a throw. Migrating it means deciding that tolerance is no longer wanted.
+- `src/dsl4/action-hat-detector.js` is a declared pure DSL 4.0 core entry. `test/dsl4-architecture.test.mjs` keeps `@kubohiroya/turbowarp-*` imports out of that graph unless the package is registered in `pureSharedPackages`, so it stays a pure function over a runtime-shaped argument.
+- `runtime.ext_scratch3_looks` (actor speech) is Scratch extension internals rather than runtime host surface, and no shared accessor is planned.
 
 Acceptance criteria:
 
@@ -81,9 +97,9 @@ Does not own:
 First migration candidates:
 
 - `resolveDsl4ReloadAnchor` in `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/preview-protocol.js`
+- `src/dsl4/preview-protocol.ts`
 - `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/reload-planner.js`
+- `src/dsl4/reload-planner.ts`
 - `src/builder/dsl4-preview-transport-policy.js`
 - app-neutral pieces of `src/builder/dsl4-preview-reload-overlay.js`
 - app-neutral pieces of `src/builder/dsl4-preview-reload-surface.js`
@@ -97,18 +113,28 @@ Acceptance criteria:
 Migration status:
 
 - `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
+- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
+- `capabilityList` in `src/dsl4/preview-protocol.ts` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
 - The broader `createDsl4PreviewProtocolSession` still remains in `tm-kamishibai` because the current DSL 4.0 wire protocol owns candidate ids, restart choices, source integrity, and `preview.source.staged/committed/deferred` events that are not part of `turbowarp-preview-runtime@0.1.0`.
 - Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
 
+DSL 4.0 core purity rule:
+
+- `test/dsl4-architecture.test.mjs` used to forbid every `@kubohiroya/turbowarp-*` specifier inside a declared DSL 4.0 core import graph, which blocked core entries such as `src/dsl4/preview-protocol.ts` and `src/dsl4/reload-planner.ts` from using any shared package.
+- The rule now allows a named allowlist, `pureSharedPackages`, currently holding only `@kubohiroya/turbowarp-preview-runtime`. Every other `@kubohiroya/turbowarp-*` specifier and `scratch-vm` stay forbidden in core graphs, and `node:` builtins stay forbidden everywhere in them.
+- The allowlist is not a blanket exemption. A companion test asserts that each listed package declares no `dependencies`, `peerDependencies`, or `optionalDependencies`, that its entry module imports nothing, and that its source never names `globalThis`, `window`, `document`, `navigator`, `indexedDB`, `localStorage`, `fetch`, `XMLHttpRequest`, `WebSocket`, `Scratch`, `process`, or `require`. `@kubohiroya/turbowarp-app-shell` fails that guard today, so the intent of the original rule is preserved: the core stays outside platform and I/O dependencies, while app-neutral extraction is no longer blocked by package boundary alone.
+- Adding a package to `pureSharedPackages` is a deliberate decision. If a shared package ever needs platform access, it does not belong in the DSL 4.0 core graph and its core caller should move behind an injected port instead.
+
 ### `@kubohiroya/turbowarp-app-shell`
 
-Status: published as `@kubohiroya/turbowarp-app-shell@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-app-shell>.
+Status: published as `@kubohiroya/turbowarp-app-shell@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-app-shell>. `0.2.0` adds the shell primitives this repository now consumes.
 
 Verification:
 
 - `pnpm run check` passes.
-- `npm install @kubohiroya/turbowarp-app-shell@0.1.0` works from a clean temporary project.
-- Initial API covers locale resolution and disposable runtime message indicators with injected copy/action behavior.
+- `npm install @kubohiroya/turbowarp-app-shell@0.1.0` and `@0.2.0` both work from a clean temporary project.
+- `0.1.0` covers locale resolution and disposable runtime message indicators with injected copy/action behavior.
+- `0.2.0` adds title controls, application menu, loading presenter, and source chooser primitives, plus the injection points those primitives need to keep an app's own presentation: per-part DOM attributes, icon `filter`/`size`/`fontSize`, absolute menu action `position`, menu status `color`, `closeIconMetrics`, and `align: 'center'` source choices.
 
 Owns:
 
@@ -128,21 +154,21 @@ Does not own:
 - Pose/runtime-specific controls.
 - Title backdrop generation policy.
 
-First migration candidates:
+Remaining migration candidates:
 
-- app-neutral pieces of `src/dsl4/platform/standard-app-shell.js`
-- `src/dsl4/platform/runtime-title-controls.js`
-- `src/dsl4/platform/runtime-application-menu.js`
-- `src/dsl4/platform/loading-screen-presenter.js`
-- `src/dsl4/platform/runtime-error-indicator.js`
-- `src/dsl4/platform/runtime-warning-indicator.js`
-- app-neutral pieces of `src/dsl4/platform/runtime-source-chooser.js`
+- app-neutral pieces of `src/dsl4/platform/standard-app-shell.ts`
+- `src/dsl4/platform/runtime-error-indicator.ts`
+- `src/dsl4/platform/runtime-warning-indicator.ts`
 
 Migration status in `tm-kamishibai`:
 
-- `src/dsl4/platform/runtime-error-indicator.js` now delegates browser locale fallback to `resolveAppShellLocale` from `@kubohiroya/turbowarp-app-shell@0.1.0`.
+- `src/dsl4/platform/runtime-title-controls.ts`, `src/dsl4/platform/runtime-application-menu.ts`, `src/dsl4/platform/loading-screen-presenter.ts`, and `src/dsl4/platform/runtime-source-chooser.ts` are now thin adapters over `createAppShellTitleControls`, `createAppShellApplicationMenu`, `createAppShellLoadingPresenter`, and `createAppShellSourceChooser`. Each module keeps its existing Kamishibai-facing signature, so no call site changed.
+- `tm-kamishibai` injects everything app-specific: menu and title copy, the menu icon set and its recolor filter, the stage-relative menu layout including the build-visible arrangement, the close glyph metrics, the source choice set, and every `data-dsl4-*` selector.
+- The rendered DOM is unchanged apart from additive `data-turbowarp-app-shell-*` attributes and the menu/title icon element, which is now a `<span>` with a `background-image` instead of an `<img>`. Both render the same asset at the same container-relative box.
+- `src/dsl4/platform/runtime-error-indicator.ts` delegates browser locale fallback to `resolveAppShellLocale`.
 - The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
-- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.1.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.ts` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
 
 Acceptance criteria:
 

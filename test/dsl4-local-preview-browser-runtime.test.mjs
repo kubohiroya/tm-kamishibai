@@ -94,6 +94,10 @@ function platformFixture(log, loadGate = Promise.resolve()) {
     getTargetForStage() {
       return stage;
     },
+    on() {},
+    startHats() {
+      return [];
+    },
   };
   const vm = {
     runtime,

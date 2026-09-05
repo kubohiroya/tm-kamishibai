@@ -42,6 +42,10 @@ let pendingCurrentDsl4ReleaseSb3;
  * Build the current release once per process. The release is deterministic and its runtime
  * extension is minified with terser, so rebuilding it for every test spends the per-test budget on
  * work that cannot differ. Each caller gets its own archive bytes.
+ *
+ * Whichever caller runs first still pays that build inside its own timeout — measured at about 14
+ * seconds locally, most of it in `createDsl4ReleaseSourceFiles`. Every test calling this therefore
+ * budgets 60 seconds, so the suite does not depend on which of them the runner reaches first.
  */
 async function createCurrentDsl4ReleaseSb3() {
   pendingCurrentDsl4ReleaseSb3 ??= buildCurrentDsl4ReleaseSb3();
@@ -497,8 +501,13 @@ class CdpClient {
   }
 }
 
-async function waitForEvaluation(client, expression, message) {
-  const deadline = Date.now() + 10_000;
+/**
+ * The default deadline suits waits that only need the page to settle. Callers that wait on
+ * TensorFlow.js pose predictions pass a longer one: SwiftShader runs the first inference an order
+ * of magnitude slower than the hardware backend CI uses.
+ */
+async function waitForEvaluation(client, expression, message, {timeoutMs = 10_000} = {}) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await client.evaluate(expression)) return;
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -567,7 +576,7 @@ async function stopChrome(child) {
 
 test(
   'loads the current DSL 4.0 runtime without duplicate TensorFlow.js registration warnings',
-  {timeout: 30_000},
+  {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-chromium-'));
@@ -647,7 +656,7 @@ console.warn = (...values) => {
 
 test(
   'opens the non-embedded release title and disabled Reload menu without loading its story bundle',
-  {timeout: 30_000},
+  {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-chromium-'));
@@ -713,8 +722,8 @@ test(
       const initialTitleScale = await client.evaluate(`(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
-        const icon = website?.querySelector('img');
-        const label = website?.querySelector('span');
+        const icon = website?.querySelector('span[aria-hidden=true]');
+        const label = website?.querySelector('span:not([aria-hidden])');
         const close = document.querySelector('[data-dsl4-title-action=close]');
         const closeRect = close?.getBoundingClientRect();
         const closeLineCenterOffsets = closeRect
@@ -754,8 +763,8 @@ test(
       const expandedTitleScale = await client.evaluate(`(() => {
         const title = document.querySelector('[data-dsl4-title-controls=true]');
         const website = document.querySelector('[data-dsl4-title-action=website]');
-        const icon = website?.querySelector('img');
-        const label = website?.querySelector('span');
+        const icon = website?.querySelector('span[aria-hidden=true]');
+        const label = website?.querySelector('span:not([aria-hidden])');
         return {
           titleWidth: title?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -804,8 +813,8 @@ test(
       const initialMenuScale = await client.evaluate(`(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icon = open?.querySelector('img');
-        const label = open?.querySelector('span');
+        const icon = open?.querySelector('span[aria-hidden=true]');
+        const label = open?.querySelector('span:not([aria-hidden])');
         return {
           menuWidth: menu?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -826,8 +835,8 @@ test(
       const expandedMenuScale = await client.evaluate(`(() => {
         const menu = document.querySelector('[data-dsl4-application-menu=true]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icon = open?.querySelector('img');
-        const label = open?.querySelector('span');
+        const icon = open?.querySelector('span[aria-hidden=true]');
+        const label = open?.querySelector('span:not([aria-hidden])');
         return {
           menuWidth: menu?.getBoundingClientRect().width ?? 0,
           iconWidth: icon?.getBoundingClientRect().width ?? 0,
@@ -880,7 +889,7 @@ test(
         const reload = document.querySelector('[data-dsl4-menu-action=reload]');
         const build = document.querySelector('[data-dsl4-menu-action=build]');
         const open = document.querySelector('[data-dsl4-menu-action=open]');
-        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] img')];
+        const icons = [...document.querySelectorAll('[data-dsl4-menu-action] span[aria-hidden=true]')];
         const runtime = globalThis.Scratch.vm.runtime;
         const stage = runtime.getTargetForStage();
         open.click();
@@ -2565,6 +2574,7 @@ scenes:
           client,
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/2') && globalThis.dsl4LocalPreviewCapabilityFixture?.metrics.predictions > 0",
           'browser-owned first pose step',
+          {timeoutMs: 30_000},
         );
         assert.equal(
           await client.evaluate(
@@ -2659,7 +2669,8 @@ scenes:
               menu?.style.display === 'block' &&
               buttons.length === 4 &&
               buttons.every((button) => getComputedStyle(button).cursor === 'pointer') &&
-              buttons.every((button) => button.querySelector('img')?.src.startsWith('data:image/svg+xml;base64,'));
+              buttons.every((button) => getComputedStyle(button.querySelector('span[aria-hidden=true]'))
+                .backgroundImage.includes('data:image/svg+xml;base64,'));
           })()`,
           'interactive browser-owned application menu',
         );

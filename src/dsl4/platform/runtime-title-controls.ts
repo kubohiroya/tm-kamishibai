@@ -1,3 +1,5 @@
+import {createAppShellTitleControls} from '@kubohiroya/turbowarp-app-shell';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -19,6 +21,9 @@ function requireDocument(value: unknown) {
 /**
  * Render title actions above the Stage without adding Scratch sprites or clones.
  * Pointer events pass through the empty overlay so the Stage itself remains clickable.
+ *
+ * The overlay mechanics live in `@kubohiroya/turbowarp-app-shell`. This module injects the
+ * Kamishibai copy, website icon, stage-relative close glyph metrics, and `data-dsl4-*` hooks.
  */
 export function createDsl4RuntimeTitleControls(options: {
   document: unknown;
@@ -44,137 +49,39 @@ export function createDsl4RuntimeTitleControls(options: {
     }
   }
 
-  const root = requireElement(document.createElement('section'), 'title control root');
-  root.setAttribute('data-dsl4-title-controls', 'true');
-  root.setAttribute('aria-label', 'Kamishibai title controls');
-  root.style.cssText =
-    'position:absolute;inset:0;z-index:2147483600;display:none;box-sizing:border-box;overflow:hidden;pointer-events:none;font-family:sans-serif;container-type:inline-size;';
-  root.style.position = 'absolute';
-  root.style.display = 'none';
+  const controls = createAppShellTitleControls({
+    document: document as unknown as Document,
+    mount: mount as unknown as HTMLElement,
+    locales: options.locales,
+    // Kamishibai starts every surface in English and switches from the application menu.
+    initialLocale: 'en',
+    fallbackLocale: 'en',
+    ariaLabel: 'Kamishibai title controls',
+    websiteIcon: options.websiteIconUrl
+      ? {url: options.websiteIconUrl}
+      : {text: '🌐', size: 'auto', fontSize: '5.5cqw'},
+    // The stage scales with its container, so the close glyph is sized in container units.
+    closeIconMetrics: {size: '4.1667cqw', thickness: '.625cqw', radius: '.3125cqw'},
+    attributes: {
+      root: {'data-dsl4-title-controls': 'true'},
+      website: {'data-dsl4-title-action': 'website'},
+      close: {'data-dsl4-title-action': 'close'},
+      closeIcon: {'data-dsl4-close-icon': 'true'},
+      closeIconLine: {'data-dsl4-close-icon-line': 'true'},
+    },
+    onWebsite: options.onWebsite,
+    onClose: options.onClose,
+    ...(options.onError === undefined ? {} : {onError: options.onError}),
+  });
 
-  let restoreMountPosition: null | (() => void) = null;
-  if (isRecord(mount.style)) {
-    const previous = mount.style.position;
-    if (previous === undefined || previous === '' || previous === 'static') {
-      mount.style.position = 'relative';
-      restoreMountPosition = () => {
-        mount.style.position = previous ?? '';
-      };
-    }
-  }
-
-  const website = document.createElement('button');
-  const websiteIcon = document.createElement(options.websiteIconUrl ? 'img' : 'span');
-  const websiteLabel = document.createElement('span');
-  const close = document.createElement('button');
-  const closeIcon = document.createElement('span');
-  const closeIconForwardLine = document.createElement('span');
-  const closeIconBackwardLine = document.createElement('span');
-  for (const element of [
-    website,
-    websiteIcon,
-    websiteLabel,
-    close,
-    closeIcon,
-    closeIconForwardLine,
-    closeIconBackwardLine,
-  ]) {
-    if (!isRecord(element) || typeof element.appendChild !== 'function') {
-      throw new TypeError('document must create title control elements');
-    }
-  }
-  website.type = 'button';
-  website.setAttribute('data-dsl4-title-action', 'website');
-  website.style.cssText =
-    'position:absolute;left:33.3333%;top:25.5556%;width:33.3333%;height:17.7778%;display:flex;align-items:center;justify-content:center;gap:5%;box-sizing:border-box;border:.4167cqw solid #005f50;border-radius:2.5cqw;background:#007d66;color:#fff;box-shadow:0 .625cqw 1.6667cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;font:inherit;';
-  website.style.cursor = 'pointer';
-  websiteIcon.setAttribute('aria-hidden', 'true');
-  if (options.websiteIconUrl) {
-    websiteIcon.src = options.websiteIconUrl;
-    websiteIcon.alt = '';
-    websiteIcon.style.cssText = 'display:block;width:10cqw;height:10cqw;object-fit:contain;';
-  } else {
-    websiteIcon.style.cssText = 'font-size:5.5cqw;line-height:1;';
-    websiteIcon.textContent = '🌐';
-  }
-  websiteLabel.style.cssText = 'font-size:2.5cqw;line-height:1.15;text-align:center;';
-  website.appendChild(websiteIcon);
-  website.appendChild(websiteLabel);
-
-  close.type = 'button';
-  close.setAttribute('data-dsl4-title-action', 'close');
-  close.style.cssText =
-    'position:absolute;left:92.5%;top:1.1111%;width:6.6667%;height:8.8889%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:.2083cqw solid #005f50;border-radius:50%;background:#007d66;color:#fff;box-shadow:0 .4167cqw 1.25cqw rgba(0,0,0,.2);cursor:pointer;pointer-events:auto;padding:0;';
-  close.style.cursor = 'pointer';
-  closeIcon.setAttribute('data-dsl4-close-icon', 'true');
-  closeIcon.setAttribute('aria-hidden', 'true');
-  closeIcon.style.cssText =
-    'position:relative;display:block;width:4.1667cqw;height:4.1667cqw;pointer-events:none;';
-  for (const [line, rotation] of [
-    [closeIconForwardLine, '45deg'],
-    [closeIconBackwardLine, '-45deg'],
-  ]) {
-    line.setAttribute('data-dsl4-close-icon-line', 'true');
-    line.style.cssText = `position:absolute;left:50%;top:50%;display:block;width:4.1667cqw;height:.625cqw;border-radius:.3125cqw;background:currentColor;transform:translate(-50%,-50%) rotate(${rotation});transform-origin:center;`;
-    closeIcon.appendChild(line);
-  }
-  close.appendChild(closeIcon);
-
-  const reportFailure = (failure: unknown) => {
-    try {
-      options.onError?.(failure);
-    } catch {
-      // Title control error observers cannot change the application lifecycle.
-    }
-  };
-  const invoke = (event: Record<string, any>, operation: () => unknown) => {
-    event.preventDefault?.();
-    event.stopPropagation?.();
-    try {
-      Promise.resolve(operation()).catch(reportFailure);
-    } catch (error) {
-      reportFailure(error);
-    }
-  };
-  const onWebsiteClick = (event: Record<string, any>) => invoke(event, options.onWebsite);
-  const onCloseClick = (event: Record<string, any>) => invoke(event, options.onClose);
-  website.addEventListener('click', onWebsiteClick);
-  close.addEventListener('click', onCloseClick);
-  root.appendChild(website);
-  root.appendChild(close);
-  mount.appendChild(root);
-
-  let locale: 'en' | 'ja' = 'en';
-  let disposed = false;
-
-  function render() {
-    websiteLabel.textContent = options.locales[locale].website;
-    website.setAttribute('aria-label', options.locales[locale].website);
-    close.setAttribute('aria-label', options.locales[locale].close);
-    close.setAttribute('title', options.locales[locale].close);
-  }
-
-  function show(nextLocale = locale) {
-    if (disposed) throw new TypeError('title controls are disposed');
-    locale = nextLocale === 'ja' ? 'ja' : 'en';
-    render();
-    root.style.display = 'block';
-    return locale;
-  }
-
-  function hide() {
-    if (!disposed) root.style.display = 'none';
-  }
-
-  function dispose() {
-    if (disposed) return;
-    disposed = true;
-    website.removeEventListener('click', onWebsiteClick);
-    close.removeEventListener('click', onCloseClick);
-    root.remove?.();
-    restoreMountPosition?.();
-  }
-
-  render();
-  return Object.freeze({element: root, show, hide, dispose});
+  return Object.freeze({
+    element: controls.element,
+    show(nextLocale?: 'en' | 'ja') {
+      return controls.show(
+        nextLocale === undefined ? undefined : nextLocale === 'ja' ? 'ja' : 'en',
+      );
+    },
+    hide: () => controls.hide(),
+    dispose: () => controls.dispose(),
+  });
 }

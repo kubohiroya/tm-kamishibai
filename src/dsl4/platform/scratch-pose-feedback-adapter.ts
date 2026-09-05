@@ -12,9 +12,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function adapterError(code: string, message: string) {
+function adapterError(code: string, message: string, cause?: unknown) {
   const error = new Error(message);
   Object.defineProperty(error, 'code', {value: code});
+  if (cause !== undefined) Object.defineProperty(error, 'cause', {value: cause});
   return error;
 }
 
@@ -31,11 +32,32 @@ function parseScratchPercentage(value: unknown) {
   return number;
 }
 
-function resolveStage(runtime: unknown) {
-  if (!isRecord(runtime) || typeof runtime.getTargetForStage !== 'function') {
-    throw new TypeError('TurboWarp runtime must provide getTargetForStage');
+function validateRuntimeHost(value: unknown) {
+  if (
+    !isRecord(value) ||
+    typeof value.getStageTarget !== 'function' ||
+    typeof value.getMonitorBlocks !== 'function' ||
+    typeof value.getMonitorState !== 'function'
+  ) {
+    throw new TypeError('Scratch pose feedback requires an injected TurboWarp runtime host');
   }
-  const stage = runtime.getTargetForStage();
+  return value as unknown as {
+    getStageTarget: () => unknown;
+    getMonitorBlocks: () => {
+      getBlock: (id: string) => unknown;
+      getScripts: () => string[];
+      changeBlock: (change: {id: string; element: string; value: unknown}) => void;
+    };
+    getMonitorState: () => {
+      has: (id: string) => boolean;
+      get: (id: string) => unknown;
+      valueSeq: () => Iterable<unknown>;
+    };
+  };
+}
+
+function resolveStage(runtimeHost: ReturnType<typeof validateRuntimeHost>) {
+  const stage = runtimeHost.getStageTarget();
   if (
     !isRecord(stage) ||
     stage.isStage !== true ||
@@ -79,34 +101,17 @@ function monitorProperty(record: unknown, property: string) {
  * Scratch's data_showvariable/data_hidevariable primitives.
  */
 function createMonitorChannel(
-  runtime: Record<string, unknown>,
+  runtimeHost: ReturnType<typeof validateRuntimeHost>,
   variable: Record<string, unknown>,
   name: string,
 ) {
-  const monitorBlocksCandidate = runtime.monitorBlocks;
-  const getMonitorState = runtime.getMonitorState;
-  if (
-    !isRecord(monitorBlocksCandidate) ||
-    typeof monitorBlocksCandidate.getBlock !== 'function' ||
-    typeof monitorBlocksCandidate.getScripts !== 'function' ||
-    typeof monitorBlocksCandidate.changeBlock !== 'function' ||
-    typeof getMonitorState !== 'function'
-  ) {
-    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'TurboWarp monitor API is unavailable');
-  }
-  const monitorBlocks = monitorBlocksCandidate as {
-    getBlock: Function;
-    getScripts: Function;
-    changeBlock: Function;
-  };
-  const monitorState = getMonitorState.call(runtime);
-  if (
-    !isRecord(monitorState) ||
-    typeof monitorState.has !== 'function' ||
-    typeof monitorState.get !== 'function' ||
-    typeof monitorState.valueSeq !== 'function'
-  ) {
-    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'TurboWarp monitor state is unavailable');
+  let monitorBlocks: ReturnType<typeof runtimeHost.getMonitorBlocks>;
+  let monitorState: ReturnType<typeof runtimeHost.getMonitorState>;
+  try {
+    monitorBlocks = runtimeHost.getMonitorBlocks();
+    monitorState = runtimeHost.getMonitorState();
+  } catch (error) {
+    throw adapterError('K4-TW-POSE-FEEDBACK-001', 'TurboWarp monitor API is unavailable', error);
   }
 
   const id = variable.id as string;
@@ -183,7 +188,9 @@ function createMonitorChannel(
     readVisible,
     writeVisible(visible: boolean) {
       if (readVisible() === visible) return;
-      monitorBlocks.changeBlock({id, element: 'checkbox', value: visible}, runtime);
+      // TurboWarp's Blocks instance already holds its own runtime, so changeBlock takes only the
+      // change record. The runtime argument this used to pass was ignored.
+      monitorBlocks.changeBlock({id, element: 'checkbox', value: visible});
       if (readVisible() !== visible) {
         throw adapterError(
           'K4-TW-POSE-FEEDBACK-001',
@@ -242,7 +249,8 @@ function throwCollected(errors: unknown[], message: string) {
  * values produced by the Scratch runtime. Invalid final pairs are restored atomically.
  */
 export function createDsl4ScratchPoseFeedbackAdapter(options: {
-  runtime: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost: unknown;
   mode: 'scratchMirror' | 'scratchBinding';
   variableNames?: {confidence: string; progress: string};
 }) {
@@ -263,7 +271,8 @@ export function createDsl4ScratchPoseFeedbackAdapter(options: {
     throw new TypeError('Scratch pose feedback variableNames must provide two distinct names');
   }
 
-  const stage = resolveStage(options.runtime);
+  const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  const stage = resolveStage(runtimeHost);
   const confidenceVariable = resolveVariable(stage, variableNames.confidence);
   const progressVariable = resolveVariable(stage, variableNames.progress);
   if (confidenceVariable === progressVariable) {
@@ -276,13 +285,16 @@ export function createDsl4ScratchPoseFeedbackAdapter(options: {
   } catch (error) {
     throw error;
   }
-  const runtime = options.runtime as Record<string, unknown>;
   const confidenceMonitor = createMonitorChannel(
-    runtime,
+    runtimeHost,
     confidenceVariable,
     variableNames.confidence,
   );
-  const progressMonitor = createMonitorChannel(runtime, progressVariable, variableNames.progress);
+  const progressMonitor = createMonitorChannel(
+    runtimeHost,
+    progressVariable,
+    variableNames.progress,
+  );
 
   let disposed = false;
   let active = false;

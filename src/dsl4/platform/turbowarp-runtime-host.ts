@@ -2,7 +2,10 @@ import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.j
 import {validateCompositionMethods} from './composition-contract.js';
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
-import {createTurboWarpBroadcastPort} from '@kubohiroya/turbowarp-runtime-host';
+import {
+  createTurboWarpBroadcastPort,
+  createTurboWarpRuntimeHost,
+} from '@kubohiroya/turbowarp-runtime-host';
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
@@ -32,6 +35,7 @@ import {
 
 export type HostPortContext = Readonly<{
   runtime: unknown;
+  runtimeHost: unknown;
   storyDocument: Readonly<Record<string, unknown>>;
 }>;
 
@@ -424,9 +428,10 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   const cacheIdentity = injectedCacheIdentity ?? embeddedCacheIdentity;
 
   try {
+    const turboWarpHost = createTurboWarpRuntimeHost({runtime: options.runtime});
     if (broadcastMessageAndWaitEnabled) {
       broadcastActionPort = createTurboWarpBroadcastPort({
-        runtime: options.runtime,
+        runtime: turboWarpHost.runtime,
         errorCodePrefix: 'K4',
       });
     }
@@ -455,7 +460,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       : null;
     if (feedbackMode === 'scratchMirror' || feedbackMode === 'scratchBinding') {
       scratchPoseFeedbackAdapter = createDsl4ScratchPoseFeedbackAdapter({
-        runtime: options.runtime,
+        runtimeHost: turboWarpHost,
         mode: feedbackMode,
       });
     }
@@ -591,7 +596,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           ? composition.createAudioVoice.bind(composition)
           : undefined);
       crossfadePlatform = createDsl4TurboWarpCrossfadePlatform({
-        runtime: options.runtime,
+        runtimeHost: turboWarpHost,
         ...(options.actorScheduler === undefined ? {} : {scheduler: options.actorScheduler}),
         ...(options.actorFrameMilliseconds === undefined
           ? {}
@@ -618,7 +623,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     if (standaloneAdvanceIndicatorEnabled) {
       const activeAssetSession = assetSession;
       bubbleAdvanceIndicatorPresenter = createDsl4BubbleAdvanceIndicatorPresenter({
-        runtime: options.runtime,
+        runtimeHost: turboWarpHost,
         getAssetResource: (assetId: string) => activeAssetSession.getAssetResource(assetId),
         ...(options.createAdvanceIndicatorImage === undefined
           ? {}
@@ -671,7 +676,11 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     hostPort = validateHostPort(
       typeof options.createHostPort === 'function'
         ? await options.createHostPort(
-            Object.freeze({runtime: options.runtime, storyDocument: component.storyDocument}),
+            Object.freeze({
+              runtime: turboWarpHost.runtime,
+              runtimeHost: turboWarpHost,
+              storyDocument: component.storyDocument,
+            }),
           )
         : undefined,
     );

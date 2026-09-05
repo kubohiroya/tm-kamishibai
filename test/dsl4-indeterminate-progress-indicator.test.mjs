@@ -106,7 +106,8 @@ test('Standard app shell wires loading and camera waits to the shared indicator'
   const loadingScreen = findByAttribute(document.body, 'data-dsl4-loading-screen', 'true')[0];
   assert.ok(loadingScreen);
   assert.equal(loadingScreen.style.position, 'absolute');
-  assert.equal(loadingScreen.style.display, 'block');
+  assert.equal(loadingScreen.style.display, 'flex');
+  assert.equal(loadingScreen.getAttribute('aria-hidden'), 'true');
   assert.equal(loadingScreen.children[0].src, 'blob:loading-backdrop');
   assert.equal(loadingScreen.children[1].src, 'blob:loading-costume');
   hostOptions.setLoading({visible: false}, {});

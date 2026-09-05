@@ -47,14 +47,26 @@ function validateScheduler(value: unknown) {
  */
 export function createDsl4BubbleAdvanceIndicatorPresenter(options: unknown) {
   if (!isRecord(options)) throw new TypeError('Bubble advance indicator options are required');
-  if (!isRecord(options.runtime) || !isRecord(options.runtime.renderer)) {
-    throw new TypeError('Bubble advance indicators require a TurboWarp renderer');
+  if (
+    !isRecord(options.runtimeHost) ||
+    typeof options.runtimeHost.getRenderer !== 'function' ||
+    typeof options.runtimeHost.requestRedraw !== 'function'
+  ) {
+    throw new TypeError('Bubble advance indicators require an injected TurboWarp runtime host');
   }
   if (typeof options.getAssetResource !== 'function') {
     throw new TypeError('getAssetResource must be a function');
   }
-  const runtime = options.runtime as Record<string, any>;
-  const renderer = runtime.renderer as Record<string, any>;
+  const runtimeHost = options.runtimeHost as {
+    getRenderer: () => unknown;
+    requestRedraw: () => void;
+  };
+  let renderer: Record<string, any>;
+  try {
+    renderer = runtimeHost.getRenderer() as Record<string, any>;
+  } catch (error) {
+    throw new TypeError('Bubble advance indicators require a TurboWarp renderer', {cause: error});
+  }
   const getAssetResource = options.getAssetResource;
   const createImage = options.createImage ?? defaultCreateImage;
   if (typeof createImage !== 'function') throw new TypeError('createImage must be a function');
@@ -67,7 +79,7 @@ export function createDsl4BubbleAdvanceIndicatorPresenter(options: unknown) {
     skin._textureDirty = true;
     skin.emitWasAltered();
     target.onTargetVisualChange?.();
-    runtime.requestRedraw?.();
+    runtimeHost.requestRedraw();
   }
 
   function installRenderer(target: Record<string, any>, active: Record<string, any>) {

@@ -1,3 +1,5 @@
+import {normalizeCapabilities} from '@kubohiroya/turbowarp-preview-runtime';
+
 import {
   dsl4PreviewOptionalCapabilities,
   dsl4PreviewProtocolVersion,
@@ -50,23 +52,18 @@ function validateSessionId(value: unknown) {
   return value;
 }
 
+/**
+ * Delegate app-neutral capability token grammar, duplicate rejection, and ordering to the shared
+ * preview runtime, then keep the DSL 4.0 required capability set as a local policy check.
+ */
 function validateCapabilities(value: unknown) {
-  if (!Array.isArray(value)) throw new TypeError('capabilities must be an array');
-  const capabilities = value.map((capability) => {
-    if (typeof capability !== 'string' || !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u.test(capability)) {
-      throw new TypeError('capabilities contains an invalid capability');
-    }
-    return capability;
-  });
-  if (new Set(capabilities).size !== capabilities.length) {
-    throw new TypeError('capabilities must not contain duplicates');
-  }
+  const capabilities = normalizeCapabilities(value, 'capabilities');
   for (const required of dsl4PreviewRequiredCapabilities) {
     if (!capabilities.includes(required)) {
       throw new TypeError(`capabilities is missing required capability ${required}`);
     }
   }
-  return Object.freeze([...capabilities].sort());
+  return capabilities;
 }
 
 function optionalCallback(value: unknown, name: string): Function | undefined {
