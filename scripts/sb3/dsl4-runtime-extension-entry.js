@@ -1,3 +1,5 @@
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+
 import schema from '../../schema/dsl-4.schema.json' with {type: 'json'};
 
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
@@ -164,8 +166,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.lastStoryVariableWriteResult = false;
     this.storyVariableWriteResults = new WeakMap();
 
-    const runtime = Scratch.vm.runtime;
-    runtime.on('PROJECT_STOP_ALL', () =>
+    this.turboWarpHost = createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true});
+    this.turboWarpHost.onRuntimeEvent('PROJECT_STOP_ALL', () =>
       this.enqueue(() => this.stop('project-stop-all'), 'shutdown'),
     );
     if (DSL4_AUTHORING_PROFILE) this.installDropTarget();
@@ -479,10 +481,10 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   requestCloseTitle() {
-    const threads = this.Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+    const threads = this.turboWarpHost.startHats('event_whenbroadcastreceived', {
       BROADCAST_OPTION: 'closeTitle',
     });
-    if (!Array.isArray(threads) || threads.length === 0) return this.closeTitle();
+    if (threads.length === 0) return this.closeTitle();
     return undefined;
   }
 
@@ -762,7 +764,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   hideAllDisplayTargets() {
-    const targets = this.Scratch?.vm?.runtime?.targets;
+    const targets = this.turboWarpHost.runtime.targets;
     if (!Array.isArray(targets)) return;
     for (const target of targets) {
       if (target?.isStage === true) continue;
@@ -771,8 +773,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showScratchTitle(locale) {
-    const runtime = this.Scratch.vm.runtime;
-    const stage = runtime.getTargetForStage();
+    const stage = this.turboWarpHost.getStageTarget();
     this.shell?.hideTitle();
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
@@ -786,8 +787,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   showScratchMenu(locale) {
-    const runtime = this.Scratch.vm.runtime;
-    const stage = runtime.getTargetForStage();
+    const stage = this.turboWarpHost.getStageTarget();
     this.hideScratchTitle();
     this.sourceChooser?.hide();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
@@ -931,6 +931,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.lastError = '';
 
     const Scratch = this.Scratch;
+    const turboWarpHost = this.turboWarpHost;
     const packagedProject = JSON.parse(Scratch.vm.toJSON());
     const project = projectOverride ?? this.selectedProject ?? packagedProject;
     const applicationMode =
@@ -974,11 +975,11 @@ class KamishibaiDsl4RuntimeExtension {
         }
         if (result.status === 'finished') {
           await shell.runtimeHost.prepareMenu();
-          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+          turboWarpHost.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showCover',
           });
           this.showScratchMenu(this.titleLocale);
-          Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+          turboWarpHost.startHats('event_whenbroadcastreceived', {
             BROADCAST_OPTION: 'showMenu',
           });
           this.status = 'menu';
@@ -1016,9 +1017,9 @@ class KamishibaiDsl4RuntimeExtension {
                 onSessionBackingFatalError: (failure) => this.showSessionBackingFatal(failure),
               }
             : {}),
-          runtime: Scratch.vm.runtime,
+          runtime: turboWarpHost.runtime,
           onTitleStart() {
-            Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            turboWarpHost.startHats('event_whenbroadcastreceived', {
               BROADCAST_OPTION: 'closeTitle',
             });
           },
@@ -1064,7 +1065,7 @@ class KamishibaiDsl4RuntimeExtension {
             this.pendingStart = null;
             this.hideScratchTitle();
             this.showScratchMenu(this.titleLocale);
-            Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            turboWarpHost.startHats('event_whenbroadcastreceived', {
               BROADCAST_OPTION: 'showMenu',
             });
             this.status = 'menu';

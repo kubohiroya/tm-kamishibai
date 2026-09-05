@@ -195,6 +195,29 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
   }
 });
 
+test('routes runtime extension Scratch VM access through the shared runtime host', async () => {
+  const sources = new Map();
+  for (const relative of [
+    path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'),
+    path.join('scripts', 'sb3', 'dsl4-runtime-authoring-profile.js'),
+  ]) {
+    sources.set(relative, await readFile(path.join(repositoryRoot, relative), 'utf8'));
+  }
+
+  for (const [relative, source] of sources) {
+    assert.doesNotMatch(source, /\bvm\.runtime\b/u, relative);
+    assert.doesNotMatch(source, /\bgetTargetForStage\b/u, relative);
+    for (const match of source.matchAll(/(\S*?)startHats\s*\(/gu)) {
+      assert.match(match[1], /^(?:this\.)?turboWarpHost\.$/u, `${relative}: ${match[0]}`);
+    }
+  }
+
+  const entry = sources.get(path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'));
+  assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-host'/u);
+  assert.match(entry, /createTurboWarpRuntimeHost\(\{Scratch, requireUnsandboxed: true\}\)/u);
+  assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
+});
+
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
   const source = await readFile(
     path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js'),
