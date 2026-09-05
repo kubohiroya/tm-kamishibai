@@ -13,6 +13,11 @@ import {runDsl4LocalPreviewCommand} from './dsl4-local-preview-command.js';
 import {dsl4LocalPreviewBrowserBootstrapMaximums} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {
+  Dsl4BlockSourceExportError,
+  exportDsl4BlockSourcesToYaml,
+  formatDsl4BlockSourceExportFailure,
+} from './dsl4-block-source-export.js';
+import {
   formatDsl4Diagnostic,
   serializeDsl4ValidationResult,
   validateDsl4SourceFile,
@@ -146,6 +151,10 @@ export function usage() {
   tm-kamishibai validate-dsl4 --input STORY.k4.yml \\
     [--format pretty|json]
 
+  tm-kamishibai export-block-dsl --input PROJECT.sb3 --output-dir dist \\
+    [--name NAME] [--format pretty|json] [--max-source-files N] \\
+    [--max-total-source-bytes N] [--max-include-depth N]
+
   tm-kamishibai audit-dsl4-assets --project-root DIR \\
     [--source STORY.k4.yml] [--source-id ID] \\
     [--source-manifest project.source.yml] \\
@@ -241,6 +250,14 @@ convert-dsl4-assets options:
 validate-dsl4 options:
   --format FORMAT         Diagnostic output: pretty (default) or json
 
+export-block-dsl options:
+  --name NAME                   Work name for the root YAML and the ZIP package
+                                (defaults to the input SB3 filename stem)
+  --format FORMAT               Report output: pretty (default) or json
+  --max-source-files N          Maximum files in the include graph
+  --max-total-source-bytes N    Maximum graph total and composed source bytes
+  --max-include-depth N         Maximum include graph depth
+
 audit-dsl4-assets options:
   --enable-source-includes       Enable multi-file include processing
   --max-source-files N          Maximum files in the include graph
@@ -276,6 +293,12 @@ build-dsl4 writes one self-contained SB3 after revalidating the disk candidate.
 preview-dsl4 builds a development-only browser runtime in memory, opens the system
 browser, and reports success only after the authenticated runtime-ready acknowledgement.
 validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnostics.
+export-block-dsl reads the DSL declaration hats embedded in an SB3, sends them through the Block
+frontend, Source Graph, and the same schema and semantic validation a YAML project gets, and only
+then serializes YAML. A story without includes becomes one NAME.k4.yml; a story with includes
+becomes NAME-k4.zip holding NAME-k4/ with the root and every referenced module. Every Sprite that
+declares a DSL source must be reachable through an include. Invalid block sources fail with
+source-located diagnostics instead of writing plausible YAML.
 audit-dsl4-assets resolves a frozen asset lock without network access or file writes.
 lock-dsl4-assets fetches only allowlisted HTTPS providers and atomically writes a canonical lock.
 vendor-dsl4-assets fetches and verifies lock providers, then atomically installs a content-addressed
@@ -284,6 +307,58 @@ convert-dsl4-assets writes one new authoring directory and never overwrites inpu
 outside its content-addressed rsync payload names. It never performs remote deletion.
 convert-dsl4 never modifies its DSL 3.2 input and atomically replaces only the
 explicitly selected YAML output.`;
+}
+
+/**
+ * @param {string[]} arguments_
+ * @returns {{
+ *   input: string,
+ *   outputDir: string,
+ *   name?: string,
+ *   format: 'pretty' | 'json',
+ *   maxSourceBytes: number,
+ *   maxSourceFiles?: number,
+ *   maxTotalSourceBytes?: number,
+ *   maxIncludeDepth?: number,
+ * }}
+ */
+function parseExportBlockDsl4Arguments(arguments_) {
+  const {values} = parseCliFlagAndValueOptions(arguments_, {
+    flagOptions: new Set(),
+    valueOptions: new Set([
+      '--input',
+      '--output-dir',
+      '--name',
+      '--format',
+      '--max-source-bytes',
+      '--max-source-files',
+      '--max-total-source-bytes',
+      '--max-include-depth',
+    ]),
+  });
+  requireCliValueOptions(values, ['--input', '--output-dir']);
+  const format = values.get('--format') ?? 'pretty';
+  if (format !== 'pretty' && format !== 'json') {
+    throw new Sb3BuilderError('--format must be either pretty or json.', {stage: 'cli'});
+  }
+  const maxSourceBytes = resolveDsl4CliDefaultLimit(values, '--max-source-bytes');
+  const maxTotalSourceBytes = values.has('--max-total-source-bytes')
+    ? readCliInteger(values, '--max-total-source-bytes', maxSourceBytes)
+    : undefined;
+  return {
+    input: path.resolve(/** @type {string} */ (values.get('--input'))),
+    outputDir: path.resolve(/** @type {string} */ (values.get('--output-dir'))),
+    ...(values.has('--name') ? {name: /** @type {string} */ (values.get('--name'))} : {}),
+    format,
+    maxSourceBytes,
+    ...(values.has('--max-source-files')
+      ? {maxSourceFiles: readCliInteger(values, '--max-source-files', 1)}
+      : {}),
+    ...(maxTotalSourceBytes === undefined ? {} : {maxTotalSourceBytes}),
+    ...(values.has('--max-include-depth')
+      ? {maxIncludeDepth: readCliInteger(values, '--max-include-depth', 1)}
+      : {}),
+  };
 }
 
 /**
@@ -1317,7 +1392,7 @@ function parsePreviewDsl4Arguments(rest) {
 
 /**
  * @param {string[]} arguments_
- * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'convert-dsl4-assets', options: ReturnType<typeof parseConvertDsl4AssetsArguments>} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>} | {action: 'audit-dsl4-assets', options: ReturnType<typeof parseAuditDsl4AssetArguments>} | {action: 'lock-dsl4-assets', options: ReturnType<typeof parseLockDsl4AssetArguments>} | {action: 'vendor-dsl4-assets', options: ReturnType<typeof parseVendorDsl4AssetArguments>}}
+ * @returns {{action: 'help'} | {action: 'version'} | {action: 'build', options: Parameters<typeof buildSb3Bundle>[0]} | {action: 'build-dsl4', options: Dsl4CliOptions} | {action: 'preview-dsl4', options: Dsl4PreviewCliOptions} | {action: 'convert', options: Parameters<typeof convertDsl32File>[0]} | {action: 'convert-dsl4-assets', options: ReturnType<typeof parseConvertDsl4AssetsArguments>} | {action: 'validate-dsl4', options: ReturnType<typeof parseValidateDsl4Arguments>} | {action: 'export-block-dsl', options: ReturnType<typeof parseExportBlockDsl4Arguments>} | {action: 'audit-dsl4-assets', options: ReturnType<typeof parseAuditDsl4AssetArguments>} | {action: 'lock-dsl4-assets', options: ReturnType<typeof parseLockDsl4AssetArguments>} | {action: 'vendor-dsl4-assets', options: ReturnType<typeof parseVendorDsl4AssetArguments>}}
  */
 export function parseCliArguments(arguments_) {
   if (arguments_.includes('--help') || arguments_.includes('-h')) return {action: 'help'};
@@ -1338,6 +1413,9 @@ export function parseCliArguments(arguments_) {
   if (command === 'validate-dsl4') {
     return {action: 'validate-dsl4', options: parseValidateDsl4Arguments(rest)};
   }
+  if (command === 'export-block-dsl') {
+    return {action: 'export-block-dsl', options: parseExportBlockDsl4Arguments(rest)};
+  }
   if (command === 'audit-dsl4-assets') {
     return {action: 'audit-dsl4-assets', options: parseAuditDsl4AssetArguments(rest)};
   }
@@ -1351,7 +1429,7 @@ export function parseCliArguments(arguments_) {
     return {action: 'preview-dsl4', options: parsePreviewDsl4Arguments(rest)};
   }
   throw new Sb3BuilderError(
-    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
+    `Expected the audit-dsl4-assets, build-sb3, build-dsl4, convert-dsl4, convert-dsl4-assets, export-block-dsl, lock-dsl4-assets, preview-dsl4, vendor-dsl4-assets, or validate-dsl4 command, received ${command ?? '(none)'}.`,
     {stage: 'cli'},
   );
 }
@@ -1359,7 +1437,7 @@ export function parseCliArguments(arguments_) {
 /**
  * @param {string[]} arguments_
  * @param {{stdout?: Pick<NodeJS.WriteStream, 'write'>, stderr?: Pick<NodeJS.WriteStream, 'write'>}} [io]
- * @param {{runPreview?: typeof runDsl4LocalPreviewCommand, runAssetAudit?: typeof auditDsl4AssetDistribution, runAssetConverter?: typeof convertDsl4ProjectAssets, runAssetLock?: typeof generateDsl4AssetDistributionLockFile, runAssetVendor?: typeof vendorDsl4AssetDistribution}} [dependencies]
+ * @param {{runPreview?: typeof runDsl4LocalPreviewCommand, runAssetAudit?: typeof auditDsl4AssetDistribution, runAssetConverter?: typeof convertDsl4ProjectAssets, runAssetLock?: typeof generateDsl4AssetDistributionLockFile, runAssetVendor?: typeof vendorDsl4AssetDistribution, runBlockDslExport?: typeof exportDsl4BlockSourcesToYaml}} [dependencies]
  */
 export async function runCli(arguments_, io = {}, dependencies = {}) {
   const stdout = io.stdout ?? process.stdout;
@@ -1433,6 +1511,47 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
       }
     }
     return {...result, exitCode: result.ok ? 0 : 1};
+  }
+  if (parsed.action === 'export-block-dsl') {
+    const runBlockDslExport = dependencies.runBlockDslExport ?? exportDsl4BlockSourcesToYaml;
+    if (typeof runBlockDslExport !== 'function') {
+      throw new TypeError('runBlockDslExport must be a function');
+    }
+    const displaySource = path.basename(parsed.options.input);
+    try {
+      const result = await runBlockDslExport({
+        ...parsed.options,
+        sourceFrontend: createDsl4ProductionSourceFrontend(schema, {
+          limits: {
+            maxCanonicalSourceBytes:
+              parsed.options.maxTotalSourceBytes ?? parsed.options.maxSourceBytes,
+          },
+        }),
+      });
+      if (parsed.options.format === 'json') {
+        stdout.write(`${JSON.stringify({version: 1, ok: true, ...result})}\n`);
+      } else {
+        stdout.write(`Exported ${path.basename(result.outputPath)}\n`);
+        for (const file of result.files) stdout.write(`  ${file.path}\n`);
+      }
+      return {...result, exitCode: 0};
+    } catch (error) {
+      if (!(error instanceof Dsl4BlockSourceExportError)) throw error;
+      if (parsed.options.format === 'json') {
+        stdout.write(
+          `${JSON.stringify({
+            version: 1,
+            ok: false,
+            code: error.code,
+            message: error.message,
+            diagnostics: error.diagnostics,
+          })}\n`,
+        );
+      } else {
+        stderr.write(formatDsl4BlockSourceExportFailure(error, displaySource));
+      }
+      throw Object.assign(error, {reported: true, exitCode: 1});
+    }
   }
   if (parsed.action === 'audit-dsl4-assets') {
     const runAssetAudit = dependencies.runAssetAudit ?? auditDsl4AssetDistribution;
