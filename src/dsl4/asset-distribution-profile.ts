@@ -541,8 +541,8 @@ export function resolveDsl4AssetDistributionProfile(
   const resolvedAssets = Object.fromEntries(
     storyIds.map((assetId) => {
       const asset = storyAssets[assetId];
-      const lockAssetEntry = lock.assets[assetId] as Readonly<Record<string, any>>;
-      if (lockAssetEntry.kind !== asset.kind) {
+      const lockAssetEntry = lock.assets[assetId] as Readonly<Record<string, any>> | undefined;
+      if (!lockAssetEntry || lockAssetEntry.kind !== asset.kind) {
         fail('K4-ASSET-LOCK-001', `Asset ${assetId} lock kind is stale`);
       }
       const declared = declaredProviders(assetId, storyProvider(asset), config.providers[assetId]);
