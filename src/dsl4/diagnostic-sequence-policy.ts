@@ -276,12 +276,13 @@ export function normalizeDsl4DiagnosticSequence(input: unknown, policy: unknown)
   let diagnostics = sorted;
   let truncation = null;
 
-  if (sorted.length > maxDiagnostics) {
-    const firstOmittedIndex = maxDiagnostics - 1;
-    const omitted = sorted.slice(firstOmittedIndex);
+  const firstOmittedIndex = maxDiagnostics - 1;
+  const omitted = sorted.slice(firstOmittedIndex);
+  const [firstOmitted] = omitted;
+  // The slice starts inside the sequence whenever it is longer than the limit.
+  if (sorted.length > maxDiagnostics && firstOmitted) {
     const omittedErrors = omitted.filter((item) => item.severity === 'error').length;
     const omittedWarnings = omitted.length - omittedErrors;
-    const firstOmitted = omitted[0];
     const severity = (omittedErrors > 0 ? 'error' : 'warning') as 'error' | 'warning';
     const sentinel = {
       version: 1 as const,

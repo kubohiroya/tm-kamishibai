@@ -431,7 +431,8 @@ export function validateDsl4Semantics(
     const scenePath = propertyPath('$.scenes', sceneId);
     const actionBasePath = Array.isArray(scene) ? scenePath : `${scenePath}.actions`;
     sceneActions(scene).forEach((action, actionIndex) => {
-      const [key] = Object.keys(action);
+      // A validated action carries exactly one command key.
+      const [key = ''] = Object.keys(action);
       const value = action[key];
       const actionPath = `${actionBasePath}[${actionIndex}][${JSON.stringify(key)}]`;
       if (value && typeof value === 'object' && !Array.isArray(value)) {
