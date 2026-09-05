@@ -131,13 +131,13 @@ function runtimeDiagnostic(
 
 /** The structured-data lifecycle the controller drives around each story, scene, and action. */
 interface StructuredDataIntegration {
-  beginStory(...parameters: any[]): unknown;
-  dispose?(...parameters: any[]): unknown;
+  beginStory(): unknown;
+  dispose?(): unknown;
   endStory(reason: string): unknown;
-  enterScene(...parameters: any[]): unknown;
-  beginNextAction(...parameters: any[]): unknown;
+  enterScene(sceneId: string, options: {actionIndex: number}): unknown;
+  beginNextAction(): unknown;
   releaseAction(reason: string): unknown;
-  currentActionResources(...parameters: any[]): unknown;
+  currentActionResources(): unknown;
 }
 
 export function createDsl4RuntimeController({

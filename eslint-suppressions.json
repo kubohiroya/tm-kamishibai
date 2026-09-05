@@ -225,7 +225,7 @@
   },
   "src/dsl4/asset-reload-protocol.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 11
+      "count": 1
     }
   },
   "src/dsl4/asset-reload-transaction.ts": {
@@ -248,7 +248,7 @@
   },
   "src/dsl4/browser-asset-reload-pipeline.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 16
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
@@ -336,7 +336,7 @@
   },
   "src/dsl4/live-reload-session.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 19
+      "count": 9
     }
   },
   "src/dsl4/navigation-session.ts": {
@@ -585,7 +585,7 @@
   },
   "src/dsl4/runtime-controller.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 13
+      "count": 8
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 10

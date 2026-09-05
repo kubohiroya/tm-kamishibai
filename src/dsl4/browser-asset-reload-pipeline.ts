@@ -35,12 +35,12 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
    * whichever the surface provides, so every member here is optional.
    */
   reloadSurface?: {
-    submitCandidate?(...parameters: any[]): any;
-    submitReloadCandidate?(...parameters: any[]): any;
-    setDiagnostic?(...parameters: any[]): any;
-    setReloadDiagnostic?(...parameters: any[]): any;
-    setWatchState?(...parameters: any[]): any;
-    setReloadWatchState?(...parameters: any[]): any;
+    submitCandidate?(candidate: Readonly<Record<string, unknown>>): unknown;
+    submitReloadCandidate?(candidate: Readonly<Record<string, unknown>>): unknown;
+    setDiagnostic?(kind: string, diagnostic: unknown): unknown;
+    setReloadDiagnostic?(kind: string, diagnostic: unknown): unknown;
+    setWatchState?(kind: string, state: unknown): unknown;
+    setReloadWatchState?(kind: string, state: unknown): unknown;
   };
   restartGeneration?: (request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   resolveReloadAvailability?: (event: Readonly<Record<string, unknown>>) => unknown;

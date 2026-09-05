@@ -27,12 +27,16 @@ function validateStoryDocument(value: unknown) {
  * members belong to sessions that expose the debugger surface.
  */
 export interface LiveReloadRuntimeSession {
-  start(...parameters: any[]): any;
-  stop(...parameters: any[]): any;
-  dispose(...parameters: any[]): any;
+  start(options?: {
+    sceneId?: string;
+    actionIndex?: number;
+    variables?: Readonly<Record<string, string | number | boolean>>;
+  }): Promise<unknown>;
+  stop(reason?: string): unknown;
+  dispose(reason?: string): unknown;
   getState(): Readonly<Record<string, any>>;
-  quiesce(...parameters: any[]): any;
-  resumeQuiesce(...parameters: any[]): any;
+  quiesce(request: {candidateId: number}): unknown;
+  resumeQuiesce(candidateId: number): unknown;
   invokeAction?(action: unknown): unknown;
   queueVariableWrite?(request: unknown): unknown;
   getRuntimeVariableSnapshot?(): unknown;

@@ -275,7 +275,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function enqueue(operation: () => unknown | Promise<unknown>) {
+  function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
     const result = operationQueue.then(operation);
     operationQueue = result.then(
       () => undefined,
@@ -442,7 +442,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function commit(revision: number, request: Readonly<Record<string, unknown>> = {}) {
+  function commit(revision: unknown, request: unknown = {}) {
     return enqueue(async () => {
       if (disposed) throw new TypeError('asset reload transaction is disposed');
       const requestedRevision = positiveInteger(revision, 'revision');
@@ -540,7 +540,7 @@ export function createDsl4AssetReloadTransaction(options: {
     });
   }
 
-  function defer(revision: number) {
+  function defer(revision: unknown) {
     return enqueue(async () => {
       if (disposed) throw new TypeError('asset reload transaction is disposed');
       const requestedRevision = positiveInteger(revision, 'revision');
