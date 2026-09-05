@@ -440,7 +440,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       });
     }
     actorPlatform = createDsl4TurboWarpActorPlatform({
-      runtime: options.runtime,
+      runtimeHost: turboWarpHost,
       ...(bubbleCompositionProxy === null ? {} : {bubbleComposition: bubbleCompositionProxy}),
       ...(speechAdvanceTypewriterEnabled
         ? {

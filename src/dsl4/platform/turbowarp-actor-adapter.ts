@@ -45,18 +45,24 @@ function validateScheduler(value: unknown) {
   };
 }
 
-function validateRuntime(
+function validateRuntimeHost(
   value: unknown,
   speechAdvanceTypewriterEnabled: boolean,
   bubbleEnabled: boolean,
 ) {
-  if (!isRecord(value) || !Array.isArray(value.targets)) {
-    throw new TypeError('TurboWarp runtime must provide a targets array');
+  if (!isRecord(value) || typeof value.targets !== 'function' || !isRecord(value.runtime)) {
+    throw new TypeError('TurboWarp actor platform requires an injected TurboWarp runtime host');
   }
-  const looks = (isRecord(value.ext_scratch3_looks) ? value.ext_scratch3_looks : null) as Record<
-    string,
-    unknown
-  > | null;
+  const runtimeHost = value as unknown as {
+    targets: () => unknown[];
+    runtime: Record<string, unknown>;
+  };
+  // The shared host validates the target list per call. Actor resolution runs on every action, so
+  // reject a malformed runtime once, here, instead of surfacing it mid-story.
+  runtimeHost.targets();
+  const looks = (
+    isRecord(runtimeHost.runtime.ext_scratch3_looks) ? runtimeHost.runtime.ext_scratch3_looks : null
+  ) as Record<string, unknown> | null;
   if (
     !bubbleEnabled &&
     (looks === null ||
@@ -68,7 +74,7 @@ function validateRuntime(
     );
   }
   return {
-    runtime: value as Record<string, unknown> & {targets: unknown[]},
+    runtimeHost,
     say: bubbleEnabled
       ? null
       : ((looks?._say as Function).bind(looks) as (message: string, target: unknown) => void),
@@ -238,7 +244,8 @@ function durationMilliseconds(seconds: number, operation: string) {
 
 /** Connect the DSL4 actor presentation boundary to one TurboWarp runtime. */
 export function createDsl4TurboWarpActorPlatform(options: {
-  runtime: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost: unknown;
   scheduler?: unknown;
   frameMilliseconds?: number;
   speechAdvanceTypewriterEnabled?: boolean;
@@ -262,8 +269,8 @@ export function createDsl4TurboWarpActorPlatform(options: {
   ) {
     throw new TypeError('Bubble composition must provide show and releaseAll');
   }
-  const {runtime, say, think} = validateRuntime(
-    options.runtime,
+  const {runtimeHost, say, think} = validateRuntimeHost(
+    options.runtimeHost,
     speechAdvanceTypewriterEnabled,
     bubbleEnabled,
   );
@@ -316,7 +323,10 @@ export function createDsl4TurboWarpActorPlatform(options: {
     if (typeof actorId !== 'string' || actorId.length === 0) {
       throw adapterError('K4-TW-ACTOR-001', 'actorId must be a non-empty string');
     }
-    const actorNameMatches = runtime.targets.filter((candidate) => {
+    // The Stage is a distinct DSL 4.0 type, so an actor target must carry isStage === false. That
+    // is stricter than the shared spriteTargets() predicate, which only excludes isStage === true.
+    const targets = runtimeHost.targets();
+    const actorNameMatches = targets.filter((candidate) => {
       if (!isRecord(candidate) || candidate.isStage !== false) return false;
       if (typeof candidate.lookupVariableByNameAndType !== 'function') return false;
       const variable = candidate.lookupVariableByNameAndType('actorName', '');
@@ -328,7 +338,7 @@ export function createDsl4TurboWarpActorPlatform(options: {
     const matches =
       actorNameMatches.length > 0
         ? actorNameMatches
-        : runtime.targets.filter(
+        : targets.filter(
             (candidate) =>
               isRecord(candidate) &&
               candidate.isStage === false &&
