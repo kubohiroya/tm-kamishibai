@@ -239,6 +239,98 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 
 - Re-evaluate TypeScript 7 (see Toolchain Decisions).
 
+### Burndown Handover
+
+Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
+looks stale; `eslint-suppressions.json` is the authority on what is left.
+
+**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,111 over 113 files now
+(`any` 839, `Function` 272). The two batches so far were #712, which flipped the rules and typed
+the injected `crypto.subtle`, `node:fs/promises`, `fs.watch` and clock boundaries (-138), and #713,
+which replaced nineteen inline copies of the source frontend port with `Dsl4SourceFrontend` and
+adopted the existing `Dsl4Diagnostic` (-25).
+
+**What is left, by area:**
+
+| Area                                       | Total | `any` | `Function` | Files |
+| ------------------------------------------ | ----- | ----- | ---------- | ----- |
+| `src/dsl4` (core + browser)                | 470   | 337   | 133        | 46    |
+| `src/dsl4/platform` (TurboWarp adapters)   | 267   | 169   | 98         | 34    |
+| `src/builder`                              | 240   | 199   | 41         | 30    |
+| `scripts/sb3` (extension entry, authoring) | 122   | 122   | 0          | 2     |
+| `src/converter`                            | 12    | 12    | 0          | 1     |
+
+Six files carry a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
+`platform/turbowarp-runtime-host.ts` (62), `object-store/store.ts` (49),
+`builder/dsl4-web-preview-shell.ts` (33), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
+`builder/dsl4-asset-converter.ts` (30).
+
+**What the remaining `any` actually is.** `Record<string, any>` is 521 of the 839. Classifying each
+occurrence by what it annotates: 144 are `as` casts, 307 annotate a named binding, and 70 sit in a
+generic position (an array element, a `Map` value, a return type). The named ones do not converge on
+one domain — the largest are `asset` 30, then `event` 15, `left` 15, `payload` 15, `root` 9,
+`request` 9, `invocation` 7, `state` 7, `project` 7, `target` 7, `document` 6, `storyDocument` 6,
+`source` 6, `globalObject` 6, and a long tail of one- and two-occurrence names. Read together they
+are three unrelated things: internal protocol payloads that no schema describes, platform objects
+from TurboWarp and the DOM, and story- or asset-shaped values.
+
+Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
+is worth doing, but the story- and asset-shaped named bindings come to roughly 55, so it addresses
+a minority of the `Record<string, any>`, not the majority.
+
+Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
+`Readonly<Record<string, unknown>>` rather than `any`, so the frontend boundary is not the problem;
+and the runtime story document is not the schema shape. `createStoryDocument` returns a normalized
+`{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A real
+`Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win available.
+
+The remaining 272 `Function` occurrences are per-file callback shapes. The shared-boundary trick
+that cleared 138 of them in #712 is spent; what is left needs a signature per call site.
+
+**How to run a batch.**
+
+1. Pick a cluster that shares one type, not a directory. The two batches that worked both replaced
+   one repeated shape everywhere it appeared.
+2. Write the type where its dependencies are legal. The pure DSL 4.0 core forbids `node:` imports,
+   which is why `Dsl4SubtleCrypto` is import-free and `Dsl4FileSystem` lives under `src/builder`.
+   `test/dsl4-architecture.test.mjs` enforces this and will catch a mistake.
+3. `pnpm typecheck` after the replacement, before anything else. The error count is the real size of
+   the batch, and it is usually much smaller than the occurrence count once the type is right.
+4. `pnpm lint:prune-suppressions`, then commit the smaller `eslint-suppressions.json`.
+5. `pnpm verify:pr`.
+
+**Pitfalls, all of them paid for once already.**
+
+- **Do not codemod.** Replacing every `Record<string, any>` with `Record<string, unknown>` leaves
+  890 type errors; every `Function` with `(...args: unknown[]) => unknown` leaves 276. Typing one
+  injected boundary correctly leaves none.
+- **A type-only edit does not churn the release artifact, and introducing a local variable does.**
+  Narrowing through a new `const` rewrote the 3.7 MB playback runtime and the candidate hash;
+  writing the same narrowing as an in-place cast kept both byte-identical. Prefer the cast in a
+  batch that is otherwise types-only, and check with `pnpm sb3:check`.
+- **A validator's runtime check does not narrow its return.** `typeof value.open === 'function'` on
+  a `Record<string, unknown>` still needs `as unknown as Dsl4FileSystem`. Six sites in the tree do
+  this; it is the expected shape, not a smell.
+- **An unannotated method inside `Object.freeze({...})` loses its contextual type.** Two producers
+  were widening `ok: false` to `boolean` and `severity: 'error'` to `string` behind a
+  `Record<string, any>`, so their declared discriminated unions never discriminated. Annotate the
+  method, not just the factory's return.
+- **Watch for a second shape before unifying.** `dsl4-build`'s three diagnostic producers do not
+  share a type: the artifact descriptor and the verifier allow a null `range`, `Dsl4Diagnostic` does
+  not.
+
+**Decisions still open.**
+
+- Narrowing the digest inputs from `Uint8Array<ArrayBufferLike>` to `Uint8Array<ArrayBuffer>`, which
+  is what Web Crypto's `BufferSource` actually accepts. It propagates up through the public
+  integrity and asset-bundle signatures, so `Dsl4SubtleCrypto` declares the wider parameter for now
+  and says why.
+- Whether `Dsl4Diagnostic` should move out of `source-frontend.ts` to a leaf module. Pure-core
+  modules such as `diagnostic-projection.ts` cannot import it today without taking on the frontend's
+  whole graph.
+- Converting `src/dsl4/block-source-export.js` and `src/builder/dsl4-block-source-export.js` (588
+  lines) to TypeScript; see the Module Checklist.
+
 ## Module Checklist
 
 Every module Phase 3 converted is TypeScript. Four files under `src/` are JavaScript.
