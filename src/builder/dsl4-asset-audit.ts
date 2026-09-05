@@ -8,6 +8,7 @@ import {
   validateDsl4AssetDistributionLock,
 } from '../dsl4/asset-distribution-profile.js';
 import {createDsl4AssetDependencyIndex} from '../dsl4/asset-dependency-index.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
@@ -509,9 +510,7 @@ export async function auditDsl4AssetDistribution(options: {
   assetConfig: string;
   assetLock: string;
   assetProfile: string;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxSourceManifestBytes: number;
   maxAssetConfigBytes: number;

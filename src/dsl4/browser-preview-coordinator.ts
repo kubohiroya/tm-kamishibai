@@ -1,5 +1,6 @@
 import {createDsl4BrowserPreviewSourceAdapter} from './browser-preview-source-adapter.js';
 import {createDsl4PreviewSourceProtocolPort} from './preview-source-protocol-port.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {deepFreeze} from './story-document.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -10,9 +11,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function createDsl4BrowserPreviewCoordinator(options: {
   protocolSession: Record<string, Function>;
   sessionId: string;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   featureFlags?: unknown;
   maxSourceFiles?: number;
