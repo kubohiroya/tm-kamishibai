@@ -76,6 +76,7 @@ pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
 pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
 pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 See the [maintainer guide](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/) for the complete command reference, exit statuses, and release workflow.

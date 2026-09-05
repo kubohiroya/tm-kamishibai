@@ -102,6 +102,15 @@ export {
   dsl4BrowserTurboWarpStageMaximumProjectBytes,
 } from './browser-turbowarp-stage.js';
 export {
+  createDsl4BlockSourceGraph,
+  dsl4BlockSourceExportFormatVersion,
+  dsl4BlockSourceExportMaximumNameLength,
+  dsl4BlockSourceExportPackageSuffix,
+  planDsl4BlockSourceExport,
+  resolveDsl4BlockSourceExportName,
+  serializeDsl4SourceYaml,
+} from './block-source-export.js';
+export {
   dsl4BlockSourceBundleExtensionId,
   dsl4BlockSourceCommandOpcode,
   dsl4BlockSourceDefaultLimits,

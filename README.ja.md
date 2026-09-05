@@ -76,6 +76,7 @@ pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
 pnpm exec tm-kamishibai build-dsl4 --base kamishibai-4-base.sb3 --project-root . --output dist/my-story.sb3
 pnpm exec tm-kamishibai convert-dsl4 --input legacy-story.txt --output opening.k4.yml
+pnpm exec tm-kamishibai export-block-dsl --input block-story.sb3 --output-dir dist
 ```
 
 完全なコマンドリファレンス、終了status、release workflowは[メンテナンスガイド](https://kubohiroya.github.io/tm-kamishibai-docs/developer-guides/developer-guide/)を参照してください。
