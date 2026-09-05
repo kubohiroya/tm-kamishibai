@@ -67,7 +67,7 @@ function assertPortableFilename(value, label, details = {}) {
       details,
     );
   }
-  if (reservedFilenameStems.has(value.split('.')[0].toLowerCase())) {
+  if (reservedFilenameStems.has((value.split('.')[0] ?? '').toLowerCase())) {
     fail('K4-BLOCK-EXPORT-NAME-001', `${label} uses a reserved filename`, details);
   }
 }

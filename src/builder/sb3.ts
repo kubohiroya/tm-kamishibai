@@ -82,11 +82,12 @@ function findTarget(project: Record<string, unknown>, targetName: string) {
       ? target.isStage === true
       : target.isStage !== true && target.name === targetName,
   );
+  const [target] = matches;
   assert(
-    matches.length === 1,
+    matches.length === 1 && target,
     `SB3 target must resolve exactly once: ${targetName} (found ${matches.length}).`,
   );
-  return matches[0];
+  return target;
 }
 
 export function buildSb3Archive(

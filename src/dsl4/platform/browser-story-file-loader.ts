@@ -365,7 +365,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     }
     const materialized = [];
     if (archiveMode) {
-      const archiveFile = requireFile(selected[0].file);
+      const archiveFile = requireFile(selected[0]?.file);
       const archiveBytes = await readFile(archiveFile, maxAssetFileBytes, `${id}/${inputPath}`);
       const extracted = await extractDsl4PoseArchive({
         assetId: id,

@@ -14,7 +14,7 @@ export function createDsl4RuntimeCacheLeaseLifecycle({
   heartbeatMs,
   scheduleHeartbeat,
 }: {
-  cachePort: Record<string, (...args: never[]) => unknown> | null;
+  cachePort: Record<'renewLease' | 'releaseLease', () => unknown> | null;
   heartbeatMs: number;
   scheduleHeartbeat: (callback: () => void, milliseconds: number) => () => void;
 }) {

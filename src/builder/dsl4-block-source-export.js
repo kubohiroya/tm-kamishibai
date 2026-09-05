@@ -254,7 +254,7 @@ export async function exportDsl4BlockSourcesToYaml(options) {
   const contents =
     plan.kind === 'package'
       ? serializeDsl4BlockSourcePackage(plan)
-      : Buffer.from(strToU8(plan.files[0].text));
+      : Buffer.from(strToU8(plan.files[0]?.text ?? ''));
   const outputPaths = await installBundleTransactionally({
     outputDirectory,
     outputName: plan.name,

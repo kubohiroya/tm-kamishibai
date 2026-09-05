@@ -71,7 +71,7 @@ function parseYamlManifest(source: string) {
   }
   if (empty) return {};
   try {
-    const value = documents[0].toJS({mapAsMap: false, maxAliasCount: 0});
+    const value = documents[0]?.toJS({mapAsMap: false, maxAliasCount: 0});
     if (!isRecord(value)) {
       fail('K4-SOURCE-MANIFEST-YAML-001', 'Source manifest YAML must contain one mapping');
     }

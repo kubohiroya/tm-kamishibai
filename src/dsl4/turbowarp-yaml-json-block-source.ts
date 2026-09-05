@@ -417,7 +417,7 @@ export function extractDsl4BlockSourcesFromProject(
         targetName,
       });
     }
-    const hat = blocks[hats[0]] as Record<string, unknown>;
+    const hat = blocks[hats[0] ?? ''] as Record<string, unknown>;
     if (typeof hat.next !== 'string') {
       fail('K4-BLOCK-SOURCE-GRAPH-001', 'DSL source hat must have a block below it', {
         targetName,

@@ -129,7 +129,7 @@ function anchorRect(
 }
 
 function anchorDistance(left: string, right: string) {
-  const [leftX, leftY] = anchorGrid[left];
+  const [leftX = 0, leftY = 0] = anchorGrid[left] ?? [];
   const [rightX, rightY] = anchorGrid[right];
   return (leftX - rightX) ** 2 + (leftY - rightY) ** 2;
 }
