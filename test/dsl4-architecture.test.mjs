@@ -7,6 +7,14 @@ import {fileURLToPath} from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
 
+/**
+ * Shared packages the DSL 4.0 core may import. The core purity rule exists to keep platform and
+ * I/O dependencies out of the core graph, not to forbid app-neutral extraction, so a package
+ * earns a place here only while it stays dependency-free and platform-free. The test below
+ * enforces that, so this list cannot silently become a hole in the rule.
+ */
+const pureSharedPackages = Object.freeze(['@kubohiroya/turbowarp-preview-runtime']);
+
 const pureEntries = [
   'action-hat-detector.js',
   'action-invocation-adapter.js',
@@ -88,6 +96,7 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
         `${entry}: ${relative}`,
       );
       for (const specifier of imports) {
+        if (pureSharedPackages.includes(specifier)) continue;
         assert.doesNotMatch(specifier, /^node:/u, `${entry}: ${relative}`);
         assert.doesNotMatch(
           specifier,
@@ -101,6 +110,25 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
         `${entry}: ${relative}`,
       );
     }
+  }
+});
+
+test('keeps every DSL4 core shared package dependency-free and platform-free', async () => {
+  for (const specifier of pureSharedPackages) {
+    const manifest = JSON.parse(
+      await readFile(fileURLToPath(import.meta.resolve(`${specifier}/package.json`)), 'utf8'),
+    );
+    for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+      assert.deepEqual(manifest[field] ?? {}, {}, `${specifier}: ${field}`);
+    }
+    const entry = fileURLToPath(import.meta.resolve(specifier));
+    const source = await readFile(entry, 'utf8');
+    assert.deepEqual(moduleSpecifiers(source, specifier), [], specifier);
+    assert.doesNotMatch(
+      source,
+      /\b(?:globalThis|window|document|navigator|indexedDB|localStorage|fetch|XMLHttpRequest|WebSocket|Scratch|process|require)\b/u,
+      specifier,
+    );
   }
 });
 

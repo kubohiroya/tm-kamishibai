@@ -120,6 +120,35 @@ function hello(sessionId, overrides = {}) {
   };
 }
 
+test('reports malformed capability tokens as DSL 4.0 protocol schema errors', async () => {
+  const {protocol} = createSetup();
+  for (const capabilities of [
+    'source.stage.v1',
+    ['Source.Stage.V1'],
+    ['source..stage.v1'],
+    [...dsl4PreviewRequiredCapabilities, dsl4PreviewRequiredCapabilities[0]],
+  ]) {
+    await assert.rejects(
+      protocol.handshake(hello('client-a', {capabilities})),
+      (error) =>
+        error instanceof Dsl4PreviewProtocolError &&
+        error.code === 'K4-PREVIEW-PROTOCOL-SCHEMA' &&
+        !error.message.endsWith('.'),
+    );
+    assert.equal(protocol.getState().connected, false);
+  }
+
+  assert.throws(
+    () =>
+      createDsl4PreviewProtocolSession({
+        liveReloadSession: createDsl4LiveReloadSession({createSession: () => ({})}),
+        runtimeCapabilities: ['not a capability'],
+      }),
+    (error) =>
+      error instanceof Dsl4PreviewProtocolError && error.code === 'K4-PREVIEW-PROTOCOL-SCHEMA',
+  );
+});
+
 test('negotiates one major version and fails closed when required capabilities are missing', async () => {
   const {protocol} = createSetup();
   await assert.rejects(
