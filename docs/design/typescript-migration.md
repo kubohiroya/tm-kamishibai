@@ -275,8 +275,14 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   cast through `unknown`. That worked because those injected dependencies are `node:fs/promises`,
   `fs.watch` and `crypto.subtle` subsets whose real signatures were already known.
 
-  What is left is a long tail. `Record<string, any>` is still 63% of the remaining `any` and stands
-  in for DSL 4.0 story and asset structures that have no TypeScript declarations at all;
+  The list was re-baselined once, after `noUncheckedIndexedAccess` landed: that work replaced the
+  `Record<string, Function>` collaborator placeholders with named interfaces whose members are
+  declared `(...parameters: any[]): unknown`, which moved about 130 occurrences from the
+  `Function` rule to the `any` rule. The list now holds 1,208 occurrences over 117 files (1,042
+  `any`, 166 `Function`).
+
+  What is left is a long tail. `Record<string, any>` is still over half of the remaining `any` and
+  stands in for DSL 4.0 story and asset structures that have no TypeScript declarations at all;
   `schema/dsl-4.schema.json` already describes 127 of them and is the obvious source to generate
   from. The remaining `Function` occurrences are per-file callback shapes, not a shared boundary.
 
