@@ -107,8 +107,19 @@ export function createDsl4CameraPreviewControls(options: {
     throw new TypeError('camera preview controls require at least one configured control');
   }
   const assetUrls = isRecord(options.assetUrls) ? options.assetUrls : {};
+  /**
+   * The camera members these controls call.
+   *
+   * Which of them must exist depends on the configured controls, checked just below; the type
+   * names all of them so a member nobody validated is a compile error.
+   */
   const port = (isRecord(options.port) ? options.port : {}) as Record<
-    string,
+    | 'isCameraRunning'
+    | 'setPreviewMirroring'
+    | 'listCameraDevices'
+    | 'selectCamera'
+    | 'getCameraSelection'
+    | 'getActiveCamera',
     (...args: any[]) => any
   >;
   const requiredMethods = new Set(['isCameraRunning']);
@@ -123,7 +134,9 @@ export function createDsl4CameraPreviewControls(options: {
       requiredMethods.add(method);
     }
   }
-  for (const method of requiredMethods) requireFunction(port[method], `port.${method}`);
+  for (const method of requiredMethods) {
+    requireFunction((port as Record<string, unknown>)[method], `port.${method}`);
+  }
   const getPreviewRect = requireFunction(options.getPreviewRect, 'getPreviewRect');
   const labels = {
     mirroring: 'Switch camera preview mirroring',

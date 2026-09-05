@@ -38,10 +38,11 @@ function validatePlatform(value: unknown) {
     'disposeAudioEngine',
     'disposeStorage',
     'disposeBitmapAdapter',
-  ];
+  ] as const;
+  // Keyed by the method names that were checked, so an unvalidated member is a compile error.
   return Object.freeze(
     Object.fromEntries(methods.map((name) => [name, requiredFunction(value[name], name)])),
-  );
+  ) as Readonly<Record<(typeof methods)[number], (...parameters: any[]) => any>>;
 }
 
 function validateVm(value: unknown) {

@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 272 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 237 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 272: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 237: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -283,7 +283,12 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   runs; the failure record and the dispatch loop bind the action once and branch, which also closes
   the gap where two `currentAction()` calls could disagree.
 
-  What is left is roughly 200 more placeholder members and about 70 genuine lookups.
+  A validator that builds its result — `Object.fromEntries(methods.map(...))` in the browser stage
+  platform — needs no interface at all: make the method list `as const` and the result is
+  `Record<(typeof methods)[number], …>`.
+
+  What is left is a long tail: about 60 files with five to ten errors each, no cluster larger than
+  that.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.

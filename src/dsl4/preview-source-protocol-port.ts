@@ -11,6 +11,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The preview protocol session this port speaks to. */
+interface PreviewProtocolSession {
+  handshake(...parameters: any[]): any;
+  stage(...parameters: any[]): any;
+  defer(...parameters: any[]): any;
+  commit(...parameters: any[]): any;
+  disconnect(...parameters: any[]): any;
+  getState(): Readonly<Record<string, any>>;
+  whenIdle(...parameters: any[]): any;
+}
+
 function validateProtocol(value: unknown) {
   if (
     !isRecord(value) ||
@@ -24,7 +35,7 @@ function validateProtocol(value: unknown) {
   ) {
     throw new TypeError('protocolSession must implement the DSL 4.0 preview protocol');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreviewProtocolSession;
 }
 
 function validateSessionId(value: unknown) {

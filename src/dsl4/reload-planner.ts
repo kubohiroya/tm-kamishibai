@@ -87,7 +87,8 @@ function currentActionOf(
   const actionPath = currentExecution.actionPath;
   if (typeof actionPath !== 'string') return null;
   const matches = actionsOf(currentStoryDocument).filter((action) => action.id === actionPath);
-  return matches.length === 1 ? matches[0] : null;
+  const [onlyMatch] = matches;
+  return matches.length === 1 && onlyMatch ? onlyMatch : null;
 }
 
 function hasCompatibleSignature(
@@ -180,7 +181,11 @@ function resolveActionAnchor(
     };
   }
 
-  const action = matches[0];
+  const [action] = matches;
+  // The count checks above leave exactly one match.
+  if (!action) {
+    return {code: 'K4-RELOAD-ANCHOR-MISSING', message: 'No action matches the current anchor'};
+  }
   if (!hasCompatibleSignature(currentAction, action)) {
     return {
       code: 'K4-RELOAD-ANCHOR-INCOMPATIBLE',
