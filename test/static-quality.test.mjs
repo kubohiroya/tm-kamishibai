@@ -49,4 +49,5 @@ test('does not ignore current release workflow sources', async () => {
   const eslint = new ESLint({cwd: new URL('.', projectRoot).pathname});
   assert.equal(await eslint.isPathIgnored('scripts/sb3/downloadable-releases.mjs'), false);
   assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-workflow.mjs'), false);
+  assert.equal(await eslint.isPathIgnored('scripts/sb3/dsl4-release-policy.mjs'), false);
 });
