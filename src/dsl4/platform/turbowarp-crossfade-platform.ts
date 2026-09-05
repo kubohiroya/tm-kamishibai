@@ -112,8 +112,15 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   } catch (error) {
     throw new TypeError('Crossfade platform requires a TurboWarp runtime renderer', {cause: error});
   }
-  const scheduler = (options.scheduler ?? defaultScheduler()) as Record<string, Function>;
-  if (['now', 'setTimeout', 'clearTimeout'].some((name) => typeof scheduler[name] !== 'function')) {
+  const scheduler = (options.scheduler ?? defaultScheduler()) as Record<
+    'now' | 'setTimeout' | 'clearTimeout',
+    (...parameters: any[]) => any
+  >;
+  if (
+    (['now', 'setTimeout', 'clearTimeout'] as const).some(
+      (name) => typeof scheduler[name] !== 'function',
+    )
+  ) {
     throw new TypeError('Crossfade scheduler must provide now, setTimeout, and clearTimeout');
   }
   const frameMilliseconds = Number(options.frameMilliseconds ?? defaultFrameMilliseconds);

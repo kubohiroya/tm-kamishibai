@@ -190,7 +190,7 @@ export async function loadDsl4ExternalSource(
   }: {
     maxSourceBytes: number;
     subtleCrypto?: {digest: Function} | undefined;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function};
+    fileSystem?: {realpath: Function; lstat: Function; open: Function} | undefined;
     readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   },
 ) {

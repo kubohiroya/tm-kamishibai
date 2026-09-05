@@ -635,7 +635,7 @@ function verifyPackagedLogicalEntries(
     for (const entry of rootEntries) {
       assert.deepEqual(projectArchive[entry], rootArchive[entry]);
     }
-    const html = strFromU8(packagedArchive['index.html']);
+    const html = strFromU8(packagedArchive['index.html'] ?? new Uint8Array());
     assert.match(html, /"surface":"zip-one-asset"/u);
     return {entrySourceMode: 'archive', logicalEntryCount: rootEntries.length};
   }
@@ -644,7 +644,7 @@ function verifyPackagedLogicalEntries(
     assert.deepEqual(packagedArchive[`${assetPrefix}${entry}`], rootArchive[entry]);
   }
   const indexName = target === 'zip' ? 'index.html' : 'packaged-project/resources/app/index.html';
-  const html = strFromU8(packagedArchive[indexName]);
+  const html = strFromU8(packagedArchive[indexName] ?? new Uint8Array());
   assert.match(html, new RegExp(`"surface":"${target === 'zip' ? 'zip' : 'electron'}"`, 'u'));
   return {entrySourceMode: 'direct', logicalEntryCount: rootEntries.length};
 }
@@ -741,7 +741,7 @@ async function main() {
   try {
     const rootEntry = await createRootEntryUrashima(options.samplesRoot, temporaryDirectory);
     const archive = unzipSync(rootEntry.bytes);
-    const project = JSON.parse(strFromU8(archive['project.json']));
+    const project = JSON.parse(strFromU8(archive['project.json'] ?? new Uint8Array()));
     const frontend = createDsl4ProductionSourceFrontend(schema);
     const component = await loadDsl4BinaryEntryRuntimeComponent(project, frontend, runtimeLimits);
     assert.equal(component.ok, true, JSON.stringify(component.diagnostics));

@@ -325,8 +325,9 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   const blobs = new Map();
   let fileCount = 0;
   let totalBytes = 0;
-  for (const id of Object.keys(storyDocument.assets ?? {}).sort()) {
-    const asset = storyDocument.assets[id];
+  for (const [id, asset] of Object.entries(
+    (storyDocument.assets ?? {}) as Readonly<Record<string, Readonly<Record<string, any>>>>,
+  ).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {
     const common = commonManifestAsset(asset, id);
     if (asset.delivery === 'remote') {
       manifestAssets.push({...common, source: {type: 'remote', ...asset.source}});
@@ -364,7 +365,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     }
     const materialized = [];
     if (archiveMode) {
-      const archiveFile = requireFile(selected[0].file);
+      const archiveFile = requireFile(selected[0]?.file);
       const archiveBytes = await readFile(archiveFile, maxAssetFileBytes, `${id}/${inputPath}`);
       const extracted = await extractDsl4PoseArchive({
         assetId: id,

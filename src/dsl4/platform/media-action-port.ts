@@ -1,3 +1,5 @@
+import {validateCompositionMethods} from './composition-contract.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -47,23 +49,21 @@ function validateComposition(value: unknown) {
     'applyToTarget',
     'playSound',
     'stopSound',
-  ];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Asset Manager composition must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  ] as const;
+  return validateCompositionMethods(value, 'Asset Manager composition', methods);
 }
 
 function validateTransitionHost(value: unknown) {
   if (value === undefined) return null;
-  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Media transition host must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'] as const;
+  return validateCompositionMethods(value, 'Media transition host', methods);
 }
 
-function validatePayload(value: unknown, keys: string[], command: string) {
+function validatePayload<Key extends string>(
+  value: unknown,
+  keys: readonly Key[],
+  command: string,
+): Record<Key, string> {
   if (
     !isRecord(value) ||
     Object.keys(value).length !== keys.length ||
@@ -74,12 +74,14 @@ function validatePayload(value: unknown, keys: string[], command: string) {
       `${command} payload must provide exactly ${keys.join(', ')}`,
     );
   }
+  const candidate = value as Record<string, unknown>;
   for (const key of keys) {
-    if (typeof value[key] !== 'string' || value[key].length === 0) {
+    const entry = candidate[key];
+    if (typeof entry !== 'string' || entry.length === 0) {
       throw portError('K4-MEDIA-PORT-001', `${command}.${key} must be a non-empty string`);
     }
   }
-  return value as unknown as Record<string, string>;
+  return value as unknown as Record<Key, string>;
 }
 
 function validateContext(value: unknown) {
@@ -408,7 +410,9 @@ export function createDsl4MediaActionPort(options: {
 
       async function applyStep(index: number) {
         if (!state.active) return;
+        // The index is taken modulo the step count, so it always resolves.
         const step = steps[index];
+        if (!step) return;
         await enqueueActorSkin(target, () => composition.applyToTarget(step.skin, actor));
         if (!state.active) return;
         state.timer = scheduler.setTimeout(() => {

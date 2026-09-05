@@ -118,8 +118,11 @@ export function createDsl4StoryIterator(storyDocument: Readonly<Record<string, u
     requireActive();
     if (typeof sceneId !== 'string' || !sceneIndex.has(sceneId)) return null;
     position = sceneIndex.get(sceneId) as number;
+    const scene = scenes[position];
+    // The index is built from the same scene list, so the position always resolves.
+    if (!scene) return null;
     state = 'positioned';
-    return Object.freeze({status: 'item', index: position, scene: scenes[position]});
+    return Object.freeze({status: 'item', index: position, scene});
   }
 
   function current() {
@@ -388,6 +391,8 @@ export function createDsl4KamishibaiStructuredDataSession({
     const next = sceneIterator.next();
     if (next.status === 'done') return deepFreeze({status: 'done'});
     const action = next.action;
+    // The iterator reports 'done' before it runs out of actions.
+    if (!action) return deepFreeze({status: 'done'});
     const storyPath = String(action.id);
     const actionView = {
       kind: 'ActionView',

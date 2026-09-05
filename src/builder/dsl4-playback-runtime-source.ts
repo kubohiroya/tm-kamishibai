@@ -25,9 +25,7 @@ export function readDsl4PlaybackPoseNetBundle({
   pendingPoseNetProjectBundle ??= createDsl4PoseNetProjectBundleFromLoader(
     async ({packageSpecifier}) =>
       new Uint8Array(await readFile(new URL(import.meta.resolve(packageSpecifier)))),
-    {
-      subtleCrypto: subtleCrypto as Pick<SubtleCrypto, 'digest'> | undefined,
-    },
+    subtleCrypto === undefined ? {} : {subtleCrypto: subtleCrypto as Pick<SubtleCrypto, 'digest'>},
   );
   return pendingPoseNetProjectBundle;
 }

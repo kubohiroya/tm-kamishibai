@@ -106,7 +106,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
       if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
         throw invalidResult(`Invalid key input result: ${String(selected)}`);
       }
-      return {sceneId: routes[selected], reason: 'keyInput'};
+      return {sceneId: routes[selected] ?? '', reason: 'keyInput'};
     }
     if (command === 'touchInputToChangeScene') {
       const routes = args.routes as Record<string, string>;
@@ -114,7 +114,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
       if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
         throw invalidResult(`Invalid touch input result: ${String(selected)}`);
       }
-      return {sceneId: routes[selected], reason: 'touchInput'};
+      return {sceneId: routes[selected] ?? '', reason: 'touchInput'};
     }
     if (command === 'poseInputToChangeScene') {
       const routes = args.routes as Record<string, string>;
@@ -131,7 +131,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
       if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
         throw invalidResult(`Invalid pose input result: ${String(selected)}`);
       }
-      return {sceneId: routes[selected], reason: 'poseInput'};
+      return {sceneId: routes[selected] ?? '', reason: 'poseInput'};
     }
     if (command === 'imageInputToChangeScene') {
       const routes = args.routes as Record<string, string>;
@@ -148,7 +148,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
       if (typeof selected !== 'string' || !Object.hasOwn(routes, selected)) {
         throw invalidResult(`Invalid image input result: ${String(selected)}`);
       }
-      return {sceneId: routes[selected], reason: 'imageInput'};
+      return {sceneId: routes[selected] ?? '', reason: 'imageInput'};
     }
     if (command === 'pose') {
       await dispatchPose({target, args}, context);

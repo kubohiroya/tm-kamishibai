@@ -207,7 +207,8 @@ export async function loadDsl4LocalAssetSnapshot(
     maxTotalBytes: number;
     subtleCrypto?: {digest: Function} | undefined;
     retainPoseArchives?: boolean;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function};
+    fileSystem?:
+      {realpath: Function; lstat: Function; open: Function; readdir: Function} | undefined;
     readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   },
 ) {
@@ -248,10 +249,9 @@ export async function loadDsl4LocalAssetSnapshot(
     Record<string, Readonly<Record<string, unknown>>>
   >;
 
-  for (const assetId of Object.keys(assets).sort((left, right) =>
+  for (const [assetId, asset] of Object.entries(assets).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   )) {
-    const asset = assets[assetId];
     const common = {
       id: assetId,
       kind: asset.kind,

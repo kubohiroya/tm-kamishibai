@@ -23,7 +23,7 @@ const bubbleStyleFields = Object.freeze([
 ]);
 
 function defineStyle(
-  composition: Record<string, Function>,
+  composition: Record<'defineStyle' | 'releaseAll', (...parameters: any[]) => any>,
   name: string,
   style: Record<string, unknown>,
 ) {
@@ -60,8 +60,8 @@ export function createDsl4BubblePlatform(options: {
     audio: options.assetManager,
     textCapability: options.textCapability,
     ...(options.scheduler === undefined ? {} : {scheduler: options.scheduler}),
-  }) as Record<string, Function>;
-  for (const method of ['defineStyle', 'show', 'releaseAll']) {
+  }) as Record<'defineStyle' | 'show' | 'releaseAll', (...parameters: any[]) => any>;
+  for (const method of ['defineStyle', 'show', 'releaseAll'] as const) {
     if (typeof composition[method] !== 'function') {
       throw new TypeError(`Bubble composition must provide ${method}`);
     }

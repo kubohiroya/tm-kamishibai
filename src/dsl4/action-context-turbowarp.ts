@@ -116,7 +116,17 @@ export function createDsl4ActionContextTurboWarpSurface(options: unknown = {}) {
   }
 
   const Scratch = options.Scratch as any;
-  const adapter = options.adapter as Record<string, Function>;
+  /** The core action block adapter this context reads the running action through. */
+  const adapter = options.adapter as Record<
+    | 'currentActionName'
+    | 'currentActionTarget'
+    | 'currentActionHasArgument'
+    | 'currentActionArgument'
+    | 'completeCurrentAction'
+    | 'failCurrentAction'
+    | 'gotoFromCurrentAction',
+    (...parameters: any[]) => any
+  >;
   if (
     Scratch?.extensions?.unsandboxed !== true ||
     typeof Scratch.extensions.register !== 'function' ||
@@ -144,7 +154,7 @@ export function createDsl4ActionContextTurboWarpSurface(options: unknown = {}) {
     'gotoFromCurrentAction',
   ];
   for (const method of adapterMethods) {
-    if (typeof adapter[method] !== 'function') {
+    if (typeof (adapter as Record<string, unknown>)[method] !== 'function') {
       throw new TypeError(`Action Context adapter.${method} is required`);
     }
   }

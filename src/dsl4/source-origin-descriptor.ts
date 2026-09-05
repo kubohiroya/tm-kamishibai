@@ -247,7 +247,8 @@ export function validateDsl4SourceOriginDescriptor(
     entry(value, limits, `Source origin descriptor entry ${index}`),
   );
   for (let index = 1; index < entries.length; index += 1) {
-    if (entries[index - 1].storyPath >= entries[index].storyPath) {
+    // The loop starts at one and stops at the length, so both entries are present.
+    if ((entries[index - 1]?.storyPath ?? '') >= (entries[index]?.storyPath ?? '')) {
       fail(
         'K4-SOURCE-ORIGIN-ORDER-001',
         'Source origin entries must have unique storyPaths in canonical order',

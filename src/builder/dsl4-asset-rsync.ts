@@ -24,7 +24,7 @@ export function normalizeRsyncDestination(value: unknown) {
       'K4-ASSET-CONVERT-RSYNC-CONFIG-001',
     );
   }
-  const remotePath = match.groups.remotePath;
+  const remotePath = match.groups.remotePath ?? '';
   if (
     remotePath.includes('//') ||
     remotePath.split('/').some((segment) => segment === '.' || segment === '..')

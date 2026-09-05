@@ -28,7 +28,20 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
   ) => unknown | Promise<unknown>;
   onWatchStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  reloadSurface?: Record<string, Function>;
+  /**
+   * The reload surface, under either spelling.
+   *
+   * The pipeline accepts the older `*Reload*` member names as well as the current ones and picks
+   * whichever the surface provides, so every member here is optional.
+   */
+  reloadSurface?: {
+    submitCandidate?(...parameters: any[]): any;
+    submitReloadCandidate?(...parameters: any[]): any;
+    setDiagnostic?(...parameters: any[]): any;
+    setReloadDiagnostic?(...parameters: any[]): any;
+    setWatchState?(...parameters: any[]): any;
+    setReloadWatchState?(...parameters: any[]): any;
+  };
   restartGeneration?: (request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   resolveReloadAvailability?: (event: Readonly<Record<string, unknown>>) => unknown;
 }) {
@@ -133,13 +146,14 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
         changedIds,
         initiatingInputId: null,
         async apply(request: Readonly<Record<string, any>>) {
-          await (protocol as Record<string, Function>).whenIdle();
+          await requireProtocol().whenIdle();
           const committed = await commit({
             requestedPreference: request.requestedPreference,
             actualAnchor: request.actualAnchor,
             fallbackReason: request.fallbackReason,
           });
-          if (committed.result.type !== 'preview.asset.committed') {
+          const committedResult = committed.result as Readonly<{type?: string}>;
+          if (committedResult.type !== 'preview.asset.committed') {
             throw new TypeError('asset generation commit was not acknowledged');
           }
         },
@@ -148,7 +162,12 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     ).catch(reportError);
   }
 
-  let protocol: Record<string, Function> | null = null;
+  let protocol: ReturnType<typeof createDsl4AssetReloadProtocolSession> | null = null;
+  /** The protocol session exists from `start()` until `dispose()`; asking outside that is a defect. */
+  const requireProtocol = () => {
+    if (!protocol) throw new TypeError('asset reload pipeline has no protocol session');
+    return protocol;
+  };
   const adapter = createDsl4BrowserPreviewAssetAdapter({
     ...(options.adapterOptions as Record<string, any>),
     inspectImage: options.adapterOptions.inspectImage as (
@@ -215,7 +234,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
       started,
       disposed,
       adapter: adapter.getState(),
-      protocol: (protocol as Record<string, Function>).getState(),
+      protocol: requireProtocol().getState(),
       transaction: transaction.getState(),
     });
   }
@@ -224,31 +243,31 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     if (started || disposed) throw new TypeError('browser asset pipeline can only start once');
     started = true;
     await adapter.start(projectRoot, context);
-    await (protocol as Record<string, Function>).whenIdle();
+    await requireProtocol().whenIdle();
     return snapshot();
   }
 
   async function updateSource(context: unknown) {
     if (!started || disposed) throw new TypeError('browser asset pipeline is not active');
     await adapter.updateSource(context);
-    await (protocol as Record<string, Function>).whenIdle();
+    await requireProtocol().whenIdle();
     return snapshot();
   }
 
   async function pollNow() {
     if (!started || disposed) throw new TypeError('browser asset pipeline is not active');
     await adapter.pollNow();
-    await (protocol as Record<string, Function>).whenIdle();
+    await requireProtocol().whenIdle();
     return snapshot();
   }
 
   async function commit(request: Readonly<Record<string, unknown>> = {}) {
     if (!isRecord(request)) throw new TypeError('browser asset commit request must be an object');
-    const revision = (protocol as Record<string, Function>).getState().candidateRevision;
+    const revision = requireProtocol().getState().candidateRevision;
     if (!Number.isSafeInteger(revision) || Number(revision) < 1) {
       throw new TypeError('browser asset pipeline has no candidate');
     }
-    const result = await (protocol as Record<string, Function>).commit({
+    const result = await requireProtocol().commit({
       type: 'preview.asset.commit',
       sessionId: options.sessionId,
       revision,
@@ -258,11 +277,11 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
   }
 
   async function defer() {
-    const revision = (protocol as Record<string, Function>).getState().candidateRevision;
+    const revision = requireProtocol().getState().candidateRevision;
     if (!Number.isSafeInteger(revision) || Number(revision) < 1) {
       throw new TypeError('browser asset pipeline has no candidate');
     }
-    const result = await (protocol as Record<string, Function>).defer({
+    const result = await requireProtocol().defer({
       type: 'preview.asset.defer',
       sessionId: options.sessionId,
       revision,
@@ -275,7 +294,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     if (disposed) return Promise.resolve(snapshot());
     disposed = true;
     disposePromise = Promise.resolve()
-      .then(() => (protocol as Record<string, Function>).disconnect())
+      .then(() => requireProtocol().disconnect())
       .then(() => transaction.dispose())
       .then(snapshot);
     return disposePromise;
@@ -292,7 +311,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     getState: snapshot,
     async whenIdle() {
       await adapter.whenIdle();
-      await (protocol as Record<string, Function>).whenIdle();
+      await requireProtocol().whenIdle();
       await transaction.whenIdle();
       return snapshot();
     },

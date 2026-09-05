@@ -219,6 +219,7 @@ async function readPoseSource(
     return readPoseDirectory(root, sourcePath, maxFileBytes);
   }
   const [archive] = await readSingleFile(root, sourcePath, maxFileBytes);
+  if (!archive) throw new TypeError(`Pose archive is empty: ${sourcePath}`);
   const extracted = await extractDsl4PoseArchive({
     assetId,
     bytes: archive.bytes,
@@ -267,8 +268,9 @@ async function captureAssetSnapshot(
   const assets = (storyDocument.assets ?? {}) as Readonly<
     Record<string, Readonly<Record<string, any>>>
   >;
-  for (const id of Object.keys(assets).sort()) {
-    const asset = assets[id];
+  for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  )) {
     const common = commonManifestAsset(asset, id);
     if (asset.delivery === 'remote') {
       manifestAssets.push({...common, source: {type: 'remote', ...asset.source}});

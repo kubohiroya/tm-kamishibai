@@ -211,6 +211,7 @@ async function readPoseBundle(
 ) {
   if (isDsl4PoseArchivePath(directoryPath)) {
     const [archive] = await readSingleFile(root, directoryPath, limit, signal);
+    if (!archive) throw new TypeError(`Pose archive is empty: ${directoryPath}`);
     const extracted = await extractDsl4PoseArchive(
       {
         assetId,
@@ -394,8 +395,9 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
       const assets = (context.storyDocument.assets ?? {}) as Readonly<
         Record<string, Readonly<Record<string, any>>>
       >;
-      for (const id of Object.keys(assets).sort()) {
-        const asset = assets[id];
+      for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      )) {
         const common = commonManifestAsset(asset, id);
         if (asset.delivery === 'remote') {
           manifestAssets.push({...common, source: {type: 'remote', ...asset.source}});

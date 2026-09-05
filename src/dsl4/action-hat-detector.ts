@@ -30,7 +30,7 @@ function requireExactKeys(value: Record<string, unknown>, keys: Set<string>, lab
   }
 }
 
-function resolveLimits(input: unknown): Readonly<Record<string, number>> {
+function resolveLimits(input: unknown): Readonly<typeof dsl4ActionHatDetectorDefaultLimits> {
   if (input === undefined) return dsl4ActionHatDetectorDefaultLimits;
   if (!isRecord(input)) fail('K4-REGISTRY-LIMIT-001', 'Action hat limits must be an object');
   const unknown = Object.keys(input).filter(
@@ -45,7 +45,7 @@ function resolveLimits(input: unknown): Readonly<Record<string, number>> {
       fail('K4-REGISTRY-LIMIT-001', `${name} must be a positive safe integer`);
     }
   }
-  return Object.freeze(limits);
+  return Object.freeze(limits) as Readonly<typeof dsl4ActionHatDetectorDefaultLimits>;
 }
 
 function requireBoundedName(value: unknown, label: string, maxScalars: number): string {
@@ -74,7 +74,7 @@ function requireDeclarationRecord(value: unknown, label: string): Record<string,
 
 function readDeclaration(
   block: Record<string, unknown>,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4ActionHatDetectorDefaultLimits>,
   targetId: string,
   blockId: string,
 ): Record<string, unknown> {

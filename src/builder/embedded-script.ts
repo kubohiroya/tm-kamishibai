@@ -28,7 +28,7 @@ export function resolveEmbeddedScriptSlot(
   const namedSlots = Object.entries(variables).filter(
     ([, value]) => Array.isArray(value) && value[0] === embeddedScriptVariableName,
   );
-  if (namedSlots.length !== 1 || namedSlots[0][0] !== embeddedScriptVariableId) {
+  if (namedSlots.length !== 1 || namedSlots[0]?.[0] !== embeddedScriptVariableId) {
     throw new Sb3BuilderError(
       `Embedded script slot must resolve exactly once as ${embeddedScriptVariableId}/${embeddedScriptVariableName}.`,
       {stage},

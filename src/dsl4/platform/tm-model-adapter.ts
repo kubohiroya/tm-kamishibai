@@ -31,7 +31,7 @@ function validateComposition(value: unknown) {
   ) {
     throw new TypeError('TM composition must provide registerPoseModel and releasePoseModel');
   }
-  return value as Record<string, Function>;
+  return value as Record<'registerPoseModel' | 'releasePoseModel', (...parameters: any[]) => any>;
 }
 
 function validateSignal(value: unknown) {

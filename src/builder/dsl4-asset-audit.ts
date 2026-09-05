@@ -399,7 +399,8 @@ export function createDsl4AssetDistributionAudit({
     Record<string, Readonly<Record<string, any>>>
   >;
   const assets = resolved.assets.map((asset) => {
-    const storyAsset = resolvedStoryAssets[asset.id];
+    // The resolved assets come from the same story document as the index.
+    const storyAsset = resolvedStoryAssets[asset.id] ?? {};
     return {
       id: asset.id,
       kind: asset.kind,
@@ -437,10 +438,10 @@ export function createDsl4AssetDistributionAudit({
     Object.entries(dependencies.scenes).map(([sceneId, scene]) => [
       sceneId,
       {
-        all: phase(scene.all),
-        eager: phase(scene.eager),
-        lazy: phase(scene.lazy),
-        sceneRetained: phase(scene.sceneRetained),
+        all: phase(scene.all ?? []),
+        eager: phase(scene.eager ?? []),
+        lazy: phase(scene.lazy ?? []),
+        sceneRetained: phase(scene.sceneRetained ?? []),
       },
     ]),
   );
@@ -456,8 +457,9 @@ export function createDsl4AssetDistributionAudit({
     .map(([contentIntegrity, group]) => ({
       contentIntegrity,
       assetIds: group.map(({id}) => id).sort(),
-      logicalBytes: group[0].logicalBytes,
-      savingsBytes: group[0].logicalBytes * (group.length - 1),
+      // Only groups with more than one member reach here, so the first is present.
+      logicalBytes: group[0]?.logicalBytes ?? 0,
+      savingsBytes: (group[0]?.logicalBytes ?? 0) * (group.length - 1),
     }))
     .sort(({contentIntegrity: left}, {contentIntegrity: right}) =>
       left < right ? -1 : left > right ? 1 : 0,
