@@ -69,7 +69,7 @@ export function createDsl4PreviewReloadSurface(options: {
   viewport: unknown;
   safeArea?: unknown;
   debugExecution?: Parameters<typeof createDsl4PreviewReloadOverlay>[0]['debugExecution'];
-  clock?: Readonly<Record<string, Function>>;
+  clock?: Parameters<typeof createDsl4PreviewReloadPolicy>[0]['clock'];
   storage?: Parameters<typeof createDsl4PreviewReloadOverlay>[0]['storage'];
   reducedMotion?: boolean;
   formatTime?: (timestamp: number) => string;

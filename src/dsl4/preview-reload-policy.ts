@@ -132,7 +132,7 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('reload policy clock is invalid');
   }
-  return value as Readonly<Record<string, Function>>;
+  return value as Readonly<{now: Function; setTimeout: Function; clearTimeout: Function}>;
 }
 
 const defaultClock = Object.freeze({
@@ -161,7 +161,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   restartGeneration: (request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onState?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<Record<string, Function>> | undefined;
+  clock?: Readonly<{now: Function; setTimeout: Function; clearTimeout: Function}> | undefined;
   minimumSuccessDisplayMs?: number;
 }) {
   if (!isRecord(options)) throw new TypeError('reload policy options are required');

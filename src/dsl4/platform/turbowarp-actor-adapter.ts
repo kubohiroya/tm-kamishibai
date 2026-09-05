@@ -508,7 +508,9 @@ export function createDsl4TurboWarpActorPlatform(options: {
       }
       presentationTail = presentationTail.then(async () => {
         if (!bubbleHandle) {
-          const createdHandle = await (bubbleComposition as Record<string, Function>).show({
+          const createdHandle = await (
+            bubbleComposition as Record<'show', (...parameters: any[]) => any>
+          ).show({
             actor,
             actorKey: actor.id,
             kind,

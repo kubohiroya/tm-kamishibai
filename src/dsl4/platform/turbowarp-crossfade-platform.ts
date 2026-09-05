@@ -96,7 +96,10 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   }
   const runtime = options.runtime as Record<string, any>;
   const renderer = runtime.renderer as Record<string, any>;
-  const scheduler = (options.scheduler ?? defaultScheduler()) as Record<string, Function>;
+  const scheduler = (options.scheduler ?? defaultScheduler()) as Record<
+    string,
+    (...parameters: any[]) => any
+  >;
   if (['now', 'setTimeout', 'clearTimeout'].some((name) => typeof scheduler[name] !== 'function')) {
     throw new TypeError('Crossfade scheduler must provide now, setTimeout, and clearTimeout');
   }

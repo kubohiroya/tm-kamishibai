@@ -166,7 +166,10 @@ function validateComposition(value: unknown) {
       'Asset Manager composition must provide registerProjectAsset, registerEmbeddedAsset, and releaseAsset',
     );
   }
-  return value as Record<string, Function>;
+  return value as Record<
+    'registerProjectAsset' | 'registerEmbeddedAsset' | 'releaseAsset',
+    (...parameters: any[]) => any
+  >;
 }
 
 function validateSignal(value: unknown) {
