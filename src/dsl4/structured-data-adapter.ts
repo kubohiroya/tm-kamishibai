@@ -26,9 +26,10 @@ function defaultNonceSource(byteLength: number) {
 function encodeBase64Url(bytes: Uint8Array) {
   let encoded = '';
   for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index];
-    const second = index + 1 < bytes.length ? bytes[index + 1] : 0;
-    const third = index + 2 < bytes.length ? bytes[index + 2] : 0;
+    // The loop is bounded by the byte length, so the first byte of each group is present.
+    const first = bytes[index] ?? 0;
+    const second = bytes[index + 1] ?? 0;
+    const third = bytes[index + 2] ?? 0;
     const combined = (first << 16) | (second << 8) | third;
     encoded += base64UrlAlphabet[(combined >>> 18) & 63];
     encoded += base64UrlAlphabet[(combined >>> 12) & 63];
@@ -62,7 +63,8 @@ function normalizeLimits(input: unknown) {
   const normalized = {...dsl4StructuredDataAdapterDefaultLimits, ...candidate};
   const defaults = dsl4StructuredDataAdapterDefaultLimits as Readonly<Record<string, number>>;
   for (const [name, value] of Object.entries(normalized)) {
-    const maximum = defaults[name];
+    // `normalized` starts from the defaults, so every name has a maximum.
+    const maximum = defaults[name] ?? 0;
     if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > maximum) {
       throw new TypeError(`${name} must be a positive safe integer within the default`);
     }

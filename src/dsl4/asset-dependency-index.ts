@@ -145,7 +145,16 @@ export function createDsl4AssetDependencyIndex(storyDocument: Readonly<Record<st
 
   const startupAssets = sortedUnique(startup);
   const bgmDependencies = new Set<string>();
-  const scenes: Record<string, Readonly<Record<string, ReadonlyArray<string>>>> = {};
+  /** The four dependency phases every scene entry carries. */
+  const scenes: Record<
+    string,
+    Readonly<{
+      all: ReadonlyArray<string>;
+      eager: ReadonlyArray<string>;
+      lazy: ReadonlyArray<string>;
+      sceneRetained: ReadonlyArray<string>;
+    }>
+  > = {};
   for (const scene of (storyDocument.scenes ?? []) as ReadonlyArray<
     Readonly<Record<string, unknown>>
   >) {
