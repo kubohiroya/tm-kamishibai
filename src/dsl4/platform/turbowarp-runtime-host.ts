@@ -1,3 +1,5 @@
+import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
+import {validateCompositionMethods} from './composition-contract.js';
 import {createRuntimeExpressionComposition as createDefaultRuntimeExpressionComposition} from '@kubohiroya/turbowarp-runtime-expression/composition';
 import {createSvgTextCompositionCapability} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 import {
@@ -39,12 +41,15 @@ export type HostPortContext = Readonly<{
   storyDocument: Readonly<Record<string, unknown>>;
 }>;
 
+/** One method on a runtime port, dispatched by name with the action payload and its context. */
+export type PortOperation = (...parameters: any[]) => unknown;
+
 export type HostPort = {
-  wait?: Function;
-  transition?: Function;
-  keyInputToChangeScene?: Function;
-  touchInputToChangeScene?: Function;
-  dispose?: Function;
+  wait?: PortOperation;
+  transition?: PortOperation;
+  keyInputToChangeScene?: PortOperation;
+  touchInputToChangeScene?: PortOperation;
+  dispose?: PortOperation;
 };
 
 export type RuntimeConditionEvaluator = (
@@ -240,7 +245,7 @@ function createWaitPort(schedule: (callback: () => void, milliseconds: number) =
 }
 
 function validateHostPort(value: unknown): Readonly<HostPort> | HostPort {
-  if (value === undefined) return Object.freeze({}) as Readonly<Record<string, Function>>;
+  if (value === undefined) return Object.freeze({}) as Readonly<HostPort>;
   if (!isRecord(value)) throw new TypeError('DSL 4.0 host port must be an object');
   for (const [method, operation] of Object.entries(value)) {
     if (method === 'dispose') {
@@ -256,18 +261,9 @@ function validateHostPort(value: unknown): Readonly<HostPort> | HostPort {
   return value as HostPort;
 }
 
-function validateCompositionMethods(value: unknown, label: string, methods: string[]) {
-  if (!isRecord(value)) throw new TypeError(`${label} must be an object`);
-  const missing = methods.filter((method) => typeof value[method] !== 'function');
-  if (missing.length > 0) {
-    throw new TypeError(`${label} must provide ${missing.join(', ')}`);
-  }
-  return value as Record<string, Function>;
-}
-
 function addPortMethods(
-  destination: Record<string, Function>,
-  source: Record<string, Function>,
+  destination: Record<string, PortOperation>,
+  source: Record<string, PortOperation>,
   methods: string[],
   owner: string,
 ) {
@@ -284,7 +280,7 @@ function addPortMethods(
 
 function validateStoryCapabilities(
   storyDocument: Readonly<Record<string, unknown>>,
-  port: Record<string, Function>,
+  port: Record<string, (...parameters: any[]) => unknown>,
   evaluateCondition: unknown,
 ) {
   const scenes = Array.isArray(storyDocument.scenes) ? storyDocument.scenes : [];
@@ -379,7 +375,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   let scratchPoseFeedbackAdapter: ReturnType<typeof createDsl4ScratchPoseFeedbackAdapter> | null =
     null;
   let poseFeedbackPresenter: ReturnType<typeof createDsl4PoseFeedbackPresenter> | null = null;
-  let runtimeExpressionComposition: Record<string, Function> | null = null;
+  let runtimeExpressionComposition: {releaseAll(): unknown} | null = null;
   let cameraPreviewControls: ReturnType<typeof createDsl4CameraPreviewControls> | null = null;
   let broadcastActionPort: ReturnType<typeof createTurboWarpBroadcastPort> | null = null;
   let latestPoseState: Readonly<Record<string, unknown>> | null = null;
@@ -389,7 +385,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
   validateBroadcastMessageAndWaitFeature(component.storyDocument, broadcastMessageAndWaitEnabled);
   const standaloneAdvanceIndicatorEnabled =
     bubbleAdvanceIndicatorEnabled && !turboWarpBubbleEnabled;
-  let hostPort: Readonly<Record<string, Function>> | Record<string, Function> = Object.freeze({});
+  let hostPort: Readonly<HostPort> | HostPort = Object.freeze({});
   const bubbleCompositionProxy = turboWarpBubbleEnabled
     ? Object.freeze({
         show(input: unknown) {
@@ -566,7 +562,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(poseFeedbackEnabled
         ? {
             poseFeedbackEnabled: true,
-            onPoseState: poseStateObserver,
+            ...(poseStateObserver === undefined ? {} : {onPoseState: poseStateObserver}),
             ...(poseStateBinding === undefined ? {} : {readPoseStateBinding: poseStateBinding}),
           }
         : {}),
@@ -696,8 +692,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       const createRuntimeExpression =
         options.createRuntimeExpressionComposition ?? createDefaultRuntimeExpressionComposition;
       const candidate = createRuntimeExpression();
+      // Recorded before validation so an incomplete composition is still released on cleanup.
       if (isRecord(candidate)) {
-        runtimeExpressionComposition = candidate as Record<string, Function>;
+        runtimeExpressionComposition = candidate as unknown as {releaseAll(): unknown};
       }
       const baseComposition = validateCompositionMethods(
         candidate,
@@ -734,7 +731,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       };
     }
 
-    const port = {} as Record<string, Function>;
+    const port = {} as Record<string, (...parameters: any[]) => unknown>;
     addPortMethods(
       port,
       mediaPort,
@@ -744,7 +741,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     if (broadcastActionPort) {
       addPortMethods(
         port,
-        broadcastActionPort as unknown as Record<string, Function>,
+        broadcastActionPort as unknown as Record<string, PortOperation>,
         ['broadcastMessageAndWait'],
         'TurboWarp broadcast action port',
       );
@@ -835,7 +832,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       addPortMethods(port, asyncInputPort, ['touchInputToChangeScene'], 'async input action port');
     }
 
-    for (const method of Object.keys(hostPort)) {
+    const injectedPort = hostPort as Record<string, PortOperation | undefined>;
+    for (const method of Object.keys(injectedPort)) {
       if (method === 'dispose') continue;
       if (Object.hasOwn(port, method)) {
         throw hostError('K4-HOST-PORT-COLLISION', `Runtime port method is duplicated: ${method}`);
@@ -846,7 +844,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           `Injected runtime port is unsupported: ${method}`,
         );
       }
-      port[method] = (hostPort[method] as Function).bind(hostPort);
+      port[method] = (injectedPort[method] as PortOperation).bind(hostPort);
     }
     if (!Object.hasOwn(port, 'wait')) {
       const schedule = options.waitSchedule ?? defaultWaitSchedule;
@@ -1281,7 +1279,7 @@ export async function createDsl4TurboWarpRuntimeHost(
   let stopForSessionBackingFatal: null | (() => void) = null;
   let runtimeLifecycleObserver: ((event: Readonly<Record<string, unknown>>) => void) | null = null;
   const runtimeEventListeners: Set<(event: Readonly<Record<string, unknown>>) => void> = new Set();
-  let applicationPort: Readonly<Record<string, Function>> | null = null;
+  let applicationPort: Readonly<Record<string, PortOperation>> | null = null;
   let runtimeDiagnosticsPort: Readonly<{getState: () => Readonly<Record<string, number>>}> | null =
     null;
   let runtimeVariableStatePort: Readonly<{
@@ -1337,15 +1335,21 @@ export async function createDsl4TurboWarpRuntimeHost(
   const startup = await createDsl4RuntimeStartup({
     featureFlags,
     project: options.project,
-    sourceFrontend: options.sourceFrontend,
-    maxSourceBytes: options.maxSourceBytes,
-    maxAssetFiles: options.maxAssetFiles,
-    maxAssetFileBytes: options.maxAssetFileBytes,
-    maxAssetBytes: options.maxAssetBytes,
+    ...(options.sourceFrontend === undefined ? {} : {sourceFrontend: options.sourceFrontend}),
+    ...(options.maxSourceBytes === undefined ? {} : {maxSourceBytes: options.maxSourceBytes}),
+    ...(options.maxAssetFiles === undefined ? {} : {maxAssetFiles: options.maxAssetFiles}),
+    ...(options.maxAssetFileBytes === undefined
+      ? {}
+      : {maxAssetFileBytes: options.maxAssetFileBytes}),
+    ...(options.maxAssetBytes === undefined ? {} : {maxAssetBytes: options.maxAssetBytes}),
     assetBundleFormat,
-    historyNavigationAvailable: options.historyNavigationAvailable,
-    historyLimits: options.historyLimits,
-    evaluateCondition: options.evaluateCondition,
+    ...(options.historyNavigationAvailable === undefined
+      ? {}
+      : {historyNavigationAvailable: options.historyNavigationAvailable}),
+    ...(options.historyLimits === undefined ? {} : {historyLimits: options.historyLimits}),
+    ...(options.evaluateCondition === undefined
+      ? {}
+      : {evaluateCondition: options.evaluateCondition}),
     onEvent(event) {
       try {
         runtimeLifecycleObserver?.(event);
@@ -1361,7 +1365,7 @@ export async function createDsl4TurboWarpRuntimeHost(
       }
       options.onEvent?.(event);
     },
-    onInputError: options.onInputError,
+    ...(options.onInputError === undefined ? {} : {onInputError: options.onInputError}),
     subtleCrypto: options.subtleCrypto,
     async createRuntimeEnvironment(
       runtimeComponent: Readonly<Record<string, unknown>>,
@@ -1420,7 +1424,7 @@ export async function createDsl4TurboWarpRuntimeHost(
     }>;
     channel: 'bundled' | 'unbundled';
     runtimeComponent: Readonly<Record<string, unknown>>;
-    session: Readonly<Record<string, Function>>;
+    session: Dsl4NavigationSessionSurface;
   }>;
   const session = successfulStartup.session;
 

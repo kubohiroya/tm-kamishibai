@@ -120,7 +120,7 @@ function httpsUrl(value: string, name: string) {
 }
 
 function normalizeContentType(contentType: string) {
-  return contentType.split(';', 1)[0].trim().toLowerCase();
+  return (contentType.split(';', 1)[0] ?? '').trim().toLowerCase();
 }
 
 function assertAllowedHost(host: string, allowedHosts: ReadonlyArray<string>) {
@@ -267,7 +267,7 @@ function localContentType(bytes: Buffer, filePath: string, kind: string) {
     if (bytes.subarray(0, 4).toString('ascii') === 'OggS') return 'audio/ogg';
     if (
       bytes.subarray(0, 3).toString('ascii') === 'ID3' ||
-      (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
+      (bytes.length >= 2 && bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0)
     )
       return 'audio/mpeg';
   }
@@ -491,12 +491,14 @@ async function inspectLocalProvider(
     contentsByPath.set(entry.path, bytes);
   }
   files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  const [onlyFile] = files;
+  if (!onlyFile) fail('Asset materialized no files', 'K4-ASSET-LOCK-001');
   const logical = recognitionModel
     ? logicalBundle(files)
     : {
-        contentIntegrity: files[0].integrity,
-        contentType: localContentType(contentsByPath.get(files[0].path), files[0].path, asset.kind),
-        size: files[0].size,
+        contentIntegrity: onlyFile.integrity,
+        contentType: localContentType(contentsByPath.get(onlyFile.path), onlyFile.path, asset.kind),
+        size: onlyFile.size,
       };
   return {provider: {file: inputPath}, logical};
 }
@@ -755,5 +757,6 @@ export async function generateDsl4AssetDistributionLockFile(options: any) {
       validateDsl4AssetDistributionLock(candidate);
     },
   });
-  return {...result, outputPath: installed[outputName]};
+  // The transaction installs the output it was given.
+  return {...result, outputPath: installed[outputName] ?? outputName};
 }

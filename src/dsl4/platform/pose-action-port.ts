@@ -1,3 +1,4 @@
+import {validateCompositionMethods} from './composition-contract.js';
 import {createDsl4PoseStateEvent} from '../pose-feedback-policy.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -107,11 +108,8 @@ function validateTMComposition(value: unknown) {
     'configureAccumulatedPose',
     'resetAccumulatedPose',
     'subscribeAccumulatedPose',
-  ];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`TM composition must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  ] as const;
+  return validateCompositionMethods(value, 'TM composition', methods);
 }
 
 function validateAsyncInputComposition(value: unknown) {
@@ -122,7 +120,7 @@ function validateAsyncInputComposition(value: unknown) {
   ) {
     throw new TypeError('Async Input composition must provide waitForPoseCandidate and releaseAll');
   }
-  return value as Record<string, Function>;
+  return value as Record<'waitForPoseCandidate' | 'releaseAll', (...parameters: any[]) => any>;
 }
 
 function validateSequencePayload(value: unknown) {

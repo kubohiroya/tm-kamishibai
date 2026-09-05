@@ -34,9 +34,10 @@ export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
 // buttons are dark teal, so the runtime recolors the same asset instead of shipping a second set.
 const menuIconFilter = 'invert(1) brightness(1.7) saturate(.35)';
 
-type MenuRect = Readonly<{left: string; top: string; width: string; height: string}>;
+/** The application actions, which are also the keys of both layout tables. */
+type MenuAction = 'open' | 'reload' | 'build' | 'about' | 'language';
 
-const compactLayout: Readonly<Record<string, MenuRect>> = Object.freeze({
+const compactLayout = Object.freeze({
   open: {left: '10%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
   reload: {left: '53.3333%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
   build: {left: '10%', top: '45%', width: '36.6667%', height: '24.4444%'},
@@ -44,7 +45,7 @@ const compactLayout: Readonly<Record<string, MenuRect>> = Object.freeze({
   language: {left: '53.3333%', top: '58.8889%', width: '36.6667%', height: '24.4444%'},
 });
 
-const buildLayout: Readonly<Record<string, MenuRect>> = Object.freeze({
+const buildLayout = Object.freeze({
   open: {left: '10%', top: '18%', width: '36.6667%', height: '24.4444%'},
   reload: {left: '53.3333%', top: '18%', width: '36.6667%', height: '24.4444%'},
   build: {left: '10%', top: '43%', width: '80%', height: '20%'},
@@ -133,7 +134,7 @@ export function createDsl4RuntimeApplicationMenu(options: {
       en: options.locales.en[action] as string,
       ja: options.locales.ja[action] as string,
     });
-  const actionState = (action: string) => {
+  const actionState = (action: MenuAction) => {
     const enabled =
       (action !== 'open' || openVisible) &&
       (action !== 'reload' || reloadEnabled) &&
@@ -148,10 +149,10 @@ export function createDsl4RuntimeApplicationMenu(options: {
     return options.onLocaleChange(locale);
   };
 
-  const definitions: ReadonlyArray<{id: string; onSelect: () => unknown | Promise<unknown>}> = [
+  const definitions: ReadonlyArray<{id: MenuAction; onSelect: () => unknown | Promise<unknown>}> = [
     {id: 'open', onSelect: options.onOpen ?? (() => undefined)},
     {id: 'reload', onSelect: options.onReload},
-    ...(options.onBuild === undefined ? [] : [{id: 'build', onSelect: options.onBuild}]),
+    ...(options.onBuild === undefined ? [] : [{id: 'build' as const, onSelect: options.onBuild}]),
     {id: 'about', onSelect: options.onAbout},
     {id: 'language', onSelect: toggleLocale},
   ];

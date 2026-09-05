@@ -83,7 +83,8 @@ export function createDsl4IndeterminateProgressIndicator(options: {
     mount.style.position = 'relative';
   }
   const initialVariant = resolveVariant(options.variant);
-  const labels: Record<string, string> = {...defaultLabels};
+  // Starts from the defaults, so `default` is always present; callers may add their own sources.
+  const labels: Record<string, string> & typeof defaultLabels = {...defaultLabels};
   if (options.labels !== undefined) {
     if (!isRecord(options.labels))
       throw new TypeError('progress indicator labels must be an object');

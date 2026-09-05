@@ -53,7 +53,8 @@ function normalizeLimits(inputLimits: unknown) {
   const normalized = {...dsl4JsonPathDefaultLimits, ...limits};
   const defaults = dsl4JsonPathDefaultLimits as Readonly<Record<string, number>>;
   for (const [name, value] of Object.entries(normalized)) {
-    const defaultValue = defaults[name];
+    // `normalized` starts from the defaults, so every name has one.
+    const defaultValue = defaults[name] ?? 0;
     if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > defaultValue) {
       throw new TypeError(`${name} must be a positive safe integer no greater than its default`);
     }
@@ -520,7 +521,7 @@ export function createDsl4JsonPathEngine({
   limits: inputLimits,
   adapter = rawJsonAdapter,
 }: {
-  limits?: Partial<typeof dsl4JsonPathDefaultLimits>;
+  limits?: Partial<typeof dsl4JsonPathDefaultLimits> | undefined;
   adapter?: unknown;
 } = {}) {
   const limits = normalizeLimits(inputLimits);

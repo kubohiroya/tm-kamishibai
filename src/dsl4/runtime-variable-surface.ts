@@ -201,7 +201,10 @@ export function createDsl4RuntimeStateExpressionComposition(input: unknown) {
   if (!isRecord(input) || !isRecord(input.composition)) {
     throw new TypeError('Runtime state expression adapter requires a composition');
   }
-  const composition = input.composition as Record<string, Function>;
+  const composition = input.composition as Record<
+    'evaluateCondition' | 'validateConditionSyntax' | 'releaseAll',
+    (...parameters: any[]) => any
+  >;
   if (
     typeof composition.evaluateCondition !== 'function' ||
     typeof composition.validateConditionSyntax !== 'function' ||

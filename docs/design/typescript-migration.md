@@ -207,12 +207,56 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
   `site/site-shell.js` and `bin/tm-kamishibai.mjs`. Dropping them would silently remove those files
   from the program before they are converted.
-- **Stricter flags, measured on the current tree:** `exactOptionalPropertyTypes` leaves 33 errors and
-  `noUncheckedIndexedAccess` leaves 847. Neither is adopted yet. Do not widen the reported optional
-  properties in bulk to clear the first one: a blanket `| undefined` pass touched 138 declarations
-  and broke the ordinary type check, because names such as `limits` and `onError` appear in many
-  unrelated option types. The one property that was worth widening repository-wide is
-  `subtleCrypto`, whose JSDoc always allowed an explicit `undefined`; that is already done.
+- **`exactOptionalPropertyTypes` is on (done).** The 33 errors were all one shape: an option was
+  forwarded as an explicit `undefined` into a property the callee declares optional. Two fixes,
+  chosen per site:
+  - **Omit the key at the call site** — `...(x === undefined ? {} : {x})` — wherever absence is what
+    the caller means. Ternaries that produced `undefined` (`x.length > 0 ? x : undefined`) became the
+    same shape, and `asset-snapshot-watch` now `delete`s a consumed `release` callback instead of
+    assigning `undefined` to it.
+  - **Declare `?: T | undefined`** on the callee, for the ten properties whose function already
+    treats `undefined` as absent — `diagnostic()` re-emits `storyPath` through
+    `...(storyPath ? {storyPath} : {})`, `createDsl4JsonPathEngine` drops `limits` into
+    `normalizeLimits`, and so on.
+
+  Widening a callee's whole option bag is still the wrong move, and the numbers say so: one such
+  pass over six option types broke the ordinary type check in six places and pushed the
+  `exactOptionalPropertyTypes` count from 23 back up to 29.
+
+- **`noUncheckedIndexedAccess` is on (done).** All 854 errors are gone and the flag is enabled. The
+  measurement is what made the work tractable: 687 of them were not array or record lookups at all
+  but member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
+  collaborator objects — under the flag every member of an index signature is possibly undefined, so
+  the report was mostly about untyped boundaries, which is the same work the `no-explicit-any` and
+  `no-unsafe-function-type` burndown below is doing.
+
+  Eight shapes covered the whole set, and they are worth reaching for in this order:
+  - **Iterate `Object.entries`** instead of looping over `Object.keys` and looking the value back
+    up. The cheapest fix is not making a lookup safe but not making it: thirteen errors in the local
+    asset reader went with one loop.
+  - **Name the collaborator.** Where a runtime validator already lists the members it checks, an
+    interface beside it says the same thing to the type checker.
+  - **Key a validated record by the checked names.** `validateCompositionMethods` in
+    `src/dsl4/platform/composition-contract.ts` is generic over the method-name literals, so asking
+    for a member nobody validated is a compile error. A validator that builds its result with
+    `Object.fromEntries(methods.map(...))` needs only an `as const` list.
+  - **Name a limit bag after its defaults** — `Readonly<typeof dsl4XDefaultLimits>` rather than
+    `Readonly<Record<string, number>>`; a dictionary that starts from defaults and stays open is
+    `Record<string, string> & typeof defaults`.
+  - **Declare the local `assert` as `asserts condition`** so the guard the code already runs
+    narrows the value it checked. One line each in three builder modules.
+  - **Read a bounded array with a default**, and say in a comment why the default is unreachable.
+  - **Guard a nullable collaborator with an accessor that throws**, not with `!`.
+  - **Stop widening.** One frozen lookup table had been cast to `Readonly<Record<string, …>>`,
+    which threw away the literal keys it already had; deleting the cast was the entire fix.
+
+  The flag also reported real design facts rather than style problems. `currentAction()` returns
+  nothing once a scene runs past its last action, and its callers assumed otherwise; the Structured
+  Data iterators handed out positions they had not checked; `createAudioVoice`,
+  `getRuntimeVariableSnapshot`, and four live reload session members were called without any
+  validator requiring them, all genuinely optional; and one placeholder in the camera preview
+  controls was carrying two different rectangles in two different coordinate systems.
+
 - **`no-explicit-any` and `no-unsafe-function-type` are `error`, with the existing occurrences held
   in `eslint-suppressions.json` (in progress).** Waiting for the TurboWarp platform boundaries to be
   typed first would have left new code unchecked for the whole burndown, so the rules were switched
@@ -232,60 +276,70 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   cast through `unknown`. That worked because those injected dependencies are `node:fs/promises`,
   `fs.watch` and `crypto.subtle` subsets whose real signatures were already known.
 
-  What is left is a long tail. `Record<string, any>` is still 63% of the remaining `any` and stands
-  in for DSL 4.0 story and asset structures that have no TypeScript declarations at all;
-  `schema/dsl-4.schema.json` already describes 127 of them and is the obvious source to generate
-  from. The remaining `Function` occurrences are per-file callback shapes, not a shared boundary.
+  The list was re-baselined once, after `noUncheckedIndexedAccess` landed: that work replaced the
+  `Record<string, Function>` collaborator placeholders with named interfaces whose members are
+  declared `(...parameters: any[]): unknown`, which moved about 130 occurrences from the
+  `Function` rule to the `any` rule. The list now holds 1,208 occurrences over 117 files (1,042
+  `any`, 166 `Function`).
 
-- Re-evaluate TypeScript 7 (see Toolchain Decisions).
+  What is left is a long tail with no single source. `Record<string, any>` is still over half of
+  the remaining `any` -- 562 of the 1,042 -- but classifying each of those by what it annotates
+  gives 144 `as` casts, 313 named bindings and 105 generic positions, and the named ones do not
+  converge on one domain: `asset` 31, then `event` 15, `left` 15, `payload` 15, `root` 9, `state` 9,
+  `request` 9, `invocation` 7, `document` 6, `storyDocument` 6, and a long tail of one- and
+  two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
+  that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
+  values. Only the third is reachable from `schema/dsl-4.schema.json`; generating types from its 127
+  `$defs` is worth doing, but it addresses a minority of the `Record<string, any>` rather than the
+  bulk of them. The remaining `Function` occurrences are per-file callback shapes, not a shared
+  boundary.
+
+- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
+  `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
 
 ### Burndown Handover
 
 Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
 looks stale; `eslint-suppressions.json` is the authority on what is left.
 
-**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,111 over 113 files now
-(`any` 839, `Function` 272). The two batches so far were #712, which flipped the rules and typed
-the injected `crypto.subtle`, `node:fs/promises`, `fs.watch` and clock boundaries (-138), and #713,
-which replaced nineteen inline copies of the source frontend port with `Dsl4SourceFrontend` and
-adopted the existing `Dsl4Diagnostic` (-25).
+**Where it stands.** 1,181 occurrences over 115 files (`any` 1,015, `Function` 166). Compare that
+to an earlier total only through the bullet above: `noUncheckedIndexedAccess` landed between the
+switch-on and now, and moved roughly 130 occurrences from the `Function` rule to the `any` rule.
+The two batches so far were #712, which flipped the rules and typed the injected `crypto.subtle`,
+`node:fs/promises`, `fs.watch` and clock boundaries, and #713, which replaced nineteen inline copies
+of the source frontend port with `Dsl4SourceFrontend` and adopted the existing `Dsl4Diagnostic`.
 
 **What is left, by area:**
 
 | Area                                       | Total | `any` | `Function` | Files |
 | ------------------------------------------ | ----- | ----- | ---------- | ----- |
-| `src/dsl4` (core + browser)                | 470   | 337   | 133        | 46    |
-| `src/dsl4/platform` (TurboWarp adapters)   | 267   | 169   | 98         | 34    |
-| `src/builder`                              | 240   | 199   | 41         | 30    |
+| `src/dsl4` (core + browser)                | 560   | 465   | 95         | 48    |
+| `src/dsl4/platform` (TurboWarp adapters)   | 260   | 209   | 51         | 34    |
+| `src/builder`                              | 227   | 207   | 20         | 30    |
 | `scripts/sb3` (extension entry, authoring) | 122   | 122   | 0          | 2     |
 | `src/converter`                            | 12    | 12    | 0          | 1     |
 
 Six files carry a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
-`platform/turbowarp-runtime-host.ts` (62), `object-store/store.ts` (49),
-`builder/dsl4-web-preview-shell.ts` (33), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
+`object-store/store.ts` (49), `platform/turbowarp-runtime-host.ts` (46),
+`navigation-session-surface.ts` (35), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
 `builder/dsl4-asset-converter.ts` (30).
 
-**What the remaining `any` actually is.** `Record<string, any>` is 521 of the 839. Classifying each
-occurrence by what it annotates: 144 are `as` casts, 307 annotate a named binding, and 70 sit in a
-generic position (an array element, a `Map` value, a return type). The named ones do not converge on
-one domain — the largest are `asset` 30, then `event` 15, `left` 15, `payload` 15, `root` 9,
-`request` 9, `invocation` 7, `state` 7, `project` 7, `target` 7, `document` 6, `storyDocument` 6,
-`source` 6, `globalObject` 6, and a long tail of one- and two-occurrence names. Read together they
-are three unrelated things: internal protocol payloads that no schema describes, platform objects
-from TurboWarp and the DOM, and story- or asset-shaped values.
+**What the remaining `any` actually is.** The bullet above breaks down `Record<string, any>`, which
+is 562 of the 1,015: three unrelated domains, of which only story- and asset-shaped values are
+reachable from the schema. A further 87 are `...parameters: any[]` on the collaborator interfaces
+`noUncheckedIndexedAccess` introduced -- the same untyped-boundary problem in a new shape, and an
+easier one, because each interface now names its members and the signatures can be filled in one
+collaborator at a time. The remaining ~366 are scattered annotations and casts.
 
-Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
-is worth doing, but the story- and asset-shaped named bindings come to roughly 55, so it addresses
-a minority of the `Record<string, any>`, not the majority.
+Two things make schema generation less of a lever than it looks: `ParseSuccess.storyDocument` is
+already `Readonly<Record<string, unknown>>` rather than `any`, so the frontend boundary is not the
+problem; and the runtime story document is not the schema shape. `createStoryDocument` returns a
+normalized `{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A
+real `Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win
+available.
 
-Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
-`Readonly<Record<string, unknown>>` rather than `any`, so the frontend boundary is not the problem;
-and the runtime story document is not the schema shape. `createStoryDocument` returns a normalized
-`{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A real
-`Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win available.
-
-The remaining 272 `Function` occurrences are per-file callback shapes. The shared-boundary trick
-that cleared 138 of them in #712 is spent; what is left needs a signature per call site.
+The remaining 166 `Function` occurrences are per-file callback shapes. The shared-boundary trick
+that #712 used is spent; what is left needs a signature per call site.
 
 **How to run a batch.**
 

@@ -94,15 +94,17 @@ Does not own:
 - Pose or story runtime reload decisions.
 - UI copy.
 
-First migration candidates:
+Migration candidates:
 
-- `resolveDsl4ReloadAnchor` in `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/preview-protocol.ts`
-- `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/reload-planner.ts`
-- `src/builder/dsl4-preview-transport-policy.js`
-- app-neutral pieces of `src/builder/dsl4-preview-reload-overlay.js`
-- app-neutral pieces of `src/builder/dsl4-preview-reload-surface.js`
+- done: `resolveDsl4ReloadAnchor` in `src/dsl4/preview-reload-policy.ts`
+- done: `src/dsl4/preview-protocol.ts`
+- done: `src/dsl4/preview-source-protocol-port.ts` capability grammar
+- remaining, no shared API yet: `src/dsl4/reload-planner.ts`
+- remaining, no shared API yet: `src/builder/dsl4-preview-transport-policy.ts`
+- remaining, no shared API yet: app-neutral pieces of `src/builder/dsl4-preview-reload-overlay.ts`
+- remaining, no shared API yet: app-neutral pieces of `src/builder/dsl4-preview-reload-surface.ts`
+
+The remaining items are blocked on the shared package, not on this repository. `turbowarp-preview-runtime@0.2.0` exposes no reload planning, transport policy, or reload surface API, so there is nothing to delegate to yet. The DSL 4.0 core purity rule no longer blocks them.
 
 Acceptance criteria:
 
@@ -115,7 +117,9 @@ Migration status:
 - `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
 - `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
 - `capabilityList` in `src/dsl4/preview-protocol.ts` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
-- The broader `createDsl4PreviewProtocolSession` still remains in `tm-kamishibai` because the current DSL 4.0 wire protocol owns candidate ids, restart choices, source integrity, and `preview.source.staged/committed/deferred` events that are not part of `turbowarp-preview-runtime@0.1.0`.
+- `createDsl4PreviewProtocolSession` in `src/dsl4/preview-protocol.ts` is now built on `createPreviewProtocolController` from `@kubohiroya/turbowarp-preview-runtime@0.2.0`. Connection ownership, capability negotiation, revision ordering, candidate identity, and the operation queue come from the shared package; the DSL 4.0 wire contract stays here — message names, ack payloads, source integrity projection, restart choices, and the `Dsl4PreviewProtocolError` class. The module went from 414 to 327 lines and no longer holds a connection state machine.
+- `errorCodePrefix: 'K4-PREVIEW'` makes the shared controller emit `K4-PREVIEW-PROTOCOL-*` directly, because the package builds codes as `${prefix}-PROTOCOL-${suffix}`. Shared rejections are restated as `Dsl4PreviewProtocolError` at the session boundary so the exported error class and `instanceof` checks are unchanged.
+- Two behavior differences are deliberate. Shared validation messages are reworded (for example `Preview revision is stale` rather than `Preview source revision is stale`); codes are unchanged and no test or UI asserts these strings. Operations on a disposed live reload runtime now fail `K4-PREVIEW-PROTOCOL-DISCONNECTED` rather than only rejecting a new handshake.
 - Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
 
 DSL 4.0 core purity rule:

@@ -92,7 +92,7 @@ function encodeBase64(bytes: Uint8Array): string {
     const first = bytes[index];
     const second = bytes[index + 1];
     const third = bytes[index + 2];
-    const value = (first << 16) | ((second ?? 0) << 8) | (third ?? 0);
+    const value = ((first ?? 0) << 16) | ((second ?? 0) << 8) | (third ?? 0);
     result += base64Alphabet[(value >>> 18) & 63];
     result += base64Alphabet[(value >>> 12) & 63];
     result += second === undefined ? '=' : base64Alphabet[(value >>> 6) & 63];
@@ -196,7 +196,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
     subtleCrypto = globalThis.crypto?.subtle,
   }: {
     maxSourceBytes: number;
-    sourceOriginLimits?: Record<string, number>;
+    sourceOriginLimits?: Record<string, number> | undefined;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
@@ -325,7 +325,9 @@ export async function resolveDsl4EmbeddedSource(
       'DSL 4.0 embedded source exists in both bundled and unbundled storage',
     );
   }
-  const location = locations[0];
+  const [location] = locations;
+  // The count checks above leave exactly one location.
+  if (!location) fail('K4-SOURCE-CHANNEL-MISSING', 'DSL 4.0 embedded source is missing');
   const descriptor = await validateDsl4EmbeddedSourceDescriptor(location.descriptor, {
     maxSourceBytes,
     sourceOriginLimits,

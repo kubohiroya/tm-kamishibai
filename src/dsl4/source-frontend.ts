@@ -145,7 +145,7 @@ function diagnostic({
   path: string;
   node: any;
   lineCounter: import('yaml').LineCounter;
-  storyPath?: string;
+  storyPath?: string | undefined;
 }): Dsl4Diagnostic {
   return {
     version: 1,
@@ -172,6 +172,7 @@ function resolveFrontendLimits(input: unknown) {
   if (unknown.length > 0) {
     throw new TypeError(`Unknown source frontend limits: ${unknown.sort().join(', ')}`);
   }
+  // The entries come from the defaults, so the result carries exactly their names.
   return Object.freeze(
     Object.fromEntries(
       Object.entries(dsl4SourceFrontendDefaultLimits).map(([name, maximum]) => {
@@ -183,12 +184,12 @@ function resolveFrontendLimits(input: unknown) {
         return [name, Number(value)];
       }),
     ),
-  );
+  ) as Readonly<typeof dsl4SourceFrontendDefaultLimits>;
 }
 
 function finalizeDiagnostics(
   diagnostics: readonly Dsl4Diagnostic[],
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
 ) {
   return normalizeDsl4DiagnosticSequence(diagnostics, {
     maxDiagnostics: limits.maxDiagnostics,
@@ -210,7 +211,7 @@ function sortDiagnostics(diagnostics: readonly Dsl4Diagnostic[]): readonly Dsl4D
 }
 
 /** Count YAML collections and scalars without recursively traversing an attacker-controlled tree. */
-function inspectYamlResources(root: any, limits: Readonly<Record<string, number>>) {
+function inspectYamlResources(root: any, limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>) {
   const stack = [{node: root, collectionDepth: 0}];
   let nodeCount = 0;
   let firstNodeOverflow = null;
@@ -260,7 +261,7 @@ function validateStoryResourceLimits(
   document: any,
   lineCounter: import('yaml').LineCounter,
   sourceId: string,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
 ) {
   const diagnostics: Dsl4Diagnostic[] = [];
   const assets = isRecord(story.assets) ? story.assets : {};
@@ -441,7 +442,7 @@ function schemaErrorSegments(error: any): (string | number)[] {
 function parseRestrictedYaml(
   source: string,
   sourceId: string,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
 ): {
   document: any;
   lineCounter: import('yaml').LineCounter;

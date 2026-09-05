@@ -45,7 +45,7 @@ function fail(code: string, message: string, details?: object): never {
   throw new Dsl4BlockSourceError(code, message, details);
 }
 
-function resolveLimits(input: unknown): Readonly<Record<string, number>> {
+function resolveLimits(input: unknown): Readonly<typeof dsl4BlockSourceDefaultLimits> {
   if (input === undefined) return dsl4BlockSourceDefaultLimits;
   if (!isRecord(input)) fail('K4-BLOCK-SOURCE-LIMIT-001', 'Block source limits must be an object');
   const unknown = Object.keys(input).filter(
@@ -87,7 +87,7 @@ function isYamlJsonOpcode(opcode: string, member: string) {
   return opcode === member || opcode === `${yamlJsonExtensionId}_${member}`;
 }
 
-function boundedScalar(value: unknown, limits: Readonly<Record<string, number>>) {
+function boundedScalar(value: unknown, limits: Readonly<typeof dsl4BlockSourceDefaultLimits>) {
   const text = String(value);
   if (text.length > limits.maxScalarCodeUnits) {
     fail('K4-BLOCK-SOURCE-LIMIT-001', 'YAML/JSON scalar exceeds the code unit limit');
@@ -123,7 +123,7 @@ function literalInputValue(input: unknown) {
 function inputValue(
   blocks: Record<string, unknown>,
   input: unknown,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4BlockSourceDefaultLimits>,
   visiting: Set<string>,
   depth: number,
 ): unknown {
@@ -193,7 +193,7 @@ function concatFragments(left: unknown, right: unknown) {
 function evaluateReporter(
   blocks: Record<string, unknown>,
   blockId: string,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4BlockSourceDefaultLimits>,
   visiting: Set<string>,
   depth: number,
 ): unknown {
@@ -350,7 +350,7 @@ function renderYaml(fragment: unknown): string {
 function sourceTextFromCommand(
   blocks: Record<string, unknown>,
   commandId: string,
-  limits: Readonly<Record<string, number>>,
+  limits: Readonly<typeof dsl4BlockSourceDefaultLimits>,
 ) {
   const command = blocks[commandId];
   if (
@@ -417,7 +417,7 @@ export function extractDsl4BlockSourcesFromProject(
         targetName,
       });
     }
-    const hat = blocks[hats[0]] as Record<string, unknown>;
+    const hat = blocks[hats[0] ?? ''] as Record<string, unknown>;
     if (typeof hat.next !== 'string') {
       fail('K4-BLOCK-SOURCE-GRAPH-001', 'DSL source hat must have a block below it', {
         targetName,

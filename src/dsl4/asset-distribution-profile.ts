@@ -519,6 +519,9 @@ export function resolveDsl4AssetDistributionProfile(
     Record<string, Readonly<Record<string, any>>>
   >;
   const storyIds = Object.keys(storyAssets).sort();
+  /** Every id comes from the same record, so a miss is a defect in this resolver. */
+  const requireStoryAsset = (assetId: string) =>
+    storyAssets[assetId] ?? fail('K4-ASSET-LOCK-001', `Asset ${assetId} is not in the story`);
   const lockIds = Object.keys(lock.assets).sort();
   if (JSON.stringify(storyIds) !== JSON.stringify(lockIds)) {
     fail('K4-ASSET-LOCK-001', 'asset distribution lock must contain every StoryDocument asset');
@@ -540,9 +543,9 @@ export function resolveDsl4AssetDistributionProfile(
   const resolution: Record<string, any>[] = [];
   const resolvedAssets = Object.fromEntries(
     storyIds.map((assetId) => {
-      const asset = storyAssets[assetId];
-      const lockAssetEntry = lock.assets[assetId] as Readonly<Record<string, any>>;
-      if (lockAssetEntry.kind !== asset.kind) {
+      const asset = requireStoryAsset(assetId);
+      const lockAssetEntry = lock.assets[assetId] as Readonly<Record<string, any>> | undefined;
+      if (!lockAssetEntry || lockAssetEntry.kind !== asset.kind) {
         fail('K4-ASSET-LOCK-001', `Asset ${assetId} lock kind is stale`);
       }
       const declared = declaredProviders(assetId, storyProvider(asset), config.providers[assetId]);

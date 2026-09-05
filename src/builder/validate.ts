@@ -12,7 +12,7 @@ import {Sb3BuilderError} from './errors.js';
 import {sha256} from './hash.js';
 import {collectAssetLines} from './script.js';
 
-function assert(condition: unknown, message: string) {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Sb3BuilderError(message, {stage: 'validate-output'});
 }
 

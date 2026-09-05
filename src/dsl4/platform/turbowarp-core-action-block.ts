@@ -299,7 +299,8 @@ function normalizeBlockArguments(command: string, sourceValue: unknown) {
   }
   if (Object.hasOwn(scalarArgumentNames, command)) {
     const argumentNames = scalarArgumentNames as Readonly<Record<string, string>>;
-    return {[argumentNames[command]]: cloneValue(sourceValue)};
+    // Guarded by the hasOwn check above.
+    return {[argumentNames[command] ?? command]: cloneValue(sourceValue)};
   }
   const normalized = cloneValue(sourceValue) as Record<string, unknown>;
   delete normalized.stableId;
@@ -419,7 +420,8 @@ export function createDsl4TurboWarpCoreActionBlockAdapter(
   });
   const maximumLimits = defaultJsonLimits as Readonly<Record<string, number>>;
   for (const [name, value] of Object.entries(limits)) {
-    if (!Number.isSafeInteger(value) || value < 1 || value > maximumLimits[name]) {
+    // `limits` starts from the defaults, so every name has a maximum.
+    if (!Number.isSafeInteger(value) || value < 1 || value > (maximumLimits[name] ?? 0)) {
       throw new TypeError(`${name} is outside the TurboWarp action JSON limit`);
     }
   }

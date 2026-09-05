@@ -266,7 +266,7 @@ export function createDsl4PoseArchiveExtractor({
 
     const files = await Promise.all(
       paths.map(async (path) => {
-        const bytes = new Uint8Array(extracted[path]);
+        const bytes = new Uint8Array(extracted[path] ?? new Uint8Array());
         if (bytes.byteLength !== expectedExpandedSizes.get(path)) {
           throw archiveError(
             assetId,

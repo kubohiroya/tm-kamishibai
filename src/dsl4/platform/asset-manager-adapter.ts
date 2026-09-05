@@ -55,7 +55,7 @@ function embeddedBitmapResolution(
 ) {
   const resolution = declaredBitmapResolution(asset, `Asset ${String(asset.id)}`);
   if (resolution === undefined) return undefined;
-  const mediaType = mimeType.split(';', 1)[0].trim().toLowerCase();
+  const mediaType = (mimeType.split(';', 1)[0] ?? '').trim().toLowerCase();
   const isRasterMime = mediaType.startsWith('image/') && mediaType !== 'image/svg+xml';
   const isRasterPath = mediaType.length === 0 && bitmapFilePattern.test(sourceName);
   return isRasterMime || isRasterPath ? resolution : undefined;
@@ -166,7 +166,10 @@ function validateComposition(value: unknown) {
       'Asset Manager composition must provide registerProjectAsset, registerEmbeddedAsset, and releaseAsset',
     );
   }
-  return value as Record<string, Function>;
+  return value as Record<
+    'registerProjectAsset' | 'registerEmbeddedAsset' | 'releaseAsset',
+    (...parameters: any[]) => any
+  >;
 }
 
 function validateSignal(value: unknown) {

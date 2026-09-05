@@ -39,7 +39,12 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('asset snapshot watch clock is invalid');
   }
-  return value as Readonly<Record<string, Function>>;
+  return value as Readonly<{
+    now: Function;
+    sleep: Function;
+    setTimeout: Function;
+    clearTimeout: Function;
+  }>;
 }
 
 const defaultClock = Object.freeze({
@@ -104,7 +109,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   ) => unknown | Promise<unknown>;
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<Record<string, Function>>;
+  clock?: Readonly<{now: Function; sleep: Function; setTimeout: Function; clearTimeout: Function}>;
   foregroundIntervalMs?: number;
   backgroundIntervalMs?: number;
   quietWindowMs?: number;
@@ -229,7 +234,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   async function release(value: {release?: Function} | null, reason: string) {
     if (!value?.release) return;
     const operation = value.release;
-    value.release = undefined;
+    delete value.release;
     await operation(reason);
   }
 
@@ -298,7 +303,12 @@ export function createDsl4AssetSnapshotWatch(options: {
         return snapshot();
       }
       await release(candidate, 'superseded');
-      candidate = {revision, key: read.key, value: read.value, release: read.release};
+      candidate = {
+        revision,
+        key: read.key,
+        value: read.value,
+        ...(read.release === undefined ? {} : {release: read.release}),
+      };
       try {
         await options.onCandidate(
           deepFreeze({formatVersion: 1, revision, key: read.key, value: read.value}),

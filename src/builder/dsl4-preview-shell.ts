@@ -1,3 +1,4 @@
+import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {hasDsl4SourceFilenameSuffix} from '../dsl4/source-filename.js';
@@ -326,7 +327,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     ['anchor', 'Current anchor'],
     ['warnings', 'Warnings'],
     ['changes', 'Change categories'],
-  ]) {
+  ] as ReadonlyArray<[string, string]>) {
     const term = element(document, 'dt', label);
     const description = element(document, 'dd');
     description.setAttribute('data-summary-value', key);
@@ -369,7 +370,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     ['1', '1. Restart from the beginning'],
     ['2', '2. Restart from the current scene'],
     ['3', '3. Restart from the current action'],
-  ]) {
+  ] as ReadonlyArray<[string, string]>) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-${number}`;
     button.type = 'button';
@@ -617,7 +618,7 @@ function validateReloadSurface(value: unknown) {
   ) {
     throw new TypeError('CLI reload surface does not implement the shared preview contract');
   }
-  return value as Record<string, Function>;
+  return value as unknown as Dsl4PreviewReloadSurface;
 }
 
 function previewGeometry(value: unknown, fallback: Readonly<Record<string, number>>) {
@@ -666,7 +667,7 @@ export function createDsl4CliPreviewShell(input: unknown = {}) {
     onDefer: input.onDefer,
     onError: input.onError,
   });
-  let reloadSurface: Record<string, Function> | null = null;
+  let reloadSurface: Dsl4PreviewReloadSurface | null = null;
   let disposed = false;
   let disposePromise: Promise<unknown> | null = null;
 

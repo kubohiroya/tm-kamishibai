@@ -363,8 +363,9 @@ export async function vendorDsl4AssetDistribution(options: any) {
     maxBytes: maxFileBytes,
     fetchImplementation,
   };
-  for (const assetId of Object.keys(lock.assets).sort()) {
-    const asset = lock.assets[assetId];
+  for (const [assetId, asset] of Object.entries(lock.assets).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  )) {
     const remote = asset.providers.remote;
     if (!remote) continue;
     const configured = config.providers[assetId];

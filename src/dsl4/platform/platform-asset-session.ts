@@ -1,6 +1,7 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 
+import {validateCompositionMethods} from './composition-contract.js';
 import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
@@ -65,15 +66,6 @@ function validateTMRuntime(value: unknown) {
   return value;
 }
 
-function validateCompositionMethods(value: unknown, label: string, methods: string[]) {
-  if (!isRecord(value)) throw new TypeError(`${label} must be an object`);
-  const missing = methods.filter((method) => typeof value[method] !== 'function');
-  if (missing.length > 0) {
-    throw new TypeError(`${label} must provide ${missing.join(', ')}`);
-  }
-  return value as Record<string, Function>;
-}
-
 /**
  * Release compositions created before a complete session could be published.
  *
@@ -107,7 +99,15 @@ function disposedError() {
 
 /** Keep the pose overlay source opt-in at the DSL boundary. */
 function configurePoseOverlay(
-  composition: Record<string, Function>,
+  composition: Record<
+    | 'hidePoseOverlay'
+    | 'showPoseOverlay'
+    | 'setPoseJointStyle'
+    | 'setPoseBoneStyle'
+    | 'setPoseOverlayMinimumConfidence'
+    | 'setPoseOverlayConfidenceScaling',
+    (...parameters: any[]) => any
+  >,
   overlay: Record<string, unknown> | null,
 ) {
   if (!overlay) {
@@ -172,7 +172,7 @@ export function createDsl4PlatformAssetSession(options: {
   poseSchedule?: Function;
   poseNow?: Function;
   poseFeedbackEnabled?: boolean;
-  onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown;
+  onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown | undefined;
   posePreviewMirroringEnabled?: boolean;
   readPoseStateBinding?: () => Readonly<{confidence?: number; progress?: number}> | null;
   cameraPreviewControlsEnabled?: boolean;
@@ -395,7 +395,7 @@ export function createDsl4PlatformAssetSession(options: {
         ? createAssetManager(undefined, compositionOptions)
         : createAssetManager();
     created.push(assetManagerCandidate);
-    const assetManagerMethods = [
+    const assetManagerBaseMethods = [
       'registerProjectAsset',
       'registerEmbeddedAsset',
       'releaseAsset',
@@ -407,26 +407,32 @@ export function createDsl4PlatformAssetSession(options: {
       'playSound',
       'stopSound',
       'stopAllSounds',
-      ...(verifiedRemoteEnabled
-        ? [
-            'resolveVerifiedRemoteBinary',
-            'getVerifiedRemoteCacheStats',
-            'pruneVerifiedRemoteCache',
-            'clearVerifiedRemoteCache',
-            'listVerifiedRemoteStoryCaches',
-            'pruneVerifiedRemoteStoryCaches',
-            'deleteVerifiedRemoteStoryCache',
-            'renewVerifiedRemoteStoryCacheLease',
-            'releaseVerifiedRemoteStoryCacheLease',
-          ]
-        : []),
-      ...(binaryEntryEnabled ? ['createSessionBinaryBacking'] : []),
-    ];
-    const assetManagerComposition = validateCompositionMethods(
-      assetManagerCandidate,
-      'Asset Manager composition',
-      assetManagerMethods,
-    );
+    ] as const;
+    const verifiedRemoteMethods = [
+      'resolveVerifiedRemoteBinary',
+      'getVerifiedRemoteCacheStats',
+      'pruneVerifiedRemoteCache',
+      'clearVerifiedRemoteCache',
+      'listVerifiedRemoteStoryCaches',
+      'pruneVerifiedRemoteStoryCaches',
+      'deleteVerifiedRemoteStoryCache',
+      'renewVerifiedRemoteStoryCacheLease',
+      'releaseVerifiedRemoteStoryCacheLease',
+    ] as const;
+    const binaryEntryMethods = ['createSessionBinaryBacking'] as const;
+    // The feature flags decide what has to be present, while the type names every method the
+    // session can reach; each optional group is behind the same flag at its call sites.
+    const assetManagerComposition = validateCompositionMethods<
+      | (typeof assetManagerBaseMethods)[number]
+      | (typeof verifiedRemoteMethods)[number]
+      | (typeof binaryEntryMethods)[number],
+      // Crossfade audio is used when the composition offers it and falls back when it does not.
+      'createAudioVoice'
+    >(assetManagerCandidate, 'Asset Manager composition', [
+      ...assetManagerBaseMethods,
+      ...(verifiedRemoteEnabled ? verifiedRemoteMethods : []),
+      ...(binaryEntryEnabled ? binaryEntryMethods : []),
+    ]);
     const binaryAssetBacking = binaryEntryEnabled
       ? createDsl4BinaryEntryBacking({
           runtimeComponent,
@@ -475,7 +481,7 @@ export function createDsl4PlatformAssetSession(options: {
         : {createComposition: options.createTMComposition}),
     });
     created.push(tmPlatform.composition);
-    const tmComposition = validateCompositionMethods(tmPlatform.composition, 'TM composition', [
+    const tmBaseMethods = [
       'registerPoseModel',
       'activatePoseModel',
       'releasePoseModel',
@@ -498,22 +504,35 @@ export function createDsl4PlatformAssetSession(options: {
       'configureAccumulatedPose',
       'resetAccumulatedPose',
       'subscribeAccumulatedPose',
+    ] as const;
+    const tmMirroringMethods = ['setPreviewMirroring'] as const;
+    const tmPoseOverlayMethods = [
+      'showPoseOverlay',
+      'hidePoseOverlay',
+      'setPoseJointStyle',
+      'setPoseBoneStyle',
+      'setPoseOverlayMinimumConfidence',
+      'setPoseOverlayConfidenceScaling',
+    ] as const;
+    const tmCameraMenuMethods = [
+      'listCameraDevices',
+      'selectCamera',
+      'getCameraSelection',
+      'getActiveCamera',
+    ] as const;
+    // As above: the flags decide what must exist, the type names everything the session can reach.
+    const tmComposition = validateCompositionMethods<
+      | (typeof tmBaseMethods)[number]
+      | (typeof tmMirroringMethods)[number]
+      | (typeof tmPoseOverlayMethods)[number]
+      | (typeof tmCameraMenuMethods)[number]
+    >(tmPlatform.composition, 'TM composition', [
+      ...tmBaseMethods,
       ...(posePreviewMirroringEnabled || cameraPreviewMirroringControlEnabled
-        ? ['setPreviewMirroring']
+        ? tmMirroringMethods
         : []),
-      ...(poseOverlay
-        ? [
-            'showPoseOverlay',
-            'hidePoseOverlay',
-            'setPoseJointStyle',
-            'setPoseBoneStyle',
-            'setPoseOverlayMinimumConfidence',
-            'setPoseOverlayConfidenceScaling',
-          ]
-        : []),
-      ...(cameraMenuControlEnabled
-        ? ['listCameraDevices', 'selectCamera', 'getCameraSelection', 'getActiveCamera']
-        : []),
+      ...(poseOverlay ? tmPoseOverlayMethods : []),
+      ...(cameraMenuControlEnabled ? tmCameraMenuMethods : []),
     ]);
     configurePoseOverlay(tmComposition, poseOverlay);
     const storyCameraLifecycle = storyUsesPoseRecognition(runtimeComponent.storyDocument)

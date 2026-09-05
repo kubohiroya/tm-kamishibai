@@ -254,8 +254,12 @@ export async function installDsl4RuntimeComponent(
     {maxSourceBytes, historyNavigationAvailable, subtleCrypto},
   );
   if (!validatedArtifact.ok) {
-    const firstDiagnostic = validatedArtifact.diagnostics[0];
-    fail(firstDiagnostic.message, firstDiagnostic.code);
+    const [firstDiagnostic] = validatedArtifact.diagnostics;
+    // A failed validation always carries at least one diagnostic.
+    fail(
+      firstDiagnostic?.message ?? 'DSL 4.0 runtime artifact is invalid',
+      firstDiagnostic?.code ?? 'K4-ARTIFACT-001',
+    );
   }
   const validatedArtifactSuccess = validatedArtifact as unknown as {
     artifact: Readonly<Record<string, unknown>>;
@@ -306,7 +310,9 @@ export async function installDsl4RuntimeComponent(
     poseNetBundle === undefined
       ? undefined
       : await validateDsl4PoseNetProjectBundle(poseNetBundle, {
-          subtleCrypto: subtleCrypto as unknown as Pick<SubtleCrypto, 'digest'> | undefined,
+          ...(subtleCrypto === undefined
+            ? {}
+            : {subtleCrypto: subtleCrypto as unknown as Pick<SubtleCrypto, 'digest'>}),
         });
 
   const output = structuredClone(project) as Record<string, unknown>;
