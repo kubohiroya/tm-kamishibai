@@ -191,6 +191,14 @@ GitHub Releasesからbounded downloadし、size、SHA-256、ZIP、Title metadata
 既定OFFの対象surfaceを無効化し、必要に応じてnpm versionをdeprecateし、GitHub Releaseへ注記します。
 過去の3.1／3.2はGitHub Release assetだけを配布正本とし、現在のtoolchainやsourceから再構築しません。
 
+この手順の汎用部分、すなわちsource identity、決定的SB3 build検証、artifactのSHA-256とsize、candidateの
+atomic書き出し、candidate／frozen／publishedのlifecycle、公開済みartifactの照合は
+`@kubohiroya/sb3-toolchain`のrelease snapshot helperが所有します。Kamishibai固有のpolicy、すなわち
+release version／series／channel／buildDate、`kamishibai-${version}.sb3`のnaming、npm／GitHub
+Release／Pagesの公開方針、download catalogの照合、title build metadataのstampingは
+`scripts/sb3/dsl4-release-policy.mjs`に集約し、`scripts/sb3/dsl4-release-workflow.mjs`は両者を
+つなぐorchestrationとCLIだけを持ちます。
+
 ## 8. 受け入れ基準
 
 - capability、repository、package、version、extension ID、providerがfixtureと一致する
