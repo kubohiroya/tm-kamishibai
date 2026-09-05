@@ -3,7 +3,8 @@ packages:
 
 allowBuilds:
   # Temporary: builds @kubohiroya/turbowarp-app-shell from its git ref until 0.2.0 is on npm.
-  '@kubohiroya/turbowarp-app-shell@https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/142a44ac9a1f0a1680d5235ce9845a9ac59fc0cc': true
+  '@kubohiroya/turbowarp-app-shell@https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/142a44ac9a1f0a1680d5235ce9845a9ac59fc0cc': set this to true or false
+  '@kubohiroya/turbowarp-app-shell@https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/882dd70465d6935143d40b7b9fce0793415e15bc': true
   es5-ext: false
   esbuild: true
   fsevents: false
