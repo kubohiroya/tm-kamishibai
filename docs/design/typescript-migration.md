@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 301 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 272 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 301: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 272: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -276,7 +276,14 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   entries of the default limits, so its return type is those defaults, and four signatures that
   took `Readonly<Record<string, number>>` now name every limit they read.
 
-  What is left is roughly 220 more placeholder members and about 80 genuine lookups.
+  The runtime controller is the clearest case of the flag reporting a design fact rather than a
+  style problem: `currentAction()` returns nothing once a scene runs past its last action, and the
+  callers were written as though it always had one. It returns `| null` now, and the three callers
+  say which case they are — the action context throws, because it is only built while an action
+  runs; the failure record and the dispatch loop bind the action once and branch, which also closes
+  the gap where two `currentAction()` calls could disagree.
+
+  What is left is roughly 200 more placeholder members and about 70 genuine lookups.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.

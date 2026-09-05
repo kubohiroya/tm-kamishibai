@@ -504,12 +504,13 @@ export function createDsl4RuntimeController({
     return structuredScene ?? scenes[currentSceneIndex];
   }
 
-  function currentAction() {
+  /** The action the runtime is on, or null once the scene has run past its last action. */
+  function currentAction(): Readonly<Record<string, any>> | null {
     if (structuredAction) return structuredAction;
     const actions = (currentScene()?.actions ?? []) as ReadonlyArray<
       Readonly<Record<string, unknown>>
     >;
-    return actions[currentActionIndex];
+    return actions[currentActionIndex] ?? null;
   }
 
   function isRehearsalSceneStatefulAction(action: Readonly<Record<string, unknown>> | null) {
@@ -809,6 +810,10 @@ export function createDsl4RuntimeController({
   function actionContext(actionGeneration: number, signal: AbortSignal): ActionContext {
     const scene = currentScene();
     const action = currentAction();
+    // The context is built while an action runs, so both are present.
+    if (!scene || !action) {
+      throw new TypeError('DSL 4.0 action context requires an active scene and action');
+    }
     const sceneId = String(scene.id);
     const actionPath = String(action.id);
     return {
@@ -1030,6 +1035,7 @@ export function createDsl4RuntimeController({
   function applyPosePreviewMirroring(scene: Readonly<Record<string, unknown>>) {
     if (!posePreviewMirroringEnabled) return;
     const operation = port.setPosePreviewMirroring;
+    if (typeof operation !== 'function') return;
     const storyPreview = isRecord(recognition.preview) ? recognition.preview : {};
     const scenePreview = isRecord(scene.posePreview) ? scene.posePreview : {};
     const mode = scenePreview.mirroring ?? storyPreview.mirroring ?? 'mirrored';
@@ -1049,6 +1055,8 @@ export function createDsl4RuntimeController({
       throw error;
     }
     const nextScene = scenes[nextIndex];
+    // enterScene resolves the index against the scene list before reaching here.
+    if (!nextScene) throw new TypeError(`DSL 4.0 scene index ${nextIndex} does not exist`);
     const from = currentScene()?.id ?? null;
     port.hideSceneActors?.(
       deepFreeze({
@@ -1136,7 +1144,7 @@ export function createDsl4RuntimeController({
       throw error;
     }
     for (const [ruleIndex, rule] of rules.entries()) {
-      if (rule.else) return rule.else;
+      if (typeof rule.else === 'string') return rule.else;
       if (typeof evaluateCondition !== 'function') {
         const error = new Error('Runtime condition evaluator is not available');
         Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});
@@ -1144,7 +1152,7 @@ export function createDsl4RuntimeController({
       }
       let matches;
       try {
-        matches = await evaluateCondition(rule.if, context.variables, context);
+        matches = await evaluateCondition(String(rule.if), context.variables, context);
       } catch (error) {
         throw mapDsl4RuntimeExpressionError(error, {
           storyPath: `/branches/${encodeDsl4StoryPathSegment(branchId)}/${ruleIndex}/if`,
@@ -1152,7 +1160,7 @@ export function createDsl4RuntimeController({
         });
       }
       ensureActive(context);
-      if (matches) return rule.goto;
+      if (matches) return String(rule.goto);
     }
     const error = new Error(`Branch ${branchId} has no matching destination`);
     Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-BRANCH-002'});
@@ -1534,7 +1542,8 @@ export function createDsl4RuntimeController({
     status = 'failed';
     pendingVariableWrites = [];
     actionAbortController?.abort('runtime-failed');
-    const actionPath = typeof currentAction()?.id === 'string' ? String(currentAction().id) : null;
+    const failedAction = currentAction();
+    const actionPath = typeof failedAction?.id === 'string' ? String(failedAction.id) : null;
     const errorRecord =
       typeof terminalError === 'object' && terminalError !== null
         ? (terminalError as Record<string, unknown>)
@@ -1613,7 +1622,7 @@ export function createDsl4RuntimeController({
           }
           if (
             !(await enterScene(
-              String(scenes[currentSceneIndex + 1].id),
+              String(scenes[currentSceneIndex + 1]?.id),
               sceneSkip?.reason ?? 'sequential',
               activeRunId,
             ))
@@ -1701,7 +1710,9 @@ export function createDsl4RuntimeController({
         activeNestedInvocations.clear();
         try {
           const stagingTransition = pendingSceneCrossfade;
-          transition = await dispatch(currentAction(), context, {
+          const dispatchedAction = currentAction();
+          if (!dispatchedAction) break;
+          transition = await dispatch(dispatchedAction, context, {
             rehearsalSceneSkip: applyingRehearsalSceneState,
             sceneEntryStaging:
               stagingTransition?.sceneId === scene.id &&
@@ -1936,7 +1947,7 @@ export function createDsl4RuntimeController({
       return runPromise;
     }
     if (currentSceneIndex + 1 < scenes.length) {
-      const nextSceneId = String(scenes[currentSceneIndex + 1].id);
+      const nextSceneId = String(scenes[currentSceneIndex + 1]?.id);
       emit('navigation.advance', {
         fromStoryPath,
         toStoryPath: storyPathAt(currentSceneIndex + 1, 0),
@@ -2175,7 +2186,8 @@ export function createDsl4RuntimeController({
     try {
       beginStructuredStory();
       releaseStructuredAction(reason);
-      applyPosePreviewMirroring(scenes[target.sceneIndex]);
+      const targetScene = scenes[target.sceneIndex];
+      if (targetScene) applyPosePreviewMirroring(targetScene);
       bindStructuredScene(sceneId, actionIndex);
     } catch (error) {
       fail(error);

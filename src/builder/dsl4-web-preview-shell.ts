@@ -1,3 +1,4 @@
+import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
 import {createDsl4DiagnosticUiProjection} from '../dsl4/diagnostic-projection.js';
@@ -201,20 +202,6 @@ interface PreviewAssetPipelineSurface {
   whenIdle(): Promise<unknown>;
 }
 
-interface PreviewReloadSurfaceSurface {
-  submitCandidate(candidate: unknown): unknown;
-  setDiagnostic(channel: string, diagnostic: unknown): unknown;
-  setWatchState(channel: string, state: unknown): unknown;
-  acknowledgePreviewInput(input?: unknown): unknown;
-  registerReservedRect(owner: unknown, rect: unknown): unknown;
-  updateReservedRect(owner: unknown, rect: unknown): unknown;
-  unregisterReservedRect(owner: unknown): unknown;
-  updateViewport(viewport: unknown, safeArea?: unknown): unknown;
-  dispose(): unknown;
-  getSnapshot(): Readonly<Record<string, any>>;
-  whenIdle(): Promise<unknown>;
-}
-
 function validateCoordinator(value: unknown, requireRestart: boolean) {
   if (
     !isRecord(value) ||
@@ -272,7 +259,7 @@ function validateReloadSurface(value: unknown) {
   ) {
     throw new TypeError('preview reload surface does not implement the required contract');
   }
-  return value as unknown as PreviewReloadSurfaceSurface;
+  return value as unknown as Dsl4PreviewReloadSurface;
 }
 
 function validateAssetPipelineOptions(value: unknown, requireRestart: boolean) {
@@ -482,7 +469,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   let assetPipeline: PreviewAssetPipelineSurface | null = null;
   let assetPipelineStarted = false;
   let assetSourceQueue = Promise.resolve();
-  let reloadSurface: PreviewReloadSurfaceSurface | null = null;
+  let reloadSurface: Dsl4PreviewReloadSurface | null = null;
   let manualRestartDepth = 0;
 
   function reportError(error: unknown) {
