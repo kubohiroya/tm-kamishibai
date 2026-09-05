@@ -189,7 +189,12 @@ export function createDsl4NavigationSession({
       'inputArbitration must provide key, pointer, and pointer cancellation arbitration',
     );
   }
-  const arbitration = inputArbitration as Record<string, Function> | undefined;
+  const arbitration = inputArbitration as
+    | Record<
+        'shouldDeferNavigationKey' | 'arbitrateNavigationPointer' | 'cancelNavigationPointer',
+        (...parameters: any[]) => any
+      >
+    | undefined;
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
   }

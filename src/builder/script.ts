@@ -101,10 +101,10 @@ export function transformScript(
   }
   const missing = assetManifest.assets.filter((entry) => !seen.has(entry.name));
   if (missing.length > 0) {
-    const entry = missing[0];
+    const [entry] = missing;
     throw new Sb3BuilderError('Manifest asset is not referenced by an external asset= command.', {
-      assetName: entry.name,
-      inputUri: entry.uri,
+      assetName: entry?.name,
+      inputUri: entry?.uri,
       stage: 'transform-script',
     });
   }
