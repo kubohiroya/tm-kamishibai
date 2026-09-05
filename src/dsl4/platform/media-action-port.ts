@@ -59,7 +59,11 @@ function validateTransitionHost(value: unknown) {
   return validateCompositionMethods(value, 'Media transition host', methods);
 }
 
-function validatePayload(value: unknown, keys: string[], command: string) {
+function validatePayload<Key extends string>(
+  value: unknown,
+  keys: readonly Key[],
+  command: string,
+): Record<Key, string> {
   if (
     !isRecord(value) ||
     Object.keys(value).length !== keys.length ||
@@ -70,12 +74,14 @@ function validatePayload(value: unknown, keys: string[], command: string) {
       `${command} payload must provide exactly ${keys.join(', ')}`,
     );
   }
+  const candidate = value as Record<string, unknown>;
   for (const key of keys) {
-    if (typeof value[key] !== 'string' || value[key].length === 0) {
+    const entry = candidate[key];
+    if (typeof entry !== 'string' || entry.length === 0) {
       throw portError('K4-MEDIA-PORT-001', `${command}.${key} must be a non-empty string`);
     }
   }
-  return value as unknown as Record<string, string>;
+  return value as unknown as Record<Key, string>;
 }
 
 function validateContext(value: unknown) {

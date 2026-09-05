@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 112 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 96 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 112: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 96: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
