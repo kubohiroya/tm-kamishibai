@@ -195,7 +195,10 @@ export function removeProjectAsset(
       'K4-ASSET-CONVERT-PROJECT-001',
     );
   }
-  const [{candidate, index}] = matches;
+  const [firstMatch] = matches;
+  // The count check above leaves exactly one match.
+  if (!firstMatch) fail('Project asset did not resolve', 'K4-ASSET-CONVERT-PROJECT-001');
+  const {candidate, index} = firstMatch;
   collection.splice(index, 1);
   target[collectionName] = collection;
   const filename =

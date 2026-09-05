@@ -216,7 +216,8 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
         provider.descriptor.files as ReadonlyArray<Record<string, any>>
       ).filter((file) => file.assetId === assetId);
       for (const [index, file] of asset.files.entries()) {
-        const entryName = String(descriptorFiles[index].entry);
+        // The descriptor lists one file per asset file, in the same order.
+        const entryName = String(descriptorFiles[index]?.entry);
         const existing = candidateEntries.get(entryName);
         if (existing && !equalBytes(existing, file.bytes)) {
           entryFail(

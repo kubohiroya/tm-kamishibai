@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 74 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 62 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 74: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 62: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -292,7 +292,9 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   name a validated collaborator; key a validated record by the checked method names; name a limit
   bag after its defaults; iterate `Object.entries` instead of looking the key back up; read a
   bounded array with a default and say why it is unreachable; guard a nullable collaborator with an
-  accessor that throws. A seventh turned up in the reload overlay: a frozen lookup table that had
+  accessor that throws. An eighth: a local `assert(condition, message)` helper declared as
+  `asserts condition`, which lets the guard the code already runs narrow the value it checked — one
+  line each in three builder modules. A seventh turned up in the reload overlay: a frozen lookup table that had
   been widened to `Readonly<Record<string, …>>` by an explicit cast. Deleting the cast restores the
   literal keys the object already had — the fix is removing a type, not adding one.
 

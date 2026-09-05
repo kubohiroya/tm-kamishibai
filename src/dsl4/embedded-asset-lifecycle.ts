@@ -30,7 +30,7 @@ function assetError(assetId: string, code: string, message: string, cause?: unkn
 }
 
 function mediaType(value: unknown) {
-  return typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : '';
+  return typeof value === 'string' ? (value.split(';', 1)[0]?.trim().toLowerCase() ?? '') : '';
 }
 
 function isVerifiedRemoteSource(source: Record<string, any>) {

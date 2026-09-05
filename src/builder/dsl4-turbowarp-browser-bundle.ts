@@ -189,7 +189,7 @@ export async function buildDsl4TurboWarpBrowserBundle(options: {
   if (outputs.length !== 1 || chunks.length !== 1) {
     throw new TypeError('TurboWarp browser bundle must produce exactly one output file');
   }
-  const bytes = new TextEncoder().encode(chunks[0].code ?? '');
+  const bytes = new TextEncoder().encode(chunks[0]?.code ?? '');
   if (bytes.byteLength < 1 || bytes.byteLength > maximum) {
     throw new TypeError(`TurboWarp browser bundle must contain 1-${maximum} bytes`);
   }

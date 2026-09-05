@@ -5,7 +5,7 @@ import {configureEmbeddedScript} from './embedded-script.js';
 import {Sb3BuilderError, toAssetError} from './errors.js';
 import {md5} from './hash.js';
 
-function assert(condition: unknown, message: string) {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Sb3BuilderError(message, {stage: 'build-sb3'});
 }
 
