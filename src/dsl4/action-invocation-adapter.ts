@@ -68,12 +68,12 @@ function validateStoryDocument(input: unknown) {
 
 function validateThreadHost(input: unknown) {
   if (!isRecord(input)) throw new TypeError('Custom action thread host must be an object');
-  for (const method of ['start', 'waitForCompletion', 'stop']) {
+  for (const method of ['start', 'waitForCompletion', 'stop'] as const) {
     if (typeof input[method] !== 'function') {
       throw new TypeError(`Custom action thread host must provide ${method}`);
     }
   }
-  const host = input as Record<string, Function>;
+  const host = input as Record<'start' | 'waitForCompletion' | 'stop', (...p: any[]) => any>;
   return Object.freeze({
     start: host.start.bind(input),
     waitForCompletion: host.waitForCompletion.bind(input),

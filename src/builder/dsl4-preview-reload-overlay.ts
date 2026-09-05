@@ -12,7 +12,7 @@ const statePresentation = Object.freeze({
   diagnostic: {icon: '!', badge: 'Error', label: 'Reload status: preview needs attention'},
   paused: {icon: 'Ⅱ', badge: 'Paused', label: 'Reload status: watching is paused'},
   disconnected: {icon: '×', badge: 'Offline', label: 'Reload status: preview is disconnected'},
-}) as Readonly<Record<string, Readonly<{icon: string; badge: string; label: string}>>>;
+});
 const anchorLabels = Object.freeze({
   'top-left': '左上',
   'top-center': '上中央',
@@ -441,7 +441,8 @@ export function createDsl4PreviewReloadOverlay(options: {
           badge: 'Debug',
           label: `Debug paused before ${debugState?.command} in ${debugState?.sceneId}`,
         }
-      : (statePresentation[lastPolicyState.status] ?? statePresentation.watching);
+      : (statePresentation[lastPolicyState.status as keyof typeof statePresentation] ??
+        statePresentation.watching);
     const statusKey = debugPaused ? 'debug-paused' : lastPolicyState.status;
     statusButton.setAttribute('data-reload-state', lastPolicyState.status);
     statusButton.setAttribute(
@@ -658,17 +659,20 @@ export function createDsl4PreviewReloadOverlay(options: {
       !event.shiftKey
     ) {
       event.preventDefault();
-      const value = positionShortcuts[event.code];
+      // The code was matched against the shortcut list just above.
+      const value = positionShortcuts[event.code] ?? 'top-right';
       observe(policy.selectPosition(value));
       return;
     }
     const activeAnchor = [...anchorButtons.entries()].find(
       ([, button]) => button === document.activeElement,
     );
-    if (activeAnchor && Object.hasOwn(anchorNeighbors[activeAnchor[0]], event.code)) {
+    const activeNeighbors = activeAnchor ? anchorNeighbors[activeAnchor[0]] : undefined;
+    if (activeNeighbors && Object.hasOwn(activeNeighbors, event.code)) {
       event.preventDefault();
-      const next = anchorNeighbors[activeAnchor[0]][event.code];
-      anchorButtons.get(next).focus();
+      const next = activeNeighbors[event.code];
+      const nextButton = next === undefined ? undefined : anchorButtons.get(next);
+      nextButton?.focus();
       return;
     }
     if (activeAnchor && ['Enter', 'Space'].includes(event.code)) {
