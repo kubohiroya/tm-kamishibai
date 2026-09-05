@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
+
+import {resolveModulePath} from './helpers/module-path.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
@@ -14,6 +16,7 @@ const pureEntries = [
   'asset-bundle-descriptor.js',
   'asset-dependency-index.js',
   'binary-entry-provider.js',
+  'block-source-export.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
   'history-reducer.js',
@@ -55,7 +58,7 @@ function moduleSpecifiers(source, filename) {
 }
 
 async function importGraph(entry) {
-  const pending = [path.join(dsl4Root, entry)];
+  const pending = [await resolveModulePath(path.join(dsl4Root, entry))];
   const modules = new Map();
   while (pending.length > 0) {
     const filename = pending.pop();
@@ -71,7 +74,7 @@ async function importGraph(entry) {
         true,
         `${path.relative(repositoryRoot, filename)} escapes the DSL4 core`,
       );
-      pending.push(target);
+      pending.push(await resolveModulePath(target));
     }
   }
   return modules;
@@ -105,11 +108,17 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
 });
 
 test('keeps specialized pure modules outside their forbidden graphs', async () => {
-  const jsonPathSource = await readFile(path.join(dsl4Root, 'jsonpath.js'), 'utf8');
+  const jsonPathSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'jsonpath.js')),
+    'utf8',
+  );
   assert.deepEqual(moduleSpecifiers(jsonPathSource, 'jsonpath.js'), []);
   assert.doesNotMatch(jsonPathSource, /\b(?:eval|Function|RegExp)\s*\(|\.match\s*\(/u);
 
-  const detectorSource = await readFile(path.join(dsl4Root, 'action-hat-detector.js'), 'utf8');
+  const detectorSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'action-hat-detector.js')),
+    'utf8',
+  );
   assert.doesNotMatch(detectorSource, /\b(?:eval|Function)\s*\(/u);
 
   const objectStore = await importGraph('object-store/index.js');
@@ -144,7 +153,7 @@ test('keeps startup and host composition independent from ambient platform globa
     path.join(dsl4Root, 'runtime-startup.js'),
     path.join(dsl4Root, 'platform', 'turbowarp-runtime-host.js'),
   ]) {
-    const source = await readFile(filename, 'utf8');
+    const source = await readFile(await resolveModulePath(filename), 'utf8');
     assert.doesNotMatch(
       source,
       /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\.extensions\b)/u,
@@ -175,7 +184,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
     'turbowarp-actor-adapter.js',
     'turbowarp-runtime-host.js',
   ]) {
-    const filename = path.join(dsl4Root, 'platform', relative);
+    const filename = await resolveModulePath(path.join(dsl4Root, 'platform', relative));
     const source = await readFile(filename, 'utf8');
     for (const specifier of moduleSpecifiers(source, filename)) {
       assert.doesNotMatch(specifier, /^node:/u, relative);
@@ -194,9 +203,33 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
   }
 });
 
+test('routes runtime extension Scratch VM access through the shared runtime host', async () => {
+  const sources = new Map();
+  for (const relative of [
+    path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'),
+    path.join('scripts', 'sb3', 'dsl4-runtime-authoring-profile.js'),
+  ]) {
+    const modulePath = await resolveModulePath(path.join(repositoryRoot, relative));
+    sources.set(relative, await readFile(modulePath, 'utf8'));
+  }
+
+  for (const [relative, source] of sources) {
+    assert.doesNotMatch(source, /\bvm\.runtime\b/u, relative);
+    assert.doesNotMatch(source, /\bgetTargetForStage\b/u, relative);
+    for (const match of source.matchAll(/(\S*?)startHats\s*\(/gu)) {
+      assert.match(match[1], /^(?:this\.)?turboWarpHost\.$/u, `${relative}: ${match[0]}`);
+    }
+  }
+
+  const entry = sources.get(path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'));
+  assert.match(entry, /from '@kubohiroya\/turbowarp-runtime-host'/u);
+  assert.match(entry, /createTurboWarpRuntimeHost\(\{Scratch, requireUnsandboxed: true\}\)/u);
+  assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
+});
+
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
   const source = await readFile(
-    path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js'),
+    await resolveModulePath(path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js')),
     'utf8',
   );
   assert.doesNotMatch(source, /(?:atomic-output|\bwriteFile\b|\brename\b|\bmkdir\b|\brm\s*\()/u);

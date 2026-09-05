@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import {runCli, usage} from '../src/builder/cli.js';
+import {runCli, usage} from '../dist/builder/cli.js';
 
 runCli(process.argv.slice(2))
   .then((result) => {

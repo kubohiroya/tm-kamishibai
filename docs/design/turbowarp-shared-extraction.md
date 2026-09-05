@@ -35,12 +35,14 @@ Migration status:
 
 - `src/dsl4/platform/turbowarp-runtime-host.js` now creates the shared `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})` directly.
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
-- Related `tm-kamishibai` checks pass: `pnpm typecheck`, `pnpm lint`, and `node --test test/dsl4-architecture.test.mjs test/dsl4-turbowarp-runtime-host.test.mjs`.
+- `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
+- `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
+- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, and `pnpm test:quick`.
 
 Remaining migration candidates:
 
-- runtime access pieces from `src/dsl4/platform/turbowarp-runtime-host.js`
-- generic VM subscription patterns used by runtime shutdown handling
+- Stage target resolution in `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js`. Those ports accept a runtime that only provides `getTargetForStage`, while `createTurboWarpRuntimeHost` also requires `on` and `startHats`. Migrate them once the shared package exposes a stage-only accessor, rather than widening the port contracts to fit the current host validation.
+- `vm.runtime` access in `src/dsl4/browser-turbowarp-stage.js`, which owns its own Scratch VM instance instead of an injected TurboWarp host.
 
 Acceptance criteria:
 
