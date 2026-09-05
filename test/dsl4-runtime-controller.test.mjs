@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4RuntimeController, dsl4CoreActionNames} from '../src/dsl4/index.js';
 import {deferred} from './helpers/async-test-helpers.mjs';

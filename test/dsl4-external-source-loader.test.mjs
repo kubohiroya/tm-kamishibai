@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {
   ensureDsl4ExternalSourceCacheIdentity,

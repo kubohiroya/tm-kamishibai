@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strToU8, zipSync} from 'fflate';
@@ -542,7 +542,7 @@ test('preserves the Urashima clear, scale, visibility, layer, and loop semantics
 
 test('installs one converted file atomically and preserves the prior output on conversion errors', async (context) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tmpose-converter-'));
-  context.after(() => rm(directory, {recursive: true, force: true}));
+  context.onTestFinished(() => rm(directory, {recursive: true, force: true}));
   const inputPath = path.join(directory, 'source.txt');
   const outputPath = path.join(directory, 'story.kamishibai.yaml');
   const validSource = 'kamishibai=3.2\nsceneLabel=opening\naction=wait:1\n';
@@ -575,7 +575,7 @@ test('installs one converted file atomically and preserves the prior output on c
 
 test('exposes convert-dsl4 through the installable CLI contract', async (context) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tmpose-converter-cli-'));
-  context.after(() => rm(directory, {recursive: true, force: true}));
+  context.onTestFinished(() => rm(directory, {recursive: true, force: true}));
   const inputPath = path.join(fixtureRoot, 'full.dsl32.txt');
   const outputPath = path.join(directory, 'story.kamishibai.yaml');
   const poseModelMapPath = path.join(fixtureRoot, 'pose-models.json');

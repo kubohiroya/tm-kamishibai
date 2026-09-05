@@ -13,6 +13,9 @@ import {
   recordPublishedSb3ReleaseSnapshot,
   verifySb3ReleaseSnapshot,
   writeSb3ReleaseCandidate,
+  // @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+  // The package is migrating to TypeScript; when it publishes types this directive becomes unused
+  // and the type check fails, which is the signal to delete it and pick the real types up.
 } from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from './build.mjs';
@@ -45,18 +48,18 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export const createDsl4ReleaseSourceIdentity = computeReleaseSourceIdentity;
 
-async function readMetadata(root) {
+async function readMetadata(/** @type {any} */ root) {
   try {
     const metadata = await readSb3ReleaseSnapshotMetadata(path.join(root, dsl4ReleaseMetadataPath));
     return assertDsl4ReleaseMetadata(metadata);
   } catch (error) {
-    if (error?.code === 'ENOENT') return null;
+    if (/** @type {any} */ (error)?.code === 'ENOENT') return null;
     throw error;
   }
 }
 
 /** Materialize the in-memory release source into a throwaway directory the SB3 builder can read. */
-async function withReleaseSourceDirectory(files, build) {
+async function withReleaseSourceDirectory(/** @type {any} */ files, /** @type {any} */ build) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tmpose-kamishibai-release-'));
   const sourceDirectory = path.join(temporaryRoot, 'app');
   try {
@@ -73,14 +76,18 @@ async function withReleaseSourceDirectory(files, build) {
   }
 }
 
-function createReleaseSb3(root, files, createSb3) {
+function createReleaseSb3(
+  /** @type {any} */ root,
+  /** @type {any} */ files,
+  /** @type {any} */ createSb3,
+) {
   return () =>
-    withReleaseSourceDirectory(files, (sourceDirectory) =>
+    withReleaseSourceDirectory(files, (/** @type {any} */ sourceDirectory) =>
       createSb3(dsl4ReleaseSb3Options({root, sourceDirectory})),
     );
 }
 
-async function writeMetadataAtomically(root, metadata) {
+async function writeMetadataAtomically(/** @type {any} */ root, /** @type {any} */ metadata) {
   const filename = path.join(root, dsl4ReleaseMetadataPath);
   await mkdir(path.dirname(filename), {recursive: true});
   const temporaryPath = `${filename}.tmp-${process.pid}`;
@@ -93,7 +100,7 @@ async function writeMetadataAtomically(root, metadata) {
   }
 }
 
-async function defaultFetchReleaseArtifact(metadata) {
+async function defaultFetchReleaseArtifact(/** @type {any} */ metadata) {
   const {createDownloadableReleaseSb3} = await import('./downloadable-releases.mjs');
   const result = await createDownloadableReleaseSb3({
     ...metadata.artifact,
@@ -160,14 +167,14 @@ export async function verifyDsl4ReleaseSnapshot({
 
 export const checkDsl4Release = verifyDsl4ReleaseSnapshot;
 
-export async function verifyDsl4PublishedReleaseSnapshot(options = {}) {
+export async function verifyDsl4PublishedReleaseSnapshot(/** @type {any} */ options = {}) {
   const metadata = await readMetadata(options.root ?? repositoryRoot);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
   assert.equal(metadata.state, 'published', `${dsl4ReleaseVersion} must be published.`);
   return verifyDsl4ReleaseSnapshot(options);
 }
 
-export async function freezeDsl4Release(options = {}) {
+export async function freezeDsl4Release(/** @type {any} */ options = {}) {
   const metadata = await checkDsl4Release(options);
   if (metadata.state === 'frozen') return metadata;
   assert.equal(metadata.state, 'candidate', `${dsl4ReleaseVersion} is already published.`);
@@ -177,7 +184,7 @@ export async function freezeDsl4Release(options = {}) {
 }
 
 export async function recordDsl4Publication(
-  urls,
+  /** @type {any} */ urls,
   {root = repositoryRoot, fetchReleaseArtifact = defaultFetchReleaseArtifact} = {},
 ) {
   const metadata = await readMetadata(root);
@@ -196,7 +203,7 @@ export async function recordDsl4Publication(
   return published;
 }
 
-function argumentValue(name) {
+function argumentValue(/** @type {any} */ name) {
   const position = process.argv.indexOf(name);
   return position === -1 ? undefined : process.argv[position + 1];
 }
