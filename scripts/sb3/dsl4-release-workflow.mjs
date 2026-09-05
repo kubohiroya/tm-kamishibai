@@ -13,6 +13,9 @@ import {
   recordPublishedSb3ReleaseSnapshot,
   verifySb3ReleaseSnapshot,
   writeSb3ReleaseCandidate,
+  // @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+  // The package is migrating to TypeScript; when it publishes types this directive becomes unused
+  // and the type check fails, which is the signal to delete it and pick the real types up.
 } from '@kubohiroya/sb3-toolchain';
 
 import {createKamishibaiSb3} from './build.mjs';
@@ -20,9 +23,9 @@ import {createDsl4ReleaseSourceFiles} from './dsl4-downloadable-release.mjs';
 import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type: 'json'};
 
 export const dsl4ReleaseVersion = releasePins.release.version;
-export const dsl4NextReleaseVersion = '4.0.0-rc.12';
+export const dsl4NextReleaseVersion = '4.0.0-rc.13';
 export const dsl4ReleaseSeries = releasePins.release.series;
-export const dsl4ReleaseBuildDate = '2026-08-26';
+export const dsl4ReleaseBuildDate = '2026-09-05';
 export const dsl4ReleaseChannel = releasePins.release.channel;
 export const dsl4ReleaseTag = `v${dsl4ReleaseVersion}`;
 export const dsl4ReleaseFilename = `kamishibai-${dsl4ReleaseVersion}.sb3`;
@@ -35,15 +38,15 @@ export const dsl4ReleaseAssetUrl =
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const validReleaseStates = new Set(['candidate', 'frozen', 'published']);
 
-function normalizedSourceFiles(files) {
+function normalizedSourceFiles(/** @type {any} */ files) {
   return [...files.entries()].sort(([left], [right]) => left.localeCompare(right, 'en'));
 }
 
-export function createDsl4ReleaseSourceIdentity(files) {
+export function createDsl4ReleaseSourceIdentity(/** @type {any} */ files) {
   return computeReleaseSourceIdentity(files);
 }
 
-export function assertDsl4ReleaseMetadata(metadata) {
+export function assertDsl4ReleaseMetadata(/** @type {any} */ metadata) {
   assertSb3ReleaseSnapshotMetadata(metadata);
   assert.equal(metadata.series, dsl4ReleaseSeries, 'DSL 4 release series is invalid.');
   assert.equal(metadata.version, dsl4ReleaseVersion, 'DSL 4 release version is invalid.');
@@ -83,7 +86,7 @@ export function assertDsl4ReleaseMetadata(metadata) {
   return metadata;
 }
 
-export function assertDsl4ReleaseCanUpdate(metadata) {
+export function assertDsl4ReleaseCanUpdate(/** @type {any} */ metadata) {
   if (!metadata) return;
   assertDsl4ReleaseMetadata(metadata);
   assert.equal(
@@ -93,17 +96,17 @@ export function assertDsl4ReleaseCanUpdate(metadata) {
   );
 }
 
-async function readMetadata(root) {
+async function readMetadata(/** @type {any} */ root) {
   try {
     const source = await readFile(path.join(root, dsl4ReleaseMetadataPath), 'utf8');
     return assertDsl4ReleaseMetadata(JSON.parse(source));
   } catch (error) {
-    if (error?.code === 'ENOENT') return null;
+    if (/** @type {any} */ (error)?.code === 'ENOENT') return null;
     throw error;
   }
 }
 
-async function writeSourceFiles(directory, files) {
+async function writeSourceFiles(/** @type {any} */ directory, /** @type {any} */ files) {
   for (const [relativePath, contents] of normalizedSourceFiles(files)) {
     const outputPath = path.join(directory, relativePath);
     await mkdir(path.dirname(outputPath), {recursive: true});
@@ -111,7 +114,7 @@ async function writeSourceFiles(directory, files) {
   }
 }
 
-function sb3Options(root, sourceDirectory) {
+function sb3Options(/** @type {any} */ root, /** @type {any} */ sourceDirectory) {
   return {
     buildDate: dsl4ReleaseBuildDate,
     faviconPath: path.join(root, 'site/favicon.png'),
@@ -120,7 +123,11 @@ function sb3Options(root, sourceDirectory) {
   };
 }
 
-async function createCandidate(root, files, createSb3) {
+async function createCandidate(
+  /** @type {any} */ root,
+  /** @type {any} */ files,
+  /** @type {any} */ createSb3,
+) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tmpose-kamishibai-release-'));
   const sourceDirectory = path.join(temporaryRoot, 'app');
   try {
@@ -131,7 +138,7 @@ async function createCandidate(root, files, createSb3) {
   }
 }
 
-async function writeAtomically(filename, contents) {
+async function writeAtomically(/** @type {any} */ filename, /** @type {any} */ contents) {
   await mkdir(path.dirname(filename), {recursive: true});
   const temporaryPath = `${filename}.tmp-${process.pid}`;
   try {
@@ -143,7 +150,7 @@ async function writeAtomically(filename, contents) {
   }
 }
 
-async function defaultFetchReleaseArtifact(metadata) {
+async function defaultFetchReleaseArtifact(/** @type {any} */ metadata) {
   const {createDownloadableReleaseSb3} = await import('./downloadable-releases.mjs');
   const result = await createDownloadableReleaseSb3({
     ...metadata.artifact,
@@ -154,7 +161,10 @@ async function defaultFetchReleaseArtifact(metadata) {
   return result.archive;
 }
 
-async function verifyRemoteArtifact(metadata, fetchReleaseArtifact = defaultFetchReleaseArtifact) {
+async function verifyRemoteArtifact(
+  /** @type {any} */ metadata,
+  fetchReleaseArtifact = defaultFetchReleaseArtifact,
+) {
   await verifySb3ReleaseSnapshot({metadata, fetchPublishedArtifact: fetchReleaseArtifact});
 }
 
@@ -225,7 +235,9 @@ export async function verifyDsl4ReleaseSnapshot({
   }
   if (verifyCatalog) {
     const {downloadCatalog} = await import('../download-catalog.mjs');
-    const catalogEntry = downloadCatalog.find(({series}) => series === dsl4ReleaseSeries);
+    const catalogEntry = downloadCatalog.find(
+      (/** @type {any} */ {series}) => series === dsl4ReleaseSeries,
+    );
     assert.equal(catalogEntry?.version, metadata.version);
     if (metadata.state === 'published') {
       assert.equal(catalogEntry?.artifact?.sha256, metadata.artifact.sha256);
@@ -233,28 +245,31 @@ export async function verifyDsl4ReleaseSnapshot({
     } else {
       assert.equal(catalogEntry?.artifact, undefined);
     }
-    assert.equal(downloadCatalog.find(({recommended}) => recommended)?.version, '3.2.3');
+    assert.equal(
+      downloadCatalog.find((/** @type {any} */ {recommended}) => recommended)?.version,
+      '3.2.3',
+    );
   }
   return metadata;
 }
 
 export const checkDsl4Release = verifyDsl4ReleaseSnapshot;
 
-export async function verifyDsl4PublishedReleaseSnapshot(options = {}) {
+export async function verifyDsl4PublishedReleaseSnapshot(/** @type {any} */ options = {}) {
   const metadata = await readMetadata(options.root ?? repositoryRoot);
   assert(metadata, `Missing ${dsl4ReleaseMetadataPath}.`);
   assert.equal(metadata.state, 'published', `${dsl4ReleaseVersion} must be published.`);
   return verifyDsl4ReleaseSnapshot(options);
 }
 
-async function writeMetadataAtomically(root, metadata) {
+async function writeMetadataAtomically(/** @type {any} */ root, /** @type {any} */ metadata) {
   await writeAtomically(
     path.join(root, dsl4ReleaseMetadataPath),
     `${JSON.stringify(metadata, null, 2)}\n`,
   );
 }
 
-export async function freezeDsl4Release(options = {}) {
+export async function freezeDsl4Release(/** @type {any} */ options = {}) {
   const metadata = await checkDsl4Release(options);
   if (metadata.state === 'frozen') return metadata;
   assert.equal(metadata.state, 'candidate', `${dsl4ReleaseVersion} is already published.`);
@@ -263,7 +278,7 @@ export async function freezeDsl4Release(options = {}) {
   return frozen;
 }
 
-function publicationUrl(argumentName, value) {
+function publicationUrl(/** @type {any} */ argumentName, /** @type {any} */ value) {
   assert(value, `Missing ${argumentName}.`);
   const url = new URL(value);
   assert.equal(url.protocol, 'https:', `${argumentName} must use HTTPS.`);
@@ -271,7 +286,7 @@ function publicationUrl(argumentName, value) {
 }
 
 export async function recordDsl4Publication(
-  {npmUrl, githubReleaseUrl, pagesUrl},
+  /** @type {any} */ {npmUrl, githubReleaseUrl, pagesUrl},
   {root = repositoryRoot, fetchReleaseArtifact = defaultFetchReleaseArtifact} = {},
 ) {
   const metadata = await readMetadata(root);
@@ -296,7 +311,7 @@ export async function recordDsl4Publication(
   return published;
 }
 
-function argumentValue(name) {
+function argumentValue(/** @type {any} */ name) {
   const position = process.argv.indexOf(name);
   return position === -1 ? undefined : process.argv[position + 1];
 }

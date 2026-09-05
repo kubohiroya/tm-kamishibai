@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4LoadingScreenPresenter} from '../src/dsl4/platform/loading-screen-presenter.js';
 import {

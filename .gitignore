@@ -1,5 +1,6 @@
 node_modules/
 dist/
+site-dist/
 tmp/
 /docs/reports/
 /kamishibai.sb3

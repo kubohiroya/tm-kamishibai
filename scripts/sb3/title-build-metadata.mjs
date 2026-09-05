@@ -25,7 +25,7 @@ const assetManagerSetTextValueOpcodes = new Set([
   'tmposebundle_kubohiroyaassetmanager__setTextValue',
 ]);
 
-function escapeXml(value) {
+function escapeXml(/** @type {any} */ value) {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -34,7 +34,8 @@ function escapeXml(value) {
     .replaceAll("'", '&apos;');
 }
 
-function replaceProjectPlaceholders(value, replacements) {
+/** @returns {any} */
+function replaceProjectPlaceholders(/** @type {any} */ value, /** @type {any} */ replacements) {
   if (typeof value === 'string') {
     return replacements[value] ?? value;
   }
@@ -52,11 +53,11 @@ function replaceProjectPlaceholders(value, replacements) {
   return value;
 }
 
-function isLeapYear(year) {
+function isLeapYear(/** @type {any} */ year) {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
 
-function assertValidBuildDate(buildDate) {
+function assertValidBuildDate(/** @type {any} */ buildDate) {
   assert(
     typeof buildDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(buildDate),
     `${titleBuildDateEnvironmentVariable} must use YYYY-MM-DD: ${buildDate}`,
@@ -70,7 +71,7 @@ function assertValidBuildDate(buildDate) {
   return buildDate;
 }
 
-function formatTokyoDate(now) {
+function formatTokyoDate(/** @type {any} */ now) {
   assert(now instanceof Date && !Number.isNaN(now.valueOf()), 'A valid build time is required.');
   const parts = new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
@@ -82,6 +83,9 @@ function formatTokyoDate(now) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+/**
+ * @param {{buildDate?: string, environment?: NodeJS.ProcessEnv, now?: Date, version?: string}} [options]
+ */
 export function resolveTitleBuildMetadata({
   buildDate,
   environment = process.env,
@@ -103,16 +107,18 @@ export function resolveTitleBuildMetadata({
   });
 }
 
-export function readTitleBuildMetadataFromSb3(archiveBytes) {
+export function readTitleBuildMetadataFromSb3(/** @type {any} */ archiveBytes) {
   const archive = unzipSync(new Uint8Array(archiveBytes));
   assert(archive['project.json'], 'The SB3 archive must contain project.json.');
   const project = JSON.parse(strFromU8(archive['project.json']));
-  const stages = project.targets.filter((target) => target.isStage);
+  const stages = project.targets.filter((/** @type {any} */ target) => target.isStage);
   assert.equal(stages.length, 1, 'The SB3 archive must contain exactly one Stage target.');
-  const titleCostumes = stages[0].costumes.filter((costume) => costume.name === 'Title');
+  const titleCostumes = stages[0].costumes.filter(
+    (/** @type {any} */ costume) => costume.name === 'Title',
+  );
   assert.equal(titleCostumes.length, 1, 'The Stage must contain exactly one Title backdrop.');
   assert.equal(
-    stages[0].costumes.some((costume) => costume.name === 'Title-en'),
+    stages[0].costumes.some((/** @type {any} */ costume) => costume.name === 'Title-en'),
     false,
     'The Stage must use one locale-independent Title backdrop.',
   );
@@ -121,8 +127,8 @@ export function readTitleBuildMetadataFromSb3(archiveBytes) {
   const titleAsset = archive[titleCostume.md5ext];
   assert(titleAsset, `The SB3 archive is missing the Title asset: ${titleCostume.md5ext}`);
   const versionBlocks = project.targets
-    .flatMap((target) => Object.values(target.blocks ?? {}))
-    .filter((block) => {
+    .flatMap((/** @type {any} */ target) => Object.values(target.blocks ?? {}))
+    .filter((/** @type {any} */ block) => {
       if (!assetManagerSetTextValueOpcodes.has(block.opcode)) return false;
       return block.inputs?.NAME?.[1]?.[1] === 'about.version';
     });
@@ -159,25 +165,27 @@ export function readTitleBuildMetadataFromSb3(archiveBytes) {
   return metadata;
 }
 
-async function readPackageVersion(packageJsonPath) {
+async function readPackageVersion(/** @type {any} */ packageJsonPath) {
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   return packageJson.version;
 }
 
-async function stampSvgAsset({
-  assetsDirectory,
-  costume,
-  description,
-  placeholder,
-  project,
-  replacement,
-  sourceManifest,
-}) {
+async function stampSvgAsset(
+  /** @type {any} */ {
+    assetsDirectory,
+    costume,
+    description,
+    placeholder,
+    project,
+    replacement,
+    sourceManifest,
+  },
+) {
   assert.equal(costume.dataFormat, 'svg', `${description} must be an SVG asset.`);
   const originalFilename = costume.md5ext;
   const references = project.targets
-    .flatMap((target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
-    .filter((asset) => asset.md5ext === originalFilename);
+    .flatMap((/** @type {any} */ target) => [...(target.costumes ?? []), ...(target.sounds ?? [])])
+    .filter((/** @type {any} */ asset) => asset.md5ext === originalFilename);
   assert.equal(
     references.length,
     1,
@@ -198,8 +206,10 @@ async function stampSvgAsset({
   costume.assetId = assetId;
   costume.md5ext = filename;
   const archiveEntryIndexes = sourceManifest.archiveEntries
-    .map((entryName, index) => (entryName === originalFilename ? index : -1))
-    .filter((index) => index >= 0);
+    .map((/** @type {any} */ entryName, /** @type {any} */ index) =>
+      entryName === originalFilename ? index : -1,
+    )
+    .filter((/** @type {any} */ index) => index >= 0);
   assert.equal(
     archiveEntryIndexes.length,
     1,
@@ -215,13 +225,21 @@ async function stampSvgAsset({
   return Object.freeze({assetId, filename});
 }
 
-async function svgAssetContainsPlaceholder(assetsDirectory, costume, placeholder) {
+async function svgAssetContainsPlaceholder(
+  /** @type {any} */ assetsDirectory,
+  /** @type {any} */ costume,
+  /** @type {any} */ placeholder,
+) {
   if (costume.dataFormat !== 'svg') return false;
   const svg = await readFile(path.join(assetsDirectory, costume.md5ext), 'utf8');
   return svg.includes(placeholder);
 }
 
-async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
+async function stampTitleSource(
+  /** @type {any} */ sourceDirectory,
+  /** @type {any} */ faviconPath,
+  /** @type {any} */ metadata,
+) {
   const projectPath = path.join(sourceDirectory, 'project.source.json');
   const sourceManifestPath = path.join(sourceDirectory, 'sb3-source.json');
   const assetsDirectory = path.join(sourceDirectory, 'assets');
@@ -236,16 +254,18 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   });
   const project = replaceProjectPlaceholders(JSON.parse(projectSource), replacements);
   const sourceManifest = JSON.parse(sourceManifestSource);
-  const stages = project.targets.filter((target) => target.isStage);
+  const stages = project.targets.filter((/** @type {any} */ target) => target.isStage);
   assert.equal(stages.length, 1, 'The app source must contain exactly one Stage target.');
-  const titleCostumes = stages[0].costumes.filter((costume) => costume.name === 'Title');
+  const titleCostumes = stages[0].costumes.filter(
+    (/** @type {any} */ costume) => costume.name === 'Title',
+  );
   assert.equal(
     titleCostumes.length,
     1,
     'The Stage must contain exactly one locale-independent Title backdrop.',
   );
   assert.equal(
-    stages[0].costumes.some((costume) => costume.name === 'Title-en'),
+    stages[0].costumes.some((/** @type {any} */ costume) => costume.name === 'Title-en'),
     false,
     'The Stage must not contain a locale-specific Title-en backdrop.',
   );
@@ -256,7 +276,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     `The source manifest is missing the Title backdrop: ${titleCostume.md5ext}`,
   );
   const runtimeTitleCostumes = stages[0].costumes.filter(
-    (costume) => costume.name === 'TitleRuntime',
+    (/** @type {any} */ costume) => costume.name === 'TitleRuntime',
   );
   assert.equal(
     runtimeTitleCostumes.length,
@@ -264,7 +284,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
     'The Stage must contain exactly one locale-independent TitleRuntime backdrop.',
   );
   const officialWebsiteTargets = project.targets.filter(
-    (target) => target.name === 'officialWebsiteButton',
+    (/** @type {any} */ target) => target.name === 'officialWebsiteButton',
   );
   assert(
     officialWebsiteTargets.length <= 1,
@@ -272,11 +292,11 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
   );
   const officialWebsiteCostumes =
     officialWebsiteTargets[0]?.costumes.filter(
-      (costume) => costume.name === 'official-website-button',
+      (/** @type {any} */ costume) => costume.name === 'official-website-button',
     ) ?? [];
   const officialWebsiteRuntimeCostumes =
     officialWebsiteTargets[0]?.costumes.filter(
-      (costume) => costume.name === 'official-website-button-runtime',
+      (/** @type {any} */ costume) => costume.name === 'official-website-button-runtime',
     ) ?? [];
   if (officialWebsiteTargets.length === 1) {
     assert.equal(
@@ -423,7 +443,7 @@ async function stampTitleSource(sourceDirectory, faviconPath, metadata) {
 }
 
 export async function withTitleBuildMetadataSource(
-  {
+  /** @type {any} */ {
     buildDate,
     environment = process.env,
     faviconPath,
@@ -432,7 +452,7 @@ export async function withTitleBuildMetadataSource(
     sourceDirectory,
     version,
   },
-  callback,
+  /** @type {any} */ callback,
 ) {
   assert(typeof sourceDirectory === 'string', 'The app source directory is required.');
   assert(typeof packageJsonPath === 'string', 'The package.json path is required.');

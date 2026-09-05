@@ -35,12 +35,14 @@ Migration status:
 
 - `src/dsl4/platform/turbowarp-runtime-host.js` now creates the shared `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})` directly.
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
-- Related `tm-kamishibai` checks pass: `pnpm typecheck`, `pnpm lint`, and `node --test test/dsl4-architecture.test.mjs test/dsl4-turbowarp-runtime-host.test.mjs`.
+- `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
+- `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
+- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, and `pnpm test:quick`.
 
 Remaining migration candidates:
 
-- runtime access pieces from `src/dsl4/platform/turbowarp-runtime-host.js`
-- generic VM subscription patterns used by runtime shutdown handling
+- Stage target resolution in `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js`. Those ports accept a runtime that only provides `getTargetForStage`, while `createTurboWarpRuntimeHost` also requires `on` and `startHats`. Migrate them once the shared package exposes a stage-only accessor, rather than widening the port contracts to fit the current host validation.
+- `vm.runtime` access in `src/dsl4/browser-turbowarp-stage.js`, which owns its own Scratch VM instance instead of an injected TurboWarp host.
 
 Acceptance criteria:
 
@@ -129,19 +131,19 @@ Does not own:
 
 Remaining migration candidates:
 
-- app-neutral pieces of `src/dsl4/platform/standard-app-shell.js`
-- `src/dsl4/platform/runtime-error-indicator.js`
-- `src/dsl4/platform/runtime-warning-indicator.js`
+- app-neutral pieces of `src/dsl4/platform/standard-app-shell.ts`
+- `src/dsl4/platform/runtime-error-indicator.ts`
+- `src/dsl4/platform/runtime-warning-indicator.ts`
 
 Migration status in `tm-kamishibai`:
 
-- `src/dsl4/platform/runtime-title-controls.js`, `src/dsl4/platform/runtime-application-menu.js`, `src/dsl4/platform/loading-screen-presenter.js`, and `src/dsl4/platform/runtime-source-chooser.js` are now thin adapters over `createAppShellTitleControls`, `createAppShellApplicationMenu`, `createAppShellLoadingPresenter`, and `createAppShellSourceChooser`. Each module keeps its existing Kamishibai-facing signature, so no call site changed.
+- `src/dsl4/platform/runtime-title-controls.ts`, `src/dsl4/platform/runtime-application-menu.ts`, `src/dsl4/platform/loading-screen-presenter.ts`, and `src/dsl4/platform/runtime-source-chooser.ts` are now thin adapters over `createAppShellTitleControls`, `createAppShellApplicationMenu`, `createAppShellLoadingPresenter`, and `createAppShellSourceChooser`. Each module keeps its existing Kamishibai-facing signature, so no call site changed.
 - `tm-kamishibai` injects everything app-specific: menu and title copy, the menu icon set and its recolor filter, the stage-relative menu layout including the build-visible arrangement, the close glyph metrics, the source choice set, and every `data-dsl4-*` selector.
 - The rendered DOM is unchanged apart from additive `data-turbowarp-app-shell-*` attributes and the menu/title icon element, which is now a `<span>` with a `background-image` instead of an `<img>`. Both render the same asset at the same container-relative box.
-- `src/dsl4/platform/runtime-error-indicator.js` delegates browser locale fallback to `resolveAppShellLocale`.
+- `src/dsl4/platform/runtime-error-indicator.ts` delegates browser locale fallback to `resolveAppShellLocale`.
 - The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
 - The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
-- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.js` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
+- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.ts` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
 
 Acceptance criteria:
 
