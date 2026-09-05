@@ -174,6 +174,47 @@ function sourceDetails(result: unknown) {
   });
 }
 
+/**
+ * The collaborators the shell drives, named rather than indexed.
+ *
+ * Each interface lists exactly the members the validator below checks for and the shell calls. An
+ * index signature would leave every one possibly undefined and say nothing about its arguments.
+ */
+interface PreviewCoordinatorSurface {
+  openProject(handle?: unknown): unknown;
+  start(projectRoot: unknown, context?: unknown): unknown;
+  restart(anchor: unknown, context?: unknown): unknown;
+  pollNow(): unknown;
+  commit(choice: unknown, context?: unknown): unknown;
+  defer(): unknown;
+  dispose(): unknown;
+  getState(): Readonly<Record<string, any>>;
+  whenIdle(): Promise<unknown>;
+}
+
+interface PreviewAssetPipelineSurface {
+  start(projectRoot: unknown, context?: unknown): unknown;
+  updateSource(context: unknown): unknown;
+  pollNow(): unknown;
+  dispose(): unknown;
+  getState(): Readonly<Record<string, any>>;
+  whenIdle(): Promise<unknown>;
+}
+
+interface PreviewReloadSurfaceSurface {
+  submitCandidate(candidate: unknown): unknown;
+  setDiagnostic(channel: string, diagnostic: unknown): unknown;
+  setWatchState(channel: string, state: unknown): unknown;
+  acknowledgePreviewInput(input?: unknown): unknown;
+  registerReservedRect(owner: unknown, rect: unknown): unknown;
+  updateReservedRect(owner: unknown, rect: unknown): unknown;
+  unregisterReservedRect(owner: unknown): unknown;
+  updateViewport(viewport: unknown, safeArea?: unknown): unknown;
+  dispose(): unknown;
+  getSnapshot(): Readonly<Record<string, any>>;
+  whenIdle(): Promise<unknown>;
+}
+
 function validateCoordinator(value: unknown, requireRestart: boolean) {
   if (
     !isRecord(value) ||
@@ -189,7 +230,7 @@ function validateCoordinator(value: unknown, requireRestart: boolean) {
   ) {
     throw new TypeError('browser preview coordinator does not implement the required contract');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreviewCoordinatorSurface;
 }
 
 function validateAssetPipeline(value: unknown) {
@@ -204,7 +245,7 @@ function validateAssetPipeline(value: unknown) {
   ) {
     throw new TypeError('browser asset pipeline does not implement the required contract');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreviewAssetPipelineSurface;
 }
 
 function restartChoice(value: unknown) {
@@ -231,7 +272,7 @@ function validateReloadSurface(value: unknown) {
   ) {
     throw new TypeError('preview reload surface does not implement the required contract');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreviewReloadSurfaceSurface;
 }
 
 function validateAssetPipelineOptions(value: unknown, requireRestart: boolean) {
@@ -438,10 +479,10 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   const detailsByIntegrity = new Map();
   let selectedProjectRoot: Record<string, any> | null = null;
   let latestValidSourceResult: Readonly<Record<string, any>> | null = null;
-  let assetPipeline: Record<string, Function> | null = null;
+  let assetPipeline: PreviewAssetPipelineSurface | null = null;
   let assetPipelineStarted = false;
   let assetSourceQueue = Promise.resolve();
-  let reloadSurface: Record<string, Function> | null = null;
+  let reloadSurface: PreviewReloadSurfaceSurface | null = null;
   let manualRestartDepth = 0;
 
   function reportError(error: unknown) {
@@ -742,7 +783,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     onError: reportError,
   });
 
-  let coordinator: Record<string, Function>;
+  let coordinator: PreviewCoordinatorSurface;
   try {
     coordinator = validateCoordinator(
       createCoordinator({

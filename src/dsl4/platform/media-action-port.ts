@@ -1,3 +1,5 @@
+import {validateCompositionMethods} from './composition-contract.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -47,20 +49,14 @@ function validateComposition(value: unknown) {
     'applyToTarget',
     'playSound',
     'stopSound',
-  ];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Asset Manager composition must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  ] as const;
+  return validateCompositionMethods(value, 'Asset Manager composition', methods);
 }
 
 function validateTransitionHost(value: unknown) {
   if (value === undefined) return null;
-  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Media transition host must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  const methods = ['crossfadeStage', 'crossfadeActorSkin', 'replaceBgm', 'finishAll'] as const;
+  return validateCompositionMethods(value, 'Media transition host', methods);
 }
 
 function validatePayload(value: unknown, keys: string[], command: string) {
