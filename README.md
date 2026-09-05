@@ -133,6 +133,13 @@ Common checks:
 | `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate         |
 | `pnpm pack:smoke`   | Verify the installable npm package contents                         |
 
+`scripts/site-navigation.mjs` is a generated artifact shared byte-for-byte with
+[tm-kamishibai-docs](https://github.com/kubohiroya/tm-kamishibai-docs) and
+[tm-kamishibai-samples](https://github.com/kubohiroya/tm-kamishibai-samples), and the `Navigation
+contract` workflow compares it against the canonical docs copy. Do not edit it here. Its source is
+`scripts/site-navigation.ts` in tm-kamishibai-samples; change that file, regenerate with
+`pnpm build:site-navigation` there, and distribute the result to all three repositories.
+
 ## Documentation
 
 - [Published documentation](https://kubohiroya.github.io/tm-kamishibai-docs/): operating instructions, author guides, command references, troubleshooting, migration notes, and workshop materials
