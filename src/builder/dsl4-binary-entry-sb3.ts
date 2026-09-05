@@ -167,10 +167,9 @@ export async function embedDsl4BinaryEntryRuntimeComponentInSb3(
         const bytes = new Uint8Array(binaryBundle.getEntry(entryName));
         return {bytes, compressedSize: bytes.length};
       },
-      releaseEntries:
-        binaryBundle.releaseEntries === undefined
-          ? undefined
-          : () => binaryBundle.releaseEntries?.(),
+      ...(binaryBundle.releaseEntries === undefined
+        ? {}
+        : {releaseEntries: () => binaryBundle.releaseEntries?.()}),
       subtleCrypto: options.subtleCrypto,
     });
     const expectedNames = [
@@ -298,7 +297,9 @@ export async function createDsl4BinaryEntryProviderFromSb3(
     maxFileBytes: options.maxAssetFileBytes,
     maxTotalBytes: options.maxAssetBytes,
     maxCompressionRatio: ratioLimit,
-    releaseAfterLastAsset: options.releaseAfterLastAsset,
+    ...(options.releaseAfterLastAsset === undefined
+      ? {}
+      : {releaseAfterLastAsset: options.releaseAfterLastAsset}),
     readEntry(entryName, {signal}) {
       if (signal?.aborted) {
         entryFail('K4-ASSET-ENTRY-ABORTED-001', 'Binary entry consumption was aborted');

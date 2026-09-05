@@ -132,7 +132,7 @@ function diagnostic({
   path: string;
   node: any;
   lineCounter: import('yaml').LineCounter;
-  storyPath?: string;
+  storyPath?: string | undefined;
 }): Dsl4Diagnostic {
   return {
     version: 1,

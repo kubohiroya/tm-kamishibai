@@ -161,7 +161,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   restartGeneration: (request: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onState?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<Record<string, Function>>;
+  clock?: Readonly<Record<string, Function>> | undefined;
   minimumSuccessDisplayMs?: number;
 }) {
   if (!isRecord(options)) throw new TypeError('reload policy options are required');

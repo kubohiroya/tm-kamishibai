@@ -87,7 +87,9 @@ export function createDsl4ProjectTMRuntime(options: {
       runtime: runtime as any,
       globalObject: options.globalObject as any,
       projectBundle: loadDsl4PoseNetProjectBundle(options.project) as any,
-      subtleCrypto: options.subtleCrypto,
+      // The pinned runtime declares `subtleCrypto` optional but not nullable, so an absent digest
+      // implementation is expressed by leaving the property out.
+      ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
     });
     return bundledRuntime;
   };

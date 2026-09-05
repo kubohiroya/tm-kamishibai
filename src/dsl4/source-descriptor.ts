@@ -195,7 +195,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
     subtleCrypto = globalThis.crypto?.subtle,
   }: {
     maxSourceBytes: number;
-    sourceOriginLimits?: Record<string, number>;
+    sourceOriginLimits?: Record<string, number> | undefined;
     subtleCrypto?: {digest: Function} | undefined;
   },
 ) {

@@ -88,7 +88,7 @@ export function createDsl4AssetReloadProtocolSession({
 }: {
   transaction: Record<string, Function>;
   sessionId: string;
-  negotiatedCapabilities?: ReadonlyArray<string>;
+  negotiatedCapabilities?: ReadonlyArray<string> | undefined;
 }) {
   const transaction = validateTransaction(inputTransaction);
   const expectedSessionId = sessionId(inputSessionId);

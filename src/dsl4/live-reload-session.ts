@@ -433,7 +433,7 @@ export function createDsl4LiveReloadSession({
             currentStoryDocument: current.storyDocument,
             candidateStoryDocument: candidate.storyDocument,
             currentExecution: executionFromQuiesceToken(token),
-            isException,
+            ...(isException === undefined ? {} : {isException}),
           });
           candidate = {...candidate, token, plan};
           diagnostics = plan.diagnostics;

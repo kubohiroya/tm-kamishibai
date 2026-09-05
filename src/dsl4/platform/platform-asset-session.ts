@@ -171,7 +171,7 @@ export function createDsl4PlatformAssetSession(options: {
   poseSchedule?: Function;
   poseNow?: Function;
   poseFeedbackEnabled?: boolean;
-  onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown;
+  onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown | undefined;
   posePreviewMirroringEnabled?: boolean;
   readPoseStateBinding?: () => Readonly<{confidence?: number; progress?: number}> | null;
   cameraPreviewControlsEnabled?: boolean;

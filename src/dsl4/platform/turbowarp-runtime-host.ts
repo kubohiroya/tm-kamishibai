@@ -559,7 +559,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       ...(poseFeedbackEnabled
         ? {
             poseFeedbackEnabled: true,
-            onPoseState: poseStateObserver,
+            ...(poseStateObserver === undefined ? {} : {onPoseState: poseStateObserver}),
             ...(poseStateBinding === undefined ? {} : {readPoseStateBinding: poseStateBinding}),
           }
         : {}),
@@ -1328,15 +1328,21 @@ export async function createDsl4TurboWarpRuntimeHost(
   const startup = await createDsl4RuntimeStartup({
     featureFlags,
     project: options.project,
-    sourceFrontend: options.sourceFrontend,
-    maxSourceBytes: options.maxSourceBytes,
-    maxAssetFiles: options.maxAssetFiles,
-    maxAssetFileBytes: options.maxAssetFileBytes,
-    maxAssetBytes: options.maxAssetBytes,
+    ...(options.sourceFrontend === undefined ? {} : {sourceFrontend: options.sourceFrontend}),
+    ...(options.maxSourceBytes === undefined ? {} : {maxSourceBytes: options.maxSourceBytes}),
+    ...(options.maxAssetFiles === undefined ? {} : {maxAssetFiles: options.maxAssetFiles}),
+    ...(options.maxAssetFileBytes === undefined
+      ? {}
+      : {maxAssetFileBytes: options.maxAssetFileBytes}),
+    ...(options.maxAssetBytes === undefined ? {} : {maxAssetBytes: options.maxAssetBytes}),
     assetBundleFormat,
-    historyNavigationAvailable: options.historyNavigationAvailable,
-    historyLimits: options.historyLimits,
-    evaluateCondition: options.evaluateCondition,
+    ...(options.historyNavigationAvailable === undefined
+      ? {}
+      : {historyNavigationAvailable: options.historyNavigationAvailable}),
+    ...(options.historyLimits === undefined ? {} : {historyLimits: options.historyLimits}),
+    ...(options.evaluateCondition === undefined
+      ? {}
+      : {evaluateCondition: options.evaluateCondition}),
     onEvent(event) {
       try {
         runtimeLifecycleObserver?.(event);
@@ -1352,7 +1358,7 @@ export async function createDsl4TurboWarpRuntimeHost(
       }
       options.onEvent?.(event);
     },
-    onInputError: options.onInputError,
+    ...(options.onInputError === undefined ? {} : {onInputError: options.onInputError}),
     subtleCrypto: options.subtleCrypto,
     async createRuntimeEnvironment(
       runtimeComponent: Readonly<Record<string, unknown>>,

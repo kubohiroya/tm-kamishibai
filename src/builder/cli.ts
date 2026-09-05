@@ -525,7 +525,7 @@ function parseAuditDsl4AssetArguments(arguments_: string[]): {
     ...(sourceIncludesEnabled
       ? {
           maxSourceFiles: positiveInteger('--max-source-files'),
-          maxTotalSourceBytes,
+          ...(maxTotalSourceBytes === undefined ? {} : {maxTotalSourceBytes}),
           maxIncludeDepth: positiveInteger('--max-include-depth'),
         }
       : {}),
@@ -686,7 +686,7 @@ function parseLockDsl4AssetArguments(arguments_: string[]): {
     ...(sourceIncludesEnabled
       ? {
           maxSourceFiles: positiveInteger('--max-source-files'),
-          maxTotalSourceBytes,
+          ...(maxTotalSourceBytes === undefined ? {} : {maxTotalSourceBytes}),
           maxIncludeDepth: positiveInteger('--max-include-depth'),
         }
       : {}),
@@ -1024,6 +1024,10 @@ function parseBuildSb3Arguments(rest: string[]): Parameters<typeof buildSb3Bundl
   if (profile !== 'editor' && profile !== 'player') {
     throw new Sb3BuilderError('--profile must be either editor or player.', {stage: 'cli'});
   }
+  const requestTimeoutMs = numberValue('--timeout-ms');
+  const maxAssetBytes = numberValue('--max-asset-bytes');
+  const maxEmbeddedScriptBytes = numberValue('--max-script-bytes');
+  const maxRedirects = numberValue('--max-redirects');
   return {
     baseSb3: path.resolve(values.get('--base') as string),
     sourceScript: path.resolve(values.get('--script') as string),
@@ -1031,12 +1035,12 @@ function parseBuildSb3Arguments(rest: string[]): Parameters<typeof buildSb3Bundl
     outputDirectory: path.dirname(outputBase),
     outputName: path.basename(outputBase),
     profile,
-    allowedFileRoots: allowedFileRoots.length > 0 ? allowedFileRoots : undefined,
+    ...(allowedFileRoots.length > 0 ? {allowedFileRoots} : {}),
     allowHttp,
-    requestTimeoutMs: numberValue('--timeout-ms'),
-    maxAssetBytes: numberValue('--max-asset-bytes'),
-    maxEmbeddedScriptBytes: numberValue('--max-script-bytes'),
-    maxRedirects: numberValue('--max-redirects'),
+    ...(requestTimeoutMs === undefined ? {} : {requestTimeoutMs}),
+    ...(maxAssetBytes === undefined ? {} : {maxAssetBytes}),
+    ...(maxEmbeddedScriptBytes === undefined ? {} : {maxEmbeddedScriptBytes}),
+    ...(maxRedirects === undefined ? {} : {maxRedirects}),
   };
 }
 

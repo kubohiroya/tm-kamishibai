@@ -301,8 +301,8 @@ export function createDsl4ReloadPlan({
       severity: 'error',
       message: anchorResult.message,
       path: '$.reload.options.currentAction',
-      storyPath: anchorResult.storyPath,
-      details: anchorResult.details,
+      ...(anchorResult.storyPath === undefined ? {} : {storyPath: anchorResult.storyPath}),
+      ...(anchorResult.details === undefined ? {} : {details: anchorResult.details}),
     });
     diagnostics.push(anchorDiagnostic);
     currentActionOption = {enabled: false, reason: anchorDiagnostic.code};

@@ -1705,7 +1705,10 @@ export async function convertDsl32File(options: {
     }
   }
   const source = await readFile(inputPath);
-  const result = convertDsl32ToDsl4(source, {sourceId: inputPath, poseModels});
+  const result = convertDsl32ToDsl4(source, {
+    sourceId: inputPath,
+    ...(poseModels === undefined ? {} : {poseModels}),
+  });
   if (!result.ok || !result.yaml) {
     return {...result, outputPath: null};
   }

@@ -131,9 +131,9 @@ export function createDsl4PreviewReloadSurface(options: {
     policy,
     layoutCoordinator,
     debugExecution: options.debugExecution,
-    storage: options.storage,
-    formatTime: options.formatTime,
-    reducedMotion: options.reducedMotion,
+    ...(options.storage === undefined ? {} : {storage: options.storage}),
+    ...(options.formatTime === undefined ? {} : {formatTime: options.formatTime}),
+    ...(options.reducedMotion === undefined ? {} : {reducedMotion: options.reducedMotion}),
     onError: reportError,
   });
   const document = options.document as Record<string, any>;

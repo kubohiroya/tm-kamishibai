@@ -114,7 +114,7 @@ export function createDsl4PreviewSourceProtocolPort({
 }: {
   protocolSession: Record<string, Function>;
   sessionId: string;
-  capabilities?: ReadonlyArray<string>;
+  capabilities?: ReadonlyArray<string> | undefined;
   onEvent?: (event: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
 }) {

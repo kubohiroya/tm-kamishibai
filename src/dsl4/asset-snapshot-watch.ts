@@ -229,7 +229,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   async function release(value: {release?: Function} | null, reason: string) {
     if (!value?.release) return;
     const operation = value.release;
-    value.release = undefined;
+    delete value.release;
     await operation(reason);
   }
 
@@ -298,7 +298,12 @@ export function createDsl4AssetSnapshotWatch(options: {
         return snapshot();
       }
       await release(candidate, 'superseded');
-      candidate = {revision, key: read.key, value: read.value, release: read.release};
+      candidate = {
+        revision,
+        key: read.key,
+        value: read.value,
+        ...(read.release === undefined ? {} : {release: read.release}),
+      };
       try {
         await options.onCandidate(
           deepFreeze({formatVersion: 1, revision, key: read.key, value: read.value}),

@@ -206,15 +206,27 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
   `site/site-shell.js` and `bin/tm-kamishibai.mjs`. Dropping them would silently remove those files
   from the program before they are converted.
-- **Stricter flags, measured on the current tree:** `exactOptionalPropertyTypes` leaves 33 errors and
-  `noUncheckedIndexedAccess` leaves 847. Neither is adopted yet. Do not widen the reported optional
-  properties in bulk to clear the first one: a blanket `| undefined` pass touched 138 declarations
-  and broke the ordinary type check, because names such as `limits` and `onError` appear in many
-  unrelated option types. The one property that was worth widening repository-wide is
-  `subtleCrypto`, whose JSDoc always allowed an explicit `undefined`; that is already done.
+- **`exactOptionalPropertyTypes` is on (done).** The 33 errors were all one shape: an option was
+  forwarded as an explicit `undefined` into a property the callee declares optional. Two fixes,
+  chosen per site:
+  - **Omit the key at the call site** — `...(x === undefined ? {} : {x})` — wherever absence is what
+    the caller means. Ternaries that produced `undefined` (`x.length > 0 ? x : undefined`) became the
+    same shape, and `asset-snapshot-watch` now `delete`s a consumed `release` callback instead of
+    assigning `undefined` to it.
+  - **Declare `?: T | undefined`** on the callee, for the ten properties whose function already
+    treats `undefined` as absent — `diagnostic()` re-emits `storyPath` through
+    `...(storyPath ? {storyPath} : {})`, `createDsl4JsonPathEngine` drops `limits` into
+    `normalizeLimits`, and so on.
+
+  Widening a callee's whole option bag is still the wrong move, and the numbers say so: one such
+  pass over six option types broke the ordinary type check in six places and pushed the
+  `exactOptionalPropertyTypes` count from 23 back up to 29.
+
+- **`noUncheckedIndexedAccess` leaves 850 errors** and is not adopted yet.
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.
-- Re-evaluate TypeScript 7 (see Toolchain Decisions).
+- Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
+  `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
 
 ## Module Checklist
 

@@ -305,7 +305,9 @@ export async function installDsl4RuntimeComponent(
     poseNetBundle === undefined
       ? undefined
       : await validateDsl4PoseNetProjectBundle(poseNetBundle, {
-          subtleCrypto: subtleCrypto as unknown as Pick<SubtleCrypto, 'digest'> | undefined,
+          ...(subtleCrypto === undefined
+            ? {}
+            : {subtleCrypto: subtleCrypto as unknown as Pick<SubtleCrypto, 'digest'>}),
         });
 
   const output = structuredClone(project) as Record<string, unknown>;

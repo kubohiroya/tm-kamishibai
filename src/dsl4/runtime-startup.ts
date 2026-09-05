@@ -332,20 +332,27 @@ export async function createDsl4RuntimeStartup(
     const posePreviewControls = isRecord(posePreview.controls) ? posePreview.controls : {};
     const cameraMirroringControlEnabled =
       featureFlags.dsl4CameraPreviewControls && isRecord(posePreviewControls.mirroring);
+    const resolvedAssetLifecycle = runtimeEnvironment?.assetLifecycle ?? options.assetLifecycle;
+    const resolvedEvaluateCondition =
+      runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition;
     created = createDsl4NavigationSession({
       storyDocument: component.storyDocument,
       controlProfile: String(component.runtimeArtifact.controlProfile),
       historyNavigationAvailable: options.historyNavigationAvailable ?? false,
-      historyLimits: options.historyLimits,
+      ...(options.historyLimits === undefined ? {} : {historyLimits: options.historyLimits}),
       port: runtimeEnvironment?.port ?? (options.port as Record<string, Function>),
-      debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
-      assetLifecycle: runtimeEnvironment?.assetLifecycle ?? options.assetLifecycle,
-      createAssetLifecycle: createAssetLifecycle
-        ? () => createAssetLifecycle(component, startupContext)
-        : undefined,
-      evaluateCondition: runtimeEnvironment?.evaluateCondition ?? options.evaluateCondition,
-      onEvent: options.onEvent,
-      onInputError: options.onInputError,
+      ...(resolvedAssetLifecycle === undefined ? {} : {assetLifecycle: resolvedAssetLifecycle}),
+      ...(featureFlags.dsl4Debugger && options.debugExecution !== undefined
+        ? {debugExecution: options.debugExecution}
+        : {}),
+      ...(createAssetLifecycle
+        ? {createAssetLifecycle: () => createAssetLifecycle(component, startupContext)}
+        : {}),
+      ...(resolvedEvaluateCondition === undefined
+        ? {}
+        : {evaluateCondition: resolvedEvaluateCondition}),
+      ...(options.onEvent === undefined ? {} : {onEvent: options.onEvent}),
+      ...(options.onInputError === undefined ? {} : {onInputError: options.onInputError}),
       poseNavigationPolicyEnabled: featureFlags.dsl4PoseFeedbackModes,
       structuredDataIntegrationEnabled: featureFlags.structuredDataIntegrationEnabled,
       posePreviewMirroringEnabled:

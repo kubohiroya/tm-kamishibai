@@ -520,7 +520,7 @@ export function createDsl4JsonPathEngine({
   limits: inputLimits,
   adapter = rawJsonAdapter,
 }: {
-  limits?: Partial<typeof dsl4JsonPathDefaultLimits>;
+  limits?: Partial<typeof dsl4JsonPathDefaultLimits> | undefined;
   adapter?: unknown;
 } = {}) {
   const limits = normalizeLimits(inputLimits);

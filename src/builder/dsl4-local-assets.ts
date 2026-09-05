@@ -207,7 +207,8 @@ export async function loadDsl4LocalAssetSnapshot(
     maxTotalBytes: number;
     subtleCrypto?: {digest: Function} | undefined;
     retainPoseArchives?: boolean;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function};
+    fileSystem?:
+      {realpath: Function; lstat: Function; open: Function; readdir: Function} | undefined;
     readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   },
 ) {

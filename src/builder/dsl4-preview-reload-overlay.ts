@@ -132,7 +132,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   mount: unknown;
   policy: Record<string, Function>;
   layoutCoordinator: Record<string, Function>;
-  debugExecution?: Record<string, Function>;
+  debugExecution?: Record<string, Function> | undefined;
   storage?: {getItem?: Function; setItem?: Function};
   formatTime?: (timestamp: number) => string;
   reducedMotion?: boolean;

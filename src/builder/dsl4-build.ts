@@ -169,7 +169,7 @@ export async function buildDsl4RuntimeComponent(options: {
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
   subtleCrypto?: {digest: Function} | undefined;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function};
+  fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function} | undefined;
   readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   readAssetFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   assetConfig?: string;
@@ -238,7 +238,7 @@ export async function buildDsl4RuntimeComponent(options: {
         maxSourceBytes: sourceLimits.maxSourceFileBytes,
         subtleCrypto,
         fileSystem,
-        readSource,
+        ...(readSource === undefined ? {} : {readSource}),
       });
   if (usesBlockSource) {
     blockSourceSet = (
@@ -260,8 +260,8 @@ export async function buildDsl4RuntimeComponent(options: {
       ? await createDsl4VirtualBlockSourceGraph(blockSourceSet, graphLimits)
       : await loadDsl4BuildSourceGraph(projectRoot, source, {
           limits: graphLimits,
-          fileSystem,
-          readSource,
+          ...(fileSystem === undefined ? {} : {fileSystem}),
+          ...(readSource === undefined ? {} : {readSource}),
         });
     const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend);
     parsed = graphFrontend.parse(sourceGraph, {
@@ -357,7 +357,7 @@ export async function buildDsl4RuntimeComponent(options: {
     maxTotalBytes: maxTotalAssetBytes,
     subtleCrypto,
     fileSystem,
-    readFile: readAssetFile,
+    ...(readAssetFile === undefined ? {} : {readFile: readAssetFile}),
   });
   let assetBundle;
   try {
