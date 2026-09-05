@@ -226,8 +226,8 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   measurement is what made the work tractable: 687 of them were not array or record lookups at all
   but member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects — under the flag every member of an index signature is possibly undefined, so
-  the report was mostly about untyped boundaries, which is the same work that gates re-enabling
-  `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type`.
+  the report was mostly about untyped boundaries, which is the same work the `no-explicit-any` and
+  `no-unsafe-function-type` burndown below is doing.
 
   Eight shapes covered the whole set, and they are worth reaching for in this order:
   - **Iterate `Object.entries`** instead of looping over `Object.keys` and looking the value back
@@ -281,10 +281,17 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   `Function` rule to the `any` rule. The list now holds 1,208 occurrences over 117 files (1,042
   `any`, 166 `Function`).
 
-  What is left is a long tail. `Record<string, any>` is still over half of the remaining `any` and
-  stands in for DSL 4.0 story and asset structures that have no TypeScript declarations at all;
-  `schema/dsl-4.schema.json` already describes 127 of them and is the obvious source to generate
-  from. The remaining `Function` occurrences are per-file callback shapes, not a shared boundary.
+  What is left is a long tail with no single source. `Record<string, any>` is still over half of
+  the remaining `any` -- 562 of the 1,042 -- but classifying each of those by what it annotates
+  gives 144 `as` casts, 313 named bindings and 105 generic positions, and the named ones do not
+  converge on one domain: `asset` 31, then `event` 15, `left` 15, `payload` 15, `root` 9, `state` 9,
+  `request` 9, `invocation` 7, `document` 6, `storyDocument` 6, and a long tail of one- and
+  two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
+  that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
+  values. Only the third is reachable from `schema/dsl-4.schema.json`; generating types from its 127
+  `$defs` is worth doing, but it addresses a minority of the `Record<string, any>` rather than the
+  bulk of them. The remaining `Function` occurrences are per-file callback shapes, not a shared
+  boundary.
 
 - Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
   `typescript-eslint@8.69.0` declares `typescript: '>=4.8.4 <6.1.0'`.
