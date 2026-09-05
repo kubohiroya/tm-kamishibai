@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 340 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 301 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 340: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 301: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -272,7 +272,11 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   unreachable. A `null` collaborator that exists between `start()` and `dispose()` gets a
   `requireProtocol()`-style accessor that throws, rather than the `!` the migration warns about.
 
-  What is left is roughly 280 more placeholder members and about 140 genuine lookups.
+  A limit bag is a third recurring shape: `resolveFrontendLimits` builds its result from the
+  entries of the default limits, so its return type is those defaults, and four signatures that
+  took `Readonly<Record<string, number>>` now name every limit they read.
+
+  What is left is roughly 220 more placeholder members and about 80 genuine lookups.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.

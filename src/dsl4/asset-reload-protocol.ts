@@ -25,6 +25,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The asset reload transaction as the protocol session drives it. */
+interface AssetReloadTransactionPort {
+  stage(...parameters: any[]): any;
+  failClosed(...parameters: any[]): any;
+  commit(...parameters: any[]): any;
+  defer(...parameters: any[]): any;
+  getState(): Readonly<Record<string, any>>;
+  whenIdle(...parameters: any[]): any;
+}
+
 function validateTransaction(value: unknown) {
   if (
     !isRecord(value) ||
@@ -37,7 +47,7 @@ function validateTransaction(value: unknown) {
   ) {
     throw new TypeError('asset protocol requires an asset reload transaction');
   }
-  return value as Record<string, Function>;
+  return value as unknown as AssetReloadTransactionPort;
 }
 
 function sessionId(value: unknown) {
@@ -86,7 +96,7 @@ export function createDsl4AssetReloadProtocolSession({
   sessionId: inputSessionId,
   negotiatedCapabilities = [],
 }: {
-  transaction: Record<string, Function>;
+  transaction: AssetReloadTransactionPort;
   sessionId: string;
   negotiatedCapabilities?: ReadonlyArray<string> | undefined;
 }) {

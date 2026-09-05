@@ -1,3 +1,5 @@
+import {validateCompositionMethods} from './composition-contract.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -24,7 +26,10 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
   if (!isRecord(options) || !isRecord(options.composition)) {
     throw new TypeError('story camera lifecycle options and composition are required');
   }
-  const composition = options.composition as Record<string, Function>;
+  const composition = options.composition as Record<
+    (typeof methods)[number],
+    (...parameters: any[]) => any
+  >;
   const methods = [
     'startCamera',
     'stopCamera',
@@ -35,11 +40,8 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
     'setPreviewPosition',
     'stopRecognition',
     'isRecognizing',
-  ];
-  const missing = methods.filter((method) => typeof composition[method] !== 'function');
-  if (missing.length > 0) {
-    throw new TypeError(`story camera composition must provide ${missing.join(', ')}`);
-  }
+  ] as const;
+  validateCompositionMethods(options.composition, 'story camera composition', methods);
   if (options.setBusy !== undefined && typeof options.setBusy !== 'function') {
     throw new TypeError('setBusy must be a function');
   }
@@ -74,11 +76,12 @@ export function createDsl4StoryCameraLifecycle(options: unknown) {
 
   function stopCameraResources() {
     const errors = [];
+    // Validated above, and each pair is read once so the stop only runs while the state is active.
     for (const [active, stop] of [
       [composition.isPreviewVisible, composition.hidePreview],
       [composition.isRecognizing, composition.stopRecognition],
       [composition.isCameraRunning, composition.stopCamera],
-    ]) {
+    ] as ReadonlyArray<[(...parameters: any[]) => any, (...parameters: any[]) => any]>) {
       try {
         if (active.call(composition)) stop.call(composition);
       } catch (error) {
