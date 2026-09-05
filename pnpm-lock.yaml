@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@kubohiroya/turbowarp-app-shell':
-        specifier: github:kubohiroya/turbowarp-app-shell#882dd70465d6935143d40b7b9fce0793415e15bc
-        version: https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/882dd70465d6935143d40b7b9fce0793415e15bc
+        specifier: 0.2.0
+        version: 0.2.0
       '@kubohiroya/turbowarp-asset-manager':
         specifier: 0.14.0
         version: 0.14.0
@@ -390,9 +390,8 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
 
-  '@kubohiroya/turbowarp-app-shell@https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/882dd70465d6935143d40b7b9fce0793415e15bc':
-    resolution: {gitHosted: true, integrity: sha512-19jQa4DX9vhbJLjK1pECUTshKlzbcM8fY/7zsitcVdzqHVw67Dk/c+YTv3wd32zarlOndOOM/UzT3B1ds4BhXw==, tarball: https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/882dd70465d6935143d40b7b9fce0793415e15bc}
-    version: 0.2.0
+  '@kubohiroya/turbowarp-app-shell@0.2.0':
+    resolution: {integrity: sha512-sYt1KBEEm00biA0kjhO+1OkpSO9qb6UI++bXZvtYDQ+2sLMKM1c7vGFD8cEQsLy51cx0vSM8PUufiqb2dIwnQw==}
     engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-asset-manager@0.14.0':
@@ -3360,7 +3359,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-app-shell@https://codeload.github.com/kubohiroya/turbowarp-app-shell/tar.gz/882dd70465d6935143d40b7b9fce0793415e15bc': {}
+  '@kubohiroya/turbowarp-app-shell@0.2.0': {}
 
   '@kubohiroya/turbowarp-asset-manager@0.14.0': {}
 
