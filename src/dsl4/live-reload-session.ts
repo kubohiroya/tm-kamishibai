@@ -323,7 +323,7 @@ export function createDsl4LiveReloadSession({
     });
   }
 
-  function enqueue(operation: () => unknown | Promise<unknown>) {
+  function enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
     const result = operationQueue.then(operation);
     operationQueue = result.then(
       () => undefined,

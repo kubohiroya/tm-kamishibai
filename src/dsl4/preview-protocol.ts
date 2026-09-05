@@ -73,14 +73,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The live reload session as the preview protocol drives it. */
+/** The live reload snapshot; the protocol reads a few members off it and summarises the rest. */
+type LiveReloadState = Readonly<Record<string, any>>;
+
+/**
+ * The live reload session as the preview protocol drives it.
+ *
+ * The protocol has already validated `choice` against `restartChoices` when it calls `commit`, so
+ * the port takes the string rather than restating the union.
+ */
 interface PreviewProtocolLiveReloadPort {
-  stage(...parameters: any[]): any;
-  defer(...parameters: any[]): any;
-  commit(...parameters: any[]): any;
-  discardCandidate(...parameters: any[]): any;
-  getState(): Readonly<Record<string, any>>;
-  whenIdle(...parameters: any[]): any;
+  stage(input: unknown): Promise<LiveReloadState>;
+  defer(candidateId: number): Promise<LiveReloadState>;
+  commit(candidateId: number, choice: string): Promise<LiveReloadState>;
+  discardCandidate(): unknown;
+  getState(): LiveReloadState;
+  whenIdle(): Promise<unknown>;
 }
 
 function validateLiveReloadSession(value: unknown) {
