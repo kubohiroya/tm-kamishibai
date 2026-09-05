@@ -117,6 +117,7 @@
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.10.0",
+    "@kubohiroya/vite-plugin-turbowarp-extension": "0.3.0",
     "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",
     "@types/node": "^26.2.0",
@@ -128,7 +129,9 @@
     "prettier": "^3.9.6",
     "scratch-parser": "6.0.1",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
-    "typescript": "^7.0.2"
+    "terser": "^5.51.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   },
   "engines": {
     "node": ">=22.12.0"

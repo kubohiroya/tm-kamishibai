@@ -105,13 +105,22 @@ export function formatDsl4RuntimeProvenanceComment() {
   return `${lines.join('\n')}\n`;
 }
 
+export const dsl4RuntimeExtensionMetadata = Object.freeze({
+  id: 'kubohiroyakamishibairuntime4',
+  name: 'Kamishibai DSL 4.0 Runtime',
+  description: 'Run a self-contained Participatory AI Kamishibai DSL 4.0 story.',
+  author: 'Hiroya Kubo',
+  license: 'MPL-2.0',
+});
+
 export function formatDsl4RuntimeExtensionHeader() {
+  const {id, name, description, author, license} = dsl4RuntimeExtensionMetadata;
   return [
-    '// Name: Kamishibai DSL 4.0 Runtime',
-    '// ID: kubohiroyakamishibairuntime4',
-    '// Description: Run a self-contained Participatory AI Kamishibai DSL 4.0 story.',
-    '// By: Hiroya Kubo',
-    '// License: MPL-2.0',
+    `// Name: ${name}`,
+    `// ID: ${id}`,
+    `// Description: ${description}`,
+    `// By: ${author}`,
+    `// License: ${license}`,
     '',
     formatDsl4RuntimeProvenanceComment().trimEnd(),
     '',
