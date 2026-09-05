@@ -1,3 +1,5 @@
+import {createAppShellSourceChooser} from '@kubohiroya/turbowarp-app-shell';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -11,9 +13,19 @@ function requireElement(value, name) {
   return /** @type {Record<string, any>} */ (value);
 }
 
+/** @type {ReadonlyArray<readonly ['file' | 'project' | 'cancel', 'openFile' | 'openProject' | 'cancel']>} */
+const choiceLabelKeys = Object.freeze([
+  Object.freeze(/** @type {const} */ (['file', 'openFile'])),
+  Object.freeze(/** @type {const} */ (['project', 'openProject'])),
+  Object.freeze(/** @type {const} */ (['cancel', 'cancel'])),
+]);
+
 /**
  * Let an author choose the watched source shape while preserving the browser click activation
  * needed by File System Access pickers.
+ *
+ * The dialog mechanics live in `@kubohiroya/turbowarp-app-shell`. This module owns the Kamishibai
+ * source choices, their copy, the picker callbacks, and the `data-dsl4-*` hooks.
  *
  * @param {object} options
  * @param {unknown} options.document
@@ -46,104 +58,50 @@ export function createDsl4RuntimeSourceChooser(options) {
     }
   }
 
-  const root = requireElement(document.createElement('section'), 'source chooser');
-  const panel = requireElement(document.createElement('div'), 'source chooser panel');
-  root.setAttribute('data-dsl4-source-chooser', 'true');
-  root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-modal', 'true');
-  root.style.cssText =
-    'position:absolute;inset:0;z-index:2147483620;display:none;align-items:center;justify-content:center;padding:5cqw;box-sizing:border-box;background:rgba(0,20,18,.72);font-family:sans-serif;cursor:auto;pointer-events:auto;container-type:inline-size;';
-  root.style.position = 'absolute';
-  root.style.display = 'none';
-  panel.style.cssText =
-    'display:grid;width:min(75cqw,560px);gap:2.4cqw;padding:4cqw;box-sizing:border-box;border:.4cqw solid #005f50;border-radius:2.5cqw;background:#f4fffc;box-shadow:0 1.2cqw 3cqw rgba(0,0,0,.35);';
-
-  /** @type {Map<'file' | 'project' | 'cancel', {button: Record<string, any>, onClick: () => void}>} */
-  const buttons = new Map();
-  const definitions = /** @type {const} */ ([
-    ['file', 'openFile', options.onFile],
-    ['project', 'openProject', options.onProject],
-    ['cancel', 'cancel', options.onCancel],
-  ]);
-  let disposed = false;
-  /** @type {'en' | 'ja'} */
-  let locale = 'en';
-
-  /** @param {unknown} error */
-  function report(error) {
-    try {
-      options.onError?.(error);
-    } catch {
-      // Chooser error observers cannot change application state.
-    }
-  }
-
-  for (const [choice, , callback] of definitions) {
-    const button = requireElement(document.createElement('button'), `${choice} button`);
-    button.type = 'button';
-    button.setAttribute('data-dsl4-source-choice', choice);
-    button.style.cssText =
-      choice === 'cancel'
-        ? 'min-height:7cqw;padding:1.3cqw 2cqw;border:.3cqw solid #52605d;border-radius:1.3cqw;background:#fff;color:#263330;font:inherit;font-size:3cqw;cursor:pointer;'
-        : 'min-height:9cqw;padding:1.6cqw 2cqw;border:.3cqw solid #005f50;border-radius:1.5cqw;background:#007d66;color:#fff;font:inherit;font-size:3.4cqw;font-weight:700;cursor:pointer;';
-    button.style.cursor = 'pointer';
-    const onClick = () => {
-      try {
-        Promise.resolve(callback()).catch(report);
-      } catch (error) {
-        report(error);
-      }
-    };
-    button.addEventListener('click', onClick);
-    panel.appendChild(button);
-    buttons.set(choice, {button, onClick});
-  }
-  root.appendChild(panel);
-  mount.appendChild(root);
-
-  function render() {
-    for (const [choice, labelKey] of definitions) {
-      const button = /** @type {{button: Record<string, any>}} */ (buttons.get(choice)).button;
-      button.textContent = options.locales[locale][labelKey];
-      button.setAttribute('aria-label', options.locales[locale][labelKey]);
-    }
-  }
+  const callbacks = {
+    file: options.onFile,
+    project: options.onProject,
+    cancel: options.onCancel,
+  };
+  const chooser = createAppShellSourceChooser({
+    document: /** @type {any} */ (document),
+    mount: /** @type {any} */ (mount),
+    initialLocale: 'en',
+    fallbackLocale: 'en',
+    ariaLabel: 'Kamishibai source chooser',
+    choices: choiceLabelKeys.map(([choice, labelKey]) => ({
+      id: choice,
+      labels: Object.freeze({
+        en: options.locales.en[labelKey],
+        ja: options.locales.ja[labelKey],
+      }),
+      // Cancel is the quiet way out, so it keeps the secondary treatment.
+      primary: choice !== 'cancel',
+      align: /** @type {const} */ ('center'),
+      attributes: {'data-dsl4-source-choice': choice},
+      onSelect: /** @type {any} */ (callbacks[choice]),
+    })),
+    attributes: {root: {'data-dsl4-source-chooser': 'true'}},
+    ...(options.onError === undefined
+      ? {}
+      : {onError: /** @type {(error: unknown) => unknown} */ (options.onError)}),
+  });
 
   return Object.freeze({
-    element: root,
+    element: chooser.element,
     /** @param {'en' | 'ja'} nextLocale @param {{fileEnabled?: boolean, projectEnabled?: boolean}} [availability] */
     show(nextLocale, availability = {}) {
-      if (disposed) throw new TypeError('runtime source chooser is disposed');
-      locale = nextLocale === 'ja' ? 'ja' : 'en';
       const fileEnabled = availability.fileEnabled ?? true;
       const projectEnabled = availability.projectEnabled ?? true;
       if (typeof fileEnabled !== 'boolean' || typeof projectEnabled !== 'boolean') {
         throw new TypeError('source chooser availability must be boolean');
       }
-      for (const [choice, enabled] of /** @type {const} */ ([
-        ['file', fileEnabled],
-        ['project', projectEnabled],
-      ])) {
-        const button = /** @type {{button: Record<string, any>}} */ (buttons.get(choice)).button;
-        button.disabled = !enabled;
-        button.setAttribute('aria-disabled', String(!enabled));
-        button.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        button.style.opacity = enabled ? '1' : '0.42';
-      }
-      render();
-      root.style.display = 'flex';
+      chooser.show(nextLocale === 'ja' ? 'ja' : 'en', {
+        file: {enabled: fileEnabled},
+        project: {enabled: projectEnabled},
+      });
     },
-    hide() {
-      if (!disposed) root.style.display = 'none';
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      for (const {button, onClick} of buttons.values()) {
-        button.removeEventListener('click', onClick);
-      }
-      buttons.clear();
-      root.remove?.();
-    },
+    hide: () => chooser.hide(),
+    dispose: () => chooser.dispose(),
   });
 }

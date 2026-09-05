@@ -100,13 +100,14 @@ Migration status:
 
 ### `@kubohiroya/turbowarp-app-shell`
 
-Status: published as `@kubohiroya/turbowarp-app-shell@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-app-shell>.
+Status: published as `@kubohiroya/turbowarp-app-shell@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-app-shell>. `0.2.0` adds the shell primitives this repository now consumes.
 
 Verification:
 
 - `pnpm run check` passes.
 - `npm install @kubohiroya/turbowarp-app-shell@0.1.0` works from a clean temporary project.
-- Initial API covers locale resolution and disposable runtime message indicators with injected copy/action behavior.
+- `0.1.0` covers locale resolution and disposable runtime message indicators with injected copy/action behavior.
+- `0.2.0` adds title controls, application menu, loading presenter, and source chooser primitives, plus the injection points those primitives need to keep an app's own presentation: per-part DOM attributes, icon `filter`/`size`/`fontSize`, absolute menu action `position`, menu status `color`, `closeIconMetrics`, and `align: 'center'` source choices.
 
 Owns:
 
@@ -126,21 +127,21 @@ Does not own:
 - Pose/runtime-specific controls.
 - Title backdrop generation policy.
 
-First migration candidates:
+Remaining migration candidates:
 
 - app-neutral pieces of `src/dsl4/platform/standard-app-shell.js`
-- `src/dsl4/platform/runtime-title-controls.js`
-- `src/dsl4/platform/runtime-application-menu.js`
-- `src/dsl4/platform/loading-screen-presenter.js`
 - `src/dsl4/platform/runtime-error-indicator.js`
 - `src/dsl4/platform/runtime-warning-indicator.js`
-- app-neutral pieces of `src/dsl4/platform/runtime-source-chooser.js`
 
 Migration status in `tm-kamishibai`:
 
-- `src/dsl4/platform/runtime-error-indicator.js` now delegates browser locale fallback to `resolveAppShellLocale` from `@kubohiroya/turbowarp-app-shell@0.1.0`.
+- `src/dsl4/platform/runtime-title-controls.js`, `src/dsl4/platform/runtime-application-menu.js`, `src/dsl4/platform/loading-screen-presenter.js`, and `src/dsl4/platform/runtime-source-chooser.js` are now thin adapters over `createAppShellTitleControls`, `createAppShellApplicationMenu`, `createAppShellLoadingPresenter`, and `createAppShellSourceChooser`. Each module keeps its existing Kamishibai-facing signature, so no call site changed.
+- `tm-kamishibai` injects everything app-specific: menu and title copy, the menu icon set and its recolor filter, the stage-relative menu layout including the build-visible arrangement, the close glyph metrics, the source choice set, and every `data-dsl4-*` selector.
+- The rendered DOM is unchanged apart from additive `data-turbowarp-app-shell-*` attributes and the menu/title icon element, which is now a `<span>` with a `background-image` instead of an `<img>`. Both render the same asset at the same container-relative box.
+- `src/dsl4/platform/runtime-error-indicator.js` delegates browser locale fallback to `resolveAppShellLocale`.
 - The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
-- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.1.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+- The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
+- The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.js` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
 
 Acceptance criteria:
 

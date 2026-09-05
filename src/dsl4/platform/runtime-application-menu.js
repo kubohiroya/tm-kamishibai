@@ -1,3 +1,5 @@
+import {createAppShellApplicationMenu} from '@kubohiroya/turbowarp-app-shell';
+
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -31,9 +33,34 @@ export const dsl4RuntimeApplicationMenuDefaultIcons = Object.freeze({
     'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij4KICA8Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIxOSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjUuNSIvPgogIDxjaXJjbGUgY3g9IjI0IiBjeT0iMjQiIHI9IjE5IiBmaWxsPSJub25lIiBzdHJva2U9IiNkODU2NTYiIHN0cm9rZS13aWR0aD0iMi41Ii8+CiAgPHBhdGggZD0iTTUuNSAyNGgzN004LjUgMTVoMzFNOC41IDMzaDMxTTI0IDVjNSA1IDcgMTEgNyAxOXMtMiAxNC03IDE5Yy01LTUtNy0xMS03LTE5czItMTQgNy0xOVoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8cGF0aCBkPSJNNS41IDI0aDM3TTguNSAxNWgzMU04LjUgMzNoMzFNMjQgNWM1IDUgNyAxMSA3IDE5cy0yIDE0LTcgMTljLTUtNS03LTExLTctMTlzMi0xNCA3LTE5WiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZDg1NjU2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K',
 });
 
+// The menu artwork ships as dark line art so it stays legible on a light editor page. The stage
+// buttons are dark teal, so the runtime recolors the same asset instead of shipping a second set.
+const menuIconFilter = 'invert(1) brightness(1.7) saturate(.35)';
+
+/** @type {Readonly<Record<string, Readonly<{left: string, top: string, width: string, height: string}>>>} */
+const compactLayout = Object.freeze({
+  open: {left: '10%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
+  reload: {left: '53.3333%', top: '25.5556%', width: '36.6667%', height: '24.4444%'},
+  build: {left: '10%', top: '45%', width: '36.6667%', height: '24.4444%'},
+  about: {left: '10%', top: '58.8889%', width: '36.6667%', height: '24.4444%'},
+  language: {left: '53.3333%', top: '58.8889%', width: '36.6667%', height: '24.4444%'},
+});
+
+/** @type {Readonly<Record<string, Readonly<{left: string, top: string, width: string, height: string}>>>} */
+const buildLayout = Object.freeze({
+  open: {left: '10%', top: '18%', width: '36.6667%', height: '24.4444%'},
+  reload: {left: '53.3333%', top: '18%', width: '36.6667%', height: '24.4444%'},
+  build: {left: '10%', top: '43%', width: '80%', height: '20%'},
+  about: {left: '10%', top: '68%', width: '36.6667%', height: '24.4444%'},
+  language: {left: '53.3333%', top: '68%', width: '36.6667%', height: '24.4444%'},
+});
+
 /**
  * Render the application actions above the stage without adding Scratch sprites or clones.
  * The overlay is owned by the stage mount, so it cannot escape into the surrounding editor UI.
+ *
+ * The menu mechanics live in `@kubohiroya/turbowarp-app-shell`. This module owns the Kamishibai
+ * action set, its stage-relative layout, the icon recolor, and the `data-dsl4-*` hooks.
  *
  * @param {object} options
  * @param {unknown} options.document
@@ -91,48 +118,6 @@ export function createDsl4RuntimeApplicationMenu(options) {
     }
   }
 
-  const rootCandidate = document.createElement('section');
-  if (!isRecord(rootCandidate) || typeof rootCandidate.addEventListener !== 'function') {
-    throw new TypeError('document must create event-capable elements');
-  }
-  const root = /** @type {Record<string, any>} */ (rootCandidate);
-  root.setAttribute('data-dsl4-application-menu', 'true');
-  root.setAttribute('aria-label', 'Kamishibai application menu');
-  root.style.cssText =
-    'position:absolute;inset:0;z-index:2147483600;display:none;box-sizing:border-box;overflow:hidden;pointer-events:auto;font-family:sans-serif;container-type:inline-size;';
-  root.style.position = 'absolute';
-  root.style.display = 'none';
-  root.style.cursor = 'pointer';
-
-  /** @type {null | (() => void)} */
-  let restoreMountPosition = null;
-  if (isRecord(mount.style)) {
-    const previous = mount.style.position;
-    if (previous === undefined || previous === '' || previous === 'static') {
-      mount.style.position = 'relative';
-      restoreMountPosition = () => {
-        mount.style.position = previous ?? '';
-      };
-    }
-  }
-
-  /** @type {Array<{action: 'open' | 'reload' | 'build' | 'about' | 'language', left: string, top: string, callback: null | Function}>} */
-  const definitionList = [
-    {action: 'open', left: '10%', top: '25.5556%', callback: options.onOpen ?? null},
-    {action: 'reload', left: '53.3333%', top: '25.5556%', callback: options.onReload},
-    {action: 'about', left: '10%', top: '58.8889%', callback: options.onAbout},
-    {action: 'language', left: '53.3333%', top: '58.8889%', callback: null},
-  ];
-  if (options.onBuild !== undefined) {
-    definitionList.splice(2, 0, {
-      action: 'build',
-      left: '10%',
-      top: '45%',
-      callback: options.onBuild,
-    });
-  }
-  const definitions = Object.freeze(definitionList.map((definition) => Object.freeze(definition)));
-  const buttons = new Map();
   /** @type {'en' | 'ja'} */
   let locale = 'en';
   let reloadEnabled = options.reloadEnabled ?? true;
@@ -144,117 +129,79 @@ export function createDsl4RuntimeApplicationMenu(options) {
   if (typeof buildVisible !== 'boolean') throw new TypeError('buildVisible must be a boolean');
   if (typeof buildEnabled !== 'boolean') throw new TypeError('buildEnabled must be a boolean');
   let buildStatus = '';
-  let disposed = false;
-  const buttonShadow = '0 .625cqw 1.6667cqw rgba(0,0,0,.2)';
 
-  /** @param {unknown} failure */
-  const reportFailure = (failure) => {
-    try {
-      options.onError?.(failure);
-    } catch {
-      // Menu error observers cannot change the application lifecycle.
-    }
-  };
-  /** @param {Function} operation */
-  const invoke = (operation) => {
-    try {
-      Promise.resolve(operation()).catch(reportFailure);
-    } catch (error) {
-      reportFailure(error);
-    }
+  /** @param {string} action */
+  const labelsOf = (action) =>
+    Object.freeze({
+      en: options.locales.en[action],
+      ja: options.locales.ja[action],
+    });
+  /** @param {string} action */
+  const actionState = (action) => {
+    const enabled =
+      (action !== 'open' || openVisible) &&
+      (action !== 'reload' || reloadEnabled) &&
+      (action !== 'build' || buildEnabled);
+    const visible = (action !== 'open' || openVisible) && (action !== 'build' || buildVisible);
+    const layout = buildVisible ? buildLayout : compactLayout;
+    return {enabled, visible, position: layout[action]};
   };
 
-  for (const definition of definitions) {
-    const button = document.createElement('button');
-    const icon = document.createElement('img');
-    const label = document.createElement('span');
-    for (const element of [button, icon, label]) {
-      if (!isRecord(element) || typeof element.appendChild !== 'function') {
-        throw new TypeError('document must create application menu elements');
-      }
-    }
-    button.type = 'button';
-    button.setAttribute('data-dsl4-menu-action', definition.action);
-    button.style.cssText = `position:absolute;left:${definition.left};top:${definition.top};width:36.6667%;height:24.4444%;display:flex;min-width:0;min-height:0;align-items:center;justify-content:center;flex-direction:column;gap:.4167cqw;border:.4167cqw solid #005f50;border-radius:2.9167cqw;background:#007d66;color:#fff;box-shadow:${buttonShadow};cursor:pointer;font:inherit;`;
-    button.style.cursor = 'pointer';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.src = icons[definition.action];
-    icon.alt = '';
-    icon.style.cssText =
-      'display:block;width:10cqw;height:10cqw;object-fit:contain;filter:invert(1) brightness(1.7) saturate(.35);';
-    label.style.cssText = 'font-size:3.8cqw;line-height:1.15;text-align:center;';
-    button.appendChild(icon);
-    button.appendChild(label);
-    const onClick = () => {
-      if (
-        (definition.action === 'reload' && !reloadEnabled) ||
-        (definition.action === 'build' && (!buildVisible || !buildEnabled))
-      ) {
-        return;
-      }
-      if (definition.action === 'language') {
-        locale = locale === 'ja' ? 'en' : 'ja';
-        render();
-        invoke(() => options.onLocaleChange(locale));
-        return;
-      }
-      if (definition.callback) invoke(definition.callback);
-    };
-    button.addEventListener('click', onClick);
-    root.appendChild(button);
-    buttons.set(definition.action, {button, label, onClick});
-  }
-  const statusCandidate = document.createElement('p');
-  if (!isRecord(statusCandidate) || typeof statusCandidate.appendChild !== 'function') {
-    throw new TypeError('document must create application menu status elements');
-  }
-  const status = /** @type {Record<string, any>} */ (statusCandidate);
-  status.setAttribute('data-dsl4-menu-build-status', 'true');
-  status.setAttribute('role', 'status');
-  status.setAttribute('aria-live', 'polite');
-  status.style.cssText =
-    'position:absolute;left:10%;top:93%;width:80%;margin:0;color:#004d40;font-size:2.7cqw;line-height:1.1;text-align:center;';
-  root.appendChild(status);
-  mount.appendChild(root);
+  /** @type {ReturnType<typeof createAppShellApplicationMenu> | null} */
+  let menu = null;
+  const toggleLocale = () => {
+    locale = locale === 'ja' ? 'en' : 'ja';
+    menu?.setLocale(locale);
+    return options.onLocaleChange(locale);
+  };
+
+  /** @type {Array<{id: string, onSelect: () => unknown | Promise<unknown>}>} */
+  const definitions = [
+    {id: 'open', onSelect: /** @type {any} */ (options.onOpen ?? (() => undefined))},
+    {id: 'reload', onSelect: /** @type {any} */ (options.onReload)},
+    ...(options.onBuild === undefined
+      ? []
+      : [{id: 'build', onSelect: /** @type {any} */ (options.onBuild)}]),
+    {id: 'about', onSelect: /** @type {any} */ (options.onAbout)},
+    {id: 'language', onSelect: toggleLocale},
+  ];
+
+  menu = createAppShellApplicationMenu({
+    document: /** @type {any} */ (document),
+    mount: /** @type {any} */ (mount),
+    // Kamishibai starts every surface in English and switches from this menu.
+    initialLocale: 'en',
+    fallbackLocale: 'en',
+    ariaLabel: 'Kamishibai application menu',
+    actions: definitions.map(({id, onSelect}) => ({
+      id,
+      labels: labelsOf(id),
+      icon: {url: /** @type {Record<string, string>} */ (icons)[id], filter: menuIconFilter},
+      attributes: {'data-dsl4-menu-action': id},
+      onSelect,
+      ...actionState(id),
+    })),
+    status: {
+      text: '',
+      visible: false,
+      color: '#004d40',
+    },
+    attributes: {
+      root: {'data-dsl4-application-menu': 'true'},
+      status: {'data-dsl4-menu-build-status': 'true'},
+    },
+    ...(options.onError === undefined
+      ? {}
+      : {onError: /** @type {(error: unknown) => unknown} */ (options.onError)}),
+  });
 
   function render() {
-    for (const [action, value] of buttons) {
-      const label = options.locales[locale][action] ?? '';
-      value.label.textContent = label;
-      value.button.setAttribute('aria-label', label);
-      const disabled =
-        (action === 'open' && !openVisible) ||
-        (action === 'reload' && !reloadEnabled) ||
-        (action === 'build' && !buildEnabled);
-      const hidden = (action === 'open' && !openVisible) || (action === 'build' && !buildVisible);
-      value.button.disabled = disabled;
-      value.button.setAttribute('aria-disabled', String(disabled));
-      value.button.hidden = hidden;
-      value.button.style.display = hidden ? 'none' : 'flex';
-      value.button.style.cursor = disabled ? 'not-allowed' : 'pointer';
-      value.button.style.opacity = disabled ? '0.42' : '1';
-      value.button.style.boxShadow = disabled ? 'none' : buttonShadow;
-      if (buildVisible) {
-        if (action === 'open' || action === 'reload') value.button.style.top = '18%';
-        if (action === 'about' || action === 'language') value.button.style.top = '68%';
-        if (action === 'build') {
-          value.button.style.left = '10%';
-          value.button.style.top = '43%';
-          value.button.style.width = '80%';
-          value.button.style.height = '20%';
-        }
-      } else if (action !== 'build') {
-        const original = definitions.find((definition) => definition.action === action);
-        value.button.style.top = original?.top ?? '';
-      }
-    }
-    status.textContent = buildVisible ? buildStatus : '';
-    status.hidden = !buildVisible || buildStatus.length === 0;
+    for (const {id} of definitions) menu?.setActionState(id, actionState(id));
+    menu?.setStatus({text: buildVisible ? buildStatus : '', visible: buildVisible});
   }
 
   /** @param {boolean} enabled */
   function setReloadEnabled(enabled) {
-    if (disposed) throw new TypeError('application menu is disposed');
     if (typeof enabled !== 'boolean') throw new TypeError('reload enabled state must be a boolean');
     reloadEnabled = enabled;
     render();
@@ -262,7 +209,6 @@ export function createDsl4RuntimeApplicationMenu(options) {
 
   /** @param {{visible?: boolean, enabled?: boolean, status?: string}} state */
   function setBuildState(state) {
-    if (disposed) throw new TypeError('application menu is disposed');
     if (!isRecord(state)) throw new TypeError('build state must be an object');
     if (state.visible !== undefined) {
       if (typeof state.visible !== 'boolean')
@@ -281,29 +227,17 @@ export function createDsl4RuntimeApplicationMenu(options) {
     render();
   }
 
-  function show(nextLocale = locale) {
-    if (disposed) throw new TypeError('application menu is disposed');
-    locale = nextLocale === 'ja' ? 'ja' : 'en';
-    render();
-    root.style.display = 'block';
-    return locale;
-  }
-
-  function hide() {
-    if (!disposed) root.style.display = 'none';
-  }
-
-  function dispose() {
-    if (disposed) return;
-    disposed = true;
-    for (const {button, onClick} of buttons.values()) {
-      button.removeEventListener('click', onClick);
-    }
-    buttons.clear();
-    root.remove?.();
-    restoreMountPosition?.();
-  }
-
   render();
-  return Object.freeze({element: root, show, hide, setReloadEnabled, setBuildState, dispose});
+  return Object.freeze({
+    element: menu.element,
+    /** @param {'en' | 'ja'} [nextLocale] */
+    show(nextLocale) {
+      if (nextLocale !== undefined) locale = nextLocale === 'ja' ? 'ja' : 'en';
+      return menu.show(locale);
+    },
+    hide: () => menu.hide(),
+    setReloadEnabled,
+    setBuildState,
+    dispose: () => menu.dispose(),
+  });
 }

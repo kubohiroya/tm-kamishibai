@@ -5,11 +5,11 @@
   "channel": "next",
   "buildDate": "2026-08-26",
   "state": "candidate",
-  "sourceIdentity": "sha256:0893142f2426845204caed9978a3e48b9004094f27137b4204f5ce70254934b2",
+  "sourceIdentity": "sha256:40a4fa1f6084fcc65c91d8b551dcf8d0b24bf2980d44cce956fe27959cf2dfab",
   "artifact": {
     "filename": "kamishibai-4.0.0-rc.11.sb3",
-    "sha256": "a64ba3c3307ec9d983eda2c674df94745d031f162531e97be8b421614473fb07",
-    "size": 6769946,
+    "sha256": "8be2c4152895c124617f84516c5283a589b226bac9cfd1ef895d87c6494b40f2",
+    "size": 6776955,
     "url": "https://github.com/kubohiroya/tm-kamishibai/releases/download/v4.0.0-rc.11/kamishibai-4.0.0-rc.11.sb3"
   },
   "publication": {
