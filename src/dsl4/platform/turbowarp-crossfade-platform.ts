@@ -81,7 +81,8 @@ function createDrawableCopy(renderer: Record<string, any>, target: Record<string
 
 /** TurboWarp renderer and Asset Manager implementation for visual and BGM crossfades. */
 export function createDsl4TurboWarpCrossfadePlatform(options: {
-  runtime: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost: unknown;
   scheduler?: unknown;
   frameMilliseconds?: number;
   createAudioVoice?: (
@@ -91,11 +92,26 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   createImageBitmap?: (canvas: HTMLCanvasElement) => Promise<ImageBitmap>;
   onBackgroundError?: (error: unknown) => unknown;
 }) {
-  if (!isRecord(options) || !isRecord(options.runtime) || !isRecord(options.runtime.renderer)) {
-    throw new TypeError('Crossfade platform requires a TurboWarp runtime renderer');
+  if (
+    !isRecord(options) ||
+    !isRecord(options.runtimeHost) ||
+    typeof options.runtimeHost.getRenderer !== 'function' ||
+    typeof options.runtimeHost.requestRedraw !== 'function' ||
+    typeof options.runtimeHost.getStageTarget !== 'function'
+  ) {
+    throw new TypeError('Crossfade platform requires an injected TurboWarp runtime host');
   }
-  const runtime = options.runtime as Record<string, any>;
-  const renderer = runtime.renderer as Record<string, any>;
+  const runtimeHost = options.runtimeHost as {
+    getRenderer: () => unknown;
+    requestRedraw: () => void;
+    getStageTarget: () => unknown;
+  };
+  let renderer: Record<string, any>;
+  try {
+    renderer = runtimeHost.getRenderer() as Record<string, any>;
+  } catch (error) {
+    throw new TypeError('Crossfade platform requires a TurboWarp runtime renderer', {cause: error});
+  }
   const scheduler = (options.scheduler ?? defaultScheduler()) as Record<string, Function>;
   if (['now', 'setTimeout', 'clearTimeout'].some((name) => typeof scheduler[name] !== 'function')) {
     throw new TypeError('Crossfade scheduler must provide now, setTimeout, and clearTimeout');
@@ -199,7 +215,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       cleaned = true;
       target.setEffect?.('ghost', baseline);
       renderer.destroyDrawable(copy.drawableId, copy.group);
-      runtime.requestRedraw?.();
+      runtimeHost.requestRedraw();
     };
     let finishCurrent = cleanup;
     const preparation = Object.freeze({
@@ -235,7 +251,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
             'ghost',
             baseline + (100 - baseline) * eased,
           );
-          runtime.requestRedraw?.();
+          runtimeHost.requestRedraw();
         },
         cleanup,
       );
@@ -319,14 +335,14 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       cleaned = true;
       renderer.destroyDrawable(drawableId, group);
       renderer.destroySkin(skinId);
-      runtime.requestRedraw?.();
+      runtimeHost.requestRedraw();
     };
     const operation = timeline(
       Number(transition.seconds) * 1000,
       (progress) => {
         const eased = applyDsl4MoveEasing(transitionEasing(transition.easing), progress);
         renderer.updateDrawableEffect(drawableId, 'ghost', eased * 100);
-        runtime.requestRedraw?.();
+        runtimeHost.requestRedraw();
       },
       cleanup,
     );
@@ -412,9 +428,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       transition: Record<string, any>,
       signal?: AbortSignal,
     ) {
-      const stage = runtime.targets?.find(
-        (target: Record<string, any>) => target?.isStage === true,
-      );
+      const stage = runtimeHost.getStageTarget() as Record<string, any> | null | undefined;
       if (!stage) throw platformError('The Stage target is unavailable');
       return crossfadeDrawable(stage, apply, transition, signal);
     },

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4BubbleAdvanceIndicatorPresenter} from '../src/dsl4/platform/index.js';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
 
 function manualScheduler() {
   let now = 0;
@@ -66,11 +67,11 @@ function fixture() {
     onTargetVisualChange() {},
     getCustomState: () => ({skinId: 1}),
   };
-  const runtime = {
+  const runtimeHost = createTestTurboWarpRuntimeHost({
     renderer: {_allSkins: [null, skin]},
     requestRedraw() {},
-  };
-  return {draws, runtime, skin, target};
+  });
+  return {draws, runtimeHost, skin, target};
 }
 
 test('loops image asset frames at the text end and restores the native bubble renderer', () => {
@@ -79,7 +80,7 @@ test('loops image asset frames at the text end and restores the native bubble re
   const originalReflow = view.skin._reflowLines;
   const originalRender = view.skin._renderTextBubble;
   const presenter = createDsl4BubbleAdvanceIndicatorPresenter({
-    runtime: view.runtime,
+    runtimeHost: view.runtimeHost,
     scheduler: clock.scheduler,
     getAssetResource(assetId) {
       return {kind: 'image', objectUrl: `blob:${assetId}`};
@@ -112,7 +113,7 @@ test('fails closed for missing image resources and disposes active timers', () =
   const view = fixture();
   const clock = manualScheduler();
   const presenter = createDsl4BubbleAdvanceIndicatorPresenter({
-    runtime: view.runtime,
+    runtimeHost: view.runtimeHost,
     scheduler: clock.scheduler,
     getAssetResource: () => null,
     createImage: () => ({complete: true, naturalWidth: 1, naturalHeight: 1, src: ''}),
@@ -127,7 +128,7 @@ test('fails closed for missing image resources and disposes active timers', () =
   );
 
   const working = createDsl4BubbleAdvanceIndicatorPresenter({
-    runtime: view.runtime,
+    runtimeHost: view.runtimeHost,
     scheduler: clock.scheduler,
     getAssetResource: (assetId) => ({kind: 'image', objectUrl: `blob:${assetId}`}),
     createImage: () => ({complete: true, naturalWidth: 1, naturalHeight: 1, src: ''}),

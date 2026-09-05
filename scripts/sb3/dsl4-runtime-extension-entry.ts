@@ -804,10 +804,7 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   hideAllDisplayTargets() {
-    const targets = this.turboWarpHost.runtime.targets;
-    if (!Array.isArray(targets)) return;
-    for (const target of targets) {
-      if (target?.isStage === true) continue;
+    for (const target of this.turboWarpHost.spriteTargets() as Record<string, any>[]) {
       if (typeof target?.setVisible === 'function') target.setVisible(false);
     }
   }

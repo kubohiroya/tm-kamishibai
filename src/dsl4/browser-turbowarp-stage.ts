@@ -194,7 +194,7 @@ export function createDsl4BrowserTurboWarpStage(options: {
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
 
   function snapshot() {
-    const targets = Array.isArray(vm?.runtime?.targets) ? vm.runtime.targets : [];
+    const targets = runtimeHost ? runtimeHost.targets() : [];
     return deepFreeze({
       version: 1,
       status,

@@ -275,6 +275,51 @@ test('routes runtime extension Scratch VM access through the shared runtime host
   assert.match(entry, /turboWarpHost\.onRuntimeEvent\('PROJECT_STOP_ALL'/u);
 });
 
+test('reads renderer, monitors, and targets through the shared runtime host', async () => {
+  for (const relative of [
+    path.join('src', 'dsl4', 'platform', 'turbowarp-crossfade-platform.js'),
+    path.join('src', 'dsl4', 'platform', 'bubble-advance-indicator.js'),
+  ]) {
+    const source = await readFile(
+      await resolveModulePath(path.join(repositoryRoot, relative)),
+      'utf8',
+    );
+    assert.doesNotMatch(source, /\bruntime\.renderer\b/u, relative);
+    assert.doesNotMatch(source, /\bruntime\.requestRedraw\b/u, relative);
+    assert.match(source, /runtimeHost\.(?:getRenderer|requestRedraw)\s*\(/u, relative);
+  }
+
+  const poseFeedback = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'scratch-pose-feedback-adapter.js')),
+    'utf8',
+  );
+  assert.doesNotMatch(poseFeedback, /\bruntime\.monitorBlocks\b/u);
+  assert.doesNotMatch(poseFeedback, /\bruntime\.getMonitorState\b/u);
+  assert.match(poseFeedback, /runtimeHost\.getMonitorBlocks\s*\(/u);
+  assert.match(poseFeedback, /runtimeHost\.getMonitorState\s*\(/u);
+
+  const browserStage = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'browser-turbowarp-stage.js')),
+    'utf8',
+  );
+  // The module owns the VM it creates, so it is the one place allowed to name vm.runtime — and
+  // only to build the host every other read goes through.
+  assert.deepEqual(
+    [...browserStage.matchAll(/[^\n]*\bvm\.runtime\b[^\n]*/gu)].map((match) => match[0].trim()),
+    ['runtimeHost = createTurboWarpRuntimeHost({runtime: vm.runtime});'],
+  );
+
+  const variableBlocks = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'platform', 'turbowarp-runtime-variable-block.js')),
+    'utf8',
+  );
+  assert.match(variableBlocks, /createBlockSurfaceBuilder\(/u);
+  assert.match(variableBlocks, /coerceScalarBlockValue\(/u);
+  // Block records are the shared builder's job; the DSL 4.0 vocabulary stays here.
+  assert.doesNotMatch(variableBlocks, /hideFromPalette/u);
+  assert.doesNotMatch(variableBlocks, /disableMonitor/u);
+});
+
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
   const source = await readFile(
     await resolveModulePath(path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js')),

@@ -8,7 +8,7 @@ The goal is not to move Kamishibai semantics into shared packages. Shared packag
 
 ### `@kubohiroya/turbowarp-runtime-host`
 
-Status: published as `@kubohiroya/turbowarp-runtime-host@0.1.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-host>.
+Status: published as `@kubohiroya/turbowarp-runtime-host@0.2.0` and pushed to <https://github.com/kubohiroya/turbowarp-runtime-host>. 0.2.0 added target enumeration, renderer access, monitor access, `createBlockSurfaceBuilder`, and `coerceScalarBlockValue`.
 
 Verification:
 
@@ -43,14 +43,22 @@ Migration status:
 - `getTargetForStage` no longer appears anywhere in `tm-kamishibai`, and `test/dsl4-architecture.test.mjs` keeps it out.
 - Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
 
+Migrated onto `turbowarp-runtime-host@0.2.0`:
+
+- Renderer access. `src/dsl4/platform/turbowarp-crossfade-platform.js` and `src/dsl4/platform/bubble-advance-indicator.js` take an injected `runtimeHost` and use `getRenderer()` and `requestRedraw()`. The shared `requestRedraw()` is a no-op on a runtime without one, which replaced the `runtime.requestRedraw?.()` feature test at every call site.
+- Monitor access. The Scratch pose feedback adapter uses `getMonitorBlocks()` and `getMonitorState()` instead of validating `runtime.monitorBlocks` and `runtime.getMonitorState` itself. It also stopped passing a second argument to `changeBlock`: TurboWarp's `Blocks` instance holds its own runtime and `changeBlock(args)` takes one parameter, so that argument had always been ignored.
+- Stage lookup in the crossfade platform, which used to hand-roll `runtime.targets.find(isStage)`.
+- Target enumeration in `src/dsl4/browser-turbowarp-stage.js` and the extension entry's `hideAllDisplayTargets`, through `targets()` and `spriteTargets()`.
+- The runtime variable block surface. `src/dsl4/platform/turbowarp-runtime-variable-block.js` builds its 20 blocks through `createBlockSurfaceBuilder`, and `coerceDsl4StoryVariableBlockValue` delegates to `coerceScalarBlockValue` with the `K4` prefix. Record shape, palette visibility, the reporter monitor default, and duplicate-opcode detection now live in the shared package; every opcode, label, and menu item stays here. The rebuilt surface is byte-identical to the previous hand-written one across all three visibility combinations.
+
 Remaining migration candidates:
 
-These need API that `turbowarp-runtime-host@0.1.0` does not expose yet, so they stay in `tm-kamishibai` until the shared package grows:
+Each of these has a specific reason to stay, not just missing API:
 
-- Target enumeration (`runtime.targets`) used by `src/dsl4/platform/turbowarp-actor-adapter.js`, `src/dsl4/platform/asset-manager-adapter.js`, `src/dsl4/platform/turbowarp-crossfade-platform.js`, and `src/dsl4/action-hat-detector.js`.
-- Renderer access (`runtime.renderer`, `runtime.requestRedraw`) used by the crossfade platform and the bubble advance indicator.
-- Monitor access (`runtime.monitorBlocks`, `runtime.getMonitorState`) used by the Scratch pose feedback adapter through `runtimeHost.runtime`.
-- The runtime variable block surface and the block surface construction helper named in issue #689. Those are `getInfo()`-shaped block builders; extracting them needs an app-neutral block surface API in the shared package.
+- `src/dsl4/platform/turbowarp-actor-adapter.js` filters targets on `isStage === false`, which is stricter than the shared `spriteTargets()` predicate `isStage !== true`; it also validates the targets array eagerly at construction, while `targets()` validates lazily per call. Moving it would loosen actor resolution and shift when a malformed runtime is reported.
+- `src/dsl4/platform/asset-manager-adapter.js` treats a missing or malformed runtime as "no project target" and degrades to the logical name. The shared accessors are deliberately strict, so injecting a host there would turn a tolerated case into a throw.
+- `src/dsl4/action-hat-detector.js` is a declared pure DSL 4.0 core entry. `test/dsl4-architecture.test.mjs` keeps `@kubohiroya/turbowarp-*` imports out of that graph unless the package is registered in `pureSharedPackages`, so it stays a pure function over a runtime-shaped argument.
+- `runtime.ext_scratch3_looks` (actor speech) is Scratch extension internals rather than runtime host surface, and no shared accessor is planned.
 
 Acceptance criteria:
 
