@@ -342,6 +342,8 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   const blobs = new Map();
   let fileCount = 0;
   let totalBytes = 0;
+  // Narrowed in place rather than through a local, so this stays a type-only edit and the
+  // generated playback runtime keeps its current bytes.
   for (const [id, asset] of Object.entries(
     (storyDocument.assets ?? {}) as Readonly<Record<string, StoryDocumentAsset>>,
   ).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {

@@ -110,7 +110,7 @@ function resolveAssetLimits(
  * The two producers reaching here do not share a diagnostic type, and `diagnostics[0]` is optional
  * under `noUncheckedIndexedAccess`, so this declares the surface it reads.
  */
-function diagnosticError(diagnostic: Readonly<{code?: string; message?: string}> | undefined) {
+function diagnosticError(diagnostic: Readonly<{message?: unknown; code?: unknown}> | undefined) {
   const error = new Error(
     String(diagnostic?.message ?? 'The packaged DSL 4.0 binary component is invalid.'),
   );
