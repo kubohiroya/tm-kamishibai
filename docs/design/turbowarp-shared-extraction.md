@@ -124,7 +124,7 @@ Status: published as `@kubohiroya/turbowarp-app-shell@0.1.0` and pushed to <http
 Verification:
 
 - `pnpm run check` passes.
-- `npm install @kubohiroya/turbowarp-app-shell@0.1.0` works from a clean temporary project.
+- `npm install @kubohiroya/turbowarp-app-shell@0.1.0` and `@0.2.0` both work from a clean temporary project.
 - `0.1.0` covers locale resolution and disposable runtime message indicators with injected copy/action behavior.
 - `0.2.0` adds title controls, application menu, loading presenter, and source chooser primitives, plus the injection points those primitives need to keep an app's own presentation: per-part DOM attributes, icon `filter`/`size`/`fontSize`, absolute menu action `position`, menu status `color`, `closeIconMetrics`, and `align: 'center'` source choices.
 
@@ -161,7 +161,6 @@ Migration status in `tm-kamishibai`:
 - The fatal error dialog still remains in `tm-kamishibai` because it owns DSL 4.0 diagnostic rows, source excerpts, `data-dsl4-runtime-error-*` test hooks, and the return-to-menu action contract.
 - The non-modal runtime warning indicator still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` only exposes a centered message overlay and does not yet provide a bottom toast with dismiss semantics and `role="status"`.
 - The Standard app-shell title dialog in `src/dsl4/platform/standard-app-shell.ts` still remains in `tm-kamishibai` because `turbowarp-app-shell@0.2.0` has no modal about-dialog primitive, and the dialog owns the Kamishibai title backdrop policy and runtime start handoff.
-- `0.2.0` is pinned to a git ref rather than a registry version, because the npm release is still blocked on publish credentials. `package.json` names the commit, and `pnpm-workspace.yaml` allows its build so pnpm runs the package's `prepare` script — a git checkout carries no `dist/`. Restore the registry pin once `0.2.0` is on npm: set the dependency back to `0.2.0`, drop the `allowBuilds` entry, restore the `minimumReleaseAgeExclude` entry, and re-run `pnpm install`.
 
 Acceptance criteria:
 
