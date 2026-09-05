@@ -1,3 +1,4 @@
+import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from './runtime-port.js';
 import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js';
@@ -162,8 +163,7 @@ export function createDsl4RuntimeController({
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }: {
   storyDocument: Readonly<Record<string, unknown>>;
-  // The port is dispatched by method name at runtime, so an index signature is the honest shape.
-  port: Record<string, (...parameters: any[]) => unknown>;
+  port: Dsl4RuntimePort;
   assetLifecycle?: {
     prepare: Function;
     setLoading: Function;
@@ -922,7 +922,9 @@ export function createDsl4RuntimeController({
     payload: Record<string, unknown>,
     context: ActionContext,
   ): Promise<unknown> {
-    const operation = port[method];
+    const operation = (port as Readonly<Record<string, Dsl4RuntimePortOperation | undefined>>)[
+      method
+    ];
     if (typeof operation !== 'function') {
       const error = new Error(`Runtime port method ${method} is not available`);
       Object.defineProperty(error, 'code', {value: 'K4-RUNTIME-PORT-001'});

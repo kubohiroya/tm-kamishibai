@@ -341,7 +341,7 @@
   },
   "src/dsl4/navigation-session.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 10
@@ -536,7 +536,7 @@
   },
   "src/dsl4/platform/turbowarp-runtime-host.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 32
+      "count": 29
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 14
@@ -585,7 +585,7 @@
   },
   "src/dsl4/runtime-controller.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 8
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 10
@@ -593,7 +593,7 @@
   },
   "src/dsl4/runtime-startup.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 7
