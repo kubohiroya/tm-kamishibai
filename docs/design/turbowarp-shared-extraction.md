@@ -97,8 +97,14 @@ Acceptance criteria:
 Migration status:
 
 - `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
+- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.js` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
 - The broader `createDsl4PreviewProtocolSession` still remains in `tm-kamishibai` because the current DSL 4.0 wire protocol owns candidate ids, restart choices, source integrity, and `preview.source.staged/committed/deferred` events that are not part of `turbowarp-preview-runtime@0.1.0`.
 - Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
+
+Open boundary decision before the next extraction step:
+
+- `src/dsl4/preview-protocol.js` and `src/dsl4/reload-planner.js` are declared DSL 4.0 core entries in `test/dsl4-architecture.test.mjs`, and that test forbids every `@kubohiroya/turbowarp-*` specifier inside a core import graph. The duplicate capability token grammar in `preview-protocol.js` therefore cannot delegate to `normalizeCapabilities` yet.
+- The rule exists to keep the core free of platform and I/O dependencies. `@kubohiroya/turbowarp-preview-runtime` has no dependencies and no platform access, so a narrow allowlist for that one specifier would be consistent with the rule's intent, but relaxing a core purity guard is a separate decision and should land as its own PR rather than as a side effect of an import migration.
 
 ### `@kubohiroya/turbowarp-app-shell`
 
