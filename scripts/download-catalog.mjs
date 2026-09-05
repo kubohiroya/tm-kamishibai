@@ -22,7 +22,7 @@ const dsl4PublishedArtifact =
       }
     : undefined;
 
-function deepFreeze(value) {
+function deepFreeze(/** @type {any} */ value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
     for (const nested of Object.values(value)) deepFreeze(nested);
@@ -30,7 +30,7 @@ function deepFreeze(value) {
   return value;
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(/** @type {any} */ value) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
@@ -86,12 +86,12 @@ export const downloadCatalog = deepFreeze([
 ]);
 
 assert.equal(
-  new Set(downloadCatalog.map(({series}) => series)).size,
+  new Set(downloadCatalog.map((/** @type {any} */ {series}) => series)).size,
   downloadCatalog.length,
   'Download catalog series must be unique.',
 );
 assert.equal(
-  downloadCatalog.filter(({recommended}) => recommended).length,
+  downloadCatalog.filter((/** @type {any} */ {recommended}) => recommended).length,
   1,
   'The download catalog must have exactly one recommended release.',
 );
@@ -156,14 +156,16 @@ for (const entry of downloadCatalog) {
 
 export const downloadableReleases = deepFreeze(
   downloadCatalog
-    .filter(({artifact}) => artifact)
-    .map(({artifact, series, version}) => ({...artifact, series, version})),
+    .filter((/** @type {any} */ {artifact}) => artifact)
+    .map((/** @type {any} */ {artifact, series, version}) => ({...artifact, series, version})),
 );
 
-export const recommendedDownload = downloadCatalog.find(({recommended}) => recommended);
+export const recommendedDownload = downloadCatalog.find(
+  (/** @type {any} */ {recommended}) => recommended,
+);
 assert(recommendedDownload?.artifact, 'The recommended download must have a published artifact.');
 
-function escapeHtml(value) {
+function escapeHtml(/** @type {any} */ value) {
   return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -172,7 +174,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderActions(entry) {
+function renderActions(/** @type {any} */ entry) {
   const actions = [];
   if (entry.artifact) {
     actions.push(
@@ -189,7 +191,7 @@ function renderActions(entry) {
   return actions.map((action) => `        ${action}`).join('\n');
 }
 
-function renderFileInfo(entry) {
+function renderFileInfo(/** @type {any} */ entry) {
   if (!entry.artifact) return escapeHtml(entry.unavailableNote);
   return (
     `ファイル: <code>${escapeHtml(entry.artifact.filename)}</code>` +
@@ -197,17 +199,17 @@ function renderFileInfo(entry) {
   );
 }
 
-function formatFileSize(size) {
+function formatFileSize(/** @type {any} */ size) {
   const megabytes = (size / 1_000_000).toLocaleString('ja-JP', {maximumFractionDigits: 1});
   return `${megabytes} MB（${size.toLocaleString('ja-JP')} bytes）`;
 }
 
-function formatDisplayDate(value) {
+function formatDisplayDate(/** @type {any} */ value) {
   const [year, month, day] = value.split('-').map(Number);
   return `${year}年${month}月${day}日`;
 }
 
-function renderCard(entry) {
+function renderCard(/** @type {any} */ entry) {
   return `    <article data-version="${escapeHtml(entry.series)}">
       <h2>kamishibai ${escapeHtml(entry.series)} <span class="status status--${escapeHtml(entry.statusKind)}">${escapeHtml(entry.status)}</span></h2>
       <p>${escapeHtml(entry.description)}</p>
@@ -219,7 +221,7 @@ ${renderActions(entry)}
     </article>`;
 }
 
-export function renderDownloadCards(template) {
+export function renderDownloadCards(/** @type {any} */ template) {
   const placeholderCount = template.split(downloadCardsPlaceholder).length - 1;
   assert.equal(
     placeholderCount,

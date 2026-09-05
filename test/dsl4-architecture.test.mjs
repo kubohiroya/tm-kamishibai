@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
+
+import {resolveModulePath} from './helpers/module-path.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const dsl4Root = path.join(repositoryRoot, 'src', 'dsl4');
@@ -56,7 +58,7 @@ function moduleSpecifiers(source, filename) {
 }
 
 async function importGraph(entry) {
-  const pending = [path.join(dsl4Root, entry)];
+  const pending = [await resolveModulePath(path.join(dsl4Root, entry))];
   const modules = new Map();
   while (pending.length > 0) {
     const filename = pending.pop();
@@ -72,7 +74,7 @@ async function importGraph(entry) {
         true,
         `${path.relative(repositoryRoot, filename)} escapes the DSL4 core`,
       );
-      pending.push(target);
+      pending.push(await resolveModulePath(target));
     }
   }
   return modules;
@@ -106,11 +108,17 @@ test('keeps every declared DSL4 core graph outside platform and I/O dependencies
 });
 
 test('keeps specialized pure modules outside their forbidden graphs', async () => {
-  const jsonPathSource = await readFile(path.join(dsl4Root, 'jsonpath.js'), 'utf8');
+  const jsonPathSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'jsonpath.js')),
+    'utf8',
+  );
   assert.deepEqual(moduleSpecifiers(jsonPathSource, 'jsonpath.js'), []);
   assert.doesNotMatch(jsonPathSource, /\b(?:eval|Function|RegExp)\s*\(|\.match\s*\(/u);
 
-  const detectorSource = await readFile(path.join(dsl4Root, 'action-hat-detector.js'), 'utf8');
+  const detectorSource = await readFile(
+    await resolveModulePath(path.join(dsl4Root, 'action-hat-detector.js')),
+    'utf8',
+  );
   assert.doesNotMatch(detectorSource, /\b(?:eval|Function)\s*\(/u);
 
   const objectStore = await importGraph('object-store/index.js');
@@ -145,7 +153,7 @@ test('keeps startup and host composition independent from ambient platform globa
     path.join(dsl4Root, 'runtime-startup.js'),
     path.join(dsl4Root, 'platform', 'turbowarp-runtime-host.js'),
   ]) {
-    const source = await readFile(filename, 'utf8');
+    const source = await readFile(await resolveModulePath(filename), 'utf8');
     assert.doesNotMatch(
       source,
       /(?:globalThis\.(?:document|window)|\bindexedDB\b|\bfetch\s*\(|\bScratch\.extensions\b)/u,
@@ -176,7 +184,7 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
     'turbowarp-actor-adapter.js',
     'turbowarp-runtime-host.js',
   ]) {
-    const filename = path.join(dsl4Root, 'platform', relative);
+    const filename = await resolveModulePath(path.join(dsl4Root, 'platform', relative));
     const source = await readFile(filename, 'utf8');
     for (const specifier of moduleSpecifiers(source, filename)) {
       assert.doesNotMatch(specifier, /^node:/u, relative);
@@ -201,7 +209,8 @@ test('routes runtime extension Scratch VM access through the shared runtime host
     path.join('scripts', 'sb3', 'dsl4-runtime-extension-entry.js'),
     path.join('scripts', 'sb3', 'dsl4-runtime-authoring-profile.js'),
   ]) {
-    sources.set(relative, await readFile(path.join(repositoryRoot, relative), 'utf8'));
+    const modulePath = await resolveModulePath(path.join(repositoryRoot, relative));
+    sources.set(relative, await readFile(modulePath, 'utf8'));
   }
 
   for (const [relative, source] of sources) {
@@ -220,7 +229,7 @@ test('routes runtime extension Scratch VM access through the shared runtime host
 
 test('keeps one-shot build output mutation outside the orchestration core', async () => {
   const source = await readFile(
-    path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js'),
+    await resolveModulePath(path.join(repositoryRoot, 'src', 'builder', 'dsl4-build.js')),
     'utf8',
   );
   assert.doesNotMatch(source, /(?:atomic-output|\bwriteFile\b|\brename\b|\bmkdir\b|\brm\s*\()/u);

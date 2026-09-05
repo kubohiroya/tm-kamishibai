@@ -3,7 +3,7 @@ import {createHash, webcrypto} from 'node:crypto';
 import {mkdtemp, mkdir, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {zipSync} from 'fflate';
@@ -30,7 +30,7 @@ function sri(bytes) {
 
 async function workspace(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-assets-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
+  t.onTestFinished(() => rm(root, {recursive: true, force: true}));
   await mkdir(path.join(root, 'assets'), {recursive: true});
   await mkdir(path.join(root, 'models', 'rescue', 'nested'), {recursive: true});
   const files = {
@@ -269,7 +269,7 @@ test('rejects non-normalized and non-local locators before filesystem access', a
 test('rejects root escape, asset symlinks, nested symlinks, and wrong file kinds', async (t) => {
   const fixture = await workspace(t);
   const outside = await mkdtemp(path.join(os.tmpdir(), 'dsl4-local-assets-outside-'));
-  t.after(() => rm(outside, {recursive: true, force: true}));
+  t.onTestFinished(() => rm(outside, {recursive: true, force: true}));
   await writeFile(path.join(outside, 'outside.svg'), 'outside');
   await symlink(path.join(outside, 'outside.svg'), path.join(fixture.root, 'assets', 'link.svg'));
   await symlink(outside, path.join(fixture.root, 'assets', 'escape'));

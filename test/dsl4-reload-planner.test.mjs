@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4ReloadPlan} from '../src/dsl4/index.js';
 import {dsl4TestSourceFrontend} from './helpers/dsl4-test-frontend.mjs';

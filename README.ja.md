@@ -22,15 +22,15 @@ TM紙芝居は、カメラの前で取ったポーズをきっかけに、登場
 
 ## どの版を使うか
 
-|                      | 3.2.3                                | 4.0.0-rc.11                                  |
+|                      | 3.2.3                                | 4.0.0-rc.12                                  |
 | -------------------- | ------------------------------------ | -------------------------------------------- |
 | 状態                 | 安定版・現在の推奨                   | リリース候補                                 |
 | 向いている用途       | 体験会、安定運用、既存の3.1／3.2作品 | YAML台本、ブラウザ制作、CLI／APIの先行検証   |
 | 台本                 | 3.1／3.2テキストDSL                  | DSL 4.0 YAML                                 |
 | 入手先               | [ダウンロードページ][downloads]      | [ダウンロードページ][downloads]／npmの`next` |
-| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc11]                    |
+| 変更時に確認する文書 | [公開ドキュメント][docs]             | [4.0リリースノート][rc12]                    |
 
-迷った場合は3.2.3を使ってください。4.0.0-rc.11は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
+迷った場合は3.2.3を使ってください。4.0.0-rc.12は正式版前の公開候補であり、安定運用よりも4.0の制作フローやAPIを検証したい場合に適しています。公開済みの3.1／3.2作品は、4.0へ移行しなくても引き続き利用できます。
 
 ## まず体験する
 
@@ -46,7 +46,7 @@ TM紙芝居は、カメラの前で取ったポーズをきっかけに、登場
 
 ### YAML projectには4.0を使う
 
-YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.11を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
+YAML authoring、browser live preview、現行CLI／APIを評価する場合は4.0.0-rc.12を使います。Standard SB3は`.k4.yml`台本ファイルまたはproject directoryを開き、変更の検証、live preview、配布用SB3の生成まで行えます。
 
 ```yaml
 kamishibai: '4.0'
@@ -67,10 +67,10 @@ scenes:
 
 ## CLI quick start
 
-[`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.11)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.12.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
+[`@kubohiroya/tm-kamishibai`](https://www.npmjs.com/package/@kubohiroya/tm-kamishibai/v/4.0.0-rc.12)のCLIは、CI、再現可能なbuild、大規模project、配布profileの管理に向いています。Node.js 22.18.0以上とpnpm 11を使用し、検証するversionを固定して導入します。
 
 ```bash
-pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.11
+pnpm add --save-exact @kubohiroya/tm-kamishibai@4.0.0-rc.12
 pnpm exec tm-kamishibai --help
 pnpm exec tm-kamishibai validate-dsl4 --input opening.k4.yml --format pretty
 pnpm exec tm-kamishibai preview-dsl4 --watch --base kamishibai-4-base.sb3 --project-root .
@@ -111,9 +111,13 @@ preview、validator、builder、runtime loaderは同じStoryDocumentと診断を
 
 必要な環境:
 
-- Node.js 22.12.0以上
+- Node.js 22.18.0以上。buildのscriptはTypeScriptのmoduleを直接importするため、22.18.0以降で
+  無指定で有効になるtype strippingを前提とします。
 - pnpm 11
 - SB3やブラウザ統合を変更する場合は、TurboWarpを実行できるdesktop環境
+
+このrepositoryはTypeScriptで記述します。`scripts/`配下を含め、新規moduleは`.ts`で追加します。
+`src/`に残るJavaScriptは生成物のみです。編集が必要なJavaScriptは、拡張せずTypeScriptへ変換します。
 
 セットアップ:
 
@@ -124,15 +128,16 @@ pnpm verify:quick
 
 主な検証:
 
-| Command             | Purpose                                                             |
-| ------------------- | ------------------------------------------------------------------- |
-| `pnpm verify:quick` | Lint, type-check, and run the lightweight tests during development  |
-| `pnpm verify:full`  | Run the CI-equivalent SB3, full test, E2E, site, and package checks |
-| `pnpm format`       | Check formatting with Prettier                                      |
-| `pnpm test`         | Run the full unit and integration suite                             |
-| `pnpm run build`    | Build the site and fetch verified Release SB3 assets into `dist/`   |
-| `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate         |
-| `pnpm pack:smoke`   | Verify the installable npm package contents                         |
+| Command             | Purpose                                                                |
+| ------------------- | ---------------------------------------------------------------------- |
+| `pnpm verify:quick` | Lint, type-check, and run the lightweight tests during development     |
+| `pnpm verify:full`  | Run the CI-equivalent SB3, full test, E2E, site, and package checks    |
+| `pnpm format`       | Check formatting with Prettier                                         |
+| `pnpm test`         | Run the full unit and integration suite                                |
+| `pnpm run build`    | Build the site and fetch verified Release SB3 assets into `site-dist/` |
+| `pnpm build:lib`    | Compile `src/` into the published `dist/` package                      |
+| `pnpm sb3:check`    | Regenerate and verify the current DSL 4.0 release candidate            |
+| `pnpm pack:smoke`   | Verify the installable npm package contents                            |
 
 `scripts/site-navigation.mjs`は生成物です。
 [tm-kamishibai-docs](https://github.com/kubohiroya/tm-kamishibai-docs)と
@@ -146,7 +151,7 @@ pnpm verify:quick
 
 - [公開ドキュメント](https://kubohiroya.github.io/tm-kamishibai-docs/): 操作、作者ガイド、コマンドリファレンス、トラブルシューティング、移行ノート、ワークショップ資料
 - [ドキュメントsource](https://github.com/kubohiroya/tm-kamishibai-docs): 公開文書の原稿とissue
-- [v4.0.0-rc.11リリースノート][rc11]: 公開状態、互換性、検証済みartifact、rollback
+- [v4.0.0-rc.12リリースノート][rc12]: 公開状態、互換性、検証済みartifact、rollback
 - [Issue tracker](https://github.com/kubohiroya/tm-kamishibai/issues): bug、提案、実装scope、受け入れ基準、rollback plan
 
 ## 関連プロジェクト
@@ -162,4 +167,4 @@ pnpm verify:quick
 
 [docs]: https://kubohiroya.github.io/tm-kamishibai-docs/
 [downloads]: https://kubohiroya.github.io/tm-kamishibai/downloads/
-[rc11]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.11.md
+[rc12]: https://github.com/kubohiroya/tm-kamishibai/blob/main/docs/releases/v4.0.0-rc.12.md
