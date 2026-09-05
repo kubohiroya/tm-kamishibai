@@ -1,5 +1,7 @@
 import {createSvgTextComposition} from '@kubohiroya/turbowarp-svg-text/composition';
 
+import type {Dsl4CompositionMethod} from './composition-contract.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -68,7 +70,7 @@ function validateComposition(value: unknown) {
   }
   return value as Record<
     'defineStyle' | 'setText' | 'releaseTarget' | 'releaseAll',
-    (...parameters: any[]) => any
+    Dsl4CompositionMethod
   >;
 }
 

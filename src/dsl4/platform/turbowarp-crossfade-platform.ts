@@ -1,4 +1,5 @@
 import {applyDsl4MoveEasing, isDsl4MoveEasing} from '../move-easing.js';
+import type {Dsl4CompositionMethod} from './composition-contract.js';
 
 const defaultFrameMilliseconds = 1000 / 60;
 
@@ -114,7 +115,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   }
   const scheduler = (options.scheduler ?? defaultScheduler()) as Record<
     'now' | 'setTimeout' | 'clearTimeout',
-    (...parameters: any[]) => any
+    Dsl4CompositionMethod
   >;
   if (
     (['now', 'setTimeout', 'clearTimeout'] as const).some(

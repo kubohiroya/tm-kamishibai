@@ -1,5 +1,6 @@
 import {createTurboWarpBubbleComposition} from '@kubohiroya/turbowarp-bubble/turbowarp-adapter';
 import {bubbleStyleNameForStyleIds, composeBubbleStyles} from '../bubble-style.js';
+import type {Dsl4CompositionMethod} from './composition-contract.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -23,7 +24,7 @@ const bubbleStyleFields = Object.freeze([
 ]);
 
 function defineStyle(
-  composition: Record<'defineStyle' | 'releaseAll', (...parameters: any[]) => any>,
+  composition: Record<'defineStyle' | 'releaseAll', Dsl4CompositionMethod>,
   name: string,
   style: Record<string, unknown>,
 ) {
@@ -60,7 +61,7 @@ export function createDsl4BubblePlatform(options: {
     audio: options.assetManager,
     textCapability: options.textCapability,
     ...(options.scheduler === undefined ? {} : {scheduler: options.scheduler}),
-  }) as Record<'defineStyle' | 'show' | 'releaseAll', (...parameters: any[]) => any>;
+  }) as Record<'defineStyle' | 'show' | 'releaseAll', Dsl4CompositionMethod>;
   for (const method of ['defineStyle', 'show', 'releaseAll'] as const) {
     if (typeof composition[method] !== 'function') {
       throw new TypeError(`Bubble composition must provide ${method}`);

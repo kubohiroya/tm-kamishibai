@@ -1,7 +1,7 @@
 import {createAssetManagerComposition as createDefaultAssetManagerComposition} from '@kubohiroya/turbowarp-asset-manager/composition';
 import {createAsyncInputComposition as createDefaultAsyncInputComposition} from '@kubohiroya/turbowarp-async-input/composition';
 
-import {validateCompositionMethods} from './composition-contract.js';
+import {type Dsl4CompositionMethod, validateCompositionMethods} from './composition-contract.js';
 import {
   createDsl4EmbeddedAssetLifecycle,
   createDsl4RemoteAssetLifecycle,
@@ -106,7 +106,7 @@ function configurePoseOverlay(
     | 'setPoseBoneStyle'
     | 'setPoseOverlayMinimumConfidence'
     | 'setPoseOverlayConfidenceScaling',
-    (...parameters: any[]) => any
+    Dsl4CompositionMethod
   >,
   overlay: Record<string, unknown> | null,
 ) {
@@ -605,7 +605,8 @@ export function createDsl4PlatformAssetSession(options: {
           ...(loaded.transferOwnership === true ? {transferOwnership: true} : {}),
         };
       }
-      const result = await assetManagerComposition.resolveVerifiedRemoteBinary(
+      // The composition is validated by name, so its result is narrowed here rather than trusted.
+      const result = (await assetManagerComposition.resolveVerifiedRemoteBinary(
         {
           url: payload.url,
           integrity: payload.integrity,
@@ -616,7 +617,7 @@ export function createDsl4PlatformAssetSession(options: {
           signal: context.signal,
           load: loadVerifiedRemote,
         },
-      );
+      )) as Readonly<Record<string, unknown>>;
       if (Array.isArray(result.cacheWarnings)) {
         for (const warning of result.cacheWarnings) {
           if (!isRecord(warning)) continue;

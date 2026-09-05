@@ -467,7 +467,7 @@ export function createDsl4PoseActionPort(options: {
     requestSoundStop(playback.sound);
   }
 
-  async function withCameraBusy<T>(operation: () => Promise<T>) {
+  async function withCameraBusy<T>(operation: () => T | Promise<T>) {
     notifyCameraBusy(true);
     try {
       return await operation();
