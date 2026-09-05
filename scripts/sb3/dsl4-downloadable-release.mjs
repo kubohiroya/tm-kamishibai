@@ -6,8 +6,9 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-import {build} from 'esbuild';
+import {turboWarpExtension} from '@kubohiroya/vite-plugin-turbowarp-extension';
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
+import {build} from 'vite';
 
 import {installDsl4PackagedRuntimeComponent} from '../../src/builder/dsl4-source.js';
 import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
@@ -16,6 +17,7 @@ import {createDsl4RuntimeArtifactDescriptor} from '../../src/dsl4/runtime-artifa
 import {createDsl4EmbeddedSourceDescriptor} from '../../src/dsl4/source-descriptor.js';
 import {createDsl4PoseNetProjectBundleFromLoader} from '../../src/dsl4/platform/posenet-bundle.js';
 import {
+  dsl4RuntimeExtensionMetadata,
   dsl4RuntimeProvenance,
   formatDsl4RuntimeExtensionHeader,
 } from '../../src/dsl4/runtime-provenance.js';
@@ -153,6 +155,7 @@ const runtimeExtensionEntryPath = path.join(
   projectRoot,
   'scripts/sb3/dsl4-runtime-extension-entry.js',
 );
+const runtimeExtensionTarget = 'es2022';
 let pendingPoseNetProjectBundle;
 
 function createPoseNetProjectBundle() {
@@ -483,10 +486,17 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     tmPoseBrowserRuntime,
     'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
+  // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
+  // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
+  // The prelude runs outside the extension wrapper, in sloppy mode, because both vendored
+  // bundles are UMD distributions that attach themselves to the global object.
+  const prelude =
+    `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
+    `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}`;
   const result = await build({
-    entryPoints: [runtimeExtensionEntryPath],
-    bundle: true,
-    charset: 'utf8',
+    root: projectRoot,
+    configFile: false,
+    logLevel: 'silent',
     define: {
       DSL4_APPLICATION_MENU_ICONS: JSON.stringify(applicationMenuIcons),
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
@@ -494,24 +504,30 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
       ),
       DSL4_AUTHORING_PROFILE: JSON.stringify(profile === 'authoring'),
     },
-    format: 'iife',
-    banner: {
-      // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
-      // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
-      js:
-        `${formatDsl4RuntimeExtensionHeader()}\n` +
-        `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
-        `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}\n`,
+    build: {
+      write: false,
+      target: runtimeExtensionTarget,
+      minify: 'terser',
+      terserOptions: {
+        format: {comments: 'some'},
+      },
     },
-    legalComments: 'eof',
-    logLevel: 'silent',
-    minify: true,
-    platform: 'browser',
-    target: ['es2022'],
-    write: false,
+    plugins: [
+      turboWarpExtension({
+        ...dsl4RuntimeExtensionMetadata,
+        fileName: `${runtimeExtensionId}.js`,
+        entry: runtimeExtensionEntryPath,
+        target: runtimeExtensionTarget,
+        // The header carries the bundled component notices, so it replaces the
+        // five metadata lines the plugin would emit on its own.
+        header: formatDsl4RuntimeExtensionHeader().trimEnd(),
+        prelude,
+      }),
+    ],
   });
-  assert.equal(result.outputFiles.length, 1);
-  return Buffer.from(result.outputFiles[0].contents);
+  const outputs = Array.isArray(result) ? result.flatMap((item) => item.output) : result.output;
+  assert.equal(outputs.length, 1);
+  return Buffer.from(outputs[0].code, 'utf8');
 }
 
 async function loadExternalExtensionSources() {
