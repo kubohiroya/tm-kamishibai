@@ -106,7 +106,7 @@ function resolveAssetLimits(
   });
 }
 
-function diagnosticError(diagnostic: Readonly<Record<string, any>>) {
+function diagnosticError(diagnostic: Readonly<{message?: unknown; code?: unknown}> | undefined) {
   const error = new Error(
     String(diagnostic?.message ?? 'The packaged DSL 4.0 binary component is invalid.'),
   );

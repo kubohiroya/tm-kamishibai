@@ -279,15 +279,16 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   The list was re-baselined once, after `noUncheckedIndexedAccess` landed: that work replaced the
   `Record<string, Function>` collaborator placeholders with named interfaces whose members are
   declared `(...parameters: any[]): unknown`, which moved about 130 occurrences from the
-  `Function` rule to the `any` rule. The list now holds 1,208 occurrences over 117 files (1,042
-  `any`, 166 `Function`).
+  `Function` rule to the `any` rule, and the re-baselined list held 1,208 occurrences over 117
+  files (1,042 `any`, 166 `Function`). #713 then brought it to 1,181 over 115 files (1,015 `any`,
+  166 `Function`).
 
   What is left is a long tail with no single source. `Record<string, any>` is still over half of
-  the remaining `any` -- 562 of the 1,042 -- but classifying each of those by what it annotates
-  gives 144 `as` casts, 313 named bindings and 105 generic positions, and the named ones do not
-  converge on one domain: `asset` 31, then `event` 15, `left` 15, `payload` 15, `root` 9, `state` 9,
-  `request` 9, `invocation` 7, `document` 6, `storyDocument` 6, and a long tail of one- and
-  two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
+  the remaining `any` -- 536 of the 1,015 -- but classifying each of those by what it annotates
+  gives 143 `as` casts, 310 named bindings and 83 generic positions, and the named ones do not
+  converge on one domain: `asset` 29, then `event` 16, `context` 11, `payload` 10, `root` 9,
+  `left` 9, `right` 9, `state` 9, `request` 9, `invocation` 7, `project` 7, and a long tail of one-
+  and two-occurrence names. Read together they are three unrelated things -- internal protocol payloads
   that no schema describes, platform objects from TurboWarp and the DOM, and story- or asset-shaped
   values. Only the third is reachable from `schema/dsl-4.schema.json`; generating types from its 127
   `$defs` is worth doing, but it addresses a minority of the `Record<string, any>` rather than the
@@ -302,38 +303,42 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 Everything below is measured on the tree, not estimated. Re-measure before trusting a number that
 looks stale; `eslint-suppressions.json` is the authority on what is left.
 
-**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,111 over 113 files now
-(`any` 839, `Function` 272). The two batches so far were #712, which flipped the rules and typed
+**Where it stands.** 1,275 occurrences over 121 files at the switch-on, 1,181 over 115 files now
+(`any` 1,015, `Function` 166). The two batches so far were #712, which flipped the rules and typed
 the injected `crypto.subtle`, `node:fs/promises`, `fs.watch` and clock boundaries (-138), and #713,
 which replaced nineteen inline copies of the source frontend port with `Dsl4SourceFrontend` and
-adopted the existing `Dsl4Diagnostic` (-25).
+adopted the existing `Dsl4Diagnostic` (-27). The total is higher than those two subtractions
+suggest because #711 landed between them: its named collaborator interfaces declare their members
+`(...parameters: any[]): unknown`, which added about 130 `any` occurrences while removing the
+`Record<string, Function>` placeholders they replaced. Those members are a cluster of their own --
+each one disappears as soon as the collaborator gets its real signature.
 
 **What is left, by area:**
 
 | Area                                       | Total | `any` | `Function` | Files |
 | ------------------------------------------ | ----- | ----- | ---------- | ----- |
-| `src/dsl4` (core + browser)                | 470   | 337   | 133        | 46    |
-| `src/dsl4/platform` (TurboWarp adapters)   | 267   | 169   | 98         | 34    |
-| `src/builder`                              | 240   | 199   | 41         | 30    |
+| `src/dsl4` (core + browser)                | 560   | 465   | 95         | 48    |
+| `src/dsl4/platform` (TurboWarp adapters)   | 260   | 209   | 51         | 34    |
+| `src/builder`                              | 227   | 207   | 20         | 30    |
 | `scripts/sb3` (extension entry, authoring) | 122   | 122   | 0          | 2     |
 | `src/converter`                            | 12    | 12    | 0          | 1     |
 
-Six files carry a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
-`platform/turbowarp-runtime-host.ts` (62), `object-store/store.ts` (49),
-`builder/dsl4-web-preview-shell.ts` (33), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
+Six files carry almost a quarter of it: `scripts/sb3/dsl4-runtime-extension-entry.ts` (91),
+`object-store/store.ts` (49), `platform/turbowarp-runtime-host.ts` (46),
+`navigation-session-surface.ts` (35), `scripts/sb3/dsl4-runtime-authoring-profile.ts` (31),
 `builder/dsl4-asset-converter.ts` (30).
 
-**What the remaining `any` actually is.** `Record<string, any>` is 521 of the 839. Classifying each
-occurrence by what it annotates: 144 are `as` casts, 307 annotate a named binding, and 70 sit in a
-generic position (an array element, a `Map` value, a return type). The named ones do not converge on
-one domain — the largest are `asset` 30, then `event` 15, `left` 15, `payload` 15, `root` 9,
-`request` 9, `invocation` 7, `state` 7, `project` 7, `target` 7, `document` 6, `storyDocument` 6,
-`source` 6, `globalObject` 6, and a long tail of one- and two-occurrence names. Read together they
+**What the remaining `any` actually is.** `Record<string, any>` is 536 of the 1,015. Classifying
+each occurrence by what it annotates: 143 are `as` casts, 310 annotate a named binding, and 83 sit
+in a generic position (an array element, a `Map` value, a return type). The named ones do not
+converge on one domain — the largest are `asset` 29, then `event` 16, `context` 11, `payload` 10,
+`root` 9, `left` 9, `right` 9, `state` 9, `request` 9, `invocation` 7, `project` 7, `document` 6,
+`storyDocument` 6, `globalObject` 6, `target` 6, and a long tail of one- and two-occurrence names. Read together they
 are three unrelated things: internal protocol payloads that no schema describes, platform objects
 from TurboWarp and the DOM, and story- or asset-shaped values.
 
 Only the third is reachable from `schema/dsl-4.schema.json`. Generating types from its 127 `$defs`
-is worth doing, but the story- and asset-shaped named bindings come to roughly 55, so it addresses
+is worth doing, but the story- and asset-shaped named bindings come to roughly 50, so it addresses
 a minority of the `Record<string, any>`, not the majority.
 
 Two things make it less of a lever than it looks: `ParseSuccess.storyDocument` is already
@@ -342,8 +347,9 @@ and the runtime story document is not the schema shape. `createStoryDocument` re
 `{kind: 'StoryDocument', ..., sourceMap}` whose scenes and actions have been rewritten. A real
 `Dsl4StoryDocument` has to be written by hand, and would be the largest correctness win available.
 
-The remaining 272 `Function` occurrences are per-file callback shapes. The shared-boundary trick
-that cleared 138 of them in #712 is spent; what is left needs a signature per call site.
+The remaining 166 `Function` occurrences are per-file callback shapes. The shared-boundary trick
+that cleared 138 of them in #712 is spent; what is left needs a signature per call site, as do the
+`(...parameters: any[]): unknown` collaborator members that #711 introduced.
 
 **How to run a batch.**
 
