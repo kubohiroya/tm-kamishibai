@@ -296,8 +296,9 @@ validate-dsl4 uses the production canonicalizer, schema, semantics, and diagnost
 export-block-dsl reads the DSL declaration hats embedded in an SB3, sends them through the Block
 frontend, Source Graph, and the same schema and semantic validation a YAML project gets, and only
 then serializes YAML. A story without includes becomes one NAME.k4.yml; a story with includes
-becomes NAME-k4.zip holding NAME-k4/ with the root and every referenced module. Invalid block
-sources fail with source-located diagnostics instead of writing plausible YAML.
+becomes NAME-k4.zip holding NAME-k4/ with the root and every referenced module. Every Sprite that
+declares a DSL source must be reachable through an include. Invalid block sources fail with
+source-located diagnostics instead of writing plausible YAML.
 audit-dsl4-assets resolves a frozen asset lock without network access or file writes.
 lock-dsl4-assets fetches only allowlisted HTTPS providers and atomically writes a canonical lock.
 vendor-dsl4-assets fetches and verifies lock providers, then atomically installs a content-addressed
@@ -1532,9 +1533,6 @@ export async function runCli(arguments_, io = {}, dependencies = {}) {
       } else {
         stdout.write(`Exported ${path.basename(result.outputPath)}\n`);
         for (const file of result.files) stdout.write(`  ${file.path}\n`);
-        for (const sourcePath of result.unreferencedModulePaths) {
-          stderr.write(`Warning: ${sourcePath} is never included and was not exported\n`);
-        }
       }
       return {...result, exitCode: 0};
     } catch (error) {

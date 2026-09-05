@@ -152,7 +152,6 @@ test('exports one YAML file when the block story has no includes', async () => {
     assert.equal(result.name, 'urashima');
     assert.equal(path.basename(result.outputPath), 'urashima.k4.yml');
     assert.deepEqual(result.moduleFilenames, []);
-    assert.deepEqual(result.unreferencedModulePaths, []);
     const written = await readFile(result.outputPath, 'utf8');
     assert.match(written, /^kamishibai: "4\.0"$/mu);
     assert.match(written, /^ {4}- stage: Cover$/mu);
@@ -450,7 +449,7 @@ test('rejects a work name that cannot become a portable filename', async () => {
   });
 });
 
-test('reports Sprite modules that no include ever reaches', async () => {
+test('fails when a Sprite declares a DSL source that no include ever reaches', async () => {
   await withTemporaryDirectory(async (directory) => {
     const input = await writeSb3(
       directory,
@@ -462,11 +461,40 @@ test('reports Sprite modules that no include ever reaches', async () => {
         },
       }),
     );
-    const result = await exportDsl4BlockSourcesToYaml(exportOptions(directory, {input}));
-    assert.deepEqual(result.unreferencedModulePaths, ['orphan.k4.yml']);
-    assert.deepEqual(
-      result.files.map((file) => file.path),
-      ['urashima-k4/turtle.k4.yml', 'urashima-k4/urashima.k4.yml'],
+    await assert.rejects(
+      exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
+      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+        assert.equal(error.code, 'K4-BLOCK-EXPORT-UNREFERENCED-001');
+        assert.equal(error.stage, 'dsl4-block-export-plan');
+        assert.match(error.message, /"orphan\.k4\.yml"/u);
+        return true;
+      },
+    );
+    // The export is all-or-nothing: nothing is written when a declared module is unreachable.
+    await assert.rejects(readFile(path.join(directory, 'dist', 'urashima-k4.zip')));
+  });
+});
+
+test('names every unreachable module in one diagnostic', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const input = await writeSb3(
+      directory,
+      sb3Bytes({
+        stage: declarationBlocks(rootSource),
+        sprites: {
+          turtle: declarationBlocks(turtleSource),
+          zebra: declarationBlocks('scenes:\n  unusedZebra: []\n'),
+          orphan: declarationBlocks('scenes:\n  unusedOrphan: []\n'),
+        },
+      }),
+    );
+    await assert.rejects(
+      exportDsl4BlockSourcesToYaml(exportOptions(directory, {input})),
+      (/** @type {Dsl4BlockSourceExportError} */ error) => {
+        assert.equal(error.code, 'K4-BLOCK-EXPORT-UNREFERENCED-001');
+        assert.match(error.message, /"orphan\.k4\.yml", "zebra\.k4\.yml"/u);
+        return true;
+      },
     );
   });
 });

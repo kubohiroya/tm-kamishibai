@@ -160,6 +160,9 @@ export function serializeDsl4SourceYaml(canonicalSource, {sourcePath} = {}) {
  * The root source is renamed to the requested work name; every reachable module keeps the filename
  * its Sprite already contributes to the include graph, so include references stay resolvable.
  *
+ * Every declared module must be reachable. A Sprite that declares a DSL source no include names is
+ * authored content the export would silently drop, so it fails instead.
+ *
  * @param {object} options
  * @param {Readonly<{entryPath: string, sources: Readonly<Record<string, string>>}>} options.blockSourceSet
  * @param {Readonly<Record<string, any>>} options.sourceGraph
@@ -184,6 +187,20 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
   const entryFilename = `${rootName}${dsl4RecommendedSourceFilenameSuffix}`;
   const packageName = `${rootName}${dsl4BlockSourceExportPackageSuffix}`;
   const entryPath = sourceGraph.entryPath;
+
+  const reachable = new Set(
+    /** @type {Record<string, any>[]} */ (sourceGraph.nodes).map((node) => String(node.sourcePath)),
+  );
+  const unreferenced = Object.keys(blockSourceSet.sources)
+    .filter((sourcePath) => !reachable.has(sourcePath))
+    .sort();
+  if (unreferenced.length > 0) {
+    fail(
+      'K4-BLOCK-EXPORT-UNREFERENCED-001',
+      `No include reaches ${unreferenced.map((sourcePath) => JSON.stringify(sourcePath)).join(', ')}. Add an include for each module, or remove its DSL source hat.`,
+      {sourcePath: unreferenced[0]},
+    );
+  }
 
   /** @type {{sourcePath: string, filename: string, text: string, byteLength: number}[]} */
   const files = [];
@@ -214,7 +231,6 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
   }
 
   const packaged = moduleFilenames.length > 0;
-  const exported = new Set(files.map((file) => file.sourcePath));
   return deepFreeze({
     formatVersion: dsl4BlockSourceExportFormatVersion,
     name: rootName,
@@ -233,8 +249,5 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
         byteLength: file.byteLength,
       })),
     moduleFilenames: [...moduleFilenames].sort(),
-    unreferencedModulePaths: Object.keys(blockSourceSet.sources)
-      .filter((sourcePath) => !exported.has(sourcePath))
-      .sort(),
   });
 }

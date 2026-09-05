@@ -157,7 +157,8 @@ function readDsl4BlockSourcePackage(bytes) {
  *
  * The block source travels Block frontend, Source Graph, graph frontend validation, and only then
  * the YAML serializer, so a block-authored story is held to exactly the same schema, semantic, and
- * include rules as a YAML-authored one. An invalid source fails instead of writing plausible YAML.
+ * include rules as a YAML-authored one. An invalid source fails instead of writing plausible YAML,
+ * and so does a Sprite whose declared DSL source no include reaches.
  *
  * @param {object} options
  * @param {string} options.input SB3 file carrying the DSL declaration hats
@@ -247,7 +248,7 @@ export async function exportDsl4BlockSourcesToYaml(options) {
   try {
     plan = planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name});
   } catch (error) {
-    failDomain(error, 'dsl4-block-export-serialize');
+    failDomain(error, 'dsl4-block-export-plan');
   }
 
   const contents =
@@ -306,7 +307,6 @@ export async function exportDsl4BlockSourcesToYaml(options) {
       byteLength: file.byteLength,
     })),
     moduleFilenames: plan.moduleFilenames,
-    unreferencedModulePaths: plan.unreferencedModulePaths,
   });
 }
 
