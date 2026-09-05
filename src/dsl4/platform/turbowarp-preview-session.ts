@@ -89,8 +89,8 @@ function ownRuntimeEnvironment(
   });
 }
 
-function createDefaultHostPort(context: Readonly<{runtime: unknown}>) {
-  return createDsl4TurboWarpTransitionPort({runtime: context.runtime});
+function createDefaultHostPort(context: Readonly<{runtimeHost: unknown}>) {
+  return createDsl4TurboWarpTransitionPort({runtimeHost: context.runtimeHost});
 }
 
 /**

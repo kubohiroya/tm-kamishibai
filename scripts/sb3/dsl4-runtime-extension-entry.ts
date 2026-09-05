@@ -1063,8 +1063,8 @@ class KamishibaiDsl4RuntimeExtension {
               BROADCAST_OPTION: 'closeTitle',
             });
           },
-          createHostPort: async ({runtime}: {runtime: any}) =>
-            createDsl4TurboWarpTransitionPort({runtime}),
+          createHostPort: async ({runtimeHost}: {runtimeHost: unknown}) =>
+            createDsl4TurboWarpTransitionPort({runtimeHost}),
           tmPoseRuntime: createDsl4ProjectTMRuntime({
             runtime: resolveBundledTMRuntime(),
             globalObject: globalThis,

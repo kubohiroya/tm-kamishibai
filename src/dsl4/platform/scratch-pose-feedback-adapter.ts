@@ -31,11 +31,18 @@ function parseScratchPercentage(value: unknown) {
   return number;
 }
 
-function resolveStage(runtime: unknown) {
-  if (!isRecord(runtime) || typeof runtime.getTargetForStage !== 'function') {
-    throw new TypeError('TurboWarp runtime must provide getTargetForStage');
+function validateRuntimeHost(value: unknown) {
+  if (!isRecord(value) || typeof value.getStageTarget !== 'function' || !isRecord(value.runtime)) {
+    throw new TypeError('Scratch pose feedback requires an injected TurboWarp runtime host');
   }
-  const stage = runtime.getTargetForStage();
+  return value as unknown as {
+    getStageTarget: () => unknown;
+    runtime: Record<string, unknown>;
+  };
+}
+
+function resolveStage(runtimeHost: ReturnType<typeof validateRuntimeHost>) {
+  const stage = runtimeHost.getStageTarget();
   if (
     !isRecord(stage) ||
     stage.isStage !== true ||
@@ -242,7 +249,8 @@ function throwCollected(errors: unknown[], message: string) {
  * values produced by the Scratch runtime. Invalid final pairs are restored atomically.
  */
 export function createDsl4ScratchPoseFeedbackAdapter(options: {
-  runtime: unknown;
+  /** Injected `@kubohiroya/turbowarp-runtime-host` adapter. */
+  runtimeHost: unknown;
   mode: 'scratchMirror' | 'scratchBinding';
   variableNames?: {confidence: string; progress: string};
 }) {
@@ -263,7 +271,8 @@ export function createDsl4ScratchPoseFeedbackAdapter(options: {
     throw new TypeError('Scratch pose feedback variableNames must provide two distinct names');
   }
 
-  const stage = resolveStage(options.runtime);
+  const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  const stage = resolveStage(runtimeHost);
   const confidenceVariable = resolveVariable(stage, variableNames.confidence);
   const progressVariable = resolveVariable(stage, variableNames.progress);
   if (confidenceVariable === progressVariable) {
@@ -276,7 +285,7 @@ export function createDsl4ScratchPoseFeedbackAdapter(options: {
   } catch (error) {
     throw error;
   }
-  const runtime = options.runtime as Record<string, unknown>;
+  const runtime = runtimeHost.runtime;
   const confidenceMonitor = createMonitorChannel(
     runtime,
     confidenceVariable,
