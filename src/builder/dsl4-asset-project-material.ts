@@ -86,7 +86,9 @@ export function readProjectMaterial(
       'K4-ASSET-CONVERT-PROJECT-001',
     );
   }
-  const descriptor = matches[0];
+  const [descriptor] = matches;
+  // The count check above leaves exactly one descriptor.
+  if (!descriptor) fail('SB3 asset descriptor is missing', 'K4-ASSET-CONVERT-PROJECT-001');
   const filename =
     typeof descriptor.md5ext === 'string'
       ? descriptor.md5ext
