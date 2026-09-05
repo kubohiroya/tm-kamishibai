@@ -230,7 +230,7 @@
   },
   "src/dsl4/asset-reload-transaction.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 17
+      "count": 3
     }
   },
   "src/dsl4/asset-snapshot-watch.ts": {
@@ -337,11 +337,6 @@
   "src/dsl4/live-reload-session.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 19
-    }
-  },
-  "src/dsl4/navigation-session-surface.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 35
     }
   },
   "src/dsl4/navigation-session.ts": {
@@ -598,7 +593,7 @@
   },
   "src/dsl4/preview-source-protocol-port.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 15
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 2
