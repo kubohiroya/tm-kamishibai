@@ -2,6 +2,7 @@ import {fromByteArray, toByteArray} from 'base64-js';
 
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const bundleKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const manifestKeys = new Set(['assets', 'formatVersion']);
@@ -290,7 +291,7 @@ export async function validateDsl4EmbeddedAssetBundle(
     maxFiles,
     maxTotalBytes,
     subtleCrypto = globalThis.crypto?.subtle,
-  }: {maxFiles: number; maxTotalBytes: number; subtleCrypto?: {digest: Function} | undefined},
+  }: {maxFiles: number; maxTotalBytes: number; subtleCrypto?: Dsl4SubtleCrypto | undefined},
 ) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('DSL 4.0 asset bundle requires a StoryDocument version 4.0');

@@ -2,6 +2,7 @@ import {validateDsl4AssetBundleManifest} from './asset-bundle-descriptor.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 const liveReloadKinds = new Set(['backdrop', 'costume', 'image', 'recognitionModel', 'sound']);
@@ -112,7 +113,7 @@ export async function createDsl4AssetReloadSnapshot({
   manifest: unknown;
   structuralFingerprint: string;
   sourceIntegrity: string;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('asset reload snapshot requires a DSL 4.0 StoryDocument');

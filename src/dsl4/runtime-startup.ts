@@ -6,6 +6,7 @@ import {
 } from './runtime-artifact-loader.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 import {dsl4FirstCrossfadeStoryPath} from './transition-spec.js';
 
 export {
@@ -149,7 +150,7 @@ export async function createDsl4RuntimeStartup(
       context: Readonly<{command: string; code: string}>,
     ) => unknown | Promise<unknown>;
     debugExecution?: {beforeAction: Function; getState: Function};
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 startup options must be an object');

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {createDsl4SourceGraph, Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, realpath});
 
@@ -41,10 +42,14 @@ function validateFileSystem(value: unknown) {
   ) {
     throw new TypeError('fileSystem must provide realpath, lstat, and open');
   }
-  return value as {realpath: Function; lstat: Function; open: Function};
+  return value as Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -72,7 +77,7 @@ async function readStableIncludedSource(
   sourcePath: string,
   canonicalRoot: string,
   limit: number,
-  fileSystem: {realpath: Function; lstat: Function; open: Function},
+  fileSystem: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>,
   readSource: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>,
 ) {
   const requestedPath = path.resolve(canonicalRoot, ...sourcePath.split('/'));
@@ -161,7 +166,7 @@ export async function loadDsl4BuildSourceGraph(
       maxTotalSourceBytes: number;
       maxIncludeDepth: number;
     }>;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function};
+    fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
     readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   } = {},
 ) {
