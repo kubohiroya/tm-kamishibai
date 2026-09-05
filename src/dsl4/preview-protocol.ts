@@ -1,3 +1,5 @@
+import {normalizeCapabilities} from '@kubohiroya/turbowarp-preview-runtime';
+
 import {deepFreeze} from './story-document.js';
 
 const messageTypes = Object.freeze({
@@ -9,7 +11,6 @@ const messageTypes = Object.freeze({
 });
 
 const restartChoices = new Set(['storyStart', 'currentScene', 'currentAction']);
-const capabilityPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u;
 
 export const dsl4PreviewProtocolVersion = deepFreeze({major: 1, minor: 0});
 export const dsl4PreviewRequiredCapabilities = deepFreeze([
@@ -71,19 +72,21 @@ function positiveInteger(value: unknown, name: string) {
   return Number(value);
 }
 
+/**
+ * Let the shared preview runtime own the capability token grammar, duplicate rejection, and
+ * ordering, and restate its rejection as a DSL 4.0 protocol schema error so the wire contract keeps
+ * reporting `K4-PREVIEW-PROTOCOL-SCHEMA`. Shared messages end with a period and DSL 4.0 protocol
+ * messages do not.
+ */
 function capabilityList(value: unknown, name: string) {
-  if (!Array.isArray(value)) fail('K4-PREVIEW-PROTOCOL-SCHEMA', `${name} must be an array`);
-  const result = [];
-  const seen = new Set();
-  for (const item of value) {
-    if (typeof item !== 'string' || !capabilityPattern.test(item)) {
-      fail('K4-PREVIEW-PROTOCOL-SCHEMA', `${name} contains an invalid capability`);
-    }
-    if (seen.has(item)) fail('K4-PREVIEW-PROTOCOL-SCHEMA', `${name} contains a duplicate`);
-    seen.add(item);
-    result.push(item);
+  try {
+    return normalizeCapabilities(value, name);
+  } catch (error) {
+    fail(
+      'K4-PREVIEW-PROTOCOL-SCHEMA',
+      error instanceof TypeError ? error.message.replace(/\.$/u, '') : `${name} is invalid`,
+    );
   }
-  return Object.freeze(result.sort());
 }
 
 function protocolVersion(value: unknown) {
