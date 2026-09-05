@@ -6,6 +6,7 @@ import {
   createDsl4BinaryEntryAssetBundle,
   Dsl4BinaryEntryError,
 } from '../dsl4/binary-entry-provider.js';
+import {createDsl4BlockSourceGraph} from '../dsl4/block-source-export.js';
 import {createDsl4RuntimeArtifactDescriptor} from '../dsl4/runtime-artifact-descriptor.js';
 import {
   loadDsl4BinaryEntryRuntimeComponent,
@@ -15,7 +16,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from '../dsl4/source-descriptor.js';
-import {createDsl4SourceGraph, Dsl4SourceGraphError} from '../dsl4/source-graph.js';
+import {Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {
@@ -134,23 +135,7 @@ async function createDsl4VirtualBlockSourceGraph(
   }>,
 ) {
   try {
-    return await createDsl4SourceGraph(blockSourceSet.entryPath, {
-      limits,
-      readSource(sourcePath) {
-        const source = blockSourceSet.sources[sourcePath];
-        if (typeof source !== 'string') {
-          throw new Dsl4SourceGraphError(
-            'K4-SOURCE-MISSING',
-            'Included block DSL source is missing',
-            {
-              sourceId: sourcePath,
-              sourcePath,
-            },
-          );
-        }
-        return source;
-      },
-    });
+    return await createDsl4BlockSourceGraph(blockSourceSet, limits);
   } catch (error) {
     if (error instanceof Dsl4SourceGraphError) {
       throw new Dsl4BuildError(error.message, {

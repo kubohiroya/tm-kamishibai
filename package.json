@@ -56,6 +56,7 @@
     "sb3:dsl4-release:write": "pnpm release:dsl4:update",
     "dsl4:assets:convert": "pnpm run build:lib && node bin/tm-kamishibai.mjs convert-dsl4-assets",
     "dsl4:playback-runtime:generate": "pnpm run build:lib && node scripts/generate-dsl4-playback-runtime.mjs",
+    "export-block-dsl": "pnpm run build:lib && node scripts/export-block-dsl.mjs",
     "smoke:dsl4-packager-binary-memory": "pnpm run build:lib && node scripts/smoke/dsl4-packager-binary-memory.mjs",
     "e2e": "pnpm e2e:preview && pnpm e2e:chromium",
     "e2e:preview": "pnpm run build:lib && vitest run test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs",

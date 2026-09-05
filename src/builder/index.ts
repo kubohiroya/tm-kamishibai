@@ -23,6 +23,14 @@ export {dsl4CliDefaultLimits} from './dsl4-cli-default-limits.js';
 export {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 export {buildDsl4RuntimeComponentFile} from './dsl4-build-output.js';
 export {
+  defaultDsl4BlockSourceExportName,
+  dsl4BlockSourceExportDefaults,
+  Dsl4BlockSourceExportError,
+  exportDsl4BlockSourcesToYaml,
+  formatDsl4BlockSourceExportFailure,
+  serializeDsl4BlockSourcePackage,
+} from './dsl4-block-source-export.js';
+export {
   dsl4DefaultBuildFeatureFlags,
   resolveDsl4BuildFeatureFlags,
 } from './dsl4-build-feature-flags.js';

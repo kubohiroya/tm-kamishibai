@@ -16,6 +16,7 @@ const pureEntries = [
   'asset-bundle-descriptor.js',
   'asset-dependency-index.js',
   'binary-entry-provider.js',
+  'block-source-export.js',
   'control-profile-resolver.js',
   'embedded-asset-lifecycle.js',
   'history-reducer.js',
