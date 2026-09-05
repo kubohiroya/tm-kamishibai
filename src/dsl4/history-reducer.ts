@@ -95,9 +95,11 @@ function sceneDestination(
   reason: string,
 ): HistoryDestination {
   const visit = state.sceneVisits[visitIndex];
+  // Callers resolve the index against the visit list first, so a miss is a defect in this reducer.
+  if (!visit) throw new TypeError(`History scene visit ${visitIndex} does not exist`);
   const firstAction = state.actionEntries[Number(visit.firstActionHistoryIndex)];
   const actionPath =
-    firstAction?.visitId === visit.visitId && typeof firstAction.actionPath === 'string'
+    firstAction?.visitId === visit.visitId && typeof firstAction?.actionPath === 'string'
       ? firstAction.actionPath
       : null;
   return {
@@ -114,9 +116,9 @@ function move(state: Readonly<HistoryState>, command: string) {
     if (state.actionCursor <= 0) return success(state, false);
     const nextActionCursor = state.actionCursor - 1;
     const entry = state.actionEntries[nextActionCursor];
-    const actionIndex = actionIndexFromPath(String(entry.actionPath));
-    const nextSceneVisitCursor = visitIndexById(state, Number(entry.visitId));
-    if (actionIndex === null || nextSceneVisitCursor < 0) {
+    const actionIndex = entry ? actionIndexFromPath(String(entry.actionPath)) : null;
+    const nextSceneVisitCursor = entry ? visitIndexById(state, Number(entry.visitId)) : -1;
+    if (!entry || actionIndex === null || nextSceneVisitCursor < 0) {
       return failure(
         state,
         'K4-HISTORY-STATE-001',
@@ -145,6 +147,8 @@ function move(state: Readonly<HistoryState>, command: string) {
     return success(state, false);
   }
   const visit = state.sceneVisits[nextSceneVisitCursor];
+  // The bounds check above has already rejected a cursor outside the visit list.
+  if (!visit) return success(state, false);
   const nextState = deepFreeze({
     ...state,
     mode: 'history',

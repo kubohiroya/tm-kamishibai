@@ -249,10 +249,9 @@ export async function loadDsl4LocalAssetSnapshot(
     Record<string, Readonly<Record<string, unknown>>>
   >;
 
-  for (const assetId of Object.keys(assets).sort((left, right) =>
+  for (const [assetId, asset] of Object.entries(assets).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   )) {
-    const asset = assets[assetId];
     const common = {
       id: assetId,
       kind: asset.kind,

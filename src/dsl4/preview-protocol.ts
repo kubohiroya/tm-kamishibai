@@ -100,6 +100,16 @@ function protocolVersion(value: unknown) {
   return {major: Number(value.major), minor: Number(value.minor)};
 }
 
+/** The live reload session as the preview protocol drives it. */
+interface PreviewProtocolLiveReloadPort {
+  stage(...parameters: any[]): any;
+  defer(...parameters: any[]): any;
+  commit(...parameters: any[]): any;
+  discardCandidate(...parameters: any[]): any;
+  getState(): Readonly<Record<string, any>>;
+  whenIdle(...parameters: any[]): any;
+}
+
 function validateLiveReloadSession(value: unknown) {
   if (
     !isRecord(value) ||
@@ -112,7 +122,7 @@ function validateLiveReloadSession(value: unknown) {
   ) {
     throw new TypeError('liveReloadSession does not implement the preview protocol port');
   }
-  return value as Record<string, Function>;
+  return value as unknown as PreviewProtocolLiveReloadPort;
 }
 
 function currentSummary(state: Readonly<Record<string, any>>) {
@@ -144,7 +154,7 @@ export function createDsl4PreviewProtocolSession({
   liveReloadSession,
   runtimeCapabilities = [],
 }: {
-  liveReloadSession: Record<string, Function>;
+  liveReloadSession: PreviewProtocolLiveReloadPort;
   runtimeCapabilities?: ReadonlyArray<string>;
 }) {
   const liveReload = validateLiveReloadSession(liveReloadSession);

@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 423 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 340 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 423: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 340: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -261,6 +261,11 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   host, the preview session, and the startup helper share, and
   `src/dsl4/platform/composition-contract.ts` holds the validator the ports and the asset session
   share.
+
+  The cheapest fix is to stop looking the value up: a `for (const id of Object.keys(assets))` loop
+  that immediately reads `assets[id]` becomes `for (const [id, asset] of Object.entries(assets))`,
+  which cleared thirteen errors in the local asset reader alone and the same shape in four other
+  modules.
 
   Byte-level parsers are their own case, settled in the media sniffer: each read has a length check
   right above it, so the read carries a default and a comment saying why the default is
