@@ -19,6 +19,7 @@ import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 import {sha256} from './hash.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
@@ -57,7 +58,7 @@ function validateFileSystem(value: unknown) {
   ) {
     throw new TypeError('fileSystem must provide realpath, lstat, open, and readdir');
   }
-  return value as {realpath: Function; lstat: Function; open: Function; readdir: Function};
+  return value as unknown as Dsl4FileSystem;
 }
 
 function isWithin(ancestor: string, candidate: string) {
@@ -325,7 +326,11 @@ function declaredProviders(
   return result;
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -357,7 +362,7 @@ function sameFileState(left: Record<string, any>, right: Record<string, any>) {
 async function readStableFile(
   filePath: string,
   limit: number,
-  fileSystem: {lstat: Function; open: Function},
+  fileSystem: Pick<Dsl4FileSystem, 'lstat' | 'open'>,
 ) {
   const before = await fileSystem.lstat(filePath);
   if (!before.isFile() || before.isSymbolicLink())
@@ -376,7 +381,7 @@ async function readStableFile(
 async function enumerateLocalFiles(
   rootPath: string,
   assetId: string,
-  fileSystem: {lstat: Function; readdir: Function},
+  fileSystem: Pick<Dsl4FileSystem, 'lstat' | 'readdir'>,
 ) {
   const result: {path: string; absolutePath: string}[] = [];
   async function visit(directory: string, relativeDirectory: string) {

@@ -1,5 +1,6 @@
 import {createDsl4EmbeddedAssetBundle} from '../asset-bundle-descriptor.js';
 import {computeDsl4Sha256Integrity} from '../source-descriptor.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
 
 const defaultQuietWindowMs = 100;
@@ -213,7 +214,7 @@ async function readPoseSource(
   sourcePath: string,
   maxFileBytes: number,
   maxTotalBytes: number,
-  subtleCrypto: {digest: Function},
+  subtleCrypto: Dsl4SubtleCrypto,
 ) {
   if (!isDsl4PoseArchivePath(sourcePath)) {
     return readPoseDirectory(root, sourcePath, maxFileBytes);
@@ -256,7 +257,7 @@ async function captureAssetSnapshot(
     maxAssetFileBytes: number;
     maxAssetFiles: number;
     maxAssetBytes: number;
-    subtleCrypto: {digest: Function};
+    subtleCrypto: Dsl4SubtleCrypto;
   },
 ) {
   const manifestAssets = [];
@@ -361,7 +362,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   maxAssetBytes: number;
   quietWindowMs?: number;
   sleep?: (milliseconds: number) => Promise<unknown>;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(input)) throw new TypeError('browser preview runtime component input is required');
   if (!isRecord(input.baseComponent)) throw new TypeError('baseComponent must be an object');
@@ -409,7 +410,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
     maxAssetFileBytes,
     maxAssetFiles,
     maxAssetBytes,
-    subtleCrypto: subtleCrypto as {digest: Function},
+    subtleCrypto: subtleCrypto as Dsl4SubtleCrypto,
   };
   let snapshot = await captureAssetSnapshot(storyDocument, projectRoot, captureOptions);
   if (hasLocalFiles(storyDocument)) {

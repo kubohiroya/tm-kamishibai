@@ -7,7 +7,9 @@ import {
   isDsl4PoseArchivePath,
 } from '../dsl4/platform/pose-archive-extractor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
 
@@ -48,7 +50,7 @@ function validateFileSystem(value: unknown) {
   ) {
     throw new TypeError('fileSystem must provide realpath, lstat, open, and readdir');
   }
-  return value as {realpath: Function; lstat: Function; open: Function; readdir: Function};
+  return value as unknown as Dsl4FileSystem;
 }
 
 function localPath(value: unknown, assetId: string) {
@@ -86,7 +88,11 @@ function stateKey(state: Record<string, any>) {
   return `${state.dev}:${state.ino}:${state.size}:${state.mtimeMs}:${state.ctimeMs}`;
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -109,7 +115,7 @@ async function readStableFile(
   filePath: string,
   assetId: string,
   limit: number,
-  fileSystem: {lstat: Function},
+  fileSystem: Pick<Dsl4FileSystem, 'lstat'>,
   readFile: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>,
 ) {
   let before;
@@ -140,7 +146,7 @@ async function readStableFile(
 
 async function enumerateDirectory(
   rootPath: string,
-  fileSystem: {lstat: Function; readdir: Function},
+  fileSystem: Pick<Dsl4FileSystem, 'lstat' | 'readdir'>,
   assetId: string,
 ) {
   const files: {path: string; absolutePath: string; state: Record<string, any>}[] = [];
@@ -205,9 +211,9 @@ export async function loadDsl4LocalAssetSnapshot(
     maxFileBytes: number;
     maxFiles: number;
     maxTotalBytes: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
     retainPoseArchives?: boolean;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function};
+    fileSystem?: Dsl4FileSystem;
     readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   },
 ) {

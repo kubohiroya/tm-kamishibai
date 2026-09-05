@@ -5,6 +5,7 @@ import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
 import {extractDsl4PoseArchive} from './pose-archive-extractor.js';
 import {isDsl4PoseArchivePath} from './pose-archive-locator.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
 
@@ -206,7 +207,7 @@ async function readPoseBundle(
   directoryPath: string,
   limit: number,
   totalLimit: number,
-  subtleCrypto: {digest: Function},
+  subtleCrypto: Dsl4SubtleCrypto,
   signal: AbortSignal,
 ) {
   if (isDsl4PoseArchivePath(directoryPath)) {
@@ -290,7 +291,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
   createWatch?: Function;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   maxFiles?: number;
   maxFileBytes?: number;
   maxTotalBytes?: number;

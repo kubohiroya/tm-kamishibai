@@ -13,6 +13,7 @@ import {
   createDsl4RuntimeVariableSnapshot,
 } from '../runtime-variable-surface.js';
 import {deepFreeze} from '../story-document.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
 import {createDsl4AsyncInputActionPort} from './async-input-action-port.js';
 import {createDsl4BubbleAdvanceIndicatorPresenter} from './bubble-advance-indicator.js';
@@ -1222,7 +1223,7 @@ export async function createDsl4TurboWarpRuntimeHost(
       error: unknown,
       context: Readonly<{command: string; code: string}>,
     ) => unknown | Promise<unknown>;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
     runtimeVersion?: string;
   } = {},
 ) {

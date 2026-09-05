@@ -7,6 +7,7 @@ import {
   validateDsl4SourceOriginDescriptor,
 } from './source-origin-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const requiredDescriptorKeys = new Set([
   'byteLength',
@@ -102,7 +103,7 @@ function encodeBase64(bytes: Uint8Array): string {
 
 export async function computeDsl4Sha256Integrity(
   bytes: Uint8Array,
-  subtleCrypto: {digest: Function} = globalThis.crypto?.subtle,
+  subtleCrypto: Dsl4SubtleCrypto = globalThis.crypto?.subtle,
 ) {
   if (!subtleCrypto || typeof subtleCrypto.digest !== 'function') {
     fail('K4-SOURCE-INTEGRITY-UNAVAILABLE', 'SHA-256 digest capability is unavailable');
@@ -147,7 +148,7 @@ export async function createDsl4EmbeddedSourceDescriptor(
     cacheIdentity?: unknown;
     sourceOrigins?: unknown;
     sourceOriginLimits?: Record<string, number>;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   const canonicalSource = canonicalizeDsl4Source(source);
@@ -196,7 +197,7 @@ export async function validateDsl4EmbeddedSourceDescriptor(
   }: {
     maxSourceBytes: number;
     sourceOriginLimits?: Record<string, number>;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   const limit = requireMaxSourceBytes(maxSourceBytes);
@@ -285,7 +286,7 @@ export async function resolveDsl4EmbeddedSource(
   }: {
     maxSourceBytes: number;
     sourceOriginLimits?: Record<string, number>;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!isRecord(project)) {

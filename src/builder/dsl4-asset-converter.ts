@@ -11,6 +11,7 @@ import {
   resolveDsl4RemotePoseWeightsPath,
 } from '../dsl4/remote-pose-directory.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {loadDsl4ProjectJson, loadDsl4ProjectSourceManifest} from './dsl4-asset-audit.js';
 import {fetchDsl4AssetRemote} from './dsl4-asset-lock.js';
 import {contentTypeFor, extensionFor} from './dsl4-asset-media.js';
@@ -446,7 +447,7 @@ export async function convertDsl4ProjectAssets(options: {
   maxRedirects: number;
   allowedHosts: string[];
   fetchImplementation?: typeof fetch;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   runRsync?: (command: {
     executable: string;
     arguments: string[];

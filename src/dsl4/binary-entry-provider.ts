@@ -1,6 +1,7 @@
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {validateDsl4AssetBundleManifest} from './asset-bundle-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const descriptorKeys = new Set(['files', 'formatVersion', 'integrity', 'manifest']);
 const legacyFileKeys = new Set(['assetId', 'entry', 'integrity', 'path', 'size']);
@@ -227,7 +228,7 @@ export async function validateDsl4BinaryEntryAssetBundle(
     maxFiles: number;
     maxFileBytes: number;
     maxTotalBytes: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
@@ -464,7 +465,7 @@ export async function createDsl4OneShotBinaryEntryProvider(
       | Promise<{bytes: Uint8Array; compressedSize: number}>
       | {bytes: Uint8Array; compressedSize: number};
     releaseEntries?: () => Promise<void> | void;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (typeof readEntry !== 'function') throw new TypeError('readEntry must be a function');

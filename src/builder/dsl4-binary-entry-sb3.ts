@@ -6,6 +6,7 @@ import {
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from '../dsl4/binary-entry-provider.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {Sb3BuilderError} from './errors.js';
 import {installDsl4BinaryEntryRuntimeComponent} from './dsl4-source.js';
 import {readSb3, serializeSb3} from './sb3.js';
@@ -272,7 +273,7 @@ export async function createDsl4BinaryEntryProviderFromSb3(
     maxAssetBytes: number;
     maxCompressionRatio: number;
     releaseAfterLastAsset?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!(sb3Bytes instanceof Uint8Array)) {
@@ -351,7 +352,7 @@ export async function inspectDsl4BinaryEntryArchive(
     maxAssetFileBytes: number;
     maxAssetBytes: number;
     maxCompressionRatio: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!(sb3Bytes instanceof Uint8Array)) {

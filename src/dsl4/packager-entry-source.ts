@@ -5,6 +5,7 @@ import {
   Dsl4BinaryEntryError,
   validateDsl4BinaryEntryAssetBundle,
 } from './binary-entry-provider.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 export const dsl4PackagerEntrySourceContractVersion = 1;
 export const dsl4PackagerEntrySourceRegistryName =
@@ -127,7 +128,7 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
     maxAssetBytes: number;
     maxCompressionRatio: number;
     releaseAfterLastAsset?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!isRecord(source)) throw new TypeError('source must be an object');

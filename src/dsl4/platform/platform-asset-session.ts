@@ -6,6 +6,7 @@ import {
   createDsl4RemoteAssetLifecycle,
 } from '../embedded-asset-lifecycle.js';
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {createDsl4AssetManagerAdapter} from './asset-manager-adapter.js';
 import {createDsl4PlatformAssetAdapter} from './asset-adapter-router.js';
 import {createDsl4BinaryEntryBacking} from './binary-entry-backing.js';
@@ -161,7 +162,7 @@ export function createDsl4PlatformAssetSession(options: {
   cacheIdentity?: unknown;
   verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
   poseArchiveLimits?: Readonly<Record<string, unknown>>;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createFile?: Function;
   createAssetManagerComposition?: Function;
   createTMComposition?: Function;

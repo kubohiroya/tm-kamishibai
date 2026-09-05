@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 
 import {createDsl4PoseNetProjectBundleFromLoader} from '../dsl4/platform/posenet-bundle.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 
 const playbackRuntimeUrl = new URL(
   './generated/dsl4-playback-runtime-extension.js',
@@ -21,7 +22,7 @@ export function readDsl4PlaybackRuntimeExtensionSource() {
  */
 export function readDsl4PlaybackPoseNetBundle({
   subtleCrypto = globalThis.crypto?.subtle,
-}: {subtleCrypto?: {digest: Function} | undefined} = {}) {
+}: {subtleCrypto?: Dsl4SubtleCrypto | undefined} = {}) {
   pendingPoseNetProjectBundle ??= createDsl4PoseNetProjectBundleFromLoader(
     async ({packageSpecifier}) =>
       new Uint8Array(await readFile(new URL(import.meta.resolve(packageSpecifier)))),

@@ -212,8 +212,30 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   and broke the ordinary type check, because names such as `limits` and `onError` appear in many
   unrelated option types. The one property that was worth widening repository-wide is
   `subtleCrypto`, whose JSDoc always allowed an explicit `undefined`; that is already done.
-- Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
-  platform boundaries have real types.
+- **`no-explicit-any` and `no-unsafe-function-type` are `error`, with the existing occurrences held
+  in `eslint-suppressions.json` (in progress).** Waiting for the TurboWarp platform boundaries to be
+  typed first would have left new code unchecked for the whole burndown, so the rules were switched
+  on with ESLint's bulk suppressions instead: a file that already violated them keeps a counted
+  suppression, and anything new is an error on the first run. ESLint fails when a suppression is no
+  longer needed, so the list can only shrink -- run `pnpm lint:prune-suppressions` after clearing a
+  file and commit the smaller list.
+
+  The baseline was 1,275 occurrences over 121 files (865 `any`, 410 `Function`). Do not try to clear
+  them with a codemod: replacing every `Record<string, any>` with `Record<string, unknown>` leaves
+  890 type errors, and replacing every `Function` with `(...args: unknown[]) => unknown` leaves 276.
+  What works is typing the injected boundary once and applying it. `Dsl4SubtleCrypto`
+  (`src/dsl4/subtle-crypto.ts`), `Dsl4FileSystem` and `Dsl4FileWatcher`
+  (`src/builder/file-system.ts`), and the clock local to `dsl4-preview-watch.ts` removed 138
+  `Function` occurrences across the 35 modules that take them by injection, and the only call sites
+  that had to change were the two validators whose runtime check TypeScript cannot follow, which now
+  cast through `unknown`. That worked because those injected dependencies are `node:fs/promises`,
+  `fs.watch` and `crypto.subtle` subsets whose real signatures were already known.
+
+  What is left is a long tail. `Record<string, any>` is still 63% of the remaining `any` and stands
+  in for DSL 4.0 story and asset structures that have no TypeScript declarations at all;
+  `schema/dsl-4.schema.json` already describes 127 of them and is the obvious source to generate
+  from. The remaining `Function` occurrences are per-file callback shapes, not a shared boundary.
+
 - Re-evaluate TypeScript 7 (see Toolchain Decisions).
 
 ## Module Checklist
@@ -237,6 +259,6 @@ type checker, ESLint, the full Vitest suite, and the release snapshot verified a
   `test/helpers/module-path.mjs`, which also accepts the `.ts` module a `.js` path names.
 - **Browser-facing suites.** `test/e2e/`, `test/fixtures/dsl4/`, and the local preview host suite
   load the compiled package, because a browser cannot execute a `.ts` module.
-- **Carried-over looseness.** `any` and `Function` annotations moved across from the JSDoc as-is;
-  `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` stay off until Phase 5 types
-  the TurboWarp platform boundaries properly.
+- **Carried-over looseness.** `any` and `Function` annotations moved across from the JSDoc as-is.
+  Both rules are now `error`, and the occurrences that predate the switch are counted in
+  `eslint-suppressions.json` rather than left unchecked; see Phase 5.
