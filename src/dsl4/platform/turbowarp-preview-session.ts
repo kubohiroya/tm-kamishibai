@@ -1,3 +1,4 @@
+import type {Dsl4NavigationSessionSurface} from '../navigation-session-surface.js';
 import {createDsl4NavigationSession} from '../navigation-session.js';
 import {resolveDsl4FeatureFlags} from '../runtime-startup.js';
 import {deepFreeze} from '../story-document.js';
@@ -51,11 +52,11 @@ function validateSessionContext(value: unknown) {
 
 /** Make one navigation session the sole owner of its TurboWarp runtime environment. */
 function ownRuntimeEnvironment(
-  session: Readonly<Record<string, Function>>,
+  session: Dsl4NavigationSessionSurface,
   environment: Readonly<{dispose: Function; getPoseState?: Function}>,
   runtimeVersion: unknown,
   stateSurfaceEnabled: boolean,
-): Readonly<Record<string, Function>> {
+): Dsl4NavigationSessionSurface {
   let disposePromise: Promise<void> | null = null;
   return Object.freeze({
     ...session,
@@ -238,7 +239,7 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
       throw failure;
     }
 
-    const navigationSession = (created as unknown as {session: Readonly<Record<string, Function>>})
+    const navigationSession = (created as unknown as {session: Dsl4NavigationSessionSurface})
       .session;
     try {
       if (options.inputTarget !== undefined) {
@@ -278,8 +279,8 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
 
   return async function createPreviewSession(contextInput: unknown) {
     const context = validateSessionContext(contextInput);
-    let concreteSession: Readonly<Record<string, Function>> | null = null;
-    let initializationPromise: Promise<Readonly<Record<string, Function>>> | null = null;
+    let concreteSession: Dsl4NavigationSessionSurface | null = null;
+    let initializationPromise: Promise<Dsl4NavigationSessionSurface> | null = null;
     let runPromise: Promise<unknown> | null = null;
     let disposePromise: Promise<void> | null = null;
     let stopReason: string | null = null;
@@ -375,7 +376,9 @@ export function createDsl4TurboWarpPreviewSessionFactory(optionsInput: unknown) 
       getState: snapshot,
       getRuntimeVariableSnapshot() {
         if (!featureFlags.dsl4TurboWarpStateSurface) return null;
-        if (!concreteSession) return createDsl4RuntimeVariableSnapshot(snapshot().runtime);
+        if (!concreteSession?.getRuntimeVariableSnapshot) {
+          return createDsl4RuntimeVariableSnapshot(snapshot().runtime);
+        }
         return concreteSession.getRuntimeVariableSnapshot();
       },
       invokeAction(action: Readonly<Record<string, unknown>>) {

@@ -1,3 +1,4 @@
+import type {Dsl4NavigationSessionSurface} from './navigation-session-surface.js';
 import {createDsl4NavigationSession} from './navigation-session.js';
 import {
   loadDsl4BinaryEntryRuntimeComponent,
@@ -83,7 +84,7 @@ async function rejectInvalidRuntimeEnvironment(
 
 /** Make the published navigation session the sole owner of its runtime environment. */
 function ownRuntimeEnvironment(
-  session: Readonly<Record<string, Function>>,
+  session: Dsl4NavigationSessionSurface,
   environment: RuntimeEnvironment,
 ) {
   let disposePromise: Promise<void> | null = null;
@@ -393,7 +394,7 @@ export async function createDsl4RuntimeStartup(
       diagnostics: created.diagnostics,
     });
   }
-  const success = created as unknown as {session: Readonly<Record<string, Function>>};
+  const success = created as unknown as {session: Dsl4NavigationSessionSurface};
   const publishedSession = runtimeEnvironment
     ? ownRuntimeEnvironment(success.session, runtimeEnvironment)
     : success.session;

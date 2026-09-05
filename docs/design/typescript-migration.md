@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 604 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 527 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,9 +234,11 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 604: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 527: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
-  preview layout coordinator, the live reload session, and the runtime controller. Two shapes recur.
+  preview layout coordinator, the live reload session, the runtime controller, the asset converter,
+  and the TurboWarp runtime host with the preview session and startup helper that share its
+  navigation session. Two shapes recur.
   Where a validator lists members inline, an interface next to it names them. Where a validator
   takes a method-name array, `validateCompositionMethods` in
   `src/dsl4/platform/composition-contract.ts` is generic over those literals, so the result is keyed
@@ -251,7 +253,13 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   runtime controller's `port` keeps its index signature — it looks methods up by name and already
   handles a missing one — but its element type is now a call signature rather than `Function`.
 
-  What is left is roughly 420 more placeholder members and about 180 genuine lookups, including the
+  Where several modules drive the same collaborator, the interface belongs beside it:
+  `Dsl4NavigationSessionSurface` in `src/dsl4/navigation-session-surface.ts` is what the runtime
+  host, the preview session, and the startup helper share, and
+  `src/dsl4/platform/composition-contract.ts` holds the validator the ports and the asset session
+  share.
+
+  What is left is roughly 350 more placeholder members and about 180 genuine lookups, including the
   `Readonly<Record<string, number>>` limit bags that should be `typeof dsl4XDefaultLimits`.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp

@@ -31,24 +31,27 @@ export function projectTarget(
     ? (project.targets as Record<string, unknown>[])
     : [];
   if (asset.kind === 'backdrop' || asset.kind === 'sound') {
-    const matches = targets.filter((target) => target.isStage === true);
-    if (matches.length !== 1) {
+    const [stage, ...extraStages] = targets.filter((target) => target.isStage === true);
+    if (!stage || extraStages.length > 0) {
       fail('SB3 must contain exactly one Stage target', 'K4-ASSET-CONVERT-PROJECT-001');
     }
-    return matches[0];
+    return stage;
   }
   const named = targets.filter(
     (target) => target.isStage !== true && projectTargetName(target) === asset.target,
   );
-  if (named.length === 1) return named[0];
+  const [namedTarget] = named;
+  if (named.length === 1 && namedTarget) return namedTarget;
   const logical = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, asset.target),
   );
-  if (logical.length === 1) return logical[0];
+  const [logicalTarget] = logical;
+  if (logical.length === 1 && logicalTarget) return logicalTarget;
   const templates = targets.filter(
     (target) => target.isStage !== true && projectActorVariableMatches(target, '_template_'),
   );
-  if (templates.length === 1) return templates[0];
+  const [templateTarget] = templates;
+  if (templates.length === 1 && templateTarget) return templateTarget;
   fail(
     `Costume target cannot be resolved exactly once in the SB3: ${String(asset.target)}`,
     'K4-ASSET-CONVERT-PROJECT-001',
