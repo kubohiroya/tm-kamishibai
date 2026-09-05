@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+
 import {
   createDsl4ScratchPoseFeedbackAdapter,
   dsl4ScratchPoseFeedbackVariableNames,
@@ -82,6 +84,16 @@ function fakeRuntime(overrides = {}) {
     },
     ...overrides.stage,
   };
+  const runtime = {
+    getTargetForStage: () => stage,
+    getMonitorState: () => monitorState,
+    monitorBlocks,
+    on() {},
+    startHats() {
+      return [];
+    },
+    ...overrides.runtime,
+  };
   return {
     confidence,
     progress,
@@ -93,12 +105,8 @@ function fakeRuntime(overrides = {}) {
       return monitorRecords.get(variable.id)?.visible;
     },
     stage,
-    runtime: {
-      getTargetForStage: () => stage,
-      getMonitorState: () => monitorState,
-      monitorBlocks,
-      ...overrides.runtime,
-    },
+    runtime,
+    runtimeHost: createTurboWarpRuntimeHost({runtime}),
   };
 }
 
@@ -112,7 +120,7 @@ test('clears pre-existing values and visible monitors after resolving every chan
   }
 
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchMirror',
   });
 
@@ -154,7 +162,7 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
   assert.throws(
     () =>
       createDsl4ScratchPoseFeedbackAdapter({
-        runtime: setup.runtime,
+        runtimeHost: setup.runtimeHost,
         mode: 'scratchBinding',
       }),
     (error) => {
@@ -171,7 +179,7 @@ test('fails closed and aggregates startup reset and monitor cleanup failures', (
 test('scratchMirror projects normalized state to 0-100 and never reads Scratch edits back', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchMirror',
   });
 
@@ -192,7 +200,7 @@ test('scratchMirror projects normalized state to 0-100 and never reads Scratch e
 test('scratchBinding accepts one valid write per variable at each tick boundary', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   adapter.onPoseState(event({phase: 'waiting', confidence: 0, progress: 0}));
@@ -218,7 +226,7 @@ test('scratchBinding accepts one valid write per variable at each tick boundary'
 test('scratchBinding samples the final ordered writes at one projected tick boundary', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   adapter.onPoseState(event({phase: 'waiting', confidence: 0.4, progress: 0.2}));
@@ -238,7 +246,7 @@ test('scratchBinding samples the final ordered writes at one projected tick boun
 test('scratchBinding rejects an invalid pair atomically and restores the last projection', () => {
   const setup = fakeRuntime();
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   const invalidValues = [
@@ -266,7 +274,7 @@ test('completed and cancelled terminal states disable binding and reset both var
   const setup = fakeRuntime();
   const originalDescriptor = Object.getOwnPropertyDescriptor(setup.confidence, 'value');
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   assert.deepEqual(Object.getOwnPropertyDescriptor(setup.confidence, 'value'), originalDescriptor);
@@ -320,7 +328,7 @@ test('rolls back both variables when a special setter fails halfway through proj
   });
   const setup = fakeRuntime({progressVariable});
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   adapter.onPoseState(event({phase: 'waiting', confidence: 0.4, progress: 0.2}));
@@ -343,7 +351,11 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
   const missing = fakeRuntime();
   missing.variables.delete(dsl4ScratchPoseFeedbackVariableNames.progress);
   assert.throws(
-    () => createDsl4ScratchPoseFeedbackAdapter({runtime: missing.runtime, mode: 'scratchMirror'}),
+    () =>
+      createDsl4ScratchPoseFeedbackAdapter({
+        runtimeHost: missing.runtimeHost,
+        mode: 'scratchMirror',
+      }),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(missing.confidence.value, 0);
@@ -351,7 +363,8 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
   const cloud = fakeRuntime();
   cloud.confidence.isCloud = true;
   assert.throws(
-    () => createDsl4ScratchPoseFeedbackAdapter({runtime: cloud.runtime, mode: 'scratchMirror'}),
+    () =>
+      createDsl4ScratchPoseFeedbackAdapter({runtimeHost: cloud.runtimeHost, mode: 'scratchMirror'}),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
   );
 
@@ -360,7 +373,7 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
   assert.throws(
     () =>
       createDsl4ScratchPoseFeedbackAdapter({
-        runtime: ambiguous.runtime,
+        runtimeHost: ambiguous.runtimeHost,
         mode: 'scratchBinding',
       }),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
@@ -373,7 +386,7 @@ test('fails closed before mutation when the stage variables are missing, cloud, 
     configurable: false,
   });
   const fixedAdapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: fixed.runtime,
+    runtimeHost: fixed.runtimeHost,
     mode: 'scratchBinding',
   });
   fixedAdapter.onPoseState(event({phase: 'waiting', confidence: 0.2, progress: 0.1}));
@@ -388,7 +401,11 @@ test('fails closed before mutation when a Stage variable monitor is missing or a
   missing.monitorBlocksById.delete(missing.progress.id);
   missing.monitorRecords.delete(missing.progress.id);
   assert.throws(
-    () => createDsl4ScratchPoseFeedbackAdapter({runtime: missing.runtime, mode: 'scratchMirror'}),
+    () =>
+      createDsl4ScratchPoseFeedbackAdapter({
+        runtimeHost: missing.runtimeHost,
+        mode: 'scratchMirror',
+      }),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(missing.confidence.value, 0);
@@ -420,7 +437,10 @@ test('fails closed before mutation when a Stage variable monitor is missing or a
   });
   assert.throws(
     () =>
-      createDsl4ScratchPoseFeedbackAdapter({runtime: ambiguous.runtime, mode: 'scratchBinding'}),
+      createDsl4ScratchPoseFeedbackAdapter({
+        runtimeHost: ambiguous.runtimeHost,
+        mode: 'scratchBinding',
+      }),
     (error) => error.code === 'K4-TW-POSE-FEEDBACK-001',
   );
   assert.equal(ambiguous.monitorVisible(ambiguous.confidence), false);
@@ -453,7 +473,7 @@ test('ignores an unrelated sprite monitor with the same variable name', () => {
   });
 
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchMirror',
   });
   adapter.onPoseState(event());
@@ -478,7 +498,7 @@ test('attempts monitor cleanup after reset failure and aggregates both failures'
   });
   const setup = fakeRuntime({progressVariable});
   const adapter = createDsl4ScratchPoseFeedbackAdapter({
-    runtime: setup.runtime,
+    runtimeHost: setup.runtimeHost,
     mode: 'scratchBinding',
   });
   adapter.onPoseState(event({confidence: 0.7, progress: 0.6}));

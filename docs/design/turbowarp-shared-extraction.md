@@ -37,12 +37,20 @@ Migration status:
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
 - `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
 - `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
-- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, and `pnpm test:quick`.
+- `createDsl4TurboWarpRuntimeEnvironment` now builds one `createTurboWarpRuntimeHost({runtime})` for the whole session and hands it to the adapters that need the Stage. `HostPortContext` carries `runtimeHost` next to `runtime`, so `createHostPort` implementations receive the adapter instead of resolving the Stage themselves.
+- `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js` take an injected `runtimeHost` and call `getStageTarget()`. Their unit fixtures shrank from a runtime duck-type to the host contract, which is what the acceptance criterion "Scratch VM access in app code is reduced to an injected runtime host interface" asks for. The earlier concern about widening the port contracts does not apply to injection: the ports never construct a host, so they never require `on` or `startHats`.
+- `src/dsl4/browser-turbowarp-stage.js` builds its own host from the VM it creates and uses `getStageTarget()` and `runtimeHost.runtime`. It still reads `vm.runtime.targets` directly for the target-count snapshot, because `targets` is not part of the shared surface.
+- `getTargetForStage` no longer appears anywhere in `tm-kamishibai`, and `test/dsl4-architecture.test.mjs` keeps it out.
+- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, `pnpm test:full`, `pnpm sb3:check`, and `pnpm e2e:chromium`.
 
 Remaining migration candidates:
 
-- Stage target resolution in `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js`. Those ports accept a runtime that only provides `getTargetForStage`, while `createTurboWarpRuntimeHost` also requires `on` and `startHats`. Migrate them once the shared package exposes a stage-only accessor, rather than widening the port contracts to fit the current host validation.
-- `vm.runtime` access in `src/dsl4/browser-turbowarp-stage.js`, which owns its own Scratch VM instance instead of an injected TurboWarp host.
+These need API that `turbowarp-runtime-host@0.1.0` does not expose yet, so they stay in `tm-kamishibai` until the shared package grows:
+
+- Target enumeration (`runtime.targets`) used by `src/dsl4/platform/turbowarp-actor-adapter.js`, `src/dsl4/platform/asset-manager-adapter.js`, `src/dsl4/platform/turbowarp-crossfade-platform.js`, and `src/dsl4/action-hat-detector.js`.
+- Renderer access (`runtime.renderer`, `runtime.requestRedraw`) used by the crossfade platform and the bubble advance indicator.
+- Monitor access (`runtime.monitorBlocks`, `runtime.getMonitorState`) used by the Scratch pose feedback adapter through `runtimeHost.runtime`.
+- The runtime variable block surface and the block surface construction helper named in issue #689. Those are `getInfo()`-shaped block builders; extracting them needs an app-neutral block surface API in the shared package.
 
 Acceptance criteria:
 

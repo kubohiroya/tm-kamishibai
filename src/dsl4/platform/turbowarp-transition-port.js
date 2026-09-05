@@ -96,18 +96,18 @@ function validatePayload(value) {
  * rehearsal skip behavior of the 3.2 runtime.
  *
  * @param {object} options
- * @param {unknown} options.runtime
+ * @param {unknown} options.runtimeHost injected `@kubohiroya/turbowarp-runtime-host` adapter
  * @param {unknown} [options.scheduler]
  * @param {() => number} [options.now]
  * @param {number} [options.frameMilliseconds]
  */
 export function createDsl4TurboWarpTransitionPort(options) {
   if (!isRecord(options)) throw new TypeError('transition port options must be an object');
-  const runtime = options.runtime;
-  if (!isRecord(runtime) || typeof runtime.getTargetForStage !== 'function') {
-    throw new TypeError('TurboWarp runtime must provide getTargetForStage');
+  const runtimeHost = options.runtimeHost;
+  if (!isRecord(runtimeHost) || typeof runtimeHost.getStageTarget !== 'function') {
+    throw new TypeError('transition port requires an injected TurboWarp runtime host');
   }
-  const stageCandidate = runtime.getTargetForStage();
+  const stageCandidate = runtimeHost.getStageTarget();
   if (
     !isRecord(stageCandidate) ||
     stageCandidate.isStage !== true ||

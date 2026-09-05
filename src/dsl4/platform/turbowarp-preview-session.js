@@ -97,9 +97,9 @@ function ownRuntimeEnvironment(session, environment, runtimeVersion, stateSurfac
   });
 }
 
-/** @param {Readonly<{runtime: unknown}>} context */
+/** @param {Readonly<{runtimeHost: unknown}>} context */
 function createDefaultHostPort(context) {
-  return createDsl4TurboWarpTransitionPort({runtime: context.runtime});
+  return createDsl4TurboWarpTransitionPort({runtimeHost: context.runtimeHost});
 }
 
 /**

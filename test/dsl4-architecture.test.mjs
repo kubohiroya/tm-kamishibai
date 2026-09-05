@@ -194,6 +194,25 @@ test('keeps platform adapters explicit, injected, and outside the public core gr
   }
 });
 
+test('resolves the TurboWarp Stage target only through the injected runtime host', async () => {
+  for (const relative of [
+    path.join('src', 'dsl4', 'platform', 'turbowarp-transition-port.js'),
+    path.join('src', 'dsl4', 'platform', 'scratch-pose-feedback-adapter.js'),
+    path.join('src', 'dsl4', 'browser-turbowarp-stage.js'),
+  ]) {
+    const source = await readFile(path.join(repositoryRoot, relative), 'utf8');
+    assert.doesNotMatch(source, /\bgetTargetForStage\b/u, relative);
+    assert.match(source, /\bgetStageTarget\s*\(/u, relative);
+  }
+
+  const composition = await readFile(
+    path.join(dsl4Root, 'platform', 'turbowarp-runtime-host.js'),
+    'utf8',
+  );
+  assert.match(composition, /createTurboWarpRuntimeHost\(\{runtime: options\.runtime\}\)/u);
+  assert.match(composition, /runtimeHost: turboWarpHost/u);
+});
+
 test('routes runtime extension Scratch VM access through the shared runtime host', async () => {
   const sources = new Map();
   for (const relative of [

@@ -34,12 +34,19 @@ function parseScratchPercentage(value) {
   return number;
 }
 
-/** @param {unknown} runtime */
-function resolveStage(runtime) {
-  if (!isRecord(runtime) || typeof runtime.getTargetForStage !== 'function') {
-    throw new TypeError('TurboWarp runtime must provide getTargetForStage');
+/** @param {unknown} value */
+function validateRuntimeHost(value) {
+  if (!isRecord(value) || typeof value.getStageTarget !== 'function' || !isRecord(value.runtime)) {
+    throw new TypeError('Scratch pose feedback requires an injected TurboWarp runtime host');
   }
-  const stage = runtime.getTargetForStage();
+  return /** @type {{getStageTarget: () => unknown, runtime: Record<string, unknown>}} */ (
+    /** @type {unknown} */ (value)
+  );
+}
+
+/** @param {ReturnType<typeof validateRuntimeHost>} runtimeHost */
+function resolveStage(runtimeHost) {
+  const stage = runtimeHost.getStageTarget();
   if (
     !isRecord(stage) ||
     stage.isStage !== true ||
@@ -251,7 +258,7 @@ function throwCollected(errors, message) {
  * values produced by the Scratch runtime. Invalid final pairs are restored atomically.
  *
  * @param {object} options
- * @param {unknown} options.runtime
+ * @param {unknown} options.runtimeHost injected `@kubohiroya/turbowarp-runtime-host` adapter
  * @param {'scratchMirror' | 'scratchBinding'} options.mode
  * @param {{confidence: string, progress: string}} [options.variableNames]
  */
@@ -273,7 +280,8 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
     throw new TypeError('Scratch pose feedback variableNames must provide two distinct names');
   }
 
-  const stage = resolveStage(options.runtime);
+  const runtimeHost = validateRuntimeHost(options.runtimeHost);
+  const stage = resolveStage(runtimeHost);
   const confidenceVariable = resolveVariable(stage, variableNames.confidence);
   const progressVariable = resolveVariable(stage, variableNames.progress);
   if (confidenceVariable === progressVariable) {
@@ -287,7 +295,7 @@ export function createDsl4ScratchPoseFeedbackAdapter(options) {
   } catch (error) {
     throw error;
   }
-  const runtime = /** @type {Record<string, unknown>} */ (options.runtime);
+  const runtime = runtimeHost.runtime;
   const confidenceMonitor = createMonitorChannel(
     runtime,
     confidenceVariable,

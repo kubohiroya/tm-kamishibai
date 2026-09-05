@@ -1,3 +1,5 @@
+import {createTurboWarpRuntimeHost} from '@kubohiroya/turbowarp-runtime-host';
+
 import {deepFreeze} from './story-document.js';
 import {dsl4BrowserPreviewArtifactLimits} from './browser-preview-artifact-limits.js';
 
@@ -190,6 +192,8 @@ export function createDsl4BrowserTurboWarpStage(options) {
   let disposeRequested = false;
   /** @type {Record<string, any> | null} */
   let vm = null;
+  /** @type {ReturnType<typeof createTurboWarpRuntimeHost> | null} */
+  let runtimeHost = null;
   /** @type {unknown} */
   let renderer = null;
   /** @type {unknown} */
@@ -307,6 +311,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
       }
       baseProjectBytes = new Uint8Array(0);
       vm = null;
+      runtimeHost = null;
       renderer = null;
       audioEngine = null;
       storage = null;
@@ -337,6 +342,7 @@ export function createDsl4BrowserTurboWarpStage(options) {
         audioEngine = await platform.createAudioEngine();
         bitmapAdapter = await platform.createBitmapAdapter();
         vm = validateVm(await platform.createVm());
+        runtimeHost = createTurboWarpRuntimeHost({runtime: vm.runtime});
         vm.attachStorage(storage);
         vm.attachRenderer(renderer);
         vm.attachAudioEngine(audioEngine);
@@ -413,8 +419,10 @@ export function createDsl4BrowserTurboWarpStage(options) {
   }
 
   function getRuntime() {
-    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
-    return vm.runtime;
+    if (status !== 'ready' || !runtimeHost) {
+      throw new TypeError('TurboWarp browser stage is not ready');
+    }
+    return runtimeHost.runtime;
   }
 
   function getCanvas() {
@@ -424,9 +432,10 @@ export function createDsl4BrowserTurboWarpStage(options) {
 
   /** @param {'en' | 'ja'} locale */
   function showApplicationMenu(locale) {
-    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
-    const runtime = vm.runtime;
-    const stage = runtime.getTargetForStage?.();
+    if (status !== 'ready' || !runtimeHost) {
+      throw new TypeError('TurboWarp browser stage is not ready');
+    }
+    const stage = /** @type {Record<string, any>} */ (runtimeHost.getStageTarget());
     const costumeName = locale === 'ja' ? 'MenuRuntime' : 'Menu';
     const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
     const stageIndex = stageCostumes.findIndex(
@@ -438,9 +447,10 @@ export function createDsl4BrowserTurboWarpStage(options) {
 
   /** @param {'en' | 'ja'} locale */
   function showApplicationTitle(locale) {
-    if (status !== 'ready' || !vm) throw new TypeError('TurboWarp browser stage is not ready');
-    const runtime = vm.runtime;
-    const stage = runtime.getTargetForStage?.();
+    if (status !== 'ready' || !runtimeHost) {
+      throw new TypeError('TurboWarp browser stage is not ready');
+    }
+    const stage = /** @type {Record<string, any>} */ (runtimeHost.getStageTarget());
     const costumeName = locale === 'ja' ? 'TitleRuntime' : 'Title';
     const stageCostumes = stage?.sprite?.costumes ?? stage?.getCostumes?.() ?? [];
     const stageIndex = stageCostumes.findIndex(
