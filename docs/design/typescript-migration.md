@@ -222,81 +222,39 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 39 errors** and is not adopted yet, but the measurement
-  changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
-  member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
-  collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
-  index signature is possibly undefined, so the errors are really a report of untyped boundaries —
-  the same work that gates re-enabling `@typescript-eslint/no-explicit-any` and
-  `no-unsafe-function-type`. Replace a placeholder with an interface naming the members the caller
-  actually uses, keeping the runtime validator that already checks them; the reload overlay went
-  from 35 errors to 7 that way, and the named types immediately surfaced real nullability the index
-  signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
-  is the right fix only for the remaining genuine indexing.
+- **`noUncheckedIndexedAccess` is on (done).** All 854 errors are gone and the flag is enabled. The
+  measurement is what made the work tractable: 687 of them were not array or record lookups at all
+  but member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
+  collaborator objects — under the flag every member of an index signature is possibly undefined, so
+  the report was mostly about untyped boundaries, which is the same work that gates re-enabling
+  `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type`.
 
-  Done so far, 854 down to 39: the reload overlay, the web preview shell, the platform asset
-  session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
-  preview layout coordinator, the live reload session, the runtime controller, the asset converter,
-  the TurboWarp runtime host with the preview session and startup helper that share its navigation
-  session, the CLI argument parser, the authoring profile's limits, the media sniffer, the asset
-  reload transaction and pipeline, and the actor action port. Two shapes recur.
-  Where a validator lists members inline, an interface next to it names them. Where a validator
-  takes a method-name array, `validateCompositionMethods` in
-  `src/dsl4/platform/composition-contract.ts` is generic over those literals, so the result is keyed
-  by the names that were checked and asking for an unchecked one is a compile error — which is how
-  `createAudioVoice` turned up: the runtime host calls it, no validator required it, and it is
-  genuinely optional, so the helper grew an `Optional` parameter to say so.
+  Eight shapes covered the whole set, and they are worth reaching for in this order:
+  - **Iterate `Object.entries`** instead of looping over `Object.keys` and looking the value back
+    up. The cheapest fix is not making a lookup safe but not making it: thirteen errors in the local
+    asset reader went with one loop.
+  - **Name the collaborator.** Where a runtime validator already lists the members it checks, an
+    interface beside it says the same thing to the type checker.
+  - **Key a validated record by the checked names.** `validateCompositionMethods` in
+    `src/dsl4/platform/composition-contract.ts` is generic over the method-name literals, so asking
+    for a member nobody validated is a compile error. A validator that builds its result with
+    `Object.fromEntries(methods.map(...))` needs only an `as const` list.
+  - **Name a limit bag after its defaults** — `Readonly<typeof dsl4XDefaultLimits>` rather than
+    `Readonly<Record<string, number>>`; a dictionary that starts from defaults and stays open is
+    `Record<string, string> & typeof defaults`.
+  - **Declare the local `assert` as `asserts condition`** so the guard the code already runs
+    narrows the value it checked. One line each in three builder modules.
+  - **Read a bounded array with a default**, and say in a comment why the default is unreachable.
+  - **Guard a nullable collaborator with an accessor that throws**, not with `!`.
+  - **Stop widening.** One frozen lookup table had been cast to `Readonly<Record<string, …>>`,
+    which threw away the literal keys it already had; deleting the cast was the entire fix.
 
-  The genuine lookups have their own two shapes, both settled in the DSL 3.2 converter: reading a
-  split command argument that a length check above already required (an `argumentAt` helper that
-  returns the empty string, which flows into the same diagnostics an empty argument would), and
-  destructuring after such a check (defaults on the bindings), and reading `arguments_[index]`
-  inside a loop the argument count already bounds (the same empty-string default, which would be
-  rejected as an unknown option). A runtime dispatch table like the
-  runtime controller's `port` keeps its index signature — it looks methods up by name and already
-  handles a missing one — but its element type is now a call signature rather than `Function`.
-
-  Where several modules drive the same collaborator, the interface belongs beside it:
-  `Dsl4NavigationSessionSurface` in `src/dsl4/navigation-session-surface.ts` is what the runtime
-  host, the preview session, and the startup helper share, and
-  `src/dsl4/platform/composition-contract.ts` holds the validator the ports and the asset session
-  share.
-
-  The cheapest fix is to stop looking the value up: a `for (const id of Object.keys(assets))` loop
-  that immediately reads `assets[id]` becomes `for (const [id, asset] of Object.entries(assets))`,
-  which cleared thirteen errors in the local asset reader alone and the same shape in four other
-  modules.
-
-  Byte-level parsers are their own case, settled in the media sniffer: each read has a length check
-  right above it, so the read carries a default and a comment saying why the default is
-  unreachable. A `null` collaborator that exists between `start()` and `dispose()` gets a
-  `requireProtocol()`-style accessor that throws, rather than the `!` the migration warns about.
-
-  A limit bag is a third recurring shape: `resolveFrontendLimits` builds its result from the
-  entries of the default limits, so its return type is those defaults, and four signatures that
-  took `Readonly<Record<string, number>>` now name every limit they read.
-
-  The runtime controller is the clearest case of the flag reporting a design fact rather than a
-  style problem: `currentAction()` returns nothing once a scene runs past its last action, and the
-  callers were written as though it always had one. It returns `| null` now, and the three callers
-  say which case they are — the action context throws, because it is only built while an action
-  runs; the failure record and the dispatch loop bind the action once and branch, which also closes
-  the gap where two `currentAction()` calls could disagree.
-
-  A validator that builds its result — `Object.fromEntries(methods.map(...))` in the browser stage
-  platform — needs no interface at all: make the method list `as const` and the result is
-  `Record<(typeof methods)[number], …>`.
-
-  What is left is a long tail: about 60 files with five to ten errors each, no cluster larger than
-  that, and every one of them an instance of a shape above. The six shapes, for reference:
-  name a validated collaborator; key a validated record by the checked method names; name a limit
-  bag after its defaults; iterate `Object.entries` instead of looking the key back up; read a
-  bounded array with a default and say why it is unreachable; guard a nullable collaborator with an
-  accessor that throws. An eighth: a local `assert(condition, message)` helper declared as
-  `asserts condition`, which lets the guard the code already runs narrow the value it checked — one
-  line each in three builder modules. A seventh turned up in the reload overlay: a frozen lookup table that had
-  been widened to `Readonly<Record<string, …>>` by an explicit cast. Deleting the cast restores the
-  literal keys the object already had — the fix is removing a type, not adding one.
+  The flag also reported real design facts rather than style problems. `currentAction()` returns
+  nothing once a scene runs past its last action, and its callers assumed otherwise; the Structured
+  Data iterators handed out positions they had not checked; `createAudioVoice`,
+  `getRuntimeVariableSnapshot`, and four live reload session members were called without any
+  validator requiring them, all genuinely optional; and one placeholder in the camera preview
+  controls was carrying two different rectangles in two different coordinate systems.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.

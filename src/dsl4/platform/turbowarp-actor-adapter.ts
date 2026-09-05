@@ -539,10 +539,11 @@ export function createDsl4TurboWarpActorPlatform(options: {
     const reveal = (count: number, withSound: boolean) => {
       visibleCount = Math.min(count, segments.length);
       queueBubbleText(segments.slice(0, visibleCount).join(''), visibleCount >= segments.length);
-      if (withSound && visibleCount > 0) playCharacterSound(segments[visibleCount - 1]);
+      // visibleCount is clamped to the segment count above.
+      if (withSound && visibleCount > 0) playCharacterSound(segments[visibleCount - 1] ?? '');
     };
     const nextCharacterInterval = () =>
-      visibleCount > 0 && restSegments.has(segments[visibleCount - 1])
+      visibleCount > 0 && restSegments.has(segments[visibleCount - 1] ?? '')
         ? (restCharacterInterval as number)
         : (characterInterval as number);
     const notifyTextComplete = () => {
@@ -693,7 +694,7 @@ export function createDsl4TurboWarpActorPlatform(options: {
               reveal(1, false);
               playSound(startSound);
               if (state !== 'running') return;
-              playCharacterSound(segments[0]);
+              playCharacterSound(segments[0] ?? '');
               if (segments.length === 1) notifyTextComplete();
               const tick = () => {
                 characterTimer = undefined;

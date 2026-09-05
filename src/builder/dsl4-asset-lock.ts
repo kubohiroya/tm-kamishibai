@@ -752,5 +752,6 @@ export async function generateDsl4AssetDistributionLockFile(options: any) {
       validateDsl4AssetDistributionLock(candidate);
     },
   });
-  return {...result, outputPath: installed[outputName]};
+  // The transaction installs the output it was given.
+  return {...result, outputPath: installed[outputName] ?? outputName};
 }

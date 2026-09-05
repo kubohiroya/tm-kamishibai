@@ -300,7 +300,7 @@ export async function exportDsl4BlockSourcesToYaml(options) {
     name: plan.name,
     entryPath: plan.entryPath,
     entryFilename: plan.entryFilename,
-    outputPath: outputPaths[plan.outputFilename],
+    outputPath: outputPaths[plan.outputFilename] ?? plan.outputFilename,
     files: plan.files.map((file) => ({
       sourcePath: file.sourcePath,
       path: file.path,

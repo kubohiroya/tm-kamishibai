@@ -10,7 +10,8 @@ export const dsl4ExternalSourceManifestFilenames = deepFreeze([
   'project.source.yaml',
   'project.source.json',
 ]);
-export const dsl4DefaultExternalSourceManifestFilename = dsl4ExternalSourceManifestFilenames[0];
+export const dsl4DefaultExternalSourceManifestFilename: string =
+  dsl4ExternalSourceManifestFilenames[0] ?? 'sources.yml';
 export const dsl4ExternalSourceManifestDefaults = deepFreeze({
   formatVersion: 1,
   mode: 'external',

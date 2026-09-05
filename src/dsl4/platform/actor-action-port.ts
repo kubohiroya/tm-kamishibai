@@ -406,7 +406,7 @@ export function createDsl4ActorActionPort(options: {
   if (bubbleAdvanceIndicatorEnabled && !speechAdvanceTypewriterEnabled) {
     throw new TypeError('bubbleAdvanceIndicatorEnabled requires speechAdvanceTypewriterEnabled');
   }
-  let advanceIndicatorPresenter: Record<string, Function> | undefined;
+  let advanceIndicatorPresenter: Record<'create', (...parameters: any[]) => any> | undefined;
   if (bubbleAdvanceIndicatorEnabled) {
     if (
       !isRecord(options.advanceIndicatorPresenter) ||
@@ -416,7 +416,10 @@ export function createDsl4ActorActionPort(options: {
         'advanceIndicatorPresenter.create is required when bubble advance indicators are enabled',
       );
     }
-    advanceIndicatorPresenter = options.advanceIndicatorPresenter as Record<string, Function>;
+    advanceIndicatorPresenter = options.advanceIndicatorPresenter as Record<
+      'create',
+      (...parameters: any[]) => any
+    >;
   }
   const host = validateHost(options.host, speechAdvanceTypewriterEnabled);
   if (options.stopActorLoop !== undefined && typeof options.stopActorLoop !== 'function') {

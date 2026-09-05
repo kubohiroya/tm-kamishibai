@@ -198,7 +198,7 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
     fail(
       'K4-BLOCK-EXPORT-UNREFERENCED-001',
       `No include reaches ${unreferenced.map((sourcePath) => JSON.stringify(sourcePath)).join(', ')}. Add an include for each module, or remove its DSL source hat.`,
-      {sourcePath: unreferenced[0]},
+      unreferenced[0] === undefined ? {} : {sourcePath: unreferenced[0]},
     );
   }
 

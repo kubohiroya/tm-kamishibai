@@ -10,6 +10,7 @@
     "skipLibCheck": true,
     "strict": true,
     "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "target": "ES2023",
     "types": ["node"],
     "allowImportingTsExtensions": true

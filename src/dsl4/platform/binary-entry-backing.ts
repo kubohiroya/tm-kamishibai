@@ -88,7 +88,7 @@ export function createDsl4BinaryEntryBacking({
 }: {
   runtimeComponent: Readonly<Record<string, any>>;
   provider: unknown;
-  composition: Readonly<Record<string, Function>>;
+  composition: Readonly<Record<'createSessionBinaryBacking', (...parameters: any[]) => any>>;
   namespace: string;
   policy: 'prefer' | 'required' | 'disabled';
   sessionId: string;

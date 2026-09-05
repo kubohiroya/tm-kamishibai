@@ -120,7 +120,7 @@ function validateAsyncInputComposition(value: unknown) {
   ) {
     throw new TypeError('Async Input composition must provide waitForPoseCandidate and releaseAll');
   }
-  return value as Record<string, Function>;
+  return value as Record<'waitForPoseCandidate' | 'releaseAll', (...parameters: any[]) => any>;
 }
 
 function validateSequencePayload(value: unknown) {

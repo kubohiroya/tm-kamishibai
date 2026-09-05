@@ -1,3 +1,4 @@
+import {validateCompositionMethods} from './composition-contract.js';
 import {createDsl4OrderedCursorNotifier} from './ordered-cursor-notifier.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -11,11 +12,8 @@ function inputPortError(message: string) {
 }
 
 function validateComposition(value: unknown) {
-  const methods = ['waitForKeyCandidate', 'waitForActorTouchCandidate'];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Async Input composition must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  const methods = ['waitForKeyCandidate', 'waitForActorTouchCandidate'] as const;
+  return validateCompositionMethods(value, 'Async Input composition', methods);
 }
 
 function validateArbitration(value: unknown) {

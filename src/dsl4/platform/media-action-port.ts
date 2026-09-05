@@ -410,7 +410,9 @@ export function createDsl4MediaActionPort(options: {
 
       async function applyStep(index: number) {
         if (!state.active) return;
+        // The index is taken modulo the step count, so it always resolves.
         const step = steps[index];
+        if (!step) return;
         await enqueueActorSkin(target, () => composition.applyToTarget(step.skin, actor));
         if (!state.active) return;
         state.timer = scheduler.setTimeout(() => {
