@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "isolatedModules": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*.js",
+    "src/**/*.ts",
+    "bin/**/*.mjs",
+    "scripts/**/*.mjs",
+    "scripts/**/*.js",
+    "scripts/**/*.ts",
+    "site/**/*.js",
+    "test/**/*.ts",
+    "vitest.config.ts",
+    "vitest.e2e.config.ts"
+  ],
+  "exclude": ["src/builder/generated/dsl4-playback-runtime-extension.js"]
+}

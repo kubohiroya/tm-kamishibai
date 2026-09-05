@@ -8,6 +8,9 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 
+// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+// The package is migrating to TypeScript; when it publishes types this directive becomes unused
+// and the type check fails, which is the signal to delete it and pick the real types up.
 import {createDeterministicSb3, importSb3} from '@kubohiroya/sb3-toolchain';
 import {strFromU8, unzipSync} from 'fflate';
 
@@ -17,8 +20,8 @@ import {
   createDsl4ProductionSourceFrontend,
   dsl4PackagerCompatibility,
   packageDsl4WithTurboWarpPackager,
-} from '../../src/builder/index.js';
-import {loadDsl4BinaryEntryRuntimeComponent} from '../../src/dsl4/runtime-artifact-loader.js';
+} from '../../dist/builder/index.js';
+import {loadDsl4BinaryEntryRuntimeComponent} from '../../dist/dsl4/runtime-artifact-loader.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultSamplesRoot = path.resolve(repositoryRoot, '../tm-kamishibai-samples');
@@ -45,11 +48,11 @@ const targetNames = new Set([
   'electron-win32',
 ]);
 
-function sha256(bytes) {
+function sha256(/** @type {any} */ bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function parseArguments(arguments_) {
+function parseArguments(/** @type {any} */ arguments_) {
   let samplesRoot = defaultSamplesRoot;
   let outputDirectory = null;
   let measureBrowser = false;
@@ -84,7 +87,7 @@ function parseArguments(arguments_) {
   };
 }
 
-function run(command, arguments_, options = {}) {
+function run(/** @type {any} */ command, /** @type {any} */ arguments_, options = {}) {
   const result = spawnSync(command, arguments_, {encoding: 'utf8', ...options});
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -94,7 +97,8 @@ function run(command, arguments_, options = {}) {
   }
 }
 
-const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const sleep = (/** @type {any} */ milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function resolveChromeExecutable() {
   const candidates = [
@@ -105,7 +109,9 @@ async function resolveChromeExecutable() {
     'google-chrome-stable',
     'chromium',
     'chromium-browser',
-  ].filter(Boolean);
+  ].filter(
+    /** @returns {value is string} */ (/** @type {string | undefined} */ value) => Boolean(value),
+  );
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate)) {
       try {
@@ -121,7 +127,7 @@ async function resolveChromeExecutable() {
   throw new Error('Browser measurement requires Chrome or Chromium; set CHROME_BIN');
 }
 
-function contentType(filename) {
+function contentType(/** @type {any} */ filename) {
   return (
     {
       '.html': 'text/html; charset=utf-8',
@@ -132,7 +138,8 @@ function contentType(filename) {
   );
 }
 
-async function startArtifactServer(root) {
+async function startArtifactServer(/** @type {any} */ root) {
+  /** @type {any[]} */
   const requests = [];
   const server = createServer(async (request, response) => {
     try {
@@ -168,7 +175,7 @@ async function startArtifactServer(root) {
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, '127.0.0.1', /** @type {any} */ (resolve));
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Artifact server did not bind TCP');
@@ -179,14 +186,14 @@ async function startArtifactServer(root) {
   };
 }
 
-function waitForDevTools(child) {
+function waitForDevTools(/** @type {any} */ child) {
   return new Promise((resolve, reject) => {
     let output = '';
     const timeout = setTimeout(
       () => reject(new Error(`Chrome DevTools timeout\n${output}`)),
       15_000,
     );
-    const inspect = (chunk) => {
+    const inspect = (/** @type {any} */ chunk) => {
       output += chunk.toString();
       const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/u);
       if (!match) return;
@@ -195,21 +202,21 @@ function waitForDevTools(child) {
     };
     child.stdout.on('data', inspect);
     child.stderr.on('data', inspect);
-    child.once('exit', (code) => {
+    child.once('exit', (/** @type {any} */ code) => {
       clearTimeout(timeout);
       reject(new Error(`Chrome exited before DevTools was ready (${code})\n${output}`));
     });
   });
 }
 
-async function waitForPageTarget(browserWebSocketUrl) {
+async function waitForPageTarget(/** @type {any} */ browserWebSocketUrl) {
   const endpoint = new URL(browserWebSocketUrl);
   const listUrl = `http://${endpoint.host}/json/list`;
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
       const targets = await fetch(listUrl).then((response) => response.json());
-      const page = targets.find((target) => target.type === 'page');
+      const page = targets.find((/** @type {any} */ target) => target.type === 'page');
       if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
     } catch {
       // Chrome may publish the browser endpoint before its first page target.
@@ -220,13 +227,14 @@ async function waitForPageTarget(browserWebSocketUrl) {
 }
 
 class CdpClient {
-  constructor(socket) {
+  constructor(/** @type {any} */ socket) {
     this.socket = socket;
     this.nextId = 1;
     this.pending = new Map();
+    /** @type {any[]} */
     this.exceptions = [];
     this.networkUrls = new Set();
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener('message', (/** @type {any} */ event) => {
       const message = JSON.parse(String(event.data));
       if (message.method === 'Runtime.exceptionThrown') {
         this.exceptions.push(
@@ -246,7 +254,7 @@ class CdpClient {
     });
   }
 
-  static async connect(url) {
+  static async connect(/** @type {any} */ url) {
     const socket = new WebSocket(url);
     await new Promise((resolve, reject) => {
       socket.addEventListener('open', resolve, {once: true});
@@ -255,7 +263,7 @@ class CdpClient {
     return new CdpClient(socket);
   }
 
-  send(method, params = {}) {
+  send(/** @type {any} */ method, params = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, {resolve, reject});
@@ -263,7 +271,7 @@ class CdpClient {
     });
   }
 
-  async evaluate(expression) {
+  async evaluate(/** @type {any} */ expression) {
     const response = await this.send('Runtime.evaluate', {
       expression,
       awaitPromise: true,
@@ -282,10 +290,10 @@ class CdpClient {
   }
 }
 
-function waitForExit(child, timeoutMilliseconds) {
+function waitForExit(/** @type {any} */ child, /** @type {any} */ timeoutMilliseconds) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
   return new Promise((resolve) => {
-    const finish = (exited) => {
+    const finish = (/** @type {any} */ exited) => {
       clearTimeout(timeout);
       child.off('exit', onExit);
       resolve(exited);
@@ -296,7 +304,7 @@ function waitForExit(child, timeoutMilliseconds) {
   });
 }
 
-async function stopChrome(child) {
+async function stopChrome(/** @type {any} */ child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');
   if (await waitForExit(child, 2_000)) return;
@@ -313,7 +321,10 @@ const runtimeDiagnosticsExpression = `(() => {
   return typeof value === 'string' ? JSON.parse(value) : value;
 })()`;
 
-async function collectStartupMeasurement(client, expectedMode) {
+async function collectStartupMeasurement(
+  /** @type {any} */ client,
+  /** @type {any} */ expectedMode,
+) {
   const startedAt = Date.now();
   const deadline = startedAt + 120_000;
   let startupPeakBytes = 0;
@@ -358,7 +369,7 @@ async function collectStartupMeasurement(client, expectedMode) {
   };
 }
 
-async function clickStage(client) {
+async function clickStage(/** @type {any} */ client) {
   const point = await client.evaluate(`(() => {
     const canvas = document.querySelector('.sc-canvas');
     if (!canvas) return null;
@@ -384,7 +395,12 @@ async function clickStage(client) {
   });
 }
 
-async function pressKey(client, key, code, keyCode) {
+async function pressKey(
+  /** @type {any} */ client,
+  /** @type {any} */ key,
+  /** @type {any} */ code,
+  /** @type {any} */ keyCode,
+) {
   const parameters = {
     key,
     code,
@@ -395,7 +411,12 @@ async function pressKey(client, key, code, keyCode) {
   await client.send('Input.dispatchKeyEvent', {type: 'keyUp', ...parameters});
 }
 
-async function waitForRuntimeCondition(client, predicate, label, timeoutMilliseconds = 30_000) {
+async function waitForRuntimeCondition(
+  /** @type {any} */ client,
+  /** @type {any} */ predicate,
+  /** @type {any} */ label,
+  timeoutMilliseconds = 30_000,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     const diagnostics = await client.evaluate(runtimeDiagnosticsExpression);
@@ -405,7 +426,7 @@ async function waitForRuntimeCondition(client, predicate, label, timeoutMillisec
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function poseFeedbackIsVisible(client) {
+async function poseFeedbackIsVisible(/** @type {any} */ client) {
   return client.evaluate(`(() => {
     const text = [...document.querySelectorAll('.sc-monitor-root')]
       .filter((element) => getComputedStyle(element).display !== 'none')
@@ -415,11 +436,11 @@ async function poseFeedbackIsVisible(client) {
   })()`);
 }
 
-async function advanceToPose(client, poseLocation) {
+async function advanceToPose(/** @type {any} */ client, /** @type {any} */ poseLocation) {
   await clickStage(client);
   await waitForRuntimeCondition(
     client,
-    (diagnostics) => diagnostics.runtime?.status === 'running',
+    (/** @type {any} */ diagnostics) => diagnostics.runtime?.status === 'running',
     'story start',
   );
   await pressKey(client, 'ArrowDown', 'ArrowDown', 40);
@@ -438,7 +459,7 @@ async function advanceToPose(client, poseLocation) {
   }
   diagnostics = await waitForRuntimeCondition(
     client,
-    (candidate) =>
+    (/** @type {any} */ candidate) =>
       candidate.resources?.activePoseModelCount === 1 &&
       candidate.resources?.registeredPoseModelCount >= 1 &&
       candidate.runtime?.sceneId === poseLocation.sceneId &&
@@ -458,14 +479,9 @@ async function advanceToPose(client, poseLocation) {
   return {diagnostics, monitorsVisible, poseHeapAfterGcBytes};
 }
 
-async function measurePackagerBrowserScenario({
-  chromeExecutable,
-  profileDirectory,
-  url,
-  expectedMode,
-  label,
-  poseLocation,
-}) {
+async function measurePackagerBrowserScenario(
+  /** @type {any} */ {chromeExecutable, profileDirectory, url, expectedMode, label, poseLocation},
+) {
   const chrome = spawn(
     chromeExecutable,
     [
@@ -530,7 +546,10 @@ async function measurePackagerBrowserScenario({
   }
 }
 
-async function measurePackagerBrowserArtifacts(outputDirectory, poseLocation) {
+async function measurePackagerBrowserArtifacts(
+  /** @type {any} */ outputDirectory,
+  /** @type {any} */ poseLocation,
+) {
   const chromeExecutable = await resolveChromeExecutable();
   const server = await startArtifactServer(outputDirectory);
   const measurements = [];
@@ -584,7 +603,7 @@ async function measurePackagerBrowserArtifacts(outputDirectory, poseLocation) {
   });
 }
 
-async function writeArchiveDirectory(archive, directory) {
+async function writeArchiveDirectory(/** @type {any} */ archive, /** @type {any} */ directory) {
   for (const [name, bytes] of Object.entries(archive)) {
     if (name.endsWith('/')) continue;
     const output = path.resolve(directory, name);
@@ -597,11 +616,16 @@ async function writeArchiveDirectory(archive, directory) {
   }
 }
 
-function verifyPackagedLogicalEntries(target, data, rootArchive, rootEntries) {
+function verifyPackagedLogicalEntries(
+  /** @type {any} */ target,
+  /** @type {any} */ data,
+  /** @type {any} */ rootArchive,
+  /** @type {any} */ rootEntries,
+) {
   if (target === 'html') {
     const html = Buffer.from(data).toString('utf8');
     assert.match(html, /dsl4-packager-entry-source v1/u);
-    assert(rootEntries.every((entry) => html.includes(entry)));
+    assert(rootEntries.every((/** @type {any} */ entry) => html.includes(entry)));
     return {entrySourceMode: 'archive', logicalEntryCount: rootEntries.length};
   }
   const packagedArchive = unzipSync(data);
@@ -625,7 +649,10 @@ function verifyPackagedLogicalEntries(target, data, rootArchive, rootEntries) {
   return {entrySourceMode: 'direct', logicalEntryCount: rootEntries.length};
 }
 
-async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
+async function createRootEntryUrashima(
+  /** @type {any} */ samplesRoot,
+  /** @type {any} */ temporaryDirectory,
+) {
   const storyDirectory = path.join(samplesRoot, 'stories/urashima');
   const basePath = path.join(temporaryDirectory, 'kamishibai-4.0-current.sb3');
   const actorBasePath = path.join(temporaryDirectory, 'urashima-actor-base.sb3');
@@ -638,7 +665,7 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   }
   const release = await createKamishibaiSb3({
     sourceDirectory: releaseSourceDirectory,
-    version: '4.0.0-rc.11',
+    version: '4.0.0-rc.12',
     buildDate: '2026-08-16',
     faviconPath: path.join(repositoryRoot, 'site/favicon.png'),
   });
@@ -685,7 +712,11 @@ async function createRootEntryUrashima(samplesRoot, temporaryDirectory) {
   return {bytes, path: rootEntryPath};
 }
 
-function configurePackager(TurboWarpPackager, loadedProject, target) {
+function configurePackager(
+  /** @type {any} */ TurboWarpPackager,
+  /** @type {any} */ loadedProject,
+  /** @type {any} */ target,
+) {
   const packager = new TurboWarpPackager.Packager();
   packager.project = loadedProject;
   packager.options.target = target;
@@ -719,13 +750,18 @@ async function main() {
       .sort();
     assert(rootEntries.length > 0);
     assert(rootEntries.every((name) => !name.includes('/')));
-    assert.equal(component.assetBundle.files.length, 55);
+    assert.equal(/** @type {any} */ (component).assetBundle.files.length, 55);
     for (const model of ['PoseModel1', 'PoseModel2', 'PoseModel3']) {
-      assert.equal(component.assetBundle.files.filter(({assetId}) => assetId === model).length, 3);
+      assert.equal(
+        /** @type {any} */ (component).assetBundle.files.filter(
+          (/** @type {any} */ {assetId}) => assetId === model,
+        ).length,
+        3,
+      );
     }
     const poseSceneId = 'beach';
-    const poseActions = component.storyDocument.scenes?.find(
-      (scene) => scene.id === poseSceneId,
+    const poseActions = /** @type {any} */ (component).storyDocument.scenes?.find(
+      (/** @type {any} */ scene) => scene.id === poseSceneId,
     )?.actions;
     assert(Array.isArray(poseActions), `Missing ${poseSceneId} scene actions`);
     const poseActionIndex = poseActions.findIndex(
@@ -739,7 +775,8 @@ async function main() {
     await writeFile(rootOutput, rootEntry.bytes);
 
     const require = createRequire(import.meta.url);
-    const TurboWarpPackager = require('@turbowarp/packager');
+    // @turbowarp/packager publishes no declarations; the smoke test validates what it returns.
+    const TurboWarpPackager = /** @type {any} */ (require('@turbowarp/packager'));
     const packagerPackage = require('@turbowarp/packager/package.json');
     assert.equal(packagerPackage.name, dsl4PackagerCompatibility.package);
     assert.equal(packagerPackage.version, dsl4PackagerCompatibility.version);
@@ -750,11 +787,12 @@ async function main() {
       const result = await packageDsl4WithTurboWarpPackager({
         packager,
         packagerPackage,
-        storyDocument: component.storyDocument,
-        descriptor: component.assetBundle,
+        storyDocument: /** @type {any} */ (component).storyDocument,
+        descriptor: /** @type {any} */ (component).assetBundle,
         limits: packagerLimits,
       });
-      const extension = result.type === 'text/html' ? '.html' : '.zip';
+      const packaged = /** @type {any} */ (result);
+      const extension = packaged.type === 'text/html' ? '.html' : '.zip';
       const filename = `urashima-${target}${extension}`;
       const output = path.join(options.outputDirectory, filename);
       await writeFile(output, result.data);
@@ -780,7 +818,7 @@ async function main() {
         target,
         filename,
         ...logicalEntries,
-        mediaType: result.type,
+        mediaType: packaged.type,
         size: result.data.byteLength,
         sha256: sha256(result.data),
       });
@@ -808,7 +846,7 @@ async function main() {
         size: rootEntry.bytes.byteLength,
         sha256: sha256(rootEntry.bytes),
         rootEntryCount: rootEntries.length,
-        logicalFileCount: component.assetBundle.files.length,
+        logicalFileCount: /** @type {any} */ (component).assetBundle.files.length,
         poseModels: 3,
         poseModelFiles: 9,
       },

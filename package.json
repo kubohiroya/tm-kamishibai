@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/tm-kamishibai",
-  "version": "4.0.0-rc.11",
+  "version": "4.0.0-rc.12",
   "private": false,
   "type": "module",
   "description": "TM Kamishibai — an AI-powered interactive storytelling system built on the TurboWarp ecosystem, using Teachable Machine recognition as story input",
@@ -13,9 +13,18 @@
     "url": "https://github.com/kubohiroya/tm-kamishibai/issues"
   },
   "exports": {
-    "./builder": "./src/builder/index.js",
-    "./converter": "./src/converter/index.js",
-    "./dsl4": "./src/dsl4/index.js",
+    "./builder": {
+      "types": "./dist/builder/index.d.ts",
+      "import": "./dist/builder/index.js"
+    },
+    "./converter": {
+      "types": "./dist/converter/index.d.ts",
+      "import": "./dist/converter/index.js"
+    },
+    "./dsl4": {
+      "types": "./dist/dsl4/index.d.ts",
+      "import": "./dist/dsl4/index.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -23,12 +32,10 @@
   },
   "files": [
     "bin/",
-    "src/builder/",
-    "src/dsl4/",
+    "dist/",
     "schema/dsl-4.schema.json",
     "schema/dsl-4-asset-config.schema.json",
     "schema/dsl-4-asset-lock.schema.json",
-    "src/converter/",
     "README.md",
     "README.ja.md",
     "LICENSE",
@@ -41,42 +48,45 @@
   },
   "packageManager": "pnpm@11.18.0",
   "scripts": {
-    "build": "node scripts/build-site.mjs",
+    "build": "pnpm run build:site",
     "sb3:build": "pnpm release:dsl4:update",
     "sb3:check": "pnpm sb3:dsl4-release:check",
     "sb3:dsl4-published-snapshot:check": "pnpm release:dsl4:verify-published-snapshot",
     "sb3:dsl4-release:check": "pnpm release:dsl4:check",
     "sb3:dsl4-release:write": "pnpm release:dsl4:update",
-    "dsl4:assets:convert": "node bin/tm-kamishibai.mjs convert-dsl4-assets",
-    "dsl4:playback-runtime:generate": "node scripts/generate-dsl4-playback-runtime.mjs",
-    "smoke:dsl4-packager-binary-memory": "node scripts/smoke/dsl4-packager-binary-memory.mjs",
+    "dsl4:assets:convert": "pnpm run build:lib && node bin/tm-kamishibai.mjs convert-dsl4-assets",
+    "dsl4:playback-runtime:generate": "pnpm run build:lib && node scripts/generate-dsl4-playback-runtime.mjs",
+    "smoke:dsl4-packager-binary-memory": "pnpm run build:lib && node scripts/smoke/dsl4-packager-binary-memory.mjs",
     "e2e": "pnpm e2e:preview && pnpm e2e:chromium",
-    "e2e:preview": "node --test test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs",
-    "e2e:chromium": "node --test --test-concurrency=1 test/e2e/dsl4-web-preview-chromium.test.mjs test/e2e/dsl4-asset-distribution-offline-chromium.test.mjs",
-    "e2e:chromium:preview": "node --test --test-concurrency=1 test/e2e/dsl4-web-preview-chromium.test.mjs",
-    "e2e:chromium:distribution": "node --test test/e2e/dsl4-asset-distribution-offline-chromium.test.mjs",
+    "e2e:preview": "pnpm run build:lib && vitest run test/dsl4-browser-preview-source-adapter.test.mjs test/dsl4-preview-source-protocol-port.test.mjs test/dsl4-web-preview-shell.test.mjs test/dsl4-browser-preview-asset-adapter.test.mjs test/dsl4-browser-asset-reload-pipeline.test.mjs test/dsl4-preview-reload-overlay.test.mjs",
+    "e2e:chromium": "pnpm run build:lib && vitest run --config vitest.e2e.config.ts",
+    "e2e:chromium:preview": "pnpm run build:lib && vitest run --config vitest.e2e.config.ts test/e2e/dsl4-web-preview-chromium.test.mjs",
+    "e2e:chromium:distribution": "pnpm run build:lib && vitest run --config vitest.e2e.config.ts test/e2e/dsl4-asset-distribution-offline-chromium.test.mjs",
     "lint": "eslint .",
-    "format": "prettier --check \"**/*.{js,mjs,cjs}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\"",
-    "typecheck": "tsc --project tsconfig.builder.json",
+    "format": "prettier --check \"**/*.{js,mjs,cjs,ts}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\"",
+    "typecheck": "tsc --project tsconfig.json",
     "test": "pnpm test:full",
-    "test:quick": "node scripts/test/run-suite.mjs quick",
-    "test:full": "node scripts/test/run-suite.mjs full",
+    "test:quick": "pnpm run build:lib && node scripts/test/run-suite.mjs quick",
+    "test:full": "pnpm run build:lib && node scripts/test/run-suite.mjs full",
     "verify:quick": "pnpm lint && pnpm typecheck && pnpm test:quick",
     "verify:pr": "pnpm sb3:check && pnpm lint && pnpm format && pnpm typecheck && pnpm test:quick",
     "verify:full": "pnpm sb3:check && pnpm lint && pnpm format && pnpm typecheck && pnpm test:full && pnpm e2e && pnpm build && pnpm pack:smoke",
     "verify:release": "pnpm verify:full",
-    "predeploy": "pnpm run build",
-    "deploy": "gh-pages -d dist",
-    "pack:check": "npm pack --dry-run --ignore-scripts",
-    "pack:smoke": "node scripts/verify-package.mjs",
+    "predeploy": "pnpm run build:site",
+    "deploy": "gh-pages -d site-dist",
+    "pack:check": "pnpm run build:lib && npm pack --dry-run --ignore-scripts",
+    "pack:smoke": "pnpm run build:lib && node scripts/verify-package.mjs",
     "release:check": "npm publish --dry-run --access public --tag next",
-    "release:dsl4:update": "node scripts/sb3/dsl4-release-workflow.mjs update",
-    "release:dsl4:check": "node scripts/sb3/dsl4-release-workflow.mjs check",
-    "release:dsl4:verify-published-snapshot": "node scripts/sb3/dsl4-release-workflow.mjs verify-published-snapshot",
-    "release:dsl4:freeze": "node scripts/sb3/dsl4-release-workflow.mjs freeze",
-    "release:dsl4:record-publication": "node scripts/sb3/dsl4-release-workflow.mjs record-publication",
-    "prepack": "pnpm lint && pnpm format && pnpm typecheck && node --test test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
-    "tm-kamishibai": "node bin/tm-kamishibai.mjs"
+    "release:dsl4:update": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.mjs update",
+    "release:dsl4:check": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.mjs check",
+    "release:dsl4:verify-published-snapshot": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.mjs verify-published-snapshot",
+    "release:dsl4:freeze": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.mjs freeze",
+    "release:dsl4:record-publication": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.mjs record-publication",
+    "prepack": "pnpm lint && pnpm format && pnpm typecheck && pnpm build:lib && vitest run test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
+    "tm-kamishibai": "pnpm run build:lib && node bin/tm-kamishibai.mjs",
+    "build:lib": "node scripts/build-lib.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "dev": "pnpm run build:lib && tsc --project tsconfig.build.json --watch"
   },
   "keywords": [
     "turbowarp",
@@ -108,15 +118,16 @@
     "base64-js": "1.5.1",
     "brfs": "2.0.2",
     "buffer": "6.0.3",
-    "esbuild": "0.28.2",
     "fflate": "0.8.3",
     "scratch-audio": "github:TurboWarp/scratch-audio#aba00cd02e36d95407effafa03f3678e4c669b30",
     "scratch-render": "github:TurboWarp/scratch-render#a67f7c9c07d459582c227d4fd3fae8f59d8fc9ce",
     "scratch-vm": "github:TurboWarp/scratch-vm#c4823421cb7c17d8d8a89878851ce1668c26a21f",
+    "vite": "^8.2.2",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@kubohiroya/sb3-toolchain": "0.10.0",
+    "@kubohiroya/vite-plugin-turbowarp-extension": "0.3.0",
     "@turbowarp/packager": "3.13.0",
     "@turbowarp/sbdl": "7.0.0",
     "@types/node": "^26.2.0",
@@ -128,9 +139,11 @@
     "prettier": "^3.9.6",
     "scratch-parser": "6.0.1",
     "scratch-render-fonts": "github:TurboWarp/scratch-render-fonts#7b6768fc6dfef6b343a06f992587b74807043961",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }

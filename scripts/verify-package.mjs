@@ -8,7 +8,11 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 
-function run(command, arguments_, options = {}) {
+function run(
+  /** @type {any} */ command,
+  /** @type {any} */ arguments_,
+  /** @type {any} */ options = {},
+) {
   const result = spawnSync(command, arguments_, {
     cwd: options.cwd ?? projectRoot,
     encoding: 'utf8',
@@ -44,18 +48,22 @@ try {
   )[0];
   assert(packResult?.filename, 'npm pack did not return a package filename');
 
-  const packedPaths = new Set(packResult.files.map(({path: filePath}) => filePath));
+  const packedPaths = new Set(
+    packResult.files.map((/** @type {any} */ {path: filePath}) => filePath),
+  );
   for (const requiredPath of [
     'README.md',
     'README.ja.md',
     'bin/tm-kamishibai.mjs',
     'schema/dsl-4.schema.json',
-    'src/builder/index.js',
-    'src/dsl4/index.js',
-    'src/dsl4/object-store/index.js',
-    'src/dsl4/platform/standard-app-shell.js',
-    'src/dsl4/platform/turbowarp-preview-session.js',
-    'src/dsl4/platform/turbowarp-runtime-host.js',
+    'dist/builder/index.js',
+    'dist/builder/index.d.ts',
+    'dist/builder/generated/dsl4-playback-runtime-extension.js',
+    'dist/dsl4/index.js',
+    'dist/dsl4/object-store/index.js',
+    'dist/dsl4/platform/standard-app-shell.js',
+    'dist/dsl4/platform/turbowarp-preview-session.js',
+    'dist/dsl4/platform/turbowarp-runtime-host.js',
   ]) {
     assert(packedPaths.has(requiredPath), `npm package is missing ${requiredPath}`);
   }
@@ -72,9 +80,9 @@ try {
   const packageJson = JSON.parse(
     await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
   );
-  const dsl4 = await import(pathToFileURL(path.join(packageDirectory, 'src/dsl4/index.js')).href);
+  const dsl4 = await import(pathToFileURL(path.join(packageDirectory, 'dist/dsl4/index.js')).href);
   const builder = await import(
-    pathToFileURL(path.join(packageDirectory, 'src/builder/index.js')).href
+    pathToFileURL(path.join(packageDirectory, 'dist/builder/index.js')).href
   );
   assert.equal(typeof dsl4.createDsl4SourceFrontend, 'function');
   assert.equal(typeof dsl4.createDsl4InputArbitration, 'function');

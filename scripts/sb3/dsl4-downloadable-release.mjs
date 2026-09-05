@@ -6,19 +6,23 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-import {build} from 'esbuild';
+// @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
+// The package is migrating to TypeScript; when it publishes types this directive becomes unused
+// and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
 
-import {installDsl4PackagedRuntimeComponent} from '../../src/builder/dsl4-source.js';
-import {createDsl4ProductionSourceFrontend} from '../../src/builder/dsl4-source-frontend.js';
-import {createDsl4EmbeddedAssetBundle} from '../../src/dsl4/asset-bundle-descriptor.js';
-import {createDsl4RuntimeArtifactDescriptor} from '../../src/dsl4/runtime-artifact-descriptor.js';
-import {createDsl4EmbeddedSourceDescriptor} from '../../src/dsl4/source-descriptor.js';
-import {createDsl4PoseNetProjectBundleFromLoader} from '../../src/dsl4/platform/posenet-bundle.js';
+import {installDsl4PackagedRuntimeComponent} from '../../dist/builder/dsl4-source.js';
+import {createDsl4ProductionSourceFrontend} from '../../dist/builder/dsl4-source-frontend.js';
+import {createDsl4EmbeddedAssetBundle} from '../../dist/dsl4/asset-bundle-descriptor.js';
+import {createDsl4RuntimeArtifactDescriptor} from '../../dist/dsl4/runtime-artifact-descriptor.js';
+import {createDsl4EmbeddedSourceDescriptor} from '../../dist/dsl4/source-descriptor.js';
+import {createDsl4PoseNetProjectBundleFromLoader} from '../../dist/dsl4/platform/posenet-bundle.js';
 import {
+  dsl4RuntimeExtensionMetadata,
   dsl4RuntimeProvenance,
   formatDsl4RuntimeExtensionHeader,
-} from '../../src/dsl4/runtime-provenance.js';
+} from '../../dist/dsl4/runtime-provenance.js';
+import {buildTurboWarpExtensionBundle} from './turbowarp-extension-bundle.ts';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -36,7 +40,7 @@ const applicationMenuIconPaths = Object.freeze({
   language: path.join(projectRoot, 'scripts/sb3/assets/application-menu-language.svg'),
 });
 const extensionId = 'kubohiroyakamishibai4';
-const runtimeExtensionId = 'kubohiroyakamishibairuntime4';
+const runtimeExtensionId = dsl4RuntimeExtensionMetadata.id;
 const runtimeExtensionPath = `extensions/${runtimeExtensionId}.js`;
 const externalExtensionMembers = Object.freeze(
   [
@@ -151,7 +155,7 @@ const limits = Object.freeze({
 const runtimeProfiles = new Set(['authoring', 'playback']);
 const runtimeExtensionEntryPath = path.join(
   projectRoot,
-  'scripts/sb3/dsl4-runtime-extension-entry.js',
+  'scripts/sb3/dsl4-runtime-extension-entry.ts',
 );
 let pendingPoseNetProjectBundle;
 
@@ -164,15 +168,20 @@ function createPoseNetProjectBundle() {
   return pendingPoseNetProjectBundle;
 }
 
-function md5(contents) {
+function md5(/** @type {any} */ contents) {
   return createHash('md5').update(contents).digest('hex');
 }
 
-function sha256Sri(contents) {
+function sha256Sri(/** @type {any} */ contents) {
   return `sha256-${createHash('sha256').update(contents).digest('base64')}`;
 }
 
-function svgAsset(name, source, rotationCenterX, rotationCenterY) {
+function svgAsset(
+  /** @type {any} */ name,
+  /** @type {any} */ source,
+  /** @type {any} */ rotationCenterX,
+  /** @type {any} */ rotationCenterY,
+) {
   const bytes = Buffer.from(`${source.trim()}\n`);
   const assetId = md5(bytes);
   return Object.freeze({
@@ -248,7 +257,12 @@ function titleAssets() {
   return Object.freeze([title, titleRuntime, menu, menuRuntime]);
 }
 
-function stageTarget(title, titleRuntime, menu, menuRuntime) {
+function stageTarget(
+  /** @type {any} */ title,
+  /** @type {any} */ titleRuntime,
+  /** @type {any} */ menu,
+  /** @type {any} */ menuRuntime,
+) {
   return {
     isStage: true,
     name: 'Stage',
@@ -390,7 +404,7 @@ function poseFeedbackMonitors() {
   ];
 }
 
-async function createProject(assets) {
+async function createProject(/** @type {any} */ assets) {
   const [title, titleRuntime, menu, menuRuntime] = assets;
   const project = {
     targets: [stageTarget(title, titleRuntime, menu, menuRuntime)],
@@ -426,9 +440,13 @@ async function createProject(assets) {
     {maxSourceBytes: limits.maxSourceBytes, subtleCrypto: webcrypto.subtle},
   );
   assert.equal(artifactResult.ok, true, JSON.stringify(artifactResult.diagnostics));
+  const runtimeArtifact = /** @type {any} */ (artifactResult).artifact;
   const assetBundle = await createDsl4EmbeddedAssetBundle(
     parsed.storyDocument,
-    {manifest: {formatVersion: 1, assets: []}, getFile() {}},
+    {
+      manifest: {formatVersion: 1, assets: []},
+      getFile: /** @type {any} */ (() => {}),
+    },
     {
       maxFiles: limits.maxAssetFiles,
       maxTotalBytes: limits.maxAssetBytes,
@@ -440,16 +458,16 @@ async function createProject(assets) {
     project,
     parsed.storyDocument,
     sourceDescriptor,
-    artifactResult.artifact,
+    runtimeArtifact,
     assetBundle,
-    {
+    /** @type {any} */ ({
       channel: 'unbundled',
       ...limits,
       poseNetBundle,
       subtleCrypto: webcrypto.subtle,
-    },
+    }),
   );
-  installed.extensionStorage[runtimeExtensionId].application = {mode: 'menu'};
+  /** @type {any} */ (installed).extensionStorage[runtimeExtensionId].application = {mode: 'menu'};
   return installed;
 }
 
@@ -483,10 +501,12 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     tmPoseBrowserRuntime,
     'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
-  const result = await build({
-    entryPoints: [runtimeExtensionEntryPath],
-    bundle: true,
-    charset: 'utf8',
+  return buildTurboWarpExtensionBundle({
+    entry: runtimeExtensionEntryPath,
+    root: projectRoot,
+    fileName: `${runtimeExtensionId}.js`,
+    globalName: 'dsl4RuntimeExtension',
+    metadata: dsl4RuntimeExtensionMetadata,
     define: {
       DSL4_APPLICATION_MENU_ICONS: JSON.stringify(applicationMenuIcons),
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
@@ -494,24 +514,17 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
       ),
       DSL4_AUTHORING_PROFILE: JSON.stringify(profile === 'authoring'),
     },
-    format: 'iife',
-    banner: {
-      // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
-      // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
-      js:
-        `${formatDsl4RuntimeExtensionHeader()}\n` +
-        `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
-        `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}\n`,
-    },
-    legalComments: 'eof',
-    logLevel: 'silent',
-    minify: true,
-    platform: 'browser',
-    target: ['es2022'],
-    write: false,
+    // Keep non-ASCII copy readable and move dependency licences to the end of the file.
+    esbuildOptions: {charset: 'utf8', legalComments: 'eof'},
+    header: formatDsl4RuntimeExtensionHeader(),
+    // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
+    // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
+    prelude:
+      `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
+      `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}`,
+    // The bundle carries several extensions, each registering itself once.
+    registrations: {min: 1},
   });
-  assert.equal(result.outputFiles.length, 1);
-  return Buffer.from(result.outputFiles[0].contents);
 }
 
 async function loadExternalExtensionSources() {
@@ -523,7 +536,7 @@ async function loadExternalExtensionSources() {
   );
 }
 
-function extensionSourceDescriptors(externalExtensionSources) {
+function extensionSourceDescriptors(/** @type {any} */ externalExtensionSources) {
   return [
     {
       id: runtimeExtensionId,
@@ -532,7 +545,7 @@ function extensionSourceDescriptors(externalExtensionSources) {
       parameters: [],
       encoding: 'base64',
     },
-    ...externalExtensionSources.map((member) => ({
+    ...externalExtensionSources.map((/** @type {any} */ member) => ({
       id: member.id,
       path: member.path,
       mediaType: 'text/javascript',
@@ -555,10 +568,12 @@ export async function createDsl4RuntimeBundleSource({profile = 'authoring'} = {}
     loadExternalExtensionSources(),
   ]);
   const extensions = extensionSourceDescriptors(externalExtensionSources);
-  const extensionContents = new Map([
-    [runtimeExtensionId, runtimeExtensionSource],
-    ...externalExtensionSources.map((member) => [member.id, member.contents]),
-  ]);
+  const extensionContents = new Map(
+    /** @type {Array<[string, Buffer]>} */ ([
+      [runtimeExtensionId, runtimeExtensionSource],
+      ...externalExtensionSources.map((member) => [member.id, member.contents]),
+    ]),
+  );
   const project = {
     extensions: [...bundleMemberIds],
     extensionURLs: Object.fromEntries(
