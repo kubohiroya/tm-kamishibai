@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strToU8, unzipSync, zipSync} from 'fflate';
@@ -648,7 +648,6 @@ scenes:
 
 test('ships the DSL 4.0 implementation and schema required by the installed CLI', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.files.includes('src/builder/'), true);
-  assert.equal(packageJson.files.includes('src/dsl4/'), true);
+  assert.equal(packageJson.files.includes('dist/'), true);
   assert.equal(packageJson.files.includes('schema/dsl-4.schema.json'), true);
 });

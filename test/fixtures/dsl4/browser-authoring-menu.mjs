@@ -1,6 +1,6 @@
 import {appShellLocales} from '../../../scripts/sb3/app-shell-locales.mjs';
-import {createDsl4RuntimeApplicationMenu} from '../../../src/dsl4/platform/runtime-application-menu.js';
-import {createDsl4RuntimeErrorIndicator} from '../../../src/dsl4/platform/runtime-error-indicator.js';
+import {createDsl4RuntimeApplicationMenu} from '../../../dist/dsl4/platform/runtime-application-menu.js';
+import {createDsl4RuntimeErrorIndicator} from '../../../dist/dsl4/platform/runtime-error-indicator.js';
 
 const mode = new URL(globalThis.location.href).searchParams.get('mode') ?? 'start';
 const browserDocument = globalThis.document;

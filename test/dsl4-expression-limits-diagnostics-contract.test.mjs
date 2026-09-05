@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
+
+import {resolveModulePath} from './helpers/module-path.mjs';
 
 import {
   RuntimeExpressionCompositionError,
@@ -143,7 +145,9 @@ test('keeps every implemented limit in the design registry synchronized with cod
   );
 
   const objectStoreSource = await readFile(
-    path.join(repositoryRoot, contract.implementedLimits.objectStore.source),
+    await resolveModulePath(
+      path.join(repositoryRoot, contract.implementedLimits.objectStore.source),
+    ),
     'utf8',
   );
   for (const [name, value] of Object.entries(contract.implementedLimits.objectStore.values)) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4RuntimeSourceChooser} from '../src/dsl4/platform/runtime-source-chooser.js';
 import {createFakeDocument, findByAttribute} from './helpers/fake-dom.mjs';

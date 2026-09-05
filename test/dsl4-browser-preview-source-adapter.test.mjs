@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {
   createDsl4BrowserPreviewSourceAdapter,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4CameraPreviewControls} from '../src/dsl4/platform/index.js';
 import {createFakeDocument} from './helpers/fake-dom.mjs';

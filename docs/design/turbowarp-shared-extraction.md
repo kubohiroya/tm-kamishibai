@@ -35,12 +35,14 @@ Migration status:
 
 - `src/dsl4/platform/turbowarp-runtime-host.js` now creates the shared `createTurboWarpBroadcastPort({errorCodePrefix: 'K4'})` directly.
 - The previous local `src/dsl4/platform/turbowarp-broadcast-action-port.js` wrapper and its wrapper-only tests were removed after the shared package took over the TurboWarp broadcast ownership rules.
-- Related `tm-kamishibai` checks pass: `pnpm typecheck`, `pnpm lint`, and `node --test test/dsl4-architecture.test.mjs test/dsl4-turbowarp-runtime-host.test.mjs`.
+- `scripts/sb3/dsl4-runtime-extension-entry.js` and `scripts/sb3/dsl4-runtime-authoring-profile.js` now resolve the TurboWarp runtime once through `createTurboWarpRuntimeHost({Scratch, requireUnsandboxed: true})` and reach it only through `runtime`, `onRuntimeEvent`, `startHats`, and `getStageTarget`. `Scratch.vm.runtime`, `runtime.on('PROJECT_STOP_ALL', …)`, and `getTargetForStage()` no longer appear in app code, and `test/dsl4-architecture.test.mjs` keeps them out.
+- `Scratch.vm` surface that the shared package does not own — `toJSON()`, `saveProjectSb3DontZip()`, and `renderer.canvas` — stays in `tm-kamishibai`.
+- Related `tm-kamishibai` checks pass: `pnpm lint`, `pnpm format`, `pnpm typecheck`, `pnpm dsl4:playback-runtime:generate`, and `pnpm test:quick`.
 
 Remaining migration candidates:
 
-- runtime access pieces from `src/dsl4/platform/turbowarp-runtime-host.js`
-- generic VM subscription patterns used by runtime shutdown handling
+- Stage target resolution in `src/dsl4/platform/turbowarp-transition-port.js` and `src/dsl4/platform/scratch-pose-feedback-adapter.js`. Those ports accept a runtime that only provides `getTargetForStage`, while `createTurboWarpRuntimeHost` also requires `on` and `startHats`. Migrate them once the shared package exposes a stage-only accessor, rather than widening the port contracts to fit the current host validation.
+- `vm.runtime` access in `src/dsl4/browser-turbowarp-stage.js`, which owns its own Scratch VM instance instead of an injected TurboWarp host.
 
 Acceptance criteria:
 
@@ -79,9 +81,9 @@ Does not own:
 First migration candidates:
 
 - `resolveDsl4ReloadAnchor` in `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/preview-protocol.js`
+- `src/dsl4/preview-protocol.ts`
 - `src/dsl4/preview-reload-policy.js`
-- `src/dsl4/reload-planner.js`
+- `src/dsl4/reload-planner.ts`
 - `src/builder/dsl4-preview-transport-policy.js`
 - app-neutral pieces of `src/builder/dsl4-preview-reload-overlay.js`
 - app-neutral pieces of `src/builder/dsl4-preview-reload-surface.js`
@@ -95,14 +97,14 @@ Acceptance criteria:
 Migration status:
 
 - `resolveDsl4ReloadAnchor` now delegates app-neutral anchor fallback to `resolveReloadAnchor` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`.
-- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.js` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
-- `capabilityList` in `src/dsl4/preview-protocol.js` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
+- `validateCapabilities` in `src/dsl4/preview-source-protocol-port.ts` now delegates capability token grammar, duplicate rejection, and ordering to `normalizeCapabilities` from `@kubohiroya/turbowarp-preview-runtime@0.1.0`. The DSL 4.0 required capability set stays local because it names `source.stage.v1`, `source.commit.v1`, `restart.choice.v1`, and `diagnostics.v1`, which are Kamishibai preview policy rather than shared grammar. Malformed capability input now fails with the shared `PreviewProtocolError`, which still extends `TypeError`, so existing `assert.throws` callers keep passing.
+- `capabilityList` in `src/dsl4/preview-protocol.ts` now delegates to the same `normalizeCapabilities`, and restates its rejection as `K4-PREVIEW-PROTOCOL-SCHEMA` so the DSL 4.0 wire contract is unchanged. `test/dsl4-preview-protocol.test.mjs` pins that error code for malformed, mis-cased, and duplicated capability tokens, which was previously unpinned.
 - The broader `createDsl4PreviewProtocolSession` still remains in `tm-kamishibai` because the current DSL 4.0 wire protocol owns candidate ids, restart choices, source integrity, and `preview.source.staged/committed/deferred` events that are not part of `turbowarp-preview-runtime@0.1.0`.
 - Related checks pass: `pnpm sb3:check`, `pnpm lint`, `pnpm format`, `pnpm typecheck`, and `node --test test/dsl4-preview-reload-policy.test.mjs test/dsl4-preview-reload-overlay.test.mjs test/dsl4-preview-reload-surface.test.mjs test/dsl4-architecture.test.mjs test/dsl4-downloadable-release.test.mjs`.
 
 DSL 4.0 core purity rule:
 
-- `test/dsl4-architecture.test.mjs` used to forbid every `@kubohiroya/turbowarp-*` specifier inside a declared DSL 4.0 core import graph, which blocked core entries such as `src/dsl4/preview-protocol.js` and `src/dsl4/reload-planner.js` from using any shared package.
+- `test/dsl4-architecture.test.mjs` used to forbid every `@kubohiroya/turbowarp-*` specifier inside a declared DSL 4.0 core import graph, which blocked core entries such as `src/dsl4/preview-protocol.ts` and `src/dsl4/reload-planner.ts` from using any shared package.
 - The rule now allows a named allowlist, `pureSharedPackages`, currently holding only `@kubohiroya/turbowarp-preview-runtime`. Every other `@kubohiroya/turbowarp-*` specifier and `scratch-vm` stay forbidden in core graphs, and `node:` builtins stay forbidden everywhere in them.
 - The allowlist is not a blanket exemption. A companion test asserts that each listed package declares no `dependencies`, `peerDependencies`, or `optionalDependencies`, that its entry module imports nothing, and that its source never names `globalThis`, `window`, `document`, `navigator`, `indexedDB`, `localStorage`, `fetch`, `XMLHttpRequest`, `WebSocket`, `Scratch`, `process`, or `require`. `@kubohiroya/turbowarp-app-shell` fails that guard today, so the intent of the original rule is preserved: the core stays outside platform and I/O dependencies, while app-neutral extraction is no longer blocked by package boundary alone.
 - Adding a package to `pureSharedPackages` is a deliberate decision. If a shared package ever needs platform access, it does not belong in the DSL 4.0 core graph and its core caller should move behind an injected port instead.
