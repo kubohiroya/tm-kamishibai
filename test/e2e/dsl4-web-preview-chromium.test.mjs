@@ -36,7 +36,20 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url);
 const TurboWarpPackager = require('@turbowarp/packager');
 
+let pendingCurrentDsl4ReleaseSb3;
+
+/**
+ * Build the current release once per process. The release is deterministic and its runtime
+ * extension is minified with terser, so rebuilding it for every test spends the per-test budget on
+ * work that cannot differ. Each caller gets its own archive bytes.
+ */
 async function createCurrentDsl4ReleaseSb3() {
+  pendingCurrentDsl4ReleaseSb3 ??= buildCurrentDsl4ReleaseSb3();
+  const release = await pendingCurrentDsl4ReleaseSb3;
+  return {...release, archive: Uint8Array.from(release.archive)};
+}
+
+async function buildCurrentDsl4ReleaseSb3() {
   const sourceDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-current-release-source-'));
   try {
     const sourceFiles = await createDsl4ReleaseSourceFiles();

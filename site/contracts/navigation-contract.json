@@ -104,11 +104,13 @@
     {
       "repository": "kubohiroya/tm-kamishibai-samples",
       "paths": [
-        "scripts/build-site.mjs",
+        "scripts/build-site.ts",
+        "scripts/site-navigation.ts",
+        "scripts/build-site-navigation.ts",
         "scripts/site-navigation.mjs",
         "site/contracts/navigation-contract.json",
         "site/site-shell.css",
-        "scripts/verify-site.mjs",
+        "scripts/verify-site.ts",
         ".github/workflows/navigation-contract.yml"
       ]
     }

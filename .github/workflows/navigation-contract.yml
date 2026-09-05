@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: kubohiroya/tm-kamishibai-docs
-          ref: 8c6f0b3e804e11060e7ad456985f22c47a52d462
+          ref: e93abd713bcac3bcef279eb44563119d238e0499
           path: .navigation-contract-source
           fetch-depth: 1
       - name: Compare generated contract and renderer

@@ -6,10 +6,12 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import {turboWarpExtension} from '@kubohiroya/vite-plugin-turbowarp-extension';
 // @ts-expect-error -- @kubohiroya/sb3-toolchain ships JavaScript without declarations today.
 // The package is migrating to TypeScript; when it publishes types this directive becomes unused
 // and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildExtensionBundles} from '@kubohiroya/sb3-toolchain';
+import {build} from 'vite';
 
 import {installDsl4PackagedRuntimeComponent} from '../../dist/builder/dsl4-source.js';
 import {createDsl4ProductionSourceFrontend} from '../../dist/builder/dsl4-source-frontend.js';
@@ -22,7 +24,6 @@ import {
   dsl4RuntimeProvenance,
   formatDsl4RuntimeExtensionHeader,
 } from '../../dist/dsl4/runtime-provenance.js';
-import {buildTurboWarpExtensionBundle} from './turbowarp-extension-bundle.ts';
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -157,6 +158,7 @@ const runtimeExtensionEntryPath = path.join(
   projectRoot,
   'scripts/sb3/dsl4-runtime-extension-entry.ts',
 );
+const runtimeExtensionTarget = 'es2022';
 let pendingPoseNetProjectBundle;
 
 function createPoseNetProjectBundle() {
@@ -471,10 +473,28 @@ async function createProject(/** @type {any} */ assets) {
   return installed;
 }
 
+/** @type {Map<string, Promise<Buffer>>} */
+const pendingRuntimeExtensionSources = new Map();
+
+/**
+ * Build one runtime extension, or hand back the build this process already ran.
+ *
+ * The bundle is deterministic for a profile and minification dominates its cost, so repeated
+ * callers — the release workflow and the browser end-to-end suite alike — share one build. Each
+ * caller still gets its own Buffer.
+ */
 export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} = {}) {
   if (!runtimeProfiles.has(profile)) {
     throw new TypeError('DSL 4.0 runtime profile must be authoring or playback');
   }
+  const pending =
+    pendingRuntimeExtensionSources.get(profile) ?? buildDsl4RuntimeExtensionSource(profile);
+  pendingRuntimeExtensionSources.set(profile, pending);
+  return Buffer.from(await pending);
+}
+
+/** @param {string} profile */
+async function buildDsl4RuntimeExtensionSource(profile) {
   const [
     tensorflowBrowserRuntime,
     tmPoseBrowserRuntime,
@@ -501,12 +521,17 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
     tmPoseBrowserRuntime,
     'The pinned Teachable Machine Pose bundle no longer has the expected Webpack loader.',
   );
-  return buildTurboWarpExtensionBundle({
-    entry: runtimeExtensionEntryPath,
+  // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
+  // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
+  // The prelude runs outside the extension wrapper, in sloppy mode, because both vendored
+  // bundles are UMD distributions that attach themselves to the global object.
+  const prelude =
+    `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
+    `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}`;
+  const result = await build({
     root: projectRoot,
-    fileName: `${runtimeExtensionId}.js`,
-    globalName: 'dsl4RuntimeExtension',
-    metadata: dsl4RuntimeExtensionMetadata,
+    configFile: false,
+    logLevel: 'silent',
     define: {
       DSL4_APPLICATION_MENU_ICONS: JSON.stringify(applicationMenuIcons),
       DSL4_OFFICIAL_WEBSITE_ICON: JSON.stringify(
@@ -514,17 +539,32 @@ export async function createDsl4RuntimeExtensionSource({profile = 'authoring'} =
       ),
       DSL4_AUTHORING_PROFILE: JSON.stringify(profile === 'authoring'),
     },
-    // Keep non-ASCII copy readable and move dependency licences to the end of the file.
-    esbuildOptions: {charset: 'utf8', legalComments: 'eof'},
-    header: formatDsl4RuntimeExtensionHeader(),
-    // Compatibility fallback until turbowarp-tm publishes one reviewed browser runtime.
-    // TM Pose directly references global `tf`; its embedded module 0 is routed to that instance.
-    prelude:
-      `(function (exports, module, define, require, process) {\n${tensorflowBrowserRuntime}\n` +
-      `}).call(globalThis);\n${tmPoseRuntimeWithSharedTensorflow}`,
-    // The bundle carries several extensions, each registering itself once.
-    registrations: {min: 1},
+    build: {
+      write: false,
+      target: runtimeExtensionTarget,
+      minify: 'terser',
+      terserOptions: {
+        format: {comments: 'some'},
+      },
+    },
+    plugins: [
+      turboWarpExtension({
+        ...dsl4RuntimeExtensionMetadata,
+        fileName: `${runtimeExtensionId}.js`,
+        entry: runtimeExtensionEntryPath,
+        target: runtimeExtensionTarget,
+        // The header carries the bundled component notices, so it replaces the
+        // five metadata lines the plugin would emit on its own.
+        header: formatDsl4RuntimeExtensionHeader().trimEnd(),
+        prelude,
+      }),
+    ],
   });
+  // `build` returns a watcher only when `build.watch` is set, which this build never does.
+  const built = /** @type {any} */ (result);
+  const outputs = Array.isArray(built) ? built.flatMap((item) => item.output) : built.output;
+  assert.equal(outputs.length, 1);
+  return Buffer.from(outputs[0].code, 'utf8');
 }
 
 async function loadExternalExtensionSources() {

@@ -120,12 +120,13 @@ export const dsl4RuntimeExtensionMetadata = Object.freeze({
 });
 
 export function formatDsl4RuntimeExtensionHeader() {
+  const {id, name, description, author, license} = dsl4RuntimeExtensionMetadata;
   return [
-    `// Name: ${dsl4RuntimeExtensionMetadata.name}`,
-    `// ID: ${dsl4RuntimeExtensionMetadata.id}`,
-    `// Description: ${dsl4RuntimeExtensionMetadata.description}`,
-    `// By: ${dsl4RuntimeExtensionMetadata.author}`,
-    `// License: ${dsl4RuntimeExtensionMetadata.license}`,
+    `// Name: ${name}`,
+    `// ID: ${id}`,
+    `// Description: ${description}`,
+    `// By: ${author}`,
+    `// License: ${license}`,
     '',
     formatDsl4RuntimeProvenanceComment().trimEnd(),
     '',

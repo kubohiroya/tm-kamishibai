@@ -133,20 +133,12 @@ remaining type errors were resolved by hand, which is where the real findings su
 
 ### Phase 4 — Vite for browser bundling (done)
 
-The extension build goes through `scripts/sb3/turbowarp-extension-bundle.ts`, whose options
-(`header`, `prelude`, `registrations`, `minify`) mirror the API added to
-`@kubohiroya/vite-plugin-turbowarp-extension@0.3.0` for
-[issue #9](https://github.com/kubohiroya/vite-plugin-turbowarp-extension/issues/9). That module is
-the only caller-visible seam, so adopting more of the plugin changes its body and nothing else.
+The DSL 4.0 runtime extension is built by `@kubohiroya/vite-plugin-turbowarp-extension@0.3.0`, which
+owns the extension contract: one JavaScript chunk, no leftover module syntax, exactly one
+`Scratch.extensions.register(...)` call, the header, the prelude, and the wrapper.
 
-Two Vite 8 details, found while reviewing that issue, are settled in this repository:
-
-- `esbuild.legalComments` alone does not keep dependency licence notices, because the chunk-level
-  comment filter drops them first. The extension build sets `output.comments: {legal: true}` as
-  well. The current graph carries no legal comments — the esbuild artifact had none either — so this
-  guards future dependencies rather than fixing a live regression.
-- `inlineDynamicImports` is deprecated in Vite 8. The local preview bundle uses `codeSplitting:
-false`, which this repository can rely on because it pins Vite 8.
+`inlineDynamicImports` is deprecated in Vite 8; the local preview bundle uses
+`codeSplitting: false`, which this repository can rely on because it pins Vite 8.
 
 Untyped dependencies are handled so they stop being untyped on their own: `@kubohiroya/sb3-toolchain`
 is migrating to TypeScript, so its import sites carry `@ts-expect-error` rather than an ambient
@@ -157,34 +149,27 @@ land, which is the signal to delete it.
 Both programmatic `esbuild` builds now run through Vite's programmatic `build()`, and `esbuild` is
 gone from `dependencies` (Vite brings its own):
 
-- **DSL 4.0 runtime extension** (`scripts/sb3/dsl4-downloadable-release.mjs`) — an IIFE library
-  build. The extension header and the two vendored runtimes are prepended _after_ the build,
-  because minification drops a Rollup `banner` comment.
+- **DSL 4.0 runtime extension** (`scripts/sb3/dsl4-downloadable-release.mjs`) — a plugin build.
+  The header carries the bundled component notices, so it replaces the plugin's own metadata lines,
+  and the two vendored UMD runtimes are passed as the prelude, which the plugin places above the
+  strict-mode wrapper and checks for module syntax.
 - **Local preview bundle** (`src/builder/dsl4-turbowarp-browser-bundle.ts`) — an ES library build
   with a ported plugin for the reviewed webpack inline loaders (`raw-loader!`, `base64-loader!`,
   `ify-loader!` with `brfs`, and the disabled external-worker specifiers).
 
-The plugin's `validateBundleCode` enforces the extension contract here — one JavaScript chunk, no
-leftover module syntax, and a bounded number of `Scratch.extensions.register(...)` calls. Its
-`generateBundle` hook cannot own the wrapper yet: it indents the wrapped source by two spaces, and
-a minifier writes `"\n"` string constants as template literals holding a real newline, so indenting
-rewrites every such constant to `"\n  "`. In this bundle that corrupted the `yaml` lexer's newline
-handling and every DSL 4.0 story failed to parse, with no build-time signal
-([issue #16](https://github.com/kubohiroya/vite-plugin-turbowarp-extension/issues/16)). The seam
-therefore composes header, prelude, and wrapper itself and never re-indents the built source. It
-also reproduces the two guarantees that came with the plugin's wrapper: the prelude is compiled with
-`new vm.Script` (parsed, not run) so an ESM distribution build fails the release instead of the
-extension load, and it is terminated with `;` because the wrapper that follows starts with `(`. The
-extension identity lives once, in `dsl4RuntimeExtensionMetadata`, and the header is generated from
-it.
+**The minifier choice is load-bearing, and `terser` is the one that works.** The plugin indents the
+wrapped source by two spaces, while `esbuild` and Oxc write `"\n"` string constants as template
+literals holding a real newline — indenting then rewrites every such constant to `"\n  "`. Built
+that way, the bundled `yaml` lexer stops recognising line breaks and every DSL 4.0 story fails to
+parse, with no build-time signal; the release suite catches it, but nothing earlier does. `terser`
+does not produce those literals, so the artifact is correct, and it mangles module-level names in
+the plugin's `es` output, so the bundle is no larger than the previous `iife` build. Reported as
+[issue #16](https://github.com/kubohiroya/vite-plugin-turbowarp-extension/issues/16); until it is
+fixed, changing `build.minify` here needs the full release suite, not just a green build.
 
-Two further measurements from the same work:
-
-- The plugin builds an ES library and wraps the result afterwards, which leaves module-level names
-  unminifiable: the same graph is 1.62 MB as `es` against 1.23 MB as `iife`. The extension build
-  asks for `formats: ['iife']`.
-- `dist/` is what the runtime extension entry imports, so a stale `dist/` silently ships stale
-  behaviour into the generated artifact. Regenerating the runtime runs `build:lib` first.
+One more property of this layout: `dist/` is what the runtime extension entry imports, so a stale
+`dist/` silently ships stale behaviour into the generated artifact. Regenerating the runtime runs
+`build:lib` first.
 
 Two behaviours had to be reproduced explicitly, and both are load-bearing:
 
@@ -213,10 +198,10 @@ for `tm-kamishibai preview` and is not part of any release artifact.
 - **`scripts/**`, `site/**`, and `bin/**` are now type-checked (done).** The two modules Vite
   bundles — `scripts/sb3/dsl4-runtime-extension-entry.ts` and
   `scripts/sb3/dsl4-runtime-authoring-profile.ts` — are TypeScript, because they are shipped source
-  rather than tooling. `scripts/sb3/turbowarp-extension-bundle.ts` is TypeScript as well: Node's
-  type stripping runs it directly, which is why `engines.node` requires 22.18.0. The remaining
-  Node-run scripts are still `.mjs` and are checked as JavaScript through JSDoc annotations;
-  convert one when it next needs real work, and add new ones as `.ts`. Untyped dependencies carry
+  rather than tooling. The remaining Node-run scripts are still `.mjs` and are checked as JavaScript
+  through JSDoc annotations; convert one when it next needs real work, and add new ones as `.ts`,
+  which Node runs directly through its own type stripping — that is why `engines.node` requires
+  22.18.0. Untyped dependencies carry
   `@ts-expect-error` at their import sites rather than an ambient declaration.
 - **Keep `allowJs` and `checkJs`.** They are what type-checks the remaining `scripts/**/*.mjs`,
   `site/site-shell.js` and `bin/tm-kamishibai.mjs`. Dropping them would silently remove those files
