@@ -14,6 +14,7 @@ import {
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from '../dsl4/source-origin-descriptor.js';
 import {validateDsl4PoseNetProjectBundle} from '../dsl4/platform/posenet-bundle.js';
 import {fromByteArray} from 'base64-js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3, serializeSb3} from './sb3.js';
 
@@ -124,7 +125,7 @@ export async function installDsl4EmbeddedSource(
     channel: 'bundled' | 'unbundled';
     maxSourceBytes: number;
     replaceExisting?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!isRecord(project)) {
@@ -215,7 +216,7 @@ export async function installDsl4RuntimeComponent(
     assetDistribution?: unknown;
     poseNetBundle?: unknown;
     runtimeExtensionSource?: string;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!isRecord(project)) {
@@ -394,7 +395,7 @@ export function installDsl4PackagedRuntimeComponent(
     maxAssetBytes: number;
     historyNavigationAvailable?: boolean;
     replaceExisting?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   return installDsl4RuntimeComponent(project, storyDocument, sourceDescriptor, runtimeArtifact, {

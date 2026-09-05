@@ -1,0 +1,689 @@
+{
+  "scripts/sb3/dsl4-runtime-authoring-profile.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 31
+    }
+  },
+  "scripts/sb3/dsl4-runtime-extension-entry.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 91
+    }
+  },
+  "src/builder/dsl4-asset-audit.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "src/builder/dsl4-asset-converter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 31
+    }
+  },
+  "src/builder/dsl4-asset-lock.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    }
+  },
+  "src/builder/dsl4-asset-project-material.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    }
+  },
+  "src/builder/dsl4-asset-vendor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/builder/dsl4-binary-entry-sb3.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/builder/dsl4-browser-runtime-component.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/builder/dsl4-build-output.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/builder/dsl4-build.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/builder/dsl4-external-source.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-local-assets.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "src/builder/dsl4-local-preview-browser-bootstrap.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/builder/dsl4-local-preview-browser-client.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    }
+  },
+  "src/builder/dsl4-local-preview-browser-entry.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-local-preview-browser-runtime.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-local-preview-client.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "src/builder/dsl4-local-preview-command.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 4
+    }
+  },
+  "src/builder/dsl4-local-preview-host.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 4
+    }
+  },
+  "src/builder/dsl4-packager-entry-source.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/builder/dsl4-preview-reload-overlay.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    }
+  },
+  "src/builder/dsl4-preview-reload-surface.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 5
+    }
+  },
+  "src/builder/dsl4-preview-shell.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-preview-watch.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/builder/dsl4-project-source.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/builder/dsl4-source-graph.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-turbowarp-browser-bundle.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/builder/dsl4-validate.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/builder/dsl4-web-preview-shell.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/builder/embedded-script.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/builder/sb3.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/builder/validate.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/converter/index.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "src/dsl4/action-context-turbowarp.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/dsl4/action-invocation-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "src/dsl4/asset-bundle-descriptor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/asset-candidate-validator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 7
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/asset-distribution-profile.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    }
+  },
+  "src/dsl4/asset-preload-coordinator.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 4
+    }
+  },
+  "src/dsl4/asset-reload-policy.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/asset-reload-protocol.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 11
+    }
+  },
+  "src/dsl4/asset-reload-transaction.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 17
+    }
+  },
+  "src/dsl4/asset-snapshot-watch.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 15
+    }
+  },
+  "src/dsl4/binary-entry-provider.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/browser-asset-reload-pipeline.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/dsl4/browser-preview-asset-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/browser-preview-coordinator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/browser-preview-runtime-bridge.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/browser-preview-source-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 20
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 11
+    }
+  },
+  "src/dsl4/browser-turbowarp-platform.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/dsl4/browser-turbowarp-stage.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/debug-execution.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/dsl4/diagnostic-projection.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/diagnostic-sequence-policy.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/embedded-asset-lifecycle.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 10
+    }
+  },
+  "src/dsl4/jsonpath.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 26
+    }
+  },
+  "src/dsl4/kamishibai-structured-data.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "src/dsl4/keymap-input-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 4
+    }
+  },
+  "src/dsl4/live-reload-session.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 19
+    }
+  },
+  "src/dsl4/navigation-session-surface.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 35
+    }
+  },
+  "src/dsl4/navigation-session.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 10
+    }
+  },
+  "src/dsl4/object-store/store.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 49
+    }
+  },
+  "src/dsl4/packager-entry-source.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/platform/actor-action-port.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/dsl4/platform/asset-manager-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/binary-entry-backing.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 14
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/browser-distribution-build.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 20
+    }
+  },
+  "src/dsl4/platform/browser-preview-runtime-component.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 16
+    }
+  },
+  "src/dsl4/platform/browser-remote-asset-loader.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/dsl4/platform/browser-story-file-loader.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    }
+  },
+  "src/dsl4/platform/bubble-advance-indicator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 10
+    }
+  },
+  "src/dsl4/platform/bubble-platform.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/platform/camera-preview-controls.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 3
+    }
+  },
+  "src/dsl4/platform/composition-contract.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/dsl4/platform/indeterminate-progress-indicator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/loading-screen-presenter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/media-action-port.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/platform/packaged-binary-runtime.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    }
+  },
+  "src/dsl4/platform/platform-asset-session.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 6
+    }
+  },
+  "src/dsl4/platform/pose-action-port.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/posenet-bundle.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/platform/runtime-application-menu.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/runtime-error-indicator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/runtime-source-chooser.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/runtime-title-controls.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/runtime-warning-indicator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/dsl4/platform/scratch-pose-feedback-adapter.ts": {
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/session-backing-diagnostic.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/dsl4/platform/standard-app-shell.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 18
+    }
+  },
+  "src/dsl4/platform/story-camera-lifecycle.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    }
+  },
+  "src/dsl4/platform/svg-text-action-port.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/platform/tm-model-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/turbowarp-actor-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 5
+    }
+  },
+  "src/dsl4/platform/turbowarp-core-action-block.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/turbowarp-crossfade-platform.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 6
+    }
+  },
+  "src/dsl4/platform/turbowarp-preview-session.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/platform/turbowarp-runtime-host.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 33
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 14
+    }
+  },
+  "src/dsl4/preview-layout-coordinator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/preview-protocol.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "src/dsl4/preview-reload-policy.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 7
+    }
+  },
+  "src/dsl4/preview-reload-surface-contract.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/dsl4/preview-source-graph-generation.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/dsl4/preview-source-protocol-port.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 2
+    }
+  },
+  "src/dsl4/runtime-action-dispatcher.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/dsl4/runtime-artifact-loader.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/dsl4/runtime-controller.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 10
+    }
+  },
+  "src/dsl4/runtime-startup.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 7
+    }
+  },
+  "src/dsl4/runtime-variable-surface.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/source-frontend.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 12
+    }
+  },
+  "src/dsl4/source-graph-frontend.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 28
+    }
+  },
+  "src/dsl4/source-graph.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/dsl4/source-origin-descriptor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/dsl4/story-document.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/dsl4/structured-data-adapter.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    }
+  },
+  "src/dsl4/structured-data-turbowarp.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/dsl4/structured-data.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 21
+    }
+  }
+}

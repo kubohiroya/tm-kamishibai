@@ -9,6 +9,7 @@ import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descript
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 export const dsl4RuntimeArtifactStoragePaths = deepFreeze({
   bundled:
@@ -174,7 +175,7 @@ export async function loadDsl4RuntimeArtifact(
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;
     maxAssetBytes?: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
@@ -395,7 +396,7 @@ export function loadDsl4RuntimeComponent(
     maxAssetFiles: number;
     maxAssetBytes: number;
     historyNavigationAvailable?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   return loadDsl4RuntimeArtifact(project, sourceFrontend, {

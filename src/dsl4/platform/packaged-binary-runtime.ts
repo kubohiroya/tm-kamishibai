@@ -5,6 +5,7 @@ import {
 import {dsl4BinaryEntryFormatVersion} from '../binary-entry-provider.js';
 import {loadDsl4BinaryEntryRuntimeComponent} from '../runtime-artifact-loader.js';
 import {deepFreeze} from '../story-document.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 
 const archiveSurfaces = new Set(['plain-html', 'zip-one-asset']);
 const directSurfaces = new Set(['zip', 'electron']);
@@ -127,7 +128,7 @@ export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   maxAssetFiles: number;
   maxAssetBytes: number;
   globalObject?: Record<PropertyKey, any>;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(options)) throw new TypeError('Packaged binary runtime options are required');
   const descriptors = storedAssetDescriptors(options.project);

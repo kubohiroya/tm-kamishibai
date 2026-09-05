@@ -5,6 +5,7 @@ import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {createDsl4PreviewSourceGraphGeneration} from '../dsl4/preview-source-graph-generation.js';
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {
   loadDsl4ExternalSource,
   validateDsl4ExternalSourceManifest,
@@ -12,6 +13,7 @@ import {
 import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
+import type {Dsl4FileWatcher} from './file-system.js';
 
 export const dsl4PreviewWatchDefaults = Object.freeze({
   quietWindowMs: 100,
@@ -29,6 +31,21 @@ function cancelSchedule(timer: ReturnType<typeof globalThis.setTimeout>) {
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
+}
+
+/**
+ * The clock the watcher takes by injection so the suites can drive quiet periods without waiting.
+ *
+ * The timer handle stays opaque because the watcher only holds what `setTimeout` returned and hands
+ * it back to `clearTimeout`; the injected fakes return a counter rather than a `Timeout`.
+ */
+type Dsl4WatchTimerHandle = unknown;
+
+interface Dsl4WatchClock {
+  now(): number;
+  setTimeout(handler: () => void, delay: number): Dsl4WatchTimerHandle;
+  clearTimeout(handle: Dsl4WatchTimerHandle): void;
+  sleep(milliseconds: number): Promise<unknown>;
 }
 
 const defaultClock = Object.freeze({
@@ -66,7 +83,7 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('clock must provide now, setTimeout, clearTimeout, and sleep');
   }
-  return value as {now: Function; setTimeout: Function; clearTimeout: Function; sleep: Function};
+  return value as unknown as Dsl4WatchClock;
 }
 
 function errorCode(error: unknown) {
@@ -161,20 +178,20 @@ export function createDsl4PreviewSourceWatcher({
   quietWindowMs?: number;
   retryIntervalMs?: number;
   stabilityTimeoutMs?: number;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   loadSource?: (
     projectRoot: string,
     manifest: unknown,
-    options: {maxSourceBytes: number; subtleCrypto?: {digest: Function} | undefined},
+    options: {maxSourceBytes: number; subtleCrypto?: Dsl4SubtleCrypto | undefined},
   ) => Promise<Record<string, any>>;
   watchFactory?: (
     directory: string,
     listener: (eventType: string, filename: string | Buffer | null) => void,
     options?: {recursive?: boolean},
-  ) => {close: Function; on: Function};
+  ) => Dsl4FileWatcher;
   loadSourceGraph?: typeof loadDsl4BuildSourceGraph;
   loadAssets?: typeof loadDsl4LocalAssetSnapshot;
-  clock?: {now: Function; setTimeout: Function; clearTimeout: Function; sleep: Function};
+  clock?: Dsl4WatchClock;
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
     throw new TypeError('projectRoot must be a non-empty string');
@@ -239,8 +256,8 @@ export function createDsl4PreviewSourceWatcher({
   let published = 0;
   let lastPublication: Readonly<Record<string, unknown>> | null = null;
   let publicationKey = '';
-  let quietTimer: any = null;
-  let fileWatcher: {close: Function; on: Function} | null = null;
+  let quietTimer: Dsl4WatchTimerHandle = null;
+  let fileWatcher: Dsl4FileWatcher | null = null;
   let operationQueue = Promise.resolve();
 
   function snapshot() {

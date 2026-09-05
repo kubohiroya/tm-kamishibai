@@ -1,5 +1,6 @@
 import {computeDsl4Sha256Integrity} from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {packageName, packageVersion} from './constants.js';
 import {validateDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 
@@ -82,7 +83,7 @@ function integrity(value: unknown, name: string) {
  */
 export async function createDsl4ArtifactFingerprint(
   input: unknown,
-  {subtleCrypto = globalThis.crypto?.subtle}: {subtleCrypto?: {digest: Function} | undefined} = {},
+  {subtleCrypto = globalThis.crypto?.subtle}: {subtleCrypto?: Dsl4SubtleCrypto | undefined} = {},
 ) {
   const root = exactRecord(input, inputKeys, 'artifact fingerprint input');
   if (root.formatVersion !== 1) {

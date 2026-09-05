@@ -6,6 +6,7 @@ import {
   loadDsl4BinaryEntryRuntimeComponent,
   loadDsl4RuntimeComponent,
 } from '../dsl4/runtime-artifact-loader.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {buildDsl4RuntimeComponent, Dsl4BuildError} from './dsl4-build.js';
 import {
@@ -96,7 +97,7 @@ export async function buildDsl4RuntimeComponentFile(options: {
   maxIncludeDepth?: number;
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   createStoryId?: () => string;
 }) {
   if (!isRecord(options)) {

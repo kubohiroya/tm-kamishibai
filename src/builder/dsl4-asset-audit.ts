@@ -19,6 +19,7 @@ import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
@@ -47,7 +48,7 @@ function validateFileSystem(value: unknown) {
   ) {
     throw new TypeError('fileSystem must provide realpath, lstat, and open');
   }
-  return value as {realpath: Function; lstat: Function; open: Function};
+  return value as Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
 }
 
 function isWithin(ancestor: string, candidate: string) {
@@ -68,7 +69,11 @@ function sameFileState(left: Record<string, any>, right: Record<string, any>) {
   );
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -104,7 +109,7 @@ async function readStableProjectJson(
     maxBytes: number;
     label: string;
     code: string;
-    fileSystem: {realpath: Function; lstat: Function; open: Function};
+    fileSystem: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
     readFile: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
     extensions?: readonly string[];
     formatLabel?: string;
@@ -188,7 +193,7 @@ export async function loadDsl4ProjectJson({
   maxBytes: number;
   label: string;
   code: string;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function};
+  fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
   readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
@@ -234,7 +239,7 @@ export async function loadDsl4ProjectSourceManifest({
   maxBytes: number;
   label: string;
   code: string;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function};
+  fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
   readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
@@ -287,7 +292,7 @@ export async function loadDsl4AssetAuditInputs({
   maxSourceManifestBytes: number;
   maxAssetConfigBytes: number;
   maxAssetLockBytes: number;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function};
+  fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
   readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
 }) {
   if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
@@ -515,7 +520,7 @@ export async function auditDsl4AssetDistribution(options: {
   maxSourceFiles?: number;
   maxTotalSourceBytes?: number;
   maxIncludeDepth?: number;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function};
+  fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
   readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
 }) {
   if (!isRecord(options)) throw new TypeError('asset distribution audit options are required');

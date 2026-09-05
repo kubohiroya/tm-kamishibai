@@ -16,7 +16,9 @@ import {
   Dsl4SourceDescriptorError,
 } from '../dsl4/source-descriptor.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, realpath});
 
@@ -68,10 +70,14 @@ function validateFileSystem(value: unknown) {
   ) {
     throw new TypeError('fileSystem must provide realpath, lstat, and open');
   }
-  return value as {realpath: Function; lstat: Function; open: Function};
+  return value as Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'>;
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -189,8 +195,8 @@ export async function loadDsl4ExternalSource(
     readSource,
   }: {
     maxSourceBytes: number;
-    subtleCrypto?: {digest: Function} | undefined;
-    fileSystem?: {realpath: Function; lstat: Function; open: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
+    fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'> | undefined;
     readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   },
 ) {
