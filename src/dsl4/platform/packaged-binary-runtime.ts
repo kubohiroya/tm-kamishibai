@@ -4,6 +4,7 @@ import {
 } from '../packager-entry-source.js';
 import {dsl4BinaryEntryFormatVersion} from '../binary-entry-provider.js';
 import {loadDsl4BinaryEntryRuntimeComponent} from '../runtime-artifact-loader.js';
+import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {deepFreeze} from '../story-document.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 
@@ -105,7 +106,11 @@ function resolveAssetLimits(
   });
 }
 
-function diagnosticError(diagnostic: Readonly<Record<string, any>>) {
+/**
+ * The two producers reaching here do not share a diagnostic type, and `diagnostics[0]` is optional
+ * under `noUncheckedIndexedAccess`, so this declares the surface it reads.
+ */
+function diagnosticError(diagnostic: Readonly<{code?: string; message?: string}> | undefined) {
   const error = new Error(
     String(diagnostic?.message ?? 'The packaged DSL 4.0 binary component is invalid.'),
   );
@@ -121,9 +126,7 @@ function diagnosticError(diagnostic: Readonly<Record<string, any>>) {
  */
 export async function createDsl4PackagedBinaryRuntimeBridge(options: {
   project: unknown;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxAssetFiles: number;
   maxAssetBytes: number;

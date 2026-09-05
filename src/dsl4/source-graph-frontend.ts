@@ -10,6 +10,7 @@ import {
 } from 'yaml';
 
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
+import type {Dsl4Diagnostic, Dsl4SourceFrontend} from './source-frontend.js';
 import {createStoryDocument, deepFreeze, sourceRangeForNode} from './story-document.js';
 
 const namedDeclarationNamespaces = new Set([
@@ -69,7 +70,7 @@ function diagnostic(
   path: string,
   node: any,
   lineCounter: import('yaml').LineCounter,
-) {
+): Dsl4Diagnostic {
   return {
     version: 1,
     code,
@@ -82,10 +83,7 @@ function diagnostic(
   };
 }
 
-function sortDiagnostics(
-  diagnostics: readonly Record<string, any>[],
-  sourceOrder: readonly string[],
-) {
+function sortDiagnostics(diagnostics: readonly Dsl4Diagnostic[], sourceOrder: readonly string[]) {
   const order = new Map(sourceOrder.map((sourceId, index) => [sourceId, index]));
   return deepFreeze(
     [...diagnostics].sort(
@@ -171,7 +169,7 @@ function parseGraphNode(node: Record<string, any>) {
     version: '1.2',
   });
   const document = documents[0];
-  const diagnostics: Record<string, any>[] = [];
+  const diagnostics: Dsl4Diagnostic[] = [];
   if (documents.length !== 1 || !document || !isMap(document.contents)) {
     diagnostics.push(
       diagnostic(
@@ -282,7 +280,7 @@ function composeRawStory(
   parsedNodes: Map<string, Record<string, any>>,
 ) {
   const composed: Record<string, unknown> = {};
-  const diagnostics: Record<string, any>[] = [];
+  const diagnostics: Dsl4Diagnostic[] = [];
   const assetPaths = new Map<string, Record<string, any>>(
     graph.assetFiles.map((asset: Record<string, any>) => [
       `${asset.sourcePath}\0${asset.assetId}`,
@@ -443,9 +441,7 @@ function projectDiagnostics(
 }
 
 /** Add graph composition in front of the existing canonical single-source frontend. */
-export function createDsl4SourceGraphFrontend(sourceFrontend: {
-  parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-}) {
+export function createDsl4SourceGraphFrontend(sourceFrontend: Dsl4SourceFrontend) {
   if (!sourceFrontend || typeof sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
@@ -475,7 +471,7 @@ export function createDsl4SourceGraphFrontend(sourceFrontend: {
         throw new TypeError('sourceId must be a non-empty string without NUL');
       }
       const parsedNodes: Map<string, Record<string, any>> = new Map();
-      const sourceDiagnostics: Record<string, any>[] = [];
+      const sourceDiagnostics: Dsl4Diagnostic[] = [];
       for (const sourcePath of discoveryOrder) {
         const parsed = parseGraphNode(nodes.get(sourcePath) as Record<string, any>);
         parsedNodes.set(sourcePath, parsed);

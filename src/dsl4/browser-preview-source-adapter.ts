@@ -13,6 +13,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from './source-descriptor.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
@@ -318,9 +319,7 @@ function validateSourceFrontend(value: unknown) {
   if (!isRecord(value) || typeof value.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  return value as {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  return value as unknown as Dsl4SourceFrontend;
 }
 
 function validateDocument(value: unknown) {
@@ -421,9 +420,7 @@ export function createDsl4BrowserPreviewStoryFileProject(fileHandleInput: unknow
 
 /** Watch one user-selected project root without retaining it outside this adapter instance. */
 export function createDsl4BrowserPreviewSourceAdapter(options: {
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   featureFlags?: unknown;
   maxSourceFiles?: number;

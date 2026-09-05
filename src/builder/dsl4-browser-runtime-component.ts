@@ -6,6 +6,7 @@ import {
 } from '../dsl4/browser-turbowarp-stage.js';
 import {dsl4BrowserPreviewArtifactLimits} from '../dsl4/browser-preview-artifact-limits.js';
 import {loadDsl4RuntimeComponent} from '../dsl4/runtime-artifact-loader.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
 const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
@@ -97,9 +98,7 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  const sourceFrontend = options.sourceFrontend as {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  const sourceFrontend = options.sourceFrontend as unknown as Dsl4SourceFrontend;
   const maxProjectBytes = boundedLimit(
     options.maxProjectBytes ?? dsl4BrowserRuntimeComponentDefaults.maxProjectBytes,
     'maxProjectBytes',

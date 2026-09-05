@@ -11,12 +11,12 @@
   },
   "src/builder/dsl4-asset-audit.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
+      "count": 11
     }
   },
   "src/builder/dsl4-asset-converter.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 31
+      "count": 30
     }
   },
   "src/builder/dsl4-asset-lock.ts": {
@@ -41,17 +41,12 @@
   },
   "src/builder/dsl4-browser-runtime-component.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/builder/dsl4-build-output.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
+      "count": 2
     }
   },
   "src/builder/dsl4-build.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 4
+      "count": 2
     }
   },
   "src/builder/dsl4-external-source.ts": {
@@ -268,9 +263,6 @@
     }
   },
   "src/dsl4/browser-preview-coordinator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
     }
@@ -282,7 +274,7 @@
   },
   "src/dsl4/browser-preview-source-adapter.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 20
+      "count": 18
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 11
@@ -393,7 +385,7 @@
   },
   "src/dsl4/platform/browser-distribution-build.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 20
+      "count": 19
     }
   },
   "src/dsl4/platform/browser-preview-runtime-component.ts": {
@@ -411,7 +403,7 @@
   },
   "src/dsl4/platform/browser-story-file-loader.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 15
+      "count": 12
     }
   },
   "src/dsl4/platform/bubble-advance-indicator.ts": {
@@ -457,7 +449,7 @@
   },
   "src/dsl4/platform/packaged-binary-runtime.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 3
     }
   },
   "src/dsl4/platform/platform-asset-session.ts": {
@@ -570,7 +562,7 @@
   },
   "src/dsl4/platform/turbowarp-runtime-host.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 33
+      "count": 32
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 14
@@ -601,7 +593,7 @@
   },
   "src/dsl4/preview-source-graph-generation.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 4
+      "count": 2
     }
   },
   "src/dsl4/preview-source-protocol-port.ts": {
@@ -617,11 +609,6 @@
       "count": 4
     }
   },
-  "src/dsl4/runtime-artifact-loader.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
   "src/dsl4/runtime-controller.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 13
@@ -632,7 +619,7 @@
   },
   "src/dsl4/runtime-startup.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 7
@@ -650,7 +637,7 @@
   },
   "src/dsl4/source-graph-frontend.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 28
+      "count": 23
     }
   },
   "src/dsl4/source-graph.ts": {

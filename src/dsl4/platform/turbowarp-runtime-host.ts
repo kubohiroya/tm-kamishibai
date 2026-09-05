@@ -14,6 +14,7 @@ import {
   createDsl4RuntimeStateExpressionComposition,
   createDsl4RuntimeVariableSnapshot,
 } from '../runtime-variable-surface.js';
+import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {deepFreeze} from '../story-document.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {createDsl4ActorActionPort} from './actor-action-port.js';
@@ -1155,9 +1156,7 @@ export async function createDsl4TurboWarpRuntimeHost(
   options: {
     featureFlags?: unknown;
     project?: unknown;
-    sourceFrontend?: {
-      parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-    };
+    sourceFrontend?: Dsl4SourceFrontend;
     maxSourceBytes?: number;
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;

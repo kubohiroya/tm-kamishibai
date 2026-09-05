@@ -2,6 +2,7 @@ import {strFromU8, strToU8, zipSync} from 'fflate';
 
 import {createDsl4RuntimeArtifactDescriptor} from '../runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
+import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {dsl4ScratchPoseFeedbackVariableNames} from './scratch-pose-feedback-adapter.js';
 
@@ -245,9 +246,7 @@ export function createDsl4BrowserDistributionFilename(displayName: string) {
 export async function createDsl4BrowserDistributionSb3(options: {
   projectFiles: unknown;
   runtimeComponent: unknown;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxAssetFiles: number;
   maxAssetBytes: number;

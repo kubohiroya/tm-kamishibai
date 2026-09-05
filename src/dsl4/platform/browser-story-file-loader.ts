@@ -5,6 +5,7 @@ import {
   computeDsl4Sha256Integrity,
   createDsl4EmbeddedSourceDescriptor,
 } from '../source-descriptor.js';
+import type {Dsl4SourceFrontend} from '../source-frontend.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
 import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
@@ -251,7 +252,24 @@ function missingEmbeddedAssetError({
   return error;
 }
 
-function commonManifestAsset(asset: Readonly<Record<string, any>>, id: string) {
+/**
+ * The story document asset fields this loader reads.
+ *
+ * The source frontend has already validated the document against the DSL 4.0 schema, so this
+ * narrows the parse result for the fields used here instead of re-checking them.
+ */
+interface StoryDocumentAsset {
+  kind?: string;
+  loading?: string;
+  target?: unknown;
+  bitmapResolution?: number;
+  name?: string;
+  file?: unknown;
+  delivery?: string;
+  source?: Readonly<Record<string, unknown>>;
+}
+
+function commonManifestAsset(asset: StoryDocumentAsset, id: string) {
   return {
     id,
     kind: asset.kind,
@@ -270,9 +288,7 @@ function commonManifestAsset(asset: Readonly<Record<string, any>>, id: string) {
 export async function buildDsl4BrowserSelectedStoryProject(options: {
   project: unknown;
   entries: ReadonlyArray<Readonly<{path?: string; file: unknown}>>;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   maxAssetFileBytes: number;
   maxAssetFiles: number;
@@ -327,7 +343,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   let fileCount = 0;
   let totalBytes = 0;
   for (const [id, asset] of Object.entries(
-    (storyDocument.assets ?? {}) as Readonly<Record<string, Readonly<Record<string, any>>>>,
+    (storyDocument.assets ?? {}) as Readonly<Record<string, StoryDocumentAsset>>,
   ).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))) {
     const common = commonManifestAsset(asset, id);
     if (asset.delivery === 'remote') {
