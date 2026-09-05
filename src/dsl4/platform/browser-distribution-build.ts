@@ -2,6 +2,7 @@ import {strFromU8, strToU8, zipSync} from 'fflate';
 
 import {createDsl4RuntimeArtifactDescriptor} from '../runtime-artifact-descriptor.js';
 import {loadDsl4RuntimeComponent} from '../runtime-artifact-loader.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {dsl4ScratchPoseFeedbackVariableNames} from './scratch-pose-feedback-adapter.js';
 
 export const dsl4BrowserDistributionBuildDefaults = Object.freeze({
@@ -254,7 +255,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
   maxArchiveBytes?: number;
   maxProjectBytes?: number;
   network?: 'allowed' | 'forbidden';
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(options)) throw new TypeError('browser distribution build options are required');
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {

@@ -9,6 +9,7 @@ import {
 } from '../dsl4/external-source-manifest.js';
 import {parseDsl4ExternalSourceManifest} from './dsl4-external-source.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 
 export const dsl4ProjectSourceDefaults = Object.freeze({maxSourceManifestBytes: 32 * 1024});
 
@@ -53,10 +54,15 @@ function validateFileSystem(value: unknown) {
   if (value.readdir !== undefined && typeof value.readdir !== 'function') {
     throw new TypeError('fileSystem.readdir must be a function when present');
   }
-  return value as {realpath: Function; lstat: Function; open: Function; readdir?: Function};
+  return value as Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'> &
+    Partial<Pick<Dsl4FileSystem, 'readdir'>>;
 }
 
-async function readBoundedFile(filePath: string, limit: number, fileSystem: {open: Function}) {
+async function readBoundedFile(
+  filePath: string,
+  limit: number,
+  fileSystem: Pick<Dsl4FileSystem, 'open'>,
+) {
   const handle = await fileSystem.open(filePath, 'r');
   const chunks: Buffer[] = [];
   let size = 0;
@@ -95,7 +101,8 @@ export async function resolveDsl4ProjectSource(options: {
   source?: string;
   sourceId?: string;
   maxSourceManifestBytes?: number;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir?: Function};
+  fileSystem?: Pick<Dsl4FileSystem, 'realpath' | 'lstat' | 'open'> &
+    Partial<Pick<Dsl4FileSystem, 'readdir'>>;
   readFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
 }) {
   if (!isRecord(options)) throw new TypeError('project source options are required');

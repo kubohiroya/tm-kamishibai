@@ -5,6 +5,7 @@ import {
   validateDsl4EmbeddedSourceDescriptor,
 } from './source-descriptor.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const artifactKeys = new Set([
   'controlProfile',
@@ -90,7 +91,7 @@ export async function createDsl4RuntimeArtifactDescriptor(
   }: {
     maxSourceBytes: number;
     historyNavigationAvailable?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
@@ -156,7 +157,7 @@ export async function validateDsl4RuntimeArtifactDescriptor(
   options: {
     maxSourceBytes: number;
     historyNavigationAvailable?: boolean;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {

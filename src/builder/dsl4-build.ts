@@ -19,6 +19,7 @@ import {
 import {Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {
   Dsl4BlockSourceError,
   extractDsl4BlockSourcesFromProject,
@@ -38,6 +39,7 @@ import {embedDsl4BinaryEntryRuntimeComponentInSb3} from './dsl4-binary-entry-sb3
 import {resolveDsl4BuildFeatureFlags} from './dsl4-build-feature-flags.js';
 import {embedDsl4PackagedRuntimeComponentInSb3} from './dsl4-source.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileSystem} from './file-system.js';
 import {readSb3} from './sb3.js';
 
 export class Dsl4BuildError extends Sb3BuilderError {
@@ -78,7 +80,7 @@ async function loadDsl4BlockSourceFromSb3(
   {
     maxSourceBytes,
     subtleCrypto,
-  }: {maxSourceBytes: number; subtleCrypto?: {digest: Function} | undefined},
+  }: {maxSourceBytes: number; subtleCrypto?: Dsl4SubtleCrypto | undefined},
 ) {
   let blockSourceSet;
   try {
@@ -168,8 +170,8 @@ export async function buildDsl4RuntimeComponent(options: {
   maxIncludeDepth?: number;
   historyNavigationAvailable?: boolean;
   replaceExisting?: boolean;
-  subtleCrypto?: {digest: Function} | undefined;
-  fileSystem?: {realpath: Function; lstat: Function; open: Function; readdir: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
+  fileSystem?: Dsl4FileSystem | undefined;
   readSource?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   readAssetFile?: (filePath: string, limit: number) => Promise<Buffer | Uint8Array>;
   assetConfig?: string;

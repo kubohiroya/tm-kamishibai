@@ -1,6 +1,7 @@
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
 import {createDsl4SourceGraphFrontend} from './source-graph-frontend.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const textEncoder = new TextEncoder();
 
@@ -35,7 +36,7 @@ export async function createDsl4PreviewSourceGraphGeneration(
     sourceId: string;
     displayName: string;
     maxComposedSourceBytes: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
 ) {
   if (!isRecord(sourceGraph) || sourceGraph.formatVersion !== 1) {

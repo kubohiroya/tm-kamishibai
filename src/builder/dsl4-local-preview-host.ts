@@ -26,6 +26,7 @@ import {
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
 import {dsl4ExternalSourceManifestFilenames} from '../dsl4/external-source-manifest.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4FileWatcher} from './file-system.js';
 import {
   parseDsl4ExternalSourceManifest,
   validateDsl4ExternalSourceManifest,
@@ -320,7 +321,7 @@ export function createDsl4LocalPreviewHost(options: {
   structureWatchFactory?: (
     directory: string,
     listener: (eventType: string, filename: string | Buffer | null) => void,
-  ) => {close: Function; on: Function};
+  ) => Dsl4FileWatcher;
   watcherOptions?: Record<string, unknown>;
   onEvent?: (event: Readonly<Record<string, unknown>>) => unknown;
   onError?: (error: unknown) => unknown;
@@ -460,7 +461,7 @@ export function createDsl4LocalPreviewHost(options: {
     ((directory, listener) => watch(directory, {persistent: true}, listener))) as (
     directory: string,
     listener: (eventType: string, filename: string | Buffer | null) => void,
-  ) => {close: Function; on: Function};
+  ) => Dsl4FileWatcher;
   if (typeof structureWatchFactory !== 'function') {
     throw new TypeError('structureWatchFactory must be a function');
   }
@@ -496,7 +497,7 @@ export function createDsl4LocalPreviewHost(options: {
   > | null = null;
   let sourcePort: ReturnType<typeof createDsl4PreviewSourceProtocolPort> | null = null;
   let sourceWatcher: ReturnType<typeof createDsl4PreviewSourceWatcher> | null = null;
-  let structureWatcher: {close: Function; on: Function} | null = null;
+  let structureWatcher: Dsl4FileWatcher | null = null;
   let currentSourceSummary: Readonly<Record<string, any>> | null = null;
   let latestValidSourceResult: Readonly<Record<string, any>> | null = null;
   let startPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
@@ -700,7 +701,7 @@ export function createDsl4LocalPreviewHost(options: {
       }
       throw new TypeError('structureWatchFactory must return close and on methods');
     }
-    structureWatcher = watcher as {close: Function; on: Function};
+    structureWatcher = watcher as Dsl4FileWatcher;
     structureWatcher.on('error', reportError);
   }
 

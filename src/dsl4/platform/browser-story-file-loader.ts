@@ -6,6 +6,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
 } from '../source-descriptor.js';
 import {encodeDsl4StoryPathSegment} from '../story-path.js';
+import type {Dsl4SubtleCrypto} from '../subtle-crypto.js';
 import {extractDsl4PoseArchive, isDsl4PoseArchivePath} from './pose-archive-extractor.js';
 
 const storyFilenamePattern = /\.(?:k4|kamishibai)\.ya?ml$/iu;
@@ -277,7 +278,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   maxAssetFiles: number;
   maxAssetBytes: number;
   controlProfile?: string;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(options)) throw new TypeError('browser story build options are required');
   if (!isRecord(options.project)) throw new TypeError('project must be an object');

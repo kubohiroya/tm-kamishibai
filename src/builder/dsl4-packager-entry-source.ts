@@ -5,6 +5,7 @@ import {
   dsl4PackagerEntrySourceContractVersion,
   dsl4PackagerEntrySourceRegistryName,
 } from '../dsl4/packager-entry-source.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {fixedZipTimestamp} from './constants.js';
 import {inspectDsl4BinaryEntryArchive} from './dsl4-binary-entry-sb3.js';
 import {dsl4PackagerCompatibility} from './dsl4-packager-compatibility.js';
@@ -285,7 +286,7 @@ export async function packageDsl4WithTurboWarpPackager({
     maxAssetFileBytes: number;
     maxAssetBytes: number;
     maxCompressionRatio: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   };
 }) {
   validatePackagerMetadata(packagerPackage);

@@ -32,8 +32,8 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@kubohiroya/turbowarp-preview-runtime':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.0
+        version: 0.2.0
       '@kubohiroya/turbowarp-runtime-expression':
         specifier: 0.5.0
         version: 0.5.0
@@ -432,8 +432,8 @@ packages:
     resolution: {integrity: sha512-vHvrT+jKBivLiKK86j8bIwzw2iSq5Sj4FbPkXxfByqMnuZszKCgMzlvM7CBaTo8hPvqcmMisoRGoDOXsOHGRBg==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-preview-runtime@0.1.0':
-    resolution: {integrity: sha512-aH6lADkbbJAZaWCAc4ATrhYbu3kdK1YHIRYRdkwrlO7F8lBHxxpfHmOikdF5F1k7QDuiacSaJqePAfDIp4W/0w==}
+  '@kubohiroya/turbowarp-preview-runtime@0.2.0':
+    resolution: {integrity: sha512-nFDjQD/IbHEElVD3bNgnLxb38CZT3UNIJBWYd2AVMqZr07n0yJGzi+IzDW8JHbYQyJYD+D3qkzucWyIyyCbAVQ==}
     engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-runtime-expression@0.5.0':
@@ -3378,7 +3378,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-local-preview@0.1.0': {}
 
-  '@kubohiroya/turbowarp-preview-runtime@0.1.0': {}
+  '@kubohiroya/turbowarp-preview-runtime@0.2.0': {}
 
   '@kubohiroya/turbowarp-runtime-expression@0.5.0': {}
 
