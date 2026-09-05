@@ -148,6 +148,7 @@ export function installDsl4RuntimeAuthoringProfile(
       }
 
       const Scratch = this.Scratch;
+      const turboWarpHost = this.turboWarpHost;
       const mount = resolveRuntimeMount(Scratch);
       const loadRemoteAsset = createRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
       /** @type {Record<string, any> | null} */
@@ -169,7 +170,7 @@ export function installDsl4RuntimeAuthoringProfile(
           }
           return generation;
         },
-        runtime: Scratch.vm.runtime,
+        runtime: turboWarpHost.runtime,
         resetManagedPresentation: () => {
           this.hideScratchTitle();
           this.hideScratchMenu();
@@ -198,7 +199,7 @@ export function installDsl4RuntimeAuthoringProfile(
           if (event.type === 'runtime.finish') {
             this.status = 'menu';
             this.showScratchMenu(this.titleLocale);
-            Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+            turboWarpHost.startHats('event_whenbroadcastreceived', {
               BROADCAST_OPTION: 'showMenu',
             });
             return;
@@ -585,13 +586,13 @@ export function installDsl4RuntimeAuthoringProfile(
           loggedError(error),
         );
       }
-      const Scratch = this.Scratch;
+      const turboWarpHost = this.turboWarpHost;
       const showMenu = async () => {
         if (this.shell !== null) return;
         this.pendingStart = null;
         this.hideScratchTitle();
         this.showScratchMenu(this.titleLocale);
-        Scratch.vm.runtime.startHats('event_whenbroadcastreceived', {
+        turboWarpHost.startHats('event_whenbroadcastreceived', {
           BROADCAST_OPTION: 'showMenu',
         });
         this.status = 'menu';
