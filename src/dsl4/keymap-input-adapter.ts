@@ -175,8 +175,8 @@ export function createDsl4KeymapInputAdapter({
         return false;
       }
     }
-    if (!Object.hasOwn(resolvedKeymap, code)) return false;
     const command = resolvedKeymap[code];
+    if (command === undefined) return false;
     const context = deepFreeze({code});
     let dispatchNow = dispatchImmediately && !shouldConsumeCommand;
     if (shouldConsumeCommand) {

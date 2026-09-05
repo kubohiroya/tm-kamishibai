@@ -39,7 +39,12 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('asset snapshot watch clock is invalid');
   }
-  return value as Readonly<Record<string, Function>>;
+  return value as Readonly<{
+    now: Function;
+    sleep: Function;
+    setTimeout: Function;
+    clearTimeout: Function;
+  }>;
 }
 
 const defaultClock = Object.freeze({
@@ -104,7 +109,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   ) => unknown | Promise<unknown>;
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<Record<string, Function>>;
+  clock?: Readonly<{now: Function; sleep: Function; setTimeout: Function; clearTimeout: Function}>;
   foregroundIntervalMs?: number;
   backgroundIntervalMs?: number;
   quietWindowMs?: number;
