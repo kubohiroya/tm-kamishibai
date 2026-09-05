@@ -13,6 +13,7 @@ import {
   createDsl4ActorActionPort,
   createDsl4TurboWarpActorPlatform,
 } from '../src/dsl4/platform/index.js';
+import {createTestTurboWarpRuntimeHost} from './helpers/turbowarp-runtime-host.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const schema = JSON.parse(
@@ -68,21 +69,18 @@ function speechRuntime() {
     setSize() {},
     setVisible() {},
   };
-  return {
-    actor,
-    bubbles,
-    runtime: {
-      targets: [actor],
-      ext_scratch3_looks: {
-        _say(message, target) {
-          bubbles.push({kind: 'say', message, target: target.id});
-        },
-        _think(message, target) {
-          bubbles.push({kind: 'think', message, target: target.id});
-        },
+  const runtime = {
+    targets: [actor],
+    ext_scratch3_looks: {
+      _say(message, target) {
+        bubbles.push({kind: 'say', message, target: target.id});
+      },
+      _think(message, target) {
+        bubbles.push({kind: 'think', message, target: target.id});
       },
     },
   };
+  return {actor, bubbles, runtime, runtimeHost: createTestTurboWarpRuntimeHost(runtime)};
 }
 
 function parseSpeech(command, args, bubbleStyles = '') {
@@ -118,7 +116,7 @@ function createSpeechExecution(command, args, bubbleStyles = '', advanceIndicato
   const clock = manualScheduler();
   const sounds = [];
   const platform = createDsl4TurboWarpActorPlatform({
-    runtime: fake.runtime,
+    runtimeHost: fake.runtimeHost,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound(sound) {
@@ -587,7 +585,7 @@ test('contains character sound cleanup failure and still settles and clears the 
   const fake = speechRuntime();
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
-    runtime: fake.runtime,
+    runtimeHost: fake.runtimeHost,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound() {},
@@ -615,7 +613,7 @@ test('stops only speech sound assets whose playback actually started', async () 
   const clock = manualScheduler();
   const sounds = [];
   const platform = createDsl4TurboWarpActorPlatform({
-    runtime: fake.runtime,
+    runtimeHost: fake.runtimeHost,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound(sound) {
@@ -647,7 +645,7 @@ test('fails closed when Unicode grapheme segmentation is unavailable', () => {
   Object.defineProperty(Intl, 'Segmenter', {configurable: true, value: undefined});
   try {
     const platform = createDsl4TurboWarpActorPlatform({
-      runtime: fake.runtime,
+      runtimeHost: fake.runtimeHost,
       scheduler: clock.scheduler,
       speechAdvanceTypewriterEnabled: true,
     });
@@ -669,7 +667,7 @@ test('typewriter reveals one grapheme cluster per tick and validates character s
   const fake = speechRuntime();
   const clock = manualScheduler();
   const platform = createDsl4TurboWarpActorPlatform({
-    runtime: fake.runtime,
+    runtimeHost: fake.runtimeHost,
     scheduler: clock.scheduler,
     speechAdvanceTypewriterEnabled: true,
     playSpeechSound() {},
