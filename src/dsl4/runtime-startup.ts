@@ -4,6 +4,7 @@ import {
   loadDsl4RuntimeComponent,
 } from './runtime-artifact-loader.js';
 import {resolveDsl4FeatureFlags} from './feature-flags.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 import {dsl4FirstCrossfadeStoryPath} from './transition-spec.js';
@@ -118,9 +119,7 @@ export async function createDsl4RuntimeStartup(
   options: {
     featureFlags?: unknown;
     project?: unknown;
-    sourceFrontend?: {
-      parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-    };
+    sourceFrontend?: Dsl4SourceFrontend;
     maxSourceBytes?: number;
     maxAssetFiles?: number;
     maxAssetFileBytes?: number;

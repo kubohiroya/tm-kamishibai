@@ -1,4 +1,5 @@
 import {computeDsl4Sha256Integrity} from './source-descriptor.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {createDsl4SourceGraphFrontend} from './source-graph-frontend.js';
 import {deepFreeze} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
@@ -30,9 +31,7 @@ export async function createDsl4PreviewSourceGraphGeneration(
     maxComposedSourceBytes,
     subtleCrypto = globalThis.crypto?.subtle,
   }: {
-    sourceFrontend: {
-      parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-    };
+    sourceFrontend: Dsl4SourceFrontend;
     sourceId: string;
     displayName: string;
     maxComposedSourceBytes: number;
@@ -80,11 +79,7 @@ export async function createDsl4PreviewSourceGraphGeneration(
     ),
     subtleCrypto,
   );
-  const graphFrontend = createDsl4SourceGraphFrontend(
-    sourceFrontend as {
-      parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-    },
-  );
+  const graphFrontend = createDsl4SourceGraphFrontend(sourceFrontend as Dsl4SourceFrontend);
   const parsed = graphFrontend.parse(sourceGraph, {
     featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
     sourceId,

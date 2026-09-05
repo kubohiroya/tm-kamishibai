@@ -56,6 +56,19 @@ export interface ParseFailure {
 
 export type ParseResult = ParseSuccess | ParseFailure;
 
+/**
+ * The canonical single-source frontend, as its consumers take it.
+ *
+ * Everything that turns DSL 4.0 source into a story document receives the frontend by injection
+ * rather than constructing one, because the frontend needs the JSON schema and the browser and the
+ * builder load that differently. `createDsl4SourceFrontend` returns exactly this, and
+ * `createDsl4SourceGraphFrontend` takes one -- its own `parse` is a different contract, over a
+ * source graph and with composition limits, so it is not a drop-in for this one.
+ */
+export interface Dsl4SourceFrontend {
+  parse(source: string, options?: {sourceId?: string}): ParseResult;
+}
+
 function jsonPointerSegments(pointer: string): (string | number)[] {
   if (!pointer) return [];
   return pointer
@@ -583,7 +596,7 @@ export function createDsl4SourceFrontend(
     limits?: Partial<typeof dsl4SourceFrontendDefaultLimits>;
     createRuntimeExpressionComposition?: (() => unknown) | null;
   } = {},
-): {parse(source: string, options?: {sourceId?: string}): ParseResult} {
+): Dsl4SourceFrontend {
   const registry = validateDsl4ActionRegistrySnapshot(actionRegistry);
   const limits = resolveFrontendLimits(limitOverrides);
   if (
@@ -595,7 +608,7 @@ export function createDsl4SourceFrontend(
   const AjvConstructor = Ajv2020 as any;
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
   return Object.freeze({
-    parse(source, {sourceId = 'main'} = {}) {
+    parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {
       const canonicalSource = canonicalizeDsl4Source(source);
       if (textEncoder.encode(canonicalSource).byteLength > limits.maxCanonicalSourceBytes) {
         const lineCounter = new LineCounter();

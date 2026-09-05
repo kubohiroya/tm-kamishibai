@@ -16,6 +16,7 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   Dsl4SourceDescriptorError,
 } from '../dsl4/source-descriptor.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
@@ -66,7 +67,16 @@ function nonEmptyString(value: unknown, name: string) {
   return value;
 }
 
-function failDiagnostics(diagnostics: readonly Record<string, any>[], stage: string): never {
+/**
+ * The three producers that reach here do not share one diagnostic type yet: the source frontend
+ * emits `Dsl4Diagnostic`, while the artifact descriptor and verifier emit a shape whose `range` may
+ * be null. Only the code and the message are read, so this accepts the common surface until the two
+ * shapes are unified.
+ */
+function failDiagnostics(
+  diagnostics: readonly Readonly<{code?: string; message?: string}>[],
+  stage: string,
+): never {
   const first = diagnostics[0];
   throw new Dsl4BuildError(first?.message ?? 'DSL 4.0 build validation failed', {
     stage,
@@ -155,9 +165,7 @@ export async function buildDsl4RuntimeComponent(options: {
   baseSb3Bytes: Buffer | Uint8Array;
   projectRoot: string;
   sourceManifest?: unknown;
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  };
+  sourceFrontend: Dsl4SourceFrontend;
   controlProfile: string;
   channel: 'bundled' | 'unbundled';
   maxSourceBytes: number;

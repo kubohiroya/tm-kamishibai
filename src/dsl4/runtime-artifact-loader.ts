@@ -7,6 +7,7 @@ import {Dsl4BinaryEntryError, validateDsl4BinaryEntryAssetBundle} from './binary
 import {validateDsl4AssetDistributionResolution} from './asset-distribution-profile.js';
 import {validateDsl4RuntimeArtifactDescriptor} from './runtime-artifact-descriptor.js';
 import {Dsl4SourceDescriptorError, resolveDsl4EmbeddedSource} from './source-descriptor.js';
+import type {Dsl4SourceFrontend} from './source-frontend.js';
 import {applyDsl4SourceOrigins, Dsl4SourceOriginError} from './source-origin-descriptor.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
 import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
@@ -155,9 +156,7 @@ function storedAssetDistributions(project: unknown) {
  */
 export async function loadDsl4RuntimeArtifact(
   project: unknown,
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  },
+  sourceFrontend: Dsl4SourceFrontend,
   {
     maxSourceBytes,
     historyNavigationAvailable = false,
@@ -385,9 +384,7 @@ export async function loadDsl4RuntimeArtifact(
 /** Load a complete immutable source, control artifact, and embedded asset snapshot. */
 export function loadDsl4RuntimeComponent(
   project: unknown,
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  },
+  sourceFrontend: Dsl4SourceFrontend,
   options: {
     maxSourceBytes: number;
     maxAssetFiles: number;
@@ -411,9 +408,7 @@ export function loadDsl4RuntimeComponent(
  */
 export function loadDsl4BinaryEntryRuntimeComponent(
   project: unknown,
-  sourceFrontend: {
-    parse(source: string, options?: {sourceId?: string}): Readonly<Record<string, any>>;
-  },
+  sourceFrontend: Dsl4SourceFrontend,
   options: Parameters<typeof loadDsl4RuntimeArtifact>[2],
 ) {
   return loadDsl4RuntimeArtifact(project, sourceFrontend, {
