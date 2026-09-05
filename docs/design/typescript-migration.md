@@ -222,7 +222,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 237 errors** and is not adopted yet, but the measurement
+- **`noUncheckedIndexedAccess` leaves 205 errors** and is not adopted yet, but the measurement
   changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
   member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
   collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
@@ -234,7 +234,7 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
   is the right fix only for the remaining genuine indexing.
 
-  Done so far, 854 down to 237: the reload overlay, the web preview shell, the platform asset
+  Done so far, 854 down to 205: the reload overlay, the web preview shell, the platform asset
   session, the pose and media action ports, the camera preview controls, the DSL 3.2 converter, the
   preview layout coordinator, the live reload session, the runtime controller, the asset converter,
   the TurboWarp runtime host with the preview session and startup helper that share its navigation
@@ -288,7 +288,11 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   `Record<(typeof methods)[number], …>`.
 
   What is left is a long tail: about 60 files with five to ten errors each, no cluster larger than
-  that.
+  that, and every one of them an instance of a shape above. The six shapes, for reference:
+  name a validated collaborator; key a validated record by the checked method names; name a limit
+  bag after its defaults; iterate `Object.entries` instead of looking the key back up; read a
+  bounded array with a default and say why it is unreachable; guard a nullable collaborator with an
+  accessor that throws.
 
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.

@@ -379,7 +379,8 @@ function normalizeAction(
   lineCounter: import('yaml').LineCounter,
   sourceMap: Record<string, SourceRange>,
 ): Record<string, unknown> {
-  const [sourceCommand] = Object.keys(sourceAction);
+  // The action shape is validated before this runs, so it always carries one command key.
+  const [sourceCommand = ''] = Object.keys(sourceAction);
   const separator = sourceCommand.lastIndexOf('.');
   const target = separator === -1 ? null : sourceCommand.slice(0, separator);
   const command = separator === -1 ? sourceCommand : sourceCommand.slice(separator + 1);

@@ -27,7 +27,10 @@ function validateArbitration(value: unknown) {
   ) {
     throw new TypeError('inputArbitration must provide beginStoryInput and finishStoryInput');
   }
-  return value as Record<string, Function>;
+  return value as unknown as {
+    beginStoryInput(kind: string, candidates: readonly string[]): unknown;
+    finishStoryInput(token: unknown, outcome?: Readonly<{accepted?: boolean}>): unknown;
+  };
 }
 
 function validateCandidates(value: unknown, property: 'codes' | 'actors') {
