@@ -106,7 +106,8 @@ function anchorRect(
   targetSize: number,
   margin: number,
 ) {
-  const [horizontal, vertical] = anchorGrid[value];
+  // `value` is validated against the anchor names before it reaches here.
+  const [horizontal = 0, vertical = 0] = anchorGrid[value] ?? [];
   const horizontalMargin = Math.min(
     margin,
     Math.max(0, (size.width - safe.left - safe.right - targetSize) / 2),
@@ -185,7 +186,7 @@ export function resolveDsl4PreviewReloadLayout({
   for (let radius = 1; radius <= 12; radius += 1) {
     offsets.push([0, step * radius], [0, -step * radius], [step * radius, 0], [-step * radius, 0]);
   }
-  for (const [offsetX, offsetY] of offsets) {
+  for (const [offsetX = 0, offsetY = 0] of offsets) {
     const candidate = {...origin, x: origin.x + offsetX, y: origin.y + offsetY};
     if (inside(candidate, size, safe) && !reserved.some((entry) => intersects(candidate, entry))) {
       return deepFreeze({

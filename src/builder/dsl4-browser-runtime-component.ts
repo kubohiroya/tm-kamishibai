@@ -161,7 +161,7 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
     if (names.length !== 1 || names[0] !== 'project.json') {
       fail('K4-PREVIEW-PROJECT-ARCHIVE-001', 'Preview project.json extraction failed');
     }
-    projectEntry = new Uint8Array(archive['project.json']);
+    projectEntry = new Uint8Array(archive['project.json'] ?? new Uint8Array());
   } catch (error) {
     if (error instanceof Dsl4BrowserRuntimeComponentError) throw error;
     fail('K4-PREVIEW-PROJECT-ARCHIVE-001', 'Preview SB3 is not a valid bounded ZIP archive', error);

@@ -293,7 +293,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
     );
   }
   const archive = inspectProjectFiles(options.projectFiles, maxArchiveEntries, maxArchiveBytes);
-  const project = parseProject(archive['project.json'], maxProjectBytes);
+  const project = parseProject(archive['project.json'] ?? new Uint8Array(), maxProjectBytes);
   const artifactResult = await createDsl4RuntimeArtifactDescriptor(
     component.storyDocument,
     component.sourceDescriptor,
