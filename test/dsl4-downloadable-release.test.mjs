@@ -1544,10 +1544,13 @@ async function assertNaturallyFinishedStoryReturnsToMenu(archive, expectedDispla
     for (const action of ['open', 'reload', 'about', 'language']) {
       const buttons = findByAttribute(applicationMenus[0], 'data-dsl4-menu-action', action);
       assert.equal(buttons.length, 1);
-      assert.equal(buttons[0].children[0].tagName, 'IMG');
-      assert.equal(buttons[0].children[0].src, applicationMenuIconDataUrls[action]);
-      assert.equal(buttons[0].children[0].alt, '');
-      assert.match(buttons[0].children[0].style.cssText, /invert\(1\).*saturate\(\.35\)/u);
+      assert.equal(buttons[0].children[0].tagName, 'SPAN');
+      assert.equal(
+        buttons[0].children[0].style.backgroundImage,
+        `url("${applicationMenuIconDataUrls[action]}")`,
+      );
+      assert.equal(buttons[0].children[0].getAttribute('aria-hidden'), 'true');
+      assert.match(buttons[0].children[0].style.filter, /invert\(1\).*saturate\(\.35\)/u);
       assert.match(buttons[0].children[0].style.cssText, /width:10cqw;height:10cqw/u);
       assert.match(buttons[0].children[1].style.cssText, /font-size:3\.8cqw/u);
       assert.doesNotMatch(buttons[0].children[0].style.cssText, /clamp|px/u);
@@ -2199,8 +2202,8 @@ test('localizes the existing Stage title without creating a DOM dialog', async (
     const close = findByAttribute(titleControls, 'data-dsl4-title-action', 'close')[0];
     assert.equal(website.getAttribute('aria-label'), '公式Webサイト');
     assert.equal(website.style.cssText.includes('top:25.5556%'), true);
-    assert.equal(website.children[0].tagName, 'IMG');
-    assert.match(website.children[0].src, /^data:image\/png;base64,/u);
+    assert.equal(website.children[0].tagName, 'SPAN');
+    assert.match(website.children[0].style.backgroundImage, /^url\("data:image\/png;base64,/u);
     assert.match(website.children[0].style.cssText, /width:10cqw;height:10cqw/u);
     assert.match(website.children[1].style.cssText, /font-size:2\.5cqw/u);
     assert.doesNotMatch(website.children[0].style.cssText, /clamp|px/u);

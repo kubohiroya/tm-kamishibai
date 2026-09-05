@@ -30,8 +30,9 @@ test('chooses a story file or project directory without closing the application 
   const file = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'file')[0];
   const project = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'project')[0];
   const cancel = findByAttribute(chooser.element, 'data-dsl4-source-choice', 'cancel')[0];
-  assert.equal(file.textContent, locales.ja.openFile);
-  assert.equal(project.textContent, locales.ja.openProject);
+  assert.equal(file.getAttribute('aria-label'), locales.ja.openFile);
+  assert.equal(project.getAttribute('aria-label'), locales.ja.openProject);
+  assert.equal(cancel.getAttribute('aria-label'), locales.ja.cancel);
   assert.equal(project.disabled, true);
   file.click();
   project.click();
