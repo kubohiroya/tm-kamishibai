@@ -222,7 +222,17 @@ for `tm-kamishibai preview` and is not part of any release artifact.
   pass over six option types broke the ordinary type check in six places and pushed the
   `exactOptionalPropertyTypes` count from 23 back up to 29.
 
-- **`noUncheckedIndexedAccess` leaves 850 errors** and is not adopted yet.
+- **`noUncheckedIndexedAccess` leaves 826 errors** and is not adopted yet, but the measurement
+  changed what the work is. 687 of the original 854 are not array or record lookups at all: they are
+  member calls on the `Record<string, Function>` placeholders the JSDoc sources used for
+  collaborator objects (119 of them across `src/` and `scripts/`). Under the flag every member of an
+  index signature is possibly undefined, so the errors are really a report of untyped boundaries —
+  the same work that gates re-enabling `@typescript-eslint/no-explicit-any` and
+  `no-unsafe-function-type`. Replace a placeholder with an interface naming the members the caller
+  actually uses, keeping the runtime validator that already checks them; the reload overlay went
+  from 35 errors to 7 that way, and the named types immediately surfaced real nullability the index
+  signature had hidden (an optional `storage`, a nullable debug state). Guarding individual lookups
+  is the right fix only for the remaining genuine indexing.
 - Re-enable `@typescript-eslint/no-explicit-any` and `no-unsafe-function-type` once the TurboWarp
   platform boundaries have real types.
 - Re-evaluate TypeScript 7 (see Toolchain Decisions). Still blocked as of 2026-09-05:
