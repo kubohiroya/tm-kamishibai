@@ -94,7 +94,7 @@ export function createDsl4NavigationSession({
   controlProfile: string;
   historyNavigationAvailable?: boolean;
   historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
-  port: Record<string, Function>;
+  port: Record<string, (...parameters: any[]) => unknown>;
   debugExecution?: {beforeAction: Function; getState: Function};
   assetLifecycle?: {
     prepare: Function;

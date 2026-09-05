@@ -130,6 +130,16 @@ function canonicalizeSource(input: string | Uint8Array) {
     .replace(/\r\n?|\n/gu, '\n');
 }
 
+/**
+ * Read one argument out of a split DSL 3.2 command.
+ *
+ * Every caller has already rejected the commands that do not carry the argument, so a missing one
+ * is the empty string and flows into the same diagnostics as an empty argument would.
+ */
+function argumentAt(parts: readonly string[], index: number): string {
+  return parts[index] ?? '';
+}
+
 function splitList(value: string) {
   return value.split(',').map((item) => item.trim());
 }
@@ -427,8 +437,8 @@ class Converter {
         this.error('K4-CONVERT-ASSET-ADDRESS', `Invalid ${scheme} address: ${address}`, command);
         return null;
       }
-      const sourceTarget = parts[0] || (scheme === 'sound' ? 'Stage' : id);
-      const name = parts[1] || id;
+      const sourceTarget = argumentAt(parts, 0) || (scheme === 'sound' ? 'Stage' : id);
+      const name = argumentAt(parts, 1) || id;
       return scheme === 'costume'
         ? {kind: 'costume', sourceTarget, name, command}
         : {kind: 'sound', sourceTarget, name, command};
@@ -447,7 +457,7 @@ class Converter {
       this.error('K4-CONVERT-ACTOR-001', 'actor requires ACTOR,INITIAL_COSTUME.', command);
       return;
     }
-    const [actor, costume] = parts;
+    const [actor = '', costume = ''] = parts;
     if (!this.validateIdentifier(actor, 'Actor ID', command)) return;
     if (!this.validateLiteralId(costume, 'Costume asset ID', command)) return;
     if (this.rejectDuplicate(this.actors, actor, 'Actor', command)) return;
@@ -458,7 +468,7 @@ class Converter {
 
   parseCover(command: Dsl32Command) {
     const parts = splitList(command.value);
-    if (parts.length !== 2 || !parts[0]) {
+    if (parts.length !== 2 || !argumentAt(parts, 0)) {
       this.error('K4-CONVERT-COVER-001', 'cover requires BACKDROP,BGM; BGM may be empty.', command);
       return;
     }
@@ -466,11 +476,11 @@ class Converter {
       this.error('K4-CONVERT-DUPLICATE', 'cover is declared more than once.', command);
       return;
     }
-    this.cover = {backdrop: parts[0]};
-    this.addReference('asset', parts[0], command, {expectedKind: 'backdrop'});
-    if (parts[1]) {
-      this.cover.bgm = parts[1];
-      this.addReference('asset', parts[1], command, {expectedKind: 'sound'});
+    this.cover = {backdrop: argumentAt(parts, 0)};
+    this.addReference('asset', argumentAt(parts, 0), command, {expectedKind: 'backdrop'});
+    if (argumentAt(parts, 1)) {
+      this.cover.bgm = argumentAt(parts, 1);
+      this.addReference('asset', argumentAt(parts, 1), command, {expectedKind: 'sound'});
     }
   }
 
@@ -631,7 +641,7 @@ class Converter {
       return;
     }
     this.recognition = {
-      idleSound: ids[0],
+      idleSound: ids[0] ?? '',
       ...(ids[1] ? {chargeSound: ids[1]} : {}),
     };
     for (const id of ids) this.addReference('asset', id, command, {expectedKind: 'sound'});
@@ -647,7 +657,15 @@ class Converter {
       );
       return;
     }
-    const [id, background, color, font, rawSize, align, direction] = parts;
+    const [
+      id = '',
+      background = '',
+      color = '',
+      font = '',
+      rawSize = '',
+      align = '',
+      direction = '',
+    ] = parts;
     if (!this.validateIdentifier(id, 'Text style ID', command)) return;
     if (this.rejectDuplicate(this.textStyles, id, 'Text style', command)) return;
     const size = this.parseNumber(rawSize, 'Text style size', command, {exclusiveMinimum: 0});
@@ -701,7 +719,7 @@ class Converter {
       );
       return;
     }
-    const [id, rawConditions, rawScenes] = parts;
+    const [id = '', rawConditions = '', rawScenes = ''] = parts;
     if (!this.validateIdentifier(id, 'Branch ID', command)) return;
     if (this.rejectDuplicate(this.branches, id, 'Branch', command)) return;
     const conditions = splitList(rawConditions);
@@ -875,7 +893,7 @@ class Converter {
       return;
     }
     const parts = command.value.split(':').map((part) => part.trim());
-    const targetOrCommand = parts[0] ?? '';
+    const targetOrCommand = argumentAt(parts, 0) ?? '';
     if (
       [
         'stage',
@@ -902,7 +920,7 @@ class Converter {
     command: Dsl32Command,
   ): Record<string, any> | null {
     if (['stage', 'bgm', 'sound', 'branch'].includes(actionName)) {
-      if (parts.length !== 2 || !parts[1]) {
+      if (parts.length !== 2 || !argumentAt(parts, 1)) {
         this.error(
           'K4-CONVERT-ACTION-ARGS',
           `${actionName} requires exactly one argument.`,
@@ -911,13 +929,13 @@ class Converter {
         return null;
       }
       if (actionName === 'stage') {
-        this.addReference('asset', parts[1], command, {expectedKind: 'backdrop'});
+        this.addReference('asset', argumentAt(parts, 1), command, {expectedKind: 'backdrop'});
       } else if (actionName === 'bgm' || actionName === 'sound') {
-        this.addReference('asset', parts[1], command, {expectedKind: 'sound'});
+        this.addReference('asset', argumentAt(parts, 1), command, {expectedKind: 'sound'});
       } else {
-        this.addReference('branch', parts[1], command);
+        this.addReference('branch', argumentAt(parts, 1), command);
       }
-      return {[actionName]: parts[1]};
+      return {[actionName]: argumentAt(parts, 1)};
     }
     if (actionName === 'wait') {
       if (parts.length !== 2) {
@@ -928,11 +946,11 @@ class Converter {
         );
         return null;
       }
-      const seconds = this.parseNumber(parts[1], 'wait seconds', command, {minimum: 0});
+      const seconds = this.parseNumber(argumentAt(parts, 1), 'wait seconds', command, {minimum: 0});
       return seconds === null ? null : {wait: seconds};
     }
     if (actionName === 'transition') {
-      if (parts.length !== 2 || !parts[1]) {
+      if (parts.length !== 2 || !argumentAt(parts, 1)) {
         this.error(
           'K4-CONVERT-ACTION-ARGS',
           'transition requires exactly one effect argument.',
@@ -940,20 +958,20 @@ class Converter {
         );
         return null;
       }
-      this.validateIdentifier(parts[1], 'Transition effect', command);
+      this.validateIdentifier(argumentAt(parts, 1), 'Transition effect', command);
       const legacyDurations = {fadeOut: 1, fadeUp: 1, fadeToWhite: 1, fadeFromWhite: 1, reset: 0};
-      if (!Object.hasOwn(legacyDurations, parts[1])) {
+      if (!Object.hasOwn(legacyDurations, argumentAt(parts, 1))) {
         this.error(
           'K4-CONVERT-TRANSITION-UNSUPPORTED',
-          `Unsupported DSL 3.1/3.2 transition effect: ${parts[1]}.`,
+          `Unsupported DSL 3.1/3.2 transition effect: ${argumentAt(parts, 1)}.`,
           command,
         );
         return null;
       }
       return {
         transition: {
-          effect: parts[1],
-          seconds: legacyDurations[parts[1] as keyof typeof legacyDurations],
+          effect: argumentAt(parts, 1),
+          seconds: legacyDurations[argumentAt(parts, 1) as keyof typeof legacyDurations],
         },
       };
     }
@@ -966,8 +984,8 @@ class Converter {
         );
         return null;
       }
-      const routes = splitList(parts[1]);
-      const destinations = splitList(parts[2]);
+      const routes = splitList(argumentAt(parts, 1));
+      const destinations = splitList(argumentAt(parts, 2));
       if (
         routes.length !== destinations.length ||
         routes.length === 0 ||
@@ -998,8 +1016,9 @@ class Converter {
           this.validateIdentifier(route, 'Touch route actor ID', command);
           this.addReference('actor', route, command);
         }
-        mappedRoutes.set(route, destinations[index]);
-        this.addReference('scene', destinations[index], command);
+        const destination = destinations[index] ?? '';
+        mappedRoutes.set(route, destination);
+        this.addReference('scene', destination, command);
       }
       return {[actionName]: ownObject(mappedRoutes)};
     }
@@ -1020,30 +1039,50 @@ class Converter {
       return null;
     }
     if (!this.validateIdentifier(target, 'Action actor ID', command)) return null;
-    const actionName = parts[1] ?? '';
+    const actionName = argumentAt(parts, 1) ?? '';
     this.addReference('actor', target, command);
     const key = `${target}.${actionName}`;
     if (actionName === 'show') {
-      if (parts.length !== 4 || !parts[2]) {
+      if (parts.length !== 4 || !argumentAt(parts, 2)) {
         this.error('K4-CONVERT-ACTION-ARGS', 'show requires SKIN:X,Y,SCALE.', command);
         return null;
       }
-      const coordinates = this.parseNumberList(parts[3], 3, 'show coordinates', command);
+      const coordinates = this.parseNumberList(
+        argumentAt(parts, 3),
+        3,
+        'show coordinates',
+        command,
+      );
       if (!coordinates || coordinates[2] <= 0) {
         if (coordinates)
           this.error('K4-CONVERT-ACTION-ARGS', 'show scale must be greater than 0.', command);
         return null;
       }
-      this.addReference('asset', parts[2], command, {expectedKind: 'costume', actor: target});
-      this.addCostumeUse(parts[2], target);
-      return {[key]: {skin: parts[2], x: coordinates[0], y: coordinates[1], scale: coordinates[2]}};
+      this.addReference('asset', argumentAt(parts, 2), command, {
+        expectedKind: 'costume',
+        actor: target,
+      });
+      this.addCostumeUse(argumentAt(parts, 2), target);
+      return {
+        [key]: {
+          skin: argumentAt(parts, 2),
+          x: coordinates[0],
+          y: coordinates[1],
+          scale: coordinates[2],
+        },
+      };
     }
     if (actionName === 'moveTo') {
       if (parts.length !== 3) {
         this.error('K4-CONVERT-ACTION-ARGS', 'moveTo requires X,Y,SECONDS.', command);
         return null;
       }
-      const coordinates = this.parseNumberList(parts[2], 3, 'moveTo arguments', command);
+      const coordinates = this.parseNumberList(
+        argumentAt(parts, 2),
+        3,
+        'moveTo arguments',
+        command,
+      );
       if (!coordinates || coordinates[2] < 0) {
         if (coordinates)
           this.error('K4-CONVERT-ACTION-ARGS', 'moveTo seconds must be at least 0.', command);
@@ -1053,7 +1092,7 @@ class Converter {
     }
     if (actionName === 'say' || actionName === 'think') {
       if (parts.length === 3) {
-        if (parts[2] === '') {
+        if (argumentAt(parts, 2) === '') {
           return {[key]: {text: '', seconds: 0}};
         }
         this.error(
@@ -1064,15 +1103,15 @@ class Converter {
         return null;
       }
       if (parts.length === 5) {
-        if (!parts[4]) {
+        if (!argumentAt(parts, 4)) {
           this.error('K4-CONVERT-ACTION-ARGS', `${actionName} style must not be empty.`, command);
           return null;
         }
-        const seconds = this.parseNumber(parts[3], `${actionName} seconds`, command, {
+        const seconds = this.parseNumber(argumentAt(parts, 3), `${actionName} seconds`, command, {
           minimum: 0,
         });
         if (seconds === null) return null;
-        const textStyle = parts[4];
+        const textStyle = argumentAt(parts, 4);
         this.addReference('style', textStyle, command);
         const bubbleStyle = `legacy-${actionName}-${textStyle}`;
         this.bubbleStyles.set(bubbleStyle, {
@@ -1081,7 +1120,7 @@ class Converter {
         });
         return {
           [key]: {
-            text: parts[2].replaceAll('\\n', '\n'),
+            text: argumentAt(parts, 2).replaceAll('\\n', '\n'),
             seconds,
             styles: [bubbleStyle],
           },
@@ -1091,11 +1130,15 @@ class Converter {
         this.error('K4-CONVERT-ACTION-ARGS', `${actionName} requires TEXT:SECONDS.`, command);
         return null;
       }
-      const seconds = this.parseNumber(parts[3], `${actionName} seconds`, command, {minimum: 0});
-      return seconds === null ? null : {[key]: {text: parts[2].replaceAll('\\n', '\n'), seconds}};
+      const seconds = this.parseNumber(argumentAt(parts, 3), `${actionName} seconds`, command, {
+        minimum: 0,
+      });
+      return seconds === null
+        ? null
+        : {[key]: {text: argumentAt(parts, 2).replaceAll('\\n', '\n'), seconds}};
     }
     if (actionName === 'setSkin') {
-      if ((parts.length !== 3 && parts.length !== 4) || !parts[2]) {
+      if ((parts.length !== 3 && parts.length !== 4) || !argumentAt(parts, 2)) {
         this.error(
           'K4-CONVERT-ACTION-ARGS',
           'setSkin requires SKIN with an optional positive SCALE.',
@@ -1105,12 +1148,15 @@ class Converter {
       }
       const scale =
         parts.length === 4
-          ? this.parseNumber(parts[3], 'setSkin scale', command, {exclusiveMinimum: 0})
+          ? this.parseNumber(argumentAt(parts, 3), 'setSkin scale', command, {exclusiveMinimum: 0})
           : null;
       if (parts.length === 4 && scale === null) return null;
-      this.addReference('asset', parts[2], command, {expectedKind: 'costume', actor: target});
-      this.addCostumeUse(parts[2], target);
-      return {[key]: scale === null ? parts[2] : {skin: parts[2], scale}};
+      this.addReference('asset', argumentAt(parts, 2), command, {
+        expectedKind: 'costume',
+        actor: target,
+      });
+      this.addCostumeUse(argumentAt(parts, 2), target);
+      return {[key]: scale === null ? argumentAt(parts, 2) : {skin: argumentAt(parts, 2), scale}};
     }
     if (actionName === 'hide') {
       if (parts.length !== 2) {
@@ -1120,7 +1166,7 @@ class Converter {
       return {[key]: {}};
     }
     if (actionName === 'setLayer') {
-      if (parts.length !== 3 || !parts[2]) {
+      if (parts.length !== 3 || !argumentAt(parts, 2)) {
         this.error(
           'K4-CONVERT-ACTION-ARGS',
           'setLayer requires front, back, or a finite relative layer count.',
@@ -1128,8 +1174,9 @@ class Converter {
         );
         return null;
       }
-      if (parts[2] === 'front' || parts[2] === 'back') return {[key]: parts[2]};
-      const layer = this.parseNumber(parts[2], 'setLayer count', command);
+      if (argumentAt(parts, 2) === 'front' || argumentAt(parts, 2) === 'back')
+        return {[key]: argumentAt(parts, 2)};
+      const layer = this.parseNumber(argumentAt(parts, 2), 'setLayer count', command);
       return layer === null ? null : {[key]: layer};
     }
     if (actionName === 'loop') {
@@ -1137,8 +1184,8 @@ class Converter {
         this.error('K4-CONVERT-ACTION-ARGS', 'loop requires SKINS:DURATIONS.', command);
         return null;
       }
-      const skins = splitList(parts[2]);
-      const rawDurations = splitList(parts[3]);
+      const skins = splitList(argumentAt(parts, 2));
+      const rawDurations = splitList(argumentAt(parts, 3));
       if (
         skins.length === 0 ||
         skins.length !== rawDurations.length ||
@@ -1177,22 +1224,24 @@ class Converter {
       };
     }
     if (actionName === 'setText') {
-      if (parts.length !== 4 || !parts[3]) {
+      if (parts.length !== 4 || !argumentAt(parts, 3)) {
         this.error('K4-CONVERT-ACTION-ARGS', 'setText requires TEXT:STYLE.', command);
         return null;
       }
-      this.styleReferences.set(parts[3], command);
-      this.addReference('style', parts[3], command);
-      return {[key]: {text: parts[2].replaceAll('\\n', '\n'), style: parts[3]}};
+      this.styleReferences.set(argumentAt(parts, 3), command);
+      this.addReference('style', argumentAt(parts, 3), command);
+      return {
+        [key]: {text: argumentAt(parts, 2).replaceAll('\\n', '\n'), style: argumentAt(parts, 3)},
+      };
     }
     if (actionName === 'pose') {
       if (parts.length !== 5) {
         this.error('K4-CONVERT-ACTION-ARGS', 'pose requires SKINS:POSES:SOUNDS.', command);
         return null;
       }
-      const skins = splitList(parts[2]);
-      const poses = splitList(parts[3]);
-      const sounds = splitList(parts[4]);
+      const skins = splitList(argumentAt(parts, 2));
+      const poses = splitList(argumentAt(parts, 3));
+      const sounds = splitList(argumentAt(parts, 4));
       if (poses.length === 0 || poses.some((id) => !id)) {
         this.error(
           'K4-CONVERT-POSE-STEPS',
@@ -1265,6 +1314,18 @@ class Converter {
     return number;
   }
 
+  parseNumberList(
+    value: string,
+    length: 3,
+    label: string,
+    command: Dsl32Command,
+  ): [number, number, number] | null;
+  parseNumberList(
+    value: string,
+    length: number,
+    label: string,
+    command: Dsl32Command,
+  ): number[] | null;
   parseNumberList(value: string, length: number, label: string, command: Dsl32Command) {
     const parts = splitList(value);
     if (parts.length !== length) {
@@ -1389,7 +1450,7 @@ class Converter {
         rendered.set(id, asset.name === id ? 'sound' : {kind: 'sound', name: asset.name});
       } else {
         const actors = this.costumeUses.get(id) ?? new Set();
-        const target = actors.size === 1 ? [...actors][0] : asset.sourceTarget;
+        const target = (actors.size === 1 ? [...actors][0] : asset.sourceTarget) ?? '';
         this.validateIdentifier(target, `Costume ${id} target`, asset.command);
         if (target !== asset.sourceTarget) {
           this.warning(

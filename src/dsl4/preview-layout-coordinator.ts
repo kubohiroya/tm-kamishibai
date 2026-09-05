@@ -59,6 +59,14 @@ function insets(value: unknown) {
   };
 }
 
+/** One rectangle in stage pixels, as `rect()` normalizes it. */
+interface LayoutRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 function rect(value: unknown, name: string) {
   if (!isRecord(value)) throw new TypeError(`${name} must be an object`);
   return {
@@ -69,10 +77,7 @@ function rect(value: unknown, name: string) {
   };
 }
 
-function intersects(
-  left: Readonly<Record<string, number>>,
-  right: Readonly<Record<string, number>>,
-) {
+function intersects(left: LayoutRect, right: LayoutRect) {
   return (
     left.x < right.x + right.width &&
     left.x + left.width > right.x &&
@@ -82,7 +87,7 @@ function intersects(
 }
 
 function inside(
-  candidate: Readonly<Record<string, number>>,
+  candidate: LayoutRect,
   size: {width: number; height: number},
   safe: {top: number; right: number; bottom: number; left: number},
 ) {

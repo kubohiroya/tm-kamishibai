@@ -19,6 +19,26 @@ function validateStoryDocument(value: unknown) {
   return value;
 }
 
+/**
+ * The runtime session the reload loop drives.
+ *
+ * The first six members are required and checked below. The rest are reached only when the session
+ * offers them: `getRuntimeVariableSnapshot` is probed before use, and the action and variable
+ * members belong to sessions that expose the debugger surface.
+ */
+export interface LiveReloadRuntimeSession {
+  start(...parameters: any[]): any;
+  stop(...parameters: any[]): any;
+  dispose(...parameters: any[]): any;
+  getState(): Readonly<Record<string, any>>;
+  quiesce(...parameters: any[]): any;
+  resumeQuiesce(...parameters: any[]): any;
+  invokeAction?(action: unknown): unknown;
+  queueVariableWrite?(request: unknown): unknown;
+  getRuntimeVariableSnapshot?(): unknown;
+  rejectActionInvocation?(error: unknown): unknown;
+}
+
 function validateRuntimeSession(value: unknown) {
   if (
     !isRecord(value) ||
@@ -33,7 +53,7 @@ function validateRuntimeSession(value: unknown) {
       'live reload runtime session must provide start, stop, dispose, getState, quiesce, and resumeQuiesce',
     );
   }
-  return value as Record<string, Function>;
+  return value as unknown as LiveReloadRuntimeSession;
 }
 
 function validateQuiesceToken(
@@ -178,7 +198,7 @@ function quiesceDiagnostic(storyDocument: Readonly<Record<string, unknown>>, err
   });
 }
 
-function executionState(session: Record<string, Function>) {
+function executionState(session: LiveReloadRuntimeSession) {
   const state = session.getState();
   if (!isRecord(state)) throw new TypeError('live reload runtime state must be an object');
   return isRecord(state.runtime) ? state.runtime : state;
@@ -215,12 +235,12 @@ export function createDsl4LiveReloadSession({
   createSession: (
     context: Readonly<{
       storyDocument: Readonly<Record<string, unknown>>;
-      previousSession: Record<string, Function> | null;
+      previousSession: LiveReloadRuntimeSession | null;
       preserveManagedPresentation: boolean;
     }>,
-  ) => Record<string, Function> | Promise<Record<string, Function>>;
+  ) => LiveReloadRuntimeSession | Promise<LiveReloadRuntimeSession>;
   initialStoryDocument?: Readonly<Record<string, unknown>>;
-  initialSession?: Record<string, Function>;
+  initialSession?: LiveReloadRuntimeSession;
   initialSourceIntegrity?: string;
   onRunError?: (error: unknown) => void;
   isException?: (value: unknown) => boolean;
@@ -310,7 +330,7 @@ export function createDsl4LiveReloadSession({
 
   async function makeSession(
     storyDocument: Readonly<Record<string, unknown>>,
-    previousSession: Record<string, Function> | null,
+    previousSession: LiveReloadRuntimeSession | null,
     preserveManagedPresentation: boolean,
   ) {
     const created = await createSession(

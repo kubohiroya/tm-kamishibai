@@ -129,6 +129,17 @@ function runtimeDiagnostic(
   });
 }
 
+/** The structured-data lifecycle the controller drives around each story, scene, and action. */
+interface StructuredDataIntegration {
+  beginStory(...parameters: any[]): unknown;
+  dispose?(...parameters: any[]): unknown;
+  endStory(reason: string): unknown;
+  enterScene(...parameters: any[]): unknown;
+  beginNextAction(...parameters: any[]): unknown;
+  releaseAction(reason: string): unknown;
+  currentActionResources(...parameters: any[]): unknown;
+}
+
 export function createDsl4RuntimeController({
   storyDocument,
   port,
@@ -151,7 +162,8 @@ export function createDsl4RuntimeController({
   scheduleQuiesceTimeout = defaultScheduleQuiesceTimeout,
 }: {
   storyDocument: Readonly<Record<string, unknown>>;
-  port: Record<string, Function>;
+  // The port is dispatched by method name at runtime, so an index signature is the honest shape.
+  port: Record<string, (...parameters: any[]) => unknown>;
   assetLifecycle?: {
     prepare: Function;
     setLoading: Function;
@@ -164,7 +176,7 @@ export function createDsl4RuntimeController({
     context: ActionContext,
   ) => boolean | Promise<boolean>;
   onEvent?: (event: RuntimeEvent) => void;
-  structuredDataIntegration?: Record<string, Function>;
+  structuredDataIntegration?: StructuredDataIntegration;
   debugExecution?: {beforeAction: Function; getState: Function};
   posePreviewMirroringEnabled?: boolean;
   cameraPreviewControlsEnabled?: boolean;
@@ -2443,7 +2455,7 @@ export function createDsl4RuntimeController({
     dispose() {
       if (controllerDisposed) return;
       stop('dispose');
-      structuredDataIntegration?.dispose();
+      structuredDataIntegration?.dispose?.();
       structuredScene = null;
       structuredAction = null;
       structuredActionResources = null;

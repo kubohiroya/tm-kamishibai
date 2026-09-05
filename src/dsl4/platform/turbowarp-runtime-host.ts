@@ -278,7 +278,7 @@ function addPortMethods(
 
 function validateStoryCapabilities(
   storyDocument: Readonly<Record<string, unknown>>,
-  port: Record<string, Function>,
+  port: Record<string, (...parameters: any[]) => unknown>,
   evaluateCondition: unknown,
 ) {
   const scenes = Array.isArray(storyDocument.scenes) ? storyDocument.scenes : [];
@@ -723,7 +723,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       };
     }
 
-    const port = {} as Record<string, Function>;
+    const port = {} as Record<string, (...parameters: any[]) => unknown>;
     addPortMethods(
       port,
       mediaPort,
