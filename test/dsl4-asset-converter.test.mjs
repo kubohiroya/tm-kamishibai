@@ -3,7 +3,7 @@ import {webcrypto} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import {test} from 'vitest';
 import {fileURLToPath} from 'node:url';
 
 import {strToU8, unzipSync, zipSync} from 'fflate';
@@ -200,7 +200,7 @@ function baseSb3({includeProjectAsset = true, includeProjectBytes = true} = {}) 
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsl4-asset-converter-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
+  t.onTestFinished(() => rm(root, {recursive: true, force: true}));
   await mkdir(path.join(root, 'assets'));
   await mkdir(path.join(root, 'models', 'rescue'), {recursive: true});
   await writeFile(path.join(root, 'assets', 'local.svg'), localBytes);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {createDsl4WebPreviewShell, dsl4WebPreviewShellManifest} from '../src/builder/index.js';
 import {createFakeDocument, findById} from './helpers/fake-dom.mjs';

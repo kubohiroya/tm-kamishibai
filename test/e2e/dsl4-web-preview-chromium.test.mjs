@@ -8,7 +8,7 @@ import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import test from 'node:test';
+import {test} from 'vitest';
 
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 
@@ -23,20 +23,37 @@ import {
   createDsl4ProductionSourceFrontend,
   installDsl4PackagedRuntimeComponent,
   runDsl4LocalPreviewCommand,
-} from '../../src/builder/index.js';
+} from '../../dist/builder/index.js';
 import {
   createDsl4EmbeddedAssetBundle,
   createDsl4EmbeddedSourceDescriptor,
   createDsl4LiveReloadSession,
   createDsl4PreviewProtocolSession,
   createDsl4RuntimeArtifactDescriptor,
-} from '../../src/dsl4/index.js';
+} from '../../dist/dsl4/index.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
 const TurboWarpPackager = require('@turbowarp/packager');
 
+let pendingCurrentDsl4ReleaseSb3;
+
+/**
+ * Build the current release once per process. The release is deterministic and its runtime
+ * extension is minified with terser, so rebuilding it for every test spends the per-test budget on
+ * work that cannot differ. Each caller gets its own archive bytes.
+ *
+ * Whichever caller runs first still pays that build inside its own timeout — measured at about 14
+ * seconds locally, most of it in `createDsl4ReleaseSourceFiles`. Every test calling this therefore
+ * budgets 60 seconds, so the suite does not depend on which of them the runner reaches first.
+ */
 async function createCurrentDsl4ReleaseSb3() {
+  pendingCurrentDsl4ReleaseSb3 ??= buildCurrentDsl4ReleaseSb3();
+  const release = await pendingCurrentDsl4ReleaseSb3;
+  return {...release, archive: Uint8Array.from(release.archive)};
+}
+
+async function buildCurrentDsl4ReleaseSb3() {
   const sourceDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-current-release-source-'));
   try {
     const sourceFiles = await createDsl4ReleaseSourceFiles();
@@ -306,7 +323,7 @@ test(
     const bundlePath = path.join(fixtureDirectory, 'bundle.js');
     await writeFile(
       entryPoint,
-      `import {loadDsl4BrowserTurboWarpPlatform} from ${JSON.stringify(path.join(repositoryRoot, 'src/dsl4/browser-turbowarp-platform.js'))};
+      `import {loadDsl4BrowserTurboWarpPlatform} from ${JSON.stringify(path.join(repositoryRoot, 'dist/dsl4/browser-turbowarp-platform.js'))};
 try {
   const platform = await loadDsl4BrowserTurboWarpPlatform();
   globalThis.turbowarpPlatformFixture = {ready: true, ok: true, methods: Object.keys(platform).sort()};
@@ -484,8 +501,13 @@ class CdpClient {
   }
 }
 
-async function waitForEvaluation(client, expression, message) {
-  const deadline = Date.now() + 10_000;
+/**
+ * The default deadline suits waits that only need the page to settle. Callers that wait on
+ * TensorFlow.js pose predictions pass a longer one: SwiftShader runs the first inference an order
+ * of magnitude slower than the hardware backend CI uses.
+ */
+async function waitForEvaluation(client, expression, message, {timeoutMs = 10_000} = {}) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await client.evaluate(expression)) return;
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -554,7 +576,7 @@ async function stopChrome(child) {
 
 test(
   'loads the current DSL 4.0 runtime without duplicate TensorFlow.js registration warnings',
-  {timeout: 30_000},
+  {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-tensorflow-chromium-'));
@@ -634,7 +656,7 @@ console.warn = (...values) => {
 
 test(
   'opens the non-embedded release title and disabled Reload menu without loading its story bundle',
-  {timeout: 30_000},
+  {timeout: 60_000},
   async () => {
     const chromeExecutable = await resolveChromeExecutable();
     const profileDirectory = await mkdtemp(path.join(tmpdir(), 'dsl4-release-menu-chromium-'));
@@ -1979,7 +2001,7 @@ test(
       }),
     );
     const browserBundleBytes = await buildDsl4TurboWarpBrowserBundle({
-      entryPoint: path.join(repositoryRoot, 'src/builder/dsl4-local-preview-browser-entry.js'),
+      entryPoint: path.join(repositoryRoot, 'dist/builder/dsl4-local-preview-browser-entry.js'),
     });
     const hostErrors = [];
     const host = createDsl4LocalPreviewHost({
@@ -2552,6 +2574,7 @@ scenes:
           client,
           "globalThis.dsl4LocalPreviewCapabilityFixture?.events.some(({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/2') && globalThis.dsl4LocalPreviewCapabilityFixture?.metrics.predictions > 0",
           'browser-owned first pose step',
+          {timeoutMs: 30_000},
         );
         assert.equal(
           await client.evaluate(
@@ -2738,7 +2761,7 @@ scenes:
         );
       }
       const startupMilliseconds = Date.now() - startedAt;
-      testContext.diagnostic(`representative capability startup: ${startupMilliseconds}ms`);
+      await testContext.annotate(`representative capability startup: ${startupMilliseconds}ms`);
       assert.ok(startupMilliseconds <= 20_000, `startup took ${startupMilliseconds}ms`);
       const observed = await client.evaluate(`(() => {
         const fixture = globalThis.dsl4LocalPreviewCapabilityFixture;
@@ -2820,7 +2843,7 @@ scenes:
       await client.send('HeapProfiler.enable');
       await client.send('HeapProfiler.collectGarbage');
       const usedHeapBytes = await client.evaluate('performance.memory.usedJSHeapSize');
-      testContext.diagnostic(`representative capability heap after GC: ${usedHeapBytes} bytes`);
+      await testContext.annotate(`representative capability heap after GC: ${usedHeapBytes} bytes`);
       assert.ok(usedHeapBytes <= 192 * 1024 * 1024, `heap used ${usedHeapBytes} bytes`);
 
       await client.evaluate(`document.querySelector('[data-dsl4-menu-action="reload"]').click()`);
