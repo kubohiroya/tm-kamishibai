@@ -64,6 +64,7 @@
     "e2e:chromium:preview": "pnpm run build:lib && vitest run --config vitest.e2e.config.ts test/e2e/dsl4-web-preview-chromium.test.mjs",
     "e2e:chromium:distribution": "pnpm run build:lib && vitest run --config vitest.e2e.config.ts test/e2e/dsl4-asset-distribution-offline-chromium.test.mjs",
     "lint": "eslint .",
+    "lint:prune-suppressions": "eslint . --prune-suppressions",
     "format": "prettier --check \"**/*.{js,mjs,cjs,ts}\" \".github/**/*.{yaml,yml}\" \"*.{json,md,yaml,yml}\"",
     "typecheck": "tsc --project tsconfig.json",
     "test": "pnpm test:full",

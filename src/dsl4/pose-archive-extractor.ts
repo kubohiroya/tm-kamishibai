@@ -1,6 +1,7 @@
 import {unzipSync} from 'fflate';
 
 import {encodeDsl4StoryPathSegment} from './story-path.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 export const DSL4_POSE_ARCHIVE_EXTRACTOR_FORMAT = 'tm-zip-v1';
 export const DSL4_POSE_ARCHIVE_MAX_COMPRESSION_RATIO = 100;
@@ -88,7 +89,7 @@ function validateSignal(value: unknown) {
 
 export async function computeDsl4PoseArchiveIntegrity(
   bytes: Uint8Array,
-  subtleCrypto: {digest: Function},
+  subtleCrypto: Dsl4SubtleCrypto,
 ) {
   const digest = new Uint8Array(await subtleCrypto.digest('SHA-256', bytes));
   const hex = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -121,7 +122,7 @@ export function createDsl4PoseArchiveExtractor({
   subtleCrypto = globalThis.crypto?.subtle,
 }: {
   limits: unknown;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   const limits = validateLimits(limitsValue);
   if (!subtleCrypto || typeof subtleCrypto.digest !== 'function') {
@@ -312,7 +313,7 @@ export async function extractDsl4PoseArchive(
     maxFileBytes: number;
     maxTotalBytes: number;
     maxCompressionRatio?: number;
-    subtleCrypto?: {digest: Function} | undefined;
+    subtleCrypto?: Dsl4SubtleCrypto | undefined;
   },
   context: Readonly<Record<string, unknown>> = {},
 ) {

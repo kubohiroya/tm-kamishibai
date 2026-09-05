@@ -5,6 +5,7 @@ import {
   parseDsl4RemotePoseJson,
   resolveDsl4RemotePoseWeightsPath,
 } from './remote-pose-directory.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -41,7 +42,7 @@ function isVerifiedRemoteSource(source: Record<string, any>) {
   );
 }
 
-async function sha256Hex(bytes: Uint8Array, subtleCrypto: {digest: Function}) {
+async function sha256Hex(bytes: Uint8Array, subtleCrypto: Dsl4SubtleCrypto) {
   const digest = new Uint8Array(await subtleCrypto.digest('SHA-256', bytes));
   return [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
@@ -67,7 +68,7 @@ export function createDsl4EmbeddedAssetLifecycle({
   resolveVerifiedRemoteAsset?: Function;
   extractRemotePoseArchive?: Function;
   resolveEmbeddedAssetFiles?: Function;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
   const storyDocument = isRecord(runtimeComponent.storyDocument)

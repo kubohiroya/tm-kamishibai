@@ -14,6 +14,7 @@ import {
   Dsl4SourceDescriptorError,
 } from './source-descriptor.js';
 import {deepFreeze} from './story-document.js';
+import type {Dsl4SubtleCrypto} from './subtle-crypto.js';
 
 const browserSourceGraphDefaultLimits = Object.freeze({
   maxSourceFiles: 64,
@@ -444,7 +445,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   quietWindowMs?: number;
   retryIntervalMs?: number;
   stabilityTimeoutMs?: number;
-  subtleCrypto?: {digest: Function} | undefined;
+  subtleCrypto?: Dsl4SubtleCrypto | undefined;
   clock?: {now: Function; setTimeout: Function; clearTimeout: Function; sleep: Function};
   validateManifest?: (input: unknown) => Readonly<Record<string, any>>;
   createSourceDescriptor?: (

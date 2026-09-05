@@ -10,17 +10,20 @@ const rules = {
 /**
  * TypeScript reports undefined identifiers and unused values through its own checker.
  *
- * `any` and `Function` carry over from the JSDoc annotations of the JavaScript sources, mostly at
- * TurboWarp platform boundaries that have no published types. Replacing them is Phase 5 of
- * docs/design/typescript-migration.md, so the two rules stay off until those boundaries are typed.
+ * `any` and `Function` carried over from the JSDoc annotations of the JavaScript sources, mostly at
+ * TurboWarp platform boundaries that had no published types. Both rules are `error` so new code is
+ * held to them; the occurrences that predate the switch are listed in `eslint-suppressions.json`
+ * and are burned down by Phase 5 of docs/design/typescript-migration.md. ESLint fails on a
+ * suppression that is no longer needed, so the list can only shrink -- run
+ * `pnpm lint:prune-suppressions` after clearing a file.
  */
 const typescriptRules = {
   eqeqeq: 'error',
   'no-undef': 'off',
   'no-unused-vars': 'off',
   '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
-  '@typescript-eslint/no-explicit-any': 'off',
-  '@typescript-eslint/no-unsafe-function-type': 'off',
+  '@typescript-eslint/no-explicit-any': 'error',
+  '@typescript-eslint/no-unsafe-function-type': 'error',
 };
 
 export default [
