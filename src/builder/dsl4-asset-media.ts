@@ -59,7 +59,7 @@ export function contentTypeFor(bytes: Buffer, filePath: string, kind: string) {
     if (bytes.subarray(0, 4).toString('ascii') === 'OggS') return 'audio/ogg';
     if (
       bytes.subarray(0, 3).toString('ascii') === 'ID3' ||
-      (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
+      (bytes.length >= 2 && bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0)
     ) {
       return 'audio/mpeg';
     }
@@ -99,7 +99,9 @@ function jpegDimensions(bytes: Buffer) {
       offset += 1;
       continue;
     }
-    const marker = bytes[offset + 1];
+    // The loop stops before the last byte, so the marker is present; a missing one would fall
+    // through to the frame-size branch below and be rejected by the length check there.
+    const marker = bytes[offset + 1] ?? 0;
     if (marker === 0xd8 || marker === 0xd9) {
       offset += 2;
       continue;
@@ -135,8 +137,16 @@ function svgDimensions(bytes: Buffer) {
       .trim()
       .split(/[\s,]+/u)
       .map(Number);
-    if (values.length === 4 && values.every(Number.isFinite) && values[2] > 0 && values[3] > 0) {
-      return {width: values[2], height: values[3]};
+    const [, , viewBoxWidth, viewBoxHeight] = values;
+    if (
+      values.length === 4 &&
+      values.every(Number.isFinite) &&
+      viewBoxWidth !== undefined &&
+      viewBoxHeight !== undefined &&
+      viewBoxWidth > 0 &&
+      viewBoxHeight > 0
+    ) {
+      return {width: viewBoxWidth, height: viewBoxHeight};
     }
   }
   const numeric = (name: string) => {
@@ -208,7 +218,8 @@ function oggMetadata(bytes: Buffer) {
   let sampleCount = 0;
   while (offset + 27 <= bytes.length) {
     if (bytes.subarray(offset, offset + 4).toString('ascii') !== 'OggS') break;
-    const segmentCount = bytes[offset + 26];
+    // The loop condition guarantees 27 bytes from the offset, so the segment count is present.
+    const segmentCount = bytes[offset + 26] ?? 0;
     if (offset + 27 + segmentCount > bytes.length) break;
     const bodySize = bytes
       .subarray(offset + 27, offset + 27 + segmentCount)
@@ -225,11 +236,12 @@ function oggMetadata(bytes: Buffer) {
 function mp3Metadata(bytes: Buffer) {
   let offset = 0;
   if (bytes.subarray(0, 3).toString('ascii') === 'ID3' && bytes.length >= 10) {
+    // The ID3 header is ten bytes and the length check above has already required them.
     const size =
-      ((bytes[6] & 0x7f) << 21) |
-      ((bytes[7] & 0x7f) << 14) |
-      ((bytes[8] & 0x7f) << 7) |
-      (bytes[9] & 0x7f);
+      (((bytes[6] ?? 0) & 0x7f) << 21) |
+      (((bytes[7] ?? 0) & 0x7f) << 14) |
+      (((bytes[8] ?? 0) & 0x7f) << 7) |
+      ((bytes[9] ?? 0) & 0x7f);
     offset = 10 + size;
   }
   const bitrates = {
@@ -266,7 +278,8 @@ function mp3Metadata(bytes: Buffer) {
     const version = versionBits === 3 ? 1 : versionBits === 2 ? 2 : 2.5;
     const layer = 4 - layerBits;
     const rateDivisor = version === 1 ? 1 : version === 2 ? 2 : 4;
-    const frameRate = baseRates[rateIndex] / rateDivisor;
+    // rateIndex 3 is rejected above, so the table always has an entry for it.
+    const frameRate = (baseRates[rateIndex] ?? 0) / rateDivisor;
     const tableVersion = version === 1 ? 1 : 2;
     const bitrate = bitrates[`${tableVersion}-${layer}`]?.[bitrateIndex];
     if (!bitrate) {

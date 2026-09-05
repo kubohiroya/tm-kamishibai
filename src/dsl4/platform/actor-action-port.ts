@@ -1,3 +1,5 @@
+import {validateCompositionMethods} from './composition-contract.js';
+
 import {normalizeDsl4BubbleMotions} from '../bubble-motion.js';
 import {dsl4MoveEasingNames, isDsl4MoveEasing} from '../move-easing.js';
 import {createDsl4OrderedCursorNotifier} from './ordered-cursor-notifier.js';
@@ -20,15 +22,12 @@ function abortError(cause?: unknown) {
 }
 
 function validateComposition(value: unknown) {
-  const methods = ['isRegistered', 'getMimeType', 'applyToTarget'];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Asset Manager composition must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  const methods = ['isRegistered', 'getMimeType', 'applyToTarget'] as const;
+  return validateCompositionMethods(value, 'Asset Manager composition', methods);
 }
 
 function validateHost(value: unknown, speechAdvanceTypewriterEnabled: boolean) {
-  const methods = [
+  const baseMethods = [
     'showActor',
     'hideActor',
     'setActorLayer',
@@ -36,12 +35,17 @@ function validateHost(value: unknown, speechAdvanceTypewriterEnabled: boolean) {
     'createTransparencyTransition',
     'createMove',
     'createSay',
-    ...(speechAdvanceTypewriterEnabled ? ['createThink'] : []),
-  ];
-  if (!isRecord(value) || methods.some((method) => typeof value[method] !== 'function')) {
-    throw new TypeError(`Actor presentation host must provide ${methods.join(', ')}`);
-  }
-  return value as Record<string, Function>;
+  ] as const;
+  const typewriterMethods = ['createThink'] as const;
+  // The flag decides what must exist; the type names everything the port can reach, with the
+  // crossfade member optional because the port probes for it before every use.
+  return validateCompositionMethods<
+    (typeof baseMethods)[number] | (typeof typewriterMethods)[number],
+    'createVisibilityTransition'
+  >(value, 'Actor presentation host', [
+    ...baseMethods,
+    ...(speechAdvanceTypewriterEnabled ? typewriterMethods : []),
+  ]);
 }
 
 function validateSpeechPayload(value: unknown, command: string, extended: boolean) {

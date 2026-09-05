@@ -59,7 +59,14 @@ export function installDsl4RuntimeAuthoringProfile(
     createTransitionPort,
   }: {
     runtimeVersion: string;
-    limits: Readonly<Record<string, number>>;
+    // The runtime entry owns the limits; naming its record keeps every field here.
+    limits: Readonly<{
+      maxSourceBytes: number;
+      maxAssetFiles: number;
+      maxAssetBytes: number;
+      maxSelectedEntries: number;
+      maxSelectedDirectoryDepth: number;
+    }>;
     resolveRuntimeMount: (Scratch: any) => any;
     resolveBundledTMRuntime: () => any;
     loggedError: (failure: unknown) => Error;
