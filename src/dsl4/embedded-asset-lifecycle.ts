@@ -34,7 +34,60 @@ function mediaType(value: unknown) {
   return typeof value === 'string' ? (value.split(';', 1)[0]?.trim().toLowerCase() ?? '') : '';
 }
 
-function isVerifiedRemoteSource(source: Record<string, any>) {
+/**
+ * The asset lifecycle's injected surface, and the records it keeps while an asset is live.
+ *
+ * Everything the lifecycle is handed takes the request it is acting on and the runtime context of
+ * the action that asked for it, and the lifecycle narrows whatever comes back — the platform
+ * adapters answer for real assets and the suites answer with fakes, so nothing here promises more
+ * than the pair of arguments.
+ */
+type Dsl4AssetLifecycleContext = Readonly<Record<string, unknown>> &
+  Readonly<{signal?: {aborted?: boolean}}>;
+
+type Dsl4AssetLifecycleOperation = (
+  payload: Readonly<Record<string, unknown>>,
+  context: Dsl4AssetLifecycleContext,
+) => unknown;
+
+/** Where one manifest asset's bytes come from. `type` says which of the rest are present. */
+interface Dsl4AssetSource {
+  type: string;
+  url?: unknown;
+  integrity?: unknown;
+  size?: unknown;
+  contentType?: unknown;
+  files?: unknown;
+}
+
+/** One asset of the bundle manifest, as the lifecycle materializes it. */
+interface Dsl4ManifestAsset {
+  id: string;
+  kind?: string;
+  source: Dsl4AssetSource;
+}
+
+/**
+ * One asset the lifecycle is holding open.
+ *
+ * `epoch` is the generation it was created in, so a release that arrives after a reload can tell
+ * that the entry it is holding is no longer the current one.
+ */
+interface Dsl4AssetEntry {
+  asset: Dsl4ManifestAsset;
+  assetId?: string;
+  epoch: number;
+  status: string;
+  promise: Promise<unknown>;
+  resource?: unknown;
+  hasResource?: boolean;
+  released?: boolean;
+  error?: unknown;
+  releaseError?: unknown;
+  signal?: {aborted?: boolean} | undefined;
+}
+
+function isVerifiedRemoteSource(source: Dsl4AssetSource) {
   return (
     typeof source.integrity === 'string' &&
     typeof source.contentType === 'string' &&
@@ -62,12 +115,15 @@ export function createDsl4EmbeddedAssetLifecycle({
   subtleCrypto = globalThis.crypto?.subtle,
 }: {
   runtimeComponent: unknown;
-  adapter: {prepare: Function; release: Function};
-  setLoading: Function;
-  loadRemoteAsset?: Function;
-  resolveVerifiedRemoteAsset?: Function;
-  extractRemotePoseArchive?: Function;
-  resolveEmbeddedAssetFiles?: Function;
+  adapter: {
+    prepare: Dsl4AssetLifecycleOperation;
+    release: (resource: unknown, context: Dsl4AssetLifecycleContext) => unknown;
+  };
+  setLoading: Dsl4AssetLifecycleOperation;
+  loadRemoteAsset?: Dsl4AssetLifecycleOperation;
+  resolveVerifiedRemoteAsset?: Dsl4AssetLifecycleOperation;
+  extractRemotePoseArchive?: Dsl4AssetLifecycleOperation;
+  resolveEmbeddedAssetFiles?: (assetId: string, context: Dsl4AssetLifecycleContext) => unknown;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
 }) {
   if (!isRecord(runtimeComponent)) throw new TypeError('runtimeComponent must be an object');
@@ -116,7 +172,7 @@ export function createDsl4EmbeddedAssetLifecycle({
     typeof extractRemotePoseArchive === 'function' ? extractRemotePoseArchive : null;
   const getAssetFile =
     typeof runtimeComponent.getAssetFile === 'function'
-      ? (runtimeComponent.getAssetFile as Function)
+      ? (runtimeComponent.getAssetFile as (assetId: string, filePath: string) => unknown)
       : null;
   const embeddedFileResolver =
     typeof resolveEmbeddedAssetFiles === 'function' ? resolveEmbeddedAssetFiles : null;
@@ -130,16 +186,16 @@ export function createDsl4EmbeddedAssetLifecycle({
   }
 
   let epoch = 0;
-  const cache: Map<string, Record<string, any>> = new Map();
+  const cache: Map<string, Dsl4AssetEntry> = new Map();
   const releaseLocks: Map<string, Promise<void>> = new Map();
   let releaseAllLock: Promise<void> | null = null;
 
   async function materializePoseArchive(
-    asset: Record<string, any>,
+    asset: Dsl4ManifestAsset,
     bytes: Uint8Array,
     integrity: string,
     contentType: string,
-    context: Readonly<Record<string, any>>,
+    context: Dsl4AssetLifecycleContext,
   ) {
     if (!poseArchiveExtractor) {
       throw assetError(
@@ -201,8 +257,8 @@ export function createDsl4EmbeddedAssetLifecycle({
     });
   }
 
-  function materialize(asset: Record<string, any>, context: Readonly<Record<string, any>>) {
-    const source = asset.source as Record<string, any>;
+  function materialize(asset: Dsl4ManifestAsset, context: Dsl4AssetLifecycleContext) {
+    const source = asset.source;
     if (source.type === 'remote') {
       return (async () => {
         const verified = isVerifiedRemoteSource(source);
@@ -227,7 +283,8 @@ export function createDsl4EmbeddedAssetLifecycle({
           );
         }
         if (!verified) {
-          const unverifiedRemoteLoader = remoteLoader as Function;
+          // The remote branch is only entered when a loader was supplied.
+          const unverifiedRemoteLoader = remoteLoader as Dsl4AssetLifecycleOperation;
           if (!recognitionModel) {
             try {
               const loaded = await unverifiedRemoteLoader(
@@ -301,7 +358,8 @@ export function createDsl4EmbeddedAssetLifecycle({
               );
             }
             const loadFile = async (path: string) => {
-              const url = dsl4RemotePoseFileUrl(source.url, path);
+              // The verified-source check above established the url.
+              const url = dsl4RemotePoseFileUrl(source.url as string, path);
               const loaded = await unverifiedRemoteLoader(
                 Object.freeze({assetId: asset.id, url}),
                 context,
@@ -490,14 +548,20 @@ export function createDsl4EmbeddedAssetLifecycle({
               path: file.path,
               size: file.size,
               integrity: file.integrity,
-              bytes: new Uint8Array((getAssetFile as Function)(asset.id, file.path)),
+              // The embedded branch is only entered when the component supplied a file reader.
+              bytes: new Uint8Array(
+                (getAssetFile as (assetId: string, filePath: string) => ArrayLike<number>)(
+                  asset.id,
+                  file.path,
+                ),
+              ),
             }),
           )
         : [];
     return Object.freeze({asset, files: Object.freeze(files)});
   }
 
-  async function releaseEntry(entry: Record<string, any>, reason: string) {
+  async function releaseEntry(entry: Dsl4AssetEntry, reason: string) {
     if (!entry.hasResource || entry.released) return;
     entry.released = true;
     try {
@@ -508,9 +572,9 @@ export function createDsl4EmbeddedAssetLifecycle({
     }
   }
 
-  function createEntry(assetId: string, context: Readonly<Record<string, any>>) {
-    const asset = manifest.get(assetId) as Record<string, any>;
-    const entry = {
+  function createEntry(assetId: string, context: Dsl4AssetLifecycleContext) {
+    const asset = manifest.get(assetId) as Dsl4ManifestAsset;
+    const entry: Dsl4AssetEntry = {
       asset,
       assetId,
       epoch,
