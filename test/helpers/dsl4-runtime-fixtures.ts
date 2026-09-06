@@ -7,14 +7,47 @@ import {
   createDsl4EmbeddedSourceDescriptor,
   createDsl4RuntimeArtifactDescriptor,
 } from '../../src/dsl4/index.js';
+import type {RuntimeArtifact} from '../../src/dsl4/runtime-artifact-descriptor.js';
+import type {Dsl4SourceFrontend} from '../../src/dsl4/source-frontend.js';
 
 export const dsl4TestSubtleCrypto = webcrypto.subtle;
+
+/** One asset record the fixture stories declare, as this helper reads it. */
+interface FixtureAsset {
+  id: string;
+  kind?: unknown;
+  loading?: unknown;
+  name?: unknown;
+  target?: unknown;
+  delivery?: unknown;
+  source?: Record<string, unknown>;
+}
+
+/** The StoryDocument members the asset snapshot is built from. */
+interface FixtureStoryDocument {
+  assets: Record<string, FixtureAsset>;
+}
+
+/** The inputs every packaged runtime fixture takes. */
+interface FixtureOptions {
+  sourceFrontend: Dsl4SourceFrontend;
+  profile?: string | undefined;
+  historyNavigationAvailable?: boolean | undefined;
+  limits: {maxSourceBytes: number; maxAssetFiles: number; maxAssetBytes: number};
+  sourceId?: string | undefined;
+  displayName?: string | undefined;
+  cacheIdentity?: unknown;
+  subtleCrypto?: typeof dsl4TestSubtleCrypto | undefined;
+  assetSnapshot?: unknown;
+  baseProject?: ReturnType<typeof createDsl4EmptyProject> | undefined;
+  channel?: 'bundled' | 'unbundled' | undefined;
+}
 
 export function createDsl4EmptyProject() {
   return {extensionStorage: {}, targets: [], monitors: []};
 }
 
-export function createDsl4EmbeddedAssetSnapshot(storyDocument) {
+export function createDsl4EmbeddedAssetSnapshot(storyDocument: FixtureStoryDocument) {
   return Object.values(storyDocument.assets)
     .map((asset) => {
       const source =
@@ -33,7 +66,7 @@ export function createDsl4EmbeddedAssetSnapshot(storyDocument) {
 }
 
 export async function createDsl4PackagedRuntimeFixture(
-  sourceText,
+  sourceText: string,
   {
     sourceFrontend,
     profile = 'production',
@@ -44,7 +77,7 @@ export async function createDsl4PackagedRuntimeFixture(
     cacheIdentity,
     subtleCrypto = dsl4TestSubtleCrypto,
     assetSnapshot,
-  },
+  }: FixtureOptions,
 ) {
   const parsed = sourceFrontend.parse(sourceText, {
     sourceId,
@@ -70,22 +103,26 @@ export async function createDsl4PackagedRuntimeFixture(
     {
       manifest: {
         formatVersion: 1,
-        assets: assetSnapshot ?? createDsl4EmbeddedAssetSnapshot(parsed.storyDocument),
+        assets:
+          assetSnapshot ??
+          createDsl4EmbeddedAssetSnapshot(parsed.storyDocument as unknown as FixtureStoryDocument),
       },
-      getFile() {},
+      // The manifest declares no assets, so the bundle never reaches for a file.
+      getFile: (() => {}) as unknown as (assetId: string, filePath: string) => Uint8Array,
     },
     {maxFiles: limits.maxAssetFiles, maxTotalBytes: limits.maxAssetBytes, subtleCrypto},
   );
   return Object.freeze({
     storyDocument: parsed.storyDocument,
     sourceDescriptor,
-    runtimeArtifact: artifactResult.artifact,
+    // The assertion above already rejected a failed descriptor, which `assert.equal` cannot narrow.
+    runtimeArtifact: (artifactResult as unknown as {artifact: RuntimeArtifact}).artifact,
     assetBundle,
   });
 }
 
 export async function createDsl4PackagedRuntimeProject(
-  sourceText,
+  sourceText: string,
   {
     baseProject = createDsl4EmptyProject(),
     channel = 'unbundled',
@@ -98,7 +135,7 @@ export async function createDsl4PackagedRuntimeProject(
     cacheIdentity,
     subtleCrypto = dsl4TestSubtleCrypto,
     assetSnapshot,
-  },
+  }: FixtureOptions,
 ) {
   const {project} = await createDsl4InstalledRuntimeFixture(sourceText, {
     baseProject,
@@ -117,7 +154,7 @@ export async function createDsl4PackagedRuntimeProject(
 }
 
 export async function createDsl4InstalledRuntimeFixture(
-  sourceText,
+  sourceText: string,
   {
     baseProject = createDsl4EmptyProject(),
     channel = 'unbundled',
@@ -130,7 +167,7 @@ export async function createDsl4InstalledRuntimeFixture(
     cacheIdentity,
     subtleCrypto = dsl4TestSubtleCrypto,
     assetSnapshot,
-  },
+  }: FixtureOptions,
 ) {
   const fixture = await createDsl4PackagedRuntimeFixture(sourceText, {
     sourceFrontend,

@@ -25,7 +25,7 @@ import {
 import {
   createDsl4EmptyProject,
   createDsl4PackagedRuntimeProject,
-} from './helpers/dsl4-runtime-fixtures.mjs';
+} from './helpers/dsl4-runtime-fixtures.ts';
 import {createFakeDocument} from './helpers/fake-dom.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
