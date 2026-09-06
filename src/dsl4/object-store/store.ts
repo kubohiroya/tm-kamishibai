@@ -114,6 +114,22 @@ interface Dsl4StoreCommittedRoot extends Readonly<Record<string, unknown>> {
 
 type StoreLimits = Readonly<typeof defaultLimits>;
 
+/**
+ * The normalized shape `normalizeStoredValue` produces and `createNodeTree` reads: a plain JSON-like
+ * value rewritten as a tree, with container children carried in insertion order so the node members
+ * are created in the same order the caller wrote them.
+ */
+type StoreValueDescriptor =
+  | {kind: 'scalar'; scalar: string | number | boolean | null}
+  | {kind: 'array'; children: {key: number; child: StoreValueDescriptor}[]}
+  | {kind: 'object'; children: {key: string; child: StoreValueDescriptor}[]};
+
+/**
+ * The opaque node handle `readNodeView` hands out. It carries no data of its own: the view keeps the
+ * slot and generation beside it in `nodeViewMetadata`, so a handle from another view is rejected.
+ */
+type StoreProjectedNode = Readonly<{kind: 'Dsl4ObjectStoreNode'}>;
+
 /** The per-realm context every operation is given: its backend, its limits, and its liveness. */
 interface StoreRealmContext {
   backend: unknown;
@@ -324,8 +340,8 @@ function releaseSlot(working: StoreWorkingRoot, slot: number) {
 }
 
 function issueHandle(
-  working: any,
-  context: any,
+  working: StoreWorkingRoot,
+  context: StoreRealmContext,
   kind: 'scope' | 'owner' | 'lease',
   slot: number,
   generation: number,
@@ -355,7 +371,7 @@ function normalizeStoredValue(value: unknown, limits: StoreLimits) {
   const active = new WeakSet();
   let nodeCount = 0;
 
-  function visit(current: unknown, depth: number): any {
+  function visit(current: unknown, depth: number): StoreValueDescriptor {
     if (depth > limits.maxDepth) {
       throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'The value depth limit was exceeded');
     }
@@ -516,18 +532,18 @@ function normalizeOptionsArray(value: unknown, maximumLength: number) {
 
 function createNodeTree(
   working: StoreWorkingRoot,
-  descriptor: Readonly<Record<string, any>>,
+  descriptor: StoreValueDescriptor,
   entrySlot: number,
-) {
+): StoreNodeRecord {
   const {slot, generation} = allocateSlot(working);
-  const node = {
+  const node: StoreNodeRecord = {
     slot,
     generation,
     entrySlot,
     kind: descriptor.kind,
     incomingCount: 0,
     ...(descriptor.kind === 'scalar' ? {scalar: descriptor.scalar} : {members: new Map()}),
-  } as any;
+  };
   working.nodes.set(slot, node);
   if (descriptor.kind !== 'scalar') {
     for (const {key, child} of descriptor.children) {
@@ -761,25 +777,28 @@ function adjustIncomingCount(node: StoreNodeRecord, delta: number) {
 }
 
 function markHandleTerminal(
-  working: any,
+  working: StoreWorkingRoot,
   kind: 'scope' | 'owner' | 'lease',
   slot: number,
   generation: number,
   state: 'released' | 'freed',
 ) {
-  const matches = [...working.handles.values()].filter(
+  const [match, ...duplicates] = [...working.handles.values()].filter(
     (handle) =>
       handle.kind === kind &&
       handle.slot === slot &&
       handle.generation === generation &&
       handle.state === 'active',
   );
-  if (matches.length !== 1) throw new StoreInvariantFailure('Active record has no unique handle');
-  matches[0].state = state;
+  // Destructured rather than indexed so the single-match invariant narrows the record for the write.
+  if (!match || duplicates.length > 0) {
+    throw new StoreInvariantFailure('Active record has no unique handle');
+  }
+  match.state = state;
 }
 
 function releaseClosure(
-  working: any,
+  working: StoreWorkingRoot,
   scopeSlots: Set<number>,
   entrySlots: Set<number>,
   leaseSlots: Set<number>,
@@ -1099,11 +1118,11 @@ function createDebugSnapshot(
   });
 }
 
-function createNodeView(working: any, rootNode: any) {
+function createNodeView(working: StoreWorkingRoot, rootNode: StoreNodeRecord) {
   const viewKey = Object.freeze({});
-  const nodes = new Map();
+  const nodes = new Map<number, StoreProjectedNode>();
 
-  function project(node: any) {
+  function project(node: StoreNodeRecord) {
     const existing = nodes.get(node.slot);
     if (existing) return existing;
     const projected = Object.freeze({kind: 'Dsl4ObjectStoreNode'});
@@ -1131,7 +1150,7 @@ function createNodeView(working: any, rootNode: any) {
     return node;
   }
 
-  function projectMember(node: any, key: string | number) {
+  function projectMember(node: StoreNodeRecord, key: string | number) {
     const member = nodeMembers(node).get(key);
     const target = member && working.nodes.get(member.targetNodeSlot);
     if (!member || !target) throw new TypeError('Object Store node member is invalid');
@@ -1225,9 +1244,9 @@ export function createDsl4ObjectStore({
     realmNonce,
     rootScopeSlot,
     storeKey,
-    realmState: 'active' as 'active' | 'faulted' | 'disposed',
+    realmState: 'active',
     disposedResult: null,
-  } as any;
+  } as StoreRealmContext;
 
   function inactiveFailure(operation: string) {
     if (context.realmState === 'disposed') {
@@ -1239,7 +1258,10 @@ export function createDsl4ObjectStore({
     return null;
   }
 
-  function execute<T>(operation: string, mutate: (working: any) => {changed: boolean; value: T}) {
+  function execute<T>(
+    operation: string,
+    mutate: (working: StoreWorkingRoot) => {changed: boolean; value: T},
+  ) {
     const inactive = inactiveFailure(operation);
     if (inactive) return inactive;
     try {
@@ -1276,7 +1298,7 @@ export function createDsl4ObjectStore({
     }
   }
 
-  function executeRead<T>(operation: string, read: (working: any) => T) {
+  function executeRead<T>(operation: string, read: (working: StoreWorkingRoot) => T) {
     const inactive = inactiveFailure(operation);
     if (inactive) return inactive;
     try {
@@ -1670,7 +1692,9 @@ export function createDsl4ObjectStore({
       const entry = working.entries.get(selected.entrySlot);
       if (!entry) throw new StoreInvariantFailure('Selected node has no entry');
 
-      function materialize(node: any): any {
+      // The scalar leaf is whatever the backend stored and the store does not re-validate it on
+      // read, so the materialized value stays `unknown` rather than claiming a structural union.
+      function materialize(node: StoreNodeRecord): unknown {
         if (node.kind === 'scalar') return node.scalar;
         if (node.kind === 'array') {
           const array = [];
