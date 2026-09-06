@@ -34,7 +34,67 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const posePreviewMirroringModes = new Set(['mirrored', 'unmirrored']);
 
-function validateRuntimeComponent(value: unknown, binaryEntryEnabled: boolean) {
+interface PlatformAssetSource {
+  readonly type?: unknown;
+  readonly url?: unknown;
+  readonly integrity?: unknown;
+  readonly size?: unknown;
+  readonly contentType?: unknown;
+}
+
+interface PlatformManifestAsset {
+  readonly id: string;
+  readonly kind?: unknown;
+  readonly source?: unknown;
+}
+
+interface PlatformAssetBundle {
+  readonly manifest: {readonly assets: readonly PlatformManifestAsset[]};
+  readonly integrity?: string;
+  readonly files?: readonly unknown[];
+}
+
+interface PlatformRuntimeComponent {
+  readonly storyDocument: Readonly<Record<string, unknown>>;
+  readonly assetBundle: PlatformAssetBundle;
+  getAssetFile?(assetId: string, context?: Readonly<Record<string, unknown>>): unknown;
+}
+
+interface VerifiedRemoteAssetPayload {
+  readonly [key: string]: unknown;
+  readonly assetId?: unknown;
+  readonly url?: unknown;
+  readonly integrity?: unknown;
+  readonly size?: unknown;
+  readonly contentType?: unknown;
+}
+
+interface AssetLoadContext {
+  readonly [key: string]: unknown;
+  readonly signal?: unknown;
+}
+
+function platformAssetSource(value: unknown): PlatformAssetSource | null {
+  return isRecord(value) ? value : null;
+}
+
+function optionalAbortSignal(value: unknown): AbortSignal | undefined {
+  if (value === undefined) return undefined;
+  if (
+    isRecord(value) &&
+    typeof value.aborted === 'boolean' &&
+    typeof value.addEventListener === 'function' &&
+    typeof value.removeEventListener === 'function'
+  ) {
+    return value as unknown as AbortSignal;
+  }
+  throw new TypeError('asset operation signal must be an AbortSignal');
+}
+
+function validateRuntimeComponent(
+  value: unknown,
+  binaryEntryEnabled: boolean,
+): PlatformRuntimeComponent {
   const component = isRecord(value) ? value : {};
   const storyDocument = isRecord(component.storyDocument) ? component.storyDocument : null;
   const assetBundle = isRecord(component.assetBundle) ? component.assetBundle : null;
@@ -56,7 +116,7 @@ function validateRuntimeComponent(value: unknown, binaryEntryEnabled: boolean) {
     }
     ids.add(asset.id);
   }
-  return component;
+  return component as unknown as PlatformRuntimeComponent;
 }
 
 function validateTMRuntime(value: unknown) {
@@ -205,17 +265,15 @@ export function createDsl4PlatformAssetSession(options: {
   if (options.loadRemoteAsset !== undefined && typeof options.loadRemoteAsset !== 'function') {
     throw new TypeError('loadRemoteAsset must be a function');
   }
-  const componentAssetBundle = runtimeComponent.assetBundle as Record<string, any>;
-  const remoteRequired = componentAssetBundle.manifest.assets.some(
-    (asset: unknown) => isRecord(asset) && isRecord(asset.source) && asset.source.type === 'remote',
-  );
-  const verifiedRemoteRequired = componentAssetBundle.manifest.assets.some(
-    (asset: unknown) =>
-      isRecord(asset) &&
-      isRecord(asset.source) &&
-      asset.source.type === 'remote' &&
-      typeof asset.source.integrity === 'string',
-  );
+  const componentAssetBundle = runtimeComponent.assetBundle;
+  const remoteRequired = componentAssetBundle.manifest.assets.some((asset) => {
+    const source = platformAssetSource(asset.source);
+    return source?.type === 'remote';
+  });
+  const verifiedRemoteRequired = componentAssetBundle.manifest.assets.some((asset) => {
+    const source = platformAssetSource(asset.source);
+    return source?.type === 'remote' && typeof source.integrity === 'string';
+  });
   const remoteEnabled = remoteRequired && typeof options.loadRemoteAsset === 'function';
   const verifiedRemoteEnabled = remoteEnabled && verifiedRemoteRequired;
   const remoteLoader = remoteEnabled
@@ -224,7 +282,7 @@ export function createDsl4PlatformAssetSession(options: {
         context: Readonly<Record<string, unknown>>,
       ) => unknown | Promise<unknown>)
     : null;
-  let cacheIdentity = null;
+  let cacheIdentity: ReturnType<typeof validateDsl4CacheIdentity> | null = null;
   if (verifiedRemoteEnabled || binaryEntryEnabled) {
     if (options.cacheIdentity === undefined) {
       throw new TypeError(
@@ -233,14 +291,14 @@ export function createDsl4PlatformAssetSession(options: {
     }
     cacheIdentity = validateDsl4CacheIdentity(options.cacheIdentity);
   }
-  const remotePoseArchiveRequired = componentAssetBundle.manifest.assets.some(
-    (asset: unknown) =>
-      isRecord(asset) &&
+  const remotePoseArchiveRequired = componentAssetBundle.manifest.assets.some((asset) => {
+    const source = platformAssetSource(asset.source);
+    return (
       asset.kind === 'recognitionModel' &&
-      isRecord(asset.source) &&
-      asset.source.type === 'remote' &&
-      (typeof asset.source.integrity === 'string' || isDsl4RemotePoseArchiveUrl(asset.source.url)),
-  );
+      source?.type === 'remote' &&
+      (typeof source.integrity === 'string' || isDsl4RemotePoseArchiveUrl(source.url))
+    );
+  });
   if (
     options.verifiedRemoteCacheOptions !== undefined &&
     !isRecord(options.verifiedRemoteCacheOptions)
@@ -447,20 +505,25 @@ export function createDsl4PlatformAssetSession(options: {
       ...(binaryEntryEnabled ? binaryEntryMethods : []),
     ]);
     const binaryAssetBacking = binaryEntryEnabled
-      ? createDsl4BinaryEntryBacking({
-          runtimeComponent,
-          provider: options.binaryEntryProvider,
-          composition: assetManagerComposition,
-          namespace: (cacheIdentity as Record<string, any>).id,
-          policy: options.binarySessionBackingPolicy as 'prefer' | 'required' | 'disabled',
-          sessionId: options.binarySessionId as string,
-          ...(options.onBinarySessionBackingWarning === undefined
-            ? {}
-            : {onWarning: options.onBinarySessionBackingWarning}),
-          ...(options.onBinarySessionBackingFatalError === undefined
-            ? {}
-            : {onFatalError: options.onBinarySessionBackingFatalError}),
-        })
+      ? (() => {
+          if (cacheIdentity === null) {
+            throw new TypeError('cacheIdentity is required for binary-entry loading');
+          }
+          return createDsl4BinaryEntryBacking({
+            runtimeComponent,
+            provider: options.binaryEntryProvider,
+            composition: assetManagerComposition,
+            namespace: cacheIdentity.id,
+            policy: options.binarySessionBackingPolicy as 'prefer' | 'required' | 'disabled',
+            sessionId: options.binarySessionId as string,
+            ...(options.onBinarySessionBackingWarning === undefined
+              ? {}
+              : {onWarning: options.onBinarySessionBackingWarning}),
+            ...(options.onBinarySessionBackingFatalError === undefined
+              ? {}
+              : {onFatalError: options.onBinarySessionBackingFatalError}),
+          });
+        })()
       : null;
     if (binaryAssetBacking) {
       created.push(Object.freeze({releaseAll: () => binaryAssetBacking.dispose()}));
@@ -602,12 +665,12 @@ export function createDsl4PlatformAssetSession(options: {
     const cacheWarnings: Readonly<Record<string, unknown>>[] = [];
 
     async function resolveVerifiedRemoteAsset(
-      payload: Readonly<Record<string, any>>,
-      context: Readonly<Record<string, any>>,
+      payload: Readonly<VerifiedRemoteAssetPayload>,
+      context: Readonly<AssetLoadContext>,
     ) {
       async function loadVerifiedRemote(
-        input: Readonly<Record<string, any>>,
-        loadContext: Readonly<Record<string, any>>,
+        input: Readonly<VerifiedRemoteAssetPayload>,
+        loadContext: Readonly<AssetLoadContext>,
       ) {
         if (!remoteLoader) throw new TypeError('Remote loader is unavailable');
         const loaded = await remoteLoader(
@@ -656,8 +719,12 @@ export function createDsl4PlatformAssetSession(options: {
       setLoading: options.setLoading,
       ...(binaryAssetBacking
         ? {
-            resolveEmbeddedAssetFiles(assetId: string, context: Readonly<Record<string, any>>) {
-              return binaryAssetBacking.getAssetFiles(assetId, {signal: context.signal});
+            resolveEmbeddedAssetFiles(assetId: string, context: Readonly<AssetLoadContext>) {
+              const signal = optionalAbortSignal(context.signal);
+              return binaryAssetBacking.getAssetFiles(
+                assetId,
+                signal === undefined ? {} : {signal},
+              );
             },
           }
         : {}),

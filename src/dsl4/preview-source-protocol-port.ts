@@ -24,6 +24,27 @@ interface PreviewProtocolSession {
   whenIdle(): Promise<unknown>;
 }
 
+interface PreviewSourceCandidateAck {
+  readonly id: number;
+  readonly options: Readonly<Record<string, unknown>>;
+}
+
+interface PreviewSourceStageAck {
+  readonly [key: string]: unknown;
+  readonly type: 'preview.source.staged';
+  readonly sessionId: string;
+  readonly revision: number;
+  readonly status?: unknown;
+  readonly candidate: PreviewSourceCandidateAck | null;
+  readonly current?: unknown;
+}
+
+interface PreviewSourceCandidate {
+  readonly revision: number;
+  readonly id: number;
+  readonly options: Readonly<Record<string, unknown>>;
+}
+
 function validateProtocol(value: unknown) {
   if (
     !isRecord(value) ||
@@ -66,11 +87,13 @@ function validateCapabilities(value: unknown) {
   return capabilities;
 }
 
-function optionalCallback(value: unknown, name: string): Function | undefined {
+type PreviewProtocolCallback = (...arguments_: unknown[]) => unknown;
+
+function optionalCallback(value: unknown, name: string): PreviewProtocolCallback | undefined {
   if (value !== undefined && typeof value !== 'function') {
     throw new TypeError(`${name} must be a function`);
   }
-  return value;
+  return value as PreviewProtocolCallback | undefined;
 }
 
 function validateSourceResult(value: unknown) {
@@ -92,7 +115,11 @@ function validateHandshakeAck(value: unknown, sessionId: string) {
   return value;
 }
 
-function validateStageAck(value: unknown, sessionId: string, revision: number) {
+function validateStageAck(
+  value: unknown,
+  sessionId: string,
+  revision: number,
+): PreviewSourceStageAck {
   if (
     !isRecord(value) ||
     value.type !== 'preview.source.staged' ||
@@ -106,7 +133,21 @@ function validateStageAck(value: unknown, sessionId: string, revision: number) {
   ) {
     throw new TypeError('preview stage returned an invalid acknowledgement');
   }
-  return value;
+  const candidate = isRecord(value.candidate) ? value.candidate : null;
+  return {
+    type: 'preview.source.staged',
+    sessionId,
+    revision,
+    status: value.status,
+    candidate:
+      candidate === null
+        ? null
+        : {
+            id: Number(candidate.id),
+            options: candidate.options as Readonly<Record<string, unknown>>,
+          },
+    current: value.current,
+  };
 }
 
 /** Assign monotonic revisions and expose the same protocol operations to Node and browser sources. */
@@ -120,7 +161,7 @@ export function createDsl4PreviewSourceProtocolPort({
   onEvent,
   onError,
 }: {
-  protocolSession: Record<string, Function>;
+  protocolSession: unknown;
   sessionId: string;
   capabilities?: ReadonlyArray<string> | undefined;
   onEvent?: (event: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
@@ -148,7 +189,7 @@ export function createDsl4PreviewSourceProtocolPort({
   let connectionGeneration = 0;
   let latestRevision = 0;
   let latestAcknowledgedRevision = 0;
-  let candidate: Readonly<Record<string, any>> | null = null;
+  let candidate: Readonly<PreviewSourceCandidate> | null = null;
   let lastEvent: Readonly<Record<string, unknown>> | null = null;
   let current: Readonly<Record<string, unknown>> | null = null;
   let connectPromise: Promise<unknown> | null = null;
@@ -267,12 +308,11 @@ export function createDsl4PreviewSourceProtocolPort({
           }
           latestAcknowledgedRevision = revision;
           current = (ack.current ?? null) as Readonly<Record<string, unknown>>;
-          const acknowledgedCandidate = ack.candidate as Record<string, any> | null;
-          candidate = acknowledgedCandidate
+          candidate = ack.candidate
             ? deepFreeze({
                 revision,
-                id: acknowledgedCandidate.id,
-                options: acknowledgedCandidate.options,
+                id: ack.candidate.id,
+                options: ack.candidate.options,
               })
             : null;
           status = candidate ? 'candidate' : 'connected';

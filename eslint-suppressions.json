@@ -34,22 +34,6 @@
       "count": 6
     }
   },
-  "src/builder/dsl4-local-preview-command.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 4
-    }
-  },
-  "src/builder/dsl4-local-preview-host.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 4
-    }
-  },
   "src/builder/dsl4-packager-entry-source.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -116,14 +100,6 @@
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
-    }
-  },
-  "src/dsl4/browser-asset-reload-pipeline.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 3
     }
   },
   "src/dsl4/browser-preview-coordinator.ts": {
@@ -210,11 +186,6 @@
   "src/dsl4/platform/packaged-binary-runtime.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
-    }
-  },
-  "src/dsl4/platform/platform-asset-session.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
     }
   },
   "src/dsl4/platform/pose-action-port.ts": {
@@ -315,14 +286,6 @@
   },
   "src/dsl4/preview-source-graph-generation.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/preview-source-protocol-port.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
       "count": 2
     }
   },
