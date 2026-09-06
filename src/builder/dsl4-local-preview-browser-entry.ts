@@ -7,10 +7,11 @@ import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {createDsl4BundledTMRuntime} from '../dsl4/platform/posenet-bundle.js';
 import {embeddedPoseNetFiles} from '../dsl4/platform/posenet-bundle-assets.js';
 
-(globalThis as Record<string, any>).Buffer ??= Buffer;
+(globalThis as Record<string, unknown>).Buffer ??= Buffer;
 
 function resolveTMRuntime() {
-  const candidate = (globalThis as Record<string, any>).tmPose;
+  const candidate = (globalThis as Record<string, unknown>).tmPose as
+    {Webcam?: unknown; loadFromFiles?: unknown} | undefined;
   if (
     typeof candidate === 'object' &&
     candidate !== null &&
@@ -18,7 +19,7 @@ function resolveTMRuntime() {
     typeof candidate.loadFromFiles === 'function'
   ) {
     return createDsl4BundledTMRuntime({
-      runtime: candidate,
+      runtime: candidate as Parameters<typeof createDsl4BundledTMRuntime>[0]['runtime'],
       globalObject: globalThis,
       files: embeddedPoseNetFiles,
     });

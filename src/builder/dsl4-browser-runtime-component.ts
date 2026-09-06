@@ -63,7 +63,10 @@ function validateEntryName(entryName: string) {
   }
 }
 
-function requiresStandardRuntimeMarker(project: Record<string, any>) {
+function requiresStandardRuntimeMarker(project: {
+  extensions?: unknown;
+  extensionURLs?: Readonly<Record<string, unknown>>;
+}) {
   if (
     !Array.isArray(project.extensions) ||
     !project.extensions.includes(standardRuntimeExtensionId)
@@ -91,7 +94,7 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
   if (!isRecord(optionsInput)) {
     throw new TypeError('browser runtime component options are required');
   }
-  const options = optionsInput as Record<string, any>;
+  const options = optionsInput as Record<string, unknown>;
   if (!(options.projectBytes instanceof Uint8Array)) {
     throw new TypeError('projectBytes must be a Uint8Array');
   }
@@ -193,11 +196,17 @@ export async function loadDsl4BrowserRuntimeComponent(optionsInput: object) {
   }
   const standardRuntimeMarkerRequired = requiresStandardRuntimeMarker(project);
   const component = await loadDsl4RuntimeComponent(project, sourceFrontend, {
-    maxSourceBytes: options.maxSourceBytes,
-    maxAssetFiles: options.maxAssetFiles,
-    maxAssetBytes: options.maxAssetBytes,
-    historyNavigationAvailable: options.historyNavigationAvailable ?? false,
-    ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
+    maxSourceBytes: Number(options.maxSourceBytes),
+    maxAssetFiles: Number(options.maxAssetFiles),
+    maxAssetBytes: Number(options.maxAssetBytes),
+    historyNavigationAvailable: Boolean(options.historyNavigationAvailable ?? false),
+    ...(options.subtleCrypto === undefined
+      ? {}
+      : {
+          subtleCrypto: options.subtleCrypto as Parameters<
+            typeof loadDsl4RuntimeComponent
+          >[2]['subtleCrypto'],
+        }),
   });
   return component.ok ? deepFreeze({...component, standardRuntimeMarkerRequired}) : component;
 }

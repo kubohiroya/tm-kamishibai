@@ -75,7 +75,11 @@ function turbowarpInlineLoaderPlugin() {
     name: 'dsl4-turbowarp-inline-loaders',
     // The loader specifiers must be claimed before the default resolver rejects them.
     enforce: 'pre' as const,
-    async resolveId(this: any, specifier: string, importer: string | undefined) {
+    async resolveId(
+      this: {resolve(specifier: string, importer?: string, options?: unknown): unknown},
+      specifier: string,
+      importer: string | undefined,
+    ) {
       const originalImporter = importer?.startsWith(browserifyPrefix)
         ? virtualPaths.get(importer)
         : importer;
@@ -100,7 +104,7 @@ function turbowarpInlineLoaderPlugin() {
           originalImporter,
           {skipSelf: false},
         );
-        return resolved ? virtualId(browserifyPrefix, resolved.id) : null;
+        return resolved ? virtualId(browserifyPrefix, (resolved as {id: string}).id) : null;
       }
       // Everything a transformed module imports resolves against the real file it came from.
       if (importer?.startsWith(browserifyPrefix)) {

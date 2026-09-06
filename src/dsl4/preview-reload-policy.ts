@@ -145,6 +145,11 @@ const defaultClock = Object.freeze({
   clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
 });
 
+/** The last applied generation, kept until its success notice stops being shown. */
+export interface Dsl4ReloadSuccess extends Readonly<Record<string, unknown>> {
+  readonly visibleUntil: number;
+}
+
 /** Resolve the actual safe anchor without mutating the requested session preference. */
 export function resolveDsl4ReloadAnchor({
   requestedPreference,
@@ -197,7 +202,7 @@ export function createDsl4PreviewReloadPolicy(options: {
   let currentGeneration: ReturnType<typeof candidate> | null = null;
   let applying: Readonly<Record<string, unknown>> | null = null;
   let currentDiagnostic: Readonly<Record<string, unknown>> | null = null;
-  let lastSuccess: Readonly<Record<string, any>> | null = null;
+  let lastSuccess: Dsl4ReloadSuccess | null = null;
   let dialog: {
     open: boolean;
     step: 'position' | 'scope';

@@ -203,7 +203,7 @@ export function createDsl4RuntimeStateExpressionComposition(input: unknown) {
   }
   const composition = input.composition as Record<
     'evaluateCondition' | 'validateConditionSyntax' | 'releaseAll',
-    (...parameters: any[]) => any
+    (...parameters: unknown[]) => unknown
   >;
   if (
     typeof composition.evaluateCondition !== 'function' ||

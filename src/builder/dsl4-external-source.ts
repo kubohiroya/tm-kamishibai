@@ -98,7 +98,16 @@ async function readBoundedFile(
   return Buffer.concat(chunks, size);
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+/** The `fs.Stats` members this check compares to decide whether a source really changed. */
+interface Dsl4ExternalSourceFileState {
+  readonly dev: number;
+  readonly ino: number;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+}
+
+function sameFileState(left: Dsl4ExternalSourceFileState, right: Dsl4ExternalSourceFileState) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&

@@ -338,7 +338,7 @@ export function formatDsl4BlockSourceExportFailure(
         typeof projected.sourceId === 'string' && projected.sourceId.length > 0
           ? `${displaySource}!${projected.sourceId}`
           : displaySource;
-      return `${formatDsl4Diagnostic(projected, source)}\n`;
+      return `${formatDsl4Diagnostic(projected as Record<string, unknown>, source)}\n`;
     })
     .join('');
 }

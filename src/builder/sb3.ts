@@ -114,7 +114,7 @@ export function buildSb3Archive(
       const target = findTarget(project, entry.target);
       const collectionName =
         entry.kind === 'backdrop' || entry.kind === 'costume' ? 'costumes' : 'sounds';
-      const collection = (target[collectionName] ?? []) as Record<string, any>[];
+      const collection = (target[collectionName] ?? []) as Record<string, unknown>[];
       assert(
         Array.isArray(collection),
         `Target ${entry.target} ${collectionName} must be an array.`,

@@ -16,6 +16,6 @@ export interface Dsl4PreviewReloadSurface {
   unregisterReservedRect(owner: unknown): unknown;
   updateViewport(viewport: unknown, safeArea?: unknown): unknown;
   dispose(): unknown;
-  getSnapshot(): Readonly<Record<string, any>>;
+  getSnapshot(): Readonly<Record<string, unknown>>;
   whenIdle(): Promise<unknown>;
 }

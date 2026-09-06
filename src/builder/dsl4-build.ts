@@ -160,6 +160,16 @@ async function createDsl4VirtualBlockSourceGraph(
   }
 }
 
+/** The frontend parse result this build reads, whether it came through the graph or a single source. */
+interface Dsl4BuildParseResult {
+  readonly ok: boolean;
+  readonly canonicalSource: string;
+  readonly storyDocument: Readonly<Record<string, unknown>> & {
+    readonly sourceOrigins?: unknown;
+  };
+  readonly diagnostics: readonly Readonly<{code?: string; message?: string}>[];
+}
+
 /** Build one complete, self-contained DSL 4.0 runtime component in memory. */
 export async function buildDsl4RuntimeComponent(options: {
   baseSb3Bytes: Buffer | Uint8Array;
@@ -257,7 +267,7 @@ export async function buildDsl4RuntimeComponent(options: {
       }
     ).blockSourceSet;
   }
-  let parsed: Readonly<Record<string, any>>;
+  let parsed: Dsl4BuildParseResult;
   let sourceDescriptor = source.descriptor;
   if (sourceGraphEnabled) {
     const graphLimits = {
@@ -278,7 +288,7 @@ export async function buildDsl4RuntimeComponent(options: {
       featureFlags: {...featureFlags, dsl4SourceIncludes: true},
       sourceId: source.descriptor.sourceId,
       maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
-    }) as Readonly<Record<string, any>>;
+    }) as unknown as Dsl4BuildParseResult;
     if (parsed.ok) {
       try {
         sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(parsed.canonicalSource, {
@@ -307,10 +317,10 @@ export async function buildDsl4RuntimeComponent(options: {
   } else {
     parsed = sourceFrontend.parse(source.descriptor.text, {
       sourceId: source.descriptor.sourceId,
-    });
+    }) as unknown as Dsl4BuildParseResult;
   }
   if (!parsed.ok) failDiagnostics(parsed.diagnostics, 'dsl4-parse');
-  let storyDocument = parsed.storyDocument as Readonly<Record<string, unknown>>;
+  let storyDocument = parsed.storyDocument;
   let assetDistribution;
   if (assetConfig !== undefined || assetLock !== undefined || assetProfile !== undefined) {
     if (

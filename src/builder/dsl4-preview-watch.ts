@@ -15,6 +15,7 @@ import {loadDsl4LocalAssetSnapshot} from './dsl4-local-assets.js';
 import {loadDsl4BuildSourceGraph} from './dsl4-source-graph.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import type {Dsl4FileWatcher} from './file-system.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 export const dsl4PreviewWatchDefaults = Object.freeze({
   quietWindowMs: 100,
@@ -122,6 +123,12 @@ function sourceFailure(code: string, severity: 'error' | 'warning', sourceId: st
   });
 }
 
+/** The generation result the watcher publishes, as far as it inspects it. */
+interface Dsl4PreviewGenerationResult extends Readonly<Record<string, unknown>> {
+  readonly ok: boolean;
+  readonly storyDocument: Readonly<Record<string, unknown>>;
+}
+
 /** Watch one manifest-authorized source and publish only immutable, stable frontend results. */
 export function createDsl4PreviewSourceWatcher({
   projectRoot,
@@ -150,7 +157,7 @@ export function createDsl4PreviewSourceWatcher({
 }: {
   projectRoot: string;
   manifest: unknown;
-  sourceFrontend: {parse(source: string, options?: {sourceId?: string}): any};
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   featureFlags?: unknown;
   maxSourceFiles?: number;
@@ -169,7 +176,7 @@ export function createDsl4PreviewSourceWatcher({
     projectRoot: string,
     manifest: unknown,
     options: {maxSourceBytes: number; subtleCrypto?: Dsl4SubtleCrypto | undefined},
-  ) => Promise<Record<string, any>>;
+  ) => Promise<Record<string, unknown>>;
   watchFactory?: (
     directory: string,
     listener: (eventType: string, filename: string | Buffer | null) => void,
@@ -318,7 +325,9 @@ export function createDsl4PreviewSourceWatcher({
       displayName: sourceBasename,
       maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
       subtleCrypto,
-    })) as Readonly<Record<string, any>>;
+    })) as unknown as {result: Dsl4PreviewGenerationResult; key: string} & Readonly<
+      Record<string, unknown>
+    >;
     let assetIntegrity = 'invalid-source';
     if (generation.result.ok) {
       const assets = await loadAssets(projectRoot, generation.result.storyDocument, {

@@ -11,7 +11,7 @@ function isObject(value: unknown) {
 
 /** Resolve the reserved Stage variable used for embedded scripts. */
 export function resolveEmbeddedScriptSlot(
-  project: Record<string, any>,
+  project: Record<string, unknown>,
   stage: string = 'embedded-script',
 ) {
   const targets = Array.isArray(project?.targets) ? project.targets : [];
@@ -42,7 +42,7 @@ export function resolveEmbeddedScriptSlot(
 }
 
 export function configureEmbeddedScript(
-  project: Record<string, any>,
+  project: Record<string, unknown>,
   profile: 'editor' | 'player',
   scriptBytes: Buffer | Uint8Array,
   maxEmbeddedScriptBytes = defaultMaxEmbeddedScriptBytes,
