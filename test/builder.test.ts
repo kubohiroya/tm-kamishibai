@@ -32,11 +32,50 @@ const fixtureAssetsDirectory = path.join(projectRoot, 'test', 'fixtures', 'asset
 const actorPopFixturePath = path.join(fixtureAssetsDirectory, 'actor-pop.wav');
 const loadingChirpFixturePath = path.join(fixtureAssetsDirectory, 'loading-chirp.wav');
 
-function sha256(value) {
+/** The fetch stub `buildSb3Bundle` accepts, named so the suite's mocks cannot drift from it. */
+type BundleFetch = NonNullable<Parameters<typeof buildSb3Bundle>[0]['fetchImplementation']>;
+
+/** The project.json shape these assertions walk after a build. */
+interface FixtureProjectTargets extends FixtureProject {
+  targets: FixtureTarget[];
+  monitors?: unknown;
+}
+
+/** Take the one target a lookup was meant to find, naming it when the project has none. */
+function requireTarget(target: FixtureTarget | undefined, description: string): FixtureTarget {
+  if (!target) throw new Error(`Expected a ${description} target in the built project`);
+  return target;
+}
+
+interface FixtureTarget {
+  name?: string;
+  isStage?: boolean;
+  blocks?: unknown;
+  variables?: unknown;
+  lists?: unknown;
+  costumes?: {name?: string}[];
+  sounds?: {name?: string}[];
+}
+
+/** One asset entry the manifest fixtures assemble. */
+interface AssetEntryInput {
+  name: string;
+  uri: string;
+  kind: string;
+  target: string;
+  sb3Name: string;
+  contents: Buffer;
+  metadata?: Record<string, unknown>;
+}
+
+/** The project.json this suite rewrites between builds. */
+type FixtureProject = Record<string, unknown>;
+
+function sha256(value: Buffer | string) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function createMinimalBaseSb3(backdrop, costume) {
+function createMinimalBaseSb3(backdrop: Buffer, costume: Buffer) {
   const backdropId = createHash('md5').update(backdrop).digest('hex');
   const costumeId = createHash('md5').update(costume).digest('hex');
   const commonTarget = {
@@ -114,7 +153,7 @@ function createMinimalBaseSb3(backdrop, costume) {
   );
 }
 
-async function withTemporaryDirectory(callback) {
+async function withTemporaryDirectory<T>(callback: (directory: string) => Promise<T>) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tmpose-builder-test-'));
   try {
     return await callback(directory);
@@ -123,24 +162,25 @@ async function withTemporaryDirectory(callback) {
   }
 }
 
-async function writeJson(filePath, value) {
+async function writeJson(filePath: string, value: unknown) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-/**
- * @param {string} inputPath
- * @param {string} outputPath
- * @param {(project: Record<string, any>) => void} updateProject
- */
-async function rewriteSb3Project(inputPath, outputPath, updateProject) {
+async function rewriteSb3Project(
+  inputPath: string,
+  outputPath: string,
+  updateProject: (project: FixtureProjectTargets) => void,
+) {
   const archive = unzipSync(new Uint8Array(await readFile(inputPath)));
-  const project = JSON.parse(strFromU8(archive['project.json']));
+  const project: FixtureProjectTargets = JSON.parse(
+    strFromU8(archive['project.json'] as Uint8Array),
+  );
   updateProject(project);
   archive['project.json'] = strToU8(`${JSON.stringify(project)}\n`);
   await writeFile(outputPath, zipSync(archive));
 }
 
-function imageEntry({name, uri, kind, target, sb3Name, contents}) {
+function imageEntry({name, uri, kind, target, sb3Name, contents}: AssetEntryInput) {
   return {
     name,
     uri,
@@ -156,7 +196,7 @@ function imageEntry({name, uri, kind, target, sb3Name, contents}) {
   };
 }
 
-function soundEntry({name, uri, kind, target, sb3Name, contents, metadata}) {
+function soundEntry({name, uri, kind, target, sb3Name, contents, metadata}: AssetEntryInput) {
   return {
     name,
     uri,
@@ -202,7 +242,7 @@ test('serializes embedded costume references with the shortest equivalent form',
   );
 });
 
-async function writeFileFixture(directory) {
+async function writeFileFixture(directory: string) {
   const inputDirectory = path.join(directory, 'input');
   const assetsDirectory = path.join(inputDirectory, 'assets');
   const outputDirectory = path.join(directory, 'output');
@@ -304,7 +344,9 @@ test('builds all asset kinds, transforms only active asset lines, and preserves 
       readFile(fixture.sourceScriptPath),
       readFile(fixture.assetManifestPath),
     ]);
-    const originalProject = JSON.parse(strFromU8(unzipSync(originalInputs[0])['project.json']));
+    const originalProject: FixtureProjectTargets = JSON.parse(
+      strFromU8(unzipSync(originalInputs[0] as Uint8Array)['project.json'] as Uint8Array),
+    );
     const first = await buildSb3Bundle({
       baseSb3: fixture.baseSb3Path,
       sourceScript: fixture.sourceScriptPath,
@@ -313,10 +355,10 @@ test('builds all asset kinds, transforms only active asset lines, and preserves 
       outputName: 'sample',
       profile: 'editor',
     });
-    const outputSb3 = await readFile(first.outputPaths['sample.sb3']);
-    const outputScript = await readFile(first.outputPaths['sample.txt']);
+    const outputSb3 = await readFile(String(first.outputPaths['sample.sb3']));
+    const outputScript = await readFile(String(first.outputPaths['sample.txt']));
     const outputManifest = JSON.parse(
-      await readFile(first.outputPaths['sample.manifest.json'], 'utf8'),
+      await readFile(String(first.outputPaths['sample.manifest.json']), 'utf8'),
     );
     const validated = validateBundle({
       sb3Bytes: outputSb3,
@@ -332,23 +374,30 @@ test('builds all asset kinds, transforms only active asset lines, and preserves 
     assert.match(validated.script, /^text=Narration:本文は変更しない\r$/mu);
     assert.equal(validated.script.includes('\r\n'), true);
 
-    const outputProject = validated.project;
+    const outputProject = validated.project as unknown as FixtureProjectTargets;
     assert.deepEqual(outputProject.extensionURLs, originalProject.extensionURLs);
     assert.deepEqual(outputProject.monitors, originalProject.monitors);
     for (const originalTarget of originalProject.targets) {
-      const outputTarget = outputProject.targets.find(
-        (target) => target.name === originalTarget.name,
+      const outputTarget = requireTarget(
+        outputProject.targets.find((target) => target.name === originalTarget.name),
+        String(originalTarget.name),
       );
       assert.deepEqual(outputTarget.blocks, originalTarget.blocks);
       assert.deepEqual(outputTarget.variables, originalTarget.variables);
       assert.deepEqual(outputTarget.lists, originalTarget.lists);
     }
-    const stage = outputProject.targets.find((target) => target.isStage);
-    const actor = outputProject.targets.find((target) => target.name === 'Actor');
-    assert(stage.costumes.some(({name}) => name === 'Builder Scene'));
-    assert(stage.sounds.some(({name}) => name === 'Builder Stage Audio'));
-    assert(actor.costumes.some(({name}) => name === 'Builder Hero'));
-    assert(actor.sounds.some(({name}) => name === 'Builder Actor Audio'));
+    const stage = requireTarget(
+      outputProject.targets.find((target) => target.isStage),
+      'stage',
+    );
+    const actor = requireTarget(
+      outputProject.targets.find((target) => target.name === 'Actor'),
+      'Actor',
+    );
+    assert(stage.costumes?.some(({name}) => name === 'Builder Scene'));
+    assert(stage.sounds?.some(({name}) => name === 'Builder Stage Audio'));
+    assert(actor.costumes?.some(({name}) => name === 'Builder Hero'));
+    assert(actor.sounds?.some(({name}) => name === 'Builder Actor Audio'));
     assert.equal(outputManifest.formatVersion, 2);
     assert.equal(outputManifest.assets.length, 4);
     assert.equal(outputManifest.profile, 'editor');
@@ -374,11 +423,11 @@ test('builds all asset kinds, transforms only active asset lines, and preserves 
       outputName: 'sample',
       profile: 'editor',
     });
-    assert.deepEqual(await readFile(second.outputPaths['sample.sb3']), outputSb3);
-    assert.deepEqual(await readFile(second.outputPaths['sample.txt']), outputScript);
+    assert.deepEqual(await readFile(String(second.outputPaths['sample.sb3'])), outputSb3);
+    assert.deepEqual(await readFile(String(second.outputPaths['sample.txt'])), outputScript);
     assert.deepEqual(
-      await readFile(second.outputPaths['sample.manifest.json']),
-      await readFile(first.outputPaths['sample.manifest.json']),
+      await readFile(String(second.outputPaths['sample.manifest.json'])),
+      await readFile(String(first.outputPaths['sample.manifest.json'])),
     );
   });
 });
@@ -419,11 +468,18 @@ test('builds a player with the exact transformed embedded script', async () => {
       outputName: 'player',
       profile: 'player',
     });
-    const sb3Bytes = await readFile(result.outputPaths['player.sb3']);
-    const scriptBytes = await readFile(result.outputPaths['player.txt']);
-    const manifest = JSON.parse(await readFile(result.outputPaths['player.manifest.json'], 'utf8'));
+    const sb3Bytes = await readFile(String(result.outputPaths['player.sb3']));
+    const scriptBytes = await readFile(String(result.outputPaths['player.txt']));
+    const manifest = JSON.parse(
+      await readFile(String(result.outputPaths['player.manifest.json']), 'utf8'),
+    );
     const validated = validateBundle({sb3Bytes, scriptBytes, manifest});
-    const stage = validated.project.targets.find((target) => target.isStage);
+    const stage = requireTarget(
+      (validated.project as unknown as FixtureProjectTargets).targets.find(
+        (target) => target.isStage,
+      ),
+      'stage',
+    );
 
     assert.equal(manifest.profile, 'player');
     assert.deepEqual(manifest.script, {
@@ -432,8 +488,9 @@ test('builds a player with the exact transformed embedded script', async () => {
       size: scriptBytes.length,
       sha256: sha256(scriptBytes),
     });
-    assert.equal(stage.variables[embeddedScriptVariableId][0], embeddedScriptVariableName);
-    assert.equal(stage.variables[embeddedScriptVariableId][1], validated.script);
+    const stageVariables = stage.variables as Record<string, [string, unknown]>;
+    assert.equal(stageVariables[embeddedScriptVariableId]?.[0], embeddedScriptVariableName);
+    assert.equal(stageVariables[embeddedScriptVariableId]?.[1], validated.script);
 
     const secondDirectory = path.join(directory, 'second-player-output');
     const second = await buildSb3Bundle({
@@ -450,8 +507,8 @@ test('builds a player with the exact transformed embedded script', async () => {
     });
     for (const filename of ['player.sb3', 'player.txt', 'player.manifest.json']) {
       assert.deepEqual(
-        await readFile(second.outputPaths[filename]),
-        await readFile(result.outputPaths[filename]),
+        await readFile(String(second.outputPaths[filename])),
+        await readFile(String(result.outputPaths[filename])),
       );
     }
   });
@@ -493,8 +550,9 @@ test('resolves locked HTTP and HTTPS assets through the same builder core', asyn
         '',
       ].join('\n'),
     );
-    const requests = [];
-    const fetchImplementation = async (url) => {
+    const requests: string[] = [];
+    const fetchImplementation: BundleFetch = async (input) => {
+      const url = input as URL;
       requests.push(url.href);
       const contents = url.protocol === 'http:' ? httpAsset : httpsAsset;
       return new Response(contents, {
@@ -531,7 +589,7 @@ test('resolves locked HTTP and HTTPS assets through the same builder core', asyn
       'https://assets.example/https.svg',
     ]);
     assert.match(
-      await readFile(result.outputPaths['remote.txt'], 'utf8'),
+      await readFile(String(result.outputPaths['remote.txt']), 'utf8'),
       /asset=HttpScene,backdrop:HTTP Scene/u,
     );
   });
@@ -543,7 +601,7 @@ test('rejects missing, escaped, and symlink-escaped file assets with asset conte
     const outside = path.join(directory, 'outside.svg');
     const contents = Buffer.from('<svg/>');
     await writeFile(outside, contents);
-    const cases = [
+    const cases: [string, RegExp][] = [
       ['file:assets/missing.svg', /ENOENT/u],
       ['file:../outside.svg', /escapes every allowed root/u],
     ];
@@ -565,7 +623,7 @@ test('rejects missing, escaped, and symlink-escaped file assets with asset conte
       };
       const scriptPath = path.join(
         fixture.inputDirectory,
-        `unsafe-${cases.indexOf(cases.find((item) => item[0] === uri))}.txt`,
+        `unsafe-${cases.findIndex((item) => item[0] === uri)}.txt`,
       );
       await writeFile(scriptPath, `kamishibai=3.2\nasset=Unsafe,${uri}\n`);
       await assert.rejects(
@@ -578,9 +636,9 @@ test('rejects missing, escaped, and symlink-escaped file assets with asset conte
           outputName: 'unsafe',
           profile: 'editor',
         }),
-        (error) => {
+        (error: unknown) => {
           assert(error instanceof Sb3BuilderError);
-          assert.equal(error.assetName, 'Unsafe');
+          assert.equal((error as {assetName?: unknown}).assetName, 'Unsafe');
           assert.match(error.message, expected);
           return true;
         },
@@ -604,7 +662,11 @@ test('rejects HTTP failures, redirects, type, size, and hash mismatches', async 
       sb3Name: 'Failure',
       contents,
     });
-    const run = (entry, fetchImplementation, extra = {}) =>
+    const run = (
+      entry: ReturnType<typeof imageEntry>,
+      fetchImplementation: BundleFetch,
+      extra: Record<string, unknown> = {},
+    ) =>
       buildSb3Bundle({
         baseSb3: fixture.baseSb3Path,
         sourceScript: scriptPath,
@@ -679,8 +741,8 @@ test('rejects HTTP failures, redirects, type, size, and hash mismatches', async 
     await assert.rejects(
       run(
         baseEntry,
-        async (_url, {signal}) =>
-          new Promise((_resolve, reject) => {
+        (async (_url: unknown, {signal}: {signal: AbortSignal}) =>
+          new Promise<Response>((_resolve, reject) => {
             const guard = setTimeout(
               () => reject(new Error('Fetch mock did not receive the timeout abort.')),
               1_000,
@@ -694,7 +756,7 @@ test('rejects HTTP failures, redirects, type, size, and hash mismatches', async 
             } else {
               signal.addEventListener('abort', rejectOnAbort, {once: true});
             }
-          }),
+          })) as unknown as BundleFetch,
         {requestTimeoutMs: 5},
       ),
       /Request failed/u,
@@ -743,7 +805,7 @@ test('rejects missing mappings, name conflicts, kind conflicts, and existing SB3
     );
 
     const conflictManifest = structuredClone(fixture.manifest);
-    conflictManifest.assets[0].sb3Name = 'Title';
+    (conflictManifest.assets[0] as Record<string, unknown>).sb3Name = 'Title';
     await writeFile(sourcePath, 'kamishibai=3.2\nasset=Scene,file:assets/backdrop.svg\n');
     await assert.rejects(
       buildSb3Bundle({
@@ -762,13 +824,14 @@ test('rejects missing mappings, name conflicts, kind conflicts, and existing SB3
 
 test('requires an explicit builder profile and validates the reserved embedded script slot', async () => {
   await assert.rejects(
+    // The missing `profile` is the point of this case, so the options are handed over as they are.
     buildSb3Bundle({
       baseSb3: 'base.sb3',
       sourceScript: 'source.txt',
       assetManifest: 'assets.lock.json',
       outputDirectory: 'dist',
       outputName: 'missing-profile',
-    }),
+    } as Parameters<typeof buildSb3Bundle>[0]),
     /profile must be either editor or player/u,
   );
 
@@ -777,33 +840,49 @@ test('requires an explicit builder profile and validates the reserved embedded s
     const cases = [
       {
         name: 'missing',
-        update(project) {
-          const stage = project.targets.find((target) => target.isStage);
-          delete stage.variables[embeddedScriptVariableId];
+        update(project: FixtureProjectTargets) {
+          const stage = requireTarget(
+            project.targets.find((target) => target.isStage),
+            'stage',
+          );
+          const variables = stage.variables as Record<string, [string, unknown]>;
+          delete variables[embeddedScriptVariableId];
         },
         expected: /must resolve exactly once/u,
       },
       {
         name: 'duplicate',
-        update(project) {
-          const stage = project.targets.find((target) => target.isStage);
-          stage.variables.duplicateEmbeddedScript = [embeddedScriptVariableName, ''];
+        update(project: FixtureProjectTargets) {
+          const stage = requireTarget(
+            project.targets.find((target) => target.isStage),
+            'stage',
+          );
+          const variables = stage.variables as Record<string, [string, unknown]>;
+          variables.duplicateEmbeddedScript = [embeddedScriptVariableName, ''];
         },
         expected: /must resolve exactly once/u,
       },
       {
         name: 'invalid-type',
-        update(project) {
-          const stage = project.targets.find((target) => target.isStage);
-          stage.variables[embeddedScriptVariableId][1] = 123;
+        update(project: FixtureProjectTargets) {
+          const stage = requireTarget(
+            project.targets.find((target) => target.isStage),
+            'stage',
+          );
+          const variables = stage.variables as Record<string, [string, unknown]>;
+          (variables[embeddedScriptVariableId] as [string, unknown])[1] = 123;
         },
         expected: /must contain a string value/u,
       },
       {
         name: 'non-empty-base',
-        update(project) {
-          const stage = project.targets.find((target) => target.isStage);
-          stage.variables[embeddedScriptVariableId][1] = 'unexpected';
+        update(project: FixtureProjectTargets) {
+          const stage = requireTarget(
+            project.targets.find((target) => target.isStage),
+            'stage',
+          );
+          const variables = stage.variables as Record<string, [string, unknown]>;
+          (variables[embeddedScriptVariableId] as [string, unknown])[1] = 'unexpected';
         },
         expected: /must be empty/u,
       },
@@ -853,10 +932,10 @@ test('keeps all existing outputs when generation or installation fails', async (
     });
     const filenames = ['stable.sb3', 'stable.txt', 'stable.manifest.json'];
     const before = await Promise.all(
-      filenames.map((filename) => readFile(first.outputPaths[filename])),
+      filenames.map((filename) => readFile(String(first.outputPaths[filename]))),
     );
     const invalidManifest = structuredClone(fixture.manifest);
-    invalidManifest.assets[0].sha256 = '0'.repeat(64);
+    (invalidManifest.assets[0] as Record<string, unknown>).sha256 = '0'.repeat(64);
     await assert.rejects(
       buildSb3Bundle({
         baseSb3: fixture.baseSb3Path,
@@ -870,7 +949,7 @@ test('keeps all existing outputs when generation or installation fails', async (
       /SHA-256 mismatch/u,
     );
     assert.deepEqual(
-      await Promise.all(filenames.map((filename) => readFile(first.outputPaths[filename]))),
+      await Promise.all(filenames.map((filename) => readFile(String(first.outputPaths[filename])))),
       before,
     );
 
@@ -964,8 +1043,9 @@ test('exposes one CLI contract and a fixed installable package version', async (
       ],
       {
         stdout: {
-          write: (chunk) => {
-            output += chunk;
+          write: (chunk: unknown) => {
+            output += String(chunk);
+            return true;
           },
         },
       },
@@ -973,9 +1053,10 @@ test('exposes one CLI contract and a fixed installable package version', async (
     assert(result);
     assert.match(output, /cli-sample\.sb3/u);
     assert.equal(
-      await readFile(result.outputPaths['cli-sample.txt'], 'utf8').then((value) =>
-        value.includes('file:'),
-      ),
+      await readFile(
+        String((result as {outputPaths: Record<string, string>}).outputPaths['cli-sample.txt']),
+        'utf8',
+      ).then((value) => value.includes('file:')),
       false,
     );
   });
