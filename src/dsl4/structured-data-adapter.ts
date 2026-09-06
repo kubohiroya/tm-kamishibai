@@ -17,6 +17,89 @@ export const dsl4StructuredDataAdapterDefaultLimits = Object.freeze({
   maxNonceAttempts: 8,
 });
 
+interface AdapterStoreLimits {
+  readonly maxStringLength: number;
+  readonly [key: string]: unknown;
+}
+
+interface AdapterStoreError {
+  readonly code?: unknown;
+  readonly message?: unknown;
+}
+
+type AdapterResult<T> =
+  | Readonly<{ok: true; value: T}>
+  | Readonly<{ok?: false; error?: AdapterStoreError; value?: unknown}>;
+
+interface AdapterStoreSnapshotNode {
+  readonly incomingCount: unknown;
+  readonly computedIncomingCount: unknown;
+}
+
+interface AdapterStore {
+  readonly rootScopeRef: string;
+  readonly limits: AdapterStoreLimits;
+  classifyHandle(value: unknown): AdapterResult<{kind?: unknown; typeTag?: unknown}>;
+  createScope(parentScope: unknown, label: unknown): AdapterResult<unknown>;
+  debugSnapshot(): Readonly<{nodes: readonly AdapterStoreSnapshotNode[]}>;
+  disposeRealm(): AdapterResult<unknown>;
+  duplicateReference(reference: unknown, ownerScope: unknown): AdapterResult<unknown>;
+  free(owner: unknown): AdapterResult<unknown>;
+  newEntry(value: unknown, typeTag: unknown, ownerScope: unknown): AdapterResult<unknown>;
+  releaseReference(reference: unknown): AdapterResult<unknown>;
+  releaseScope(scope: unknown): AdapterResult<unknown>;
+}
+
+interface AdapterComposition {
+  readonly limits?: unknown;
+  readonly jsonPathLimits?: unknown;
+  debugNormalizedPath(resource: unknown, index: unknown): AdapterResult<{normalizedPath?: unknown}>;
+  iteratorCurrentKind(iterator: unknown): AdapterResult<{kind?: unknown}>;
+  iteratorCurrentReference(
+    iterator: unknown,
+    ownerScope: unknown,
+  ): AdapterResult<{reference?: unknown}>;
+  iteratorCurrentScalar(iterator: unknown): AdapterResult<{value?: unknown}>;
+  iteratorNext(iterator: unknown): AdapterResult<{status?: unknown}>;
+  newCollectionIterator(
+    collection: unknown,
+    ownerScope: unknown,
+  ): AdapterResult<{iterator?: unknown}>;
+  newQueryIterator(
+    source: unknown,
+    path: unknown,
+    ownerScope: unknown,
+  ): AdapterResult<{iterator?: unknown}>;
+  queryCollection(
+    source: unknown,
+    path: unknown,
+    ownerScope: unknown,
+  ): AdapterResult<{collection?: unknown}>;
+  queryKind(source: unknown, path: unknown): AdapterResult<{kind?: unknown}>;
+  queryReference(
+    source: unknown,
+    path: unknown,
+    ownerScope: unknown,
+  ): AdapterResult<{reference?: unknown}>;
+  queryScalar(source: unknown, path: unknown): AdapterResult<{value?: unknown}>;
+  releaseCollection(collection: unknown): AdapterResult<unknown>;
+  releaseIterator(iterator: unknown): AdapterResult<unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function storeErrorCode(error: AdapterStoreError | undefined) {
+  return typeof error?.code === 'string' ? error.code : 'STORE-BACKEND-FAILURE';
+}
+
+function storeErrorMessage(error: AdapterStoreError | undefined) {
+  return typeof error?.message === 'string'
+    ? error.message
+    : 'The Structured Data operation failed';
+}
+
 function defaultNonceSource(byteLength: number) {
   if (!globalThis.crypto?.getRandomValues)
     throw new TypeError('A cryptographic nonce source is required');
@@ -93,14 +176,10 @@ function validateStore(store: unknown) {
   if (typeof candidate.rootScopeRef !== 'string') {
     throw new TypeError('store.rootScopeRef is required');
   }
-  if (
-    typeof candidate.limits !== 'object' ||
-    candidate.limits === null ||
-    !Number.isSafeInteger((candidate.limits as any).maxStringLength)
-  ) {
+  if (!isRecord(candidate.limits) || !Number.isSafeInteger(candidate.limits.maxStringLength)) {
     throw new TypeError('store.limits.maxStringLength is required');
   }
-  return store as any;
+  return store as unknown as AdapterStore;
 }
 
 function validateComposition(composition: unknown) {
@@ -127,7 +206,7 @@ function validateComposition(composition: unknown) {
       throw new TypeError(`composition.${method} is required`);
     }
   }
-  return composition as any;
+  return composition as unknown as AdapterComposition;
 }
 
 function safeText(value: unknown) {
@@ -142,7 +221,7 @@ export function createDsl4StructuredDataAdapter(
   options: {
     store?: object;
     composition?: object;
-    objectStoreOptions?: object;
+    objectStoreOptions?: Parameters<typeof createDsl4ObjectStore>[0];
     compositionOptions?: object;
     nonceSource?: (byteLength: number) => Uint8Array;
     limits?: Partial<typeof dsl4StructuredDataAdapterDefaultLimits>;
@@ -154,14 +233,12 @@ export function createDsl4StructuredDataAdapter(
   const limits = normalizeLimits(options.limits);
   const nonceSource = options.nonceSource ?? defaultNonceSource;
   if (typeof nonceSource !== 'function') throw new TypeError('nonceSource must be a function');
-  const store = validateStore(
-    options.store ?? createDsl4ObjectStore(options.objectStoreOptions as any),
-  );
+  const store = validateStore(options.store ?? createDsl4ObjectStore(options.objectStoreOptions));
   const composition = validateComposition(
     options.composition ??
       createDsl4StructuredDataComposition({
         store,
-        ...((options.compositionOptions ?? {}) as any),
+        ...(isRecord(options.compositionOptions) ? options.compositionOptions : {}),
       }),
   );
   const realmNonce = createNonce(nonceSource);
@@ -173,7 +250,7 @@ export function createDsl4StructuredDataAdapter(
   const defaultScopeResult = store.createScope(store.rootScopeRef, 'structured-data.default');
   if (!defaultScopeResult.ok) {
     throw new TypeError(
-      `Structured Data default scope could not be created: ${defaultScopeResult.error.code}`,
+      `Structured Data default scope could not be created: ${storeErrorCode(defaultScopeResult.error)}`,
     );
   }
   const defaultScopeRef = defaultScopeResult.value;
@@ -219,13 +296,9 @@ export function createDsl4StructuredDataAdapter(
     );
   }
 
-  function project(result: any, operation: string, project: (value: any) => unknown) {
+  function project<T>(result: AdapterResult<T>, operation: string, project: (value: T) => unknown) {
     if (!result?.ok) {
-      return exception(
-        result?.error?.code ?? 'STORE-BACKEND-FAILURE',
-        operation,
-        result?.error?.message ?? 'The Structured Data operation failed',
-      );
+      return exception(storeErrorCode(result.error), operation, storeErrorMessage(result.error));
     }
     try {
       return project(result.value);
@@ -413,7 +486,7 @@ export function createDsl4StructuredDataAdapter(
 
   function debugAssertInvariants() {
     const snapshot = store.debugSnapshot();
-    return snapshot.nodes.every((node: any) => node.incomingCount === node.computedIncomingCount)
+    return snapshot.nodes.every((node) => node.incomingCount === node.computedIncomingCount)
       ? true
       : exception('STORE-REFERENCE-UNDERFLOW', 'debugAssertInvariants', 'A Store invariant failed');
   }
@@ -447,7 +520,11 @@ export function createDsl4StructuredDataAdapter(
     if (state === 'disposed') return true;
     const disposed = store.disposeRealm();
     if (!disposed.ok) {
-      return exception(disposed.error.code, 'dispose', disposed.error.message);
+      return exception(
+        storeErrorCode(disposed.error),
+        'dispose',
+        storeErrorMessage(disposed.error),
+      );
     }
     state = 'disposed';
     active.clear();

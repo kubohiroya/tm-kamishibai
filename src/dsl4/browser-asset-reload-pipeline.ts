@@ -7,6 +7,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface ReloadSurfaceBridge {
+  submitCandidate(candidate: Readonly<Record<string, unknown>>): unknown;
+  setDiagnostic(kind: string, diagnostic: unknown): unknown;
+  setWatchState(kind: string, state: unknown): unknown;
+}
+
+interface AssetStagedEvent {
+  readonly type?: unknown;
+  readonly revision?: unknown;
+  readonly classification?: {
+    readonly changedAssets?: readonly unknown[];
+  };
+}
+
+interface AssetReloadApplyRequest {
+  readonly requestedPreference?: unknown;
+  readonly actualAnchor?: unknown;
+  readonly fallbackReason?: unknown;
+}
+
 /**
  * Wire the browser filesystem adapter to the transport-neutral asset transaction and protocol.
  * The caller supplies the platform generation preparation at the existing runtime safe boundary.
@@ -82,11 +102,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     throw new TypeError('resolveReloadAvailability must be a function');
   }
 
-  let reloadSurface: {
-    submitCandidate: Function;
-    setDiagnostic: Function;
-    setWatchState: Function;
-  } | null = null;
+  let reloadSurface: ReloadSurfaceBridge | null = null;
   if (options.reloadSurface !== undefined) {
     if (!isRecord(options.reloadSurface)) {
       throw new TypeError('reloadSurface must be an object');
@@ -118,7 +134,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     }
   }
 
-  function assetAvailability(event: Readonly<Record<string, any>>) {
+  function assetAvailability(event: Readonly<AssetStagedEvent>) {
     if (options.resolveReloadAvailability) return options.resolveReloadAvailability(event);
     return deepFreeze({
       story: {available: true, reason: null},
@@ -131,7 +147,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     });
   }
 
-  function submitReloadCandidate(event: Readonly<Record<string, any>>) {
+  function submitReloadCandidate(event: Readonly<AssetStagedEvent>) {
     if (!reloadSurface || event.type !== 'preview.asset.staged') return;
     const changedIds = Array.isArray(event.classification?.changedAssets)
       ? event.classification.changedAssets
@@ -145,7 +161,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
         availability: assetAvailability(event),
         changedIds,
         initiatingInputId: null,
-        async apply(request: Readonly<Record<string, any>>) {
+        async apply(request: Readonly<AssetReloadApplyRequest>) {
           await requireProtocol().whenIdle();
           const committed = await commit({
             requestedPreference: request.requestedPreference,
@@ -169,7 +185,7 @@ export function createDsl4BrowserAssetReloadPipeline(options: {
     return protocol;
   };
   const adapter = createDsl4BrowserPreviewAssetAdapter({
-    ...(options.adapterOptions as Record<string, any>),
+    ...options.adapterOptions,
     inspectImage: options.adapterOptions.inspectImage as (
       bytes: Uint8Array,
       context: Readonly<Record<string, unknown>>,

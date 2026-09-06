@@ -1,4 +1,5 @@
 import type {Dsl4RuntimePort} from './runtime-port.js';
+import type {Dsl4AssetPreloadLifecycle} from './asset-preload-coordinator.js';
 import {resolveDsl4ControlProfile} from './control-profile-resolver.js';
 import {createDsl4ActionQuiesceResolver} from './action-quiesce.js';
 import {createDsl4HistoryReducer} from './history-reducer.js';
@@ -24,6 +25,27 @@ export type HistoryState = ReturnType<HistoryReducer['initialState']>;
 export type RuntimeController = ReturnType<typeof createDsl4RuntimeController>;
 
 export type SessionDiagnostic = ReturnType<typeof diagnostic>;
+
+interface NavigationDebugExecution {
+  beforeAction(
+    action: Readonly<{
+      command: string;
+      sceneId: string;
+      actionIndex: number;
+      actionPath: string;
+      signal: AbortSignal;
+    }>,
+  ): unknown;
+  getState(): Readonly<{paused?: boolean}>;
+}
+
+interface NavigationInputArbitration {
+  shouldDeferNavigationKey(context: Readonly<{code: string; historyPaused: boolean}>): boolean;
+  arbitrateNavigationPointer(
+    context: Readonly<{pointerType: string; historyPaused: boolean}>,
+  ): 'allow' | 'defer' | 'suppress';
+  cancelNavigationPointer(context: Readonly<{pointerType: string}>): unknown;
+}
 
 function diagnostic(
   storyDocument: Readonly<Record<string, unknown>>,
@@ -94,19 +116,9 @@ export function createDsl4NavigationSession({
   historyNavigationAvailable?: boolean;
   historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
   port: Dsl4RuntimePort;
-  debugExecution?: {beforeAction: Function; getState: Function};
-  assetLifecycle?: {
-    prepare: Function;
-    setLoading: Function;
-    releaseAssets: Function;
-    release: Function;
-  };
-  createAssetLifecycle?: () => {
-    prepare: Function;
-    setLoading: Function;
-    releaseAssets: Function;
-    release: Function;
-  };
+  debugExecution?: NavigationDebugExecution;
+  assetLifecycle?: Dsl4AssetPreloadLifecycle;
+  createAssetLifecycle?: () => Dsl4AssetPreloadLifecycle;
   evaluateCondition?: (
     expression: string,
     variables: Readonly<Record<string, string | number | boolean>>,
@@ -174,12 +186,7 @@ export function createDsl4NavigationSession({
       'inputArbitration must provide key, pointer, and pointer cancellation arbitration',
     );
   }
-  const arbitration = inputArbitration as
-    | Record<
-        'shouldDeferNavigationKey' | 'arbitrateNavigationPointer' | 'cancelNavigationPointer',
-        (...parameters: any[]) => any
-      >
-    | undefined;
+  const arbitration = inputArbitration as NavigationInputArbitration | undefined;
   if (assetLifecycle !== undefined && createAssetLifecycle !== undefined) {
     throw new TypeError('Provide either assetLifecycle or createAssetLifecycle, not both');
   }

@@ -74,12 +74,50 @@ export type ConversionReference = {
 export type ConversionResult = {
   ok: boolean;
   source: string;
-  document: Record<string, any> | null;
+  document: Dsl4ConvertedDocument | null;
   yaml: string | null;
   diagnostics: ConversionDiagnostic[];
 };
 
 export type PoseModelReplacement = {id: string; file: string; loading?: 'eager' | 'lazy'};
+
+type JsonObject = Record<string, unknown>;
+type TextStyleDefinition = JsonObject;
+type ConvertedAction = JsonObject;
+type BranchRule =
+  Readonly<{if: string; goto: string | undefined}> | Readonly<{else: string | undefined}>;
+type RenderedAsset =
+  | string
+  | Readonly<{
+      kind: 'backdrop' | 'sound';
+      name: string;
+    }>
+  | Readonly<{
+      kind: 'costume';
+      target: string;
+      name: string;
+    }>
+  | Readonly<{
+      kind: 'recognitionModel';
+      file: string;
+      loading?: 'eager' | 'lazy';
+    }>
+  | Readonly<{
+      kind: 'recognitionModel';
+      delivery: 'remote';
+      source: {url: string};
+      loading: 'lazy';
+    }>;
+
+export interface Dsl4ConvertedDocument extends JsonObject {
+  kamishibai: '4.0';
+  controls: Readonly<{
+    keymaps: Readonly<{
+      production: Readonly<Record<string, string>>;
+      rehearsal: Readonly<Record<string, string>>;
+    }>;
+  }>;
+}
 
 function sourceRange(command: Dsl32Command | null | undefined) {
   const line = command?.lineNumber ?? 1;
@@ -144,7 +182,7 @@ function splitList(value: string) {
   return value.split(',').map((item) => item.trim());
 }
 
-function ownObject(entries: Iterable<readonly [string, any]>): Record<string, any> {
+function ownObject<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
   return Object.fromEntries(entries);
 }
 
@@ -216,17 +254,17 @@ class Converter {
   diagnostics: ConversionDiagnostic[];
   assets: Map<string, ConvertedAsset>;
   actors: Map<string, string>;
-  textStyles: Map<string, Record<string, any>>;
+  textStyles: Map<string, TextStyleDefinition>;
   textStyleBubbleDirections: Map<string, string>;
   bubbleStyles: Map<string, {textStyle: string; kind: 'say' | 'think'}>;
   variables: Map<string, string | number | boolean>;
   variableCommands: Map<string, Dsl32Command>;
-  scenes: Map<string, Record<string, any>[]>;
+  scenes: Map<string, ConvertedAction[]>;
   scenePoseModels: Map<string, string>;
   remotePoseModels: Map<string, string>;
   nextRemotePoseModelId: number;
   scenesUsingPose: Map<string, Dsl32Command>;
-  branches: Map<string, Record<string, any>[]>;
+  branches: Map<string, BranchRule[]>;
   references: ConversionReference[];
   costumeUses: Map<string, Set<string>>;
   styleReferences: Map<string, Dsl32Command>;
@@ -250,7 +288,6 @@ class Converter {
     this.assets = new Map();
     /** @type {Map<string, string>} */
     this.actors = new Map();
-    /** @type {Map<string, Record<string, any>>} */
     this.textStyles = new Map();
     /** @type {Map<string, string>} */
     this.textStyleBubbleDirections = new Map();
@@ -260,7 +297,6 @@ class Converter {
     this.variables = new Map();
     /** @type {Map<string, Dsl32Command>} */
     this.variableCommands = new Map();
-    /** @type {Map<string, Record<string, any>[]>} */
     this.scenes = new Map();
     /** @type {Map<string, string>} */
     this.scenePoseModels = new Map();
@@ -269,7 +305,6 @@ class Converter {
     this.nextRemotePoseModelId = 1;
     /** @type {Map<string, Dsl32Command>} */
     this.scenesUsingPose = new Map();
-    /** @type {Map<string, Record<string, any>[]>} */
     this.branches = new Map();
     /** @type {ConversionReference[]} */
     this.references = [];
@@ -358,7 +393,12 @@ class Converter {
     return true;
   }
 
-  rejectDuplicate(collection: Map<string, any>, id: string, label: string, command: Dsl32Command) {
+  rejectDuplicate(
+    collection: ReadonlyMap<string, unknown>,
+    id: string,
+    label: string,
+    command: Dsl32Command,
+  ) {
     if (!collection.has(id)) return false;
     this.error('K4-CONVERT-DUPLICATE', `${label} is declared more than once: ${id}`, command);
     return true;
@@ -753,11 +793,11 @@ class Converter {
       );
       return;
     }
-    const rules = conditions.slice(0, -1).map((condition, index) => ({
+    const rules: BranchRule[] = conditions.slice(0, -1).map((condition, index) => ({
       if: condition,
       goto: destinations[index],
     }));
-    rules.push({else: destinations.at(-1)} as any);
+    rules.push({else: destinations.at(-1)});
     this.branches.set(id, rules);
     for (const destination of destinations) this.addReference('scene', destination, command);
   }
@@ -918,7 +958,7 @@ class Converter {
     actionName: string,
     parts: string[],
     command: Dsl32Command,
-  ): Record<string, any> | null {
+  ): ConvertedAction | null {
     if (['stage', 'bgm', 'sound', 'branch'].includes(actionName)) {
       if (parts.length !== 2 || !argumentAt(parts, 1)) {
         this.error(
@@ -1025,11 +1065,7 @@ class Converter {
     return null;
   }
 
-  parseActorAction(
-    target: string,
-    parts: string[],
-    command: Dsl32Command,
-  ): Record<string, any> | null {
+  parseActorAction(target: string, parts: string[], command: Dsl32Command): ConvertedAction | null {
     if (!target || target === '*' || target.includes(',')) {
       this.error(
         'K4-CONVERT-ACTOR-TARGET',
@@ -1420,7 +1456,7 @@ class Converter {
   }
 
   renderAssets() {
-    const rendered: Map<string, any> = new Map();
+    const rendered: Map<string, RenderedAsset> = new Map();
     for (const [id, asset] of this.assets) {
       if (asset.kind === 'recognitionModel') {
         if ('delivery' in asset && asset.delivery === 'remote') {
@@ -1478,7 +1514,7 @@ class Converter {
   }
 
   buildDocument() {
-    const document: Record<string, any> = {
+    const document: Dsl4ConvertedDocument = {
       kamishibai: '4.0',
       controls: {
         keymaps: {

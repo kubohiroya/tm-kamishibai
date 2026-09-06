@@ -81,7 +81,165 @@ const sourceDiagnosticPrefixes = Object.freeze([
   'K4-YAML',
 ]);
 
-function resolveRuntimeMount(Scratch: any) {
+type RuntimeEntryFunction = (...parameters: unknown[]) => unknown;
+type RuntimeEntryLocale = 'en' | 'ja';
+
+interface RuntimeEntryMount {
+  style?: Record<string, string>;
+  appendChild?(child: unknown): unknown;
+}
+
+interface RuntimeEntryCanvas extends RuntimeEntryMount {
+  parentElement?: RuntimeEntryMount | null;
+  parentNode?: RuntimeEntryMount | null;
+}
+
+interface RuntimeEntryScratchVm {
+  renderer?: {canvas?: RuntimeEntryCanvas | null};
+  runtime?: unknown;
+  toJSON(): string;
+  saveProjectSb3DontZip(): unknown | Promise<unknown>;
+}
+
+interface RuntimeEntryScratch {
+  ArgumentType: Readonly<Record<string, string>>;
+  BlockType: Readonly<Record<string, string>>;
+  vm: RuntimeEntryScratchVm;
+  extensions?: {
+    unsandboxed?: boolean;
+    register(extension: unknown): unknown;
+  };
+}
+
+interface RuntimeEntryBundledTMRuntime extends Readonly<Record<string, unknown>> {
+  Webcam: RuntimeEntryFunction;
+  loadFromFiles: RuntimeEntryFunction;
+}
+
+interface RuntimeEntryFailureRecord {
+  message?: unknown;
+  code?: unknown;
+  storyPath?: unknown;
+}
+
+interface RuntimeEntryPackagedComponent {
+  application?: {mode?: unknown};
+}
+
+interface RuntimeEntryPackagedProject extends Readonly<Record<string, unknown>> {
+  extensionStorage?: {
+    kubohiroyakamishibai4?: {
+      components?: {
+        kubohiroyakamishibairuntime4?: RuntimeEntryPackagedComponent;
+      };
+    };
+    kubohiroyakamishibairuntime4?: RuntimeEntryPackagedComponent;
+  };
+}
+
+interface RuntimeEntryStateSnapshot {
+  storyVariables?: Readonly<Record<string, unknown>>;
+  runtime?: Readonly<Record<string, unknown>>;
+  diagnostic?: RuntimeEntryFailureRecord | null;
+}
+
+/**
+ * The members the entry reads off whichever runtime is active. Both the packaged runtime host and
+ * the preview live-reload session answer this surface, and each one implements its own subset, so
+ * every member stays optional here.
+ */
+interface RuntimeEntryRuntimeInvoker {
+  getRuntimeVariableSnapshot?(): unknown;
+  getState?(): unknown;
+  queueVariableWrite?(request: unknown): unknown;
+  invokeAction?(action: unknown): unknown;
+  rejectActionInvocation?(error: unknown): unknown;
+  sessionBinaryBacking?: {getState?(): unknown};
+  diagnostics?: {getState?(): unknown};
+}
+
+/**
+ * The runtime host the packaged entry creates through the Standard app-shell. The entry owns that
+ * construction, so the startup members it drives are present rather than optional.
+ */
+interface RuntimeEntryRuntimeHost extends RuntimeEntryRuntimeInvoker {
+  getState?(): RuntimeEntryStateSnapshot;
+  start(): Promise<{status: string; diagnostic?: unknown}>;
+  prepareMenu(): unknown | Promise<unknown>;
+  attach(target: unknown): unknown;
+}
+
+/** The action surface `actionInvoker` guarantees to its callers after validating the runtime. */
+interface RuntimeEntryActionInvoker {
+  invokeAction(action: unknown): unknown;
+  rejectActionInvocation(error: unknown): unknown;
+}
+
+interface RuntimeEntryDisposable {
+  dispose(reason?: unknown): unknown;
+}
+
+interface RuntimeEntryPreviewShell extends RuntimeEntryDisposable {
+  getSnapshot(): Readonly<{
+    coordinator?: {source?: {started?: unknown}};
+    sourceDisplayName: string;
+  }>;
+  start(projectRoot: unknown): unknown | Promise<unknown>;
+  restart(reason: string): unknown | Promise<unknown>;
+  prepareDistributionBuild(): Promise<
+    Readonly<{
+      integrity: unknown;
+      sourceResult: Readonly<{storyDocument: unknown}>;
+      projectRoot: unknown;
+    }>
+  >;
+  getDistributionBuildState(): Readonly<{enabled?: boolean; reason?: unknown}>;
+}
+
+interface RuntimeEntrySourceChooser {
+  show(
+    locale: RuntimeEntryLocale,
+    options: {fileEnabled: boolean; projectEnabled: boolean},
+  ): unknown;
+  hide(): unknown;
+}
+
+interface RuntimeEntryFileInput {
+  remove?(): unknown;
+}
+
+interface RuntimeEntryPendingStart {
+  shell: RuntimeEntryAppShell | null;
+  start(): unknown | Promise<unknown>;
+}
+
+interface RuntimeEntryStoryVariableWriteResult {
+  accepted?: boolean;
+}
+
+interface RuntimeEntryStageCostume {
+  name?: unknown;
+}
+
+interface RuntimeEntryStageTarget {
+  sprite?: {costumes?: RuntimeEntryStageCostume[]};
+  setCostume?(index: number): unknown;
+  setVisible?(visible: boolean): unknown;
+}
+
+interface RuntimeEntryGenerationComponents {
+  get(key: unknown): unknown;
+}
+
+type RuntimeEntryAppShell = Extract<
+  Awaited<ReturnType<typeof createDsl4StandardAppShell>>,
+  {hideTitle: unknown}
+> & {
+  runtimeHost: RuntimeEntryRuntimeHost;
+  dispose(reason?: unknown): unknown;
+};
+
+function resolveRuntimeMount(Scratch: RuntimeEntryScratch) {
   const canvas = Scratch?.vm?.renderer?.canvas;
   const parent = canvas?.parentElement ?? canvas?.parentNode;
   if (parent && typeof parent.appendChild === 'function') return parent;
@@ -92,30 +250,30 @@ function resolveBundledTMRuntime() {
   const runtime =
     typeof tmPose === 'object' && tmPose !== null
       ? tmPose
-      : (globalThis as Record<string, any>).tmPose;
+      : (globalThis as unknown as {tmPose?: unknown}).tmPose;
   if (
     typeof runtime !== 'object' ||
     runtime === null ||
-    typeof runtime.Webcam !== 'function' ||
-    typeof runtime.loadFromFiles !== 'function'
+    typeof (runtime as RuntimeEntryBundledTMRuntime).Webcam !== 'function' ||
+    typeof (runtime as RuntimeEntryBundledTMRuntime).loadFromFiles !== 'function'
   ) {
     throw new Error('The bundled Teachable Machine Pose runtime is unavailable.');
   }
-  return runtime;
+  return runtime as RuntimeEntryBundledTMRuntime;
 }
 
-function browserLocale() {
+function browserLocale(): RuntimeEntryLocale {
   return /^ja(?:-|$)/iu.test(globalThis.navigator?.language ?? '') ? 'ja' : 'en';
 }
 
-function packagedRuntimeComponent(project: Record<string, any>) {
+function packagedRuntimeComponent(project: RuntimeEntryPackagedProject) {
   return (
     project?.extensionStorage?.kubohiroyakamishibai4?.components?.kubohiroyakamishibairuntime4 ??
     project?.extensionStorage?.kubohiroyakamishibairuntime4
   );
 }
 
-function packagedApplicationMode(project: Record<string, any>) {
+function packagedApplicationMode(project: RuntimeEntryPackagedProject) {
   const mode = packagedRuntimeComponent(project)?.application?.mode;
   return mode === 'menu' ? 'menu' : 'story';
 }
@@ -124,14 +282,15 @@ function isSourceDiagnostic(code: string) {
   return sourceDiagnosticPrefixes.some((prefix) => code.startsWith(prefix));
 }
 
-function loggedError(failure: any) {
+function loggedError(failure: unknown) {
   if (failure instanceof Error) return failure;
+  const failureRecord = failure as RuntimeEntryFailureRecord | null | undefined;
   const error = new Error(
-    String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.'),
+    String(failureRecord?.message ?? failure ?? 'DSL 4.0 story execution failed.'),
     {cause: failure},
   );
-  if (typeof failure?.code === 'string') {
-    Object.defineProperty(error, 'code', {value: failure.code});
+  if (typeof failureRecord?.code === 'string') {
+    Object.defineProperty(error, 'code', {value: failureRecord.code});
   }
   return error;
 }
@@ -141,8 +300,8 @@ const productionFeatureFlags = resolveDsl4FeatureFlags(dsl4StandardProductionFea
 declare const DSL4_APPLICATION_MENU_ICONS: Readonly<Record<string, string>>;
 declare const DSL4_OFFICIAL_WEBSITE_ICON: string;
 declare const DSL4_AUTHORING_PROFILE: boolean;
-declare const tmPose: Record<string, any>;
-declare const Scratch: Record<string, any>;
+declare const tmPose: unknown;
+declare const Scratch: RuntimeEntryScratch;
 
 /**
  * What Scratch hands a block implementation.
@@ -168,7 +327,7 @@ interface ScratchBlockUtility {
  */
 class KamishibaiDsl4RuntimeExtension {
   storyVariableWriteResults: WeakMap<object, boolean>;
-  Scratch: any;
+  Scratch: RuntimeEntryScratch;
   turboWarpHost: ReturnType<typeof createTurboWarpRuntimeHost>;
   /**
    * Installed on the prototype by `installDsl4RuntimeAuthoringProfile`, not defined here.
@@ -201,31 +360,28 @@ class KamishibaiDsl4RuntimeExtension {
    * entry only stores one it has already read `runtimeHost` and `diagnostics` off, so the field is
    * the enabled branch.
    */
-  shell: Extract<
-    Awaited<ReturnType<typeof createDsl4StandardAppShell>>,
-    {hideTitle: unknown}
-  > | null;
+  shell: RuntimeEntryAppShell | null;
   errorIndicator: ReturnType<typeof createDsl4RuntimeErrorIndicator> | null;
   warningIndicator: ReturnType<typeof createDsl4RuntimeWarningIndicator> | null;
-  binaryRuntimeSurface: any;
-  pendingStart: any;
+  binaryRuntimeSurface: unknown;
+  pendingStart: RuntimeEntryPendingStart | null;
   status: string;
   lastError: string;
-  titleLocale: string;
+  titleLocale: RuntimeEntryLocale;
   selectedProject: Readonly<Record<string, unknown>> | null;
-  previewShell: any;
-  previewLiveReload: any;
-  previewDebugExecution: any;
-  previewGenerationComponents: any;
+  previewShell: RuntimeEntryPreviewShell | null;
+  previewLiveReload: (RuntimeEntryRuntimeInvoker & RuntimeEntryDisposable) | null;
+  previewDebugExecution: RuntimeEntryDisposable | null;
+  previewGenerationComponents: RuntimeEntryGenerationComponents | null;
   previewHasCurrent: boolean;
   distributionBuildStatus: string;
-  fileInput: any;
+  fileInput: RuntimeEntryFileInput | null;
   applicationMenu: ReturnType<typeof createDsl4RuntimeApplicationMenu> | null;
   titleControls: ReturnType<typeof createDsl4RuntimeTitleControls> | null;
-  sourceChooser: any;
+  sourceChooser: RuntimeEntrySourceChooser | null;
   lastStoryVariableWriteResult: boolean;
 
-  constructor(Scratch: any) {
+  constructor(Scratch: RuntimeEntryScratch) {
     this.Scratch = Scratch;
     this.frontend = createDsl4ProductionSourceFrontend(schema, {
       runtimeStateExpressionsEnabled: productionFeatureFlags.dsl4ExpressionRuntimeState,
@@ -396,7 +552,10 @@ class KamishibaiDsl4RuntimeExtension {
 
   runtimeVariableSnapshot() {
     if (!productionFeatureFlags.dsl4TurboWarpStateSurface) return null;
-    return this.runtimeVariableInvoker()?.getRuntimeVariableSnapshot?.() ?? null;
+    return (
+      (this.runtimeVariableInvoker()?.getRuntimeVariableSnapshot?.() as
+        RuntimeEntryStateSnapshot | null | undefined) ?? null
+    );
   }
 
   storyVariableReporter(args: ScratchBlockArguments) {
@@ -462,21 +621,50 @@ class KamishibaiDsl4RuntimeExtension {
 
   canNavigateToPreviousAction() {
     if (!productionFeatureFlags.dsl4TurboWarpStateSurface) return false;
-    const state = this.runtimeVariableInvoker()?.getState?.();
-    return Boolean(state?.historyEnabled && state?.history?.actionCursor > 0);
+    const state = this.runtimeVariableInvoker()?.getState?.() as
+      | Readonly<{
+          historyEnabled?: boolean;
+          history?: Readonly<{
+            mode?: string;
+            actionCursor?: number;
+            actionEntries?: readonly unknown[];
+          }>;
+          runtime?: Readonly<{status?: string}>;
+        }>
+      | undefined;
+    return Boolean(
+      state?.historyEnabled &&
+      typeof state.history?.actionCursor === 'number' &&
+      state.history.actionCursor > 0,
+    );
   }
 
   canNavigateToNextAction() {
     if (!productionFeatureFlags.dsl4TurboWarpStateSurface) return false;
-    const state = this.runtimeVariableInvoker()?.getState?.();
+    const state = this.runtimeVariableInvoker()?.getState?.() as
+      | Readonly<{
+          historyEnabled?: boolean;
+          history?: Readonly<{
+            mode?: string;
+            actionCursor?: number;
+            actionEntries?: readonly unknown[];
+          }>;
+          runtime?: Readonly<{status?: string}>;
+        }>
+      | undefined;
     if (state?.historyEnabled && state?.history?.mode === 'history') {
-      return state.history.actionCursor < state.history.actionEntries.length;
+      return (
+        typeof state.history.actionCursor === 'number' &&
+        Array.isArray(state.history.actionEntries) &&
+        state.history.actionCursor < state.history.actionEntries.length
+      );
     }
     return state?.runtime?.status === 'running';
   }
 
-  rememberStoryVariableWrite(result: any, util: ScratchBlockUtility) {
-    const accepted = result?.accepted === true;
+  rememberStoryVariableWrite(result: unknown, util: ScratchBlockUtility) {
+    const writeResult = result as RuntimeEntryStoryVariableWriteResult | null | undefined;
+    const accepted = writeResult?.accepted === true;
     this.lastStoryVariableWriteResult = accepted;
     if (util?.thread && typeof util.thread === 'object') {
       this.storyVariableWriteResults.set(util.thread, accepted);
@@ -592,7 +780,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.showScratchTitle(this.titleLocale);
   }
 
-  actionInvoker() {
+  actionInvoker(): RuntimeEntryActionInvoker {
     const invoker = this.shell?.runtimeHost ?? this.previewLiveReload;
     if (
       !invoker ||
@@ -603,10 +791,10 @@ class KamishibaiDsl4RuntimeExtension {
       Object.defineProperty(error, 'code', {value: 'K4-BLOCK-RUNTIME-INACTIVE'});
       throw error;
     }
-    return invoker;
+    return invoker as RuntimeEntryActionInvoker;
   }
 
-  async invokeCoreActionBlock(command: any, args: ScratchBlockArguments) {
+  async invokeCoreActionBlock(command: string, args: ScratchBlockArguments) {
     let invoker;
     try {
       invoker = this.actionInvoker();
@@ -833,7 +1021,7 @@ class KamishibaiDsl4RuntimeExtension {
     return undefined;
   }
 
-  setTargetCostume(target: any, costumeName: any) {
+  setTargetCostume(target: RuntimeEntryStageTarget | null | undefined, costumeName: string) {
     const costumes = target?.sprite?.costumes;
     const index = Array.isArray(costumes)
       ? costumes.findIndex((costume) => costume?.name === costumeName)
@@ -844,7 +1032,7 @@ class KamishibaiDsl4RuntimeExtension {
     target.setCostume(index);
   }
 
-  setStageCursor(cursor: any) {
+  setStageCursor(cursor: string) {
     const canvas = this.Scratch?.vm?.renderer?.canvas;
     if (canvas?.style) canvas.style.cursor = cursor;
     const mount = resolveRuntimeMount(this.Scratch);
@@ -852,13 +1040,13 @@ class KamishibaiDsl4RuntimeExtension {
   }
 
   hideAllDisplayTargets() {
-    for (const target of this.turboWarpHost.spriteTargets() as Record<string, any>[]) {
+    for (const target of this.turboWarpHost.spriteTargets() as RuntimeEntryStageTarget[]) {
       if (typeof target?.setVisible === 'function') target.setVisible(false);
     }
   }
 
-  showScratchTitle(locale: any) {
-    const stage = this.turboWarpHost.getStageTarget();
+  showScratchTitle(locale: RuntimeEntryLocale) {
+    const stage = this.turboWarpHost.getStageTarget() as RuntimeEntryStageTarget | null;
     this.shell?.hideTitle();
     this.hideScratchMenu();
     this.setTargetCostume(stage, locale === 'ja' ? 'TitleRuntime' : 'Title');
@@ -871,8 +1059,8 @@ class KamishibaiDsl4RuntimeExtension {
     this.setStageCursor('auto');
   }
 
-  showScratchMenu(locale: any) {
-    const stage = this.turboWarpHost.getStageTarget();
+  showScratchMenu(locale: RuntimeEntryLocale) {
+    const stage = this.turboWarpHost.getStageTarget() as RuntimeEntryStageTarget | null;
     this.hideScratchTitle();
     this.sourceChooser?.hide();
     this.setTargetCostume(stage, locale === 'ja' ? 'MenuRuntime' : 'Menu');
@@ -880,10 +1068,11 @@ class KamishibaiDsl4RuntimeExtension {
     menu?.setReloadEnabled(
       this.selectedProject !== null || this.shell !== null || this.previewHasCurrent,
     );
+    const previewShell = this.previewShell;
     const buildVisible =
-      DSL4_AUTHORING_PROFILE && this.previewShell !== null && this.isDistributionBuildEnabled();
+      DSL4_AUTHORING_PROFILE && previewShell !== null && this.isDistributionBuildEnabled();
     const buildState = buildVisible
-      ? this.previewShell.getDistributionBuildState()
+      ? previewShell.getDistributionBuildState()
       : {enabled: false, reason: null};
     menu?.setBuildState({
       visible: buildVisible,
@@ -891,7 +1080,11 @@ class KamishibaiDsl4RuntimeExtension {
       status:
         this.distributionBuildStatus ||
         (buildVisible && buildState.enabled !== true
-          ? (appShellLocales as Record<string, any>)[locale].ui.buildUnavailable
+          ? (
+              appShellLocales as Readonly<
+                Record<RuntimeEntryLocale, {ui: {buildUnavailable: string}}>
+              >
+            )[locale].ui.buildUnavailable
           : ''),
     });
     menu?.show(locale);
@@ -903,19 +1096,19 @@ class KamishibaiDsl4RuntimeExtension {
     this.setStageCursor('auto');
   }
 
-  enqueue(operation: any, phase = 'operation') {
+  enqueue(operation: () => unknown | Promise<unknown>, phase = 'operation') {
     this.operation = this.operation.then(operation, operation).catch((error: unknown) => {
       this.reportFailure(error, phase);
     });
     return this.operation;
   }
 
-  reportFailure(failure: any, phase: any) {
+  reportFailure(failure: unknown, phase: string) {
     this.showFailure(failure);
     console.error(`[Kamishibai DSL 4.0] ${phase} failed.`, loggedError(failure));
   }
 
-  showSessionBackingWarning(warning: any) {
+  showSessionBackingWarning(warning: unknown) {
     const diagnostic = createDsl4SessionBackingWarningDiagnostic(warning, browserLocale());
     try {
       this.warningIndicator ??= createDsl4RuntimeWarningIndicator({
@@ -929,15 +1122,16 @@ class KamishibaiDsl4RuntimeExtension {
     console.warn('[Kamishibai DSL 4.0] session-binary-backing warning.', warning);
   }
 
-  showSessionBackingFatal(failure: any) {
+  showSessionBackingFatal(failure: unknown) {
     const diagnostic = createDsl4SessionBackingFatalDiagnostic(failure, browserLocale());
     this.warningIndicator?.hide();
     this.reportFailure(diagnostic, 'session-binary-backing');
   }
 
-  showFailure(failure: any, {returnToMenu = false} = {}) {
-    const message = String(failure?.message ?? failure ?? 'DSL 4.0 story execution failed.');
-    const code = typeof failure?.code === 'string' ? failure.code : '';
+  showFailure(failure: unknown, {returnToMenu = false} = {}) {
+    const failureRecord = failure as RuntimeEntryFailureRecord | null | undefined;
+    const message = String(failureRecord?.message ?? failure ?? 'DSL 4.0 story execution failed.');
+    const code = typeof failureRecord?.code === 'string' ? failureRecord.code : '';
     const locale = browserLocale();
     const title = isSourceDiagnostic(code)
       ? appShellLocales[locale].ui.invalidScript
@@ -965,7 +1159,7 @@ class KamishibaiDsl4RuntimeExtension {
     }
   }
 
-  async stop(reason: any) {
+  async stop(reason: string) {
     this.pendingStart = null;
     this.hideScratchTitle();
     this.hideScratchMenu();
@@ -1045,7 +1239,7 @@ class KamishibaiDsl4RuntimeExtension {
       globalObject: globalThis,
       subtleCrypto: globalThis.crypto?.subtle,
     });
-    let shell: any;
+    let shell: RuntimeEntryAppShell;
     let started = false;
     const startRuntime = async () => {
       if (started || this.shell !== shell) return;
@@ -1085,7 +1279,7 @@ class KamishibaiDsl4RuntimeExtension {
       }
     };
     try {
-      shell = await createDsl4StandardAppShell({
+      const shellCandidate = await createDsl4StandardAppShell({
         featureFlags: binaryRuntime
           ? {
               ...dsl4StandardProductionFeatureFlags,
@@ -1106,8 +1300,10 @@ class KamishibaiDsl4RuntimeExtension {
                 assetBundleFormat: binaryRuntime.assetBundleFormat,
                 binaryEntryProvider: binaryRuntime.binaryEntryProvider,
                 sessionBacking: binaryRuntime.sessionBacking,
-                onSessionBackingWarning: (warning: any) => this.showSessionBackingWarning(warning),
-                onSessionBackingFatalError: (failure: any) => this.showSessionBackingFatal(failure),
+                onSessionBackingWarning: (warning: unknown) =>
+                  this.showSessionBackingWarning(warning),
+                onSessionBackingFatalError: (failure: unknown) =>
+                  this.showSessionBackingFatal(failure),
               }
             : {}),
           runtime: turboWarpHost.runtime,
@@ -1128,10 +1324,15 @@ class KamishibaiDsl4RuntimeExtension {
           subtleCrypto: globalThis.crypto?.subtle,
         },
       });
-      if (!shell.ok || !shell.runtimeHost) {
-        const diagnostic = shell.diagnostics[0];
-        throw new Error(diagnostic?.message ?? 'The packaged DSL 4.0 story is invalid.');
+      if (!shellCandidate.ok || !shellCandidate.runtimeHost) {
+        const message = shellCandidate.diagnostics[0]?.message;
+        throw new Error(
+          message === undefined || message === null
+            ? 'The packaged DSL 4.0 story is invalid.'
+            : String(message),
+        );
       }
+      shell = shellCandidate as RuntimeEntryAppShell;
     } catch (error) {
       if (binaryRuntime) {
         try {
@@ -1183,11 +1384,11 @@ if (DSL4_AUTHORING_PROFILE) {
     resolveRuntimeMount,
     resolveBundledTMRuntime,
     loggedError,
-    createRemoteAssetLoader: createDsl4BrowserRemoteAssetLoader as (options: object) => any,
-    createProjectTMRuntime: createDsl4ProjectTMRuntime as unknown as (options: object) => any,
+    createRemoteAssetLoader: createDsl4BrowserRemoteAssetLoader as (options: object) => unknown,
+    createProjectTMRuntime: createDsl4ProjectTMRuntime as unknown as (options: object) => unknown,
     createTransitionPort: createDsl4TurboWarpTransitionPort as unknown as (
       options: object,
-    ) => Promise<any>,
+    ) => Promise<unknown>,
   });
 }
 

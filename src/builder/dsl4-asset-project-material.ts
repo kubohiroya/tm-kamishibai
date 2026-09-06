@@ -6,6 +6,43 @@ import {md5} from './hash.js';
 
 const projectKinds = new Set(['backdrop', 'costume', 'sound']);
 
+interface Sb3ProjectAssetDescriptor {
+  [key: string]: unknown;
+  name?: unknown;
+  assetId?: unknown;
+  dataFormat?: unknown;
+  md5ext?: unknown;
+}
+
+interface ProjectAssetReference {
+  kind: string;
+  target?: unknown;
+  name?: string;
+  bitmapResolution?: number;
+}
+
+function projectAssetTarget(asset: Readonly<ProjectAssetReference>, assetId: string) {
+  if (typeof asset.target !== 'string' || asset.target.length === 0) {
+    fail(`Project asset ${assetId} must declare a target`, 'K4-ASSET-CONVERT-PROJECT-001');
+  }
+  return asset.target;
+}
+
+function requireProjectAssetReference(
+  assetId: string,
+  asset: Readonly<Dsl4StoryDocumentAsset>,
+): ProjectAssetReference {
+  if (typeof asset.kind !== 'string' || asset.kind.length === 0) {
+    fail(`Project asset ${assetId} must declare a kind`, 'K4-ASSET-CONVERT-PROJECT-001');
+  }
+  return {
+    kind: asset.kind,
+    target: asset.target,
+    ...(asset.name === undefined ? {} : {name: asset.name}),
+    ...(asset.bitmapResolution === undefined ? {} : {bitmapResolution: asset.bitmapResolution}),
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -27,7 +64,8 @@ function projectActorVariableMatches(target: Record<string, unknown>, actorId: s
 
 export function projectTarget(
   project: Record<string, unknown>,
-  asset: Readonly<Record<string, any>>,
+  asset: Readonly<ProjectAssetReference>,
+  assetId = '',
 ) {
   const targets = Array.isArray(project.targets)
     ? (project.targets as Record<string, unknown>[])
@@ -39,13 +77,14 @@ export function projectTarget(
     }
     return stage;
   }
+  const assetTarget = projectAssetTarget(asset, assetId);
   const named = targets.filter(
-    (target) => target.isStage !== true && projectTargetName(target) === asset.target,
+    (target) => target.isStage !== true && projectTargetName(target) === assetTarget,
   );
   const [namedTarget] = named;
   if (named.length === 1 && namedTarget) return namedTarget;
   const logical = targets.filter(
-    (target) => target.isStage !== true && projectActorVariableMatches(target, asset.target),
+    (target) => target.isStage !== true && projectActorVariableMatches(target, assetTarget),
   );
   const [logicalTarget] = logical;
   if (logical.length === 1 && logicalTarget) return logicalTarget;
@@ -55,13 +94,17 @@ export function projectTarget(
   const [templateTarget] = templates;
   if (templates.length === 1 && templateTarget) return templateTarget;
   fail(
-    `Costume target cannot be resolved exactly once in the SB3: ${String(asset.target)}`,
+    `Costume target cannot be resolved exactly once in the SB3: ${assetTarget}`,
     'K4-ASSET-CONVERT-PROJECT-001',
   );
 }
 
-function projectAssetSlot(project: Record<string, unknown>, asset: Readonly<Record<string, any>>) {
-  const target = projectTarget(project, asset);
+function projectAssetSlot(
+  project: Record<string, unknown>,
+  assetId: string,
+  asset: Readonly<ProjectAssetReference>,
+) {
+  const target = projectTarget(project, asset, assetId);
   const collectionName = asset.kind === 'sound' ? 'sounds' : 'costumes';
   const collection = target[collectionName] ?? [];
   if (!Array.isArray(collection)) {
@@ -70,7 +113,7 @@ function projectAssetSlot(project: Record<string, unknown>, asset: Readonly<Reco
       'K4-ASSET-CONVERT-PROJECT-001',
     );
   }
-  return {target, collectionName, collection: collection as Record<string, any>[]};
+  return {target, collectionName, collection: collection as Sb3ProjectAssetDescriptor[]};
 }
 
 export function readProjectMaterial(
@@ -79,8 +122,9 @@ export function readProjectMaterial(
   assetId: string,
   asset: Dsl4StoryDocumentAsset,
 ): AssetMaterial {
-  const {collection} = projectAssetSlot(project, asset);
-  const name = asset.name ?? assetId;
+  const projectAsset = requireProjectAssetReference(assetId, asset);
+  const {collection} = projectAssetSlot(project, assetId, projectAsset);
+  const name = projectAsset.name ?? assetId;
   const matches = collection.filter((candidate) => candidate?.name === name);
   if (matches.length !== 1) {
     fail(
@@ -105,7 +149,7 @@ export function readProjectMaterial(
       Object.freeze({
         path: filename,
         bytes: contents,
-        contentType: contentTypeFor(contents, filename, asset.kind),
+        contentType: contentTypeFor(contents, filename, projectAsset.kind),
       }),
     ]),
   });
@@ -115,8 +159,8 @@ export function addProjectAsset(
   archive: Record<string, Uint8Array>,
   project: Record<string, unknown>,
   assetId: string,
-  asset: Readonly<Record<string, any>>,
-  material: Readonly<Record<string, any>>,
+  asset: Readonly<ProjectAssetReference>,
+  material: Readonly<AssetMaterial>,
 ) {
   if (!projectKinds.has(asset.kind)) {
     fail(
@@ -128,6 +172,7 @@ export function addProjectAsset(
     fail(`Project asset ${assetId} must contain exactly one file`, 'K4-ASSET-CONVERT-PROJECT-001');
   }
   const file = material.files[0];
+  if (!file) fail(`Project asset ${assetId} must contain a file`, 'K4-ASSET-CONVERT-PROJECT-001');
   const bytes = Buffer.from(file.bytes);
   const contentType = file.contentType ?? contentTypeFor(bytes, file.path, asset.kind);
   const dataFormat = extensionFor(contentType, asset.kind);
@@ -137,7 +182,7 @@ export function addProjectAsset(
       'K4-ASSET-CONVERT-UNSUPPORTED-001',
     );
   }
-  const {target, collectionName, collection} = projectAssetSlot(project, asset);
+  const {target, collectionName, collection} = projectAssetSlot(project, assetId, asset);
   const name = assetId;
   const existing = collection.filter((candidate) => candidate?.name === name);
   if (existing.length > 0) {
@@ -184,9 +229,9 @@ export function removeProjectAsset(
   archive: Record<string, Uint8Array>,
   project: Record<string, unknown>,
   assetId: string,
-  asset: Readonly<Record<string, any>>,
+  asset: Readonly<ProjectAssetReference>,
 ) {
-  const {target, collectionName, collection} = projectAssetSlot(project, asset);
+  const {target, collectionName, collection} = projectAssetSlot(project, assetId, asset);
   const name = asset.name ?? assetId;
   const matches = collection
     .map((candidate, index) => ({candidate, index}))
@@ -209,6 +254,7 @@ export function removeProjectAsset(
       : `${String(candidate.assetId)}.${String(candidate.dataFormat)}`;
   const stillReferenced = (Array.isArray(project.targets) ? project.targets : []).some(
     (projectTarget) =>
+      isRecord(projectTarget) &&
       ['costumes', 'sounds'].some(
         (key) =>
           Array.isArray(projectTarget?.[key]) &&

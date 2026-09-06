@@ -14,6 +14,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface Dsl4TurboWarpDrawable {
+  readonly skin?: {readonly id: number};
+  readonly _position: readonly [number, number];
+  readonly _direction: number;
+  readonly _scale: readonly [number, number];
+  readonly _visible: boolean;
+}
+
+interface Dsl4TurboWarpLayerGroup {
+  readonly groupIndex: number;
+  readonly drawListOffset: number;
+}
+
+interface Dsl4TurboWarpRenderer {
+  readonly _groupOrdering?: readonly string[];
+  readonly _layerGroups?: Readonly<Record<string, Dsl4TurboWarpLayerGroup>>;
+  readonly _drawList: readonly unknown[];
+  readonly _allDrawables?: Readonly<Record<number, Dsl4TurboWarpDrawable | undefined>>;
+  readonly canvas?: HTMLCanvasElement;
+  readonly _gl?: {readonly canvas?: HTMLCanvasElement};
+  getDrawableOrder(drawableId: number): number;
+  createDrawable(group: string): unknown;
+  updateDrawableSkinId(drawableId: number, skinId: number): void;
+  updateDrawableProperties(drawableId: number, properties: Record<string, unknown>): void;
+  updateDrawableEffect(drawableId: number, effect: string, value: number): void;
+  markDrawableAsNoninteractive?(drawableId: number): void;
+  setDrawableOrder(drawableId: number, order: number, group: string): void;
+  destroyDrawable(drawableId: number, group: string): void;
+  createBitmapSkin(bitmap: ImageBitmap, bitmapResolution: number): number;
+  destroySkin(skinId: number): void;
+  getNativeSize(): readonly [number, number];
+}
+
+interface Dsl4TurboWarpTarget {
+  readonly drawableID: number;
+  readonly visible?: unknown;
+  readonly effects?: unknown;
+  setEffect?(effect: string, value: number): void;
+}
+
+interface Dsl4CrossfadeTransition {
+  readonly seconds?: unknown;
+  readonly easing?: unknown;
+  readonly effect?: unknown;
+  readonly curve?: unknown;
+}
+
+interface Dsl4CrossfadeAudioVoice {
+  readonly ended: PromiseLike<unknown>;
+  setGain(gain: number): unknown;
+  stop(): unknown;
+}
+
+interface Dsl4CrossfadeOperation {
+  start?(): Promise<unknown>;
+  finish(reason?: unknown): unknown;
+}
+
 function platformError(message: string) {
   const error = new Error(message);
   Object.defineProperty(error, 'code', {value: 'K4-CROSSFADE-PLATFORM-001'});
@@ -24,6 +82,13 @@ function abortError() {
   const error = new Error('DSL 4.0 crossfade was cancelled');
   error.name = 'AbortError';
   return error;
+}
+
+function rendererDrawableId(value: unknown) {
+  if (!Number.isInteger(value)) {
+    throw platformError('A transition drawable could not be created');
+  }
+  return value as number;
 }
 
 const completedOperation = Object.freeze({
@@ -39,28 +104,27 @@ function defaultScheduler() {
   });
 }
 
-function drawableGroup(renderer: Record<string, any>, drawableId: number) {
+function drawableGroup(renderer: Dsl4TurboWarpRenderer, drawableId: number) {
   const order = renderer.getDrawableOrder(drawableId);
-  for (const name of renderer._groupOrdering ?? []) {
-    const group = renderer._layerGroups?.[name];
+  const groupOrdering = renderer._groupOrdering ?? [];
+  const layerGroups = renderer._layerGroups ?? {};
+  for (const name of groupOrdering) {
+    const group = layerGroups[name];
     if (!group) continue;
-    const nextName = renderer._groupOrdering[group.groupIndex + 1];
-    const end = nextName
-      ? renderer._layerGroups[nextName].drawListOffset
-      : renderer._drawList.length;
+    const nextName = groupOrdering[group.groupIndex + 1];
+    const nextGroup = nextName ? layerGroups[nextName] : undefined;
+    const end = nextGroup ? nextGroup.drawListOffset : renderer._drawList.length;
     if (order >= group.drawListOffset && order < end) return name;
   }
   throw platformError('The target drawable layer group is unavailable');
 }
 
-function createDrawableCopy(renderer: Record<string, any>, target: Record<string, any>) {
+function createDrawableCopy(renderer: Dsl4TurboWarpRenderer, target: Dsl4TurboWarpTarget) {
   const sourceId = target.drawableID;
   const source = renderer._allDrawables?.[sourceId];
   if (!source?.skin) throw platformError('The target drawable skin is unavailable');
   const group = drawableGroup(renderer, sourceId);
-  const drawableId = renderer.createDrawable(group);
-  if (!Number.isInteger(drawableId))
-    throw platformError('A transition drawable could not be created');
+  const drawableId = rendererDrawableId(renderer.createDrawable(group));
   try {
     renderer.updateDrawableSkinId(drawableId, source.skin.id);
     renderer.updateDrawableProperties(drawableId, {
@@ -107,9 +171,9 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     requestRedraw: () => void;
     getStageTarget: () => unknown;
   };
-  let renderer: Record<string, any>;
+  let renderer: Dsl4TurboWarpRenderer;
   try {
-    renderer = runtimeHost.getRenderer() as Record<string, any>;
+    renderer = runtimeHost.getRenderer() as Dsl4TurboWarpRenderer;
   } catch (error) {
     throw new TypeError('Crossfade platform requires a TurboWarp runtime renderer', {cause: error});
   }
@@ -138,9 +202,9 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   let disposed = false;
   let currentVoice: {
     assetId: string;
-    voice: {ended: PromiseLike<unknown>; setGain: Function; stop: Function};
+    voice: Dsl4CrossfadeAudioVoice;
   } | null = null;
-  let currentBgmTransition: Readonly<{start: Function; finish: Function}> | null = null;
+  let currentBgmTransition: Dsl4CrossfadeOperation | null = null;
 
   function timeline(duration: number, update: (progress: number) => void, complete: () => void) {
     let state = 'idle';
@@ -205,15 +269,16 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   }
 
   async function crossfadeDrawable(
-    target: Record<string, any>,
+    target: Dsl4TurboWarpTarget,
     apply: () => unknown | Promise<unknown>,
-    transition: Record<string, any>,
+    transition: Dsl4CrossfadeTransition,
     signal?: AbortSignal,
   ) {
     if (disposed) throw platformError('Crossfade platform is disposed');
     if (signal?.aborted) throw abortError();
     if (target.visible === false) return apply();
-    const baseline = Math.max(0, Math.min(100, Number(target.effects?.ghost ?? 0)));
+    const effects = isRecord(target.effects) ? target.effects : {};
+    const baseline = Math.max(0, Math.min(100, Number(effects.ghost ?? 0)));
     const copy = createDrawableCopy(renderer, target);
     let cleaned = false;
     let cancelled = false;
@@ -275,7 +340,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     }
   }
 
-  async function createSceneCrossfade(transition: Record<string, any>) {
+  async function createSceneCrossfade(transition: Dsl4CrossfadeTransition) {
     if (disposed) throw platformError('Crossfade platform is disposed');
     if (typeof bitmapFactory !== 'function') {
       throw platformError('createImageBitmap is required for scene crossfade');
@@ -290,7 +355,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       },
     });
     active.add(preparation);
-    let bitmap;
+    let bitmap: ImageBitmap;
     try {
       bitmap = await bitmapFactory(canvas);
     } finally {
@@ -312,12 +377,9 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       renderer.destroySkin(skinId);
       throw platformError('The renderer layer ordering is unavailable');
     }
-    let drawableId;
+    let drawableId: number | undefined;
     try {
-      drawableId = renderer.createDrawable(group);
-      if (!Number.isInteger(drawableId)) {
-        throw platformError('A scene transition drawable could not be created');
-      }
+      drawableId = rendererDrawableId(renderer.createDrawable(group));
       renderer.updateDrawableSkinId(drawableId, skinId);
       const nativeSize = renderer.getNativeSize();
       renderer.updateDrawableProperties(drawableId, {
@@ -333,7 +395,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       renderer.markDrawableAsNoninteractive?.(drawableId);
       renderer.setDrawableOrder(drawableId, Infinity, group);
     } catch (error) {
-      if (Number.isInteger(drawableId)) renderer.destroyDrawable(drawableId, group);
+      if (drawableId !== undefined) renderer.destroyDrawable(drawableId, group);
       renderer.destroySkin(skinId);
       throw error;
     }
@@ -341,6 +403,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
+      if (drawableId === undefined) throw platformError('A scene transition drawable is missing');
       renderer.destroyDrawable(drawableId, group);
       renderer.destroySkin(skinId);
       runtimeHost.requestRedraw();
@@ -349,6 +412,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       Number(transition.seconds) * 1000,
       (progress) => {
         const eased = applyDsl4MoveEasing(transitionEasing(transition.easing), progress);
+        if (drawableId === undefined) throw platformError('A scene transition drawable is missing');
         renderer.updateDrawableEffect(drawableId, 'ghost', eased * 100);
         runtimeHost.requestRedraw();
       },
@@ -360,7 +424,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
 
   async function replaceBgm(
     assetId: string,
-    transition: Record<string, any>,
+    transition: Dsl4CrossfadeTransition,
     {restart = false, signal}: {restart?: boolean; signal?: AbortSignal} = {},
   ) {
     if (disposed) throw platformError('Crossfade platform is disposed');
@@ -385,11 +449,7 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
       }
       throw platformError('Audio voice factory returned an invalid voice handle');
     }
-    const voice = candidateVoice as unknown as {
-      ended: PromiseLike<unknown>;
-      setGain: Function;
-      stop: Function;
-    };
+    const voice = candidateVoice as unknown as Dsl4CrossfadeAudioVoice;
     if (signal?.aborted) {
       voice.stop();
       const error = new Error('DSL 4.0 BGM replacement was cancelled');
@@ -433,17 +493,17 @@ export function createDsl4TurboWarpCrossfadePlatform(options: {
   return Object.freeze({
     crossfadeStage(
       apply: () => unknown | Promise<unknown>,
-      transition: Record<string, any>,
+      transition: Dsl4CrossfadeTransition,
       signal?: AbortSignal,
     ) {
-      const stage = runtimeHost.getStageTarget() as Record<string, any> | null | undefined;
+      const stage = runtimeHost.getStageTarget() as Dsl4TurboWarpTarget | null | undefined;
       if (!stage) throw platformError('The Stage target is unavailable');
       return crossfadeDrawable(stage, apply, transition, signal);
     },
     crossfadeActorSkin(
-      target: Record<string, any>,
+      target: Dsl4TurboWarpTarget,
       apply: () => unknown | Promise<unknown>,
-      transition: Record<string, any>,
+      transition: Dsl4CrossfadeTransition,
       signal?: AbortSignal,
     ) {
       return crossfadeDrawable(target, apply, transition, signal);

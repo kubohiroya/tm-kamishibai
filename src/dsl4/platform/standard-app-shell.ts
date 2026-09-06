@@ -19,6 +19,42 @@ const optionKeys = new Set([
 const runtimeHostReservedKeys = new Set(['featureFlags', 'poseFeedbackPresenter']);
 const supportedSurfaces = new Set(['webPlayer', 'regularEditor', 'packager', 'developmentPreview']);
 
+type StandardAppShellLocale = 'en' | 'ja';
+
+interface StandardAppShellLocalizedTitle {
+  title: string;
+  officialWebsite: string;
+  close: string;
+  language: string;
+}
+
+interface StandardAppShellTitleOptions {
+  locales: Record<StandardAppShellLocale, StandardAppShellLocalizedTitle>;
+  version: string;
+  officialWebsiteUrl: string;
+  initialLocale?: StandardAppShellLocale;
+}
+
+interface StandardRuntimeHost {
+  dispose(reason: string): unknown;
+}
+
+/**
+ * A runtime host startup diagnostic. The host reports these as plain records, so the shell only
+ * declares the members its callers read and leaves each value unvalidated.
+ */
+export interface StandardRuntimeHostDiagnostic {
+  readonly message?: unknown;
+  readonly code?: unknown;
+}
+
+interface StandardRuntimeHostResult {
+  ok: boolean;
+  enabled: true;
+  diagnostics: readonly StandardRuntimeHostDiagnostic[];
+  host?: StandardRuntimeHost | null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -85,7 +121,7 @@ function requireTitleOptions(value: unknown) {
   ) {
     throw new TypeError('title.initialLocale must be en or ja');
   }
-  return value as Readonly<Record<string, any>>;
+  return value as unknown as Readonly<StandardAppShellTitleOptions>;
 }
 
 /** @returns {'en' | 'ja'} */
@@ -101,7 +137,7 @@ function resolveBrowserTitleLocale() {
   return /^ja(?:-|$)/iu.test(preferred) ? 'ja' : 'en';
 }
 
-function isRuntimeHostResult(value: unknown) {
+function isRuntimeHostResult(value: unknown): value is StandardRuntimeHostResult {
   if (
     !isRecord(value) ||
     typeof value.ok !== 'boolean' ||
@@ -129,9 +165,7 @@ export async function createDsl4StandardAppShell(
     poseFeedbackLabels?: Readonly<Record<string, unknown>>;
     runtimeHostOptions?: Readonly<Record<string, unknown>>;
     title?: Readonly<Record<string, unknown>>;
-    createRuntimeHost?: (
-      options: Record<string, unknown>,
-    ) => Promise<Readonly<Record<string, any>>>;
+    createRuntimeHost?: (options: Record<string, unknown>) => Promise<unknown>;
   } = {},
 ) {
   if (!isRecord(options)) throw new TypeError('Standard app-shell options must be an object');
@@ -179,7 +213,7 @@ export async function createDsl4StandardAppShell(
   let poseFeedbackMount: Dsl4PreviewElement | null = null;
   let titleMount: Dsl4PreviewElement | null = null;
   let disposeTitle: (() => void) | null = null;
-  let runtimeResult: Readonly<Record<string, any>> | null = null;
+  let runtimeResult: StandardRuntimeHostResult | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let progressIndicator: ReturnType<typeof createDsl4IndeterminateProgressIndicator> | null = null;
   let loadingPresenter: ReturnType<typeof createDsl4LoadingScreenPresenter> | null = null;
@@ -495,11 +529,50 @@ export async function createDsl4StandardAppShell(
       },
       ...(typeof runtimeHostOptions.setLoading === 'function' ? {setLoading} : {}),
     };
-    runtimeResult = await createRuntimeHost({
+    const runtimeCandidate = await createRuntimeHost({
       ...hostOptions,
       featureFlags,
       poseFeedbackPresenter,
     });
+    if (!isRuntimeHostResult(runtimeCandidate)) {
+      const errors: unknown[] = [
+        new TypeError('createRuntimeHost must return a valid enabled runtime host result'),
+      ];
+      try {
+        if (
+          isRecord(runtimeCandidate) &&
+          isRecord(runtimeCandidate.host) &&
+          typeof runtimeCandidate.host.dispose === 'function'
+        ) {
+          await runtimeCandidate.host.dispose('invalid-standard-app-shell-result');
+        }
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        disposeProgressIndicator();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        disposeLoadingPresenter();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        disposeTitleMount();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
+        (root as unknown as Dsl4PreviewElement).remove();
+      }
+      root = null;
+      poseFeedbackMount = null;
+      if (errors.length === 1) throw errors[0];
+      throw new AggregateError(errors, 'Invalid Standard app-shell runtime host cleanup failed');
+    }
+    runtimeResult = runtimeCandidate;
   } catch (error) {
     try {
       disposeProgressIndicator();
@@ -523,49 +596,6 @@ export async function createDsl4StandardAppShell(
     poseFeedbackMount = null;
     throw error;
   }
-  if (!isRuntimeHostResult(runtimeResult)) {
-    const errors: unknown[] = [
-      new TypeError('createRuntimeHost must return a valid enabled runtime host result'),
-    ];
-    try {
-      if (
-        isRecord(runtimeResult) &&
-        isRecord(runtimeResult.host) &&
-        typeof runtimeResult.host.dispose === 'function'
-      ) {
-        await runtimeResult.host.dispose('invalid-standard-app-shell-result');
-      }
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      if (typeof (root as Dsl4PreviewElement | null)?.remove === 'function') {
-        (root as unknown as Dsl4PreviewElement).remove();
-      }
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      disposeProgressIndicator();
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      disposeLoadingPresenter();
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      disposeTitleMount();
-    } catch (error) {
-      errors.push(error);
-    }
-    root = null;
-    poseFeedbackMount = null;
-    if (errors.length === 1) throw errors[0];
-    throw new AggregateError(errors, 'Invalid Standard app-shell runtime host cleanup failed');
-  }
-
   function snapshot() {
     return deepFreeze({
       version: 1,

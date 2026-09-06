@@ -20,9 +20,50 @@ const interactiveRoles = new Set([
 ]);
 const keyListenerCapture = true;
 
+interface InteractiveNode {
+  readonly tagName?: unknown;
+  readonly isContentEditable?: unknown;
+  readonly role?: unknown;
+  readonly dataset?: object;
+  getAttribute?(name: string): unknown;
+}
+
+interface KeymapInputEvent {
+  readonly button?: unknown;
+  readonly code?: unknown;
+  readonly ctrlKey?: unknown;
+  readonly altKey?: unknown;
+  readonly metaKey?: unknown;
+  readonly shiftKey?: unknown;
+  readonly defaultPrevented?: unknown;
+  readonly isComposing?: unknown;
+  readonly isPrimary?: unknown;
+  readonly parentElement?: unknown;
+  readonly parentNode?: unknown;
+  readonly pointerType?: unknown;
+  readonly repeat?: unknown;
+  readonly target?: unknown;
+  composedPath?(): unknown;
+  preventDefault?(): unknown;
+  stopPropagation?(): unknown;
+}
+
+interface KeymapInputTarget {
+  addEventListener(
+    type: string,
+    listener: (event: KeymapInputEvent) => unknown,
+    options?: unknown,
+  ): unknown;
+  removeEventListener(
+    type: string,
+    listener: (event: KeymapInputEvent) => unknown,
+    options?: unknown,
+  ): unknown;
+}
+
 function isInteractiveNode(node: unknown): boolean {
   if (typeof node !== 'object' || node === null) return false;
-  const element = node as Record<string, any>;
+  const element = node as InteractiveNode;
   if (interactiveTags.has(String(element.tagName ?? '').toUpperCase())) return true;
   if (element.isContentEditable === true) return true;
   const contentEditable = element.getAttribute?.('contenteditable');
@@ -36,7 +77,7 @@ function isInteractiveNode(node: unknown): boolean {
   return Boolean(element.dataset && Object.hasOwn(element.dataset, 'kamishibaiKeymapIgnore'));
 }
 
-function eventPath(event: Record<string, any>): unknown[] {
+function eventPath(event: KeymapInputEvent): unknown[] {
   try {
     const path = event.composedPath?.();
     if (Array.isArray(path)) return path;
@@ -44,15 +85,16 @@ function eventPath(event: Record<string, any>): unknown[] {
     // Fall back to the structural parent chain.
   }
   const path = [];
-  let node = event.target;
+  let node: unknown = event.target;
   while (node && typeof node === 'object') {
     path.push(node);
-    node = node.parentElement ?? node.parentNode;
+    const current = node as KeymapInputEvent;
+    node = current.parentElement ?? current.parentNode;
   }
   return path;
 }
 
-function shouldIgnore(event: Record<string, any>): boolean {
+function shouldIgnore(event: KeymapInputEvent): boolean {
   if (event.defaultPrevented) return true;
   if (event.isComposing) return true;
   if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return true;
@@ -134,8 +176,8 @@ export function createDsl4KeymapInputAdapter({
 
   const resolvedKeymap = deepFreeze(Object.fromEntries(Object.entries(keymap)));
   let disposed = false;
-  let attachedTarget: Record<string, Function> | null = null;
-  let attachedPointerTarget: Record<string, Function> | null = null;
+  let attachedTarget: KeymapInputTarget | null = null;
+  let attachedPointerTarget: KeymapInputTarget | null = null;
   let queue: Promise<unknown> = Promise.resolve();
 
   function reportError(error: unknown, command: string, code: string) {
@@ -146,7 +188,7 @@ export function createDsl4KeymapInputAdapter({
     }
   }
 
-  function handleKeyDown(event: Record<string, any>): boolean {
+  function handleKeyDown(event: KeymapInputEvent): boolean {
     if (disposed || typeof event !== 'object' || event === null || shouldIgnore(event)) {
       return false;
     }
@@ -213,7 +255,7 @@ export function createDsl4KeymapInputAdapter({
     return true;
   }
 
-  function handlePointerUp(event: Record<string, any>) {
+  function handlePointerUp(event: KeymapInputEvent) {
     if (
       disposed ||
       !consumePointer ||
@@ -255,7 +297,7 @@ export function createDsl4KeymapInputAdapter({
     }
   }
 
-  function handlePointerCancel(event: Record<string, any>) {
+  function handlePointerCancel(event: KeymapInputEvent) {
     if (
       disposed ||
       !cancelPointer ||
@@ -274,7 +316,7 @@ export function createDsl4KeymapInputAdapter({
     return false;
   }
 
-  function attach(target: Record<string, Function>) {
+  function attach(target: KeymapInputTarget) {
     if (disposed) throw new Error('Keymap input adapter is disposed');
     if (
       typeof target?.addEventListener !== 'function' ||
@@ -289,7 +331,7 @@ export function createDsl4KeymapInputAdapter({
   }
 
   /** Attach pointer advance separately so a shell can scope it to the rendered stage. */
-  function attachPointer(target: Record<string, Function>) {
+  function attachPointer(target: KeymapInputTarget) {
     if (disposed) throw new Error('Keymap input adapter is disposed');
     if (!consumePointer) throw new Error('Pointer input consumer is not configured');
     if (

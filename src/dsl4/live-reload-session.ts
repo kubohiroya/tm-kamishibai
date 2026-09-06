@@ -19,6 +19,58 @@ function validateStoryDocument(value: unknown) {
   return value;
 }
 
+interface LiveReloadRuntimeState {
+  readonly status?: unknown;
+  readonly runtime?: unknown;
+}
+
+interface LiveReloadActionSignature {
+  readonly command: string;
+  readonly handler: 'core' | 'custom';
+  readonly target: string | null;
+}
+
+interface LiveReloadAction {
+  readonly id?: unknown;
+  readonly command?: unknown;
+  readonly target?: unknown;
+  readonly handler?: unknown;
+}
+
+interface LiveReloadScene {
+  readonly id?: unknown;
+  readonly actions?: readonly LiveReloadAction[];
+}
+
+interface LiveReloadQuiesceToken {
+  readonly kind: 'Dsl4QuiesceToken';
+  readonly version: 1;
+  readonly candidateId: number;
+  readonly runtimeGeneration: number;
+  readonly storyPath: string;
+  readonly sceneId: string | null;
+  readonly actionIndex: number;
+  readonly variables: Readonly<Record<string, string | number | boolean>>;
+  readonly resumeMode: 'next-action' | 'replay-action' | 'finished';
+  readonly actionSignature: Readonly<LiveReloadActionSignature> | null;
+}
+
+type LiveReloadPlanOption =
+  | Readonly<{
+      enabled: true;
+      preserveManagedPresentation: boolean;
+      destination: Readonly<{sceneId?: string; actionIndex?: number}>;
+      variables: Readonly<Record<string, string | number | boolean>>;
+    }>
+  | Readonly<{enabled: false; reason: string}>;
+
+interface LiveReloadPlan {
+  readonly diagnostics: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly options: Readonly<
+    Record<'storyStart' | 'currentScene' | 'currentAction', Readonly<LiveReloadPlanOption>>
+  >;
+}
+
 /**
  * The runtime session the reload loop drives.
  *
@@ -34,7 +86,7 @@ export interface LiveReloadRuntimeSession {
   }): Promise<unknown>;
   stop(reason?: string): unknown;
   dispose(reason?: string): unknown;
-  getState(): Readonly<Record<string, any>>;
+  getState(): Readonly<LiveReloadRuntimeState>;
   quiesce(request: {candidateId: number}): unknown;
   resumeQuiesce(candidateId: number): unknown;
   invokeAction?(action: unknown): unknown;
@@ -68,7 +120,7 @@ function validateQuiesceToken(
   if (!isRecord(value)) {
     throw new TypeError('live reload runtime returned an invalid QuiesceToken');
   }
-  const token = value as Record<string, any>;
+  const token = value as Record<string, unknown>;
   const keys = Object.keys(token).sort();
   const expectedKeys = [
     'actionIndex',
@@ -88,12 +140,14 @@ function validateQuiesceToken(
     token.kind !== 'Dsl4QuiesceToken' ||
     token.version !== 1 ||
     token.candidateId !== candidateId ||
+    typeof token.runtimeGeneration !== 'number' ||
     !Number.isSafeInteger(token.runtimeGeneration) ||
     token.runtimeGeneration < 0 ||
     typeof token.storyPath !== 'string' ||
     token.storyPath.length === 0 ||
     (typeof token.sceneId !== 'string' && token.sceneId !== null) ||
     (typeof token.sceneId === 'string' && token.sceneId.length === 0) ||
+    typeof token.actionIndex !== 'number' ||
     !Number.isSafeInteger(token.actionIndex) ||
     token.actionIndex < 0 ||
     !isRecord(token.variables) ||
@@ -107,6 +161,13 @@ function validateQuiesceToken(
   ) {
     throw new TypeError('live reload runtime returned an invalid QuiesceToken');
   }
+  const runtimeGeneration = Number(token.runtimeGeneration);
+  const actionIndex = Number(token.actionIndex);
+  const storyPath = token.storyPath;
+  const sceneId = token.sceneId;
+  const variables = token.variables as Readonly<Record<string, string | number | boolean>>;
+  const resumeMode = token.resumeMode as LiveReloadQuiesceToken['resumeMode'];
+  let actionSignature: Readonly<LiveReloadActionSignature> | null = null;
   if (token.actionSignature !== null) {
     if (!isRecord(token.actionSignature)) {
       throw new TypeError('live reload QuiesceToken action signature is invalid');
@@ -126,48 +187,64 @@ function validateQuiesceToken(
     ) {
       throw new TypeError('live reload QuiesceToken action signature is invalid');
     }
+    actionSignature = deepFreeze({
+      command: token.actionSignature.command,
+      handler: token.actionSignature.handler as LiveReloadActionSignature['handler'],
+      target: token.actionSignature.target,
+    });
   }
-  const scenes = currentStoryDocument.scenes as ReadonlyArray<Readonly<Record<string, any>>>;
+  const scenes = (Array.isArray(currentStoryDocument.scenes) ? currentStoryDocument.scenes : []) as
+    readonly Readonly<LiveReloadScene>[] | [];
   const declaredVariables = (currentStoryDocument.variables ?? {}) as Readonly<
     Record<string, string | number | boolean>
   >;
   const declaredVariableNames = Object.keys(declaredVariables).sort();
-  const tokenVariableNames = Object.keys(token.variables).sort();
+  const tokenVariableNames = Object.keys(variables).sort();
   if (
     declaredVariableNames.length !== tokenVariableNames.length ||
     declaredVariableNames.some((name, index) => name !== tokenVariableNames[index]) ||
-    declaredVariableNames.some(
-      (name) => typeof token.variables[name] !== typeof declaredVariables[name],
-    )
+    declaredVariableNames.some((name) => typeof variables[name] !== typeof declaredVariables[name])
   ) {
     throw new TypeError('live reload QuiesceToken variable snapshot is inconsistent');
   }
-  const scene = scenes.find((currentScene) => currentScene.id === token.sceneId) ?? null;
-  const actions = (scene?.actions ?? []) as ReadonlyArray<Readonly<Record<string, any>>>;
-  const action = actions[token.actionIndex] ?? null;
-  if (token.actionSignature) {
+  const scene = scenes.find((currentScene) => currentScene.id === sceneId) ?? null;
+  const actions = scene?.actions ?? [];
+  const action = actions[actionIndex] ?? null;
+  if (actionSignature) {
     if (
-      token.resumeMode === 'finished' ||
+      resumeMode === 'finished' ||
       !action ||
-      action.id !== token.storyPath ||
-      action.command !== token.actionSignature.command ||
-      action.target !== token.actionSignature.target ||
-      String(action.handler ?? 'core') !== token.actionSignature.handler
+      action.id !== storyPath ||
+      action.command !== actionSignature.command ||
+      action.target !== actionSignature.target ||
+      String(action.handler ?? 'core') !== actionSignature.handler
     ) {
       throw new TypeError('live reload QuiesceToken action anchor is inconsistent');
     }
   } else if (
-    token.resumeMode !== 'finished' ||
+    resumeMode !== 'finished' ||
     !scene ||
-    token.actionIndex !== actions.length ||
-    token.storyPath !== `/scenes/${encodeDsl4StoryPathSegment(String(scene.id))}`
+    actionIndex !== actions.length ||
+    storyPath !== `/scenes/${encodeDsl4StoryPathSegment(String(scene.id))}`
   ) {
     throw new TypeError('live reload QuiesceToken terminal anchor is inconsistent');
   }
-  return deepFreeze(cloneValue(token));
+  const normalizedToken: LiveReloadQuiesceToken = {
+    kind: 'Dsl4QuiesceToken',
+    version: 1,
+    candidateId,
+    runtimeGeneration,
+    storyPath,
+    sceneId,
+    actionIndex,
+    variables: cloneValue(variables) as Readonly<Record<string, string | number | boolean>>,
+    resumeMode,
+    actionSignature,
+  };
+  return deepFreeze(normalizedToken);
 }
 
-function executionFromQuiesceToken(token: Readonly<Record<string, any>>) {
+function executionFromQuiesceToken(token: Readonly<LiveReloadQuiesceToken>) {
   return deepFreeze({
     status: token.resumeMode === 'finished' ? 'finished' : 'paused',
     sceneId: token.sceneId,
@@ -275,8 +352,8 @@ export function createDsl4LiveReloadSession({
     id: number;
     storyDocument: Readonly<Record<string, unknown>>;
     integrity: string | null;
-    plan: Readonly<Record<string, any>> | null;
-    token: Readonly<Record<string, any>> | null;
+    plan: Readonly<LiveReloadPlan> | null;
+    token: Readonly<LiveReloadQuiesceToken> | null;
   } | null = null;
   let status: 'waiting' | 'active' | 'invalid' | 'quiescing' | 'pending' | 'failed' | 'disposed' =
     current ? 'active' : 'waiting';
@@ -310,8 +387,12 @@ export function createDsl4LiveReloadSession({
     });
   }
 
+  type StageBeginResult =
+    | Readonly<{kind: 'snapshot'; state: ReturnType<typeof snapshot>}>
+    | Readonly<{kind: 'candidate'; candidateId: number; quiescePromise: Promise<unknown>}>;
+
   function observeRun(run: unknown) {
-    if (!run || typeof run !== 'object' || typeof (run as any).then !== 'function') {
+    if (!isRecord(run) || typeof run.then !== 'function') {
       return;
     }
     Promise.resolve(run).catch((error) => {
@@ -358,7 +439,7 @@ export function createDsl4LiveReloadSession({
   }
 
   function stage(input: unknown) {
-    const begun = enqueue(async () => {
+    const begun = enqueue(async (): Promise<StageBeginResult> => {
       if (disposed) throw new TypeError('live reload session is disposed');
       if (!isRecord(input) || typeof input.ok !== 'boolean') {
         throw new TypeError('stage requires a source frontend result');
@@ -422,8 +503,7 @@ export function createDsl4LiveReloadSession({
       return {kind: 'candidate', candidateId, quiescePromise};
     });
 
-    const completion = begun.then(async (resultInput) => {
-      const result = resultInput as Record<string, any>;
+    const completion = begun.then(async (result) => {
       if (result.kind === 'snapshot') return result.state;
       let tokenInput;
       try {
@@ -451,15 +531,16 @@ export function createDsl4LiveReloadSession({
           throw new TypeError('live reload candidate was replaced while quiescing');
         }
         if (!current) throw new TypeError('live reload has no current runtime');
+        const activeCandidate = candidate;
         try {
-          const token = validateQuiesceToken(tokenInput, candidate.id, current.storyDocument);
+          const token = validateQuiesceToken(tokenInput, activeCandidate.id, current.storyDocument);
           const plan = createDsl4ReloadPlan({
             currentStoryDocument: current.storyDocument,
-            candidateStoryDocument: candidate.storyDocument,
+            candidateStoryDocument: activeCandidate.storyDocument,
             currentExecution: executionFromQuiesceToken(token),
             ...(isException === undefined ? {} : {isException}),
-          });
-          candidate = {...candidate, token, plan};
+          }) as Readonly<LiveReloadPlan>;
+          candidate = {...activeCandidate, token, plan};
           diagnostics = plan.diagnostics;
           status = 'pending';
           return snapshot();
@@ -469,7 +550,7 @@ export function createDsl4LiveReloadSession({
           } catch {
             // The fixed quiesce diagnostic remains authoritative.
           }
-          diagnostics = [quiesceDiagnostic(candidate.storyDocument, error)];
+          diagnostics = [quiesceDiagnostic(activeCandidate.storyDocument, error)];
           candidate = null;
           status = 'failed';
           return snapshot();
@@ -548,8 +629,10 @@ export function createDsl4LiveReloadSession({
         await previous.session.stop('live-reload');
         await previous.session.dispose('live-reload-replaced');
         const run = next.start({
-          sceneId: option.destination.sceneId,
-          actionIndex: option.destination.actionIndex,
+          ...('sceneId' in option.destination ? {sceneId: option.destination.sceneId} : {}),
+          ...('actionIndex' in option.destination
+            ? {actionIndex: option.destination.actionIndex}
+            : {}),
           variables: option.variables,
         });
         current = {

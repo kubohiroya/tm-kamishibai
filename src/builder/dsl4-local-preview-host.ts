@@ -54,6 +54,34 @@ const runtimeOwners = new Set(['protocol', 'browser']);
 const maximumRequestBytes = 4 * 1024;
 const maximumEventRecords = 64;
 
+interface LocalPreviewProtocolSession {
+  handshake(input: unknown): unknown;
+  stage(input: unknown): unknown;
+  defer(input: unknown): unknown;
+  commit(input: unknown): unknown;
+  disconnect(input: unknown): unknown;
+  getState(): Readonly<Record<string, unknown>>;
+  whenIdle(): Promise<unknown>;
+}
+
+interface LocalPreviewSourceFrontend {
+  parse(source: string, options?: {sourceId?: string}): unknown;
+}
+
+interface LocalPreviewSourceSummary {
+  readonly ok: boolean;
+  readonly integrity: string | null;
+  readonly diagnostics: readonly unknown[];
+  readonly counts: Readonly<{scenes: number; actions: number; assets: number}> | null;
+}
+
+interface LocalPreviewSourceResult {
+  readonly ok: boolean;
+  readonly diagnostics: readonly unknown[];
+  readonly storyDocument?: unknown;
+  readonly sourceSnapshot?: unknown;
+}
+
 export const dsl4LocalPreviewHostDefaults = deepFreeze({
   bindHost: '127.0.0.1',
   port: 0,
@@ -115,14 +143,14 @@ function validateProtocolSession(value: unknown) {
       throw new TypeError(`protocolSession.${method} must be a function`);
     }
   }
-  return value as Record<string, Function>;
+  return value as unknown as LocalPreviewProtocolSession;
 }
 
 function validateFrontend(value: unknown) {
   if (!isRecord(value) || typeof value.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
-  return value as {parse(source: string, options?: {sourceId?: string}): any};
+  return value as unknown as LocalPreviewSourceFrontend;
 }
 
 function validateBindHost(value: unknown) {
@@ -196,7 +224,7 @@ function writeJson(response: import('node:http').ServerResponse, status: number,
   response.end(body);
 }
 
-function safeSourceSummary(input: unknown) {
+function safeSourceSummary(input: unknown): Readonly<LocalPreviewSourceSummary> {
   if (!isRecord(input) || typeof input.ok !== 'boolean' || !Array.isArray(input.diagnostics)) {
     throw new TypeError('watcher result is invalid');
   }
@@ -222,6 +250,13 @@ function safeSourceSummary(input: unknown) {
       ? {scenes: scenes.length, actions: actionCount, assets: assetReferences.length}
       : null,
   });
+}
+
+function sourceResult(input: unknown): Readonly<LocalPreviewSourceResult> {
+  if (!isRecord(input) || typeof input.ok !== 'boolean' || !Array.isArray(input.diagnostics)) {
+    throw new TypeError('source result is invalid');
+  }
+  return input as unknown as Readonly<LocalPreviewSourceResult>;
 }
 
 function modulePath(requestPath: string) {
@@ -297,7 +332,7 @@ export function createDsl4LocalPreviewHost(options: {
   projectRoot: string;
   sourceManifestPath: string;
   sourceManifest: unknown;
-  sourceFrontend: {parse: Function};
+  sourceFrontend: LocalPreviewSourceFrontend;
   maxSourceBytes: number;
   featureFlags?: unknown;
   maxSourceFiles?: number;
@@ -306,7 +341,7 @@ export function createDsl4LocalPreviewHost(options: {
   maxAssetFileBytes?: number;
   maxAssetFiles?: number;
   maxTotalAssetBytes?: number;
-  protocolSession?: Record<string, Function>;
+  protocolSession?: unknown;
   runtimeOwner?: 'protocol' | 'browser';
   bindHost?: '127.0.0.1' | '::1';
   port?: number;
@@ -498,8 +533,8 @@ export function createDsl4LocalPreviewHost(options: {
   let sourcePort: ReturnType<typeof createDsl4PreviewSourceProtocolPort> | null = null;
   let sourceWatcher: ReturnType<typeof createDsl4PreviewSourceWatcher> | null = null;
   let structureWatcher: Dsl4FileWatcher | null = null;
-  let currentSourceSummary: Readonly<Record<string, any>> | null = null;
-  let latestValidSourceResult: Readonly<Record<string, any>> | null = null;
+  let currentSourceSummary: Readonly<LocalPreviewSourceSummary> | null = null;
+  let latestValidSourceResult: Readonly<LocalPreviewSourceResult> | null = null;
   let startPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let structuralOperation = Promise.resolve();
@@ -744,7 +779,7 @@ export function createDsl4LocalPreviewHost(options: {
       const activePort =
         runtimeOwner === 'protocol'
           ? createDsl4PreviewSourceProtocolPort({
-              protocolSession: protocolSession as Record<string, Function>,
+              protocolSession,
               sessionId,
               onEvent: observeProtocolEvent,
               onError: reportError,
@@ -779,7 +814,8 @@ export function createDsl4LocalPreviewHost(options: {
           if (!activePort) {
             fail('Preview protocol is unavailable', 'K4-PREVIEW-HOST-RUNTIME-OWNER');
           }
-          if (result.ok === true) latestValidSourceResult = result;
+          const validatedResult = sourceResult(result);
+          if (validatedResult.ok === true) latestValidSourceResult = validatedResult;
           const acknowledgement = await activePort.stage(result);
           publish({
             type: 'local-preview.source',

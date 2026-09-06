@@ -5,6 +5,43 @@ import {encodeDsl4StoryPathSegment} from './story-path.js';
 const storyTypeTag = 'kamishibai.storyDocument';
 const actionViewTypeTag = 'kamishibai.actionView';
 
+interface StructuredDataAction {
+  readonly id: string;
+  readonly command: string;
+  readonly target?: unknown;
+  readonly args?: unknown;
+}
+
+interface StructuredDataScene {
+  readonly id: string;
+  readonly actions: readonly StructuredDataAction[];
+}
+
+interface StructuredDataStoryDocument {
+  readonly kind: 'StoryDocument';
+  readonly version: '4.0';
+  readonly scenes: readonly StructuredDataScene[];
+}
+
+type StoreResult<T> =
+  Readonly<{ok: true; value: T}> | Readonly<{ok?: false; error?: unknown; value?: unknown}>;
+
+interface StructuredDataStore {
+  readonly rootScopeRef: string;
+  createScope(ownerScopeRef: string, label: string): StoreResult<string>;
+  createScopeBundle(input: {
+    ownerScopeRef: string;
+    label: string;
+    typeTag: string;
+    value: unknown;
+    references: readonly unknown[];
+  }): StoreResult<{scopeRef: string; ownerRef: string}>;
+  debugSnapshot(): Readonly<{counts?: unknown}>;
+  disposeRealm(): StoreResult<{realmState?: unknown}>;
+  readValue(source: string): StoreResult<{typeTag?: unknown; value: unknown}>;
+  releaseScope(scopeRef: string): StoreResult<unknown>;
+}
+
 export class Dsl4KamishibaiStructuredDataError extends Error {
   code: string;
   storyPath: string = '/';
@@ -36,14 +73,14 @@ function validateStoryDocument(storyDocument: unknown) {
   ) {
     throw new TypeError('Structured Data integration requires a DSL 4.0 StoryDocument');
   }
-  return storyDocument as Readonly<Record<string, any>>;
+  return storyDocument as unknown as Readonly<StructuredDataStoryDocument>;
 }
 
 function validateScene(scene: unknown) {
   if (!isRecord(scene) || typeof scene.id !== 'string' || !Array.isArray(scene.actions)) {
     throw new TypeError('SceneActionIterator requires a normalized scene');
   }
-  return scene as Readonly<Record<string, any>>;
+  return scene as unknown as Readonly<StructuredDataScene>;
 }
 
 function validateStore(store: unknown) {
@@ -59,10 +96,10 @@ function validateStore(store: unknown) {
     if (typeof store[method] !== 'function') throw new TypeError(`store.${method} is required`);
   }
   if (typeof store.rootScopeRef !== 'string') throw new TypeError('store.rootScopeRef is required');
-  return store as any;
+  return store as unknown as StructuredDataStore;
 }
 
-function requireStoreResult(result: any, operation: string, storyPath: string = '/') {
+function requireStoreResult<T>(result: StoreResult<T>, operation: string, storyPath: string = '/') {
   if (result?.ok) return result.value;
   throw new Dsl4KamishibaiStructuredDataError(
     'K4-STRUCTURED-DATA-001',
@@ -72,7 +109,11 @@ function requireStoreResult(result: any, operation: string, storyPath: string = 
   );
 }
 
-function requireCleanupResult(result: any, operation: string, storyPath: string = '/') {
+function requireCleanupResult<T>(
+  result: StoreResult<T>,
+  operation: string,
+  storyPath: string = '/',
+) {
   if (result?.ok) return result.value;
   throw new Dsl4KamishibaiStructuredDataError(
     'K4-STRUCTURED-DATA-CLEANUP-001',
@@ -83,9 +124,9 @@ function requireCleanupResult(result: any, operation: string, storyPath: string 
 }
 
 /** Create a typed scene iterator without evaluating an author-provided JSONPath. */
-export function createDsl4StoryIterator(storyDocument: Readonly<Record<string, unknown>>) {
+export function createDsl4StoryIterator(storyDocument: unknown) {
   const story = validateStoryDocument(storyDocument);
-  const scenes = story.scenes as ReadonlyArray<Readonly<Record<string, any>>>;
+  const scenes = story.scenes;
   const sceneIndex = new Map();
   for (const [index, candidate] of scenes.entries()) {
     const scene = validateScene(candidate);
@@ -150,11 +191,11 @@ export function createDsl4StoryIterator(storyDocument: Readonly<Record<string, u
 
 /** Create a typed action iterator positioned immediately before `startIndex`. */
 export function createDsl4SceneActionIterator(
-  scene: Readonly<Record<string, unknown>>,
+  scene: unknown,
   {startIndex = 0}: {startIndex?: number} = {},
 ) {
   const normalizedScene = validateScene(scene);
-  const actions = normalizedScene.actions as ReadonlyArray<Readonly<Record<string, any>>>;
+  const actions = normalizedScene.actions;
   if (
     !Number.isSafeInteger(startIndex) ||
     startIndex < 0 ||
@@ -212,19 +253,19 @@ export function createDsl4KamishibaiStructuredDataSession({
 }: {
   storyDocument: Readonly<Record<string, unknown>>;
   store?: object;
-  objectStoreOptions?: object;
+  objectStoreOptions?: Parameters<typeof createDsl4ObjectStore>[0];
 }) {
   const sourceStoryDocument = validateStoryDocument(inputStoryDocument);
-  const store = validateStore(inputStore ?? createDsl4ObjectStore(objectStoreOptions as any));
+  const store = validateStore(inputStore ?? createDsl4ObjectStore(objectStoreOptions));
   let state: 'idle' | 'active' | 'faulted' | 'disposed' = 'idle';
   let storyScopeRef: string | null = null;
   let storyIterator: ReturnType<typeof createDsl4StoryIterator> | null = null;
   let sceneScopeRef: string | null = null;
   let sceneIterator: ReturnType<typeof createDsl4SceneActionIterator> | null = null;
-  let activeScene: Readonly<Record<string, any>> | null = null;
+  let activeScene: Readonly<StructuredDataScene> | null = null;
   let actionScopeRef: string | null = null;
   let actionViewRef: string | null = null;
-  let activeAction: Readonly<Record<string, any>> | null = null;
+  let activeAction: Readonly<StructuredDataAction> | null = null;
 
   function requireUsable() {
     if (state === 'disposed' || state === 'faulted') {

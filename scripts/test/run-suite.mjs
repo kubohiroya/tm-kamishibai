@@ -12,7 +12,11 @@ const testFilePattern = /\.test\.(?:mjs|ts)$/u;
 const require = createRequire(import.meta.url);
 const vitestBinary = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
 
-const run = (/** @type {any} */ command, /** @type {any} */ arguments_) => {
+/**
+ * @param {string} command
+ * @param {readonly string[]} arguments_
+ */
+const run = (command, arguments_) => {
   const result = spawnSync(command, arguments_, {
     cwd: projectRoot,
     stdio: 'inherit',

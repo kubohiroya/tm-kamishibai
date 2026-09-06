@@ -1,5 +1,8 @@
 import type {Dsl4RuntimePort, Dsl4RuntimePortOperation} from './runtime-port.js';
-import {createDsl4AssetPreloadCoordinator} from './asset-preload-coordinator.js';
+import {
+  createDsl4AssetPreloadCoordinator,
+  type Dsl4AssetPreloadLifecycle,
+} from './asset-preload-coordinator.js';
 import {createDsl4AssetDependencyIndex} from './asset-dependency-index.js';
 import {bubbleStyleNameForStyleIds, composeBubbleStyles} from './bubble-style.js';
 import {deepFreeze, sourceOriginForStoryPath} from './story-document.js';
@@ -141,6 +144,34 @@ interface StructuredDataIntegration {
   currentActionResources(): unknown;
 }
 
+interface DebugExecution {
+  beforeAction(
+    action: Readonly<{
+      command: string;
+      sceneId: string;
+      actionIndex: number;
+      actionPath: string;
+      signal: AbortSignal;
+    }>,
+  ): unknown;
+  getState(): Readonly<{paused?: boolean}>;
+}
+
+interface SceneCrossfadeOperation {
+  start(): unknown;
+  finish(reason: string): unknown;
+}
+
+interface QuiesceRequest {
+  candidateId: number;
+  mode: 'finish-only' | 'cancel-replay-safe';
+  phase: 'quiescing' | 'token' | 'failed';
+  token: Readonly<Record<string, unknown>> | null;
+  completion: ReturnType<typeof deferred>;
+  resumeRequested: boolean;
+  cancelTimeout: () => void;
+}
+
 export function createDsl4RuntimeController({
   storyDocument,
   port,
@@ -162,12 +193,7 @@ export function createDsl4RuntimeController({
 }: {
   storyDocument: Readonly<Record<string, unknown>>;
   port: Dsl4RuntimePort;
-  assetLifecycle?: {
-    prepare: Function;
-    setLoading: Function;
-    releaseAssets: Function;
-    release: Function;
-  };
+  assetLifecycle?: Dsl4AssetPreloadLifecycle;
   evaluateCondition?: (
     expression: string,
     variables: Readonly<Record<string, string | number | boolean>>,
@@ -175,7 +201,7 @@ export function createDsl4RuntimeController({
   ) => boolean | Promise<boolean>;
   onEvent?: (event: RuntimeEvent) => void;
   structuredDataIntegration?: StructuredDataIntegration;
-  debugExecution?: {beforeAction: Function; getState: Function};
+  debugExecution?: DebugExecution;
   posePreviewMirroringEnabled?: boolean;
   cameraPreviewControlsEnabled?: boolean;
   poseNavigationPolicyEnabled?: boolean;
@@ -288,7 +314,7 @@ export function createDsl4RuntimeController({
   let pendingSceneCrossfade: {
     sceneId: string;
     prefixEnd: number;
-    operation: Readonly<{start: Function; finish: Function}>;
+    operation: Readonly<SceneCrossfadeOperation>;
   } | null = null;
   if (
     !broadcastMessageAndWaitEnabled &&
@@ -441,7 +467,7 @@ export function createDsl4RuntimeController({
     completion: ReturnType<typeof deferred>;
     cleanup: () => void;
   } | null = null;
-  let quiesceRequest: Record<string, any> | null = null;
+  let quiesceRequest: QuiesceRequest | null = null;
   let failureDiagnostic: Readonly<Record<string, unknown>> | null = null;
   const trace: RuntimeEvent[] = [];
   const assetCoordinator = assetLifecycle
@@ -462,8 +488,8 @@ export function createDsl4RuntimeController({
     : null;
   let assetsReleased = true;
   let controllerDisposed = false;
-  let structuredScene: Readonly<Record<string, any>> | null = null;
-  let structuredAction: Readonly<Record<string, any>> | null = null;
+  let structuredScene: Readonly<Record<string, unknown>> | null = null;
+  let structuredAction: Readonly<Record<string, unknown>> | null = null;
   let structuredActionResources: Readonly<{actionScopeRef: string; actionViewRef: string}> | null =
     null;
   let structuredStoryActive = false;
@@ -480,7 +506,7 @@ export function createDsl4RuntimeController({
   }
 
   /** The action the runtime is on, or null once the scene has run past its last action. */
-  function currentAction(): Readonly<Record<string, any>> | null {
+  function currentAction(): Readonly<Record<string, unknown>> | null {
     if (structuredAction) return structuredAction;
     const actions = (currentScene()?.actions ?? []) as ReadonlyArray<
       Readonly<Record<string, unknown>>
@@ -658,7 +684,7 @@ export function createDsl4RuntimeController({
       Object.defineProperty(error, 'code', {value: 'K4-STRUCTURED-DATA-001'});
       throw error;
     }
-    structuredScene = entered.scene as Readonly<Record<string, any>>;
+    structuredScene = entered.scene;
     structuredActionActive = false;
     structuredAction = null;
     structuredActionResources = null;
@@ -998,7 +1024,7 @@ export function createDsl4RuntimeController({
     return {
       sceneId: String(scene.id),
       prefixEnd,
-      operation: operation as unknown as Readonly<{start: Function; finish: Function}>,
+      operation: operation as unknown as Readonly<SceneCrossfadeOperation>,
     };
   }
 
@@ -1034,7 +1060,8 @@ export function createDsl4RuntimeController({
     const nextScene = scenes[nextIndex];
     // enterScene resolves the index against the scene list before reaching here.
     if (!nextScene) throw new TypeError(`DSL 4.0 scene index ${nextIndex} does not exist`);
-    const from = currentScene()?.id ?? null;
+    const fromId = currentScene()?.id;
+    const from = fromId === undefined || fromId === null ? null : String(fromId);
     port.hideSceneActors?.(
       deepFreeze({
         actors: storyActorIds,
@@ -1634,7 +1661,7 @@ export function createDsl4RuntimeController({
               throw error;
             }
             structuredActionActive = true;
-            structuredAction = next.action as Readonly<Record<string, any>>;
+            structuredAction = next.action;
             structuredActionResources = deepFreeze({
               actionScopeRef: currentResources.actionScopeRef,
               actionViewRef: currentResources.actionViewRef,
@@ -2238,7 +2265,7 @@ export function createDsl4RuntimeController({
   }
 
   function awaitCancelledActionCleanup(
-    request: Record<string, any>,
+    request: QuiesceRequest,
     activeRun: Promise<Readonly<Record<string, unknown>>>,
   ) {
     const timeout = deferred();
@@ -2314,6 +2341,9 @@ export function createDsl4RuntimeController({
     if (quiesceRequest) {
       quiesceRequest.candidateId = candidateId;
       if (quiesceRequest.phase === 'token') {
+        if (!quiesceRequest.token) {
+          return Promise.reject(new TypeError('live reload quiesce token is missing'));
+        }
         quiesceRequest.token = retagDsl4QuiesceToken(quiesceRequest.token, candidateId);
         return Promise.resolve(quiesceRequest.token);
       }
@@ -2326,7 +2356,7 @@ export function createDsl4RuntimeController({
     }
 
     const completion = deferred();
-    const request = {
+    const request: QuiesceRequest = {
       candidateId,
       mode,
       phase: 'quiescing',

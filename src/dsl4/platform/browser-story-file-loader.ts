@@ -47,6 +47,57 @@ function positiveLimit(value: unknown, name: string) {
   return Number(value);
 }
 
+interface Dsl4BrowserSelectedFile {
+  name: string;
+  size: number;
+  webkitRelativePath?: string;
+  arrayBuffer(): ArrayBuffer | Promise<ArrayBuffer>;
+}
+
+interface Dsl4BrowserSelectedEntry {
+  path?: string;
+  file: unknown;
+}
+
+interface Dsl4BrowserFileSystemHandle {
+  name: string;
+  kind: 'file' | 'directory' | string;
+  getFile?(): unknown | Promise<unknown>;
+  entries?(): AsyncIterable<[string, Dsl4BrowserFileSystemHandle]>;
+}
+
+interface Dsl4BrowserTransferItem {
+  getAsFileSystemHandle?():
+    Dsl4BrowserFileSystemHandle | null | Promise<Dsl4BrowserFileSystemHandle | null>;
+}
+
+interface Dsl4BrowserDataTransfer {
+  items?: ArrayLike<Dsl4BrowserTransferItem>;
+  files?: ArrayLike<unknown> | Iterable<unknown>;
+}
+
+interface Dsl4BrowserSourceRange {
+  start?: {line?: unknown};
+}
+
+interface Dsl4BrowserSelectedStoryDocument extends Readonly<Record<string, unknown>> {
+  assets?: Readonly<Record<string, Dsl4StoryDocumentAsset>>;
+  sourceMap?: Readonly<Record<string, Dsl4BrowserSourceRange>>;
+}
+
+interface Dsl4BrowserArtifactResult {
+  artifact: unknown;
+}
+
+interface Dsl4BrowserMutableProject extends Record<string, unknown> {
+  extensionStorage?: {
+    kubohiroyakamishibai4?: {
+      components?: Record<string, unknown>;
+    };
+    kubohiroyakamishibairuntime4?: unknown;
+  };
+}
+
 function requireFile(value: unknown) {
   if (
     !isRecord(value) ||
@@ -57,14 +108,12 @@ function requireFile(value: unknown) {
   ) {
     throw new TypeError('selected browser entry must provide the File contract');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4BrowserSelectedFile;
 }
 
-function entryPath(entry: Readonly<Record<string, any>>) {
-  return safePath(
-    String(entry.path ?? entry.file?.webkitRelativePath ?? entry.file?.name ?? ''),
-    'file path',
-  );
+function entryPath(entry: Readonly<Dsl4BrowserSelectedEntry>) {
+  const file = entry.file as Partial<Dsl4BrowserSelectedFile> | null | undefined;
+  return safePath(String(entry.path ?? file?.webkitRelativePath ?? file?.name ?? ''), 'file path');
 }
 
 /** Find exactly one DSL 4.0 YAML source among files selected or dropped by the user. */
@@ -118,10 +167,12 @@ function boundedSelectedPath(path: string, state: {maxDepth: number}) {
 }
 
 async function collectChildren(
-  handle: Readonly<Record<string, any>>,
+  handle: Readonly<Dsl4BrowserFileSystemHandle> & {
+    entries(): AsyncIterable<[string, Dsl4BrowserFileSystemHandle]>;
+  },
   state: {count: number; maxEntries: number},
 ) {
-  const children: Array<[string, Record<string, any>]> = [];
+  const children: Array<[string, Dsl4BrowserFileSystemHandle]> = [];
   for await (const entry of handle.entries()) {
     if (state.count + children.length >= state.maxEntries) {
       throw new TypeError(`Selected project exceeds the ${state.maxEntries} entry limit`);
@@ -133,7 +184,7 @@ async function collectChildren(
 }
 
 async function collectHandle(
-  handle: Readonly<Record<string, any>>,
+  handle: Readonly<Dsl4BrowserFileSystemHandle>,
   prefix: string,
   output: Array<{path: string; file: unknown}>,
   state: {count: number; maxEntries: number; maxDepth: number},
@@ -148,7 +199,12 @@ async function collectHandle(
   if (handle.kind !== 'directory' || typeof handle.entries !== 'function') {
     throw new TypeError('Dropped entry must be a file or enumerable directory');
   }
-  const children = await collectChildren(handle, state);
+  const children = await collectChildren(
+    handle as Readonly<Dsl4BrowserFileSystemHandle> & {
+      entries(): AsyncIterable<[string, Dsl4BrowserFileSystemHandle]>;
+    },
+    state,
+  );
   for (const [, child] of children) await collectHandle(child, path, output, state, depth + 1);
 }
 
@@ -160,12 +216,12 @@ export async function collectDsl4BrowserDroppedFiles(
   if (!isRecord(dataTransferInput)) throw new TypeError('drop payload is required');
   const limits = selectionLimits(optionsInput);
   const state = {count: 0, ...limits};
-  const dataTransfer = dataTransferInput as Record<string, any>;
+  const dataTransfer = dataTransferInput as unknown as Dsl4BrowserDataTransfer;
   const transferredItems = dataTransfer.items ?? [];
   if (Number(transferredItems.length ?? 0) > limits.maxEntries) {
     throw new TypeError(`Selected project exceeds the ${limits.maxEntries} entry limit`);
   }
-  const items = Array.from(transferredItems) as Array<Record<string, any>>;
+  const items = Array.from(transferredItems);
   const entries: Array<{path: string; file: unknown}> = [];
   if (items.some((item) => typeof item?.getAsFileSystemHandle === 'function')) {
     for (const item of items) {
@@ -174,7 +230,7 @@ export async function collectDsl4BrowserDroppedFiles(
     }
   } else {
     const droppedFiles = dataTransfer.files ?? [];
-    if (Number(droppedFiles.length ?? 0) > limits.maxEntries) {
+    if (Number((droppedFiles as ArrayLike<unknown>).length ?? 0) > limits.maxEntries) {
       throw new TypeError(`Selected project exceeds the ${limits.maxEntries} entry limit`);
     }
     for (const file of Array.from(droppedFiles)) {
@@ -200,14 +256,16 @@ export async function collectDsl4BrowserDirectoryFiles(
   const limits = selectionLimits(optionsInput);
   const state = {count: 0, ...limits};
   const entries: Array<{path: string; file: unknown}> = [];
-  const root = rootInput as Record<string, any>;
+  const root = rootInput as unknown as Dsl4BrowserFileSystemHandle & {
+    entries(): AsyncIterable<[string, Dsl4BrowserFileSystemHandle]>;
+  };
   const children = await collectChildren(root, state);
   for (const [, child] of children) await collectHandle(child, '', entries, state, 0);
   entries.sort((left, right) => left.path.localeCompare(right.path, 'en'));
   return entries;
 }
 
-async function readFile(file: Record<string, any>, limit: number, label: string) {
+async function readFile(file: Dsl4BrowserSelectedFile, limit: number, label: string) {
   if (file.size > limit) throw new TypeError(`${label} exceeds the configured byte limit`);
   const buffer = await file.arrayBuffer();
   if (!(buffer instanceof ArrayBuffer))
@@ -236,7 +294,7 @@ function missingEmbeddedAssetError({
   assetId: string;
   inputPath: string;
   sourcePath: string;
-  storyDocument: Readonly<Record<string, any>>;
+  storyDocument: Dsl4BrowserSelectedStoryDocument;
 }) {
   const assetPath = `/assets/${encodeDsl4StoryPathSegment(assetId)}`;
   const sourceRange =
@@ -315,7 +373,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     Object.defineProperty(error, 'diagnostics', {value: parsed.diagnostics ?? []});
     throw error;
   }
-  const storyDocument = parsed.storyDocument;
+  const storyDocument = parsed.storyDocument as Dsl4BrowserSelectedStoryDocument;
   const sourceDescriptor = await createDsl4EmbeddedSourceDescriptor(sourceText, {
     sourceId: 'main',
     displayName: sourcePath.split('/').at(-1) ?? sourcePath,
@@ -435,7 +493,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
     if (typeof first?.code === 'string') Object.defineProperty(error, 'code', {value: first.code});
     throw error;
   }
-  const project = structuredClone(options.project) as Record<string, any>;
+  const project = structuredClone(options.project) as Dsl4BrowserMutableProject;
   if (!isRecord(project.extensionStorage)) project.extensionStorage = {};
   delete project.extensionStorage.kubohiroyakamishibairuntime4;
   if (!isRecord(project.extensionStorage.kubohiroyakamishibai4)) {
@@ -445,7 +503,7 @@ export async function buildDsl4BrowserSelectedStoryProject(options: {
   if (!isRecord(bundleStorage.components)) bundleStorage.components = {};
   bundleStorage.components.kubohiroyakamishibairuntime4 = {
     source: structuredClone(sourceDescriptor),
-    artifact: structuredClone((artifactResult as Readonly<Record<string, any>>).artifact),
+    artifact: structuredClone((artifactResult as unknown as Dsl4BrowserArtifactResult).artifact),
     assets: structuredClone(assetBundle),
     application: {mode: 'story'},
   };

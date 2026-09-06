@@ -34,6 +34,83 @@ interface Dsl4LocalPreviewDocument extends Dsl4PreviewDocument {
   querySelector(selector: string): Dsl4PreviewElement | null;
 }
 
+type PreviewCallback = (...args: unknown[]) => unknown;
+
+interface Dsl4LocalPreviewBrowserClientOptions extends Record<string, unknown> {
+  document: unknown;
+  location: unknown;
+  history: unknown;
+  eventTarget: unknown;
+  fetch?: typeof fetch;
+  sourceFrontend: unknown;
+  platform: unknown;
+  runtimeOptions: unknown;
+  createRuntime?: typeof createDsl4LocalPreviewBrowserRuntime;
+  createShell?: typeof createDsl4CliPreviewShell;
+  onError?: (error: unknown) => unknown;
+  onRuntimeEvent?: PreviewCallback;
+  onApplicationOpen?: () => unknown;
+}
+
+interface PreviewGenerationRecord extends Record<string, unknown> {
+  sequence: number;
+  type: string;
+  generation?: Readonly<{revision?: unknown}>;
+  generationRevision?: unknown;
+  source?: unknown;
+  diagnostic?: unknown;
+}
+
+interface PreviewAcknowledgement extends Record<string, unknown> {
+  current?: Readonly<{integrity?: string}>;
+  candidate?: Readonly<{
+    options: unknown;
+  }>;
+  revision?: unknown;
+}
+
+interface PreviewDiagnostic extends Record<string, unknown> {
+  severity?: string;
+  code: string;
+  message: string;
+}
+
+interface PreviewSourceSummary extends Record<string, unknown> {
+  ok?: boolean;
+  diagnostics?: readonly unknown[];
+  integrity?: string;
+  counts?: Record<string, number>;
+}
+
+interface PreviewReloadRequest {
+  readonly actualAnchor: unknown;
+}
+
+function numberRecord(value: unknown, name: string): Record<string, number> {
+  if (!isRecord(value) || Object.values(value).some((entry) => typeof entry !== 'number')) {
+    throw new TypeError(`${name} must be a number record`);
+  }
+  return value as Record<string, number>;
+}
+
+function validateAcknowledgement(value: unknown): PreviewAcknowledgement {
+  if (!isRecord(value)) throw new TypeError('Preview acknowledgement must be an object');
+  return value as PreviewAcknowledgement;
+}
+
+function sourceDetails(source: PreviewSourceSummary, diagnostics: readonly unknown[]) {
+  if (typeof source.integrity !== 'string') {
+    throw new TypeError('Preview source summary integrity is invalid');
+  }
+  return {
+    integrity: source.integrity,
+    counts: numberRecord(source.counts, 'Preview source summary counts'),
+    warningCount: diagnostics.filter(
+      (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'warning',
+    ).length,
+  };
+}
+
 export const dsl4LocalPreviewBrowserClientDefaults = deepFreeze({
   maxProjectBytes: dsl4BrowserTurboWarpStageDefaults.maxProjectBytes,
   maxGenerationMessageBytes: dsl4PreviewSourceGenerationWireDefaults.maxMessageBytes,
@@ -98,7 +175,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   if (!isRecord(optionsInput)) {
     throw new TypeError('local preview browser client options are required');
   }
-  const options = optionsInput as Record<string, any>;
+  const options = optionsInput as Dsl4LocalPreviewBrowserClientOptions;
   const documentCandidate = isRecord(options.document) ? options.document : null;
   const locationCandidate = isRecord(options.location) ? options.location : null;
   const historyCandidate = isRecord(options.history) ? options.history : null;
@@ -185,8 +262,8 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   let streamDisconnected = false;
   let latestSequence = 0;
   let pendingCharacters = 0;
-  const pendingRecords: Array<{record: Record<string, any>; characters: number}> = [];
-  const acknowledgements: Map<number, Record<string, any>> = new Map();
+  const pendingRecords: Array<{record: PreviewGenerationRecord; characters: number}> = [];
+  const acknowledgements: Map<number, PreviewAcknowledgement> = new Map();
   let activeDetails: {
     integrity: string;
     counts: Record<string, number>;
@@ -314,7 +391,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     return bytes;
   }
 
-  function renderCommitted(acknowledgement: Record<string, any>) {
+  function renderCommitted(acknowledgement: PreviewAcknowledgement) {
     activeDetails = candidateDetails ?? activeDetails;
     candidateDetails = null;
     if (!activeDetails || !acknowledgement?.current?.integrity) return;
@@ -334,13 +411,16 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     });
   }
 
-  async function renderSource(source: Record<string, any>, acknowledgement: Record<string, any>) {
+  async function renderSource(
+    source: PreviewSourceSummary,
+    acknowledgement: PreviewAcknowledgement,
+  ) {
     const diagnostics = Array.isArray(source.diagnostics) ? source.diagnostics : [];
     const blocking = diagnostics.find(
       (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'error',
     );
     if (blocking || !source.ok) {
-      const diagnostic = blocking ??
+      const diagnostic = (blocking as PreviewDiagnostic | undefined) ??
         diagnostics[0] ?? {
           code: 'K4-PREVIEW-SOURCE-INVALID',
           severity: 'error',
@@ -365,14 +445,11 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     }
 
     await shell.setReloadDiagnostic('source', null);
-    const details = {
-      integrity: source.integrity,
-      counts: source.counts,
-      warningCount: diagnostics.filter((diagnostic) => diagnostic?.severity === 'warning').length,
-    };
+    const details = sourceDetails(source, diagnostics);
     if (acknowledgement.candidate) {
       candidateDetails = details;
       const choices = acknowledgement.candidate.options;
+      if (!isRecord(choices)) throw new TypeError('Preview candidate choices are invalid');
       shell.update({
         formatVersion: 1,
         phase: 'candidate',
@@ -397,13 +474,13 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
         availability: reloadAvailability(choices),
         changedIds: ['source-generation'],
         initiatingInputId: null,
-        async apply(request: Readonly<Record<string, any>>) {
+        async apply(request: PreviewReloadRequest) {
           const committed = await runtime?.commit(restartChoice(request.actualAnchor));
-          if (committed) renderCommitted(committed);
+          if (committed) renderCommitted(validateAcknowledgement(committed));
         },
-        async restart(request: Readonly<Record<string, any>>) {
+        async restart(request: PreviewReloadRequest) {
           const committed = await runtime?.restart(restartChoice(request.actualAnchor));
-          if (committed) renderCommitted(committed);
+          if (committed) renderCommitted(validateAcknowledgement(committed));
         },
       });
       return;
@@ -429,14 +506,14 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     }
   }
 
-  async function applyRecord(record: Record<string, any>) {
+  async function applyRecord(record: PreviewGenerationRecord) {
     if (record.type === 'local-preview.generation') {
       const revision = record.generation?.revision;
       if (!Number.isSafeInteger(revision) || Number(revision) < 1 || !runtime) {
         throw new TypeError('Preview generation record revision is invalid');
       }
-      const acknowledgement = await runtime.accept(record);
-      acknowledgements.set(Number(revision), acknowledgement);
+      const accepted = validateAcknowledgement(await runtime.accept(record));
+      acknowledgements.set(Number(revision), accepted);
       while (acknowledgements.size > 4) {
         const oldestRevision = acknowledgements.keys().next().value;
         if (oldestRevision === undefined) break;
@@ -448,10 +525,12 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       if (!Number.isSafeInteger(record.generationRevision)) {
         throw new TypeError('Preview source summary revision is invalid');
       }
-      const acknowledgement = acknowledgements.get(record.generationRevision);
-      if (!acknowledgement) return;
-      acknowledgements.delete(record.generationRevision);
-      await renderSource(record.source, acknowledgement);
+      const generationRevision = Number(record.generationRevision);
+      const accepted = acknowledgements.get(generationRevision);
+      if (!accepted) return;
+      acknowledgements.delete(generationRevision);
+      if (!isRecord(record.source)) throw new TypeError('Preview source summary is invalid');
+      await renderSource(record.source as PreviewSourceSummary, accepted);
       return;
     }
     if (record.type === 'local-preview.full-rebuild-required') {
@@ -509,7 +588,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
       throw new TypeError('Preview startup event queue exceeds its configured limit');
     }
     latestSequence = sequence;
-    pendingRecords.push({record: input as Record<string, any>, characters});
+    pendingRecords.push({record: input as PreviewGenerationRecord, characters});
     pendingCharacters += characters;
     scheduleDrain();
   }

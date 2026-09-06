@@ -15,6 +15,31 @@ export interface SourceRange {
   end: SourcePosition;
 }
 
+interface YamlNodeView {
+  readonly range?: readonly [number?, number?, unknown?];
+  get?(key: string | number, keepScalar?: boolean): unknown;
+}
+
+interface YamlDocumentView {
+  readonly contents?: unknown;
+  getIn(path: readonly (string | number)[], keepScalar?: boolean): unknown;
+}
+
+function asYamlNode(value: unknown): YamlNodeView | undefined {
+  return typeof value === 'object' && value !== null ? (value as YamlNodeView) : undefined;
+}
+
+function asYamlDocument(value: unknown): YamlDocumentView {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    typeof (value as {getIn?: unknown}).getIn !== 'function'
+  ) {
+    throw new TypeError('YAML document view must provide getIn');
+  }
+  return value as YamlDocumentView;
+}
+
 function cloneValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(cloneValue);
   if (typeof value !== 'object' || value === null) return value;
@@ -29,11 +54,11 @@ function cloneValue(value: unknown): unknown {
 function mapNestedSource(
   sourceMap: Record<string, SourceRange>,
   value: unknown,
-  document: any,
+  document: YamlDocumentView,
   lineCounter: import('yaml').LineCounter,
   yamlPath: Array<string | number>,
   storyPath: string,
-  node?: any,
+  node?: YamlNodeView,
 ) {
   if (typeof value !== 'object' || value === null) return;
   const entries = Array.isArray(value)
@@ -43,7 +68,7 @@ function mapNestedSource(
     const segment = encodeDsl4StoryPathSegment(String(key));
     const childStoryPath = `${storyPath}/${segment}`;
     const childYamlPath = [...yamlPath, key];
-    const childNode = document.getIn(childYamlPath, true) ?? node;
+    const childNode = asYamlNode(document.getIn(childYamlPath, true)) ?? node;
     sourceMap[childStoryPath] = sourceRangeForNode(childNode, lineCounter);
     mapNestedSource(
       sourceMap,
@@ -60,7 +85,7 @@ function mapNestedSource(
 function mapNestedNode(
   sourceMap: Record<string, SourceRange>,
   value: unknown,
-  node: any,
+  node: YamlNodeView | undefined,
   lineCounter: import('yaml').LineCounter,
   storyPath: string,
 ) {
@@ -71,7 +96,7 @@ function mapNestedNode(
   for (const [key, child] of entries) {
     const segment = encodeDsl4StoryPathSegment(String(key));
     const childPath = `${storyPath}/${segment}`;
-    const childNode = node?.get?.(key, true) ?? node;
+    const childNode = asYamlNode(node?.get?.(key, true)) ?? node;
     sourceMap[childPath] = sourceRangeForNode(childNode, lineCounter);
     mapNestedNode(sourceMap, child, childNode, lineCounter, childPath);
   }
@@ -84,11 +109,12 @@ export function deepFreeze<T>(value: T): Readonly<T> {
 }
 
 export function sourceRangeForNode(
-  node: any,
+  node: unknown,
   lineCounter: import('yaml').LineCounter,
 ): SourceRange {
-  const startOffset = node?.range?.[0] ?? 0;
-  const endOffset = node?.range?.[1] ?? startOffset;
+  const yamlNode = asYamlNode(node);
+  const startOffset = yamlNode?.range?.[0] ?? 0;
+  const endOffset = yamlNode?.range?.[1] ?? startOffset;
   const start = lineCounter.linePos(startOffset);
   const end = lineCounter.linePos(endOffset);
   return {
@@ -248,7 +274,7 @@ function normalizeRecognition(value: unknown) {
 function mapPoseRecognitionSource(
   sourceMap: Record<string, SourceRange>,
   value: unknown,
-  document: any,
+  document: YamlDocumentView,
   lineCounter: import('yaml').LineCounter,
 ) {
   const recognitionNode = document.getIn(['recognition'], true);
@@ -345,7 +371,7 @@ function mapPoseRecognitionSource(
 function mapBranchSources(
   sourceMap: Record<string, SourceRange>,
   branches: Record<string, unknown>,
-  document: any,
+  document: YamlDocumentView,
   lineCounter: import('yaml').LineCounter,
 ) {
   for (const [branchId, value] of Object.entries(branches)) {
@@ -375,7 +401,7 @@ function normalizeAction(
   sourceAction: Record<string, unknown>,
   sceneId: string,
   actionIndex: number,
-  actionNode: any,
+  actionNode: YamlNodeView | undefined,
   lineCounter: import('yaml').LineCounter,
   sourceMap: Record<string, SourceRange>,
 ): Record<string, unknown> {
@@ -388,7 +414,7 @@ function normalizeAction(
   const customAction = separator !== -1 && !actorCoreActionNames.has(command);
   const actionPath = `/scenes/${encodeDsl4StoryPathSegment(sceneId)}/actions/${actionIndex}`;
   const actionRange = sourceRangeForNode(actionNode, lineCounter);
-  const argumentNode = actionNode?.get?.(sourceCommand, true);
+  const argumentNode = asYamlNode(actionNode?.get?.(sourceCommand, true));
   const argumentRecord =
     typeof sourceArguments === 'object' && sourceArguments !== null
       ? (sourceArguments as Record<string, unknown>)
@@ -439,7 +465,7 @@ function normalizeAction(
         : normalizeDsl4VisualTransition(args.transition, `${actionPath}/args/transition`);
   }
   const argsNode = customAction
-    ? (argumentNode?.get?.('arguments', true) ?? argumentNode)
+    ? (asYamlNode(argumentNode?.get?.('arguments', true)) ?? argumentNode)
     : argumentNode;
   sourceMap[actionPath] = actionRange;
   sourceMap[`${actionPath}/args`] = sourceRangeForNode(argsNode, lineCounter);
@@ -447,11 +473,11 @@ function normalizeAction(
   for (const field of Object.keys(args)) {
     let fieldNode = argsNode;
     if (customAction) {
-      fieldNode = argsNode?.get?.(field, true) ?? argsNode;
+      fieldNode = asYamlNode(argsNode?.get?.(field, true)) ?? argsNode;
     } else if (argumentNode?.get && argumentRecord) {
       const sourceField =
         field === 'routes' && !Object.hasOwn(argumentRecord, 'routes') ? undefined : field;
-      if (sourceField) fieldNode = argumentNode.get(sourceField, true);
+      if (sourceField) fieldNode = asYamlNode(argumentNode.get(sourceField, true)) ?? fieldNode;
     }
     sourceMap[`${actionPath}/args/${encodeDsl4StoryPathSegment(field)}`] = sourceRangeForNode(
       fieldNode,
@@ -469,7 +495,7 @@ function normalizeAction(
     if (field === 'styles' && Array.isArray(args[field])) {
       args[field].forEach((_, styleIndex) => {
         sourceMap[`${actionPath}/args/styles/${styleIndex}`] = sourceRangeForNode(
-          fieldNode?.get?.(styleIndex, true) ?? fieldNode,
+          asYamlNode(fieldNode?.get?.(styleIndex, true)) ?? fieldNode,
           lineCounter,
         );
       });
@@ -477,7 +503,7 @@ function normalizeAction(
   }
   if (stableId) {
     sourceMap[`${actionPath}/stableId`] = sourceRangeForNode(
-      argumentNode?.get?.('stableId', true),
+      asYamlNode(argumentNode?.get?.('stableId', true)),
       lineCounter,
     );
   }
@@ -496,10 +522,11 @@ function normalizeAction(
 
 export function createStoryDocument(
   story: Record<string, unknown>,
-  document: any,
+  inputDocument: unknown,
   lineCounter: import('yaml').LineCounter,
   sourceId: string,
 ): Readonly<Record<string, unknown>> {
+  const document = asYamlDocument(inputDocument);
   const sourceMap: Record<string, SourceRange> = {
     '/': sourceRangeForNode(document.contents, lineCounter),
   };
@@ -612,7 +639,7 @@ export function createStoryDocument(
         action,
         sceneId,
         actionIndex,
-        document.getIn(actionSourcePath, true),
+        asYamlNode(document.getIn(actionSourcePath, true)),
         lineCounter,
         sourceMap,
       );
@@ -647,7 +674,7 @@ export function createStoryDocument(
       mapNestedNode(
         sourceMap,
         entryTransition,
-        entryTransitionNode,
+        asYamlNode(entryTransitionNode),
         lineCounter,
         `${scenePath}/entryTransition`,
       );

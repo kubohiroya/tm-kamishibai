@@ -1,4 +1,4 @@
-import type {Dsl4PreviewDocument} from '../dsl4/preview-dom.js';
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {resolveDsl4FeatureFlags} from '../dsl4/feature-flags.js';
@@ -43,7 +43,42 @@ const allowedChangeCategories = Object.freeze([
   'controls',
   'metadata',
 ]);
+const choiceNumbers = ['1', '2', '3'] as const;
 const sha256SRI = /^sha256-[A-Za-z0-9+/]{43}=$/u;
+
+type PreviewShellCallback = (...arguments_: unknown[]) => unknown;
+type PreviewChoiceNumber = (typeof choiceNumbers)[number];
+
+interface PreviewShellChoice {
+  readonly enabled: boolean;
+  readonly reason: string | null;
+}
+
+export interface PreviewShellView {
+  readonly formatVersion: 1;
+  readonly phase: string;
+  readonly sourceDisplayName: string;
+  readonly currentIntegrity: string | null;
+  readonly candidateIntegrity: string | null;
+  readonly validationStatus: string;
+  readonly counts: Readonly<{scenes: number; actions: number; assets: number}> | null;
+  readonly anchor: Readonly<{sceneId: string; actionId: string | null}> | null;
+  readonly choices: Readonly<Record<PreviewChoiceNumber, PreviewShellChoice>> | null;
+  readonly warningCount: number;
+  readonly changeCategories: readonly string[];
+  readonly safeStatusMessage: string;
+}
+
+interface PreviewShellKeyboardEvent {
+  readonly defaultPrevented?: boolean;
+  readonly altKey?: boolean;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly shiftKey?: boolean;
+  readonly code?: string;
+  preventDefault(): unknown;
+  stopPropagation(): unknown;
+}
 
 export const dsl4DevelopmentPreviewShellManifest = deepFreeze({
   formatVersion: 1,
@@ -177,16 +212,19 @@ function normalizeChoice(value: unknown, number: string) {
   });
 }
 
-function normalizeChoices(value: unknown, phase: string) {
+function normalizeChoices(
+  value: unknown,
+  phase: string,
+): Readonly<Record<PreviewChoiceNumber, Readonly<PreviewShellChoice>>> | null {
   if (phase !== 'candidate') {
     if (value !== null) throw new TypeError('choices must be null outside the candidate phase');
     return null;
   }
   const choices = exactRecord(value, new Set(['1', '2', '3']), 'choices');
   return deepFreeze({
-    1: normalizeChoice(choices[1], '1'),
-    2: normalizeChoice(choices[2], '2'),
-    3: normalizeChoice(choices[3], '3'),
+    1: normalizeChoice(choices['1'], '1'),
+    2: normalizeChoice(choices['2'], '2'),
+    3: normalizeChoice(choices['3'], '3'),
   });
 }
 
@@ -207,7 +245,7 @@ function normalizeCategories(value: unknown) {
   return deepFreeze(allowedChangeCategories.filter((category) => categories.includes(category)));
 }
 
-export function validateDsl4PreviewShellView(input: unknown) {
+export function validateDsl4PreviewShellView(input: unknown): Readonly<PreviewShellView> {
   const view = exactRecord(input, viewKeys, 'preview shell view');
   if (view.formatVersion !== 1) throw new TypeError('preview shell view formatVersion must be 1');
   if (typeof view.phase !== 'string' || !phases.has(view.phase)) {
@@ -254,18 +292,18 @@ function abbreviatedIntegrity(value: string | null) {
   return value === null ? 'none' : `${value.slice(0, 19)}…`;
 }
 
-function optionalCallback(callback: unknown, name: string): Function | undefined {
+function optionalCallback(callback: unknown, name: string): PreviewShellCallback | undefined {
   if (callback !== undefined && typeof callback !== 'function') {
     throw new TypeError(`${name} must be a function`);
   }
-  return callback;
+  return callback as PreviewShellCallback | undefined;
 }
 
 function requireElement(value: unknown, name: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${name} must be a DOM element`);
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewElement;
 }
 
 function requireDocument(value: unknown) {
@@ -277,7 +315,6 @@ function requireDocument(value: unknown) {
   ) {
     throw new TypeError('document must provide the DOM document contract');
   }
-  return value as unknown as Dsl4PreviewDocument;
   return value as unknown as Dsl4PreviewDocument;
 }
 
@@ -317,7 +354,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
   status.id = 'dsl4-preview-status';
   const summary = element(document, 'dl');
   summary.id = 'dsl4-preview-summary';
-  const summaryValues: Map<string, any> = new Map();
+  const summaryValues: Map<string, Dsl4PreviewElement> = new Map();
   for (const [key, label] of [
     ['source', 'Source'],
     ['currentIntegrity', 'Current integrity'],
@@ -366,13 +403,13 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
   dialogDescription.id = 'dsl4-preview-reload-description';
   dialog.appendChild(dialogTitle);
   dialog.appendChild(dialogDescription);
-  const buttons: Map<string, any> = new Map();
-  const reasons: Map<string, any> = new Map();
+  const buttons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
+  const reasons: Map<PreviewChoiceNumber, Dsl4PreviewElement> = new Map();
   for (const [number, label] of [
     ['1', '1. Restart from the beginning'],
     ['2', '2. Restart from the current scene'],
     ['3', '3. Restart from the current action'],
-  ] as ReadonlyArray<[string, string]>) {
+  ] as ReadonlyArray<[PreviewChoiceNumber, string]>) {
     const button = element(document, 'button', label);
     button.id = `dsl4-preview-reload-${number}`;
     button.type = 'button';
@@ -395,8 +432,8 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
   let disposed = false;
   let modalOpen = false;
   let initialValidPublished = false;
-  let previousFocus: any = null;
-  let currentView: Readonly<Record<string, any>> | null = null;
+  let previousFocus: Dsl4PreviewElement | null = null;
+  let currentView: Readonly<PreviewShellView> | null = null;
 
   function reportError(error: unknown) {
     if (!onError) return;
@@ -408,7 +445,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     }
   }
 
-  function invoke(callback: Function | undefined, ...arguments_: any[]) {
+  function invoke(callback: PreviewShellCallback | undefined, ...arguments_: unknown[]) {
     if (!callback) return;
     try {
       Promise.resolve(callback(...arguments_)).catch(reportError);
@@ -434,7 +471,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     restoreFocus();
   }
 
-  function commitChoice(number: string) {
+  function commitChoice(number: PreviewChoiceNumber) {
     if (!modalOpen || !currentView?.choices) return;
     const choice = currentView.choices[number];
     if (!choice.enabled) {
@@ -457,7 +494,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     button.addEventListener('click', () => commitChoice(number));
   }
 
-  function onKeyDown(event: any) {
+  function onKeyDown(event: PreviewShellKeyboardEvent) {
     if (!modalOpen || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
       return;
     }
@@ -471,7 +508,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
       if (event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
-      commitChoice(event.code.slice(-1));
+      commitChoice(event.code.slice(-1) as PreviewChoiceNumber);
       return;
     }
     if (event.code === 'Enter' || event.code === 'Space') {
@@ -489,8 +526,8 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
       dialogTitle.focus();
       return;
     }
-    const active = document.activeElement;
-    const currentIndex = focusable.indexOf(active);
+    const active = document.activeElement ?? null;
+    const currentIndex = active ? focusable.indexOf(active) : -1;
     const nextIndex = event.shiftKey
       ? currentIndex <= 0
         ? focusable.length - 1
@@ -498,15 +535,18 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
       : currentIndex < 0 || currentIndex === focusable.length - 1
         ? 0
         : currentIndex + 1;
-    focusable[nextIndex].focus();
+    (focusable[nextIndex] ?? dialogTitle).focus();
   }
-  document.addEventListener('keydown', onKeyDown, true);
+  const onDocumentKeyDown = (event: never) => onKeyDown(event);
+  document.addEventListener('keydown', onDocumentKeyDown, true);
 
   function setSummary(key: string, value: string) {
-    summaryValues.get(key).textContent = value;
+    const target = summaryValues.get(key);
+    if (!target) throw new TypeError(`Unknown preview summary key: ${key}`);
+    target.textContent = value;
   }
 
-  function render(view: Readonly<Record<string, any>>) {
+  function render(view: Readonly<PreviewShellView>) {
     status.setAttribute('data-validation-status', view.validationStatus);
     status.textContent = `${view.validationStatus.toUpperCase()}: ${view.safeStatusMessage}`;
     setSummary('source', view.sourceDisplayName);
@@ -541,10 +581,13 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
       closeModal();
       return;
     }
-    for (const number of ['1', '2', '3']) {
-      const choice = view.choices[number];
+    const choices = view.choices;
+    if (!choices) throw new TypeError('candidate preview shell view must include choices');
+    for (const number of choiceNumbers) {
+      const choice = choices[number];
       const button = buttons.get(number);
       const reason = reasons.get(number);
+      if (!button || !reason) throw new TypeError(`Unknown reload choice key: ${number}`);
       button.disabled = !choice.enabled;
       reason.textContent = choice.enabled ? 'Available' : `Unavailable: ${choice.reason}`;
     }
@@ -578,7 +621,7 @@ export function createDsl4DevelopmentPreviewShell(input: unknown) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('keydown', onDocumentKeyDown, true);
       closeModal();
       if (typeof host.remove === 'function') host.remove();
       currentView = null;

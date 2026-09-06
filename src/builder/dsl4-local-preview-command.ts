@@ -15,6 +15,7 @@ import {resolveDsl4ProjectSource} from './dsl4-project-source.js';
 import {resolveDsl4BuildSourceLimits} from './dsl4-source-limits.js';
 import {buildDsl4TurboWarpBrowserBundle} from './dsl4-turbowarp-browser-bundle.js';
 import {Sb3BuilderError} from './errors.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 const browserEntryPoint = fileURLToPath(
   new URL('./dsl4-local-preview-browser-entry.js', import.meta.url),
@@ -22,11 +23,90 @@ const browserEntryPoint = fileURLToPath(
 const maximumManifestBytes = 64 * 1024;
 
 export type PreviewHost = {
-  start: Function;
-  getLaunchUrl: Function;
-  getSnapshot: Function;
-  dispose: Function;
+  start: () => Promise<unknown>;
+  getLaunchUrl: () => string;
+  getSnapshot: () => Readonly<{origin?: unknown; browserRuntimeReady?: unknown}>;
+  dispose: () => unknown;
 };
+
+type PreviewCommandResult =
+  | Readonly<{exitCode: 0; reason: 'signal'; signal: unknown}>
+  | Readonly<{exitCode: 0; reason: 'browser-disconnected'}>
+  | Readonly<{exitCode: 1; reason: 'full-rebuild'}>;
+
+type PreviewCompletionOutcome =
+  | Readonly<{reason: 'signal'; signal: unknown}>
+  | Readonly<{reason: 'browser-disconnected'; event?: unknown}>
+  | Readonly<{reason: 'full-rebuild'; event?: unknown}>;
+
+type PreviewHostStartup =
+  | Readonly<{kind: 'listening'; listening: {origin: string}}>
+  | Readonly<{kind: 'signal'; signal: unknown}>;
+
+interface PreviewCommandIo {
+  write(chunk: string): unknown;
+}
+
+interface PreviewSignalTarget {
+  once(type: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+  off(type: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+}
+
+type PreviewHostFactory = (options: Record<string, unknown>) => PreviewHost;
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`${name} must be a non-empty string when present`);
+  }
+  return value;
+}
+
+function requiredString(value: unknown, name: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`${name} must be a non-empty string`);
+  }
+  return value;
+}
+
+function sourceFrontend(value: unknown): Dsl4SourceFrontend {
+  if (!isRecord(value) || typeof value.parse !== 'function') {
+    throw new TypeError('sourceFrontend must provide parse');
+  }
+  return value as unknown as Dsl4SourceFrontend;
+}
+
+function previewChannel(value: unknown): 'bundled' | 'unbundled' {
+  if (value !== 'bundled' && value !== 'unbundled') {
+    throw new TypeError('channel must be bundled or unbundled');
+  }
+  return value;
+}
+
+function previewHostListening(value: unknown): {origin: string} {
+  if (!isRecord(value) || typeof value.origin !== 'string') {
+    throw commandError('Preview host did not report a listening origin', 'K4-PREVIEW-CLI-HOST');
+  }
+  return {origin: value.origin};
+}
+
+function completionOutcome(value: unknown): PreviewCompletionOutcome {
+  if (!isRecord(value) || typeof value.reason !== 'string') {
+    throw commandError(
+      'Local preview command completed with an invalid outcome',
+      'K4-PREVIEW-CLI-INTERNAL',
+    );
+  }
+  if (value.reason === 'signal') return {reason: 'signal', signal: value.signal};
+  if (value.reason === 'browser-disconnected') {
+    return {reason: 'browser-disconnected', event: value.event};
+  }
+  if (value.reason === 'full-rebuild') return {reason: 'full-rebuild', event: value.event};
+  throw commandError(
+    'Local preview command completed with an unknown outcome',
+    'K4-PREVIEW-CLI-INTERNAL',
+  );
+}
 
 export const dsl4LocalPreviewCommandDefaults = Object.freeze({
   readyTimeoutMs: 20_000,
@@ -166,11 +246,26 @@ export async function runDsl4LocalPreviewCommand(
   if (!isRecord(optionsInput)) throw new TypeError('local preview command options are required');
   if (!isRecord(dependenciesInput))
     throw new TypeError('local preview dependencies must be an object');
-  const options = optionsInput as Record<string, any>;
-  const dependencies = dependenciesInput as Record<string, any>;
+  const options = optionsInput as Record<string, unknown>;
+  const dependencies = dependenciesInput;
   if (options.watch !== true) {
     throw commandError('watch must be explicitly enabled', 'K4-PREVIEW-CLI-WATCH');
   }
+  if (typeof options.projectRoot !== 'string' || options.projectRoot.length === 0) {
+    throw new TypeError('projectRoot must be a non-empty string');
+  }
+  if (typeof options.baseSb3 !== 'string' || options.baseSb3.length === 0) {
+    throw new TypeError('baseSb3 must be a non-empty string');
+  }
+  const baseSb3 = options.baseSb3;
+  const sourceManifestPathOption = optionalString(options.sourceManifest, 'sourceManifest');
+  const source = optionalString(options.source, 'source');
+  const sourceId = optionalString(options.sourceId, 'sourceId');
+  const dsl4SourceFrontend = sourceFrontend(options.sourceFrontend);
+  const controlProfile = requiredString(options.controlProfile, 'controlProfile');
+  const channel = previewChannel(options.channel);
+  const replaceExisting =
+    options.replaceExisting === undefined ? undefined : options.replaceExisting === true;
   const maxSourceBytes = boundedInteger(
     options.maxSourceBytes,
     'maxSourceBytes',
@@ -281,11 +376,25 @@ export async function runDsl4LocalPreviewCommand(
   ) {
     throw new TypeError('signalTarget must provide once and off');
   }
-  if (typeof stdout?.write !== 'function' || typeof stderr?.write !== 'function') {
+  if (
+    !isRecord(stdout) ||
+    !isRecord(stderr) ||
+    typeof stdout.write !== 'function' ||
+    typeof stderr.write !== 'function'
+  ) {
     throw new TypeError('stdout and stderr must provide write');
   }
+  const readPreviewInput = readInput as typeof readBoundedFile;
+  const buildPreviewRuntime = buildRuntime as typeof buildDsl4RuntimeComponent;
+  const buildPreviewBrowserBundle = buildBrowserBundle as typeof buildDsl4TurboWarpBrowserBundle;
+  const createPreviewHost = createHost as unknown as PreviewHostFactory;
+  const openPreviewBrowser = openBrowser as typeof openDsl4LocalPreviewBrowser;
+  const resolvePreviewProjectSource = resolveProjectSource as typeof resolveDsl4ProjectSource;
+  const previewSignalTarget = signalTarget as unknown as PreviewSignalTarget;
+  const previewStdout = stdout as unknown as PreviewCommandIo;
+  const previewStderr = stderr as unknown as PreviewCommandIo;
   if (exceedsRecommendedArtifactLimit) {
-    stderr.write(
+    previewStderr.write(
       'Warning: large preview artifact limits were explicitly enabled; browser memory use may be substantial.\n',
     );
   }
@@ -320,20 +429,22 @@ export async function runDsl4LocalPreviewCommand(
   };
   const handleSigint = () => onSignal('SIGINT');
   const handleSigterm = () => onSignal('SIGTERM');
-  signalTarget.once('SIGINT', handleSigint);
-  signalTarget.once('SIGTERM', handleSigterm);
+  previewSignalTarget.once('SIGINT', handleSigint);
+  previewSignalTarget.once('SIGTERM', handleSigterm);
 
   let readyTimer = null;
-  let result = null;
+  let result: PreviewCommandResult | null = null;
   let primaryError = null;
   try {
     const [baseSb3Bytes, resolvedSource] = await Promise.all([
-      readInput(path.resolve(options.baseSb3), maxProjectBytes, 'base SB3'),
-      resolveProjectSource({
+      readPreviewInput(path.resolve(baseSb3), maxProjectBytes, 'base SB3'),
+      resolvePreviewProjectSource({
         projectRoot,
-        ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
-        ...(options.source === undefined ? {} : {source: options.source}),
-        ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+        ...(sourceManifestPathOption === undefined
+          ? {}
+          : {sourceManifest: sourceManifestPathOption}),
+        ...(source === undefined ? {} : {source}),
+        ...(sourceId === undefined ? {} : {sourceId}),
         maxSourceManifestBytes: maximumManifestBytes,
       }),
     ]);
@@ -342,22 +453,22 @@ export async function runDsl4LocalPreviewCommand(
     let browserBundleBytes;
     try {
       [built, browserBundleBytes] = await Promise.all([
-        buildRuntime({
+        buildPreviewRuntime({
           baseSb3Bytes,
           projectRoot,
           sourceManifest,
-          sourceFrontend: options.sourceFrontend,
-          controlProfile: options.controlProfile,
-          channel: options.channel,
+          sourceFrontend: dsl4SourceFrontend,
+          controlProfile,
+          channel,
           maxSourceBytes,
           maxAssetFileBytes,
           maxAssetFiles,
           maxTotalAssetBytes,
           featureFlags,
           ...graphOptions,
-          replaceExisting: options.replaceExisting,
+          ...(replaceExisting === undefined ? {} : {replaceExisting}),
         }),
-        buildBrowserBundle({entryPoint: browserEntryPoint}),
+        buildPreviewBrowserBundle({entryPoint: browserEntryPoint}),
       ]);
     } finally {
       baseSb3Bytes.fill(0);
@@ -378,11 +489,11 @@ export async function runDsl4LocalPreviewCommand(
         resolvedSource.manifestPath === null
           ? projectRoot
           : path.dirname(resolvedSource.manifestPath);
-      const createdHost = createHost({
+      const createdHost = createPreviewHost({
         projectRoot: hostProjectRoot,
         sourceManifestPath: resolvedSource.manifestPath,
         sourceManifest,
-        sourceFrontend: options.sourceFrontend,
+        sourceFrontend: dsl4SourceFrontend,
         maxSourceBytes,
         featureFlags,
         ...graphOptions,
@@ -453,19 +564,19 @@ export async function runDsl4LocalPreviewCommand(
     if (receivedSignal) {
       result = {exitCode: 0, reason: 'signal', signal: receivedSignal};
     } else {
-      const hostStartup = await Promise.race([
-        host.start().then((listening: {origin: string}) => ({
-          kind: 'listening',
-          listening,
+      const hostStartup: PreviewHostStartup = await Promise.race([
+        host.start().then((listening) => ({
+          kind: 'listening' as const,
+          listening: previewHostListening(listening),
         })),
-        signalled.then((signal) => ({kind: 'signal', signal})),
+        signalled.then((signal) => ({kind: 'signal' as const, signal})),
       ]);
       if (hostStartup.kind === 'signal' && 'signal' in hostStartup) {
         result = {exitCode: 0, reason: 'signal', signal: hostStartup.signal};
       } else {
         const launchUrl = host.getLaunchUrl();
-        stdout.write(`Opening DSL 4.0 preview at ${hostStartup.listening.origin}\n`);
-        await openBrowser(launchUrl);
+        previewStdout.write(`Opening DSL 4.0 preview at ${hostStartup.listening.origin}\n`);
+        await openPreviewBrowser(launchUrl);
       }
       if (!result) {
         readyTimer = setTimeout(() => {
@@ -492,21 +603,25 @@ export async function runDsl4LocalPreviewCommand(
               'K4-PREVIEW-CLI-RUNTIME-DISCONNECTED',
             );
           }
-          stdout.write(`Preview ready at ${snapshot.origin}; watching ${sourceManifest.path}\n`);
-          const outcome = (await Promise.race([
-            completion,
-            signalled.then((signal) => ({reason: 'signal', signal})),
-          ])) as Record<string, any>;
+          previewStdout.write(
+            `Preview ready at ${snapshot.origin}; watching ${sourceManifest.path}\n`,
+          );
+          const outcome = completionOutcome(
+            await Promise.race([
+              completion,
+              signalled.then((signal) => ({reason: 'signal', signal})),
+            ]),
+          );
           if (outcome.reason === 'full-rebuild') {
-            stderr.write(
+            previewStderr.write(
               'Preview stopped because a full rebuild is required. Restart the command.\n',
             );
             result = {exitCode: 1, reason: outcome.reason};
           } else if (outcome.reason === 'browser-disconnected') {
-            stdout.write('Preview stopped because the browser disconnected.\n');
+            previewStdout.write('Preview stopped because the browser disconnected.\n');
             result = {exitCode: 0, reason: outcome.reason};
           } else {
-            stdout.write(`Preview stopped by ${outcome.signal}.\n`);
+            previewStdout.write(`Preview stopped by ${outcome.signal}.\n`);
             result = {exitCode: 0, reason: 'signal', signal: outcome.signal};
           }
         }
@@ -517,8 +632,8 @@ export async function runDsl4LocalPreviewCommand(
   } finally {
     if (readyTimer) clearTimeout(readyTimer);
     stopping = true;
-    signalTarget.off('SIGINT', handleSigint);
-    signalTarget.off('SIGTERM', handleSigterm);
+    previewSignalTarget.off('SIGINT', handleSigint);
+    previewSignalTarget.off('SIGTERM', handleSigterm);
     try {
       await host?.dispose();
     } catch (cleanupError) {
