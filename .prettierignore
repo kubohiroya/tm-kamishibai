@@ -6,8 +6,7 @@ output/
 tmp/
 
 # Binary assets and package-manager output.
-src/dsl4/platform/posenet-bundle-assets.js
-src/builder/generated/dsl4-playback-runtime-extension.js
+**/generated/**
 docs/images/
 pnpm-lock.yaml
 site/favicon.png

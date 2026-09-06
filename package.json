@@ -55,6 +55,7 @@
     "sb3:dsl4-release:check": "pnpm release:dsl4:check",
     "sb3:dsl4-release:write": "pnpm release:dsl4:update",
     "dsl4:assets:convert": "pnpm run build:lib && node bin/tm-kamishibai.mjs convert-dsl4-assets",
+    "posenet-bundle-assets:generate": "node scripts/generate-posenet-bundle-assets.ts",
     "dsl4:playback-runtime:generate": "pnpm run build:lib && node scripts/generate-dsl4-playback-runtime.mjs",
     "export-block-dsl": "pnpm run build:lib && node scripts/export-block-dsl.mjs",
     "smoke:dsl4-packager-binary-memory": "pnpm run build:lib && node scripts/smoke/dsl4-packager-binary-memory.ts",

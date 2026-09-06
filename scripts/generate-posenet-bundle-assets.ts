@@ -1,11 +1,14 @@
-import {readFile, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {poseNetBundleManifest} from '@kubohiroya/turbowarp-tm/posenet';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const outputPath = path.join(repositoryRoot, 'src/dsl4/platform/posenet-bundle-assets.js');
+const outputPath = path.join(
+  repositoryRoot,
+  'src/dsl4/platform/generated/posenet-bundle-assets.js',
+);
 
 function sourceLiteral(value: string) {
   return JSON.stringify(value);
@@ -36,4 +39,5 @@ ${entries.join(',\n')},
 ));
 `;
 
+await mkdir(path.dirname(outputPath), {recursive: true});
 await writeFile(outputPath, source);

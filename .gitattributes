@@ -1,0 +1,13 @@
+# Generated artifacts live under a `generated/` directory so git, GitHub, ESLint, Prettier and
+# tsconfig can name them by path instead of listing each one four times over.
+#
+# They are committed on purpose: the release candidate hash covers the playback runtime bundle, and
+# the PoseNet model data has to be in the package for offline playback. But they are machine output.
+# One regeneration rewrites 19,705 lines of minified bundle whose only real change is minifier
+# identifier allocation, or a single 6.5 MB base64 literal on one line. Rendering that as a diff
+# helps nobody reviewing the change that caused it.
+#
+# `linguist-generated=true` collapses them in GitHub diffs and drops them from the language stats.
+# `-diff` stops git rendering them locally; `git diff --text` still shows the content when a
+# regeneration genuinely needs inspecting.
+**/generated/** linguist-generated=true -diff
