@@ -1,4 +1,12 @@
+import type {Dsl4Clock} from './clock.js';
 import {deepFreeze} from './story-document.js';
+
+type AssetSnapshotRelease = (reason: string) => unknown | Promise<unknown>;
+type AssetSnapshotReadResult = {
+  key: string;
+  value: Readonly<Record<string, unknown>>;
+  release?: AssetSnapshotRelease;
+};
 
 export const dsl4AssetSnapshotWatchDefaults = deepFreeze({
   foregroundIntervalMs: 500,
@@ -39,12 +47,7 @@ function validateClock(value: unknown) {
   ) {
     throw new TypeError('asset snapshot watch clock is invalid');
   }
-  return value as Readonly<{
-    now: Function;
-    sleep: Function;
-    setTimeout: Function;
-    clearTimeout: Function;
-  }>;
+  return value as unknown as Dsl4Clock;
 }
 
 const defaultClock = Object.freeze({
@@ -53,7 +56,7 @@ const defaultClock = Object.freeze({
     new Promise((resolve) => {
       setTimeout(resolve, delay);
     }),
-  setTimeout: (callback: Function, delay: number) => setTimeout(callback, delay),
+  setTimeout: (callback: () => void, delay: number) => setTimeout(callback, delay),
   clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
 });
 
@@ -67,7 +70,7 @@ function validateReadResult(value: unknown) {
   ) {
     throw new TypeError('asset snapshot read must return key, value, and optional release');
   }
-  return value as {key: string; value: Readonly<Record<string, unknown>>; release?: Function};
+  return value as AssetSnapshotReadResult;
 }
 
 function safeDiagnostic(error: unknown) {
@@ -109,7 +112,7 @@ export function createDsl4AssetSnapshotWatch(options: {
   ) => unknown | Promise<unknown>;
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  clock?: Readonly<{now: Function; sleep: Function; setTimeout: Function; clearTimeout: Function}>;
+  clock?: Dsl4Clock;
   foregroundIntervalMs?: number;
   backgroundIntervalMs?: number;
   quietWindowMs?: number;
@@ -171,13 +174,13 @@ export function createDsl4AssetSnapshotWatch(options: {
     revision: number;
     key: string;
     value: Readonly<Record<string, unknown>>;
-    release?: Function;
+    release?: AssetSnapshotRelease;
   } | null = null;
   let candidate: {
     revision: number;
     key: string;
     value: Readonly<Record<string, unknown>>;
-    release?: Function;
+    release?: AssetSnapshotRelease;
   } | null = null;
   let diagnostic: Readonly<Record<string, unknown>> | null = null;
   let timer: unknown = null;
@@ -201,7 +204,10 @@ export function createDsl4AssetSnapshotWatch(options: {
     });
   }
 
-  async function notify(observer: Function | undefined, ...values: unknown[]) {
+  async function notify<T extends unknown[]>(
+    observer: ((...values: T) => unknown | Promise<unknown>) | undefined,
+    ...values: T
+  ) {
     if (!observer) return;
     try {
       await observer(...values);
@@ -231,7 +237,7 @@ export function createDsl4AssetSnapshotWatch(options: {
     await render();
   }
 
-  async function release(value: {release?: Function} | null, reason: string) {
+  async function release(value: {release?: AssetSnapshotRelease} | null, reason: string) {
     if (!value?.release) return;
     const operation = value.release;
     delete value.release;
@@ -415,7 +421,7 @@ export function createDsl4AssetSnapshotWatch(options: {
     cancelTimer();
     if (cycle) await cycle;
     const errors: unknown[] = [];
-    async function releaseOnDispose(value: {release?: Function} | null) {
+    async function releaseOnDispose(value: {release?: AssetSnapshotRelease} | null) {
       try {
         await release(value, 'watch-disposed');
       } catch (error) {
