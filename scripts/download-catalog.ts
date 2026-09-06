@@ -1,6 +1,40 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
+/** The published artifact bytes one catalog entry advertises, once its release is public. */
+export interface DownloadCatalogArtifact {
+  readonly buildDate: string;
+  readonly filename: string;
+  readonly url: string;
+  readonly sha256: string;
+  readonly size: number;
+  readonly sourceCommit?: string;
+  readonly sourceIdentity?: string;
+}
+
+interface DownloadCatalogEntryBase {
+  readonly description: string;
+  readonly docsUrl?: string;
+  readonly recommended?: boolean;
+  readonly series: string;
+  readonly status: string;
+  readonly statusKind: string;
+  readonly updatedAt: string;
+  readonly version: string;
+}
+
+/**
+ * One release the download page renders as a card. An entry either advertises artifact bytes, or
+ * carries the labels the card shows in their place, so the renderer never has to guess.
+ */
+export type DownloadCatalogEntry =
+  | (DownloadCatalogEntryBase & {readonly artifact: DownloadCatalogArtifact})
+  | (DownloadCatalogEntryBase & {
+      readonly artifact?: undefined;
+      readonly unavailableLabel: string;
+      readonly unavailableNote: string;
+    });
+
 export const downloadCardsPlaceholder = '{{DOWNLOAD_CARDS}}';
 export const dsl4DocsUrl =
   'https://kubohiroya.github.io/tm-kamishibai-docs/dsl-author-guides/dsl-4.0-author-guide/';
@@ -22,7 +56,7 @@ const dsl4PublishedArtifact =
       }
     : undefined;
 
-function deepFreeze(/** @type {any} */ value) {
+function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
     for (const nested of Object.values(value)) deepFreeze(nested);
@@ -30,11 +64,11 @@ function deepFreeze(/** @type {any} */ value) {
   return value;
 }
 
-function escapeRegExp(/** @type {any} */ value) {
+function escapeRegExp(value: string) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
-export const downloadCatalog = deepFreeze([
+export const downloadCatalog: readonly DownloadCatalogEntry[] = deepFreeze([
   {
     artifact: dsl4PublishedArtifact,
     description:
@@ -86,12 +120,12 @@ export const downloadCatalog = deepFreeze([
 ]);
 
 assert.equal(
-  new Set(downloadCatalog.map((/** @type {any} */ {series}) => series)).size,
+  new Set(downloadCatalog.map(({series}) => series)).size,
   downloadCatalog.length,
   'Download catalog series must be unique.',
 );
 assert.equal(
-  downloadCatalog.filter((/** @type {any} */ {recommended}) => recommended).length,
+  downloadCatalog.filter(({recommended}) => recommended).length,
   1,
   'The download catalog must have exactly one recommended release.',
 );
@@ -141,7 +175,7 @@ for (const entry of downloadCatalog) {
       );
     } else {
       assert.match(
-        entry.artifact.sourceCommit,
+        String(entry.artifact.sourceCommit),
         /^[0-9a-f]{40}$/u,
         `${entry.series} source commit is invalid.`,
       );
@@ -156,16 +190,18 @@ for (const entry of downloadCatalog) {
 
 export const downloadableReleases = deepFreeze(
   downloadCatalog
-    .filter((/** @type {any} */ {artifact}) => artifact)
-    .map((/** @type {any} */ {artifact, series, version}) => ({...artifact, series, version})),
+    .filter(({artifact}) => artifact)
+    .map(({artifact, series, version}) => ({
+      ...(artifact as DownloadCatalogArtifact),
+      series,
+      version,
+    })),
 );
 
-export const recommendedDownload = downloadCatalog.find(
-  (/** @type {any} */ {recommended}) => recommended,
-);
+export const recommendedDownload = downloadCatalog.find(({recommended}) => recommended);
 assert(recommendedDownload?.artifact, 'The recommended download must have a published artifact.');
 
-function escapeHtml(/** @type {any} */ value) {
+function escapeHtml(value: string) {
   return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -174,7 +210,7 @@ function escapeHtml(/** @type {any} */ value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderActions(/** @type {any} */ entry) {
+function renderActions(entry: DownloadCatalogEntry) {
   const actions = [];
   if (entry.artifact) {
     actions.push(
@@ -191,7 +227,7 @@ function renderActions(/** @type {any} */ entry) {
   return actions.map((action) => `        ${action}`).join('\n');
 }
 
-function renderFileInfo(/** @type {any} */ entry) {
+function renderFileInfo(entry: DownloadCatalogEntry) {
   if (!entry.artifact) return escapeHtml(entry.unavailableNote);
   return (
     `ファイル: <code>${escapeHtml(entry.artifact.filename)}</code>` +
@@ -199,17 +235,17 @@ function renderFileInfo(/** @type {any} */ entry) {
   );
 }
 
-function formatFileSize(/** @type {any} */ size) {
+function formatFileSize(size: number) {
   const megabytes = (size / 1_000_000).toLocaleString('ja-JP', {maximumFractionDigits: 1});
   return `${megabytes} MB（${size.toLocaleString('ja-JP')} bytes）`;
 }
 
-function formatDisplayDate(/** @type {any} */ value) {
+function formatDisplayDate(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   return `${year}年${month}月${day}日`;
 }
 
-function renderCard(/** @type {any} */ entry) {
+function renderCard(entry: DownloadCatalogEntry) {
   return `    <article data-version="${escapeHtml(entry.series)}">
       <h2>kamishibai ${escapeHtml(entry.series)} <span class="status status--${escapeHtml(entry.statusKind)}">${escapeHtml(entry.status)}</span></h2>
       <p>${escapeHtml(entry.description)}</p>
@@ -221,7 +257,7 @@ ${renderActions(entry)}
     </article>`;
 }
 
-export function renderDownloadCards(/** @type {any} */ template) {
+export function renderDownloadCards(template: string) {
   const placeholderCount = template.split(downloadCardsPlaceholder).length - 1;
   assert.equal(
     placeholderCount,

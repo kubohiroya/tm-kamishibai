@@ -11,7 +11,7 @@ import {
   readTitleBuildMetadataFromSb3,
   resolveTitleBuildMetadata,
   titleBuildDateEnvironmentVariable,
-} from '../scripts/sb3/title-build-metadata.mjs';
+} from '../scripts/sb3/title-build-metadata.ts';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const releasePins = JSON.parse(

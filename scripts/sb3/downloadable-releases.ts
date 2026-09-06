@@ -4,8 +4,8 @@ import {mkdir, rename, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-import {downloadableReleases} from '../download-catalog.mjs';
-import {readTitleBuildMetadataFromSb3} from './title-build-metadata.mjs';
+import {downloadableReleases} from '../download-catalog.ts';
+import {readTitleBuildMetadataFromSb3} from './title-build-metadata.ts';
 import releasePins from '../../test/fixtures/dsl4/release-pins.json' with {type: 'json'};
 
 export {downloadableReleases};

@@ -10,14 +10,14 @@ const expectedTypeScriptRules = ['eqeqeq', '@typescript-eslint/no-unused-vars'];
 const firstPartyFiles = [
   'bin/tm-kamishibai.mjs',
   'eslint.config.mjs',
-  'scripts/build-site.mjs',
-  'scripts/download-catalog.mjs',
   'site/site-shell.js',
   'src/builder/index.js',
   'test/dsl4-turbowarp-runtime-host.test.mjs',
   'test/dsl4-runtime-error-indicator.test.mjs',
 ];
 const firstPartyTypeScriptFiles = [
+  'scripts/build-site.ts',
+  'scripts/download-catalog.ts',
   'scripts/sb3/downloadable-releases.ts',
   'src/builder/hash.ts',
   'src/dsl4/story-path.ts',

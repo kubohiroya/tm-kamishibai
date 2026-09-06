@@ -7,11 +7,11 @@ import {poseNetBundleManifest} from '@kubohiroya/turbowarp-tm/posenet';
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const outputPath = path.join(repositoryRoot, 'src/dsl4/platform/posenet-bundle-assets.js');
 
-function sourceLiteral(/** @type {any} */ value) {
+function sourceLiteral(value: string) {
   return JSON.stringify(value);
 }
 
-const entries = [];
+const entries: string[] = [];
 for (const {path: name, mediaType, packageSpecifier} of poseNetBundleManifest.files) {
   const bytes = await readFile(fileURLToPath(import.meta.resolve(packageSpecifier)));
   entries.push(

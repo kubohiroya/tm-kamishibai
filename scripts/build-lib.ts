@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
  */
 const copiedArtifacts = ['builder/generated/dsl4-playback-runtime-extension.js'];
 
-function run(/** @type {any} */ command, /** @type {any} */ arguments_) {
+function run(command: string, arguments_: readonly string[]) {
   const result = spawnSync(command, arguments_, {cwd: projectRoot, stdio: 'inherit'});
   if (result.error) throw result.error;
   if (result.signal) throw new Error(`${command} terminated by ${result.signal}`);

@@ -7,7 +7,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 // and the type check fails, which is the signal to delete it and pick the real types up.
 import {buildSb3, createDeterministicSb3} from '@kubohiroya/sb3-toolchain';
 
-import {withTitleBuildMetadataSource} from './title-build-metadata.mjs';
+import {withTitleBuildMetadataSource} from './title-build-metadata.ts';
 
 /**
  * What both entry points read off their own options. The SB3 toolchain ships without declarations,

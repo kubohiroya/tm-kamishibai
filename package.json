@@ -86,8 +86,8 @@
     "release:dsl4:record-publication": "pnpm run build:lib && node scripts/sb3/dsl4-release-workflow.ts record-publication",
     "prepack": "pnpm lint && pnpm format && pnpm typecheck && pnpm build:lib && vitest run test/builder.test.mjs test/dsl32-converter.test.mjs && pnpm pack:smoke",
     "tm-kamishibai": "pnpm run build:lib && node bin/tm-kamishibai.mjs",
-    "build:lib": "node scripts/build-lib.mjs",
-    "build:site": "node scripts/build-site.mjs",
+    "build:lib": "node scripts/build-lib.ts",
+    "build:site": "node scripts/build-site.ts",
     "dev": "pnpm run build:lib && tsc --project tsconfig.build.json --watch"
   },
   "keywords": [

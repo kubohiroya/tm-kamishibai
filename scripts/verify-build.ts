@@ -7,10 +7,11 @@ import {
   downloadCardsPlaceholder,
   downloadCatalog,
   recommendedDownload,
-} from './download-catalog.mjs';
-import {siteVersionPlaceholder} from './site-version.mjs';
+} from './download-catalog.ts';
+import type {DownloadCatalogEntry} from './download-catalog.ts';
+import {siteVersionPlaceholder} from './site-version.ts';
 import {downloadableReleases} from './sb3/downloadable-releases.ts';
-import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.mjs';
+import {readTitleBuildMetadataFromSb3} from './sb3/title-build-metadata.ts';
 import {NAVIGATION_CONTRACT} from './site-navigation.mjs';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -237,7 +238,7 @@ async function verifySiteIndex() {
     html
       .replace(/\s+/gu, ' ')
       .includes(
-        `TurboWarpで編集・実行できるkamishibai ${recommendedDownload.version}` +
+        `TurboWarpで編集・実行できるkamishibai ${recommendedDownload?.version}` +
           'のSB3ファイルをダウンロードできます。',
       ),
     'The top-page download card does not use the recommended catalog version.',
@@ -293,7 +294,10 @@ async function verifyDownloads(releaseBuilds: readonly SiteReleaseBuild[] = []) 
     !html.includes('/dsl-author-guides/dsl-4.0-author-guide/'),
     'The 4.0 card links to the author guide.',
   );
-  for (const entry of downloadCatalog.filter(({artifact}: {artifact?: unknown}) => !artifact)) {
+  const unavailableEntries = downloadCatalog.filter(
+    (entry): entry is Extract<DownloadCatalogEntry, {artifact?: undefined}> => !entry.artifact,
+  );
+  for (const entry of unavailableEntries) {
     assert(
       html.includes(`aria-disabled="true">${entry.unavailableLabel}</span>`) &&
         html.includes(entry.unavailableNote),

@@ -1,6 +1,6 @@
 export const siteVersionPlaceholder = '{{PACKAGE_VERSION}}';
 
-export function renderSiteVersion(/** @type {any} */ source, /** @type {any} */ version) {
+export function renderSiteVersion(source: string, version: unknown) {
   if (typeof version !== 'string' || !/^[0-9A-Za-z][0-9A-Za-z.+-]*$/u.test(version)) {
     throw new Error(`Invalid package version for the site: ${JSON.stringify(version)}`);
   }
