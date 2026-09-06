@@ -32,7 +32,10 @@ function validateComposition(value: unknown) {
   ) {
     throw new TypeError('TM composition must provide registerPoseModel and releasePoseModel');
   }
-  return value as Record<'registerPoseModel' | 'releasePoseModel', (...parameters: any[]) => any>;
+  return value as Record<
+    'registerPoseModel' | 'releasePoseModel',
+    (...parameters: unknown[]) => unknown
+  >;
 }
 
 function validateSignal(value: unknown) {
@@ -122,7 +125,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
       if (signal?.aborted) throw abortError();
 
       let cancelled = false;
-      let cancellation = Promise.resolve();
+      let cancellation: Promise<unknown> = Promise.resolve();
       const cancelRegistration = () => {
         if (cancelled) return;
         cancelled = true;
@@ -201,7 +204,7 @@ export function createDsl4TMModelAdapter(options: {composition: unknown}) {
 export function createDsl4TMPlatform(options: {
   runtime: unknown;
   createFile?: Dsl4ForwardedFactory;
-  createComposition?: Function;
+  createComposition?: Dsl4ForwardedFactory;
   modelInitializationPolicy?: 'legacy' | 'latest-needed';
   parallelModelInitialization?: boolean;
 }) {
@@ -223,7 +226,11 @@ export function createDsl4TMPlatform(options: {
   ) {
     throw new TypeError('parallelModelInitialization must be a boolean');
   }
-  const composition = createComposition({
+  // The injected factory is forwarded through the runtime host as the permissive
+  // `Dsl4ForwardedFactory`. Narrow it to the call this module makes; the result is validated below.
+  const composition = (
+    createComposition as (options: Readonly<Record<string, unknown>>) => unknown
+  )({
     runtime: options.runtime,
     ...(options.createFile === undefined ? {} : {createFile: options.createFile}),
     ...(options.modelInitializationPolicy === undefined

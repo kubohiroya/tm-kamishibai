@@ -1,3 +1,32 @@
+/**
+ * The DOM surface this runtime UI builds and mounts. Narrower than the platform's `HTMLElement` on
+ * purpose: a suite fake only has to provide what is listed here.
+ */
+interface Dsl4RuntimeUiElement {
+  [member: string]: unknown;
+  id?: string;
+  textContent?: string | null;
+  hidden?: boolean;
+  /** Set on the button nodes these surfaces create, absent on the rest. */
+  type?: string;
+  disabled?: boolean;
+  dataset?: Record<string, string | undefined>;
+  style: Record<string, string> & {cssText?: string};
+  setAttribute(name: string, value: string): void;
+  appendChild(child: Dsl4RuntimeUiElement): unknown;
+  append?(...children: Dsl4RuntimeUiElement[]): unknown;
+  replaceChildren?(...children: Dsl4RuntimeUiElement[]): unknown;
+  remove(): void;
+  focus?(): void;
+  click?(): void;
+  addEventListener(type: string, listener: (event: never) => unknown, options?: unknown): unknown;
+  removeEventListener(
+    type: string,
+    listener: (event: never) => unknown,
+    options?: unknown,
+  ): unknown;
+}
+
 import {createAppShellTitleControls} from '@kubohiroya/turbowarp-app-shell';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -8,14 +37,14 @@ function requireElement(value: unknown, name: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${name} must be a DOM element`);
   }
-  return value as Record<string, any>;
+  return value as Dsl4RuntimeUiElement;
 }
 
 function requireDocument(value: unknown) {
   if (!isRecord(value) || typeof value.createElement !== 'function') {
     throw new TypeError('document must provide createElement');
   }
-  return value as Record<string, any>;
+  return value as Dsl4RuntimeUiElement;
 }
 
 /**

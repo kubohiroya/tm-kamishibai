@@ -83,10 +83,17 @@ export function createDsl4ProjectTMRuntime(options: {
   }
   let bundledRuntime;
   const loadRuntime = () => {
+    // The pinned `@kubohiroya/turbowarp-tm` package names these three inputs with its own runtime,
+    // global, and bundle types; this module validated the runtime above and holds the rest as
+    // opaque values it only forwards.
     bundledRuntime ??= createBundledTMRuntime({
-      runtime: runtime as any,
-      globalObject: options.globalObject as any,
-      projectBundle: loadDsl4PoseNetProjectBundle(options.project) as any,
+      runtime: runtime as unknown as Parameters<typeof createBundledTMRuntime>[0]['runtime'],
+      globalObject: options.globalObject as unknown as NonNullable<
+        Parameters<typeof createBundledTMRuntime>[0]['globalObject']
+      >,
+      projectBundle: loadDsl4PoseNetProjectBundle(options.project) as unknown as NonNullable<
+        Parameters<typeof createBundledTMRuntime>[0]['projectBundle']
+      >,
       // The pinned runtime declares `subtleCrypto` optional but not nullable, so an absent digest
       // implementation is expressed by leaving the property out.
       ...(options.subtleCrypto === undefined ? {} : {subtleCrypto: options.subtleCrypto}),
