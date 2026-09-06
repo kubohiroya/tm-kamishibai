@@ -37,6 +37,7 @@ import {
   dsl4TurboWarpBrowserBundleDefaults,
   dsl4TurboWarpBrowserBundleMaximumBytes,
 } from './dsl4-turbowarp-browser-bundle.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 const allowedModuleDirectories = ['builder', 'dsl4'];
@@ -64,9 +65,11 @@ interface LocalPreviewProtocolSession {
   whenIdle(): Promise<unknown>;
 }
 
-interface LocalPreviewSourceFrontend {
-  parse(source: string, options?: {sourceId?: string}): unknown;
-}
+/**
+ * The frontend the host is handed. It is validated on the way in and then forwarded to the watcher,
+ * which holds it to the shared `Dsl4SourceFrontend` contract.
+ */
+type LocalPreviewSourceFrontend = Dsl4SourceFrontend;
 
 interface LocalPreviewSourceSummary {
   readonly ok: boolean;

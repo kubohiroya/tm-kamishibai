@@ -60,7 +60,7 @@ function insets(value: unknown) {
 }
 
 /** One rectangle in stage pixels, as `rect()` normalizes it. */
-interface LayoutRect {
+export interface LayoutRect {
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -132,6 +132,12 @@ function anchorDistance(left: string, right: string) {
   const [leftX = 0, leftY = 0] = anchorGrid[left] ?? [];
   const [rightX = 0, rightY = 0] = anchorGrid[right] ?? [];
   return (leftX - rightX) ** 2 + (leftY - rightY) ** 2;
+}
+
+/** The published preview layout: where the panel sits and which anchor produced it. */
+export interface Dsl4PreviewLayout extends Readonly<Record<string, unknown>> {
+  readonly resolvedAnchor?: unknown;
+  readonly rect: LayoutRect;
 }
 
 /** Resolve one deterministic, safe-area-contained button layout from explicit geometry only. */
@@ -218,9 +224,9 @@ export function createDsl4PreviewLayoutCoordinator(options: {
   }
   const reserved = new Map();
   let interaction = {pressed: false, pointerCaptured: false, focused: false};
-  let currentLayout: Readonly<Record<string, any>> | null = null;
+  let currentLayout: Dsl4PreviewLayout | null = null;
 
-  function publish(layout: Readonly<Record<string, any>>) {
+  function publish(layout: Dsl4PreviewLayout) {
     if (
       currentLayout &&
       currentLayout.resolvedAnchor === layout.resolvedAnchor &&

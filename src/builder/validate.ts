@@ -25,12 +25,25 @@ function findTarget(project: Record<string, unknown>, targetName: string) {
   );
 }
 
+/** The output manifest this check compares against the bundle bytes it was handed. */
+interface Dsl4BundleManifest extends Readonly<Record<string, unknown>> {
+  readonly formatVersion?: unknown;
+  readonly profile?: unknown;
+  readonly builder?: {readonly package?: unknown; readonly version?: unknown};
+  readonly outputs?: {
+    readonly sb3?: {readonly sha256?: unknown};
+    readonly script?: {readonly sha256?: unknown};
+  };
+  readonly script?: Readonly<Record<string, unknown>>;
+  readonly assets?: Readonly<Record<string, unknown>>;
+}
+
 export function validateBundle(bundle: {
   sb3Bytes: Buffer | Uint8Array;
   scriptBytes: Buffer | Uint8Array;
-  manifest: Record<string, any>;
+  manifest: Readonly<Record<string, unknown>>;
 }) {
-  const {manifest} = bundle;
+  const manifest = bundle.manifest as Dsl4BundleManifest;
   assert(
     manifest.formatVersion === bundleManifestFormatVersion,
     'Unexpected output manifest formatVersion.',
@@ -39,7 +52,10 @@ export function validateBundle(bundle: {
     manifest.builder?.package === packageName && manifest.builder?.version === packageVersion,
     'Output manifest builder identity is invalid.',
   );
-  assert(builderProfiles.includes(manifest.profile), 'Output manifest profile is invalid.');
+  assert(
+    (builderProfiles as readonly string[]).includes(String(manifest.profile)),
+    'Output manifest profile is invalid.',
+  );
   assert(
     manifest.outputs?.sb3?.sha256 === sha256(bundle.sb3Bytes),
     'Output SB3 SHA-256 does not match manifest.',
@@ -90,7 +106,7 @@ export function validateBundle(bundle: {
     assert(target, `Generated SB3 target is missing: ${asset.target}`);
     const collectionName =
       asset.kind === 'backdrop' || asset.kind === 'costume' ? 'costumes' : 'sounds';
-    const collection = (target?.[collectionName] ?? []) as Record<string, any>[];
+    const collection = (target?.[collectionName] ?? []) as Record<string, unknown>[];
     const projectAsset = collection.find(
       (candidate) => candidate.name === asset.sb3Name && candidate.md5ext === asset.output.filename,
     );

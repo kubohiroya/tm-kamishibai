@@ -3,6 +3,7 @@ import {readFile, stat} from 'node:fs/promises';
 import {canonicalizeDsl4Source} from '../dsl4/source-canonicalizer.js';
 import {formatDsl4DiagnosticClipboard} from '../dsl4/diagnostic-projection.js';
 import {deepFreeze} from '../dsl4/story-document.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 
 const textDecoder = new TextDecoder('utf-8', {fatal: true});
 const textEncoder = new TextEncoder();
@@ -53,7 +54,7 @@ export async function validateDsl4SourceFile({
   sourceId = 'main',
 }: {
   input: string | URL;
-  sourceFrontend: {parse(source: string, options?: {sourceId?: string}): any};
+  sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;
   sourceId?: string;
 }) {
@@ -175,7 +176,7 @@ export async function validateDsl4SourceFile({
   });
 }
 
-export function formatDsl4Diagnostic(diagnostic: Record<string, any>, displaySource: string) {
+export function formatDsl4Diagnostic(diagnostic: Record<string, unknown>, displaySource: string) {
   return formatDsl4DiagnosticClipboard({...diagnostic, displayName: displaySource});
 }
 

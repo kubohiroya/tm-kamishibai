@@ -21,7 +21,7 @@ function callback(value: unknown, name: string) {
   if (value !== undefined && typeof value !== 'function') {
     throw new TypeError(`${name} must be a function`);
   }
-  return value as Function | undefined;
+  return value as ((...parameters: unknown[]) => unknown) | undefined;
 }
 
 function safeInteger(value: unknown, name: string, minimum: number) {

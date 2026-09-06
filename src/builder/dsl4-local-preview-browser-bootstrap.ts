@@ -63,10 +63,10 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput: object) {
   if (!isRecord(optionsInput)) {
     throw new TypeError('local preview browser bootstrap options are required');
   }
-  const options = optionsInput as Record<string, any>;
+  const options = optionsInput as Record<string, unknown>;
   const globalObject = isRecord(options.globalObject)
-    ? (options.globalObject as Record<string, any>)
-    : (globalThis as Record<string, any>);
+    ? (options.globalObject as Record<string, unknown>)
+    : (globalThis as Record<string, unknown>);
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
     throw new TypeError('sourceFrontend must provide parse');
   }
@@ -89,7 +89,7 @@ export function createDsl4LocalPreviewBrowserBootstrap(optionsInput: object) {
     location: globalObject.location,
     history: globalObject.history,
     eventTarget: globalObject,
-    fetch: globalObject.fetch.bind(globalObject),
+    fetch: (globalObject.fetch as (...parameters: never[]) => unknown).bind(globalObject),
     sourceFrontend: options.sourceFrontend,
     platform: createLazyTurboWarpPlatform(),
     runtimeOptions: {

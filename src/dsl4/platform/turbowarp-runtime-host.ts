@@ -859,7 +859,8 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           );
           if (isRecord(context)) expressionSnapshots.set(context, runtimeSnapshot);
         }
-        return composition.evaluateCondition(expression, variables, runtimeSnapshot);
+        return composition.evaluateCondition(expression, variables, runtimeSnapshot) as
+          boolean | Promise<boolean>;
       };
     }
 

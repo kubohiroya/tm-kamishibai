@@ -9,7 +9,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Compose the browser filesystem source with the transport-neutral preview protocol port. */
 export function createDsl4BrowserPreviewCoordinator(options: {
-  protocolSession: Record<string, Function>;
+  protocolSession: unknown;
   sessionId: string;
   sourceFrontend: Dsl4SourceFrontend;
   maxSourceBytes: number;

@@ -119,7 +119,45 @@ function restartChoice(anchor: unknown) {
   return restartChoiceNames[anchor];
 }
 
-async function renderSource(source: Record<string, any>, acknowledgement: Record<string, any>) {
+/** One event the local preview host streams to this client. */
+interface Dsl4PreviewClientEvent extends Readonly<Record<string, unknown>> {
+  readonly sequence?: unknown;
+  readonly type?: unknown;
+  readonly event?: Dsl4PreviewAcknowledgement & {type?: unknown};
+}
+
+/** One preview source result the client renders. */
+interface Dsl4PreviewSourceResult {
+  readonly ok?: unknown;
+  readonly integrity: string;
+  readonly counts: Record<string, number>;
+  readonly diagnostics?: readonly Dsl4PreviewClientDiagnostic[];
+}
+
+interface Dsl4PreviewClientDiagnostic {
+  readonly code?: string;
+  readonly message?: string;
+  readonly severity?: string;
+}
+
+/** The protocol acknowledgement the client renders alongside a source result. */
+/** The per-anchor availability the reload choices are rendered from. */
+type Dsl4PreviewReloadChoices = Readonly<
+  Record<'storyStart' | 'currentScene' | 'currentAction', {available?: unknown} | undefined>
+>;
+
+/** The protocol acknowledgement the client renders alongside a source result. */
+interface Dsl4PreviewAcknowledgement {
+  readonly current?: {readonly integrity?: string} | null;
+  readonly candidate?: {readonly options?: unknown} | null;
+  readonly active?: {readonly integrity?: string} | null;
+  readonly revision?: unknown;
+}
+
+async function renderSource(
+  source: Dsl4PreviewSourceResult,
+  acknowledgement: Dsl4PreviewAcknowledgement,
+) {
   const diagnostics = Array.isArray(source.diagnostics) ? source.diagnostics : [];
   const blocking = diagnostics.find(
     (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'error',
@@ -157,7 +195,7 @@ async function renderSource(source: Record<string, any>, acknowledgement: Record
   };
   if (acknowledgement.candidate) {
     candidateDetails = details;
-    const choices = acknowledgement.candidate.options;
+    const choices = acknowledgement.candidate.options as Dsl4PreviewReloadChoices;
     shell.update({
       formatVersion: 1,
       phase: 'candidate',
@@ -182,13 +220,13 @@ async function renderSource(source: Record<string, any>, acknowledgement: Record
       availability: reloadAvailability(choices),
       changedIds: ['source-generation'],
       initiatingInputId: null,
-      async apply(request: Readonly<Record<string, any>>) {
+      async apply(request: Readonly<Record<string, unknown>>) {
         const result = await post('/api/commit', {
           choice: restartChoice(request.actualAnchor),
         });
         renderCommitted(result.acknowledgement);
       },
-      async restart(request: Readonly<Record<string, any>>) {
+      async restart(request: Readonly<Record<string, unknown>>) {
         const result = await post('/api/restart', {
           choice: restartChoice(request.actualAnchor),
         });
@@ -218,7 +256,7 @@ async function renderSource(source: Record<string, any>, acknowledgement: Record
   }
 }
 
-function renderCommitted(acknowledgement: Record<string, any>) {
+function renderCommitted(acknowledgement: Dsl4PreviewAcknowledgement) {
   activeDetails = candidateDetails ?? activeDetails;
   candidateDetails = null;
   if (!activeDetails || !acknowledgement?.current?.integrity) return;
@@ -238,11 +276,14 @@ function renderCommitted(acknowledgement: Record<string, any>) {
   });
 }
 
-async function applyEvent(record: Record<string, any>) {
-  if (!Number.isSafeInteger(record.sequence) || record.sequence <= latestSequence) return;
-  latestSequence = record.sequence;
+async function applyEvent(record: Dsl4PreviewClientEvent) {
+  if (!Number.isSafeInteger(record.sequence) || Number(record.sequence) <= latestSequence) return;
+  latestSequence = Number(record.sequence);
   if (record.type === 'local-preview.source') {
-    await renderSource(record.source, record.acknowledgement);
+    await renderSource(
+      record.source as Dsl4PreviewSourceResult,
+      record.acknowledgement as Dsl4PreviewAcknowledgement,
+    );
     return;
   }
   if (record.type === 'local-preview.protocol') {

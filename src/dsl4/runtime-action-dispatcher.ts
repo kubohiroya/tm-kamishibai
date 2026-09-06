@@ -1,4 +1,5 @@
 import {dsl4CoreActionManifest} from './core-action-manifest.js';
+import type {ActionContext} from './runtime-controller.js';
 
 const coreActionNames = new Set(dsl4CoreActionManifest.map(({command}) => command));
 
@@ -28,13 +29,19 @@ function requireFunction(value: unknown, name: string) {
  * action surface. Callers must pass an already normalized StoryDocument action;
  * source- and block-specific validation stays outside this semantic boundary.
  */
+/**
+ * The per-invocation context the dispatcher hands each port call and branch resolution. This is the
+ * runtime controller's own `ActionContext`, so the two cannot drift apart.
+ */
+type Dsl4ActionDispatchContext = ActionContext;
+
 export function createDsl4RuntimeActionDispatcher(options: {
   invokePort: (
     method: string,
     payload: Record<string, unknown>,
-    context: any,
+    context: Dsl4ActionDispatchContext,
   ) => unknown | Promise<unknown>;
-  resolveBranch: (branchId: string, context: any) => string | Promise<string>;
+  resolveBranch: (branchId: string, context: Dsl4ActionDispatchContext) => string | Promise<string>;
   resolveSpeechStyle: (
     command: 'say' | 'think',
     args: Record<string, unknown>,
@@ -43,7 +50,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
   poseSelectionRecognition: Readonly<Record<string, unknown>>;
   dispatchPose: (
     payload: Readonly<{target: string | null; args: Record<string, unknown>}>,
-    context: any,
+    context: Dsl4ActionDispatchContext,
   ) => unknown | Promise<unknown>;
 }) {
   if (!isRecord(options))
@@ -62,7 +69,7 @@ export function createDsl4RuntimeActionDispatcher(options: {
    */
   async function dispatch(
     action: Readonly<Record<string, unknown>>,
-    context: any,
+    context: Dsl4ActionDispatchContext,
     {rehearsalSceneSkip = false}: {rehearsalSceneSkip?: boolean} = {},
   ): Promise<{sceneId: string; reason: string} | null> {
     if (!isRecord(action)) throw new TypeError('Runtime action must be an object');

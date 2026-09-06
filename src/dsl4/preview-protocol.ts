@@ -74,7 +74,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** The live reload snapshot; the protocol reads a few members off it and summarises the rest. */
-type LiveReloadState = Readonly<Record<string, any>>;
+type LiveReloadState = Readonly<Record<string, unknown>>;
 
 /**
  * The live reload session as the preview protocol drives it.
@@ -106,11 +106,22 @@ function validateLiveReloadSession(value: unknown) {
   return value as unknown as PreviewProtocolLiveReloadPort;
 }
 
-function currentSummary(state: Readonly<Record<string, any>>) {
+/** The live reload state this protocol summarizes and stages candidates from. */
+interface PreviewProtocolLiveReloadState extends Readonly<Record<string, unknown>> {
+  readonly generation?: unknown;
+  readonly current?: {readonly sourceId?: unknown; readonly integrity?: unknown} | null;
+  readonly candidate?: {readonly id?: unknown; readonly plan?: {options?: unknown}} | null;
+  readonly status?: unknown;
+  readonly diagnostics?: unknown;
+  readonly latestRevision?: unknown;
+}
+
+function currentSummary(state: Readonly<Record<string, unknown>>) {
+  const currentSource = (state as PreviewProtocolLiveReloadState).current;
   return deepFreeze({
     generation: state.generation,
-    sourceId: state.current?.sourceId ?? null,
-    integrity: state.current?.integrity ?? null,
+    sourceId: currentSource?.sourceId ?? null,
+    integrity: currentSource?.integrity ?? null,
   });
 }
 
@@ -207,7 +218,9 @@ export function createDsl4PreviewProtocolSession({
           fail('K4-PREVIEW-PROTOCOL-REVISION', 'Preview source revision was replaced');
         }
         const stagedCandidate =
-          accepted.revision === current.latestRevision ? state.candidate : null;
+          accepted.revision === current.latestRevision
+            ? ((state as PreviewProtocolLiveReloadState).candidate ?? null)
+            : null;
         if (accepted.revision === current.latestRevision) {
           if (stagedCandidate) {
             controller.acceptCandidate(accepted.sessionId, {
@@ -225,7 +238,7 @@ export function createDsl4PreviewProtocolSession({
           sourceIntegrity: integrity,
           status: state.status,
           candidate: stagedCandidate
-            ? {id: stagedCandidate.id, options: stagedCandidate.plan.options}
+            ? {id: stagedCandidate.id, options: stagedCandidate.plan?.options}
             : null,
           current: currentSummary(state),
           diagnostics: state.diagnostics,
