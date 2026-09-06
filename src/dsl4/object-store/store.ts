@@ -82,6 +82,14 @@ interface StoreNodeRecord extends StoreSlotRecord {
   members?: Map<string | number, StoreNodeMember>;
 }
 
+interface StoreCommittedNodeMember extends StoreNodeMember {
+  key: string | number;
+}
+
+interface StoreCommittedNodeRecord extends Omit<StoreNodeRecord, 'members'> {
+  members?: StoreCommittedNodeMember[];
+}
+
 interface StoreWorkingRoot {
   nextSlot: number;
   freeSlots: number[];
@@ -91,6 +99,17 @@ interface StoreWorkingRoot {
   entries: Map<number, StoreEntryRecord>;
   leases: Map<number, StoreLeaseRecord>;
   nodes: Map<number, StoreNodeRecord>;
+}
+
+interface Dsl4StoreCommittedRoot extends Readonly<Record<string, unknown>> {
+  nextSlot: number;
+  freeSlots: number[];
+  generations: StoreSlotRecord[];
+  handles: StoreHandleRecord[];
+  scopes: StoreScopeRecord[];
+  entries: StoreEntryRecord[];
+  leases: StoreLeaseRecord[];
+  nodes: StoreCommittedNodeRecord[];
 }
 
 type StoreLimits = Readonly<typeof defaultLimits>;
@@ -221,7 +240,7 @@ function compareMemberKeys(left: string | number, right: string | number) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function freezeRoot(working: StoreWorkingRoot) {
+function freezeRoot(working: StoreWorkingRoot): Dsl4StoreCommittedRoot {
   const nodes = [...working.nodes.values()].sort(bySlot).map((node) => ({
     slot: node.slot,
     generation: node.generation,
@@ -254,13 +273,13 @@ function freezeRoot(working: StoreWorkingRoot) {
   });
 }
 
-function cloneRoot(root: any) {
-  const generations = root.generations as any[];
-  const handles = root.handles as any[];
-  const scopes = root.scopes as any[];
-  const entries = root.entries as any[];
-  const leases = root.leases as any[];
-  const nodes = root.nodes as any[];
+function cloneRoot(root: Dsl4StoreCommittedRoot): StoreWorkingRoot {
+  const generations = root.generations;
+  const handles = root.handles;
+  const scopes = root.scopes;
+  const entries = root.entries;
+  const leases = root.leases;
+  const nodes = root.nodes;
   return {
     nextSlot: root.nextSlot,
     freeSlots: [...root.freeSlots],
@@ -278,13 +297,13 @@ function cloneRoot(root: any) {
             ? {}
             : {
                 members: new Map(
-                  (record.members as any[]).map((member) => [
+                  (record.members as StoreCommittedNodeMember[]).map((member) => [
                     member.key,
                     {kind: member.kind, targetNodeSlot: member.targetNodeSlot},
                   ]),
                 ),
               }),
-        },
+        } as StoreNodeRecord,
       ]),
     ),
   };
@@ -1000,12 +1019,12 @@ function verifyWorking(working: StoreWorkingRoot, limits: StoreLimits) {
   for (const entrySlot of working.entries.keys()) visitEntry(entrySlot);
 }
 
-function snapshotMembers(node: Readonly<Record<string, any>>): any[] {
-  return (node.members ?? []) as any[];
+function snapshotMembers(node: StoreCommittedNodeRecord): readonly StoreCommittedNodeMember[] {
+  return node.members ?? [];
 }
 
 function createDebugSnapshot(
-  root: any,
+  root: Dsl4StoreCommittedRoot,
   realmState: 'active' | 'faulted' | 'disposed',
   revision: number,
 ) {

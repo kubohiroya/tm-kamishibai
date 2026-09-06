@@ -328,7 +328,7 @@
   },
   "src/dsl4/object-store/store.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 28
+      "count": 16
     }
   },
   "src/dsl4/packager-entry-source.ts": {
