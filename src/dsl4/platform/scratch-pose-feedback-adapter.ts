@@ -221,13 +221,13 @@ function createVariableChannel(variable: Record<string, unknown>, name: string) 
   }
   const readUnderlying = dataProperty
     ? () => variable.value
-    : () => (descriptor.get as Function).call(variable);
+    : () => (descriptor.get as (this: unknown) => unknown).call(variable);
   const writeUnderlying = dataProperty
     ? (value: unknown) => {
         variable.value = value;
       }
     : (value: unknown) => {
-        (descriptor.set as Function).call(variable, value);
+        (descriptor.set as (this: unknown, value: unknown) => void).call(variable, value);
       };
 
   return {
@@ -314,7 +314,7 @@ export function createDsl4ScratchPoseFeedbackAdapter(options: {
       for (const [channel, previousValue] of [
         [progressChannel, previous.progress],
         [confidenceChannel, previous.confidence],
-      ]) {
+      ] as [ReturnType<typeof createVariableChannel>, unknown][]) {
         try {
           channel.writeAuthoritative(previousValue);
         } catch (rollbackError) {

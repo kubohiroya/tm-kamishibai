@@ -1,5 +1,48 @@
 import {createTurboWarpExtensionInfo} from '@kubohiroya/turbowarp-extension-manifest';
 
+import type {Dsl4ScratchHost} from './turbowarp-scratch-host.js';
+
+/**
+ * The Structured Data adapter this surface forwards its blocks to.
+ *
+ * The required method set is decided at startup from the feature flags and checked by name against
+ * the manifest opcodes, which is why the index signature is here; the named members are the calls
+ * the handlers below actually make, and the startup check runs before any of them.
+ */
+interface Dsl4StructuredDataAdapter {
+  [method: string]: ((...parameters: unknown[]) => unknown) | undefined;
+  createScope(...parameters: unknown[]): unknown;
+  debugAssertInvariants(...parameters: unknown[]): unknown;
+  debugHandleKind(...parameters: unknown[]): unknown;
+  debugLimits(...parameters: unknown[]): unknown;
+  debugNormalizedPath(...parameters: unknown[]): unknown;
+  debugSnapshot(...parameters: unknown[]): unknown;
+  defaultScope(...parameters: unknown[]): unknown;
+  duplicateReference(...parameters: unknown[]): unknown;
+  exceptionCode(...parameters: unknown[]): unknown;
+  exceptionMessage(...parameters: unknown[]): unknown;
+  exceptionOperation(...parameters: unknown[]): unknown;
+  freeEntry(...parameters: unknown[]): unknown;
+  isException(...parameters: unknown[]): unknown;
+  isReference(...parameters: unknown[]): unknown;
+  iteratorCurrentKind(...parameters: unknown[]): unknown;
+  iteratorCurrentReference(...parameters: unknown[]): unknown;
+  iteratorCurrentScalar(...parameters: unknown[]): unknown;
+  iteratorNext(...parameters: unknown[]): unknown;
+  newCollectionIterator(...parameters: unknown[]): unknown;
+  newEntryFromJson(...parameters: unknown[]): unknown;
+  newQueryIterator(...parameters: unknown[]): unknown;
+  queryCollection(...parameters: unknown[]): unknown;
+  queryKind(...parameters: unknown[]): unknown;
+  queryReference(...parameters: unknown[]): unknown;
+  queryScalar(...parameters: unknown[]): unknown;
+  releaseCollection(...parameters: unknown[]): unknown;
+  releaseException(...parameters: unknown[]): unknown;
+  releaseIterator(...parameters: unknown[]): unknown;
+  releaseReference(...parameters: unknown[]): unknown;
+  releaseScope(...parameters: unknown[]): unknown;
+}
+
 const standaloneId = 'kubohiroyastructdata1';
 const developerId = 'kubohiroyastructdata1debug';
 export const dsl4StructuredDataBlockIconURI = `data:image/svg+xml,${encodeURIComponent(
@@ -269,31 +312,42 @@ export function resolveDsl4StructuredDataFeatureFlags(input: unknown = {}) {
 }
 
 function createExtension(
-  Scratch: any,
-  manifest: Readonly<{id: string; name: string; developer: boolean; blocks: readonly any[]}>,
-  handlers: Record<string, Function>,
+  Scratch: Dsl4ScratchHost,
+  manifest: Readonly<{
+    id: string;
+    name: string;
+    developer: boolean;
+    blocks: readonly Readonly<Record<string, unknown>>[];
+  }>,
+  handlers: Record<string, (...parameters: never[]) => unknown>,
 ) {
   return Object.freeze({
     getInfo() {
-      return createTurboWarpExtensionInfo(Scratch, manifest, {
-        blockIconURI: manifest.developer
-          ? dsl4StructuredDataDebugBlockIconURI
-          : dsl4StructuredDataBlockIconURI,
-        color1: manifest.developer ? '#555555' : '#2f6f9f',
-        color2: manifest.developer ? '#444444' : '#275f88',
-        color3: manifest.developer ? '#333333' : '#1f4f70',
-        disableReporterMonitors: true,
-      });
+      // The manifests type each block argument's `type` as `unknown`, while the extension-info
+      // package names a union. Narrow to its parameter until the two agree upstream.
+      return createTurboWarpExtensionInfo(
+        Scratch,
+        manifest as unknown as Parameters<typeof createTurboWarpExtensionInfo>[1],
+        {
+          blockIconURI: manifest.developer
+            ? dsl4StructuredDataDebugBlockIconURI
+            : dsl4StructuredDataBlockIconURI,
+          color1: manifest.developer ? '#555555' : '#2f6f9f',
+          color2: manifest.developer ? '#444444' : '#275f88',
+          color3: manifest.developer ? '#333333' : '#1f4f70',
+          disableReporterMonitors: true,
+        },
+      );
     },
     ...handlers,
   });
 }
 
-function castString(Scratch: any, value: unknown) {
+function castString(Scratch: Dsl4ScratchHost, value: unknown) {
   return Scratch.Cast?.toString ? Scratch.Cast.toString(value) : String(value ?? '');
 }
 
-function castNumber(Scratch: any, value: unknown) {
+function castNumber(Scratch: Dsl4ScratchHost, value: unknown) {
   return Scratch.Cast?.toNumber ? Scratch.Cast.toNumber(value) : Number(value);
 }
 
@@ -302,7 +356,12 @@ export function createDsl4StructuredDataTurboWarpSurfaces(options: object = {}) 
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
     throw new TypeError('Structured Data TurboWarp options must be an object');
   }
-  const candidate = options as Record<string, any>;
+  const candidate = options as {
+    featureFlags?: unknown;
+    Scratch?: Dsl4ScratchHost;
+    adapter?: Dsl4StructuredDataAdapter;
+    onError?: (error: unknown, context: Readonly<{opcode: string}>) => unknown;
+  };
   const featureFlags = resolveDsl4StructuredDataFeatureFlags(candidate.featureFlags);
   if (!featureFlags.structuredDataStandaloneEnabled && !featureFlags.structuredDataDebugEnabled) {
     return deepFreeze({

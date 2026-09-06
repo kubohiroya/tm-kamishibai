@@ -353,7 +353,14 @@ export function createDsl4MediaActionPort(options: {
       }
       if (scale !== undefined) {
         await runCancellable(
-          () => (setActorScale as Function)(actor, scale, actionContext),
+          () =>
+            (
+              setActorScale as (
+                actor: unknown,
+                scale: number,
+                context: Readonly<Record<string, unknown>>,
+              ) => unknown | Promise<unknown>
+            )(actor, scale, actionContext),
           signal,
         );
       }

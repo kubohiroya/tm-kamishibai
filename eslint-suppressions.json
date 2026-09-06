@@ -74,11 +74,6 @@
       "count": 2
     }
   },
-  "src/dsl4/action-context-turbowarp.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/dsl4/asset-bundle-descriptor.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -112,16 +107,6 @@
       "count": 1
     }
   },
-  "src/dsl4/browser-turbowarp-platform.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
-  "src/dsl4/debug-execution.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 3
-    }
-  },
   "src/dsl4/diagnostic-projection.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -142,22 +127,12 @@
       "count": 3
     }
   },
-  "src/dsl4/platform/actor-action-port.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
-    }
-  },
   "src/dsl4/platform/browser-remote-asset-loader.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
-    }
-  },
-  "src/dsl4/platform/bubble-platform.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
     }
   },
   "src/dsl4/platform/camera-preview-controls.ts": {
@@ -176,11 +151,6 @@
   "src/dsl4/platform/loading-screen-presenter.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/dsl4/platform/media-action-port.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
     }
   },
   "src/dsl4/platform/packaged-binary-runtime.ts": {
@@ -223,18 +193,8 @@
       "count": 1
     }
   },
-  "src/dsl4/platform/scratch-pose-feedback-adapter.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 2
-    }
-  },
   "src/dsl4/platform/session-backing-diagnostic.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
-  "src/dsl4/platform/svg-text-action-port.ts": {
-    "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
     }
   },
@@ -244,24 +204,6 @@
     },
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 1
-    }
-  },
-  "src/dsl4/platform/turbowarp-actor-adapter.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    }
-  },
-  "src/dsl4/platform/turbowarp-core-action-block.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    }
-  },
-  "src/dsl4/platform/turbowarp-preview-session.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 2
     }
   },
   "src/dsl4/preview-layout-coordinator.ts": {
@@ -312,14 +254,6 @@
   "src/dsl4/source-origin-descriptor.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 4
-    }
-  },
-  "src/dsl4/structured-data-turbowarp.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
     }
   }
 }

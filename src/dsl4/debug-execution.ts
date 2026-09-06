@@ -26,7 +26,11 @@ export function createDsl4DebugExecutionCoordinator({
   let revision = 0;
   let disposed = false;
   const subscribers: Set<(state: Readonly<Record<string, unknown>>) => unknown> = new Set();
-  let activePause: {resolve: Function; reject: Function; cleanup: Function} | null = null;
+  let activePause: {
+    resolve: (value: Readonly<Record<string, unknown>>) => void;
+    reject: (reason?: unknown) => void;
+    cleanup: () => void;
+  } | null = null;
   let pauseLocation: Readonly<Record<string, unknown>> | null = null;
 
   function snapshot() {
