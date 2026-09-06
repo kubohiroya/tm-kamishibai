@@ -2,16 +2,31 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 
 import {createDsl4RuntimeActionDispatcher} from '../src/dsl4/index.js';
+import type {ActionContext} from '../src/dsl4/runtime-controller.js';
+import {thrown} from './helpers/thrown-error.ts';
 
-function action(command, args = {}, target = null) {
+type DispatcherOptions = Parameters<typeof createDsl4RuntimeActionDispatcher>[0];
+
+function action(command: string, args: Record<string, unknown> = {}, target: string | null = null) {
   return {command, target, args, handler: 'core'};
 }
 
-function createHarness(overrides = {}) {
-  const calls = [];
+/**
+ * The context these cases hand the dispatcher.
+ *
+ * `ActionContext` is the controller's full ten-member contract and the controller supplies all of
+ * it. These cases exercise paths that read only the abort signal, and one that reads nothing at all,
+ * so the double is named once here rather than cast at each of the eleven call sites.
+ */
+function actionContext(members: Partial<ActionContext> = {}): ActionContext {
+  return {signal: new AbortController().signal, ...members} as ActionContext;
+}
+
+function createHarness(overrides: Partial<DispatcherOptions> = {}) {
+  const calls: {method: string; payload: unknown; context: unknown}[] = [];
   const recognition = {scoreThreshold: 0.5};
   const dispatcher = createDsl4RuntimeActionDispatcher({
-    async invokePort(method, payload, context) {
+    async invokePort(method: string, payload: unknown, context: unknown) {
       calls.push({method, payload, context});
       if (method === 'poseInputToChangeScene') return 'safe';
       if (method === 'imageInputToChangeScene') return 'ready';
@@ -37,7 +52,7 @@ function createHarness(overrides = {}) {
 
 test('dispatches normalized port, navigation, selection, speech, and pose actions', async () => {
   const {dispatcher, calls, recognition} = createHarness();
-  const context = {signal: new AbortController().signal};
+  const context = actionContext();
   assert.equal(Object.isFrozen(dispatcher), true);
 
   await dispatcher.dispatch(action('show', {skin: 'Ready'}, 'Guide'), context);
@@ -109,18 +124,25 @@ test('dispatches normalized port, navigation, selection, speech, and pose action
 });
 
 test('fails closed for malformed construction, unknown actions, and invalid selection results', async () => {
-  assert.throws(() => createDsl4RuntimeActionDispatcher({}), /invokePort must be a function/u);
+  // The empty record is missing every collaborator; that is what the case proves.
+  assert.throws(
+    () => createDsl4RuntimeActionDispatcher({} as DispatcherOptions),
+    /invokePort must be a function/u,
+  );
   const {dispatcher} = createHarness({
     invokePort() {
       return 'undeclared';
     },
   });
   await assert.rejects(
-    dispatcher.dispatch(action('notRegistered'), {}),
-    (error) => error.code === 'K4-RUNTIME-DISPATCH-001',
+    dispatcher.dispatch(action('notRegistered'), actionContext()),
+    (error) => thrown(error).code === 'K4-RUNTIME-DISPATCH-001',
   );
   await assert.rejects(
-    dispatcher.dispatch(action('keyInputToChangeScene', {routes: {Space: 'next'}}), {}),
-    (error) => error.code === 'K4-RUNTIME-RESULT-001',
+    dispatcher.dispatch(
+      action('keyInputToChangeScene', {routes: {Space: 'next'}}),
+      actionContext(),
+    ),
+    (error) => thrown(error).code === 'K4-RUNTIME-RESULT-001',
   );
 });

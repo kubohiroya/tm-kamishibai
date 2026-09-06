@@ -16,7 +16,7 @@ const schema = JSON.parse(
 );
 const frontend = createDsl4SourceFrontend(schema);
 
-function actionInput(command, actionIndex, signal) {
+function actionInput(command: string, actionIndex: number, signal: AbortSignal) {
   return {
     command,
     sceneId: 'opening',
@@ -26,7 +26,13 @@ function actionInput(command, actionIndex, signal) {
   };
 }
 
-async function waitFor(predicate, message) {
+/** The trace members this case reads back; the controller publishes its trace untyped. */
+interface TraceEntry {
+  readonly type?: unknown;
+  readonly actionPath?: unknown;
+}
+
+async function waitFor(predicate: () => unknown, message: string) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;
     await Promise.resolve();
@@ -85,11 +91,11 @@ test('runtime pauses before debugger in development and treats it as a no-op oth
     {sourceId: 'runtime-debugger.kamishibai.yaml'},
   );
   assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
-  const calls = [];
+  const calls: string[] = [];
   const debug = createDsl4DebugExecutionCoordinator({enabled: true});
   const runtime = createDsl4RuntimeController({
     storyDocument: parsed.storyDocument,
-    port: {wait: async () => calls.push('wait')},
+    port: {wait: async () => void calls.push('wait')},
     debugExecution: debug,
   });
   const running = runtime.start();
@@ -97,22 +103,19 @@ test('runtime pauses before debugger in development and treats it as a no-op oth
   assert.equal(runtime.getState().actionIndex, 1);
   assert.deepEqual(calls, ['wait']);
   assert.equal(
-    runtime
-      .getTrace()
-      .filter(
-        ({type, actionPath}) =>
-          type === 'action.start' && actionPath === '/scenes/opening/actions/1',
-      ).length,
+    (runtime.getTrace() as readonly TraceEntry[]).filter(
+      ({type, actionPath}) => type === 'action.start' && actionPath === '/scenes/opening/actions/1',
+    ).length,
     0,
   );
   debug.resume();
   assert.equal((await running).status, 'finished');
   assert.deepEqual(calls, ['wait', 'wait']);
 
-  const productionCalls = [];
+  const productionCalls: string[] = [];
   const production = createDsl4RuntimeController({
     storyDocument: parsed.storyDocument,
-    port: {wait: async () => productionCalls.push('wait')},
+    port: {wait: async () => void productionCalls.push('wait')},
   });
   assert.equal((await production.start()).status, 'finished');
   assert.deepEqual(productionCalls, ['wait', 'wait']);
@@ -132,7 +135,9 @@ test('live reload quiesce cancels a step pause even for a finish-only action', a
   });
   void runtime.start();
   await waitFor(() => debug.getState().paused, 'runtime did not enter step pause');
-  const token = await runtime.quiesce({candidateId: 1, mode: 'finish-only'});
+  const token = (await runtime.quiesce({candidateId: 1, mode: 'finish-only'})) as {
+    resumeMode?: unknown;
+  };
   assert.equal(token.resumeMode, 'replay-action');
   assert.equal(debug.getState().paused, false);
   assert.equal(runtime.getState().status, 'paused');
