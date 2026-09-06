@@ -10,10 +10,65 @@ import {
   dsl4RuntimeApplicationMenuDefaultIcons,
 } from '../dsl4/platform/runtime-application-menu.js';
 import {createDsl4RuntimeTitleControls} from '../dsl4/platform/runtime-title-controls.js';
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 import {loadDsl4BrowserRuntimeComponent} from './dsl4-browser-runtime-component.js';
 
 const standardRuntimeExtensionId = 'kubohiroyakamishibai4';
+
+type PreviewCallback = (...args: unknown[]) => unknown;
+
+interface RuntimeGlobalObject extends Record<string, unknown> {
+  Scratch?: unknown;
+  navigator?: Readonly<{language?: string}>;
+  open?: (url: string, target?: string, features?: string) => unknown;
+}
+
+interface RuntimeOptionsPort extends Record<string, unknown> {
+  tmPoseRuntime?: unknown;
+  setLoading?: unknown;
+}
+
+interface LocalPreviewBrowserRuntimeOptions extends Record<string, unknown> {
+  projectBytes: Uint8Array;
+  maxProjectBytes?: unknown;
+  maxArchiveEntries?: unknown;
+  maxProjectJsonBytes?: unknown;
+  maxSourceBytes?: unknown;
+  maxAssetFiles?: unknown;
+  maxAssetBytes?: unknown;
+  maxGenerationMessageBytes?: number;
+  sourceFrontend: Dsl4SourceFrontend;
+  runtimeOptions: RuntimeOptionsPort;
+  globalObject?: RuntimeGlobalObject;
+  sessionId: string;
+  featureFlags?: unknown;
+  document: Dsl4PreviewDocument;
+  mount: Dsl4PreviewElement;
+  platform?: unknown;
+  stageWidth?: number;
+  stageHeight?: number;
+  historyNavigationAvailable?: unknown;
+  subtleCrypto?: unknown;
+  prepareVm?: (vm: unknown) => unknown | Promise<unknown>;
+  onBridgeEvent?: PreviewCallback;
+  onRuntimeEvent?: PreviewCallback;
+  onError?: (error: unknown) => unknown;
+  onApplicationOpen?: () => unknown;
+}
+
+interface RuntimeComponentFailure {
+  readonly ok: false;
+  readonly diagnostics?: readonly unknown[];
+}
+
+interface RuntimeComponentSuccess extends Readonly<Record<string, unknown>> {
+  readonly ok: true;
+  readonly standardRuntimeMarkerRequired?: boolean;
+}
+
+type RuntimeComponentResult = RuntimeComponentFailure | RuntimeComponentSuccess;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -21,17 +76,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function requiredFunction(value: unknown, name: string) {
   if (typeof value !== 'function') throw new TypeError(`${name} must be a function`);
-  return value as Function;
+  return value as PreviewCallback;
 }
 
 function optionalFunction(value: unknown, name: string) {
   if (value !== undefined && typeof value !== 'function') {
     throw new TypeError(`${name} must be a function`);
   }
-  return value as Function | undefined;
+  return value as PreviewCallback | undefined;
 }
 
-function installStandardRuntimeMarker(vm: Record<string, any>) {
+function installStandardRuntimeMarker(vm: unknown) {
+  if (!isRecord(vm)) {
+    throw new TypeError('TurboWarp VM must be an object');
+  }
   const extensionManager = vm.extensionManager;
   if (!isRecord(extensionManager) || typeof extensionManager.addBuiltinExtension !== 'function') {
     throw new TypeError('TurboWarp VM must provide extensionManager.addBuiltinExtension');
@@ -83,7 +141,7 @@ function disposedError() {
   );
 }
 
-function componentError(result: Readonly<Record<string, any>>) {
+function componentError(result: RuntimeComponentFailure) {
   const first = Array.isArray(result.diagnostics) ? result.diagnostics[0] : null;
   const error = new Dsl4LocalPreviewBrowserRuntimeError(
     'K4-PREVIEW-RUNTIME-COMPONENT-001',
@@ -102,21 +160,12 @@ function componentError(result: Readonly<Record<string, any>>) {
  * Scope the legacy global expected by pinned block-free TurboWarp compositions to this page.
  * The exact prior value is restored when the browser runtime owner is disposed.
  */
-function installScratchCompatibility(
-  globalObject: Record<string, any>,
-  runtime: Record<string, any>,
-) {
+function installScratchCompatibility(globalObject: RuntimeGlobalObject, runtime: unknown) {
   const hadScratch = Object.hasOwn(globalObject, 'Scratch');
   const previousScratch = globalObject.Scratch;
-  const inheritedScratch = isRecord(previousScratch)
-    ? (previousScratch as Record<string, any>)
-    : {};
-  const inheritedVm = isRecord(inheritedScratch.vm)
-    ? (inheritedScratch.vm as Record<string, any>)
-    : {};
-  const inheritedCast = isRecord(inheritedScratch.Cast)
-    ? (inheritedScratch.Cast as Record<string, any>)
-    : {};
+  const inheritedScratch = isRecord(previousScratch) ? previousScratch : {};
+  const inheritedVm = isRecord(inheritedScratch.vm) ? inheritedScratch.vm : {};
+  const inheritedCast = isRecord(inheritedScratch.Cast) ? inheritedScratch.Cast : {};
   globalObject.Scratch = Object.freeze({
     ...inheritedScratch,
     vm: Object.freeze({...inheritedVm, runtime}),
@@ -149,7 +198,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
   if (!isRecord(optionsInput)) {
     throw new TypeError('local preview browser runtime options are required');
   }
-  const options = optionsInput as Record<string, any>;
+  const options = optionsInput as LocalPreviewBrowserRuntimeOptions;
   if (!(options.projectBytes instanceof Uint8Array) || options.projectBytes.byteLength < 1) {
     throw new TypeError('projectBytes must be a non-empty Uint8Array');
   }
@@ -168,8 +217,8 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     throw new TypeError('runtimeOptions must be an object');
   }
   const globalObject = isRecord(options.globalObject)
-    ? (options.globalObject as Record<string, any>)
-    : (globalThis as Record<string, any>);
+    ? options.globalObject
+    : (globalThis as unknown as RuntimeGlobalObject);
   if (typeof options.sessionId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(options.sessionId)) {
     throw new TypeError('sessionId must contain 1-128 URL-safe characters');
   }
@@ -274,7 +323,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
     status = 'starting';
     startPromise = (async () => {
       try {
-        const component = await loadDsl4BrowserRuntimeComponent({
+        const component = (await loadDsl4BrowserRuntimeComponent({
           projectBytes: retainedProjectBytes,
           sourceFrontend: options.sourceFrontend,
           maxProjectBytes,
@@ -285,7 +334,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           maxAssetBytes: options.maxAssetBytes,
           historyNavigationAvailable: options.historyNavigationAvailable,
           subtleCrypto: options.subtleCrypto,
-        });
+        })) as unknown as RuntimeComponentResult;
         if (!component.ok) throw componentError(component);
         if (disposeRequested) throw disposedError();
         const runtimeOptions = {...options.runtimeOptions};
@@ -298,12 +347,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           projectBytes: retainedProjectBytes,
           platform: options.platform,
           maxProjectBytes,
-          stageWidth: options.stageWidth,
-          stageHeight: options.stageHeight,
+          ...(options.stageWidth === undefined ? {} : {stageWidth: options.stageWidth}),
+          ...(options.stageHeight === undefined ? {} : {stageHeight: options.stageHeight}),
           async prepareVm(vm) {
-            if (
-              (component as Readonly<Record<string, any>>).standardRuntimeMarkerRequired === true
-            ) {
+            if (component.standardRuntimeMarkerRequired === true) {
               installStandardRuntimeMarker(vm);
             }
             await options.prepareVm?.(vm);
@@ -395,7 +442,7 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
           inputTarget: canvas,
           stagePointerTarget: canvas,
           historyNavigationAvailable: options.historyNavigationAvailable,
-          onEvent(event: Readonly<Record<string, any>>) {
+          onEvent(event: Readonly<Record<string, unknown>>) {
             if (event?.type === 'runtime.finish') {
               showApplicationMenu();
             }
@@ -405,8 +452,10 @@ export function createDsl4LocalPreviewBrowserRuntime(optionsInput: object) {
         const activeBridge = createDsl4BrowserPreviewRuntimeBridge({
           createSession,
           sessionId: options.sessionId,
-          maxGenerationMessageBytes: options.maxGenerationMessageBytes,
-          onEvent: options.onBridgeEvent,
+          ...(options.maxGenerationMessageBytes === undefined
+            ? {}
+            : {maxGenerationMessageBytes: options.maxGenerationMessageBytes}),
+          ...(options.onBridgeEvent === undefined ? {} : {onEvent: options.onBridgeEvent}),
           onError: reportError,
         });
         bridge = activeBridge;

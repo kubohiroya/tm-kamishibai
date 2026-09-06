@@ -24,6 +24,81 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface ThreadHost {
+  start(source: Readonly<Record<string, unknown>>): unknown;
+  waitForCompletion(thread: object): PromiseLike<unknown>;
+  stop(thread: object, reason: string): unknown;
+}
+
+interface ActionParameter {
+  readonly name: string;
+  readonly type: 'string' | 'number' | 'boolean';
+  readonly required: boolean;
+}
+
+interface ActionRegistration {
+  readonly name: string;
+  readonly target: 'actor';
+  readonly parameters: readonly ActionParameter[];
+  readonly source: Readonly<Record<string, unknown>>;
+}
+
+interface ActionRegistrySnapshot {
+  readonly actions: readonly ActionRegistration[];
+}
+
+interface CustomActionPayload {
+  readonly name: string;
+  readonly target: string;
+  readonly arguments: Readonly<Record<string, string | number | boolean>>;
+}
+
+interface RuntimeContext {
+  readonly actionPath: string;
+  readonly signal: AbortSignal;
+  readonly structuredData: Readonly<{actionScopeRef: string; actionViewRef: string}>;
+}
+
+type InvocationPhase =
+  | 'created'
+  | 'running'
+  | 'cancelling'
+  | 'settling'
+  | 'completed'
+  | 'transitioned'
+  | 'failed'
+  | 'cancelled';
+
+interface InvocationPublicView {
+  readonly invocationId: string;
+  readonly runtimeGeneration: number;
+  readonly registrySnapshot: unknown;
+  readonly actionPath: string;
+  readonly name: string;
+  readonly target: string;
+  readonly arguments: Readonly<Record<string, string | number | boolean>>;
+  readonly actionScope: string;
+  readonly actionView: string;
+  readonly signal: AbortSignal;
+  readonly state: InvocationPhase;
+}
+
+interface Invocation {
+  readonly thread: object;
+  readonly registration: ActionRegistration;
+  readonly parameters: ReadonlyMap<string, ActionParameter>;
+  readonly payload: CustomActionPayload;
+  readonly runtimeContext: RuntimeContext;
+  readonly abortController: AbortController;
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (reason: unknown) => void;
+  readonly resultPromise: Promise<unknown>;
+  phase: InvocationPhase;
+  cancelTimeout: () => void;
+  handleRuntimeAbort: () => void;
+  publicView: InvocationPublicView;
+}
+
 function deepFreeze<T>(value: T): Readonly<T> {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -73,11 +148,11 @@ function validateThreadHost(input: unknown) {
       throw new TypeError(`Custom action thread host must provide ${method}`);
     }
   }
-  const host = input as Record<'start' | 'waitForCompletion' | 'stop', (...p: any[]) => any>;
+  const host = input as unknown as ThreadHost;
   return Object.freeze({
-    start: host.start.bind(input),
-    waitForCompletion: host.waitForCompletion.bind(input),
-    stop: host.stop.bind(input),
+    start: host.start.bind(input) as ThreadHost['start'],
+    waitForCompletion: host.waitForCompletion.bind(input) as ThreadHost['waitForCompletion'],
+    stop: host.stop.bind(input) as ThreadHost['stop'],
   });
 }
 
@@ -113,7 +188,7 @@ function validateRuntimeContext(input: unknown) {
   });
 }
 
-function validatePayload(input: unknown, registration: Readonly<Record<string, any>>) {
+function validatePayload(input: unknown, registration: ActionRegistration): CustomActionPayload {
   if (!isRecord(input)) throw new TypeError('Custom action payload must be an object');
   const keys = Object.keys(input).sort();
   if (
@@ -128,21 +203,22 @@ function validatePayload(input: unknown, registration: Readonly<Record<string, a
   ) {
     throw new TypeError('Custom action payload does not match its registration');
   }
-  const declaredParameters = registration.parameters as ReadonlyArray<
-    Readonly<Record<string, any>>
-  >;
+  const declaredParameters = registration.parameters;
   const parameters = new Map(declaredParameters.map((parameter) => [parameter.name, parameter]));
+  const payloadArguments: Record<string, string | number | boolean> = {};
   for (const name of Object.keys(input.arguments)) {
     const parameter = parameters.get(name);
+    const value = input.arguments[name];
     if (!parameter) {
       throw customError(
         'K4-CUSTOM-ARGUMENT-UNKNOWN',
         'Custom action payload contains an undeclared argument',
       );
     }
-    if (typeof input.arguments[name] !== parameter.type) {
+    if (typeof value !== parameter.type) {
       throw new TypeError('Custom action payload argument type does not match its registration');
     }
+    payloadArguments[name] = value as string | number | boolean;
   }
   for (const parameter of declaredParameters) {
     if (parameter.required && !Object.hasOwn(input.arguments, parameter.name)) {
@@ -152,7 +228,7 @@ function validatePayload(input: unknown, registration: Readonly<Record<string, a
   return deepFreeze({
     name: registration.name,
     target: input.target,
-    arguments: {...input.arguments},
+    arguments: payloadArguments,
   });
 }
 
@@ -203,15 +279,16 @@ export function createDsl4ActionInvocationAdapter(options: {
   const onDiagnostic = options.onDiagnostic;
   const onInternalError = options.onInternalError;
 
-  const registrations = new Map(registrySnapshot.actions.map((entry) => [entry.name, entry]));
-  const invocationByThread: WeakMap<object, Record<string, any>> = new WeakMap();
-  const settledInvocationByThread: WeakMap<object, Record<string, any>> = new WeakMap();
-  const activeInvocations: Set<Record<string, any>> = new Set();
+  const typedRegistrySnapshot = registrySnapshot as unknown as ActionRegistrySnapshot;
+  const registrations = new Map(typedRegistrySnapshot.actions.map((entry) => [entry.name, entry]));
+  const invocationByThread: WeakMap<object, Invocation> = new WeakMap();
+  const settledInvocationByThread: WeakMap<object, Invocation> = new WeakMap();
+  const activeInvocations: Set<Invocation> = new Set();
   let nextInvocationSequence = 1;
   let disposed = false;
   let disposePromise: Promise<void> | null = null;
 
-  function reportDiagnostic(code: string, invocation: Record<string, any> | null) {
+  function reportDiagnostic(code: string, invocation: Invocation | null) {
     try {
       onDiagnostic?.(
         deepFreeze({
@@ -229,11 +306,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     }
   }
 
-  function reportInternalError(
-    error: unknown,
-    operation: string,
-    invocation: Record<string, any> | null,
-  ) {
+  function reportInternalError(error: unknown, operation: string, invocation: Invocation | null) {
     try {
       onInternalError?.(
         error,
@@ -247,7 +320,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     }
   }
 
-  function clearInvocationHooks(invocation: Record<string, any>) {
+  function clearInvocationHooks(invocation: Invocation) {
     invocation.runtimeContext.signal.removeEventListener('abort', invocation.handleRuntimeAbort);
     try {
       invocation.cancelTimeout();
@@ -258,7 +331,7 @@ export function createDsl4ActionInvocationAdapter(options: {
   }
 
   function settle(
-    invocation: Record<string, any>,
+    invocation: Invocation,
     terminal: Readonly<{
       state: 'completed' | 'transitioned' | 'failed' | 'cancelled';
       result?: Readonly<Record<string, unknown>>;
@@ -355,7 +428,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     return invocationForUtil(util);
   }
 
-  function failUnknownArgument(invocation: Record<string, any>) {
+  function failUnknownArgument(invocation: Invocation) {
     settle(invocation, {
       state: 'failed',
       error: customError(
@@ -367,7 +440,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     });
   }
 
-  function declaredArgument(invocation: Record<string, any>, name: unknown) {
+  function declaredArgument(invocation: Invocation, name: unknown) {
     if (typeof name !== 'string' || !invocation.parameters.has(name)) {
       failUnknownArgument(invocation);
       return null;
@@ -409,7 +482,7 @@ export function createDsl4ActionInvocationAdapter(options: {
 
     const invocationId = `invocation-${runtimeGeneration}-${nextInvocationSequence++}`;
     const abortController = new AbortController();
-    let phase = 'created';
+    let phase: InvocationPhase = 'created';
     let resolveResult: (value: unknown) => void = () => {};
     let rejectResult: (reason: unknown) => void = () => {};
     const resultPromise = new Promise((resolve, reject) => {
@@ -440,7 +513,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     }
 
     const thread = threads[0] as object;
-    const invocation: Record<string, any> = {
+    const invocation = {
       thread,
       registration,
       parameters: new Map(registration.parameters.map((parameter) => [parameter.name, parameter])),
@@ -458,8 +531,8 @@ export function createDsl4ActionInvocationAdapter(options: {
       },
       cancelTimeout: () => {},
       handleRuntimeAbort: () => {},
-      publicView: null,
-    };
+      publicView: Object.freeze({}) as InvocationPublicView,
+    } satisfies Invocation;
     invocation.publicView = Object.freeze({
       invocationId,
       runtimeGeneration,
@@ -490,7 +563,7 @@ export function createDsl4ActionInvocationAdapter(options: {
     if (runtimeContext.signal.aborted) invocation.handleRuntimeAbort();
 
     if (invocation.phase === 'running') {
-      let scheduledCancel;
+      let scheduledCancel: (() => void) | undefined;
       try {
         scheduledCancel = scheduleTimeout(() => {
           settle(invocation, {
@@ -517,7 +590,8 @@ export function createDsl4ActionInvocationAdapter(options: {
           reason: 'timeout-schedule-failed',
         });
       } else if (invocation.phase === 'running') {
-        invocation.cancelTimeout = scheduledCancel;
+        const cancelTimeout = scheduledCancel;
+        if (typeof cancelTimeout === 'function') invocation.cancelTimeout = cancelTimeout;
       } else if (typeof scheduledCancel === 'function') {
         try {
           scheduledCancel();

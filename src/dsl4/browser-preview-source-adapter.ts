@@ -128,6 +128,50 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+type Dsl4PreviewCallback = (...values: unknown[]) => unknown | Promise<unknown>;
+
+interface Dsl4PreviewDocumentVisibility {
+  readonly visibilityState?: unknown;
+  readonly hidden?: unknown;
+  addEventListener(type: string, listener: () => unknown, options?: unknown): unknown;
+  removeEventListener(type: string, listener: () => unknown, options?: unknown): unknown;
+}
+
+interface Dsl4PreviewGlobalObject {
+  readonly isSecureContext?: unknown;
+  readonly self?: unknown;
+  readonly top?: unknown;
+  readonly document?: unknown;
+  readonly showDirectoryPicker?: unknown;
+  readonly crypto?: {readonly subtle?: Dsl4SubtleCrypto};
+}
+
+interface Dsl4PreviewSourceManifest {
+  readonly sourceId: string;
+  readonly path: string;
+  readonly cacheId?: unknown;
+  readonly cacheDatabaseName?: unknown;
+}
+
+interface Dsl4PreviewSourceSnapshot {
+  readonly integrity: string;
+  readonly text: string;
+}
+
+interface Dsl4PreviewSourceFailure {
+  readonly code?: string;
+  readonly message?: unknown;
+  readonly sourceId?: unknown;
+  readonly range?: unknown;
+  readonly related?: readonly unknown[];
+}
+
+interface Dsl4PreviewPreparedSource {
+  readonly key: string;
+  readonly descriptor?: Dsl4PreviewSourceSnapshot;
+  readonly result?: Readonly<Record<string, unknown>>;
+}
+
 function finiteMilliseconds(value: unknown, name: string, minimum: number) {
   if (!Number.isSafeInteger(value) || Number(value) < minimum) {
     throw new TypeError(`${name} must be a safe integer >= ${minimum}`);
@@ -142,11 +186,11 @@ function positiveInteger(value: unknown, name: string) {
   return Number(value);
 }
 
-function optionalCallback(value: unknown, name: string): Function | undefined {
+function optionalCallback(value: unknown, name: string): Dsl4PreviewCallback | undefined {
   if (value !== undefined && typeof value !== 'function') {
     throw new TypeError(`${name} must be a function`);
   }
-  return value;
+  return value as Dsl4PreviewCallback | undefined;
 }
 
 function validateClock(value: unknown) {
@@ -207,6 +251,10 @@ function sourceDiagnostic(
     path: typeof details.path === 'string' ? details.path : '$',
     related: [],
   });
+}
+
+function sourceDisplayName(sourcePath: string) {
+  return sourcePath.split('/').at(-1) ?? sourcePath;
 }
 
 function sourceFailure(diagnostic: Readonly<Record<string, unknown>>) {
@@ -305,6 +353,7 @@ interface Dsl4PreviewFileHandle {
 }
 
 interface Dsl4PreviewDirectoryHandle {
+  readonly [key: string]: unknown;
   kind: string;
   name?: string;
   /** `requireDirectoryHandle` checks only `getFileHandle`; the rest are probed where they are used. */
@@ -360,13 +409,21 @@ function validateDocument(value: unknown) {
   ) {
     throw new TypeError('document must provide visibility event methods');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewDocumentVisibility;
+}
+
+function sourceManifest(value: unknown): Dsl4PreviewSourceManifest | null {
+  if (value === null) return null;
+  if (!isRecord(value) || typeof value.sourceId !== 'string' || typeof value.path !== 'string') {
+    throw new TypeError('source manifest is invalid');
+  }
+  return value as unknown as Dsl4PreviewSourceManifest;
 }
 
 /** Inspect only stable platform capabilities without reading browser identity or user agent data. */
 export function inspectDsl4BrowserPreviewSupport({
   globalObject = globalThis,
-}: {globalObject?: Record<string, any>} = {}) {
+}: {globalObject?: Dsl4PreviewGlobalObject} = {}) {
   if (!isRecord(globalObject)) throw new TypeError('globalObject must be an object');
   if (globalObject.isSecureContext !== true) {
     return deepFreeze({
@@ -461,10 +518,10 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   ) => unknown | Promise<unknown>;
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  onProjectRoot?: (projectRoot: Record<string, any>) => unknown | Promise<unknown>;
-  globalObject?: Record<string, any>;
-  document?: Record<string, any>;
-  showDirectoryPicker?: Function;
+  onProjectRoot?: (projectRoot: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
+  globalObject?: Dsl4PreviewGlobalObject;
+  document?: Dsl4PreviewDocumentVisibility;
+  showDirectoryPicker?: () => Promise<unknown>;
   maxManifestBytes?: number;
   foregroundIntervalMs?: number;
   backgroundIntervalMs?: number;
@@ -473,11 +530,11 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   stabilityTimeoutMs?: number;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   clock?: Dsl4Clock;
-  validateManifest?: (input: unknown) => Readonly<Record<string, any>>;
+  validateManifest?: (input: unknown) => Dsl4PreviewSourceManifest;
   createSourceDescriptor?: (
     source: string,
     options: Record<string, unknown>,
-  ) => Promise<Readonly<Record<string, any>>>;
+  ) => Promise<Dsl4PreviewSourceSnapshot>;
   createSourceGraph?: typeof import('./source-graph.js').createDsl4SourceGraph;
   createSourceGraphGeneration?: typeof import('./preview-source-graph-generation.js').createDsl4PreviewSourceGraphGeneration;
 }) {
@@ -516,7 +573,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   const onProjectRoot = optionalCallback(options.onProjectRoot, 'onProjectRoot');
   const globalObject = (
     isRecord(options.globalObject) ? options.globalObject : globalThis
-  ) as Record<string, any>;
+  ) as Dsl4PreviewGlobalObject;
   const document = validateDocument(options.document ?? globalObject.document);
   const picker = options.showDirectoryPicker ?? globalObject.showDirectoryPicker;
   if (picker !== undefined && typeof picker !== 'function') {
@@ -601,7 +658,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
   let activeReads = 0;
   let maximumObservedConcurrentReads = 0;
   let rootHandle: Dsl4PreviewDirectoryHandle | null = null;
-  let manifest: Readonly<Record<string, any>> | null = null;
+  let manifest: Dsl4PreviewSourceManifest | null = null;
   let activeManifestFilename: string | null = null;
   let permissionWasGranted = false;
   let publicationKey = '';
@@ -625,13 +682,13 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
       activeReads,
       maximumObservedConcurrentReads,
       sourceId: manifest?.sourceId ?? null,
-      sourceDisplayName: manifest ? manifest.path.split('/').at(-1) : null,
+      sourceDisplayName: manifest ? sourceDisplayName(manifest.path) : null,
       lastPublication,
       diagnostic: currentDiagnostic,
     });
   }
 
-  async function notify(observer: Function | undefined, ...values: unknown[]) {
+  async function notify(observer: Dsl4PreviewCallback | undefined, ...values: unknown[]) {
     if (!observer) return;
     try {
       await observer(...values);
@@ -660,7 +717,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     if (previousCode !== nextCode) await notify(onDiagnostic, diagnostic);
   }
 
-  async function publish(result: Readonly<Record<string, any>>, key: string) {
+  async function publish(result: Readonly<Record<string, unknown>>, key: string) {
     if (disposed || key === publicationKey) return;
     await onResult(result);
     if (disposed) return;
@@ -825,7 +882,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
       selected = {filename, bytes};
       break;
     }
-    let input: Record<string, any> = {};
+    let input: Record<string, unknown> = {};
     if (selected !== null) {
       try {
         const syntaxCode = /\.ya?ml$/u.test(selected.filename)
@@ -904,14 +961,14 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     try {
       return await createSourceDescriptor(source, {
         sourceId: manifest.sourceId,
-        displayName: manifest.path.split('/').at(-1),
+        displayName: sourceDisplayName(manifest.path),
         maxSourceBytes,
         ...(manifest.cacheId === undefined
           ? {}
           : {
               cacheIdentity: {
                 id: manifest.cacheId,
-                label: manifest.path.split('/').at(-1),
+                label: sourceDisplayName(manifest.path),
                 databaseName: manifest.cacheDatabaseName,
               },
             }),
@@ -923,7 +980,8 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     }
   }
 
-  function graphFailure(error: Record<string, any>) {
+  function graphFailure(error: Dsl4PreviewSourceFailure) {
+    const code = error.code ?? 'K4-WEB-PREVIEW-INTERNAL';
     const range = error.range ?? {
       start: {line: 1, column: 1, offset: 0},
       end: {line: 1, column: 1, offset: 0},
@@ -934,17 +992,20 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
       diagnostics: [
         {
           version: 1,
-          code: error.code,
+          code,
           severity: 'error',
-          message: diagnosticMessages[error.code] ?? 'The Source Graph is invalid',
+          message: diagnosticMessages[code] ?? 'The Source Graph is invalid',
           sourceId: error.sourceId ?? manifest?.sourceId ?? 'main',
           range,
           path: '$',
-          related: (Array.isArray(error.related) ? error.related : []).map((related) => ({
-            message: 'Related Source Graph declaration',
-            sourceId: related.sourceId,
-            range: related.range,
-          })),
+          related: (Array.isArray(error.related) ? error.related : []).map((related) => {
+            const record = isRecord(related) ? related : {};
+            return {
+              message: 'Related Source Graph declaration',
+              sourceId: record.sourceId,
+              range: record.range,
+            };
+          }),
         },
       ],
       sourceSnapshot: null,
@@ -995,7 +1056,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     return generationFactory(graph, {
       sourceFrontend,
       sourceId: manifest.sourceId,
-      displayName: manifest.path.split('/').at(-1),
+      displayName: sourceDisplayName(manifest.path),
       maxComposedSourceBytes: sourceGraphLimits.maxTotalSourceBytes,
       subtleCrypto,
     });
@@ -1028,13 +1089,13 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
     try {
       await verifyPermission();
       if (!manifest) {
-        manifest = await loadStableManifest(requestedGeneration);
+        manifest = sourceManifest(await loadStableManifest(requestedGeneration));
         if (!manifest || disposed || requestedGeneration !== generation) return snapshot();
       }
       const startedAt = Number(clock.now());
       let attempts = 0;
       let lastTransient: unknown = null;
-      let prepared: Readonly<Record<string, any>> | null = null;
+      let prepared: Dsl4PreviewPreparedSource | null = null;
       while (!disposed && requestedGeneration === generation) {
         attempts += 1;
         try {
@@ -1076,6 +1137,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
         result = prepared.result;
       } else {
         const descriptor = prepared.descriptor;
+        if (!descriptor) throw new TypeError('source descriptor is missing');
         const parsed = sourceFrontend.parse(descriptor.text, {sourceId: manifest.sourceId});
         if (
           !isRecord(parsed) ||
@@ -1086,6 +1148,7 @@ export function createDsl4BrowserPreviewSourceAdapter(options: {
         }
         result = deepFreeze({...parsed, sourceSnapshot: descriptor});
       }
+      if (!result) throw new TypeError('source preparation result is missing');
       await publish(result, `source:${prepared.key}`);
       if (hidden) {
         await publishDiagnostic('K4-WEB-PREVIEW-BACKGROUND-THROTTLED', 'warning', false);

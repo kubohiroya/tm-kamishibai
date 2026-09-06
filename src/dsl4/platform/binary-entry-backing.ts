@@ -12,6 +12,67 @@ function errorCode(value: unknown) {
   return isRecord(value) && typeof value.code === 'string' ? value.code : '';
 }
 
+export interface BinaryEntryDescriptorFile {
+  readonly assetId: string;
+  readonly path: string;
+  readonly size: number;
+  readonly integrity: string;
+  readonly entry?: string;
+  readonly contentType?: unknown;
+  readonly bytes?: unknown;
+}
+
+export interface BinaryEntryAssetManifest {
+  readonly id: string;
+  readonly source?: unknown;
+}
+
+export interface BinaryEntryAssetBundleDescriptor {
+  readonly integrity: string;
+  readonly files: readonly BinaryEntryDescriptorFile[];
+  readonly manifest: {readonly assets: readonly BinaryEntryAssetManifest[]};
+}
+
+interface BinaryEntryRuntimeComponent {
+  readonly assetBundle?: unknown;
+}
+
+interface BinaryEntryProvider {
+  readonly assetIds: readonly string[];
+  readonly releaseAfterLastAsset: false;
+  readonly descriptor: BinaryEntryAssetBundleDescriptor;
+  readAsset(assetName: string, options: {signal?: AbortSignal}): Promise<unknown>;
+  release(): Promise<unknown> | unknown;
+}
+
+interface BinaryEntryStoredAsset {
+  readonly namespace: string;
+  readonly name: string;
+  readonly integrity: string;
+  readonly files: readonly BinaryEntryStoredFile[];
+}
+
+interface BinaryEntryStoredFile extends BinaryEntryDescriptorFile {
+  readonly bytes: Uint8Array;
+}
+
+interface BinaryEntrySessionBacking {
+  readonly mode?: unknown;
+  readonly warning?: unknown;
+  get(
+    key: Readonly<{namespace: string; name: string; integrity: string}>,
+    options: {signal: AbortSignal},
+  ): Promise<unknown>;
+  dispose?(): unknown;
+}
+
+interface BinaryEntryComposition {
+  createSessionBinaryBacking(
+    input: unknown,
+    context: {signal: AbortSignal},
+  ): Promise<unknown> | unknown;
+}
+
 function validateSignal(value: unknown) {
   if (
     value !== undefined &&
@@ -41,7 +102,7 @@ function linkSignals(external: AbortSignal | undefined, internal: AbortSignal) {
   };
 }
 
-function binaryAssets(component: Readonly<Record<string, any>>) {
+function binaryAssets(component: BinaryEntryRuntimeComponent) {
   const descriptor = component.assetBundle;
   if (
     !isRecord(descriptor) ||
@@ -52,12 +113,15 @@ function binaryAssets(component: Readonly<Record<string, any>>) {
   ) {
     throw new TypeError('binary runtime component must provide a validated binary asset bundle');
   }
-  const assets = new Map();
-  for (const asset of descriptor.manifest.assets) {
+  const typedDescriptor = descriptor as unknown as BinaryEntryAssetBundleDescriptor;
+  const assets = new Map<string, readonly BinaryEntryDescriptorFile[]>();
+  for (const asset of typedDescriptor.manifest.assets) {
     if (!isRecord(asset) || typeof asset.id !== 'string') continue;
     const source = isRecord(asset.source) ? asset.source : null;
     if (source?.type !== 'file') continue;
-    const files = descriptor.files.filter((file) => isRecord(file) && file.assetId === asset.id);
+    const files = typedDescriptor.files.filter(
+      (file) => isRecord(file) && file.assetId === asset.id,
+    );
     if (files.length === 0) {
       throw backingError(
         'K4-BINARY-BACKING-DESCRIPTOR-001',
@@ -66,7 +130,14 @@ function binaryAssets(component: Readonly<Record<string, any>>) {
     }
     assets.set(asset.id, Object.freeze(files));
   }
-  return {descriptor, assets};
+  return {descriptor: typedDescriptor, assets};
+}
+
+function validateSessionBacking(backing: unknown): BinaryEntrySessionBacking {
+  if (!isRecord(backing) || typeof backing.get !== 'function') {
+    throw new TypeError('Asset Manager composition returned an invalid binary session backing');
+  }
+  return backing as unknown as BinaryEntrySessionBacking;
 }
 
 /**
@@ -86,9 +157,9 @@ export function createDsl4BinaryEntryBacking({
   onWarning,
   onFatalError,
 }: {
-  runtimeComponent: Readonly<Record<string, any>>;
+  runtimeComponent: BinaryEntryRuntimeComponent;
   provider: unknown;
-  composition: Readonly<Record<'createSessionBinaryBacking', (...parameters: any[]) => any>>;
+  composition: BinaryEntryComposition;
   namespace: string;
   policy: 'prefer' | 'required' | 'disabled';
   sessionId: string;
@@ -150,8 +221,8 @@ export function createDsl4BinaryEntryBacking({
     );
   }
 
-  let provider: Record<string, any> | null = providerCandidate as Record<string, any>;
-  let sessionBacking: Record<string, any> | null = null;
+  let provider: BinaryEntryProvider | null = providerCandidate as unknown as BinaryEntryProvider;
+  let sessionBacking: BinaryEntrySessionBacking | null = null;
   const controller = new AbortController();
   let state = 'establishing';
   let mode: 'session' | 'direct' | null = null;
@@ -186,7 +257,7 @@ export function createDsl4BinaryEntryBacking({
     }
   }
 
-  function validateStored(assetId: string, stored: unknown) {
+  function validateStored(assetId: string, stored: unknown): BinaryEntryStoredAsset {
     const expected = assets.get(assetId);
     if (!isRecord(stored) || !Array.isArray(stored.files) || !expected) {
       throw backingError(
@@ -205,9 +276,10 @@ export function createDsl4BinaryEntryBacking({
         `Binary backing metadata does not match: ${assetId}`,
       );
     }
-    const expectedByPath = new Map<unknown, Record<string, any>>(
-      expected.map((file: Record<string, any>) => [file.path, file]),
+    const expectedByPath = new Map<unknown, BinaryEntryDescriptorFile>(
+      expected.map((file) => [file.path, file]),
     );
+    const files: BinaryEntryStoredFile[] = [];
     for (const file of stored.files) {
       const expectedFile = isRecord(file) ? expectedByPath.get(file.path) : null;
       if (
@@ -221,12 +293,26 @@ export function createDsl4BinaryEntryBacking({
           `Binary backing file does not match: ${assetId}`,
         );
       }
+      files.push({
+        assetId: expectedFile.assetId,
+        path: expectedFile.path,
+        size: expectedFile.size,
+        integrity: expectedFile.integrity,
+        ...(expectedFile.entry === undefined ? {} : {entry: expectedFile.entry}),
+        ...(file.contentType === undefined ? {} : {contentType: file.contentType}),
+        bytes: file.bytes,
+      });
     }
-    return stored as Readonly<Record<string, any>>;
+    return Object.freeze({
+      namespace: stored.namespace,
+      name: stored.name,
+      integrity: stored.integrity,
+      files: Object.freeze(files),
+    });
   }
 
   const source = Object.freeze({
-    read(asset: Readonly<Record<string, any>>, readOptions: {signal?: AbortSignal} = {}) {
+    read(asset: Readonly<{name: string}>, readOptions: {signal?: AbortSignal} = {}) {
       return enqueueProviderRead(async () => {
         const activeProvider = provider;
         if (!activeProvider) {
@@ -235,9 +321,8 @@ export function createDsl4BinaryEntryBacking({
             'Binary entry source has been released',
           );
         }
-        const loaded = await (activeProvider.readAsset as Function)(asset.name, {
-          signal: readOptions.signal,
-        });
+        const loadOptions = readOptions.signal === undefined ? {} : {signal: readOptions.signal};
+        const loaded = await activeProvider.readAsset(asset.name, loadOptions);
         if (!isRecord(loaded) || loaded.assetId !== asset.name || !Array.isArray(loaded.files)) {
           throw backingError(
             'K4-BINARY-BACKING-PROVIDER-001',
@@ -251,29 +336,31 @@ export function createDsl4BinaryEntryBacking({
       return enqueueProviderRead(async () => {
         const activeProvider = provider;
         provider = null;
-        if (activeProvider) await (activeProvider.release as Function)();
+        if (activeProvider) await activeProvider.release();
       });
     },
   });
 
   const ready = (async () => {
     try {
-      const established = await composition.createSessionBinaryBacking(
-        {
-          policy,
-          sessionId,
-          assets: expectedAssetIds.map((assetId) => ({
-            ...key(assetId),
-            files: (assets.get(assetId) as ReadonlyArray<Record<string, any>>).map((file) => ({
-              path: file.path,
-              size: file.size,
-              integrity: file.integrity,
+      const established = validateSessionBacking(
+        await composition.createSessionBinaryBacking(
+          {
+            policy,
+            sessionId,
+            assets: expectedAssetIds.map((assetId) => ({
+              ...key(assetId),
+              files: (assets.get(assetId) ?? []).map((file) => ({
+                path: file.path,
+                size: file.size,
+                integrity: file.integrity,
+              })),
             })),
-          })),
-          source,
-          onFatalError: notifyFatal,
-        },
-        {signal: controller.signal},
+            source,
+            onFatalError: notifyFatal,
+          },
+          {signal: controller.signal},
+        ),
       );
       sessionBacking = established;
       mode = established.mode as 'session' | 'direct';
@@ -312,7 +399,7 @@ export function createDsl4BinaryEntryBacking({
           await sessionBacking.get(key(assetId), {signal: linked.signal}),
         );
         return Object.freeze(
-          stored.files.map((file: Record<string, any>) =>
+          stored.files.map((file) =>
             Object.freeze({
               path: file.path,
               size: file.size,
@@ -334,21 +421,26 @@ export function createDsl4BinaryEntryBacking({
   /** Materialize a temporary editor export. */
   async function createExportBundle() {
     await ready;
-    const entries = new Map();
+    const entries = new Map<string, Uint8Array>();
     for (const assetId of expectedAssetIds) {
       const files = await getAssetFiles(assetId);
       const expected = assets.get(assetId) ?? [];
       for (const file of files) {
-        const descriptorFile = expected.find(
-          (candidate: Record<string, any>) => candidate.path === file.path,
-        );
+        const descriptorFile = expected.find((candidate) => candidate.path === file.path);
         if (!descriptorFile) {
           throw backingError(
             'K4-BINARY-BACKING-CORRUPT-001',
             `Cannot export an unknown binary file: ${assetId}/${file.path}`,
           );
         }
-        const existing = entries.get(descriptorFile.entry);
+        if (typeof descriptorFile.entry !== 'string') {
+          throw backingError(
+            'K4-BINARY-BACKING-CORRUPT-001',
+            `Cannot export a binary file without an entry name: ${assetId}/${file.path}`,
+          );
+        }
+        const entryName = descriptorFile.entry;
+        const existing = entries.get(entryName);
         if (
           existing &&
           (existing.length !== file.bytes.length ||
@@ -356,10 +448,10 @@ export function createDsl4BinaryEntryBacking({
         ) {
           throw backingError(
             'K4-BINARY-BACKING-CORRUPT-001',
-            `Content-addressed export collision: ${descriptorFile.entry}`,
+            `Content-addressed export collision: ${entryName}`,
           );
         }
-        if (!existing) entries.set(descriptorFile.entry, new Uint8Array(file.bytes));
+        if (!existing) entries.set(entryName, new Uint8Array(file.bytes));
       }
     }
     const entryNames = Object.freeze([...entries.keys()].sort());
@@ -398,7 +490,7 @@ export function createDsl4BinaryEntryBacking({
       await ready.catch(() => {});
       if (sessionBacking) {
         try {
-          await sessionBacking.dispose();
+          await sessionBacking.dispose?.();
         } catch (error) {
           errors.push(error);
         }

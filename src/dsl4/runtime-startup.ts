@@ -1,5 +1,6 @@
 import type {Dsl4RuntimePort} from './runtime-port.js';
 import type {Dsl4NavigationSessionSurface} from './navigation-session-surface.js';
+import type {Dsl4AssetPreloadLifecycle} from './asset-preload-coordinator.js';
 import {createDsl4NavigationSession} from './navigation-session.js';
 import {
   loadDsl4BinaryEntryRuntimeComponent,
@@ -18,12 +19,28 @@ export {
   resolveDsl4FeatureFlags,
 } from './feature-flags.js';
 
-export type RuntimeAssetLifecycle = {
-  prepare: Function;
-  setLoading: Function;
-  releaseAssets: Function;
-  release: Function;
-};
+export type RuntimeAssetLifecycle = Dsl4AssetPreloadLifecycle;
+
+export interface RuntimeInputArbitration {
+  shouldDeferNavigationKey(context: Readonly<{code: string; historyPaused: boolean}>): boolean;
+  arbitrateNavigationPointer(
+    context: Readonly<{pointerType: string; historyPaused: boolean}>,
+  ): 'allow' | 'defer' | 'suppress';
+  cancelNavigationPointer(context: Readonly<{pointerType: string}>): unknown;
+}
+
+export interface RuntimeDebugExecution {
+  beforeAction(
+    action: Readonly<{
+      command: string;
+      sceneId: string;
+      actionIndex: number;
+      actionPath: string;
+      signal: AbortSignal;
+    }>,
+  ): unknown;
+  getState(): Readonly<{paused?: boolean}>;
+}
 
 export type RuntimeStartupContext = Readonly<{
   channel: 'bundled' | 'unbundled';
@@ -47,6 +64,13 @@ export type RuntimeStartupContext = Readonly<{
   }>;
 }>;
 
+interface RuntimeStartupComponent {
+  readonly [key: string]: unknown;
+  channel: 'bundled' | 'unbundled';
+  storyDocument: Readonly<Record<string, unknown>>;
+  runtimeArtifact: Readonly<{controlProfile: unknown}>;
+}
+
 export type RuntimeConditionEvaluator = (
   expression: string,
   variables: Readonly<Record<string, string | number | boolean>>,
@@ -57,7 +81,7 @@ export type RuntimeEnvironment = {
   port: Dsl4RuntimePort;
   assetLifecycle?: RuntimeAssetLifecycle;
   evaluateCondition?: RuntimeConditionEvaluator;
-  inputArbitration?: Record<string, Function>;
+  inputArbitration?: RuntimeInputArbitration;
   dispose: (reason?: string) => unknown | Promise<unknown>;
 };
 
@@ -147,7 +171,7 @@ export async function createDsl4RuntimeStartup(
       error: unknown,
       context: Readonly<{command: string; code: string}>,
     ) => unknown | Promise<unknown>;
-    debugExecution?: {beforeAction: Function; getState: Function};
+    debugExecution?: RuntimeDebugExecution;
     subtleCrypto?: Dsl4SubtleCrypto | undefined;
   } = {},
 ) {
@@ -238,11 +262,7 @@ export async function createDsl4RuntimeStartup(
       diagnostics: loaded.diagnostics,
     });
   }
-  const component = loaded as unknown as {
-    channel: 'bundled' | 'unbundled';
-    storyDocument: Readonly<Record<string, unknown>>;
-    runtimeArtifact: Readonly<Record<string, any>>;
-  };
+  const component = loaded as unknown as RuntimeStartupComponent;
   const crossfadeStoryPath = dsl4FirstCrossfadeStoryPath(component.storyDocument);
   if (crossfadeStoryPath !== null && !featureFlags.dsl4CrossfadeTransitions) {
     const origin = sourceOriginForStoryPath(component.storyDocument, crossfadeStoryPath);

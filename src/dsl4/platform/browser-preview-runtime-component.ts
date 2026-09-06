@@ -9,6 +9,63 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface Dsl4BrowserPreviewFile {
+  readonly size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+interface Dsl4BrowserPreviewFileHandle {
+  readonly kind: 'file';
+  getFile(): Promise<Dsl4BrowserPreviewFile>;
+}
+
+interface Dsl4BrowserPreviewDirectoryHandle {
+  readonly kind: 'directory';
+  readonly dsl4SourceOnly?: unknown;
+  getDirectoryHandle?(name: string): Promise<Dsl4BrowserPreviewDirectoryHandle>;
+  getFileHandle?(name: string): Promise<Dsl4BrowserPreviewFileHandle>;
+  entries?(): AsyncIterable<
+    [string, Dsl4BrowserPreviewFileHandle | Dsl4BrowserPreviewDirectoryHandle]
+  >;
+}
+
+interface Dsl4BrowserPreviewAsset {
+  readonly kind?: unknown;
+  readonly loading?: unknown;
+  readonly target?: unknown;
+  readonly bitmapResolution?: unknown;
+  readonly delivery?: unknown;
+  readonly source?: unknown;
+  readonly file?: unknown;
+  readonly name?: unknown;
+}
+
+interface Dsl4BrowserPreviewStoryDocument {
+  readonly kind?: unknown;
+  readonly version?: unknown;
+  readonly assets?: Readonly<Record<string, Dsl4BrowserPreviewAsset>>;
+}
+
+interface Dsl4BrowserPreviewSourceSnapshot {
+  readonly integrity?: unknown;
+  readonly displayName?: unknown;
+}
+
+interface Dsl4BrowserPreviewSourceResult {
+  readonly ok?: unknown;
+  readonly storyDocument?: Dsl4BrowserPreviewStoryDocument;
+  readonly sourceSnapshot?: Dsl4BrowserPreviewSourceSnapshot;
+}
+
+interface Dsl4BrowserPreviewRuntimeComponent {
+  readonly [key: string]: unknown;
+}
+
+interface Dsl4BrowserPreviewLocalFile {
+  readonly path: string;
+  readonly bytes: Uint8Array;
+}
+
 export class Dsl4BrowserPreviewRuntimeAssetError extends Error {
   code: string;
   displayName: string | undefined;
@@ -79,7 +136,10 @@ function mapReadError(error: unknown, label: string): never {
   fail('K4-ASSET-PREPARE-001', `The preview asset could not be read: ${label}`, error);
 }
 
-async function resolveParent(root: Record<string, any>, segments: ReadonlyArray<string>) {
+async function resolveParent(
+  root: Dsl4BrowserPreviewDirectoryHandle,
+  segments: ReadonlyArray<string>,
+) {
   let current = root;
   for (const segment of segments.slice(0, -1)) {
     if (typeof current.getDirectoryHandle !== 'function') {
@@ -97,10 +157,14 @@ async function resolveParent(root: Record<string, any>, segments: ReadonlyArray<
 }
 
 async function readHandle(handleInput: unknown, maxFileBytes: number, label: string) {
-  const handle = isRecord(handleInput) ? (handleInput as Record<string, any>) : {};
-  if (handle.kind !== 'file' || typeof handle.getFile !== 'function') {
+  if (
+    !isRecord(handleInput) ||
+    handleInput.kind !== 'file' ||
+    typeof handleInput.getFile !== 'function'
+  ) {
     fail('K4-ASSET-PREPARE-001', `The preview asset is not a readable file: ${label}`);
   }
+  const handle = handleInput as unknown as Dsl4BrowserPreviewFileHandle;
   let file;
   try {
     file = await handle.getFile();
@@ -134,7 +198,11 @@ async function readHandle(handleInput: unknown, maxFileBytes: number, label: str
   return bytes;
 }
 
-async function readSingleFile(root: Record<string, any>, filePath: string, maxFileBytes: number) {
+async function readSingleFile(
+  root: Dsl4BrowserPreviewDirectoryHandle,
+  filePath: string,
+  maxFileBytes: number,
+): Promise<Dsl4BrowserPreviewLocalFile[]> {
   const segments = safeRelativePath(filePath, 'asset file');
   try {
     const parent = await resolveParent(root, segments);
@@ -154,10 +222,10 @@ async function readSingleFile(root: Record<string, any>, filePath: string, maxFi
 }
 
 async function readPoseDirectory(
-  root: Record<string, any>,
+  root: Dsl4BrowserPreviewDirectoryHandle,
   directoryPath: string,
   maxFileBytes: number,
-) {
+): Promise<Dsl4BrowserPreviewLocalFile[]> {
   const segments = safeRelativePath(directoryPath, 'pose model directory');
   try {
     const parent = await resolveParent(root, segments);
@@ -175,7 +243,7 @@ async function readPoseDirectory(
     ) {
       fail('K4-ASSET-POSE-BUNDLE-001', 'Pose model is not an enumerable directory');
     }
-    const entries: Array<[string, Record<string, any>]> = [];
+    const entries: Array<[string, Dsl4BrowserPreviewFileHandle]> = [];
     for await (const entry of directory.entries()) {
       if (
         !Array.isArray(entry) ||
@@ -189,7 +257,7 @@ async function readPoseDirectory(
       ) {
         fail('K4-ASSET-POSE-BUNDLE-001', 'Pose model contains an unsupported entry');
       }
-      entries.push([entry[0], entry[1] as Record<string, any>]);
+      entries.push([entry[0], entry[1] as unknown as Dsl4BrowserPreviewFileHandle]);
     }
     entries.sort(([left], [right]) => left.localeCompare(right, 'en'));
     if (entries.length !== 3) {
@@ -209,7 +277,7 @@ async function readPoseDirectory(
 }
 
 async function readPoseSource(
-  root: Record<string, any>,
+  root: Dsl4BrowserPreviewDirectoryHandle,
   assetId: string,
   sourcePath: string,
   maxFileBytes: number,
@@ -232,7 +300,7 @@ async function readPoseSource(
   return extracted.files.map((file) => ({path: file.path, bytes: file.bytes}));
 }
 
-function commonManifestAsset(asset: Readonly<Record<string, any>>, id: string) {
+function commonManifestAsset(asset: Dsl4BrowserPreviewAsset, id: string) {
   return {
     id,
     kind: asset.kind,
@@ -244,7 +312,7 @@ function commonManifestAsset(asset: Readonly<Record<string, any>>, id: string) {
   };
 }
 
-function hasLocalFiles(storyDocument: Readonly<Record<string, any>>) {
+function hasLocalFiles(storyDocument: Dsl4BrowserPreviewStoryDocument) {
   return Object.values(storyDocument.assets ?? {}).some(
     (asset) => isRecord(asset) && typeof asset.file === 'string',
   );
@@ -252,8 +320,8 @@ function hasLocalFiles(storyDocument: Readonly<Record<string, any>>) {
 
 /** Capture exactly the local files declared by one validated StoryDocument. */
 async function captureAssetSnapshot(
-  storyDocument: Readonly<Record<string, any>>,
-  projectRoot: Record<string, any> | null,
+  storyDocument: Dsl4BrowserPreviewStoryDocument,
+  projectRoot: Dsl4BrowserPreviewDirectoryHandle | null,
   options: {
     maxAssetFileBytes: number;
     maxAssetFiles: number;
@@ -261,20 +329,21 @@ async function captureAssetSnapshot(
     subtleCrypto: Dsl4SubtleCrypto;
   },
 ) {
-  const manifestAssets = [];
-  const blobs = new Map();
-  const adoption = [];
+  const manifestAssets: Record<string, unknown>[] = [];
+  const blobs = new Map<string, Uint8Array>();
+  const adoption: unknown[] = [];
   let fileCount = 0;
   let totalBytes = 0;
-  const assets = (storyDocument.assets ?? {}) as Readonly<
-    Record<string, Readonly<Record<string, any>>>
-  >;
+  const assets = storyDocument.assets ?? {};
   for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   )) {
     const common = commonManifestAsset(asset, id);
     if (asset.delivery === 'remote') {
-      manifestAssets.push({...common, source: {type: 'remote', ...asset.source}});
+      manifestAssets.push({
+        ...common,
+        source: {type: 'remote', ...(isRecord(asset.source) ? asset.source : {})},
+      });
       continue;
     }
     if (typeof asset.file !== 'string') {
@@ -356,8 +425,8 @@ async function captureAssetSnapshot(
  * TurboWarp; declared local files are copied into the session-only bundle after a stable double read.
  */
 export async function createDsl4BrowserPreviewRuntimeComponent(input: {
-  baseComponent: Readonly<Record<string, any>>;
-  sourceResult: Readonly<Record<string, any>>;
+  baseComponent: Dsl4BrowserPreviewRuntimeComponent;
+  sourceResult: unknown;
   projectRoot?: unknown;
   maxAssetFileBytes: number;
   maxAssetFiles: number;
@@ -376,7 +445,9 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   ) {
     throw new TypeError('sourceResult must contain one valid source generation');
   }
-  const storyDocument = input.sourceResult.storyDocument as Readonly<Record<string, any>>;
+  const sourceResult = input.sourceResult as Dsl4BrowserPreviewSourceResult;
+  const storyDocument = input.sourceResult
+    .storyDocument as unknown as Dsl4BrowserPreviewStoryDocument;
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('sourceResult must contain a DSL 4.0 StoryDocument');
   }
@@ -398,7 +469,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
     input.projectRoot === undefined || input.projectRoot === null
       ? null
       : isRecord(input.projectRoot) && input.projectRoot.kind === 'directory'
-        ? (input.projectRoot as Record<string, any>)
+        ? (input.projectRoot as unknown as Dsl4BrowserPreviewDirectoryHandle)
         : (() => {
             throw new TypeError('projectRoot must be a directory handle');
           })();
@@ -424,7 +495,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
     snapshot = stable;
   }
   const assetBundle = await createDsl4EmbeddedAssetBundle(
-    storyDocument,
+    storyDocument as unknown as Readonly<Record<string, unknown>>,
     {
       manifest: snapshot.manifest,
       getFile(assetId, filePath) {
@@ -439,7 +510,7 @@ export async function createDsl4BrowserPreviewRuntimeComponent(input: {
   return Object.freeze({
     ...input.baseComponent,
     storyDocument,
-    sourceDescriptor: input.sourceResult.sourceSnapshot,
+    sourceDescriptor: sourceResult.sourceSnapshot,
     assetBundle,
     getAssetFile(assetId: string, filePath: string) {
       const bytes = snapshot.blobs.get(`${assetId}\0${filePath}`);

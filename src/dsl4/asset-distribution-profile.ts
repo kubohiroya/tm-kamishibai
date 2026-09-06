@@ -53,6 +53,106 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+type Delivery = 'embedded' | 'remote';
+type NetworkPolicy = 'allowed' | 'forbidden';
+
+type EmbeddedProvider =
+  Readonly<{file: string; name?: undefined}> | Readonly<{name: string; file?: undefined}>;
+
+interface ConfigRemoteProvider {
+  readonly url: string;
+}
+
+interface DeclaredRemoteProvider extends ConfigRemoteProvider {
+  readonly transportIntegrity?: string;
+  readonly contentType?: string;
+  readonly size?: number;
+}
+
+interface LockRemoteProvider extends DeclaredRemoteProvider {
+  readonly transportIntegrity: string;
+  readonly contentType: string;
+  readonly size: number;
+}
+
+interface ConfigProviderSet {
+  readonly embedded?: EmbeddedProvider;
+  readonly remote?: ConfigRemoteProvider;
+}
+
+interface DeclaredProviderSet {
+  embedded?: EmbeddedProvider;
+  remote?: DeclaredRemoteProvider;
+}
+
+interface LockProviderSet {
+  readonly embedded?: EmbeddedProvider;
+  readonly remote?: LockRemoteProvider;
+}
+
+interface DistributionProfile {
+  readonly network: NetworkPolicy;
+  readonly defaultDelivery?: Delivery;
+  readonly kinds?: Readonly<Record<string, Delivery>>;
+  readonly assets?: Readonly<Record<string, Delivery>>;
+}
+
+interface DistributionConfig {
+  readonly profiles: Readonly<Record<string, DistributionProfile>>;
+  readonly providers: Readonly<Record<string, ConfigProviderSet>>;
+}
+
+interface LockAsset {
+  readonly kind: string;
+  readonly contentIntegrity: string;
+  readonly contentType: string;
+  readonly size: number;
+  readonly providers: LockProviderSet;
+}
+
+interface DistributionLock {
+  readonly assets: Readonly<Record<string, LockAsset>>;
+}
+
+interface StoryAsset extends Readonly<Record<string, unknown>> {
+  readonly id?: unknown;
+  readonly kind: string;
+  readonly delivery?: Delivery;
+  readonly file?: unknown;
+  readonly name?: unknown;
+  readonly source?: unknown;
+}
+
+export type AssetDistributionResolvedProvider =
+  | Readonly<{type: 'file'; file: string}>
+  | Readonly<{type: 'project'; name: string}>
+  | Readonly<{
+      type: 'remote';
+      url: string;
+      integrity: string;
+      contentType: string;
+      size: number;
+    }>;
+
+export interface AssetDistributionResolvedAsset {
+  readonly id: string;
+  readonly kind: string;
+  readonly delivery: Delivery;
+  readonly contentIntegrity: string;
+  readonly contentType: string;
+  readonly size: number;
+  readonly provider: AssetDistributionResolvedProvider;
+}
+
+export interface AssetDistributionResolution {
+  readonly formatVersion: typeof dsl4AssetDistributionFormatVersion;
+  readonly profile: string;
+  readonly network: NetworkPolicy;
+  readonly storyDocument: Readonly<Record<string, unknown>>;
+  readonly assets: readonly AssetDistributionResolvedAsset[];
+  readonly canonicalResolution: string;
+}
+
 function strictKeys(
   value: Record<string, unknown>,
   allowed: Set<string>,
@@ -371,7 +471,7 @@ export function serializeDsl4AssetDistributionLock(input: unknown) {
   return `${JSON.stringify(validateDsl4AssetDistributionLock(input), null, 2)}\n`;
 }
 
-function storyProvider(asset: Readonly<Record<string, any>>) {
+function storyProvider(asset: StoryAsset): DeclaredProviderSet {
   if (asset.delivery === 'remote') {
     if (!isRecord(asset.source)) {
       fail('K4-ASSET-PROVIDER-001', `Story asset ${asset.id} remote source is missing`);
@@ -420,18 +520,15 @@ function storyProvider(asset: Readonly<Record<string, any>>) {
   };
 }
 
-function sameEmbeddedProvider(
-  left: Readonly<Record<string, any>>,
-  right: Readonly<Record<string, any>>,
-) {
+function sameEmbeddedProvider(left: EmbeddedProvider, right: EmbeddedProvider) {
   return left.file === right.file && left.name === right.name;
 }
 
 function declaredProviders(
   assetId: string,
-  story: Readonly<Record<string, any>>,
-  configured: Readonly<Record<string, any>> | undefined,
-) {
+  story: DeclaredProviderSet,
+  configured: ConfigProviderSet | undefined,
+): DeclaredProviderSet {
   const result = {...story};
   if (configured?.embedded) {
     if (result.embedded && !sameEmbeddedProvider(result.embedded, configured.embedded)) {
@@ -448,49 +545,113 @@ function declaredProviders(
   return result;
 }
 
-function bindProviders(
-  assetId: string,
-  declared: Readonly<Record<string, any>>,
-  locked: Readonly<Record<string, any>>,
-) {
+function bindProviders(assetId: string, declared: DeclaredProviderSet, locked: LockProviderSet) {
   const declaredDeliveries = Object.keys(declared).sort();
   const lockedDeliveries = Object.keys(locked).sort();
   if (JSON.stringify(declaredDeliveries) !== JSON.stringify(lockedDeliveries)) {
     fail('K4-ASSET-LOCK-001', `Asset ${assetId} lock providers do not match declarations`);
   }
-  if (declared.embedded && !sameEmbeddedProvider(declared.embedded, locked.embedded)) {
+  const declaredEmbedded = declared.embedded;
+  const lockedEmbedded = locked.embedded;
+  if (
+    declaredEmbedded &&
+    (!lockedEmbedded || !sameEmbeddedProvider(declaredEmbedded, lockedEmbedded))
+  ) {
     fail('K4-ASSET-LOCK-001', `Asset ${assetId} embedded lock locator is stale`);
   }
-  if (declared.remote) {
-    if (declared.remote.url !== locked.remote.url) {
+  const declaredRemote = declared.remote;
+  const lockedRemote = locked.remote;
+  if (declaredRemote) {
+    if (!lockedRemote || declaredRemote.url !== lockedRemote.url) {
       fail('K4-ASSET-LOCK-001', `Asset ${assetId} remote lock URL is stale`);
     }
-    for (const key of ['transportIntegrity', 'contentType', 'size']) {
-      if (declared.remote[key] !== undefined && declared.remote[key] !== locked.remote[key]) {
-        fail('K4-ASSET-LOCK-001', `Asset ${assetId} remote lock ${key} is stale`);
-      }
+    if (
+      declaredRemote.transportIntegrity !== undefined &&
+      declaredRemote.transportIntegrity !== lockedRemote.transportIntegrity
+    ) {
+      fail('K4-ASSET-LOCK-001', `Asset ${assetId} remote lock transportIntegrity is stale`);
+    }
+    if (
+      declaredRemote.contentType !== undefined &&
+      declaredRemote.contentType !== lockedRemote.contentType
+    ) {
+      fail('K4-ASSET-LOCK-001', `Asset ${assetId} remote lock contentType is stale`);
+    }
+    if (declaredRemote.size !== undefined && declaredRemote.size !== lockedRemote.size) {
+      fail('K4-ASSET-LOCK-001', `Asset ${assetId} remote lock size is stale`);
     }
   }
 }
 
+function isEmbeddedProvider(
+  provider: EmbeddedProvider | LockRemoteProvider,
+): provider is EmbeddedProvider {
+  return 'file' in provider || 'name' in provider;
+}
+
+function isLockRemoteProvider(
+  provider: EmbeddedProvider | LockRemoteProvider,
+): provider is LockRemoteProvider {
+  return 'url' in provider;
+}
+
+function resolvedProviderFor(
+  assetId: string,
+  selected: Delivery,
+  provider: EmbeddedProvider | LockRemoteProvider,
+): AssetDistributionResolvedProvider {
+  if (selected === 'embedded') {
+    if (!isEmbeddedProvider(provider)) {
+      fail('K4-ASSET-PROVIDER-001', `Asset ${assetId} has no embedded provider`);
+    }
+    if (provider.file !== undefined) return {type: 'file', file: provider.file};
+    if (provider.name !== undefined) return {type: 'project', name: provider.name};
+    fail('K4-ASSET-PROVIDER-001', `Asset ${assetId} has no embedded provider`);
+  }
+  if (!isLockRemoteProvider(provider)) {
+    fail('K4-ASSET-PROVIDER-001', `Asset ${assetId} has no remote provider`);
+  }
+  return {
+    type: 'remote',
+    url: provider.url,
+    integrity: provider.transportIntegrity,
+    contentType: provider.contentType,
+    size: provider.size,
+  };
+}
+
 function resolvedStoryAsset(
-  asset: Readonly<Record<string, any>>,
-  selected: 'embedded' | 'remote',
-  provider: Readonly<Record<string, any>>,
+  asset: StoryAsset,
+  selected: Delivery,
+  provider: EmbeddedProvider | LockRemoteProvider,
 ) {
-  const result = {...asset, delivery: selected} as Record<string, any>;
+  const result: Record<string, unknown> = {...asset, delivery: selected};
   delete result.file;
   delete result.name;
   delete result.source;
   if (selected === 'embedded') {
-    if (provider.file) result.file = provider.file;
-    else result.name = provider.name;
+    if (!isEmbeddedProvider(provider)) {
+      fail(
+        'K4-ASSET-PROVIDER-001',
+        `Asset ${String(asset.id ?? asset.kind)} has no embedded provider`,
+      );
+    }
+    const embedded = provider;
+    if (embedded.file) result.file = embedded.file;
+    else result.name = embedded.name;
   } else {
+    if (!isLockRemoteProvider(provider)) {
+      fail(
+        'K4-ASSET-PROVIDER-001',
+        `Asset ${String(asset.id ?? asset.kind)} has no remote provider`,
+      );
+    }
+    const remote = provider;
     result.source = {
-      url: provider.url,
-      integrity: provider.transportIntegrity,
-      contentType: provider.contentType,
-      size: provider.size,
+      url: remote.url,
+      integrity: remote.transportIntegrity,
+      contentType: remote.contentType,
+      size: remote.size,
     };
   }
   return result;
@@ -502,22 +663,20 @@ export function resolveDsl4AssetDistributionProfile(
   inputConfig: unknown,
   inputLock: unknown,
   selectedProfile: string,
-) {
+): AssetDistributionResolution {
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('asset distribution resolver requires a DSL 4.0 StoryDocument');
   }
   if (typeof selectedProfile !== 'string' || !profileName.test(selectedProfile)) {
     fail('K4-ASSET-PROFILE-001', 'asset distribution profile must be selected explicitly');
   }
-  const config = validateDsl4AssetDistributionConfig(inputConfig);
-  const lock = validateDsl4AssetDistributionLock(inputLock);
-  const profile = config.profiles[selectedProfile] as Readonly<Record<string, any>> | undefined;
+  const config = validateDsl4AssetDistributionConfig(inputConfig) as unknown as DistributionConfig;
+  const lock = validateDsl4AssetDistributionLock(inputLock) as unknown as DistributionLock;
+  const profile = config.profiles[selectedProfile];
   if (!profile) {
     fail('K4-ASSET-PROFILE-001', `asset distribution profile ${selectedProfile} is not defined`);
   }
-  const storyAssets = (storyDocument.assets ?? {}) as Readonly<
-    Record<string, Readonly<Record<string, any>>>
-  >;
+  const storyAssets = (storyDocument.assets ?? {}) as Readonly<Record<string, StoryAsset>>;
   const storyIds = Object.keys(storyAssets).sort();
   /** Every id comes from the same record, so a miss is a defect in this resolver. */
   const requireStoryAsset = (assetId: string) =>
@@ -540,11 +699,11 @@ export function resolveDsl4AssetDistributionProfile(
     }
   }
 
-  const resolution: Record<string, any>[] = [];
+  const resolution: AssetDistributionResolvedAsset[] = [];
   const resolvedAssets = Object.fromEntries(
     storyIds.map((assetId) => {
       const asset = requireStoryAsset(assetId);
-      const lockAssetEntry = lock.assets[assetId] as Readonly<Record<string, any>> | undefined;
+      const lockAssetEntry = lock.assets[assetId];
       if (!lockAssetEntry || lockAssetEntry.kind !== asset.kind) {
         fail('K4-ASSET-LOCK-001', `Asset ${assetId} lock kind is stale`);
       }
@@ -565,6 +724,7 @@ export function resolveDsl4AssetDistributionProfile(
         fail('K4-ASSET-PROVIDER-001', `Asset ${assetId} has no ${selected} provider`);
       }
       const resolved = resolvedStoryAsset(asset, selected, provider);
+      const resolvedProvider = resolvedProviderFor(assetId, selected, provider);
       resolution.push({
         id: assetId,
         kind: asset.kind,
@@ -572,18 +732,7 @@ export function resolveDsl4AssetDistributionProfile(
         contentIntegrity: lockAssetEntry.contentIntegrity,
         contentType: lockAssetEntry.contentType,
         size: lockAssetEntry.size,
-        provider:
-          selected === 'embedded'
-            ? provider.file
-              ? {type: 'file', file: provider.file}
-              : {type: 'project', name: provider.name}
-            : {
-                type: 'remote',
-                url: provider.url,
-                integrity: provider.transportIntegrity,
-                contentType: provider.contentType,
-                size: provider.size,
-              },
+        provider: resolvedProvider,
       });
       return [assetId, resolved];
     }),

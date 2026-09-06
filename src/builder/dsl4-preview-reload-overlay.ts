@@ -1,4 +1,4 @@
-import type {Dsl4PreviewDocument} from '../dsl4/preview-dom.js';
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import {dsl4PreviewReloadAnchors} from '../dsl4/preview-layout-coordinator.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 
@@ -70,7 +70,7 @@ function requireElement(value: unknown) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError('reload overlay mount must be a DOM element');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4PreviewElement;
 }
 
 /**
@@ -81,8 +81,8 @@ function requireElement(value: unknown) {
  * arguments.
  */
 interface ReloadPolicySurface {
-  getState(): Readonly<Record<string, any>>;
-  subscribe(listener: (state: Readonly<Record<string, any>>) => unknown): () => void;
+  getState(): unknown;
+  subscribe(listener: (state: unknown) => unknown): () => void;
   openDialog(options?: Readonly<{inputId?: string}>): unknown;
   selectPosition(anchor: string): unknown;
   applyScope(scope: string, options?: Readonly<{inputId?: string}>): unknown;
@@ -91,16 +91,69 @@ interface ReloadPolicySurface {
 }
 
 interface ReloadLayoutSurface {
-  resolve(anchor: string): Readonly<Record<string, any>>;
+  resolve(anchor: string): unknown;
   setInteraction(interaction: Readonly<Record<string, unknown>>): unknown;
-  getState(): Readonly<Record<string, any>>;
+  getState(): ReloadLayoutState;
 }
 
 interface ReloadDebugExecutionSurface {
-  getState(): Readonly<Record<string, any>>;
-  subscribe(listener: (state: Readonly<Record<string, any>>) => unknown): () => void;
+  getState(): unknown;
+  subscribe(listener: (state: unknown) => unknown): () => void;
   setMode(mode: string): unknown;
   resume(): unknown;
+}
+
+interface ReloadPolicyState {
+  readonly status: string;
+  readonly preference: string;
+  readonly dialog: Readonly<{
+    open: boolean;
+    step: string;
+    stale?: boolean;
+    selectedPreference?: string | null;
+  }>;
+  readonly diagnostic?: Readonly<{code: string; message: string}> | null;
+  readonly lastSuccess?: Readonly<{
+    acknowledgedAt?: number;
+    actualAnchor?: string;
+    fallbackReason?: string | null;
+  }> | null;
+}
+
+interface ReloadLayoutResolution {
+  readonly rect: Readonly<{x: number; y: number}>;
+  readonly resolvedAnchor: string;
+  readonly stacked: boolean;
+  readonly collisionReason?: string | null;
+}
+
+export interface ReloadLayoutState {
+  readonly interaction: Readonly<Record<string, unknown>>;
+}
+
+interface ReloadDebugState {
+  readonly status: string;
+  readonly mode: string;
+  readonly paused?: boolean;
+  readonly reason?: string;
+  readonly sceneId?: string;
+  readonly actionIndex?: number;
+  readonly command?: string;
+}
+
+interface PreviewPointerEvent {
+  readonly pointerId?: unknown;
+}
+
+interface PreviewKeyboardEvent {
+  readonly defaultPrevented?: boolean;
+  readonly altKey?: boolean;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly shiftKey?: boolean;
+  readonly code: string;
+  preventDefault(): void;
+  stopPropagation(): void;
 }
 
 function validatePolicy(value: unknown) {
@@ -144,6 +197,103 @@ function validateDebugExecution(value: unknown) {
     );
   }
   return value as unknown as ReloadDebugExecutionSurface;
+}
+
+function validateLayoutResolution(value: unknown): ReloadLayoutResolution {
+  if (!isRecord(value) || !isRecord(value.rect)) {
+    throw new TypeError('reload overlay layout resolution is invalid');
+  }
+  const {rect} = value;
+  if (
+    typeof rect.x !== 'number' ||
+    typeof rect.y !== 'number' ||
+    typeof value.resolvedAnchor !== 'string' ||
+    typeof value.stacked !== 'boolean' ||
+    (value.collisionReason !== undefined &&
+      value.collisionReason !== null &&
+      typeof value.collisionReason !== 'string')
+  ) {
+    throw new TypeError('reload overlay layout resolution is invalid');
+  }
+  return {
+    rect: {x: rect.x, y: rect.y},
+    resolvedAnchor: value.resolvedAnchor,
+    stacked: value.stacked,
+    ...(value.collisionReason === undefined ? {} : {collisionReason: value.collisionReason}),
+  };
+}
+
+function validatePolicyDiagnostic(value: unknown): ReloadPolicyState['diagnostic'] {
+  if (value === undefined || value === null) return value;
+  if (!isRecord(value) || typeof value.code !== 'string' || typeof value.message !== 'string') {
+    throw new TypeError('reload policy diagnostic state is invalid');
+  }
+  return {code: value.code, message: value.message};
+}
+
+function validatePolicyLastSuccess(value: unknown): ReloadPolicyState['lastSuccess'] {
+  if (value === undefined || value === null) return value;
+  if (
+    !isRecord(value) ||
+    (value.acknowledgedAt !== undefined && typeof value.acknowledgedAt !== 'number') ||
+    (value.actualAnchor !== undefined && typeof value.actualAnchor !== 'string') ||
+    (value.fallbackReason !== undefined &&
+      value.fallbackReason !== null &&
+      typeof value.fallbackReason !== 'string')
+  ) {
+    throw new TypeError('reload policy success state is invalid');
+  }
+  return {
+    ...(typeof value.acknowledgedAt === 'number' ? {acknowledgedAt: value.acknowledgedAt} : {}),
+    ...(typeof value.actualAnchor === 'string' ? {actualAnchor: value.actualAnchor} : {}),
+    ...(typeof value.fallbackReason === 'string' ? {fallbackReason: value.fallbackReason} : {}),
+  };
+}
+
+function validatePolicyState(value: unknown): ReloadPolicyState {
+  if (!isRecord(value) || !isRecord(value.dialog)) {
+    throw new TypeError('reload policy state is invalid');
+  }
+  if (
+    typeof value.status !== 'string' ||
+    typeof value.preference !== 'string' ||
+    typeof value.dialog.open !== 'boolean' ||
+    typeof value.dialog.step !== 'string'
+  ) {
+    throw new TypeError('reload policy state is invalid');
+  }
+  const diagnostic = validatePolicyDiagnostic(value.diagnostic);
+  const lastSuccess = validatePolicyLastSuccess(value.lastSuccess);
+  return {
+    status: value.status,
+    preference: value.preference,
+    dialog: {
+      open: value.dialog.open,
+      step: value.dialog.step,
+      ...(typeof value.dialog.stale === 'boolean' ? {stale: value.dialog.stale} : {}),
+      ...(typeof value.dialog.selectedPreference === 'string' ||
+      value.dialog.selectedPreference === null
+        ? {selectedPreference: value.dialog.selectedPreference}
+        : {}),
+    },
+    ...(diagnostic === undefined ? {} : {diagnostic}),
+    ...(lastSuccess === undefined ? {} : {lastSuccess}),
+  };
+}
+
+function validateDebugState(value: unknown): ReloadDebugState {
+  if (!isRecord(value) || typeof value.status !== 'string' || typeof value.mode !== 'string') {
+    throw new TypeError('reload debug state is invalid');
+  }
+  return {
+    status: value.status,
+    mode: value.mode,
+    ...(typeof value.paused === 'boolean' ? {paused: value.paused} : {}),
+    ...(typeof value.reason === 'string' ? {reason: value.reason} : {}),
+    ...(typeof value.sceneId === 'string' ? {sceneId: value.sceneId} : {}),
+    ...(typeof value.actionIndex === 'number' ? {actionIndex: value.actionIndex} : {}),
+    ...(typeof value.command === 'string' ? {command: value.command} : {}),
+  };
 }
 
 function element(document: Dsl4PreviewDocument, tag: string, text?: string) {
@@ -285,7 +435,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   positionGroup.id = 'dsl4-preview-reload-position-step';
   positionGroup.setAttribute('role', 'radiogroup');
   positionGroup.setAttribute('aria-label', '再開位置');
-  const positionButtons = new Map();
+  const positionButtons = new Map<string, Dsl4PreviewElement>();
   for (const [value, label] of [
     ['story', 'ストーリーの最初から'],
     ['scene', 'このsceneの最初から'],
@@ -304,7 +454,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   const scopeGroup = element(document, 'div');
   scopeGroup.id = 'dsl4-preview-reload-scope-step';
   scopeGroup.hidden = true;
-  const scopeButtons = new Map();
+  const scopeButtons = new Map<string, Dsl4PreviewElement>();
   for (const [value, label] of [
     ['reload-once', 'この位置から今回だけreload'],
     ['reload-and-save', 'この位置からreloadし、次回以降も使用'],
@@ -324,7 +474,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   anchorGroup.id = 'dsl4-preview-reload-anchor-selector';
   anchorGroup.setAttribute('role', 'radiogroup');
   anchorGroup.setAttribute('aria-label', 'Reload button position');
-  const anchorButtons = new Map();
+  const anchorButtons = new Map<string, Dsl4PreviewElement>();
   for (const value of dsl4PreviewReloadAnchors) {
     const button = element(document, 'button', anchorLabels[value]);
     button.id = `dsl4-preview-reload-anchor-${value}`;
@@ -345,7 +495,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   debugModeGroup.id = 'dsl4-preview-debug-mode-selector';
   debugModeGroup.setAttribute('role', 'radiogroup');
   debugModeGroup.setAttribute('aria-label', 'デバッグ実行モード');
-  const debugModeButtons = new Map();
+  const debugModeButtons = new Map<string, Dsl4PreviewElement>();
   for (const [value, label] of [
     ['breakpoints', 'debugger で停止'],
     ['step', '1 action ずつ実行'],
@@ -390,8 +540,8 @@ export function createDsl4PreviewReloadOverlay(options: {
   let lastStatus = '';
   let lastDiagnosticCode: string | null = null;
   let pending: Promise<unknown>[] = [];
-  let lastPolicyState = policy.getState();
-  let lastDebugState = debugExecution?.getState() ?? null;
+  let lastPolicyState = validatePolicyState(policy.getState());
+  let lastDebugState = debugExecution ? validateDebugState(debugExecution.getState()) : null;
   let activePointerId: number | null = null;
 
   function observe(operation: unknown) {
@@ -408,7 +558,7 @@ export function createDsl4PreviewReloadOverlay(options: {
   }
 
   function resolveLayout() {
-    const resolved = layout.resolve(selectedAnchor);
+    const resolved = validateLayoutResolution(layout.resolve(selectedAnchor));
     statusButton.style.left = `${resolved.rect.x}px`;
     statusButton.style.top = `${resolved.rect.y}px`;
     statusButton.setAttribute('data-preferred-anchor', selectedAnchor);
@@ -461,7 +611,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     }
   }
 
-  function renderDebug(state: Readonly<Record<string, any>>) {
+  function renderDebug(state: ReloadDebugState) {
     if (disposed || !debugExecution) return;
     lastDebugState = state;
     host.setAttribute('data-debug-state', state.status);
@@ -483,14 +633,15 @@ export function createDsl4PreviewReloadOverlay(options: {
     renderStatusPresentation();
   }
 
-  function render(state: Readonly<Record<string, any>>) {
+  function render(state: ReloadPolicyState) {
     if (disposed) return;
     const previousDialogStep = lastPolicyState.dialog.step;
     lastPolicyState = state;
     renderStatusPresentation();
-    const diagnosticCode = state.diagnostic?.code ?? null;
-    if (diagnosticCode && diagnosticCode !== lastDiagnosticCode) {
-      assertive.textContent = `${diagnosticCode}: ${state.diagnostic.message}`;
+    const diagnostic = state.diagnostic ?? null;
+    const diagnosticCode = diagnostic?.code ?? null;
+    if (diagnostic && diagnosticCode && diagnosticCode !== lastDiagnosticCode) {
+      assertive.textContent = `${diagnosticCode}: ${diagnostic.message}`;
     } else if (!diagnosticCode) {
       assertive.textContent = '';
     }
@@ -499,15 +650,17 @@ export function createDsl4PreviewReloadOverlay(options: {
     const wasOpen = !dialog.hidden;
     dialog.hidden = !state.dialog.open;
     if (state.dialog.open) {
-      latest.textContent = state.lastSuccess
-        ? `Latest successful reload: ${formatTime(state.lastSuccess.acknowledgedAt)}`
-        : 'まだ reload されていません';
+      latest.textContent =
+        state.lastSuccess && typeof state.lastSuccess.acknowledgedAt === 'number'
+          ? `Latest successful reload: ${formatTime(state.lastSuccess.acknowledgedAt)}`
+          : 'まだ reload されていません';
       currentPreference.textContent = `次回方針: ${state.preference}`;
-      actualAnchor.textContent = state.lastSuccess
-        ? `直近の実表示: ${state.lastSuccess.actualAnchor}${
-            state.lastSuccess.fallbackReason ? ` (${state.lastSuccess.fallbackReason})` : ''
-          }`
-        : '直近の実表示: なし';
+      actualAnchor.textContent =
+        state.lastSuccess && typeof state.lastSuccess.actualAnchor === 'string'
+          ? `直近の実表示: ${state.lastSuccess.actualAnchor}${
+              state.lastSuccess.fallbackReason ? ` (${state.lastSuccess.fallbackReason})` : ''
+            }`
+          : '直近の実表示: なし';
       stale.textContent = state.dialog.stale
         ? '新しいgenerationが到着しました。再開位置を選び直してください。'
         : '';
@@ -527,7 +680,7 @@ export function createDsl4PreviewReloadOverlay(options: {
         (state.dialog.step === 'scope'
           ? scopeButtons.get('reload-once')
           : positionButtons.get('story')
-        ).focus();
+        )?.focus();
       }
     } else if (wasOpen) {
       statusButton.focus();
@@ -535,8 +688,9 @@ export function createDsl4PreviewReloadOverlay(options: {
     resolveLayout();
   }
 
-  const unsubscribe = policy.subscribe(render);
-  const unsubscribeDebug = debugExecution?.subscribe(renderDebug) ?? (() => {});
+  const unsubscribe = policy.subscribe((state) => render(validatePolicyState(state)));
+  const unsubscribeDebug =
+    debugExecution?.subscribe((state) => renderDebug(validateDebugState(state))) ?? (() => {});
   render(lastPolicyState);
   if (lastDebugState) renderDebug(lastDebugState);
 
@@ -549,7 +703,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     layout.setInteraction({...interaction, focused: false});
     resolveLayout();
   });
-  function onStatusPointerDown(event: any) {
+  function onStatusPointerDown(event: PreviewPointerEvent) {
     const pointerId = Number.isSafeInteger(event.pointerId) ? Number(event.pointerId) : null;
     activePointerId = pointerId;
     let pointerCaptured = false;
@@ -567,7 +721,7 @@ export function createDsl4PreviewReloadOverlay(options: {
       focused: document.activeElement === statusButton,
     });
   }
-  function finishPointerInteraction(event: any) {
+  function finishPointerInteraction(event: PreviewPointerEvent) {
     const pointerId = Number.isSafeInteger(event?.pointerId) ? Number(event.pointerId) : null;
     if (activePointerId !== null && pointerId !== null && pointerId !== activePointerId) return;
     if (
@@ -639,7 +793,7 @@ export function createDsl4PreviewReloadOverlay(options: {
     ].filter((button) => !button.disabled && !button.hidden);
   }
 
-  function onKeyDown(event: any) {
+  function onKeyDown(event: PreviewKeyboardEvent) {
     if (disposed || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey)
       return;
     if (!lastPolicyState.dialog.open) {
@@ -684,7 +838,8 @@ export function createDsl4PreviewReloadOverlay(options: {
     if (event.code !== 'Tab') return;
     event.preventDefault();
     const focusable = focusableDialogButtons();
-    const index = focusable.indexOf(document.activeElement);
+    const activeElement = document.activeElement ?? null;
+    const index = focusable.findIndex((button) => button === activeElement);
     const next = event.shiftKey
       ? index <= 0
         ? focusable.length - 1
@@ -692,11 +847,11 @@ export function createDsl4PreviewReloadOverlay(options: {
       : index < 0 || index === focusable.length - 1
         ? 0
         : index + 1;
-    focusable[next].focus();
+    focusable[next]?.focus();
   }
   document.addEventListener('keydown', onKeyDown, true);
 
-  function onPreviewPointer(event: any) {
+  function onPreviewPointer(event: PreviewPointerEvent) {
     if (disposed || lastPolicyState.dialog.open) return;
     const inputId = Number.isSafeInteger(event.pointerId)
       ? `pointer-${event.pointerId}`

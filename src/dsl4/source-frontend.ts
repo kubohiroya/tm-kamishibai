@@ -1,4 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
+import type {ErrorObject} from 'ajv';
 import {isAlias, isMap, isPair, isScalar, isSeq, LineCounter, parseAllDocuments, visit} from 'yaml';
 
 import {
@@ -56,6 +57,26 @@ export interface ParseFailure {
 
 export type ParseResult = ParseSuccess | ParseFailure;
 
+interface YamlNodeView {
+  readonly range?: readonly [number, number, ...number[]];
+  readonly anchor?: unknown;
+  readonly tag?: unknown;
+  readonly key?: Readonly<{value?: unknown}>;
+  readonly items?: readonly unknown[];
+  readonly value?: unknown;
+}
+
+interface YamlDocumentView {
+  readonly contents?: unknown;
+  getIn(path: readonly (string | number)[], keepScalar?: boolean): unknown;
+  toJS(options?: Readonly<Record<string, unknown>>): unknown;
+}
+
+interface ParsedYamlDocument extends YamlDocumentView {
+  readonly errors: readonly Readonly<{message: string; pos?: readonly [number, number]}>[];
+  readonly warnings: readonly Readonly<{message: string; pos?: readonly [number, number]}>[];
+}
+
 /**
  * The canonical single-source frontend, as its consumers take it.
  *
@@ -88,8 +109,8 @@ function jsonPathSegments(path: string): (string | number)[] {
   return segments;
 }
 
-function escapedJsonPath(segments: readonly (string | number)[]) {
-  return segments.reduce(
+function escapedJsonPath(segments: readonly (string | number)[]): string {
+  return segments.reduce<string>(
     (path, segment) =>
       typeof segment === 'number'
         ? `${path}[${segment}]`
@@ -122,7 +143,7 @@ function storyPathFromSourceSegments(segments: (string | number)[]): string | un
         .join('/')}`;
 }
 
-function nodeAtPath(document: any, segments: (string | number)[]): any {
+function nodeAtPath(document: YamlDocumentView, segments: (string | number)[]): unknown {
   for (let length = segments.length; length >= 0; length -= 1) {
     const node = length === 0 ? document.contents : document.getIn(segments.slice(0, length), true);
     if (node) return node;
@@ -143,7 +164,7 @@ function diagnostic({
   message: string;
   sourceId: string;
   path: string;
-  node: any;
+  node: unknown;
   lineCounter: import('yaml').LineCounter;
   storyPath?: string | undefined;
 }): Dsl4Diagnostic {
@@ -211,7 +232,10 @@ function sortDiagnostics(diagnostics: readonly Dsl4Diagnostic[]): readonly Dsl4D
 }
 
 /** Count YAML collections and scalars without recursively traversing an attacker-controlled tree. */
-function inspectYamlResources(root: any, limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>) {
+function inspectYamlResources(
+  root: unknown,
+  limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
+) {
   const stack = [{node: root, collectionDepth: 0}];
   let nodeCount = 0;
   let firstNodeOverflow = null;
@@ -234,8 +258,9 @@ function inspectYamlResources(root: any, limits: Readonly<typeof dsl4SourceFront
       if (nodeCount > limits.maxYamlNodes && !firstNodeOverflow) firstNodeOverflow = node;
       const nextDepth = collectionDepth + 1;
       if (nextDepth > limits.maxYamlDepth && !firstDepthOverflow) firstDepthOverflow = node;
-      for (let index = node.items.length - 1; index >= 0; index -= 1) {
-        stack.push({node: node.items[index], collectionDepth: nextDepth});
+      const items = (node as YamlNodeView).items ?? [];
+      for (let index = items.length - 1; index >= 0; index -= 1) {
+        stack.push({node: items[index], collectionDepth: nextDepth});
       }
       continue;
     }
@@ -243,9 +268,10 @@ function inspectYamlResources(root: any, limits: Readonly<typeof dsl4SourceFront
     if (isScalar(node)) {
       nodeCount += 1;
       if (nodeCount > limits.maxYamlNodes && !firstNodeOverflow) firstNodeOverflow = node;
+      const value = (node as YamlNodeView).value;
       if (
-        typeof node.value === 'string' &&
-        [...node.value].length > limits.maxScalarScalars &&
+        typeof value === 'string' &&
+        [...value].length > limits.maxScalarScalars &&
         !firstScalarOverflow
       ) {
         firstScalarOverflow = node;
@@ -258,7 +284,7 @@ function inspectYamlResources(root: any, limits: Readonly<typeof dsl4SourceFront
 
 function validateStoryResourceLimits(
   story: Record<string, unknown>,
-  document: any,
+  document: YamlDocumentView,
   lineCounter: import('yaml').LineCounter,
   sourceId: string,
   limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
@@ -339,7 +365,7 @@ function validateStoryResourceLimits(
 
 function validateBranchExpressions(
   story: Record<string, unknown>,
-  document: any,
+  document: YamlDocumentView,
   lineCounter: import('yaml').LineCounter,
   sourceId: string,
   createRuntimeExpressionComposition: (() => unknown) | null,
@@ -423,7 +449,7 @@ function validateBranchExpressions(
   return diagnostics;
 }
 
-function schemaDiagnosticCode(error: any): string {
+function schemaDiagnosticCode(error: ErrorObject): string {
   if (error.instancePath === '/kamishibai' && error.keyword === 'const') {
     return 'K4-VERSION-001';
   }
@@ -433,9 +459,11 @@ function schemaDiagnosticCode(error: any): string {
   return 'K4-SCHEMA-001';
 }
 
-function schemaErrorSegments(error: any): (string | number)[] {
+function schemaErrorSegments(error: ErrorObject): (string | number)[] {
   const segments = jsonPointerSegments(error.instancePath);
-  const extraProperty = error.params?.additionalProperty ?? error.params?.propertyName;
+  const params = error.params as Readonly<Record<string, unknown>>;
+  const extraProperty = params.additionalProperty ?? params.propertyName;
+  if (typeof extraProperty !== 'string' && typeof extraProperty !== 'number') return segments;
   return extraProperty === undefined ? segments : [...segments, extraProperty];
 }
 
@@ -444,7 +472,7 @@ function parseRestrictedYaml(
   sourceId: string,
   limits: Readonly<typeof dsl4SourceFrontendDefaultLimits>,
 ): {
-  document: any;
+  document: YamlDocumentView | undefined;
   lineCounter: import('yaml').LineCounter;
   diagnostics: readonly Dsl4Diagnostic[];
 } {
@@ -458,7 +486,7 @@ function parseRestrictedYaml(
   });
   const diagnostics: Dsl4Diagnostic[] = [];
 
-  for (const document of documents) {
+  for (const document of documents as readonly ParsedYamlDocument[]) {
     for (const error of [...document.errors, ...document.warnings]) {
       const node = {range: error.pos ?? [0, 0]};
       diagnostics.push(
@@ -489,8 +517,9 @@ function parseRestrictedYaml(
   }
 
   for (const document of documents) {
+    const documentView = document as unknown as ParsedYamlDocument;
     visit(document, (_key, node) => {
-      const yamlNode = node as any;
+      const yamlNode = node as YamlNodeView;
       if (isAlias(node) || yamlNode?.anchor) {
         diagnostics.push(
           diagnostic({
@@ -540,7 +569,7 @@ function parseRestrictedYaml(
         );
       }
     });
-    const resources = inspectYamlResources(document.contents, limits);
+    const resources = inspectYamlResources(documentView.contents, limits);
     if (resources.firstNodeOverflow) {
       diagnostics.push(
         diagnostic({
@@ -606,7 +635,7 @@ export function createDsl4SourceFrontend(
   ) {
     throw new TypeError('createRuntimeExpressionComposition must be a function or null');
   }
-  const AjvConstructor = Ajv2020 as any;
+  const AjvConstructor = Ajv2020 as unknown as typeof import('ajv/dist/2020.js').default;
   const validateSchema = new AjvConstructor({allErrors: true, strict: true}).compile(schema);
   return Object.freeze({
     parse(source: string, {sourceId = 'main'}: {sourceId?: string} = {}): ParseResult {
@@ -637,18 +666,20 @@ export function createDsl4SourceFrontend(
           diagnostics: finalizeDiagnostics(parsed.diagnostics, limits),
         });
       }
+      const yamlDocument = parsed.document;
 
-      const rawStory = parsed.document.toJS({maxAliasCount: 0});
+      const rawStory = yamlDocument.toJS({maxAliasCount: 0});
       if (!validateSchema(rawStory)) {
-        const diagnostics = ((validateSchema.errors ?? []) as any[]).map((error) => {
+        const diagnostics = (validateSchema.errors ?? []).map((error) => {
           const segments = schemaErrorSegments(error);
-          const rawPath = error.instancePath || '$';
+          const rawPath =
+            typeof error.instancePath === 'string' && error.instancePath ? error.instancePath : '$';
           return diagnostic({
             code: schemaDiagnosticCode(error),
             message: error.message ?? 'Schema validation failed',
             sourceId,
             path: /[\u0000-\u001f\u007f]/u.test(rawPath) ? escapedJsonPath(segments) : rawPath,
-            node: nodeAtPath(parsed.document, segments),
+            node: nodeAtPath(yamlDocument, segments),
             lineCounter: parsed.lineCounter,
             storyPath: storyPathFromSourceSegments(segments),
           });
@@ -669,7 +700,7 @@ export function createDsl4SourceFrontend(
             message: issue.message,
             sourceId,
             path: issue.path,
-            node: nodeAtPath(parsed.document, segments),
+            node: nodeAtPath(yamlDocument, segments),
             lineCounter: parsed.lineCounter,
             storyPath: storyPathFromSourceSegments(segments),
           });

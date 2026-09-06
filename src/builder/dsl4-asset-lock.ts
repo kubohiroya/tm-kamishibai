@@ -20,6 +20,8 @@ import {loadDsl4ProjectJson} from './dsl4-asset-audit.js';
 import {installBundleTransactionally} from './atomic-output.js';
 import {Sb3BuilderError} from './errors.js';
 import type {Dsl4FileSystem} from './file-system.js';
+import type {Dsl4SourceFrontend} from '../dsl4/source-frontend.js';
+import type {Dsl4SubtleCrypto} from '../dsl4/subtle-crypto.js';
 import {sha256} from './hash.js';
 
 const defaultFileSystem = Object.freeze({lstat, open, readdir, realpath});
@@ -28,6 +30,113 @@ const defaultMaxCompressionRatio = 100;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+interface Dsl4AssetLockFetchOptions {
+  readonly allowedHosts: readonly string[];
+  readonly fetchImplementation: (
+    url: URL,
+    init: {redirect: 'manual'; signal: AbortSignal},
+  ) => Promise<Response>;
+  readonly timeoutMs: number;
+  readonly maxRedirects: number;
+  readonly maxBytes: number;
+}
+
+interface Dsl4AssetLockStoryAsset {
+  readonly id: string;
+  readonly kind: string;
+  readonly delivery?: unknown;
+  readonly file?: unknown;
+  readonly name?: string;
+  readonly source?: {readonly url?: string};
+}
+
+type Dsl4AssetLockEmbeddedProvider =
+  {readonly file: string; readonly name?: never} | {readonly name: string; readonly file?: never};
+
+interface Dsl4AssetLockRemoteProvider {
+  readonly url: string;
+}
+
+interface Dsl4AssetLockProviderSet {
+  readonly embedded?: Dsl4AssetLockEmbeddedProvider;
+  readonly remote?: Dsl4AssetLockRemoteProvider;
+}
+
+interface Dsl4AssetLockConfig {
+  readonly providers: Readonly<Record<string, Dsl4AssetLockProviderSet>>;
+  readonly profiles: Readonly<
+    Record<string, {readonly assets?: Readonly<Record<string, unknown>>}>
+  >;
+}
+
+interface Dsl4AssetLockParseResult {
+  readonly ok?: unknown;
+  readonly diagnostics?: readonly {readonly message?: unknown; readonly code?: unknown}[];
+  readonly storyDocument?: {
+    readonly assets?: Readonly<Record<string, Dsl4AssetLockStoryAsset>>;
+  };
+}
+
+interface Dsl4PoseArchiveFile {
+  readonly path: string;
+  readonly size: number;
+  readonly bytes: Uint8Array;
+}
+
+interface Dsl4PoseArchiveExtraction {
+  readonly files: readonly Dsl4PoseArchiveFile[];
+}
+
+interface Dsl4AssetLockProviderOptions extends Dsl4AssetLockFetchOptions {
+  readonly projectRoot: string;
+  readonly canonicalRoot: string;
+  readonly fileSystem: Dsl4FileSystem;
+  readonly maxFileBytes: number;
+  readonly maxFiles: number;
+  readonly maxTotalBytes: number;
+  fileCount: number;
+  totalBytes: number;
+  readonly poseArchiveExtractor: (
+    payload: unknown,
+    context?: Readonly<Record<string, unknown>>,
+  ) => Promise<Dsl4PoseArchiveExtraction>;
+}
+
+interface Dsl4AssetDistributionLockOptions {
+  readonly projectRoot?: string;
+  readonly sourceFrontend?: Dsl4SourceFrontend;
+  readonly sourceIncludesEnabled?: unknown;
+  readonly maxSourceBytes?: unknown;
+  readonly maxTotalSourceBytes?: unknown;
+  readonly maxSourceManifestBytes?: unknown;
+  readonly maxAssetConfigBytes?: unknown;
+  readonly maxAssetFileBytes?: unknown;
+  readonly maxAssetFiles?: unknown;
+  readonly maxTotalAssetBytes?: unknown;
+  readonly timeoutMs?: unknown;
+  readonly maxRedirects?: unknown;
+  readonly allowedHosts?: unknown;
+  readonly fetchImplementation?: unknown;
+  readonly fileSystem?: unknown;
+  readonly sourceManifest?: string;
+  readonly source?: string;
+  readonly sourceId?: string;
+  readonly assetConfig?: string;
+  readonly readFile?: (filePath: string, limit: number) => Promise<Uint8Array | Buffer>;
+  readonly maxSourceFiles?: unknown;
+  readonly maxIncludeDepth?: unknown;
+  readonly subtleCrypto?: Dsl4SubtleCrypto;
+  readonly output?: string;
+}
+
+interface Dsl4FileState {
+  readonly dev: unknown;
+  readonly ino: unknown;
+  readonly size: unknown;
+  readonly mtimeMs: unknown;
+  readonly ctimeMs: unknown;
 }
 
 function fail(message: string, code: string, cause?: unknown): never {
@@ -168,7 +277,7 @@ async function readResponseBody(response: Response, maximumBytes: number) {
 }
 
 /** Fetch one remote provider with host, redirect, timeout, and streaming limits. */
-export async function fetchDsl4AssetRemote(inputUrl: string, options: any) {
+export async function fetchDsl4AssetRemote(inputUrl: string, options: Dsl4AssetLockFetchOptions) {
   let currentUrl = httpsUrl(inputUrl, 'remote provider URL');
   for (let redirects = 0; ; redirects += 1) {
     assertAllowedHost(currentUrl.hostname, options.allowedHosts);
@@ -303,25 +412,36 @@ function logicalBundle(files: {path: string; size: number; integrity: string}[])
 
 function declaredProviders(
   assetId: string,
-  asset: Readonly<Record<string, any>>,
-  configured: Readonly<Record<string, any>> | undefined,
+  asset: Dsl4AssetLockStoryAsset,
+  configured: Dsl4AssetLockProviderSet | undefined,
 ) {
-  const result = {} as Record<string, any>;
+  const result: {
+    embedded?: Dsl4AssetLockEmbeddedProvider;
+    remote?: Dsl4AssetLockRemoteProvider;
+  } = {};
   if (asset.delivery === 'embedded') {
     result.embedded =
       typeof asset.file === 'string' ? {file: asset.file} : {name: asset.name ?? assetId};
   } else if (isRecord(asset.source)) {
+    if (typeof asset.source.url !== 'string') {
+      fail(`Asset ${assetId} remote source is missing`, 'K4-ASSET-PROVIDER-001');
+    }
     result.remote = {url: asset.source.url};
   }
-  for (const delivery of ['embedded', 'remote']) {
-    if (!configured?.[delivery]) continue;
+  if (configured?.embedded) {
     if (
-      result[delivery] &&
-      JSON.stringify(result[delivery]) !== JSON.stringify(configured[delivery])
+      result.embedded &&
+      JSON.stringify(result.embedded) !== JSON.stringify(configured.embedded)
     ) {
-      fail(`Asset ${assetId} has conflicting ${delivery} providers`, 'K4-ASSET-PROVIDER-001');
+      fail(`Asset ${assetId} has conflicting embedded providers`, 'K4-ASSET-PROVIDER-001');
     }
-    result[delivery] = configured[delivery];
+    result.embedded = configured.embedded;
+  }
+  if (configured?.remote) {
+    if (result.remote && JSON.stringify(result.remote) !== JSON.stringify(configured.remote)) {
+      fail(`Asset ${assetId} has conflicting remote providers`, 'K4-ASSET-PROVIDER-001');
+    }
+    result.remote = configured.remote;
   }
   return result;
 }
@@ -349,7 +469,7 @@ async function readBoundedFile(
   return Buffer.concat(chunks, size);
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+function sameFileState(left: Dsl4FileState, right: Dsl4FileState) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&
@@ -416,9 +536,9 @@ async function enumerateLocalFiles(
 }
 
 async function inspectLocalProvider(
-  asset: Readonly<Record<string, any>>,
+  asset: Dsl4AssetLockStoryAsset,
   provider: {file: string},
-  options: Record<string, any>,
+  options: Dsl4AssetLockProviderOptions,
 ) {
   const inputPath = safeRelativePath(provider.file, `Asset ${asset.id} embedded.file`);
   const requestedPath = path.resolve(options.canonicalRoot, ...inputPath.split('/'));
@@ -462,7 +582,7 @@ async function inspectLocalProvider(
     options.fileCount += extracted.files.length;
     if (options.fileCount > options.maxFiles)
       fail('Asset lock exceeds maxAssetFiles', 'K4-ASSET-COUNT-001');
-    const files = extracted.files.map((file: any) => ({
+    const files = extracted.files.map((file) => ({
       path: file.path,
       size: file.size,
       integrity: `sha256-${sha256(file.bytes)}`,
@@ -504,9 +624,9 @@ async function inspectLocalProvider(
 }
 
 async function inspectRemoteProvider(
-  asset: Readonly<Record<string, any>>,
+  asset: Dsl4AssetLockStoryAsset,
   provider: {url: string},
-  options: Record<string, any>,
+  options: Dsl4AssetLockProviderOptions,
 ) {
   const remote = await fetchDsl4AssetRemote(provider.url, options);
   options.totalBytes += remote.bytes.length;
@@ -526,7 +646,7 @@ async function inspectRemoteProvider(
     options.fileCount += extracted.files.length;
     if (options.fileCount > options.maxFiles)
       fail('Asset lock exceeds maxAssetFiles', 'K4-ASSET-COUNT-001');
-    const files = extracted.files.map((file: any) => ({
+    const files = extracted.files.map((file) => ({
       path: file.path,
       size: file.size,
       integrity: `sha256-${sha256(file.bytes)}`,
@@ -557,9 +677,9 @@ async function inspectRemoteProvider(
 }
 
 async function inspectAssetProviders(
-  asset: Readonly<Record<string, any>>,
-  providers: Record<string, any>,
-  options: Record<string, any>,
+  asset: Dsl4AssetLockStoryAsset,
+  providers: Dsl4AssetLockProviderSet,
+  options: Dsl4AssetLockProviderOptions,
 ) {
   if (providers.embedded?.name && !providers.remote) {
     fail(
@@ -567,9 +687,10 @@ async function inspectAssetProviders(
       'K4-ASSET-PROJECT-001',
     );
   }
-  const embedded = providers.embedded?.file
-    ? await inspectLocalProvider(asset, providers.embedded, options)
-    : null;
+  const embedded =
+    providers.embedded?.file !== undefined
+      ? await inspectLocalProvider(asset, providers.embedded, options)
+      : null;
   const remote = providers.remote
     ? await inspectRemoteProvider(asset, providers.remote, options)
     : null;
@@ -597,40 +718,47 @@ async function inspectAssetProviders(
   };
 }
 
-export async function generateDsl4AssetDistributionLock(options: any) {
+export async function generateDsl4AssetDistributionLock(options: unknown) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) {
     throw new TypeError('lock generation options are required');
   }
-  if (typeof options.projectRoot !== 'string' || options.projectRoot.length === 0)
+  const input = options as Dsl4AssetDistributionLockOptions;
+  if (typeof input.projectRoot !== 'string' || input.projectRoot.length === 0)
     throw new TypeError('projectRoot must be a non-empty string');
-  if (!options.sourceFrontend || typeof options.sourceFrontend.parse !== 'function')
+  if (typeof input.assetConfig !== 'string' || input.assetConfig.length === 0)
+    throw new TypeError('assetConfig must be a non-empty string');
+  if (!input.sourceFrontend || typeof input.sourceFrontend.parse !== 'function')
     throw new TypeError('sourceFrontend must provide parse');
-  const sourceIncludesEnabled = options.sourceIncludesEnabled ?? false;
+  const projectRoot = input.projectRoot;
+  const assetConfig = input.assetConfig;
+  const sourceFrontend = input.sourceFrontend;
+  const sourceIncludesEnabled = input.sourceIncludesEnabled ?? false;
   if (typeof sourceIncludesEnabled !== 'boolean')
     throw new TypeError('sourceIncludesEnabled must be a boolean');
   const sourceLimits = resolveDsl4BuildSourceLimits({
     sourceIncludesEnabled,
-    maxSourceBytes: options.maxSourceBytes,
-    maxTotalSourceBytes: options.maxTotalSourceBytes,
+    maxSourceBytes: input.maxSourceBytes,
+    maxTotalSourceBytes: input.maxTotalSourceBytes,
   });
   const maxSourceManifestBytes = positiveLimit(
-    options.maxSourceManifestBytes,
+    input.maxSourceManifestBytes,
     'maxSourceManifestBytes',
   );
-  const maxAssetConfigBytes = positiveLimit(options.maxAssetConfigBytes, 'maxAssetConfigBytes');
-  const maxFileBytes = positiveLimit(options.maxAssetFileBytes, 'maxAssetFileBytes');
-  const maxFiles = positiveLimit(options.maxAssetFiles, 'maxAssetFiles');
-  const maxTotalBytes = positiveLimit(options.maxTotalAssetBytes, 'maxTotalAssetBytes');
-  const timeoutMs = positiveLimit(options.timeoutMs, 'timeoutMs');
-  const maxRedirects = nonNegativeLimit(options.maxRedirects, 'maxRedirects');
-  const allowedHosts = normalizeAllowedHosts(options.allowedHosts);
-  const fetchImplementation = options.fetchImplementation ?? globalThis.fetch;
+  const maxAssetConfigBytes = positiveLimit(input.maxAssetConfigBytes, 'maxAssetConfigBytes');
+  const maxFileBytes = positiveLimit(input.maxAssetFileBytes, 'maxAssetFileBytes');
+  const maxFiles = positiveLimit(input.maxAssetFiles, 'maxAssetFiles');
+  const maxTotalBytes = positiveLimit(input.maxTotalAssetBytes, 'maxTotalAssetBytes');
+  const timeoutMs = positiveLimit(input.timeoutMs, 'timeoutMs');
+  const maxRedirects = nonNegativeLimit(input.maxRedirects, 'maxRedirects');
+  const allowedHosts = normalizeAllowedHosts(input.allowedHosts);
+  const fetchImplementation = input.fetchImplementation ?? globalThis.fetch;
   if (typeof fetchImplementation !== 'function')
     throw new TypeError('fetchImplementation must be a function');
-  const fileSystem = validateFileSystem(options.fileSystem ?? defaultFileSystem);
+  const boundedFetch = fetchImplementation as Dsl4AssetLockFetchOptions['fetchImplementation'];
+  const fileSystem = validateFileSystem(input.fileSystem ?? defaultFileSystem);
   let canonicalRoot;
   try {
-    canonicalRoot = await fileSystem.realpath(path.resolve(options.projectRoot));
+    canonicalRoot = await fileSystem.realpath(path.resolve(projectRoot));
     const rootState = await fileSystem.lstat(canonicalRoot);
     if (!rootState.isDirectory()) fail('Project root is not a directory', 'K4-ASSET-ROOT-001');
   } catch (error) {
@@ -638,59 +766,63 @@ export async function generateDsl4AssetDistributionLock(options: any) {
     fail('Cannot resolve project root', 'K4-ASSET-ROOT-001', error);
   }
   const resolvedSource = await resolveDsl4ProjectSource({
-    projectRoot: options.projectRoot,
-    ...(options.sourceManifest === undefined ? {} : {sourceManifest: options.sourceManifest}),
-    ...(options.source === undefined ? {} : {source: options.source}),
-    ...(options.sourceId === undefined ? {} : {sourceId: options.sourceId}),
+    projectRoot,
+    ...(input.sourceManifest === undefined ? {} : {sourceManifest: input.sourceManifest}),
+    ...(input.source === undefined ? {} : {source: input.source}),
+    ...(input.sourceId === undefined ? {} : {sourceId: input.sourceId}),
     maxSourceManifestBytes,
     fileSystem,
-    readFile: options.readFile,
+    ...(input.readFile === undefined ? {} : {readFile: input.readFile}),
   });
   const configInput = await loadDsl4ProjectJson({
-    projectRoot: options.projectRoot,
-    inputPath: options.assetConfig,
+    projectRoot,
+    inputPath: assetConfig,
     maxBytes: maxAssetConfigBytes,
     label: 'asset distribution config',
     code: 'K4-ASSET-PROFILE-001',
     fileSystem,
-    readFile: options.readFile,
+    ...(input.readFile === undefined ? {} : {readFile: input.readFile}),
   });
   const manifest = resolvedSource.manifest;
-  const config = validateDsl4AssetDistributionConfig(configInput);
-  const source = await loadDsl4ExternalSource(options.projectRoot, manifest, {
+  const config = validateDsl4AssetDistributionConfig(configInput) as Dsl4AssetLockConfig;
+  const source = await loadDsl4ExternalSource(projectRoot, manifest, {
     maxSourceBytes: sourceLimits.maxSourceFileBytes,
     fileSystem,
-    readSource: options.readFile,
+    ...(input.readFile === undefined ? {} : {readSource: input.readFile}),
   });
   let parsed;
   if (sourceIncludesEnabled) {
-    const sourceGraph = await loadDsl4BuildSourceGraph(options.projectRoot, source, {
+    const sourceGraph = await loadDsl4BuildSourceGraph(projectRoot, source, {
       limits: {
         maxSourceBytes: sourceLimits.maxSourceFileBytes,
         maxTotalSourceBytes: sourceLimits.maxSourceGraphBytes,
-        maxSourceFiles: positiveLimit(options.maxSourceFiles, 'maxSourceFiles'),
-        maxIncludeDepth: positiveLimit(options.maxIncludeDepth, 'maxIncludeDepth'),
+        maxSourceFiles: positiveLimit(input.maxSourceFiles, 'maxSourceFiles'),
+        maxIncludeDepth: positiveLimit(input.maxIncludeDepth, 'maxIncludeDepth'),
       },
       fileSystem,
-      readSource: options.readFile,
+      ...(input.readFile === undefined ? {} : {readSource: input.readFile}),
     });
-    parsed = createDsl4SourceGraphFrontend(options.sourceFrontend).parse(sourceGraph, {
+    parsed = createDsl4SourceGraphFrontend(sourceFrontend).parse(sourceGraph, {
       featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
       sourceId: source.descriptor.sourceId,
       maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
     });
   } else {
-    parsed = options.sourceFrontend.parse(source.descriptor.text, {
+    parsed = sourceFrontend.parse(source.descriptor.text, {
       sourceId: source.descriptor.sourceId,
     });
   }
-  const parseResult = parsed as Readonly<Record<string, any>>;
+  const parseResult = parsed as Dsl4AssetLockParseResult;
   if (!parseResult.ok)
     fail(
-      parseResult.diagnostics?.[0]?.message ?? 'DSL 4.0 source validation failed',
-      parseResult.diagnostics?.[0]?.code ?? 'K4-ASSET-LOCK-001',
+      typeof parseResult.diagnostics?.[0]?.message === 'string'
+        ? parseResult.diagnostics[0].message
+        : 'DSL 4.0 source validation failed',
+      typeof parseResult.diagnostics?.[0]?.code === 'string'
+        ? parseResult.diagnostics[0].code
+        : 'K4-ASSET-LOCK-001',
     );
-  const storyAssets = parseResult.storyDocument.assets ?? {};
+  const storyAssets = parseResult.storyDocument?.assets ?? {};
   for (const assetId of Object.keys(config.providers))
     if (!Object.hasOwn(storyAssets, assetId))
       fail(`Provider configuration references unknown asset ${assetId}`, 'K4-ASSET-PROVIDER-001');
@@ -699,7 +831,7 @@ export async function generateDsl4AssetDistributionLock(options: any) {
       if (!Object.hasOwn(storyAssets, assetId))
         fail(`Profile references unknown asset ${assetId}`, 'K4-ASSET-PROFILE-001');
   const optionsForProviders = {
-    projectRoot: options.projectRoot,
+    projectRoot,
     canonicalRoot,
     fileSystem,
     maxFileBytes,
@@ -711,7 +843,7 @@ export async function generateDsl4AssetDistributionLock(options: any) {
     timeoutMs,
     maxRedirects,
     maxBytes: maxFileBytes,
-    fetchImplementation,
+    fetchImplementation: boundedFetch,
     poseArchiveExtractor: createDsl4PoseArchiveExtractor({
       limits: {
         maxArchiveBytes: maxFileBytes,
@@ -721,16 +853,19 @@ export async function generateDsl4AssetDistributionLock(options: any) {
         maxTotalExpandedBytes: maxTotalBytes,
         maxCompressionRatio: defaultMaxCompressionRatio,
       },
-      subtleCrypto: options.subtleCrypto,
+      subtleCrypto: input.subtleCrypto,
     }),
   };
-  const assets = {} as Record<string, any>;
-  for (const assetId of Object.keys(storyAssets).sort())
+  const assets: Record<string, unknown> = {};
+  for (const assetId of Object.keys(storyAssets).sort()) {
+    const storyAsset = storyAssets[assetId];
+    if (!storyAsset) fail(`Story asset ${assetId} is missing`, 'K4-ASSET-LOCK-001');
     assets[assetId] = await inspectAssetProviders(
-      storyAssets[assetId],
-      declaredProviders(assetId, storyAssets[assetId], config.providers[assetId]),
+      storyAsset,
+      declaredProviders(assetId, storyAsset, config.providers[assetId]),
       optionsForProviders,
     );
+  }
   const lock = validateDsl4AssetDistributionLock({formatVersion: 1, assets});
   return deepFreeze({
     lock,
@@ -739,7 +874,10 @@ export async function generateDsl4AssetDistributionLock(options: any) {
   });
 }
 
-export async function generateDsl4AssetDistributionLockFile(options: any) {
+export async function generateDsl4AssetDistributionLockFile(options: unknown) {
+  if (!isRecord(options) || typeof options.output !== 'string') {
+    throw new TypeError('output must name a file');
+  }
   const result = await generateDsl4AssetDistributionLock(options);
   const outputPath = path.resolve(options.output);
   const outputDirectory = path.dirname(outputPath);

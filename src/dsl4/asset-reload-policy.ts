@@ -11,6 +11,52 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface AssetFile {
+  readonly path: string;
+  readonly size: number;
+  readonly integrity: string;
+}
+
+type AssetSource =
+  | Readonly<{type: 'file'; inputPath: string; mode: string; files: readonly AssetFile[]}>
+  | Readonly<{
+      type: 'remote';
+      url: string;
+      contentType: string;
+      size: number;
+      integrity: string;
+    }>
+  | Readonly<{type: 'project'; name: string}>;
+
+interface ReloadAsset {
+  readonly id: string;
+  readonly kind: string;
+  readonly loading?: unknown;
+  readonly target?: unknown;
+  readonly bitmapResolution?: unknown;
+  readonly source: AssetSource;
+}
+
+type ReloadSource = ReturnType<typeof graphSource> | ReturnType<typeof contentSource>;
+
+interface ReloadSnapshot {
+  readonly kind: 'Dsl4AssetReloadSnapshot';
+  readonly formatVersion: 1;
+  readonly structuralFingerprint: string;
+  readonly sourceIntegrity: string;
+  readonly graphIntegrity: string;
+  readonly contentIntegrity: string;
+  readonly graph: readonly ReloadAsset[];
+  readonly content: readonly ReloadAsset[];
+  readonly dependencies: Readonly<{
+    scenes: Readonly<Record<string, Readonly<{all: readonly string[]}>>>;
+  }>;
+}
+
+interface AssetBundleManifest {
+  readonly assets: readonly ReloadAsset[];
+}
+
 function integrity(value: unknown, name: string) {
   if (typeof value !== 'string' || !sha256SRI.test(value)) {
     throw new TypeError(`${name} must be a canonical SHA-256 SRI value`);
@@ -32,13 +78,13 @@ function canonicalJson(value: unknown) {
   return JSON.stringify(canonicalValue(value));
 }
 
-function graphSource(asset: Readonly<Record<string, any>>) {
+function graphSource(asset: ReloadAsset) {
   if (asset.source.type === 'file') {
     return {
       type: 'file',
       inputPath: asset.source.inputPath,
       mode: asset.source.mode,
-      files: asset.source.files.map((file: Readonly<Record<string, any>>) => file.path),
+      files: asset.source.files.map((file) => file.path),
     };
   }
   if (asset.source.type === 'remote') {
@@ -53,11 +99,11 @@ function graphSource(asset: Readonly<Record<string, any>>) {
   return {type: 'project', name: asset.source.name};
 }
 
-function contentSource(asset: Readonly<Record<string, any>>) {
+function contentSource(asset: ReloadAsset) {
   if (asset.source.type !== 'file') return graphSource(asset);
   return {
     ...graphSource(asset),
-    files: asset.source.files.map((file: Readonly<Record<string, any>>) => ({
+    files: asset.source.files.map((file) => ({
       path: file.path,
       size: file.size,
       integrity: file.integrity,
@@ -65,7 +111,7 @@ function contentSource(asset: Readonly<Record<string, any>>) {
   };
 }
 
-function normalizeAsset(asset: Readonly<Record<string, any>>, source: Function) {
+function normalizeAsset(asset: ReloadAsset, source: (asset: ReloadAsset) => ReloadSource) {
   return {
     id: asset.id,
     kind: asset.kind,
@@ -76,11 +122,11 @@ function normalizeAsset(asset: Readonly<Record<string, any>>, source: Function) 
   };
 }
 
-function assetsById(assets: ReadonlyArray<Readonly<Record<string, any>>>) {
+function assetsById(assets: readonly ReloadAsset[]) {
   return new Map(assets.map((asset) => [String(asset.id), asset]));
 }
 
-function validateSnapshot(snapshot: Readonly<Record<string, any>>) {
+function validateSnapshot(snapshot: Readonly<Record<string, unknown>>): ReloadSnapshot {
   if (
     !isRecord(snapshot) ||
     snapshot.kind !== 'Dsl4AssetReloadSnapshot' ||
@@ -95,7 +141,7 @@ function validateSnapshot(snapshot: Readonly<Record<string, any>>) {
   integrity(snapshot.sourceIntegrity, 'snapshot.sourceIntegrity');
   integrity(snapshot.graphIntegrity, 'snapshot.graphIntegrity');
   integrity(snapshot.contentIntegrity, 'snapshot.contentIntegrity');
-  return snapshot as Readonly<Record<string, any>>;
+  return snapshot as unknown as ReloadSnapshot;
 }
 
 /**
@@ -118,7 +164,10 @@ export async function createDsl4AssetReloadSnapshot({
   if (storyDocument.kind !== 'StoryDocument' || storyDocument.version !== '4.0') {
     throw new TypeError('asset reload snapshot requires a DSL 4.0 StoryDocument');
   }
-  const manifest = validateDsl4AssetBundleManifest(storyDocument, inputManifest);
+  const manifest = validateDsl4AssetBundleManifest(
+    storyDocument,
+    inputManifest,
+  ) as unknown as AssetBundleManifest;
   const graph = manifest.assets.map((asset) => normalizeAsset(asset, graphSource));
   const content = manifest.assets.map((asset) => normalizeAsset(asset, contentSource));
   const graphIntegrity = await computeDsl4Sha256Integrity(
@@ -142,28 +191,25 @@ export async function createDsl4AssetReloadSnapshot({
   });
 }
 
-function affectedScenes(snapshot: Readonly<Record<string, any>>, ids: ReadonlySet<string>) {
+function affectedScenes(snapshot: ReloadSnapshot, ids: ReadonlySet<string>) {
   return Object.entries(snapshot.dependencies.scenes)
-    .filter(([, scene]) =>
-      (scene as Readonly<Record<string, any>>).all.some((assetId: string) => ids.has(assetId)),
-    )
+    .filter(([, scene]) => scene.all.some((assetId) => ids.has(assetId)))
     .map(([sceneId]) => sceneId)
     .sort();
 }
 
-function changedAsset(
-  before: Readonly<Record<string, any>> | null,
-  after: Readonly<Record<string, any>>,
-) {
+function changedAsset(before: ReloadAsset | null, after: ReloadAsset) {
   const beforeFiles = before?.source.type === 'file' ? before.source.files : [];
   const afterFiles = after.source.type === 'file' ? after.source.files : [];
+  const beforeSingleFile = beforeFiles.length === 1 ? beforeFiles[0] : null;
+  const afterSingleFile = afterFiles.length === 1 ? afterFiles[0] : null;
   return {
     id: after.id,
     kind: after.kind,
     change: before ? 'content' : 'added',
     fileCount: afterFiles.length,
-    beforeIntegrity: beforeFiles.length === 1 ? beforeFiles[0].integrity : before ? 'bundle' : null,
-    afterIntegrity: afterFiles.length === 1 ? afterFiles[0].integrity : 'bundle',
+    beforeIntegrity: beforeSingleFile ? beforeSingleFile.integrity : before ? 'bundle' : null,
+    afterIntegrity: afterSingleFile ? afterSingleFile.integrity : 'bundle',
   };
 }
 

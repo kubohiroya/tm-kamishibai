@@ -59,6 +59,95 @@ function archiveBytes(value: unknown, name: string) {
   return new Uint8Array(value);
 }
 
+type Dsl4BrowserScratchVariable = [name: string, value: unknown, isCloud?: boolean];
+
+interface Dsl4BrowserDistributionMonitor {
+  id: string;
+  mode: string;
+  opcode: string;
+  params: Readonly<{VARIABLE: string}>;
+  spriteName: null;
+  value: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  visible: boolean;
+  sliderMin: number;
+  sliderMax: number;
+  isDiscrete: boolean;
+}
+
+interface Dsl4BrowserDistributionStageTarget extends Record<string, unknown> {
+  isStage?: unknown;
+  variables?: Record<string, Dsl4BrowserScratchVariable>;
+}
+
+interface Dsl4BrowserDistributionProject extends Record<string, unknown> {
+  targets: Dsl4BrowserDistributionStageTarget[];
+  monitors?: Dsl4BrowserDistributionMonitor[];
+  extensionStorage?: {
+    kubohiroyakamishibai4?: {
+      components?: Record<string, unknown>;
+    };
+    kubohiroyakamishibairuntime4?: unknown;
+  };
+}
+
+interface Dsl4BrowserDistributionAsset {
+  source?: {type?: unknown};
+}
+
+interface Dsl4BrowserDistributionRuntimeComponent {
+  storyDocument: Readonly<Record<string, unknown>>;
+  sourceDescriptor: Readonly<Record<string, unknown>> & {displayName: string};
+  assetBundle: Readonly<{
+    manifest: Readonly<{assets: ReadonlyArray<Dsl4BrowserDistributionAsset>}>;
+  }>;
+}
+
+interface Dsl4BrowserDistributionArtifactResult {
+  artifact: unknown;
+}
+
+interface Dsl4BrowserDistributionDocument {
+  createElement(tag: string): unknown;
+  body?: {appendChild?(element: unknown): unknown};
+}
+
+interface Dsl4BrowserDistributionUrl {
+  createObjectURL(value: unknown): string;
+  revokeObjectURL(value: string): unknown;
+}
+
+interface Dsl4BrowserDistributionAnchor {
+  href: string;
+  download: string;
+  style: {display: string};
+  click(): unknown;
+  remove?(): unknown;
+}
+
+interface Dsl4BrowserDistributionWritable {
+  write(bytes: Uint8Array): unknown | Promise<unknown>;
+  close(): unknown | Promise<unknown>;
+  abort?(): unknown | Promise<unknown>;
+}
+
+interface Dsl4BrowserDistributionSaveHandle {
+  createWritable(options: {keepExistingData: boolean}): unknown | Promise<unknown>;
+}
+
+interface Dsl4BrowserDistributionGlobal {
+  document?: unknown;
+  URL?: unknown;
+  Blob?: new (parts: BlobPart[], options?: {type: string}) => unknown;
+  isSecureContext?: boolean;
+  self?: unknown;
+  top?: unknown;
+  showSaveFilePicker?(options: unknown): unknown;
+}
+
 function inspectProjectFiles(
   projectFiles: unknown,
   maxArchiveEntries: number,
@@ -111,7 +200,7 @@ function parseProject(bytes: Uint8Array, maxProjectBytes: number) {
   if (!isRecord(project) || !Array.isArray(project.targets)) {
     fail('K4-BROWSER-BUILD-PROJECT', 'The open project.json must contain a target list');
   }
-  return project as Record<string, any>;
+  return project as Dsl4BrowserDistributionProject;
 }
 
 function requireRuntimeComponent(runtimeComponent: unknown) {
@@ -126,7 +215,7 @@ function requireRuntimeComponent(runtimeComponent: unknown) {
       'The latest validated browser preview generation is unavailable',
     );
   }
-  return runtimeComponent as Readonly<Record<string, any>>;
+  return runtimeComponent as unknown as Dsl4BrowserDistributionRuntimeComponent;
 }
 
 const poseFeedbackVariables = Object.freeze([
@@ -142,7 +231,11 @@ const poseFeedbackVariables = Object.freeze([
   }),
 ]);
 
-function ensureStageVariable(variables: Record<string, any>, preferredId: string, name: string) {
+function ensureStageVariable(
+  variables: Record<string, Dsl4BrowserScratchVariable>,
+  preferredId: string,
+  name: string,
+) {
   const existing = Object.entries(variables).find(
     ([, value]) => Array.isArray(value) && value[0] === name,
   );
@@ -166,7 +259,7 @@ function ensureStageVariable(variables: Record<string, any>, preferredId: string
   return id;
 }
 
-function ensureProductionStageContract(project: Record<string, any>) {
+function ensureProductionStageContract(project: Dsl4BrowserDistributionProject) {
   const stage = project.targets.find(
     (target: unknown) => isRecord(target) && target.isStage === true,
   );
@@ -176,11 +269,7 @@ function ensureProductionStageContract(project: Record<string, any>) {
   if (!isRecord(stage.variables)) stage.variables = {};
   if (!Array.isArray(project.monitors)) project.monitors = [];
   for (const definition of poseFeedbackVariables) {
-    const id = ensureStageVariable(
-      stage.variables as Record<string, any>,
-      definition.preferredId,
-      definition.name,
-    );
+    const id = ensureStageVariable(stage.variables, definition.preferredId, definition.name);
     const monitor = {
       id,
       mode: 'slider',
@@ -206,9 +295,9 @@ function ensureProductionStageContract(project: Record<string, any>) {
 }
 
 function installDistributionComponent(
-  project: Record<string, any>,
-  component: Readonly<Record<string, any>>,
-  artifact: Readonly<Record<string, any>>,
+  project: Dsl4BrowserDistributionProject,
+  component: Dsl4BrowserDistributionRuntimeComponent,
+  artifact: unknown,
 ) {
   const output = structuredClone(project);
   ensureProductionStageContract(output);
@@ -280,9 +369,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
     throw new TypeError('network must be allowed or forbidden');
   }
   const component = requireRuntimeComponent(options.runtimeComponent);
-  const manifestAssets = component.assetBundle.manifest.assets as ReadonlyArray<
-    Record<string, any>
-  >;
+  const manifestAssets = component.assetBundle.manifest.assets;
   const remoteAssetCount = manifestAssets.filter(
     (asset) => asset?.source?.type === 'remote',
   ).length;
@@ -310,7 +397,7 @@ export async function createDsl4BrowserDistributionSb3(options: {
   const outputProject = installDistributionComponent(
     project,
     component,
-    (artifactResult as Readonly<Record<string, any>>).artifact,
+    (artifactResult as unknown as Dsl4BrowserDistributionArtifactResult).artifact,
   );
   const verified = await loadDsl4RuntimeComponent(outputProject, options.sourceFrontend, {
     maxSourceBytes,
@@ -373,14 +460,14 @@ export function downloadDsl4BrowserDistributionSb3({
 }: {
   bytes: unknown;
   filename: string;
-  globalObject?: Record<string, any>;
+  globalObject?: Dsl4BrowserDistributionGlobal;
 }) {
   const bytes = archiveBytes(bytesInput, 'distribution.sb3');
   if (typeof filename !== 'string' || !filename.endsWith('.sb3')) {
     throw new TypeError('distribution filename must end with .sb3');
   }
-  const document = globalObject.document as Record<string, any>;
-  const URL = globalObject.URL as Record<string, any>;
+  const document = globalObject.document as Dsl4BrowserDistributionDocument;
+  const URL = globalObject.URL as Dsl4BrowserDistributionUrl;
   const Blob = globalObject.Blob;
   if (
     !isRecord(document) ||
@@ -391,13 +478,13 @@ export function downloadDsl4BrowserDistributionSb3({
   ) {
     fail('K4-BROWSER-BUILD-DOWNLOAD', 'This browser cannot download the generated SB3');
   }
-  const browserDocument = document as Record<string, any>;
-  const browserURL = URL as Record<string, any>;
+  const browserDocument = document;
+  const browserURL = URL;
   const anchorCandidate = browserDocument.createElement('a');
   if (!isRecord(anchorCandidate) || typeof anchorCandidate.click !== 'function') {
     fail('K4-BROWSER-BUILD-DOWNLOAD', 'This browser cannot create an SB3 download');
   }
-  const anchor = anchorCandidate as Record<string, any>;
+  const anchor = anchorCandidate as unknown as Dsl4BrowserDistributionAnchor;
   const objectUrl = browserURL.createObjectURL(
     new Blob([bytes], {type: 'application/x.scratch.sb3'}),
   );
@@ -423,7 +510,7 @@ export function requestDsl4BrowserDistributionSaveTarget({
   globalObject = globalThis,
 }: {
   filename: string;
-  globalObject?: Record<string, any>;
+  globalObject?: Dsl4BrowserDistributionGlobal;
 }) {
   if (typeof filename !== 'string' || !filename.endsWith('.sb3')) {
     throw new TypeError('distribution filename must end with .sb3');
@@ -481,7 +568,7 @@ export async function saveDsl4BrowserDistributionSb3({
   bytes: unknown;
   filename: string;
   target?: unknown;
-  globalObject?: Record<string, any>;
+  globalObject?: Dsl4BrowserDistributionGlobal;
 }) {
   const bytes = archiveBytes(bytesInput, 'distribution.sb3');
   if (isRecord(target) && target.method === 'cancelled') {
@@ -490,17 +577,18 @@ export async function saveDsl4BrowserDistributionSb3({
   if (!isRecord(target) || target.method !== 'file-system') {
     return downloadDsl4BrowserDistributionSb3({bytes, filename, globalObject});
   }
-  const handle = target.handle as Record<string, any>;
-  let writable;
+  const handle = target.handle as Dsl4BrowserDistributionSaveHandle;
+  let writable: Dsl4BrowserDistributionWritable | undefined;
   try {
-    writable = await handle.createWritable({keepExistingData: false});
+    const writableCandidate = await handle.createWritable({keepExistingData: false});
     if (
-      !isRecord(writable) ||
-      typeof writable.write !== 'function' ||
-      typeof writable.close !== 'function'
+      !isRecord(writableCandidate) ||
+      typeof writableCandidate.write !== 'function' ||
+      typeof writableCandidate.close !== 'function'
     ) {
       fail('K4-BROWSER-BUILD-SAVE', 'The selected destination is not writable');
     }
+    writable = writableCandidate as unknown as Dsl4BrowserDistributionWritable;
     await writable.write(bytes);
     await writable.close();
   } catch (error) {

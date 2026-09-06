@@ -33,12 +33,22 @@ function validateLifecycle(lifecycle: unknown) {
       'assetLifecycle must provide prepare, setLoading, releaseAssets, and release methods',
     );
   }
-  return lifecycle as {
-    prepare: Function;
-    setLoading: Function;
-    releaseAssets: Function;
-    release: Function;
-  };
+  return lifecycle as Dsl4AssetPreloadLifecycle;
+}
+
+export interface Dsl4AssetPreloadLifecycle {
+  prepare(
+    payload: Readonly<Record<string, unknown>>,
+    context: Readonly<{signal: AbortSignal; generation: number; sceneId: string | null}>,
+  ): unknown;
+  setLoading(
+    payload: Readonly<Record<string, unknown>>,
+    context: Readonly<{signal: AbortSignal; generation: number; sceneId: string | null}>,
+  ): unknown;
+  releaseAssets(
+    payload: Readonly<{assetIds: readonly string[]; reason: string; sceneId: string | null}>,
+  ): unknown;
+  release(payload: Readonly<{reason: string}>): unknown;
 }
 
 export type Readiness =

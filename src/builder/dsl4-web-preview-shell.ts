@@ -1,4 +1,4 @@
-import type {Dsl4PreviewDocument} from '../dsl4/preview-dom.js';
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
@@ -95,7 +95,7 @@ function requireElement(value: unknown, name: string) {
   if (!isRecord(value) || typeof value.appendChild !== 'function') {
     throw new TypeError(`${name} must be a DOM element`);
   }
-  return value as any;
+  return value as unknown as Dsl4PreviewElement;
 }
 
 function requireDocument(value: unknown) {
@@ -129,24 +129,204 @@ function collectionSize(value: unknown) {
   return isRecord(value) ? Object.keys(value).length : 0;
 }
 
-function reloadDiagnostic(diagnostic: Readonly<Record<string, any>>) {
+interface WebPreviewDiagnostic {
+  readonly formatVersion?: unknown;
+  readonly version?: unknown;
+  readonly code?: unknown;
+  readonly severity?: unknown;
+  readonly message?: unknown;
+  readonly sourceId?: unknown;
+  readonly range?: unknown;
+  readonly storyPath?: unknown;
+  readonly path?: unknown;
+  readonly related?: unknown;
+  readonly displayName?: unknown;
+  readonly channel?: unknown;
+}
+
+interface WebPreviewStoryScene {
+  readonly actions?: readonly unknown[];
+}
+
+interface WebPreviewStoryDocument {
+  readonly scenes?: readonly WebPreviewStoryScene[];
+  readonly assets?: unknown;
+  readonly assetReferences?: unknown;
+}
+
+interface WebPreviewSourceSnapshot {
+  readonly integrity?: unknown;
+  readonly displayName?: unknown;
+}
+
+interface WebPreviewSourceResult {
+  readonly ok?: unknown;
+  readonly canonicalSource?: unknown;
+  readonly diagnostics?: readonly WebPreviewDiagnostic[];
+  readonly sourceSnapshot?: WebPreviewSourceSnapshot;
+  readonly storyDocument?: WebPreviewStoryDocument;
+}
+
+interface WebPreviewSourceDetails {
+  readonly integrity: string;
+  readonly sourceDisplayName: string;
+  readonly counts: Readonly<{scenes: number; actions: number; assets: number}>;
+  readonly warningCount: number;
+}
+
+interface WebPreviewChoiceState {
+  readonly enabled?: unknown;
+  readonly reason?: unknown;
+}
+
+interface WebPreviewReloadChoices {
+  readonly storyStart?: WebPreviewChoiceState;
+  readonly currentScene?: WebPreviewChoiceState;
+  readonly currentAction?: WebPreviewChoiceState;
+}
+
+interface WebPreviewProtocolRevision {
+  readonly integrity?: unknown;
+}
+
+interface WebPreviewCandidate {
+  readonly options?: unknown;
+}
+
+interface WebPreviewProtocolEvent {
+  readonly type?: unknown;
+  readonly diagnostics?: readonly WebPreviewDiagnostic[];
+  readonly sourceIntegrity?: unknown;
+  readonly candidate?: WebPreviewCandidate;
+  readonly current?: WebPreviewProtocolRevision;
+  readonly revision?: unknown;
+}
+
+interface WebPreviewSourceState {
+  readonly started?: unknown;
+  readonly status?: string;
+  readonly sourceDisplayName?: unknown;
+  readonly lastPublication?: {
+    readonly kind?: unknown;
+    readonly ok?: unknown;
+    readonly integrity?: unknown;
+  };
+}
+
+interface WebPreviewProtocolState {
+  readonly current?: WebPreviewProtocolRevision | null;
+  readonly candidate?: unknown;
+  readonly pendingStages?: unknown;
+  readonly status?: string;
+}
+
+interface WebPreviewCoordinatorState {
+  readonly source: WebPreviewSourceState;
+  readonly protocol: WebPreviewProtocolState;
+}
+
+interface WebPreviewAssetTransaction {
+  readonly diagnostic?: unknown;
+  readonly candidate?: unknown;
+  readonly status?: string;
+}
+
+interface WebPreviewAssetPipelineState {
+  readonly transaction?: WebPreviewAssetTransaction | null;
+}
+
+interface WebPreviewAssetPipelineOptions {
+  readonly structuralFingerprint: string;
+  readonly adapterOptions: unknown;
+  readonly prepareGeneration: WebPreviewCallback;
+  readonly restartGeneration?: WebPreviewCallback;
+  readonly [name: string]: unknown;
+}
+
+type WebPreviewCallback = (...values: unknown[]) => unknown;
+type WebPreviewAsyncCallback = (...values: unknown[]) => Promise<unknown> | unknown;
+
+interface WebPreviewOptions {
+  readonly assetPipelineOptions?: unknown;
+  readonly capabilities?: unknown;
+  readonly createAssetPipeline?: unknown;
+  readonly createCoordinator?: unknown;
+  readonly createReloadSurface?: unknown;
+  readonly document?: unknown;
+  readonly debugExecution?: unknown;
+  readonly environment?: unknown;
+  readonly featureFlags?: unknown;
+  readonly maxSourceBytes?: unknown;
+  readonly maxSourceFiles?: unknown;
+  readonly maxTotalSourceBytes?: unknown;
+  readonly maxIncludeDepth?: unknown;
+  readonly mount?: unknown;
+  readonly onError?: unknown;
+  readonly onDiagnostic?: unknown;
+  readonly onDistributionBuildState?: unknown;
+  readonly onProjectRoot?: unknown;
+  readonly prepareSourceResult?: unknown;
+  readonly protocolSession?: unknown;
+  readonly previewFormatTime?: unknown;
+  readonly previewReducedMotion?: unknown;
+  readonly previewSafeArea?: unknown;
+  readonly previewStorage?: unknown;
+  readonly previewViewport?: unknown;
+  readonly presentation?: unknown;
+  readonly sessionId?: unknown;
+  readonly sourceFrontend?: unknown;
+  readonly sourceOptions?: unknown;
+}
+
+interface WebPreviewProjectRoot {
+  readonly dsl4SourceOnly?: unknown;
+}
+
+interface WebPreviewReloadRequest {
+  readonly actualAnchor?: unknown;
+}
+
+interface WebPreviewView {
+  readonly formatVersion: 1;
+  readonly phase: string;
+  readonly sourceDisplayName: string;
+  readonly currentIntegrity: unknown;
+  readonly candidateIntegrity: unknown;
+  readonly validationStatus: string;
+  readonly counts: unknown;
+  readonly anchor: unknown;
+  readonly choices: unknown;
+  readonly warningCount: number;
+  readonly changeCategories: readonly string[];
+  readonly safeStatusMessage: string;
+}
+
+function reloadDiagnostic(diagnostic: WebPreviewDiagnostic) {
+  const keys = [
+    'formatVersion',
+    'version',
+    'code',
+    'severity',
+    'message',
+    'sourceId',
+    'range',
+    'storyPath',
+    'path',
+    'related',
+  ] as const satisfies readonly (keyof WebPreviewDiagnostic)[];
   return deepFreeze(
     Object.fromEntries(
-      [
-        'formatVersion',
-        'version',
-        'code',
-        'severity',
-        'message',
-        'sourceId',
-        'range',
-        'storyPath',
-        'path',
-        'related',
-      ]
-        .filter((key) => Object.hasOwn(diagnostic, key))
-        .map((key) => [key, diagnostic[key]]),
+      keys.filter((key) => Object.hasOwn(diagnostic, key)).map((key) => [key, diagnostic[key]]),
     ),
+  );
+}
+
+function isReloadChoices(value: unknown): value is WebPreviewReloadChoices {
+  return (
+    isRecord(value) &&
+    isRecord(value.storyStart) &&
+    isRecord(value.currentScene) &&
+    isRecord(value.currentAction)
   );
 }
 
@@ -190,7 +370,7 @@ interface PreviewCoordinatorSurface {
   commit(choice: unknown, context?: unknown): unknown;
   defer(): unknown;
   dispose(): unknown;
-  getState(): Readonly<Record<string, any>>;
+  getState(): WebPreviewCoordinatorState;
   whenIdle(): Promise<unknown>;
 }
 
@@ -199,7 +379,7 @@ interface PreviewAssetPipelineSurface {
   updateSource(context: unknown): unknown;
   pollNow(): unknown;
   dispose(): unknown;
-  getState(): Readonly<Record<string, any>>;
+  getState(): WebPreviewAssetPipelineState;
   whenIdle(): Promise<unknown>;
 }
 
@@ -279,7 +459,7 @@ function validateAssetPipelineOptions(value: unknown, requireRestart: boolean) {
       'assetPipelineOptions.restartGeneration is required with the shared reload overlay',
     );
   }
-  return value as Record<string, any>;
+  return value as unknown as WebPreviewAssetPipelineOptions;
 }
 
 function geometry(value: unknown, fallback: Readonly<Record<string, number>>) {
@@ -318,11 +498,12 @@ function reloadAvailability(value: unknown) {
 /** Mount the development-only browser project picker and connect it to the reload shell. */
 export function createDsl4WebPreviewShell(input: unknown = {}) {
   if (!isRecord(input)) throw new TypeError('web preview shell options must be an object');
-  const unknown = Object.keys(input).filter((key) => !optionKeys.has(key));
-  if (unknown.length > 0) {
-    throw new TypeError(`Unknown web preview shell option: ${unknown.sort().join(', ')}`);
+  const options = input as WebPreviewOptions;
+  const unknownKeys = Object.keys(input).filter((key) => !optionKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new TypeError(`Unknown web preview shell option: ${unknownKeys.sort().join(', ')}`);
   }
-  const featureFlags = resolveDsl4FeatureFlags(input.featureFlags);
+  const featureFlags = resolveDsl4FeatureFlags(options.featureFlags);
   if (!featureFlags.dsl4WebPreviewAdapter) {
     const snapshot = deepFreeze({version: 1, enabled: false, disposed: false, featureFlags});
     return Object.freeze({
@@ -338,67 +519,71 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   if (missing.length > 0) {
     throw new TypeError(`Web Preview requires options: ${missing.sort().join(', ')}`);
   }
-  if (input.environment !== 'development') {
+  if (options.environment !== 'development') {
     throw new TypeError('Web Preview shell is available only in the development environment');
   }
-  const document = requireDocument(input.document);
-  const mount = requireElement(input.mount, 'mount');
-  const presentation = input.presentation ?? 'full';
+  const document = requireDocument(options.document);
+  const mount = requireElement(options.mount, 'mount');
+  const presentation = options.presentation ?? 'full';
   if (!['full', 'runtime'].includes(String(presentation))) {
     throw new TypeError('Web Preview presentation must be full or runtime');
   }
-  if (input.onError !== undefined && typeof input.onError !== 'function') {
+  if (options.onError !== undefined && typeof options.onError !== 'function') {
     throw new TypeError('onError must be a function');
   }
-  if (input.onDiagnostic !== undefined && typeof input.onDiagnostic !== 'function') {
+  if (options.onDiagnostic !== undefined && typeof options.onDiagnostic !== 'function') {
     throw new TypeError('onDiagnostic must be a function');
   }
   if (
-    input.onDistributionBuildState !== undefined &&
-    typeof input.onDistributionBuildState !== 'function'
+    options.onDistributionBuildState !== undefined &&
+    typeof options.onDistributionBuildState !== 'function'
   ) {
     throw new TypeError('onDistributionBuildState must be a function');
   }
-  if (input.onProjectRoot !== undefined && typeof input.onProjectRoot !== 'function') {
+  if (options.onProjectRoot !== undefined && typeof options.onProjectRoot !== 'function') {
     throw new TypeError('onProjectRoot must be a function');
   }
-  if (input.prepareSourceResult !== undefined && typeof input.prepareSourceResult !== 'function') {
+  if (
+    options.prepareSourceResult !== undefined &&
+    typeof options.prepareSourceResult !== 'function'
+  ) {
     throw new TypeError('prepareSourceResult must be a function');
   }
   if (
     featureFlags.dsl4Debugger &&
-    (!isRecord(input.debugExecution) ||
-      typeof input.debugExecution.beforeAction !== 'function' ||
-      typeof input.debugExecution.getState !== 'function' ||
-      typeof input.debugExecution.subscribe !== 'function' ||
-      typeof input.debugExecution.setMode !== 'function' ||
-      typeof input.debugExecution.resume !== 'function')
+    (!isRecord(options.debugExecution) ||
+      typeof options.debugExecution.beforeAction !== 'function' ||
+      typeof options.debugExecution.getState !== 'function' ||
+      typeof options.debugExecution.subscribe !== 'function' ||
+      typeof options.debugExecution.setMode !== 'function' ||
+      typeof options.debugExecution.resume !== 'function')
   ) {
     throw new TypeError('Web Preview requires debugExecution when dsl4Debugger is enabled');
   }
-  const prepareSourceResult = input.prepareSourceResult;
-  const projectRootObserver = input.onProjectRoot;
-  const distributionBuildObserver = input.onDistributionBuildState;
-  const errorObserver = input.onError as Function | undefined;
-  const diagnosticObserver = input.onDiagnostic as Function | undefined;
-  const createCoordinator = input.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
+  const prepareSourceResult = options.prepareSourceResult as WebPreviewAsyncCallback | undefined;
+  const projectRootObserver = options.onProjectRoot as WebPreviewAsyncCallback | undefined;
+  const distributionBuildObserver = options.onDistributionBuildState as
+    WebPreviewCallback | undefined;
+  const errorObserver = options.onError as WebPreviewCallback | undefined;
+  const diagnosticObserver = options.onDiagnostic as WebPreviewCallback | undefined;
+  const createCoordinator = options.createCoordinator ?? createDsl4BrowserPreviewCoordinator;
   if (typeof createCoordinator !== 'function') {
     throw new TypeError('createCoordinator must be a function');
   }
   const assetPipelineOptions = featureFlags.dsl4WebPreviewAssetLiveReload
     ? validateAssetPipelineOptions(
-        input.assetPipelineOptions,
+        options.assetPipelineOptions,
         featureFlags.dsl4PreviewReloadOverlay,
       )
     : null;
   const createAssetPipeline = featureFlags.dsl4WebPreviewAssetLiveReload
-    ? (input.createAssetPipeline ?? createDsl4BrowserAssetReloadPipeline)
+    ? (options.createAssetPipeline ?? createDsl4BrowserAssetReloadPipeline)
     : null;
   if (createAssetPipeline !== null && typeof createAssetPipeline !== 'function') {
     throw new TypeError('createAssetPipeline must be a function');
   }
   const createReloadSurface = featureFlags.dsl4PreviewReloadOverlay
-    ? (input.createReloadSurface ?? createDsl4PreviewReloadSurface)
+    ? (options.createReloadSurface ?? createDsl4PreviewReloadSurface)
     : null;
   if (createReloadSurface !== null && typeof createReloadSurface !== 'function') {
     throw new TypeError('createReloadSurface must be a function');
@@ -461,12 +646,12 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   let disposed = false;
   let diagnosticCode: string | null = null;
   let sourceDisplayName = 'story.kamishibai.yaml';
-  let activeDetails: Readonly<Record<string, any>> | null = null;
-  let candidateDetails: Readonly<Record<string, any>> | null = null;
+  let activeDetails: WebPreviewSourceDetails | null = null;
+  let candidateDetails: WebPreviewSourceDetails | null = null;
   let disposePromise: Promise<unknown> | null = null;
-  const detailsByIntegrity = new Map();
-  let selectedProjectRoot: Record<string, any> | null = null;
-  let latestValidSourceResult: Readonly<Record<string, any>> | null = null;
+  const detailsByIntegrity = new Map<unknown, WebPreviewSourceDetails>();
+  let selectedProjectRoot: WebPreviewProjectRoot | null = null;
+  let latestValidSourceResult: WebPreviewSourceResult | null = null;
   let assetPipeline: PreviewAssetPipelineSurface | null = null;
   let assetPipelineStarted = false;
   let assetSourceQueue = Promise.resolve();
@@ -498,7 +683,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     }
   }
 
-  function queueAssetSource(result: Readonly<Record<string, any>>) {
+  function queueAssetSource(result: WebPreviewSourceResult) {
     if (!assetPipeline || !assetPipelineOptions || !selectedProjectRoot || disposed) {
       return Promise.resolve();
     }
@@ -518,7 +703,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     return assetSourceQueue;
   }
 
-  async function prepareIncludedSourceAssets(result: Readonly<Record<string, any>>) {
+  async function prepareIncludedSourceAssets(result: WebPreviewSourceResult) {
     if (
       result.ok !== true ||
       !featureFlags.dsl4SourceIncludes ||
@@ -529,20 +714,24 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     }
     await queueAssetSource(result);
     const transaction = assetPipeline?.getState()?.transaction;
-    if (!transaction || !['ready', 'active'].includes(transaction.status)) {
+    if (
+      !transaction ||
+      typeof transaction.status !== 'string' ||
+      !['ready', 'active'].includes(transaction.status)
+    ) {
       throw new TypeError('Source Graph assets must be stable before source candidate staging');
     }
     await prepareSourceResult?.(result);
   }
 
-  async function setProjectRoot(projectRoot: Readonly<Record<string, any>>) {
+  async function setProjectRoot(projectRoot: WebPreviewProjectRoot) {
     selectedProjectRoot = projectRoot;
     await projectRootObserver?.(projectRoot);
     if (latestValidSourceResult) queueAssetSource(latestValidSourceResult);
     notifyDistributionBuildState();
   }
 
-  function render(view: Readonly<Record<string, any>>) {
+  function render(view: WebPreviewView) {
     if (disposed) return;
     try {
       previewShell.update(view);
@@ -552,14 +741,14 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   }
 
   function renderDiagnostic(
-    diagnostic: Record<string, any>,
+    diagnostic: WebPreviewDiagnostic,
     channel: 'source' | 'asset' = 'source',
   ) {
     const visibleDiagnostic = deepFreeze({
       ...diagnostic,
       channel,
       ...(typeof diagnostic.displayName === 'string' ? {} : {displayName: sourceDisplayName}),
-    }) as Readonly<Record<string, any>>;
+    }) as WebPreviewDiagnostic;
     diagnosticCode = typeof visibleDiagnostic.code === 'string' ? visibleDiagnostic.code : null;
     const message = safeMessage(
       diagnosticCode
@@ -587,13 +776,13 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
       counts: null,
       anchor: null,
       choices: null,
-      warningCount: visibleDiagnostic.severity === 'warning' ? 1 : 0,
+      warningCount: 0,
       changeCategories: [],
       safeStatusMessage: message,
     });
   }
 
-  function onProtocolEvent(event: Readonly<Record<string, any>>) {
+  function onProtocolEvent(event: WebPreviewProtocolEvent) {
     if (disposed) return;
     if (event.type === 'preview.handshake.ack') {
       watchStatus.textContent = 'Preview protocol connected. Select a project directory.';
@@ -605,7 +794,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
         (diagnostic) => isRecord(diagnostic) && diagnostic.severity === 'error',
       );
       if (blocking) {
-        renderDiagnostic(blocking as Record<string, any>);
+        renderDiagnostic(blocking);
         return;
       }
       const details = detailsByIntegrity.get(event.sourceIntegrity) ?? null;
@@ -619,6 +808,9 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
         candidateDetails = details;
         notifyDistributionBuildState();
         const choices = event.candidate.options;
+        if (!isReloadChoices(choices)) {
+          throw new TypeError('preview reload choices are invalid');
+        }
         if (reloadSurface) {
           if (manualRestartDepth === 0) {
             observe(
@@ -628,11 +820,11 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
                 availability: reloadAvailability(choices),
                 changedIds: ['source-generation'],
                 initiatingInputId: null,
-                async apply(request: Readonly<Record<string, any>>) {
+                async apply(request: WebPreviewReloadRequest) {
                   const choice = restartChoice(request.actualAnchor);
                   await coordinator.commit(choice);
                 },
-                async restart(request: Readonly<Record<string, any>>) {
+                async restart(request: WebPreviewReloadRequest) {
                   const choice = restartChoice(request.actualAnchor);
                   manualRestartDepth += 1;
                   try {
@@ -729,7 +921,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     }
   }
 
-  function onSourceStatus(state: Readonly<Record<string, any>>) {
+  function onSourceStatus(state: WebPreviewSourceState) {
     if (disposed) return;
     const statusLabels: Readonly<Record<string, string>> = {
       idle: 'Web Preview is idle.',
@@ -741,7 +933,10 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
       diagnostic: 'Web Preview needs attention. See the diagnostic below.',
       disposed: 'Web Preview stopped.',
     };
-    watchStatus.textContent = statusLabels[state.status] ?? 'Web Preview status changed.';
+    const sourceStatus = state.status;
+    watchStatus.textContent = sourceStatus
+      ? (statusLabels[sourceStatus] ?? 'Web Preview status changed.')
+      : 'Web Preview status changed.';
     if (reloadSurface) {
       const reloadWatchState = (
         {
@@ -750,7 +945,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
           'background-throttled': 'paused',
           disposed: 'disconnected',
         } as Readonly<Record<string, string>>
-      )[state.status];
+      )[sourceStatus ?? ''];
       if (reloadWatchState) observe(reloadSurface.setWatchState('source', reloadWatchState));
     }
     if (typeof state.sourceDisplayName === 'string') sourceDisplayName = state.sourceDisplayName;
@@ -775,19 +970,19 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   try {
     coordinator = validateCoordinator(
       createCoordinator({
-        protocolSession: input.protocolSession,
-        sessionId: input.sessionId,
-        sourceFrontend: input.sourceFrontend,
-        maxSourceBytes: input.maxSourceBytes,
+        protocolSession: options.protocolSession,
+        sessionId: options.sessionId,
+        sourceFrontend: options.sourceFrontend,
+        maxSourceBytes: options.maxSourceBytes,
         featureFlags,
-        maxSourceFiles: input.maxSourceFiles,
-        maxTotalSourceBytes: input.maxTotalSourceBytes,
-        maxIncludeDepth: input.maxIncludeDepth,
-        capabilities: input.capabilities,
-        sourceOptions: input.sourceOptions,
+        maxSourceFiles: options.maxSourceFiles,
+        maxTotalSourceBytes: options.maxTotalSourceBytes,
+        maxIncludeDepth: options.maxIncludeDepth,
+        capabilities: options.capabilities,
+        sourceOptions: options.sourceOptions,
         onProjectRoot: setProjectRoot,
         beforeSourceStage: prepareIncludedSourceAssets,
-        onSourceResult(result: Readonly<Record<string, unknown>>) {
+        onSourceResult(result: WebPreviewSourceResult) {
           const snapshot = isRecord(result.sourceSnapshot) ? result.sourceSnapshot : null;
           if (typeof snapshot?.displayName === 'string') {
             sourceDisplayName = snapshot.displayName;
@@ -795,7 +990,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
           const details = sourceDetails(result);
           if (details) detailsByIntegrity.set(details.integrity, details);
           if (result.ok === true) {
-            latestValidSourceResult = result as Readonly<Record<string, any>>;
+            latestValidSourceResult = result;
             if (!featureFlags.dsl4SourceIncludes) queueAssetSource(latestValidSourceResult);
           } else if (
             typeof result.canonicalSource === 'string' &&
@@ -815,7 +1010,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
         },
         onProtocolEvent,
         onSourceStatus,
-        onSourceDiagnostic(diagnostic: Readonly<Record<string, unknown>> | null) {
+        onSourceDiagnostic(diagnostic: WebPreviewDiagnostic | null) {
           if (disposed) return;
           if (diagnostic === null) {
             diagnosticCode = null;
@@ -830,7 +1025,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
             notifyDistributionBuildState();
             return;
           }
-          renderDiagnostic(diagnostic as Record<string, any>);
+          renderDiagnostic(diagnostic);
           notifyDistributionBuildState();
         },
         onError: reportError,
@@ -846,20 +1041,20 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
   if (featureFlags.dsl4PreviewReloadOverlay) {
     try {
       reloadSurface = validateReloadSurface(
-        (createReloadSurface as Function)({
+        (createReloadSurface as WebPreviewCallback)({
           surface: 'web',
           environment: 'development',
           document,
           mount: host,
-          viewport: geometry(input.previewViewport, {
+          viewport: geometry(options.previewViewport, {
             width: Math.max(44, Number(mount.clientWidth) || 800),
             height: Math.max(44, Number(mount.clientHeight) || 600),
           }),
-          safeArea: geometry(input.previewSafeArea, {top: 0, right: 0, bottom: 0, left: 0}),
-          storage: input.previewStorage,
-          reducedMotion: input.previewReducedMotion,
-          formatTime: input.previewFormatTime,
-          debugExecution: featureFlags.dsl4Debugger ? input.debugExecution : undefined,
+          safeArea: geometry(options.previewSafeArea, {top: 0, right: 0, bottom: 0, left: 0}),
+          storage: options.previewStorage,
+          reducedMotion: options.previewReducedMotion,
+          formatTime: options.previewFormatTime,
+          debugExecution: featureFlags.dsl4Debugger ? options.debugExecution : undefined,
           onError: reportError,
         }),
       );
@@ -876,11 +1071,10 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
       assetPipeline = validateAssetPipeline(
         createAssetPipeline({
           ...assetPipelineOptions,
-          sessionId: input.sessionId,
+          sessionId: options.sessionId,
           ...(reloadSurface ? {reloadSurface} : {}),
-          onEvent: (event: Readonly<Record<string, unknown>>) =>
-            notifyAssetObserver('onEvent', event),
-          onDiagnostic: async (diagnostic: Readonly<Record<string, unknown>> | null) => {
+          onEvent: (event: unknown) => notifyAssetObserver('onEvent', event),
+          onDiagnostic: async (diagnostic: WebPreviewDiagnostic | null) => {
             await notifyAssetObserver('onDiagnostic', diagnostic);
             if (disposed) return;
             if (diagnostic === null) {
@@ -896,10 +1090,9 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
               }
               return;
             }
-            renderDiagnostic(diagnostic as Record<string, any>, 'asset');
+            renderDiagnostic(diagnostic, 'asset');
           },
-          onWatchStatus: (state: Readonly<Record<string, unknown>>) =>
-            notifyAssetObserver('onWatchStatus', state),
+          onWatchStatus: (state: unknown) => notifyAssetObserver('onWatchStatus', state),
           onError: (error: unknown) => {
             void notifyAssetObserver('onError', error);
             reportError(error);
@@ -981,9 +1174,10 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     if (
       coordinatorState.protocol.pendingStages !== 0 ||
       coordinatorState.protocol.candidate !== null ||
-      ['connecting', 'staging', 'committing', 'deferring', 'failed'].includes(
-        coordinatorState.protocol.status,
-      )
+      (typeof coordinatorState.protocol.status === 'string' &&
+        ['connecting', 'staging', 'committing', 'deferring', 'failed'].includes(
+          coordinatorState.protocol.status,
+        ))
     ) {
       return deepFreeze({enabled: false, reason: 'Wait for the latest validation to finish.'});
     }
@@ -991,7 +1185,8 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     if (
       assetTransaction?.diagnostic ||
       assetTransaction?.candidate ||
-      ['preparing', 'applying', 'diagnostic', 'full-rebuild'].includes(assetTransaction?.status)
+      (typeof assetTransaction?.status === 'string' &&
+        ['preparing', 'applying', 'diagnostic', 'full-rebuild'].includes(assetTransaction.status))
     ) {
       return deepFreeze({
         enabled: false,
@@ -1050,7 +1245,7 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
     start(projectRoot: unknown) {
       if (disposed) throw new TypeError('Web Preview shell is disposed');
       openButton.disabled = true;
-      if (assetPipeline) setProjectRoot(projectRoot as Record<string, any>);
+      if (assetPipeline) setProjectRoot(projectRoot as WebPreviewProjectRoot);
       return coordinator.start(projectRoot);
     },
     async pollNow() {
@@ -1067,10 +1262,16 @@ export function createDsl4WebPreviewShell(input: unknown = {}) {
         Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
         throw error;
       }
+      const integrity = latestValidSourceResult.sourceSnapshot?.integrity;
+      if (typeof integrity !== 'string') {
+        const error = new Error('Browser distribution build source integrity is unavailable');
+        Object.defineProperty(error, 'code', {value: 'K4-BROWSER-BUILD-NOT-READY'});
+        throw error;
+      }
       return Object.freeze({
         projectRoot: selectedProjectRoot,
         sourceResult: latestValidSourceResult,
-        integrity: latestValidSourceResult.sourceSnapshot.integrity,
+        integrity,
       });
     },
     restart(choice: 'storyStart' | 'currentScene' | 'currentAction') {

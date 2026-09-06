@@ -10,7 +10,11 @@ import {
 
 import {validateDsl4CacheIdentity} from '../cache-identity.js';
 import {createDsl4InputArbitration} from '../input-arbitration.js';
-import {createDsl4RuntimeStartup, resolveDsl4FeatureFlags} from '../runtime-startup.js';
+import {
+  createDsl4RuntimeStartup,
+  resolveDsl4FeatureFlags,
+  type RuntimeStartupContext,
+} from '../runtime-startup.js';
 import {
   createDsl4RuntimeStateExpressionComposition,
   createDsl4RuntimeVariableSnapshot,
@@ -55,6 +59,153 @@ export type RuntimeConditionEvaluator = (
   context: Record<string, unknown>,
 ) => boolean | Promise<boolean>;
 
+type Dsl4ResolvedFeatureFlags = ReturnType<typeof resolveDsl4FeatureFlags>;
+type CameraPreviewControlsOptions = Parameters<typeof createDsl4CameraPreviewControls>[0];
+type AssetManagerCompositionFactory = NonNullable<
+  Parameters<typeof createDsl4PlatformAssetSession>[0]['createAssetManagerComposition']
+>;
+type AsyncInputCompositionFactory = NonNullable<
+  Parameters<typeof createDsl4PlatformAssetSession>[0]['createAsyncInputComposition']
+>;
+type PoseFeedbackPresenterOptions = Parameters<typeof createDsl4PoseFeedbackPresenter>[0];
+
+interface ConfiguredPreviewControls extends Readonly<Record<string, unknown>> {
+  readonly mirroring?: Readonly<{
+    assets?: Readonly<{showMirrored?: unknown; showUnmirrored?: unknown}>;
+  }>;
+  readonly cameraMenu?: Readonly<{buttonAsset?: unknown}>;
+}
+
+interface SessionBackingHostOptions {
+  readonly binaryBundleStoreOptions?: unknown;
+  readonly sessionBacking?: unknown;
+  readonly onSessionBackingWarning?: (warning: Readonly<Record<string, unknown>>) => unknown;
+  readonly onSessionBackingFatalError?: (error: unknown) => unknown;
+}
+
+interface VerifiedRemoteCachePort {
+  readonly identity: unknown;
+  readonly getWarnings: () => unknown;
+  readonly takeWarnings: () => unknown;
+  readonly getStats: () => unknown;
+  readonly prune: () => unknown;
+  readonly clear: () => unknown;
+  readonly listStoryCaches: () => unknown;
+  readonly pruneStoryCaches: () => unknown;
+  readonly deleteStoryCache: (databaseName: string) => unknown;
+  readonly renewLease: () => unknown;
+  readonly releaseLease: () => unknown;
+}
+
+interface BinarySessionBackingPort {
+  readonly getState: () => unknown;
+}
+
+interface TurboWarpRuntimeHostOptions extends SessionBackingHostOptions {
+  readonly [key: string]: unknown;
+  readonly actorFrameMilliseconds?: number;
+  readonly actorScheduler?: unknown;
+  readonly actorTouchSource?: unknown;
+  readonly assetBundleFormat?: 'embedded-base64' | 'binary-entry';
+  readonly binaryEntryProvider?: unknown;
+  readonly binarySessionBackingPolicy?: 'prefer' | 'required' | 'disabled';
+  readonly binarySessionId?: string;
+  readonly cacheIdentity?: unknown;
+  readonly cacheLeaseHeartbeatMs?: number;
+  readonly cameraPreviewControls?: unknown;
+  readonly createAssetManagerComposition?: AssetManagerCompositionFactory;
+  readonly createAsyncInputComposition?: AsyncInputCompositionFactory;
+  readonly createAudioVoice?: (assetId: string, options: Readonly<{gain: number}>) => unknown;
+  readonly createBubbleComposition?: Dsl4ForwardedFactory;
+  readonly createFile?: Dsl4ForwardedFactory;
+  readonly createHostPort?: (context: HostPortContext) => HostPort | Promise<HostPort>;
+  readonly createImageBitmap?: (canvas: HTMLCanvasElement) => Promise<ImageBitmap>;
+  readonly createObjectURL?: (blob: Blob) => string;
+  readonly createRuntimeExpressionComposition?: Dsl4ForwardedFactory;
+  readonly createSvgTextComposition?: Dsl4ForwardedFactory;
+  readonly createTMComposition?: Dsl4ForwardedFactory;
+  readonly evaluateCondition?: RuntimeConditionEvaluator;
+  readonly featureFlags?: unknown;
+  readonly historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
+  readonly historyNavigationAvailable?: boolean;
+  readonly keySource?: unknown;
+  readonly loadRemoteAsset?: (
+    payload: Readonly<Record<string, unknown>>,
+    context: Readonly<Record<string, unknown>>,
+  ) => unknown | Promise<unknown>;
+  readonly maxAssetBytes?: number;
+  readonly maxAssetFileBytes?: number;
+  readonly maxAssetFiles?: number;
+  readonly maxSourceBytes?: number;
+  readonly onBackgroundActionError?: (
+    error: unknown,
+    context?: Readonly<Record<string, string>>,
+  ) => unknown;
+  readonly onEvent?: (event: Readonly<Record<string, unknown>>) => unknown;
+  readonly onBinarySessionBackingWarning?: (warning: Readonly<Record<string, unknown>>) => unknown;
+  readonly onBinarySessionBackingFatalError?: (error: unknown) => unknown;
+  readonly onInputError?: (
+    error: unknown,
+    context: Readonly<{command: string; code: string}>,
+  ) => unknown | Promise<unknown>;
+  readonly onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown;
+  readonly poseArchiveLimits?: Readonly<Record<string, unknown>>;
+  readonly poseFeedbackPresenter?: Readonly<Record<string, unknown>>;
+  readonly poseNow?: Dsl4ForwardedFactory;
+  readonly poseSchedule?: Dsl4ForwardedFactory;
+  readonly project?: unknown;
+  readonly runtime?: unknown;
+  readonly runtimeVersion?: string;
+  readonly scheduleCacheLeaseHeartbeat?: (callback: () => void, milliseconds: number) => () => void;
+  readonly sessionBacking?: Readonly<{
+    policy?: 'prefer' | 'required' | 'disabled';
+    sessionId?: string;
+    storeOptions?: Readonly<Record<string, unknown>>;
+  }>;
+  readonly sessionBinaryBackingOptions?: Readonly<Record<string, unknown>>;
+  readonly setBusy?: (
+    payload: Readonly<{visible: boolean; source: string; label: string; cursor?: string}>,
+  ) => unknown | Promise<unknown>;
+  readonly setCursor?: (
+    payload: Readonly<{visible: boolean; source: string; cursor: string}>,
+  ) => unknown;
+  readonly setLoading?: (
+    payload: Readonly<Record<string, unknown>>,
+    context: Readonly<Record<string, unknown>>,
+  ) => unknown | Promise<unknown>;
+  readonly sourceFrontend?: Dsl4SourceFrontend;
+  readonly subtleCrypto?: Dsl4SubtleCrypto;
+  readonly tmPoseRuntime?: unknown;
+  readonly verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
+  readonly waitSchedule?: (callback: () => void, milliseconds: number) => () => void;
+  readonly revokeObjectURL?: (url: string) => void;
+}
+
+interface AssetPreparePayload extends Readonly<Record<string, unknown>> {
+  readonly assetIds: readonly string[];
+}
+
+interface LoadingPayload extends Readonly<Record<string, unknown>> {
+  readonly visible?: unknown;
+  readonly loading?: unknown;
+}
+
+interface LoadingContext extends Readonly<Record<string, unknown>> {
+  readonly signal?: AbortSignal;
+}
+
+function validateAssetPreparePayload(
+  payload: Readonly<Record<string, unknown>>,
+): AssetPreparePayload {
+  if (
+    !Array.isArray(payload.assetIds) ||
+    payload.assetIds.some((assetId) => typeof assetId !== 'string')
+  ) {
+    throw new TypeError('asset lifecycle prepare payload must provide assetIds');
+  }
+  return payload as AssetPreparePayload;
+}
+
 const hostPortMethods = new Set([
   'wait',
   'transition',
@@ -83,8 +234,8 @@ function createSessionBackingId() {
 }
 
 export function resolveDsl4SessionBackingConfig(
-  options: Record<string, any>,
-  featureFlags: Readonly<Record<string, any>>,
+  options: SessionBackingHostOptions,
+  featureFlags: Dsl4ResolvedFeatureFlags,
   assetBundleFormat: 'embedded-base64' | 'binary-entry',
 ) {
   if (options.binaryBundleStoreOptions !== undefined) {
@@ -126,7 +277,8 @@ export function resolveDsl4SessionBackingConfig(
   if (typeof policy !== 'string' || !sessionBackingPolicies.has(policy)) {
     throw new TypeError('sessionBacking.policy must be prefer, required, or disabled');
   }
-  if (!featureFlags.dsl4SessionBinaryBacking && policy !== 'disabled') {
+  const resolvedPolicy = policy as 'prefer' | 'required' | 'disabled';
+  if (!featureFlags.dsl4SessionBinaryBacking && resolvedPolicy !== 'disabled') {
     throw new TypeError(
       'sessionBacking.policy prefer or required requires dsl4SessionBinaryBacking',
     );
@@ -138,7 +290,7 @@ export function resolveDsl4SessionBackingConfig(
     throw new TypeError('sessionBacking.storeOptions must be an object');
   }
   return Object.freeze({
-    policy,
+    policy: resolvedPolicy,
     sessionId: input.sessionId ?? createSessionBackingId(),
     storeOptions: Object.freeze({...input.storeOptions}),
   });
@@ -334,10 +486,10 @@ function resolvePoseFeedbackMode(storyDocument: Readonly<Record<string, unknown>
 }
 
 export async function createDsl4TurboWarpRuntimeEnvironment(
-  options: Record<string, any>,
+  options: TurboWarpRuntimeHostOptions,
   runtimeComponent: Readonly<Record<string, unknown>>,
-  publishVerifiedRemoteCache: (cache: Record<string, any> | null) => void,
-  publishBinarySessionBacking: (backing: Record<string, any> | null) => void,
+  publishVerifiedRemoteCache: (cache: VerifiedRemoteCachePort | null) => void,
+  publishBinarySessionBacking: (backing: BinarySessionBackingPort | null) => void,
   publishRuntimeLifecycleObserver: (
     observer: ((event: Readonly<Record<string, unknown>>) => void) | null,
   ) => void,
@@ -392,14 +544,14 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       return bubblePlatform?.releaseAll();
     },
   });
-  const preview = isRecord(component.storyDocument.recognition)
-    ? (component.storyDocument.recognition as Record<string, any>).preview
+  const recognition = isRecord(component.storyDocument.recognition)
+    ? component.storyDocument.recognition
     : null;
+  const preview = isRecord(recognition?.preview) ? recognition.preview : null;
   const hasConfiguredPreviewControls =
     cameraPreviewControlsEnabled && isRecord(preview) && isRecord(preview.controls);
-  const configuredPreviewControls = hasConfiguredPreviewControls
-    ? (preview.controls as Record<string, any>)
-    : {};
+  const configuredPreviewControls: ConfiguredPreviewControls =
+    hasConfiguredPreviewControls && isRecord(preview?.controls) ? preview.controls : {};
   const effectivePosePreviewMirroringEnabled =
     posePreviewMirroringEnabled || isRecord(configuredPreviewControls.mirroring);
   const embeddedCacheIdentity =
@@ -472,7 +624,9 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
     }
     if (feedbackMode === 'presenter') {
       if (options.poseFeedbackPresenter !== undefined) {
-        poseFeedbackPresenter = createDsl4PoseFeedbackPresenter(options.poseFeedbackPresenter);
+        poseFeedbackPresenter = createDsl4PoseFeedbackPresenter(
+          options.poseFeedbackPresenter as PoseFeedbackPresenterOptions,
+        );
       }
       const externalObserver = options.onPoseState;
       if (externalObserver !== undefined && typeof externalObserver !== 'function') {
@@ -506,11 +660,15 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       feedbackMode === 'scratchBinding'
         ? scratchPoseFeedbackAdapter?.readPoseStateBinding
         : undefined;
+    if (typeof options.setLoading !== 'function') {
+      throw new TypeError('setLoading must be a function');
+    }
+    const setLoading = options.setLoading;
     assetSession = createDsl4PlatformAssetSession({
       runtimeComponent,
       runtimeHost: turboWarpHost,
       tmPoseRuntime: options.tmPoseRuntime,
-      setLoading: options.setLoading,
+      setLoading,
       ...(options.setBusy === undefined ? {} : {setBusy: options.setBusy}),
       ...(options.setCursor === undefined ? {} : {setCursor: options.setCursor}),
       ...(options.loadRemoteAsset === undefined ? {} : {loadRemoteAsset: options.loadRemoteAsset}),
@@ -873,7 +1031,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
       if (errors.length > 1) throw new AggregateError(errors, message);
     }
 
-    function setLoadingWithResources(payload: Record<string, any>, context: Record<string, any>) {
+    function setLoadingWithResources(payload: LoadingPayload, context: LoadingContext) {
       const loading = isRecord(payload.loading) ? payload.loading : null;
       if (!payload.visible || !loading) return baseAssetLifecycle.setLoading(payload, context);
       const resourceUrl = (assetId: unknown) => {
@@ -895,11 +1053,12 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
 
     const assetLifecycle = hasConfiguredPreviewControls
       ? Object.freeze({
-          async prepare(payload: Record<string, any>, context: Record<string, any>) {
+          async prepare(payload: Readonly<Record<string, unknown>>, context: LoadingContext) {
             await baseAssetLifecycle.prepare(payload, context);
+            const preparedPayload = validateAssetPreparePayload(payload);
             if (
               cameraPreviewControls ||
-              !controlAssetIds.every((assetId) => payload.assetIds.includes(assetId))
+              !controlAssetIds.every((assetId) => preparedPayload.assetIds.includes(assetId))
             ) {
               return;
             }
@@ -919,19 +1078,22 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
                 return [assetId, resource.objectUrl];
               }),
             );
+            const cameraPreviewOptions =
+              options.cameraPreviewControls as CameraPreviewControlsOptions;
             cameraPreviewControls = createDsl4CameraPreviewControls({
-              ...options.cameraPreviewControls,
+              ...cameraPreviewOptions,
               preview,
               assetUrls: Object.freeze(assetUrls),
               port: activeAssetSession.cameraPreviewControlsPort,
-            } as any);
+            });
             cameraPreviewControls.start();
           },
-          setLoading(payload: Record<string, any>, context: Record<string, any>) {
+          setLoading(payload: LoadingPayload, context: LoadingContext) {
             return setLoadingWithResources(payload, context);
           },
-          async releaseAssets(payload: Record<string, any>) {
-            if (controlAssetIds.some((assetId) => payload.assetIds.includes(assetId))) {
+          async releaseAssets(payload: Readonly<Record<string, unknown>>) {
+            const releasePayload = validateAssetPreparePayload(payload);
+            if (controlAssetIds.some((assetId) => releasePayload.assetIds.includes(assetId))) {
               return releaseCameraPreviewControls(
                 () => baseAssetLifecycle.releaseAssets(payload),
                 'Camera preview controls and selected assets could not be released',
@@ -939,7 +1101,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
             }
             return baseAssetLifecycle.releaseAssets(payload);
           },
-          async release(payload: Record<string, any>) {
+          async release(payload: Readonly<Record<string, unknown>>) {
             return releaseCameraPreviewControls(
               () => baseAssetLifecycle.release(payload),
               'Camera preview controls and assets could not be released',
@@ -947,16 +1109,16 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
           },
         })
       : Object.freeze({
-          prepare(payload: Record<string, any>, context: Record<string, any>) {
+          prepare(payload: Readonly<Record<string, unknown>>, context: LoadingContext) {
             return baseAssetLifecycle.prepare(payload, context);
           },
-          setLoading(payload: Record<string, any>, context: Record<string, any>) {
+          setLoading(payload: LoadingPayload, context: LoadingContext) {
             return setLoadingWithResources(payload, context);
           },
-          releaseAssets(payload: Record<string, any>) {
+          releaseAssets(payload: Readonly<Record<string, unknown>>) {
             return baseAssetLifecycle.releaseAssets(payload);
           },
-          release(payload: Record<string, any>) {
+          release(payload: Readonly<Record<string, unknown>>) {
             return baseAssetLifecycle.release(payload);
           },
         });
@@ -1124,79 +1286,7 @@ export async function createDsl4TurboWarpRuntimeEnvironment(
  * Create one host-owned, default-off TurboWarp session for a packaged DSL 4.0 component.
  * The returned host never starts the story or attaches a key listener automatically.
  */
-export async function createDsl4TurboWarpRuntimeHost(
-  options: {
-    featureFlags?: unknown;
-    project?: unknown;
-    sourceFrontend?: Dsl4SourceFrontend;
-    maxSourceBytes?: number;
-    maxAssetFiles?: number;
-    maxAssetFileBytes?: number;
-    maxAssetBytes?: number;
-    assetBundleFormat?: 'embedded-base64' | 'binary-entry';
-    binaryEntryProvider?: unknown;
-    sessionBacking?: Readonly<{
-      policy?: 'prefer' | 'required' | 'disabled';
-      sessionId?: string;
-      storeOptions?: Readonly<Record<string, unknown>>;
-    }>;
-    onSessionBackingWarning?: (warning: Readonly<Record<string, unknown>>) => unknown;
-    onSessionBackingFatalError?: (error: unknown) => unknown;
-    historyNavigationAvailable?: boolean;
-    historyLimits?: {maxActionEntries: number; maxSceneVisits: number};
-    runtime?: unknown;
-    tmPoseRuntime?: unknown;
-    setLoading?: Dsl4ForwardedFactory;
-    setBusy?: (
-      payload: Readonly<{visible: boolean; source: string; label: string; cursor?: string}>,
-    ) => unknown | Promise<unknown>;
-    setCursor?: (
-      payload: Readonly<{visible: boolean; source: string; cursor: string}>,
-    ) => unknown | Promise<unknown>;
-    loadRemoteAsset?: (
-      payload: Readonly<Record<string, unknown>>,
-      context: Readonly<Record<string, unknown>>,
-    ) => unknown | Promise<unknown>;
-    cacheIdentity?: unknown;
-    cacheLeaseHeartbeatMs?: number;
-    scheduleCacheLeaseHeartbeat?: (callback: () => void, milliseconds: number) => () => void;
-    verifiedRemoteCacheOptions?: Readonly<Record<string, unknown>>;
-    poseArchiveLimits?: Readonly<Record<string, unknown>>;
-    createHostPort?: (context: HostPortContext) => HostPort | Promise<HostPort>;
-    waitSchedule?: Dsl4ForwardedFactory;
-    createFile?: Dsl4ForwardedFactory;
-    createAssetManagerComposition?: Dsl4ForwardedFactory;
-    createTMComposition?: Dsl4ForwardedFactory;
-    createAsyncInputComposition?: Dsl4ForwardedFactory;
-    keySource?: unknown;
-    actorTouchSource?: unknown;
-    createRuntimeExpressionComposition?: Dsl4ForwardedFactory;
-    createSvgTextComposition?: Dsl4ForwardedFactory;
-    createBubbleComposition?: Dsl4ForwardedFactory;
-    actorScheduler?: unknown;
-    onBackgroundActionError?: (error: unknown) => unknown;
-    actorFrameMilliseconds?: number;
-    poseSchedule?: Dsl4ForwardedFactory;
-    poseNow?: Dsl4ForwardedFactory;
-    poseFeedbackPresenter?: Readonly<Record<string, unknown>>;
-    onPoseState?: (event: Readonly<Record<string, unknown>>) => unknown;
-    cameraPreviewControls?: Readonly<Record<string, unknown>>;
-    createObjectURL?: (blob: Blob) => string;
-    revokeObjectURL?: (url: string) => void;
-    evaluateCondition?: (
-      expression: string,
-      variables: Readonly<Record<string, string | number | boolean>>,
-      context: Record<string, unknown>,
-    ) => boolean | Promise<boolean>;
-    onEvent?: (event: Readonly<Record<string, unknown>>) => void;
-    onInputError?: (
-      error: unknown,
-      context: Readonly<{command: string; code: string}>,
-    ) => unknown | Promise<unknown>;
-    subtleCrypto?: Dsl4SubtleCrypto | undefined;
-    runtimeVersion?: string;
-  } = {},
-) {
+export async function createDsl4TurboWarpRuntimeHost(options: TurboWarpRuntimeHostOptions = {}) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 TurboWarp host options must be an object');
   const featureFlags = resolveDsl4FeatureFlags(options.featureFlags);
   if (!featureFlags.dsl4Runtime) {
@@ -1246,8 +1336,8 @@ export async function createDsl4TurboWarpRuntimeHost(
     throw new TypeError('scheduleCacheLeaseHeartbeat must be a function');
   }
 
-  let verifiedRemoteCache: Record<string, any> | null = null;
-  let binarySessionBacking: Record<string, any> | null = null;
+  let verifiedRemoteCache: VerifiedRemoteCachePort | null = null;
+  let binarySessionBacking: BinarySessionBackingPort | null = null;
   let sessionBackingFatalError: unknown = null;
   let stopForSessionBackingFatal: null | (() => void) = null;
   let runtimeLifecycleObserver: ((event: Readonly<Record<string, unknown>>) => void) | null = null;
@@ -1344,15 +1434,15 @@ export async function createDsl4TurboWarpRuntimeHost(
     subtleCrypto: options.subtleCrypto,
     async createRuntimeEnvironment(
       runtimeComponent: Readonly<Record<string, unknown>>,
-      startupContext: Readonly<Record<string, any>>,
+      startupContext: RuntimeStartupContext,
     ) {
       return createDsl4TurboWarpRuntimeEnvironment(
         runtimeEnvironmentOptions,
         runtimeComponent,
-        (cache: any) => {
+        (cache) => {
           verifiedRemoteCache = cache;
         },
-        (backing: any) => {
+        (backing) => {
           binarySessionBacking = backing;
         },
         (observer) => {
@@ -1438,8 +1528,8 @@ export async function createDsl4TurboWarpRuntimeHost(
       // Startup already owns and reports the authoritative backing failure.
     }
   }
-  const cachePort = verifiedRemoteCache as unknown as Record<string, any> | null;
-  const binaryBackingPort = binarySessionBacking as unknown as Record<string, any> | null;
+  const cachePort = verifiedRemoteCache as VerifiedRemoteCachePort | null;
+  const binaryBackingPort = binarySessionBacking as BinarySessionBackingPort | null;
   let disposePromise: Promise<void> | null = null;
   let cacheExecutionId = 0;
   const cacheLeaseLifecycle = createDsl4RuntimeCacheLeaseLifecycle({
@@ -1530,9 +1620,8 @@ export async function createDsl4TurboWarpRuntimeHost(
     },
     getRuntimeVariableSnapshot() {
       if (!featureFlags.dsl4TurboWarpStateSurface) return null;
-      const poseStatePort = runtimeVariableStatePort as Readonly<{getPoseState: Function}> | null;
       return createDsl4RuntimeVariableSnapshot(session.getState().runtime, {
-        poseState: poseStatePort?.getPoseState() ?? null,
+        poseState: runtimeVariableStatePort?.getPoseState() ?? null,
         version: options.runtimeVersion,
         disposed: disposePromise !== null,
       });

@@ -61,6 +61,119 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+interface Dsl4BrowserAssetFile {
+  readonly size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+interface Dsl4BrowserAssetFileHandle {
+  readonly kind: 'file';
+  getFile(): Promise<Dsl4BrowserAssetFile>;
+}
+
+interface Dsl4BrowserAssetDirectoryHandle {
+  readonly kind: 'directory';
+  queryPermission(options: {mode: 'read'}): Promise<unknown>;
+  getDirectoryHandle(name: string): Promise<Dsl4BrowserAssetDirectoryHandle>;
+  getFileHandle(name: string): Promise<Dsl4BrowserAssetFileHandle>;
+  entries?(): AsyncIterable<[string, Dsl4BrowserAssetFileHandle | Dsl4BrowserAssetDirectoryHandle]>;
+}
+
+interface Dsl4BrowserAssetStoryAsset {
+  readonly kind?: unknown;
+  readonly loading?: unknown;
+  readonly target?: unknown;
+  readonly delivery?: unknown;
+  readonly source?: unknown;
+  readonly file?: unknown;
+  readonly name?: unknown;
+}
+
+interface Dsl4BrowserAssetStoryDocument {
+  readonly kind?: unknown;
+  readonly version?: unknown;
+  readonly assets?: Readonly<Record<string, Dsl4BrowserAssetStoryAsset>>;
+}
+
+interface Dsl4BrowserAssetSourceSnapshot {
+  readonly integrity?: unknown;
+  readonly sourceId?: unknown;
+}
+
+interface Dsl4BrowserAssetSourceResult {
+  readonly ok?: unknown;
+  readonly storyDocument?: Dsl4BrowserAssetStoryDocument;
+  readonly sourceSnapshot?: Dsl4BrowserAssetSourceSnapshot;
+}
+
+interface Dsl4BrowserAssetSourceContext {
+  readonly sourceResult: Dsl4BrowserAssetSourceResult;
+  readonly storyDocument: Dsl4BrowserAssetStoryDocument;
+  readonly sourceIntegrity: string;
+  readonly structuralFingerprint: string;
+}
+
+interface Dsl4BrowserAssetLocalFile {
+  readonly path: string;
+  readonly bytes: Uint8Array;
+}
+
+interface Dsl4BrowserAssetProvider {
+  readonly providerId: string;
+  readonly manifest: unknown;
+  getFile(assetId: string, filePath: string): Uint8Array;
+}
+
+interface Dsl4BrowserAssetCandidateValue {
+  readonly providerId: string;
+  readonly storyDocument: Dsl4BrowserAssetStoryDocument;
+  readonly manifest: unknown;
+  readonly snapshot: {
+    readonly structuralFingerprint: string;
+    readonly sourceIntegrity: string;
+    readonly graphIntegrity: string;
+    readonly contentIntegrity: string;
+  };
+  readonly validations: readonly unknown[];
+}
+
+interface Dsl4BrowserAssetCandidateEvent {
+  readonly revision: number;
+  readonly value: Dsl4BrowserAssetCandidateValue;
+}
+
+type Dsl4BrowserAssetRelease = () => unknown | Promise<unknown>;
+type Dsl4BrowserAssetWatchFactory = (options: Record<string, unknown>) => {
+  start(context: unknown): unknown;
+  update(context: unknown): unknown;
+  pollNow(): unknown;
+  setHidden(value: boolean): unknown;
+  accept(revision: number): Promise<unknown>;
+  discard(revision: number): Promise<unknown>;
+  getState(): {readonly candidate?: {readonly revision?: unknown} | null};
+  dispose(): Promise<unknown>;
+  whenIdle(): Promise<unknown>;
+};
+
+function candidateEvent(value: unknown): Dsl4BrowserAssetCandidateEvent {
+  if (!isRecord(value) || typeof value.revision !== 'number' || !isRecord(value.value)) {
+    throw new TypeError('asset watch candidate event is invalid');
+  }
+  const candidate = value.value;
+  if (
+    typeof candidate.providerId !== 'string' ||
+    !isRecord(candidate.snapshot) ||
+    typeof candidate.snapshot.structuralFingerprint !== 'string' ||
+    typeof candidate.snapshot.sourceIntegrity !== 'string' ||
+    typeof candidate.snapshot.graphIntegrity !== 'string' ||
+    typeof candidate.snapshot.contentIntegrity !== 'string' ||
+    !Array.isArray(candidate.validations)
+  ) {
+    throw new TypeError('asset watch candidate value is invalid');
+  }
+  return value as unknown as Dsl4BrowserAssetCandidateEvent;
+}
+
 function positiveLimit(value: unknown, name: string) {
   if (!Number.isSafeInteger(value) || Number(value) < 1) {
     throw new TypeError(`${name} must be a positive safe integer`);
@@ -85,10 +198,10 @@ function directoryHandle(value: unknown) {
   ) {
     throw new TypeError('asset adapter requires a read-only FileSystemDirectoryHandle');
   }
-  return value as Record<string, any>;
+  return value as unknown as Dsl4BrowserAssetDirectoryHandle;
 }
 
-function sourceContext(value: unknown) {
+function sourceContext(value: unknown): Dsl4BrowserAssetSourceContext {
   if (
     !isRecord(value) ||
     !isRecord(value.sourceResult) ||
@@ -105,7 +218,7 @@ function sourceContext(value: unknown) {
   const sourceIntegrity = integrity(value.sourceResult.sourceSnapshot.integrity, 'sourceIntegrity');
   const structuralFingerprint = integrity(value.structuralFingerprint, 'structuralFingerprint');
   return Object.freeze({
-    sourceResult: value.sourceResult,
+    sourceResult: value.sourceResult as Dsl4BrowserAssetSourceResult,
     storyDocument,
     sourceIntegrity,
     structuralFingerprint,
@@ -152,7 +265,10 @@ function mapFileError(error: unknown) {
   );
 }
 
-async function resolveParent(root: Record<string, any>, segments: ReadonlyArray<string>) {
+async function resolveParent(
+  root: Dsl4BrowserAssetDirectoryHandle,
+  segments: ReadonlyArray<string>,
+) {
   let current = root;
   for (const segment of segments.slice(0, -1)) {
     current = await current.getDirectoryHandle(segment);
@@ -163,7 +279,11 @@ async function resolveParent(root: Record<string, any>, segments: ReadonlyArray<
   return current;
 }
 
-async function readHandle(handle: Record<string, any>, maxFileBytes: number, signal: AbortSignal) {
+async function readHandle(
+  handle: Dsl4BrowserAssetFileHandle,
+  maxFileBytes: number,
+  signal: AbortSignal,
+) {
   if (!isRecord(handle) || handle.kind !== 'file' || typeof handle.getFile !== 'function') {
     fail('K4-ASSET-PREPARE-001', 'Asset entry is not a readable file');
   }
@@ -185,11 +305,11 @@ async function readHandle(handle: Record<string, any>, maxFileBytes: number, sig
 }
 
 async function readSingleFile(
-  root: Record<string, any>,
+  root: Dsl4BrowserAssetDirectoryHandle,
   filePath: string,
   limit: number,
   signal: AbortSignal,
-) {
+): Promise<Dsl4BrowserAssetLocalFile[]> {
   const segments = relativePath(filePath, 'asset file');
   const fileName = segments.at(-1) as string;
   try {
@@ -202,14 +322,14 @@ async function readSingleFile(
 }
 
 async function readPoseBundle(
-  root: Record<string, any>,
+  root: Dsl4BrowserAssetDirectoryHandle,
   assetId: string,
   directoryPath: string,
   limit: number,
   totalLimit: number,
   subtleCrypto: Dsl4SubtleCrypto,
   signal: AbortSignal,
-) {
+): Promise<Dsl4BrowserAssetLocalFile[]> {
   if (isDsl4PoseArchivePath(directoryPath)) {
     const [archive] = await readSingleFile(root, directoryPath, limit, signal);
     if (!archive) throw new TypeError(`Pose archive is empty: ${directoryPath}`);
@@ -234,7 +354,7 @@ async function readPoseBundle(
     if (!isRecord(bundle) || bundle.kind !== 'directory' || typeof bundle.entries !== 'function') {
       fail('K4-ASSET-POSE-BUNDLE-001', 'Pose model is not an enumerable directory');
     }
-    const entries: Array<[string, Record<string, any>]> = [];
+    const entries: Array<[string, Dsl4BrowserAssetFileHandle]> = [];
     for await (const entry of bundle.entries()) {
       if (!Array.isArray(entry) || entry.length !== 2) {
         fail('K4-ASSET-POSE-BUNDLE-001', 'Pose model directory entry is invalid');
@@ -250,7 +370,7 @@ async function readPoseBundle(
       ) {
         fail('K4-ASSET-POSE-BUNDLE-001', 'Pose model contains an unsupported entry');
       }
-      entries.push([name, handle as Record<string, any>]);
+      entries.push([name, handle as unknown as Dsl4BrowserAssetFileHandle]);
     }
     entries.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
     if (entries.length !== 3) {
@@ -266,7 +386,7 @@ async function readPoseBundle(
   }
 }
 
-function commonManifestAsset(asset: Readonly<Record<string, any>>, id: string) {
+function commonManifestAsset(asset: Dsl4BrowserAssetStoryAsset, id: string) {
   return {
     id,
     kind: asset.kind,
@@ -291,7 +411,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
   ) => unknown | Promise<unknown>;
   onStatus?: (state: Readonly<Record<string, unknown>>) => unknown | Promise<unknown>;
   onError?: (error: unknown) => unknown;
-  createWatch?: Function;
+  createWatch?: Dsl4BrowserAssetWatchFactory;
   subtleCrypto?: Dsl4SubtleCrypto | undefined;
   maxFiles?: number;
   maxFileBytes?: number;
@@ -347,12 +467,12 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     ),
   };
 
-  let root: Record<string, any> | null = null;
-  let activeSnapshot: Readonly<Record<string, any>> | null = null;
-  let candidateValue: Readonly<Record<string, any>> | null = null;
+  let root: Dsl4BrowserAssetDirectoryHandle | null = null;
+  let activeSnapshot: Dsl4BrowserAssetCandidateValue['snapshot'] | null = null;
+  let candidateValue: Dsl4BrowserAssetCandidateValue | null = null;
   let activeProviderId: string | null = null;
   let nextProviderId = 1;
-  const providers = new Map();
+  const providers = new Map<string, Dsl4BrowserAssetProvider>();
 
   async function read(inputContext: unknown, readOptions: {signal: AbortSignal; revision: number}) {
     if (!root) throw new TypeError('asset adapter has no project root');
@@ -367,10 +487,10 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     if (permission !== 'granted') {
       fail('K4-ASSET-PERMISSION-001', 'Asset read permission was denied or revoked');
     }
-    const manifestAssets = [];
-    const blobs = new Map();
-    const validations = [];
-    const releases: Function[] = [];
+    const manifestAssets: Record<string, unknown>[] = [];
+    const blobs = new Map<string, Uint8Array>();
+    const validations: unknown[] = [];
+    const releases: Dsl4BrowserAssetRelease[] = [];
     let fileCount = 0;
     let totalBytes = 0;
     let released = false;
@@ -393,15 +513,16 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
     }
 
     try {
-      const assets = (context.storyDocument.assets ?? {}) as Readonly<
-        Record<string, Readonly<Record<string, any>>>
-      >;
+      const assets = context.storyDocument.assets ?? {};
       for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
         left < right ? -1 : left > right ? 1 : 0,
       )) {
         const common = commonManifestAsset(asset, id);
         if (asset.delivery === 'remote') {
-          manifestAssets.push({...common, source: {type: 'remote', ...asset.source}});
+          manifestAssets.push({
+            ...common,
+            source: {type: 'remote', ...(isRecord(asset.source) ? asset.source : {})},
+          });
           continue;
         }
         if (typeof asset.file !== 'string') {
@@ -479,7 +600,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
       }
       const manifest = deepFreeze({formatVersion: 1, assets: manifestAssets});
       const snapshot = await createDsl4AssetReloadSnapshot({
-        storyDocument: context.storyDocument,
+        storyDocument: context.storyDocument as unknown as Readonly<Record<string, unknown>>,
         manifest,
         structuralFingerprint: context.structuralFingerprint,
         sourceIntegrity: context.sourceIntegrity,
@@ -528,11 +649,12 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
   const watch = createWatch({
     ...watchOptions,
     read,
-    onDiagnostic: options.onDiagnostic,
-    onStatus: options.onStatus,
-    onError: options.onError,
-    async onCandidate(event: Readonly<Record<string, any>>) {
-      const value = event.value as Readonly<Record<string, any>>;
+    ...(options.onDiagnostic === undefined ? {} : {onDiagnostic: options.onDiagnostic}),
+    ...(options.onStatus === undefined ? {} : {onStatus: options.onStatus}),
+    ...(options.onError === undefined ? {} : {onError: options.onError}),
+    async onCandidate(event: unknown) {
+      const typedEvent = candidateEvent(event);
+      const value = typedEvent.value;
       candidateValue = value;
       const classification = activeSnapshot
         ? classifyDsl4AssetReload({active: activeSnapshot, candidate: value.snapshot})
@@ -541,7 +663,7 @@ export function createDsl4BrowserPreviewAssetAdapter(options: {
         await options.onCandidate(
           deepFreeze({
             formatVersion: 1,
-            revision: event.revision,
+            revision: typedEvent.revision,
             providerId: value.providerId,
             sourceIntegrity: value.snapshot.sourceIntegrity,
             graphIntegrity: value.snapshot.graphIntegrity,

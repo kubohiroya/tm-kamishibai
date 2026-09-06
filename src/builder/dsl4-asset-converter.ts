@@ -46,6 +46,43 @@ import {readSb3, serializeSb3} from './sb3.js';
 const supportedTargets = new Set(['local', 'project', 'remote']);
 const sourceSuffixes = ['.kamishibai.yaml', '.kamishibai.yml', '.k4.yaml', '.k4.yml'];
 
+type ConversionTarget = 'local' | 'project' | 'remote';
+
+interface RemoteAssetSource {
+  readonly url: string;
+  readonly integrity?: string;
+  readonly contentType?: string;
+  readonly size?: number;
+}
+
+interface ConverterStoryAsset extends Dsl4StoryDocumentAsset {
+  readonly kind: string;
+}
+
+interface ConverterStoryDocument extends Readonly<Record<string, unknown>> {
+  readonly assets?: Readonly<Record<string, ConverterStoryAsset>>;
+}
+
+interface EditableAsset extends Record<string, unknown> {
+  kind: string;
+  target?: unknown;
+  delivery?: 'embedded' | 'remote';
+  file?: unknown;
+  name?: string;
+  source?: RemoteAssetSource;
+}
+
+interface LocalManifestFile {
+  readonly path: string;
+}
+
+interface LocalManifestSource {
+  readonly type: string;
+  readonly mode?: string;
+  readonly inputPath?: string;
+  readonly files?: readonly LocalManifestFile[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -136,7 +173,7 @@ function assetDirectoryName(assetId: string) {
 function validateRemoteSource(
   value: unknown,
   {allowBare = false, label = 'Remote mapping entry'}: {allowBare?: boolean; label?: string} = {},
-): Readonly<{url: string; integrity?: string; contentType?: string; size?: number}> {
+): RemoteAssetSource {
   if (!isRecord(value)) {
     fail(`${label} must be an object`, 'K4-ASSET-CONVERT-MAP-001');
   }
@@ -214,12 +251,7 @@ function validateRemoteMap(value: unknown, assets: Readonly<Record<string, unkno
 /** One asset of the local snapshot's manifest, as the converter reads it. */
 interface LocalManifestAsset {
   id: string;
-  source: Readonly<{
-    type: string;
-    mode?: string;
-    inputPath?: string;
-    files?: readonly {path: string}[];
-  }>;
+  source: LocalManifestSource;
 }
 
 /** The local asset snapshot the converter reads material out of. */
@@ -350,11 +382,10 @@ function createRemotePayload(
   });
 }
 
-function editableAsset(rawAsset: unknown, asset: Readonly<Record<string, any>>) {
-  const result = (isRecord(rawAsset) ? structuredClone(rawAsset) : {kind: asset.kind}) as Record<
-    string,
-    any
-  >;
+function editableAsset(rawAsset: unknown, asset: ConverterStoryAsset): EditableAsset {
+  const result: EditableAsset = isRecord(rawAsset)
+    ? {...structuredClone(rawAsset), kind: asset.kind}
+    : {kind: asset.kind};
   result.kind = asset.kind;
   if (asset.kind === 'costume') result.target = asset.target;
   for (const key of ['delivery', 'file', 'name', 'source']) delete result[key];
@@ -448,7 +479,7 @@ export async function convertDsl4ProjectAssets(options: {
   sourceId?: string;
   baseSb3: string;
   outputDirectory: string;
-  to: 'local' | 'project' | 'remote';
+  to: ConversionTarget;
   assets?: string[];
   remoteMap?: string;
   rsyncDestination?: string;
@@ -599,10 +630,8 @@ export async function convertDsl4ProjectAssets(options: {
     const first = parsed.diagnostics[0];
     fail(first?.message ?? 'DSL 4 source is invalid', first?.code ?? 'K4-ASSET-CONVERT-SOURCE-001');
   }
-  const storyDocument = parsed.storyDocument as Readonly<Record<string, any>>;
-  const storyAssets = (storyDocument.assets ?? {}) as Readonly<
-    Record<string, Readonly<Record<string, any>>>
-  >;
+  const storyDocument = parsed.storyDocument as ConverterStoryDocument;
+  const storyAssets = storyDocument.assets ?? {};
   /**
    * Read one story asset by id.
    *
@@ -633,7 +662,7 @@ export async function convertDsl4ProjectAssets(options: {
   }
   selectedIds.sort();
 
-  let remoteMap: Readonly<Record<string, Readonly<Record<string, any>>>> = Object.freeze({});
+  let remoteMap: Readonly<Record<string, RemoteAssetSource>> = Object.freeze({});
   if (options.remoteMap !== undefined) {
     const value = await loadDsl4ProjectJson({
       projectRoot: canonicalRoot,
@@ -715,7 +744,7 @@ export async function convertDsl4ProjectAssets(options: {
   async function readRemoteMaterial(
     assetId: string,
     asset: Dsl4StoryDocumentAsset,
-    remote: Readonly<Record<string, any>>,
+    remote: unknown,
   ): Promise<AssetMaterial> {
     const sourceValue = validateRemoteSource(remote, {
       allowBare: true,
@@ -849,24 +878,23 @@ export async function convertDsl4ProjectAssets(options: {
   if (document.errors.length > 0 || !isRecord(document.toJS())) {
     fail('DSL 4 source cannot be edited as one YAML document', 'K4-ASSET-CONVERT-SOURCE-001');
   }
-  const raw = document.toJS() as Record<string, any>;
+  const raw = document.toJS() as Record<string, unknown>;
   const rawAssets = isRecord(raw.assets) ? raw.assets : {};
-  const outputFiles = new Map();
+  const outputFiles = new Map<string, Buffer>();
   const remoteUploads: Map<string, Buffer> = new Map();
   const rsyncVerifications: {
     assetId: string;
     asset: Dsl4StoryDocumentAsset;
     origin: AssetMaterial;
-    source: Readonly<Record<string, unknown>>;
+    source: RemoteAssetSource;
   }[] = [];
   let remoteUploadBytes = 0;
   const selectedAssetIds = new Set(selectedIds);
   const converted: Record<string, string> = {};
   const preservedOriginals: Record<string, string> = {};
-  const projectRemovals: Map<string, {assetId: string; asset: Readonly<Record<string, any>>}> =
-    new Map();
+  const projectRemovals: Map<string, {assetId: string; asset: ConverterStoryAsset}> = new Map();
 
-  function scheduleProjectRemoval(assetId: string, asset: Readonly<Record<string, any>>) {
+  function scheduleProjectRemoval(assetId: string, asset: ConverterStoryAsset) {
     const target = projectTarget(project, asset);
     const collection = asset.kind === 'sound' ? 'sounds' : 'costumes';
     const key = `${projectTargetName(target)}\0${collection}\0${String(asset.name ?? assetId)}`;
@@ -875,9 +903,9 @@ export async function convertDsl4ProjectAssets(options: {
 
   function preserveProjectImageOrigin(
     assetId: string,
-    asset: Readonly<Record<string, any>>,
+    asset: ConverterStoryAsset,
     current: 'local' | 'remote',
-    material: Readonly<Record<string, any>>,
+    material: AssetMaterial,
   ) {
     if (asset.kind === 'sound') return;
     if (material.files.length !== 1) {
@@ -887,6 +915,7 @@ export async function convertDsl4ProjectAssets(options: {
       );
     }
     const file = material.files[0];
+    if (!file) fail(`Project image origin ${assetId} has no file`, 'K4-ASSET-CONVERT-PROJECT-001');
     const bytes = Buffer.from(file.bytes);
     const contentType = file.contentType ?? contentTypeFor(bytes, file.path, asset.kind);
     const relativePath =
@@ -998,7 +1027,8 @@ export async function convertDsl4ProjectAssets(options: {
         continue;
       }
       const currentMaterial = await originMaterial(assetId);
-      const remoteSource = mapped as Readonly<Record<string, any>>;
+      if (!mapped) fail(`Remote mapping is required for ${assetId}`, 'K4-ASSET-CONVERT-MAP-001');
+      const remoteSource = mapped;
       const destinationMaterial = await readRemoteMaterial(assetId, asset, remoteSource);
       assertSameMaterial(currentMaterial, destinationMaterial, assetId, asset.kind);
       editable.delivery = 'remote';
@@ -1029,7 +1059,8 @@ export async function convertDsl4ProjectAssets(options: {
       addSharedOutputFile(outputFiles, asset.file, localSnapshot.getPoseArchive(assetId));
       continue;
     }
-    for (const file of snapshotSource.files as Readonly<Record<string, any>>[]) {
+    const snapshotFiles = snapshotSource.files as readonly LocalManifestFile[];
+    for (const file of snapshotFiles) {
       const relativePath = directoryMode ? `${asset.file}/${file.path}` : asset.file;
       addSharedOutputFile(outputFiles, relativePath, localSnapshot.getFile(assetId, file.path));
     }
@@ -1061,7 +1092,7 @@ export async function convertDsl4ProjectAssets(options: {
     );
   }
   const verifiedAssets = (verified.storyDocument.assets ?? {}) as Readonly<
-    Record<string, Readonly<Record<string, any>>>
+    Record<string, ConverterStoryAsset>
   >;
   for (const {assetId, asset} of projectRemovals.values()) {
     const name = asset.name ?? assetId;

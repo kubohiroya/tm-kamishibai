@@ -24,6 +24,46 @@ import {createDsl4PreviewProtocolSession} from '../../dist/dsl4/preview-protocol
 import {loadDsl4RuntimeComponent} from '../../dist/dsl4/runtime-artifact-loader.js';
 import {appShellLocales} from './app-shell-locales.mjs';
 
+type AuthoringRuntimeMount = Readonly<{
+  addEventListener?: unknown;
+  removeEventListener?: unknown;
+  style?: unknown;
+}>;
+
+type AuthoringBrowserPickerHost = typeof globalThis & {
+  isSecureContext?: boolean;
+  showOpenFilePicker?: (...parameters: unknown[]) => unknown;
+  showDirectoryPicker?: (...parameters: unknown[]) => unknown;
+};
+
+type AuthoringDragEvent = Readonly<{
+  dataTransfer?: {dropEffect?: string} | null;
+  preventDefault?(): unknown;
+}>;
+
+type AuthoringDropEvent = Readonly<{
+  dataTransfer?: unknown;
+  preventDefault?(): unknown;
+}>;
+
+type AuthoringRuntimeEvent = Readonly<{
+  type?: unknown;
+  diagnostic?: unknown;
+}>;
+
+type AuthoringSourceResult = Parameters<
+  typeof createDsl4BrowserPreviewRuntimeComponent
+>[0]['sourceResult'] &
+  Readonly<{ok?: unknown; storyDocument: object}>;
+
+type AuthoringRuntimeComponent = Parameters<
+  typeof createDsl4BrowserPreviewRuntimeComponent
+>[0]['baseComponent'];
+
+type AuthoringDistributionBuildState = Readonly<{enabled?: boolean}>;
+
+type AuthoringLocale = 'en' | 'ja';
+
 function pickerWasCancelled(error: unknown) {
   return (
     typeof error === 'object' && error !== null && (error as {name?: unknown}).name === 'AbortError'
@@ -31,7 +71,7 @@ function pickerWasCancelled(error: unknown) {
 }
 
 function filePickerSupported() {
-  const host = globalThis as Record<string, any>;
+  const host = globalThis as AuthoringBrowserPickerHost;
   if (host.isSecureContext !== true || typeof host.showOpenFilePicker !== 'function') {
     return false;
   }
@@ -68,12 +108,14 @@ export function installDsl4RuntimeAuthoringProfile(
       maxSelectedEntries: number;
       maxSelectedDirectoryDepth: number;
     }>;
-    resolveRuntimeMount: (Scratch: any) => any;
-    resolveBundledTMRuntime: () => any;
+    resolveRuntimeMount: (
+      Scratch: KamishibaiDsl4RuntimeExtension['Scratch'],
+    ) => AuthoringRuntimeMount | null | undefined;
+    resolveBundledTMRuntime: () => unknown;
     loggedError: (failure: unknown) => Error;
-    createRemoteAssetLoader: (options: object) => any;
-    createProjectTMRuntime: (options: object) => any;
-    createTransitionPort: (options: object) => Promise<any>;
+    createRemoteAssetLoader: (options: object) => unknown;
+    createProjectTMRuntime: (options: object) => unknown;
+    createTransitionPort: (options: object) => Promise<unknown>;
   },
 ) {
   // The profile's methods run as the runtime extension, because they are assigned onto its
@@ -117,12 +159,12 @@ export function installDsl4RuntimeAuthoringProfile(
       ) {
         return;
       }
-      const onDragOver = (event: any) => {
+      const onDragOver = (event: AuthoringDragEvent) => {
         if (this.status !== 'menu') return;
         event.preventDefault?.();
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
       };
-      const onDrop = (event: any) => {
+      const onDrop = (event: AuthoringDropEvent) => {
         if (this.status !== 'menu') return;
         event.preventDefault?.();
         const collecting = collectDsl4BrowserDroppedFiles(event.dataTransfer, {
@@ -158,19 +200,19 @@ export function installDsl4RuntimeAuthoringProfile(
       const turboWarpHost = this.turboWarpHost;
       const mount = resolveRuntimeMount(Scratch);
       const loadRemoteAsset = createRemoteAssetLoader({maxBytes: limits.maxAssetBytes});
-      let previewProjectRoot: Record<string, any> | null = null;
-      const generationComponents = new WeakMap();
+      let previewProjectRoot: object | null = null;
+      const generationComponents = new WeakMap<object, AuthoringRuntimeComponent>();
       const debugExecution = createDsl4DebugExecutionCoordinator({
         enabled: dsl4NonEmbeddedDevelopmentFeatureFlags.dsl4Debugger,
       });
       // eslint-disable-next-line prefer-const -- assigned after the observer closes over it
-      let liveReload: any;
+      let liveReload: ReturnType<typeof createDsl4LiveReloadSession>;
       const createSession = createDsl4TurboWarpPreviewSessionFactory({
         featureFlags: dsl4NonEmbeddedDevelopmentFeatureFlags,
         runtimeVersion,
         runtimeComponent: component,
         debugExecution,
-        resolveRuntimeComponent({storyDocument}: {storyDocument: any}) {
+        resolveRuntimeComponent({storyDocument}: {storyDocument: object}) {
           const generation = generationComponents.get(storyDocument);
           if (!generation) {
             throw new TypeError('The preview source generation has no prepared runtime component');
@@ -195,7 +237,7 @@ export function installDsl4RuntimeAuthoringProfile(
         setLoading() {},
         loadRemoteAsset,
         subtleCrypto: globalThis.crypto?.subtle,
-        onEvent: (event: any) => {
+        onEvent: (event: AuthoringRuntimeEvent) => {
           if (this.previewLiveReload !== liveReload) return;
           if (event.type === 'runtime.start' || event.type === 'runtime.resume') {
             this.previewHasCurrent = true;
@@ -241,10 +283,10 @@ export function installDsl4RuntimeAuthoringProfile(
           sourceFrontend: this.frontend,
           debugExecution,
           maxSourceBytes: limits.maxSourceBytes,
-          onProjectRoot: (projectRoot: any) => {
+          onProjectRoot: (projectRoot: object) => {
             previewProjectRoot = projectRoot;
           },
-          prepareSourceResult: async (result: any) => {
+          prepareSourceResult: async (result: AuthoringSourceResult) => {
             if (result.ok !== true) return;
             const generation = await createDsl4BrowserPreviewRuntimeComponent({
               baseComponent: component,
@@ -257,25 +299,29 @@ export function installDsl4RuntimeAuthoringProfile(
             });
             generationComponents.set(result.storyDocument, generation);
           },
-          onDistributionBuildState: (state: any) => {
+          onDistributionBuildState: (state: AuthoringDistributionBuildState) => {
             if (this.status !== 'menu' || !this.applicationMenu) return;
             this.distributionBuildStatus =
               state.enabled === true
                 ? ''
-                : (appShellLocales as Record<string, any>)[this.titleLocale].ui.buildUnavailable;
+                : (
+                    appShellLocales as Readonly<
+                      Record<AuthoringLocale, {ui: {buildUnavailable: string}}>
+                    >
+                  )[this.titleLocale].ui.buildUnavailable;
             this.applicationMenu.setBuildState({
               visible: true,
               enabled: state.enabled === true,
               status: this.distributionBuildStatus,
             });
           },
-          onDiagnostic: (diagnostic: any) => {
+          onDiagnostic: (diagnostic: Readonly<{severity?: unknown}>) => {
             if (diagnostic?.severity === 'error' && this.status === 'starting') {
               this.showFailure(diagnostic, {returnToMenu: true});
             }
           },
           ...(previewStorage === undefined ? {} : {previewStorage}),
-          onError: (error: any) => this.reportFailure(error, 'preview-shell'),
+          onError: (error: unknown) => this.reportFailure(error, 'preview-shell'),
         });
       } catch (error) {
         await liveReload.dispose();
@@ -285,7 +331,7 @@ export function installDsl4RuntimeAuthoringProfile(
       this.previewLiveReload = liveReload;
       this.previewDebugExecution = debugExecution;
       this.previewGenerationComponents = generationComponents;
-      this.previewShell = previewShell;
+      this.previewShell = previewShell as unknown as KamishibaiDsl4RuntimeExtension['previewShell'];
       this.previewHasCurrent = false;
       return previewShell;
     },
@@ -330,7 +376,7 @@ export function installDsl4RuntimeAuthoringProfile(
 
     openWatchedProjectDirectory() {
       if (this.status !== 'menu' || !this.previewShell) return undefined;
-      const picker = (globalThis as Record<string, any>).showDirectoryPicker;
+      const picker = (globalThis as AuthoringBrowserPickerHost).showDirectoryPicker;
       if (typeof picker !== 'function')
         throw new Error('This browser cannot open a project folder.');
       this.sourceChooser?.hide();
@@ -366,7 +412,7 @@ export function installDsl4RuntimeAuthoringProfile(
 
     async openWatchedStoryFile() {
       if (this.status !== 'menu' || !this.previewShell) return undefined;
-      const picker = (globalThis as Record<string, any>).showOpenFilePicker;
+      const picker = (globalThis as AuthoringBrowserPickerHost).showOpenFilePicker;
       if (typeof picker !== 'function') throw new Error('This browser cannot watch a story file.');
       this.sourceChooser?.hide();
       this.status = 'starting';
@@ -482,7 +528,26 @@ export function installDsl4RuntimeAuthoringProfile(
         return undefined;
       }
       const menu = this.ensureApplicationMenu();
-      const ui = (appShellLocales as Record<string, any>)[this.titleLocale].ui;
+      const ui = (
+        appShellLocales as Readonly<
+          Record<
+            AuthoringLocale,
+            {
+              ui: {
+                buildCancelled: string;
+                buildDone: string;
+                buildDoneRemote: string;
+                buildPreparing: string;
+                buildSaved: string;
+                buildSavedRemote: string;
+                buildSaving: string;
+                buildSavingRemote: string;
+                buildVerifying: string;
+              };
+            }
+          >
+        >
+      )[this.titleLocale].ui;
       this.status = 'building';
       this.distributionBuildStatus = ui.buildPreparing;
       menu?.setBuildState({visible: true, enabled: false, status: this.distributionBuildStatus});
@@ -505,7 +570,9 @@ export function installDsl4RuntimeAuthoringProfile(
         this.distributionBuildStatus = ui.buildVerifying;
         menu?.setBuildState({visible: true, enabled: false, status: this.distributionBuildStatus});
         const initialRuntimeComponent = await createDsl4BrowserPreviewRuntimeComponent({
-          baseComponent: this.previewGenerationComponents.get(prepared.sourceResult.storyDocument),
+          baseComponent: this.previewGenerationComponents.get(
+            prepared.sourceResult.storyDocument,
+          ) as Parameters<typeof createDsl4BrowserPreviewRuntimeComponent>[0]['baseComponent'],
           sourceResult: prepared.sourceResult,
           projectRoot: prepared.projectRoot,
           maxAssetFileBytes: limits.maxAssetBytes,
@@ -525,7 +592,7 @@ export function installDsl4RuntimeAuthoringProfile(
         const runtimeComponent = await createDsl4BrowserPreviewRuntimeComponent({
           baseComponent: this.previewGenerationComponents.get(
             confirmedBeforeBuild.sourceResult.storyDocument,
-          ),
+          ) as Parameters<typeof createDsl4BrowserPreviewRuntimeComponent>[0]['baseComponent'],
           sourceResult: confirmedBeforeBuild.sourceResult,
           projectRoot: confirmedBeforeBuild.projectRoot,
           maxAssetFileBytes: limits.maxAssetBytes,

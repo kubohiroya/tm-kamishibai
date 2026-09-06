@@ -33,6 +33,109 @@ function fail(message: string, code: string, cause?: unknown): never {
   throw new Sb3BuilderError(message, {stage: 'dsl4-asset-audit', code, cause});
 }
 
+interface StableFileState {
+  readonly dev: number;
+  readonly ino: number;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+}
+
+interface AuditStoryAsset {
+  readonly loading?: unknown;
+  readonly retention?: unknown;
+}
+
+export interface AuditAsset {
+  readonly id: string;
+  readonly kind: string;
+  readonly delivery: 'embedded' | 'remote';
+  readonly loading?: unknown;
+  readonly retention?: unknown;
+  readonly contentIntegrity: string;
+  readonly contentType: string;
+  readonly logicalBytes: number;
+  readonly transportBytes: number;
+}
+
+export interface AuditDeliverySummary {
+  readonly assets: number;
+  readonly logicalBytes: number;
+  readonly embedded: Readonly<{assets: number; logicalBytes: number}>;
+  readonly remote: Readonly<{assets: number; logicalBytes: number; transportBytes: number}>;
+}
+
+export interface AuditPhaseSummary extends AuditDeliverySummary {
+  readonly ids: readonly string[];
+}
+
+export interface AssetDistributionAudit {
+  readonly formatVersion: 1;
+  readonly profile: string;
+  readonly network: 'allowed' | 'forbidden';
+  readonly offlineReady: boolean;
+  readonly totals: AuditDeliverySummary &
+    Readonly<{
+      eager: AuditDeliverySummary;
+      lazy: AuditDeliverySummary;
+    }>;
+  readonly byKind: Readonly<Record<string, AuditDeliverySummary>>;
+  readonly preparation: Readonly<{
+    startup: AuditPhaseSummary;
+    cover: AuditPhaseSummary;
+    actors: AuditPhaseSummary;
+    loading: AuditPhaseSummary;
+    recognition: AuditPhaseSummary;
+    posePreviewControls: AuditPhaseSummary;
+  }>;
+  readonly scenes: Readonly<
+    Record<
+      string,
+      Readonly<{
+        all: AuditPhaseSummary;
+        eager: AuditPhaseSummary;
+        lazy: AuditPhaseSummary;
+        sceneRetained: AuditPhaseSummary;
+      }>
+    >
+  >;
+  readonly duplicates: Readonly<{
+    groups: readonly Readonly<{
+      contentIntegrity: string;
+      assetIds: readonly string[];
+      logicalBytes: number;
+      savingsBytes: number;
+    }>[];
+    savingsBytes: number;
+  }>;
+  readonly assets: readonly AuditAsset[];
+}
+
+interface ParseDiagnosticView {
+  readonly message?: string;
+  readonly code?: string;
+}
+
+type AuditParseResult =
+  | Readonly<{
+      ok: true;
+      storyDocument: Readonly<Record<string, unknown>>;
+      diagnostics: readonly ParseDiagnosticView[];
+    }>
+  | Readonly<{ok: false; diagnostics: readonly ParseDiagnosticView[]}>;
+
+function normalizeAuditParseResult(value: unknown): AuditParseResult {
+  if (!isRecord(value) || typeof value.ok !== 'boolean' || !Array.isArray(value.diagnostics)) {
+    throw new TypeError('sourceFrontend parse result is invalid');
+  }
+  const diagnostics = value.diagnostics as readonly ParseDiagnosticView[];
+  if (!value.ok) return {ok: false, diagnostics};
+  if (!isRecord(value.storyDocument)) {
+    throw new TypeError('sourceFrontend successful parse result must include storyDocument');
+  }
+  return {ok: true, diagnostics, storyDocument: value.storyDocument};
+}
+
 function positiveLimit(value: unknown, name: string) {
   if (!Number.isSafeInteger(value) || Number(value) < 1) {
     throw new TypeError(`${name} must be a positive safe integer`);
@@ -60,7 +163,7 @@ function isWithin(ancestor: string, candidate: string) {
   );
 }
 
-function sameFileState(left: Record<string, any>, right: Record<string, any>) {
+function sameFileState(left: StableFileState, right: StableFileState) {
   return (
     left.dev === right.dev &&
     left.ino === right.ino &&
@@ -355,7 +458,7 @@ export async function loadDsl4AssetAuditInputs({
   }
 }
 
-function safeByteSum(assets: ReadonlyArray<Readonly<Record<string, any>>>) {
+function safeByteSum(assets: ReadonlyArray<Pick<AuditAsset, 'logicalBytes'>>) {
   let total = 0;
   for (const asset of assets) {
     total += Number(asset.logicalBytes);
@@ -365,7 +468,7 @@ function safeByteSum(assets: ReadonlyArray<Readonly<Record<string, any>>>) {
   return total;
 }
 
-function deliverySummary(assets: ReadonlyArray<Readonly<Record<string, any>>>) {
+function deliverySummary(assets: readonly AuditAsset[]): AuditDeliverySummary {
   const embedded = assets.filter(({delivery}) => delivery === 'embedded');
   const remote = assets.filter(({delivery}) => delivery === 'remote');
   let remoteTransportBytes = 0;
@@ -398,13 +501,13 @@ export function createDsl4AssetDistributionAudit({
   config: unknown;
   lock: unknown;
   profile: string;
-}) {
+}): AssetDistributionAudit {
   const resolved = resolveDsl4AssetDistributionProfile(storyDocument, config, lock, profile);
   const dependencies = createDsl4AssetDependencyIndex(resolved.storyDocument);
-  const resolvedStoryAssets = resolved.storyDocument.assets as Readonly<
-    Record<string, Readonly<Record<string, any>>>
+  const resolvedStoryAssets = (resolved.storyDocument.assets ?? {}) as Readonly<
+    Record<string, AuditStoryAsset>
   >;
-  const assets = resolved.assets.map((asset) => {
+  const assets: AuditAsset[] = resolved.assets.map((asset) => {
     // The resolved assets come from the same story document as the index.
     const storyAsset = resolvedStoryAssets[asset.id] ?? {};
     return {
@@ -416,7 +519,7 @@ export function createDsl4AssetDistributionAudit({
       contentIntegrity: asset.contentIntegrity,
       contentType: asset.contentType,
       logicalBytes: asset.size,
-      transportBytes: asset.delivery === 'remote' ? asset.provider.size : asset.size,
+      transportBytes: asset.provider.type === 'remote' ? asset.provider.size : asset.size,
     };
   });
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
@@ -452,7 +555,7 @@ export function createDsl4AssetDistributionAudit({
     ]),
   );
 
-  const duplicateGroups: Map<string, Record<string, any>[]> = new Map();
+  const duplicateGroups: Map<string, AuditAsset[]> = new Map();
   for (const asset of assets) {
     const group = duplicateGroups.get(asset.contentIntegrity) ?? [];
     group.push(asset);
@@ -597,7 +700,7 @@ export async function auditDsl4AssetDistribution(options: {
     ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
     ...(options.readFile === undefined ? {} : {readSource: options.readFile}),
   });
-  let parsed;
+  let parsedInput: unknown;
   if (sourceIncludesEnabled) {
     const sourceGraph = await loadDsl4BuildSourceGraph(options.projectRoot, source, {
       limits: {
@@ -608,17 +711,17 @@ export async function auditDsl4AssetDistribution(options: {
       ...(options.fileSystem === undefined ? {} : {fileSystem: options.fileSystem}),
       ...(options.readFile === undefined ? {} : {readSource: options.readFile}),
     });
-    parsed = createDsl4SourceGraphFrontend(options.sourceFrontend).parse(sourceGraph, {
+    parsedInput = createDsl4SourceGraphFrontend(options.sourceFrontend).parse(sourceGraph, {
       featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
       sourceId: source.descriptor.sourceId,
       maxComposedSourceBytes: sourceLimits.maxComposedSourceBytes,
     });
   } else {
-    parsed = options.sourceFrontend.parse(source.descriptor.text, {
+    parsedInput = options.sourceFrontend.parse(source.descriptor.text, {
       sourceId: source.descriptor.sourceId,
     });
   }
-  const parseResult = parsed as Readonly<Record<string, any>>;
+  const parseResult = normalizeAuditParseResult(parsedInput);
   if (!parseResult.ok) {
     const first = parseResult.diagnostics?.[0];
     fail(first?.message ?? 'DSL 4.0 source validation failed', first?.code ?? 'K4-ASSET-AUDIT-001');
@@ -636,11 +739,11 @@ export async function auditDsl4AssetDistribution(options: {
   }
 }
 
-export function serializeDsl4AssetDistributionAudit(audit: Readonly<Record<string, any>>) {
+export function serializeDsl4AssetDistributionAudit(audit: AssetDistributionAudit) {
   return `${JSON.stringify(audit)}\n`;
 }
 
-export function formatDsl4AssetDistributionAudit(audit: Readonly<Record<string, any>>) {
+export function formatDsl4AssetDistributionAudit(audit: AssetDistributionAudit) {
   const lines = [
     `Asset profile: ${audit.profile}`,
     `Network: ${audit.network}`,
@@ -651,12 +754,12 @@ export function formatDsl4AssetDistributionAudit(audit: Readonly<Record<string, 
     `Startup preparation: ${audit.preparation.startup.assets} (${audit.preparation.startup.logicalBytes} logical bytes)`,
     `Duplicate savings: ${audit.duplicates.savingsBytes} logical bytes`,
   ];
-  for (const [kind, summary] of Object.entries<Record<string, any>>(audit.byKind)) {
+  for (const [kind, summary] of Object.entries(audit.byKind)) {
     lines.push(
       `Kind ${kind}: ${summary.assets} (${summary.logicalBytes} logical bytes; embedded ${summary.embedded.assets}; remote ${summary.remote.assets})`,
     );
   }
-  for (const [sceneId, scene] of Object.entries<Record<string, any>>(audit.scenes)) {
+  for (const [sceneId, scene] of Object.entries(audit.scenes)) {
     lines.push(
       `Scene ${sceneId}: ${scene.all.assets} assets (${scene.all.logicalBytes} logical bytes; lazy ${scene.lazy.logicalBytes})`,
     );
