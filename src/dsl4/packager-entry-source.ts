@@ -94,7 +94,8 @@ export function claimDsl4PackagerEntrySource({
   if (
     !isRecord(source) ||
     source.contractVersion !== dsl4PackagerEntrySourceContractVersion ||
-    !supportedSurfaces.has(String(source.surface)) ||
+    typeof source.surface !== 'string' ||
+    !supportedSurfaces.has(source.surface) ||
     !isRecord(source.archive) ||
     !Array.isArray(source.entries) ||
     typeof source.readEntry !== 'function' ||
@@ -150,7 +151,8 @@ export async function createDsl4BinaryEntryProviderFromPackagerSource(
   try {
     if (
       source.contractVersion !== dsl4PackagerEntrySourceContractVersion ||
-      !supportedSurfaces.has(String(source.surface)) ||
+      typeof source.surface !== 'string' ||
+      !supportedSurfaces.has(source.surface) ||
       !isRecord(source.archive) ||
       !Array.isArray(source.entries) ||
       typeof source.readEntry !== 'function' ||
