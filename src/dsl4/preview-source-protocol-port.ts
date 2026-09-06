@@ -29,7 +29,7 @@ interface PreviewSourceCandidateAck {
   readonly options: Readonly<Record<string, unknown>>;
 }
 
-interface PreviewSourceStageAck {
+export interface PreviewSourceStageAck {
   readonly [key: string]: unknown;
   readonly type: 'preview.source.staged';
   readonly sessionId: string;
@@ -39,7 +39,7 @@ interface PreviewSourceStageAck {
   readonly current?: unknown;
 }
 
-interface PreviewSourceCandidate {
+export interface PreviewSourceCandidate {
   readonly revision: number;
   readonly id: number;
   readonly options: Readonly<Record<string, unknown>>;

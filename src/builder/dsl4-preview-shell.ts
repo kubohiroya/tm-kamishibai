@@ -54,7 +54,7 @@ interface PreviewShellChoice {
   readonly reason: string | null;
 }
 
-interface PreviewShellView {
+export interface PreviewShellView {
   readonly formatVersion: 1;
   readonly phase: string;
   readonly sourceDisplayName: string;

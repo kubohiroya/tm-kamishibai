@@ -143,6 +143,11 @@ interface RuntimeEntryStateSnapshot {
   diagnostic?: RuntimeEntryFailureRecord | null;
 }
 
+/**
+ * The members the entry reads off whichever runtime is active. Both the packaged runtime host and
+ * the preview live-reload session answer this surface, and each one implements its own subset, so
+ * every member stays optional here.
+ */
 interface RuntimeEntryRuntimeInvoker {
   getRuntimeVariableSnapshot?(): unknown;
   getState?(): unknown;
@@ -151,9 +156,23 @@ interface RuntimeEntryRuntimeInvoker {
   rejectActionInvocation?(error: unknown): unknown;
   sessionBinaryBacking?: {getState?(): unknown};
   diagnostics?: {getState?(): unknown};
-  start?(): Promise<{status: string; diagnostic?: unknown}>;
-  prepareMenu?(): unknown | Promise<unknown>;
-  attach?(target: unknown): unknown;
+}
+
+/**
+ * The runtime host the packaged entry creates through the Standard app-shell. The entry owns that
+ * construction, so the startup members it drives are present rather than optional.
+ */
+interface RuntimeEntryRuntimeHost extends RuntimeEntryRuntimeInvoker {
+  getState?(): RuntimeEntryStateSnapshot;
+  start(): Promise<{status: string; diagnostic?: unknown}>;
+  prepareMenu(): unknown | Promise<unknown>;
+  attach(target: unknown): unknown;
+}
+
+/** The action surface `actionInvoker` guarantees to its callers after validating the runtime. */
+interface RuntimeEntryActionInvoker {
+  invokeAction(action: unknown): unknown;
+  rejectActionInvocation(error: unknown): unknown;
 }
 
 interface RuntimeEntryDisposable {
@@ -216,7 +235,7 @@ type RuntimeEntryAppShell = Extract<
   Awaited<ReturnType<typeof createDsl4StandardAppShell>>,
   {hideTitle: unknown}
 > & {
-  runtimeHost: RuntimeEntryRuntimeInvoker;
+  runtimeHost: RuntimeEntryRuntimeHost;
   dispose(reason?: unknown): unknown;
 };
 
@@ -761,7 +780,7 @@ class KamishibaiDsl4RuntimeExtension {
     this.showScratchTitle(this.titleLocale);
   }
 
-  actionInvoker() {
+  actionInvoker(): RuntimeEntryActionInvoker {
     const invoker = this.shell?.runtimeHost ?? this.previewLiveReload;
     if (
       !invoker ||
@@ -772,7 +791,7 @@ class KamishibaiDsl4RuntimeExtension {
       Object.defineProperty(error, 'code', {value: 'K4-BLOCK-RUNTIME-INACTIVE'});
       throw error;
     }
-    return invoker;
+    return invoker as RuntimeEntryActionInvoker;
   }
 
   async invokeCoreActionBlock(command: string, args: ScratchBlockArguments) {
@@ -1306,8 +1325,12 @@ class KamishibaiDsl4RuntimeExtension {
         },
       });
       if (!shellCandidate.ok || !shellCandidate.runtimeHost) {
-        const diagnostic = shellCandidate.diagnostics[0];
-        throw new Error(diagnostic?.message ?? 'The packaged DSL 4.0 story is invalid.');
+        const message = shellCandidate.diagnostics[0]?.message;
+        throw new Error(
+          message === undefined || message === null
+            ? 'The packaged DSL 4.0 story is invalid.'
+            : String(message),
+        );
       }
       shell = shellCandidate as RuntimeEntryAppShell;
     } catch (error) {

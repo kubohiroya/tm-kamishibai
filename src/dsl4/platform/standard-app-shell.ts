@@ -39,10 +39,19 @@ interface StandardRuntimeHost {
   dispose(reason: string): unknown;
 }
 
+/**
+ * A runtime host startup diagnostic. The host reports these as plain records, so the shell only
+ * declares the members its callers read and leaves each value unvalidated.
+ */
+export interface StandardRuntimeHostDiagnostic {
+  readonly message?: unknown;
+  readonly code?: unknown;
+}
+
 interface StandardRuntimeHostResult {
   ok: boolean;
   enabled: true;
-  diagnostics: readonly unknown[];
+  diagnostics: readonly StandardRuntimeHostDiagnostic[];
   host?: StandardRuntimeHost | null;
 }
 
