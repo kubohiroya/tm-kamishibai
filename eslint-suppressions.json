@@ -16,7 +16,7 @@
   },
   "src/builder/dsl4-asset-converter.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 30
+      "count": 14
     }
   },
   "src/builder/dsl4-asset-lock.ts": {
@@ -26,7 +26,7 @@
   },
   "src/builder/dsl4-asset-project-material.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 7
+      "count": 6
     }
   },
   "src/builder/dsl4-asset-vendor.ts": {
