@@ -8,6 +8,7 @@ import {
   planDsl4BlockSourceExport,
   resolveDsl4BlockSourceExportName,
 } from '../dsl4/block-source-export.js';
+import type {Dsl4BlockSourceExportGraph} from '../dsl4/block-source-export.js';
 import {createDsl4SourceGraphFrontend} from '../dsl4/source-graph-frontend.js';
 import {Dsl4SourceGraphError} from '../dsl4/source-graph.js';
 import {deepFreeze} from '../dsl4/story-document.js';
@@ -21,29 +22,40 @@ import {formatDsl4Diagnostic} from './dsl4-validate.js';
 import {Sb3BuilderError} from './errors.js';
 import {readSb3} from './sb3.js';
 
+/**
+ * The members read off one validation diagnostic. The graph frontend produces these as plain
+ * records and this module only reports them, so every member stays optional and unvalidated.
+ */
+interface Dsl4BlockSourceExportDiagnostic {
+  readonly message?: string;
+  readonly code?: string;
+  readonly sourceId?: unknown;
+}
+
 export const dsl4BlockSourceExportDefaults = Object.freeze({
   maxInputBytes: 512 * 1024 * 1024,
 });
 
 export class Dsl4BlockSourceExportError extends Sb3BuilderError {
-  /**
-   * @param {string} message
-   * @param {{stage: string, code: string, diagnostics?: readonly unknown[], cause?: unknown}} details
-   */
-  constructor(message, details) {
+  // `declare` so the emitted class keeps the plain constructor assignment it had as JavaScript
+  // instead of gaining a field definition that would run before it.
+  declare readonly diagnostics: readonly unknown[];
+
+  constructor(
+    message: string,
+    details: {stage: string; code: string; diagnostics?: readonly unknown[]; cause?: unknown},
+  ) {
     super(message, details);
     this.name = 'Dsl4BlockSourceExportError';
     this.diagnostics = deepFreeze(structuredClone(details.diagnostics ?? []));
   }
 }
 
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** @param {unknown} value @param {string} name */
-function requiredPath(value, name) {
+function requiredPath(value: unknown, name: string) {
   if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
     throw new Sb3BuilderError(`${name} must be a non-empty filesystem path`, {
       stage: 'dsl4-block-export',
@@ -53,8 +65,7 @@ function requiredPath(value, name) {
   return path.resolve(value);
 }
 
-/** @param {unknown} value @param {string} name @param {number} fallback */
-function positiveSafeInteger(value, name, fallback) {
+function positiveSafeInteger(value: unknown, name: string, fallback: number) {
   if (value === undefined) return fallback;
   if (!Number.isSafeInteger(value) || Number(value) < 1) {
     throw new TypeError(`${name} must be a positive safe integer`);
@@ -62,17 +73,12 @@ function positiveSafeInteger(value, name, fallback) {
   return Number(value);
 }
 
-/**
- * Derive the work name from the input filename when the caller does not name the export.
- *
- * @param {string} inputPath
- */
-export function defaultDsl4BlockSourceExportName(inputPath) {
+/** Derive the work name from the input filename when the caller does not name the export. */
+export function defaultDsl4BlockSourceExportName(inputPath: string) {
   return path.basename(inputPath, path.extname(inputPath));
 }
 
-/** @param {string} inputPath @param {number} maxInputBytes */
-async function readInputSb3(inputPath, maxInputBytes) {
+async function readInputSb3(inputPath: string, maxInputBytes: number) {
   let inputState;
   try {
     inputState = await stat(inputPath);
@@ -114,8 +120,7 @@ async function readInputSb3(inputPath, maxInputBytes) {
   return bytes;
 }
 
-/** @param {unknown} error @param {string} stage @returns {never} */
-function failDomain(error, stage) {
+function failDomain(error: unknown, stage: string): never {
   if (error instanceof Dsl4BlockSourceError || error instanceof Dsl4SourceGraphError) {
     throw new Dsl4BlockSourceExportError(error.message, {
       stage,
@@ -128,10 +133,10 @@ function failDomain(error, stage) {
 
 /**
  * Serialize one deterministic ZIP package for a multi-source export plan.
- *
- * @param {Readonly<{files: readonly Readonly<{path: string, text: string}>[]}>} plan
  */
-export function serializeDsl4BlockSourcePackage(plan) {
+export function serializeDsl4BlockSourcePackage(
+  plan: Readonly<{files: readonly Readonly<{path: string; text: string}>[]}>,
+) {
   const entries = Object.fromEntries(
     [...plan.files]
       .sort((left, right) => (left.path < right.path ? -1 : 1))
@@ -142,10 +147,8 @@ export function serializeDsl4BlockSourcePackage(plan) {
 
 /**
  * Read one exported package back so the committed artifact is verified before it is installed.
- *
- * @param {Buffer} bytes
  */
-function readDsl4BlockSourcePackage(bytes) {
+function readDsl4BlockSourcePackage(bytes: Buffer) {
   const archive = unzipSync(new Uint8Array(bytes));
   return Object.fromEntries(
     Object.entries(archive).map(([entryName, contents]) => [entryName, strFromU8(contents)]),
@@ -159,19 +162,21 @@ function readDsl4BlockSourcePackage(bytes) {
  * the YAML serializer, so a block-authored story is held to exactly the same schema, semantic, and
  * include rules as a YAML-authored one. An invalid source fails instead of writing plausible YAML,
  * and so does a Sprite whose declared DSL source no include reaches.
- *
- * @param {object} options
- * @param {string} options.input SB3 file carrying the DSL declaration hats
- * @param {string} options.outputDir Directory that receives the YAML file or the ZIP package
- * @param {string} [options.name] Work name used for the root YAML and the package stem
- * @param {import('../dsl4/source-frontend.js').Dsl4SourceFrontend} options.sourceFrontend
- * @param {number} options.maxSourceBytes
- * @param {number} [options.maxTotalSourceBytes]
- * @param {number} [options.maxSourceFiles]
- * @param {number} [options.maxIncludeDepth]
- * @param {number} [options.maxInputBytes]
  */
-export async function exportDsl4BlockSourcesToYaml(options) {
+export async function exportDsl4BlockSourcesToYaml(options: {
+  /** SB3 file carrying the DSL declaration hats. */
+  input: string;
+  /** Directory that receives the YAML file or the ZIP package. */
+  outputDir: string;
+  /** Work name used for the root YAML and the package stem. */
+  name?: string;
+  sourceFrontend: import('../dsl4/source-frontend.js').Dsl4SourceFrontend;
+  maxSourceBytes: number;
+  maxTotalSourceBytes?: number;
+  maxSourceFiles?: number;
+  maxIncludeDepth?: number;
+  maxInputBytes?: number;
+}) {
   if (!isRecord(options)) throw new TypeError('DSL 4.0 block export options are required');
   const input = requiredPath(options.input, 'input');
   const outputDirectory = requiredPath(options.outputDir, 'outputDir');
@@ -228,13 +233,11 @@ export async function exportDsl4BlockSourcesToYaml(options) {
     failDomain(error, 'dsl4-block-export-graph');
   }
 
-  const parsed = /** @type {Readonly<Record<string, any>>} */ (
-    createDsl4SourceGraphFrontend(options.sourceFrontend).parse(sourceGraph, {
-      featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
-      sourceId: sourceGraph.entryPath,
-      maxComposedSourceBytes: maxTotalSourceBytes,
-    })
-  );
+  const parsed = createDsl4SourceGraphFrontend(options.sourceFrontend).parse(sourceGraph, {
+    featureFlags: {dsl4Runtime: true, dsl4SourceIncludes: true},
+    sourceId: sourceGraph.entryPath,
+    maxComposedSourceBytes: maxTotalSourceBytes,
+  }) as Readonly<{ok: boolean; diagnostics: readonly Dsl4BlockSourceExportDiagnostic[]}>;
   if (!parsed.ok) {
     const first = parsed.diagnostics[0];
     throw new Dsl4BlockSourceExportError(first?.message ?? 'Block DSL source validation failed', {
@@ -246,7 +249,13 @@ export async function exportDsl4BlockSourcesToYaml(options) {
 
   let plan;
   try {
-    plan = planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name});
+    plan = planDsl4BlockSourceExport({
+      blockSourceSet,
+      // `source-graph.ts` still types its nodes as possibly undefined because it reads them back
+      // out of a Map keyed by the order it just built. Narrow to the contract the plan validates.
+      sourceGraph: sourceGraph as unknown as Dsl4BlockSourceExportGraph,
+      name,
+    });
   } catch (error) {
     failDomain(error, 'dsl4-block-export-plan');
   }
@@ -315,16 +324,16 @@ export async function exportDsl4BlockSourcesToYaml(options) {
  *
  * Every graph diagnostic already carries the virtual Sprite/Stage source path, so the report points
  * back at the TurboWarp target that declared the offending DSL hat.
- *
- * @param {Dsl4BlockSourceExportError} error
- * @param {string} displaySource
  */
-export function formatDsl4BlockSourceExportFailure(error, displaySource) {
+export function formatDsl4BlockSourceExportFailure(
+  error: Dsl4BlockSourceExportError,
+  displaySource: string,
+) {
   const diagnostics = Array.isArray(error.diagnostics) ? error.diagnostics : [];
   if (diagnostics.length === 0) return `${displaySource}: ${error.code} ${error.message}\n`;
   return diagnostics
     .map((diagnostic) => {
-      const projected = /** @type {Record<string, any>} */ (diagnostic);
+      const projected = diagnostic as Dsl4BlockSourceExportDiagnostic;
       const source =
         typeof projected.sourceId === 'string' && projected.sourceId.length > 0
           ? `${displaySource}!${projected.sourceId}`

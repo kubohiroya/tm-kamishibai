@@ -22,26 +22,34 @@ const reservedFilenameStems = new Set([
 ]);
 const unsafeFilenameCharacters = /[\u0000-\u001F\u007F/\\:*?"<>|]/u;
 
-/** @param {string} code @param {string} message @param {{sourcePath?: string}} [details] @returns {never} */
-function fail(code, message, details = {}) {
+/** One extracted block DSL source set: the entry module plus every module it can include. */
+interface Dsl4BlockSourceSet {
+  readonly entryPath: string;
+  readonly sources: Readonly<Record<string, string>>;
+}
+
+/**
+ * The part of a validated Source Graph the export plan reads. Node members stay `unknown` because
+ * the plan re-validates each one where it uses it: `sourcePath` through `String`, and
+ * `canonicalSource` through `serializeDsl4SourceYaml`.
+ */
+export interface Dsl4BlockSourceExportGraph {
+  readonly entryPath: string;
+  readonly nodes: readonly {readonly sourcePath: unknown; readonly canonicalSource: unknown}[];
+}
+
+function fail(code: string, message: string, details: {sourcePath?: string} = {}): never {
   throw new Dsl4BlockSourceError(code, message, {
     ...(details.sourcePath === undefined ? {} : {targetName: details.sourcePath}),
   });
 }
 
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-function isRecord(value) {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Reject any filename that cannot travel safely through a ZIP package or a checkout.
- *
- * @param {string} value
- * @param {string} label
- * @param {{sourcePath?: string}} [details]
- */
-function assertPortableFilename(value, label, details = {}) {
+/** Reject any filename that cannot travel safely through a ZIP package or a checkout. */
+function assertPortableFilename(value: string, label: string, details: {sourcePath?: string} = {}) {
   if (typeof value !== 'string' || value.length === 0) {
     fail('K4-BLOCK-EXPORT-NAME-001', `${label} must be a non-empty filename`, details);
   }
@@ -72,16 +80,12 @@ function assertPortableFilename(value, label, details = {}) {
   }
 }
 
-/**
- * Resolve the export root name and reject anything that cannot become a portable filename stem.
- *
- * @param {unknown} name
- */
-export function resolveDsl4BlockSourceExportName(name) {
+/** Resolve the export root name and reject anything that cannot become a portable filename stem. */
+export function resolveDsl4BlockSourceExportName(name: unknown) {
   if (typeof name !== 'string' || name.length === 0) {
     fail('K4-BLOCK-EXPORT-NAME-001', 'Export name must be a non-empty string');
   }
-  const value = /** @type {string} */ (name);
+  const value = name;
   if (value.includes('.')) {
     fail('K4-BLOCK-EXPORT-NAME-001', 'Export name must not contain a dot');
   }
@@ -94,11 +98,11 @@ export function resolveDsl4BlockSourceExportName(name) {
  *
  * Include resolution, missing include targets, include cycles, and cross-source declaration
  * duplicates are all diagnosed here, exactly as they are for a YAML project on disk.
- *
- * @param {Readonly<{entryPath: string, sources: Readonly<Record<string, string>>}>} blockSourceSet
- * @param {Partial<typeof import('./source-graph.js').dsl4SourceGraphDefaultLimits>} [limits]
  */
-export function createDsl4BlockSourceGraph(blockSourceSet, limits) {
+export function createDsl4BlockSourceGraph(
+  blockSourceSet: Dsl4BlockSourceSet,
+  limits?: Partial<typeof import('./source-graph.js').dsl4SourceGraphDefaultLimits>,
+) {
   if (
     !isRecord(blockSourceSet) ||
     typeof blockSourceSet.entryPath !== 'string' ||
@@ -106,7 +110,7 @@ export function createDsl4BlockSourceGraph(blockSourceSet, limits) {
   ) {
     throw new TypeError('blockSourceSet must provide entryPath and sources');
   }
-  const sources = /** @type {Record<string, unknown>} */ (blockSourceSet.sources);
+  const sources = blockSourceSet.sources;
   return createDsl4SourceGraph(blockSourceSet.entryPath, {
     ...(limits === undefined ? {} : {limits}),
     readSource(sourcePath) {
@@ -132,11 +136,11 @@ export function createDsl4BlockSourceGraph(blockSourceSet, limits) {
  * Serializing the parsed value rather than the incoming text keeps the output independent from
  * however the block renderer happened to quote its scalars, so the same block tree always writes
  * byte-identical YAML.
- *
- * @param {string} canonicalSource
- * @param {{sourcePath?: string}} [options]
  */
-export function serializeDsl4SourceYaml(canonicalSource, {sourcePath} = {}) {
+export function serializeDsl4SourceYaml(
+  canonicalSource: unknown,
+  {sourcePath}: {sourcePath?: string} = {},
+) {
   if (typeof canonicalSource !== 'string') {
     throw new TypeError('canonicalSource must be a string');
   }
@@ -162,13 +166,16 @@ export function serializeDsl4SourceYaml(canonicalSource, {sourcePath} = {}) {
  *
  * Every declared module must be reachable. A Sprite that declares a DSL source no include names is
  * authored content the export would silently drop, so it fails instead.
- *
- * @param {object} options
- * @param {Readonly<{entryPath: string, sources: Readonly<Record<string, string>>}>} options.blockSourceSet
- * @param {Readonly<Record<string, any>>} options.sourceGraph
- * @param {string} options.name
  */
-export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
+export function planDsl4BlockSourceExport({
+  blockSourceSet,
+  sourceGraph,
+  name,
+}: {
+  blockSourceSet: Dsl4BlockSourceSet;
+  sourceGraph: Dsl4BlockSourceExportGraph;
+  name: unknown;
+}) {
   if (
     !isRecord(blockSourceSet) ||
     typeof blockSourceSet.entryPath !== 'string' ||
@@ -188,9 +195,7 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
   const packageName = `${rootName}${dsl4BlockSourceExportPackageSuffix}`;
   const entryPath = sourceGraph.entryPath;
 
-  const reachable = new Set(
-    /** @type {Record<string, any>[]} */ (sourceGraph.nodes).map((node) => String(node.sourcePath)),
-  );
+  const reachable = new Set(sourceGraph.nodes.map((node) => String(node.sourcePath)));
   const unreferenced = Object.keys(blockSourceSet.sources)
     .filter((sourcePath) => !reachable.has(sourcePath))
     .sort();
@@ -202,11 +207,9 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
     );
   }
 
-  /** @type {{sourcePath: string, filename: string, text: string, byteLength: number}[]} */
-  const files = [];
-  /** @type {string[]} */
-  const moduleFilenames = [];
-  for (const node of /** @type {Record<string, any>[]} */ (sourceGraph.nodes)) {
+  const files: {sourcePath: string; filename: string; text: string; byteLength: number}[] = [];
+  const moduleFilenames: string[] = [];
+  for (const node of sourceGraph.nodes) {
     const sourcePath = String(node.sourcePath);
     const isEntry = sourcePath === entryPath;
     const filename = isEntry ? entryFilename : sourcePath;
@@ -216,8 +219,7 @@ export function planDsl4BlockSourceExport({blockSourceSet, sourceGraph, name}) {
     files.push({sourcePath, filename, text, byteLength: textEncoder.encode(text).byteLength});
   }
 
-  /** @type {Map<string, string>} */
-  const claimed = new Map();
+  const claimed = new Map<string, string>();
   for (const file of files) {
     const previous = claimed.get(file.filename);
     if (previous !== undefined) {
