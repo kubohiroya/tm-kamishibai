@@ -137,9 +137,10 @@ test('keeps JSDoc `any` out of the JavaScript that tsconfig type-checks', async 
       includes.some((pattern) => pattern.test(file)) &&
       !excludes.some((pattern) => pattern.test(file)),
   );
-  // This test stands in for a lint rule, so it honours the same ignores. That is what drops the
-  // generated `src/dsl4/platform/posenet-bundle-assets.js`, which tsconfig does type-check: an
-  // annotation there would have to be fixed in the generator, not in the file.
+  // This test stands in for a lint rule, so it honours the same ignores, which is what drops
+  // everything under a `generated/` directory. tsconfig still type-checks the PoseNet asset module
+  // because a source file imports it, but an annotation there would have to be fixed in the
+  // generator rather than in the file.
   const checked = [];
   for (const file of candidates) {
     if (!(await eslint.isPathIgnored(file))) checked.push(file);

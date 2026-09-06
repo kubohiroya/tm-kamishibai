@@ -5,7 +5,7 @@ import {Buffer} from 'buffer';
 import {createDsl4LocalPreviewBrowserBootstrap} from './dsl4-local-preview-browser-bootstrap.js';
 import {createDsl4ProductionSourceFrontend} from './dsl4-source-frontend.js';
 import {createDsl4BundledTMRuntime} from '../dsl4/platform/posenet-bundle.js';
-import {embeddedPoseNetFiles} from '../dsl4/platform/posenet-bundle-assets.js';
+import {embeddedPoseNetFiles} from '../dsl4/platform/generated/posenet-bundle-assets.js';
 
 (globalThis as Record<string, unknown>).Buffer ??= Buffer;
 

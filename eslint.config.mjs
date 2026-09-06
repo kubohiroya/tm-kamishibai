@@ -38,8 +38,8 @@ export default [
       'site-dist/**',
       'node_modules/**',
       'tmp/**',
-      'src/dsl4/platform/posenet-bundle-assets.js',
-      'src/builder/generated/dsl4-playback-runtime-extension.js',
+      // Every generated artifact lives under a `generated/` directory; see .gitattributes.
+      '**/generated/**',
     ],
   },
   {
