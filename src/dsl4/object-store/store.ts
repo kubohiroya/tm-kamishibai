@@ -26,6 +26,87 @@ const defaultLimits = Object.freeze({
   maxStringLength: 1048576,
 });
 
+/**
+ * The Object Store's own state, in the two forms it takes.
+ *
+ * The committed form is the frozen root the backend persists: every collection is a slot-sorted
+ * array, so a commit is comparable byte for byte. The working form is what an operation mutates:
+ * the same records keyed by slot, or by token for handles. `cloneRoot` and `freezeRoot` are the
+ * only conversions between them.
+ *
+ * A slot is reused after its record is freed, so `slot` alone does not identify a record; `slot`
+ * plus `generation` does, and `generations` holds the current generation for every live slot.
+ */
+interface StoreSlotRecord {
+  slot: number;
+  generation: number;
+}
+
+interface StoreHandleRecord {
+  token: string;
+  kind: string;
+  slot: number;
+  generation: number;
+  state: string;
+  ownerScopeSlot: number | null;
+}
+
+interface StoreScopeRecord extends StoreSlotRecord {
+  parentScopeSlot: number | null;
+  label?: unknown;
+}
+
+interface StoreEntryRecord extends StoreSlotRecord {
+  ownerScopeSlot: number;
+  rootNodeSlot: number;
+  typeTag?: unknown;
+}
+
+interface StoreLeaseRecord extends StoreSlotRecord {
+  ownerScopeSlot: number;
+  targetNodeSlot: number;
+}
+
+/** One member of a container node: a child node, or a ref to another entry's node. */
+interface StoreNodeMember {
+  kind: string;
+  targetNodeSlot: number;
+}
+
+/** `members` is absent on a scalar node and `scalar` on a container one; `kind` says which. */
+interface StoreNodeRecord extends StoreSlotRecord {
+  entrySlot: number;
+  kind: string;
+  incomingCount: number;
+  scalar?: unknown;
+  members?: Map<string | number, StoreNodeMember>;
+}
+
+interface StoreWorkingRoot {
+  nextSlot: number;
+  freeSlots: number[];
+  generations: Map<number, number>;
+  handles: Map<string, StoreHandleRecord>;
+  scopes: Map<number, StoreScopeRecord>;
+  entries: Map<number, StoreEntryRecord>;
+  leases: Map<number, StoreLeaseRecord>;
+  nodes: Map<number, StoreNodeRecord>;
+}
+
+type StoreLimits = Readonly<typeof defaultLimits>;
+
+/** The per-realm context every operation is given: its backend, its limits, and its liveness. */
+interface StoreRealmContext {
+  backend: unknown;
+  limits: StoreLimits;
+  nonceSource: (byteLength: number) => Uint8Array;
+  realmNonce: string;
+  rootScopeSlot: number;
+  storeKey: object;
+  realmState: 'active' | 'faulted' | 'disposed';
+  disposedResult: unknown;
+}
+
 const refValueMetadata: WeakMap<object, {storeKey: object; nodeSlot: number; generation: number}> =
   new WeakMap();
 const nodeViewMetadata: WeakMap<object, {viewKey: object; nodeSlot: number; generation: number}> =
@@ -119,7 +200,17 @@ function success<T>(value: T) {
   return deepFreeze({ok: true, value});
 }
 
-function bySlot(left: any, right: any) {
+/**
+ * The members of a container node. A scalar node has none, so every caller here has already
+ * established the node is a container; reaching for them otherwise is an invariant failure.
+ */
+function nodeMembers(node: StoreNodeRecord) {
+  const {members} = node;
+  if (!members) throw new StoreInvariantFailure('A scalar node has no members');
+  return members;
+}
+
+function bySlot(left: StoreSlotRecord, right: StoreSlotRecord) {
   return left.slot - right.slot || left.generation - right.generation;
 }
 
@@ -130,7 +221,7 @@ function compareMemberKeys(left: string | number, right: string | number) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function freezeRoot(working: any) {
+function freezeRoot(working: StoreWorkingRoot) {
   const nodes = [...working.nodes.values()].sort(bySlot).map((node) => ({
     slot: node.slot,
     generation: node.generation,
@@ -140,7 +231,7 @@ function freezeRoot(working: any) {
     ...(node.kind === 'scalar'
       ? {scalar: node.scalar}
       : {
-          members: [...node.members.entries()].map(([key, member]) => ({
+          members: [...nodeMembers(node).entries()].map(([key, member]) => ({
             key,
             kind: member.kind,
             targetNodeSlot: member.targetNodeSlot,
@@ -199,7 +290,7 @@ function cloneRoot(root: any) {
   };
 }
 
-function allocateSlot(working: any) {
+function allocateSlot(working: StoreWorkingRoot) {
   const reused = working.freeSlots.shift();
   const slot = reused ?? working.nextSlot++;
   const generation = (working.generations.get(slot) ?? 0) + 1;
@@ -207,7 +298,7 @@ function allocateSlot(working: any) {
   return {slot, generation};
 }
 
-function releaseSlot(working: any, slot: number) {
+function releaseSlot(working: StoreWorkingRoot, slot: number) {
   if (working.freeSlots.includes(slot)) throw new StoreInvariantFailure('Slot released twice');
   working.freeSlots.push(slot);
   working.freeSlots.sort((left: number, right: number) => left - right);
@@ -240,7 +331,7 @@ function issueHandle(
   throw new StoreFailure('STORE-LIMIT-EXCEEDED', 'A unique handle could not be allocated');
 }
 
-function normalizeStoredValue(value: unknown, limits: any) {
+function normalizeStoredValue(value: unknown, limits: StoreLimits) {
   const seen = new WeakSet();
   const active = new WeakSet();
   let nodeCount = 0;
@@ -404,7 +495,11 @@ function normalizeOptionsArray(value: unknown, maximumLength: number) {
   return normalized;
 }
 
-function createNodeTree(working: any, descriptor: any, entrySlot: number) {
+function createNodeTree(
+  working: StoreWorkingRoot,
+  descriptor: Readonly<Record<string, any>>,
+  entrySlot: number,
+) {
   const {slot, generation} = allocateSlot(working);
   const node = {
     slot,
@@ -418,7 +513,7 @@ function createNodeTree(working: any, descriptor: any, entrySlot: number) {
   if (descriptor.kind !== 'scalar') {
     for (const {key, child} of descriptor.children) {
       const childNode = createNodeTree(working, child, entrySlot);
-      node.members.set(key, {kind: 'node', targetNodeSlot: childNode.slot});
+      nodeMembers(node).set(key, {kind: 'node', targetNodeSlot: childNode.slot});
     }
   }
   return node;
@@ -430,8 +525,8 @@ function parseHandle(token: unknown) {
 }
 
 function resolveHandle(
-  working: any,
-  context: any,
+  working: StoreWorkingRoot,
+  context: StoreRealmContext,
   token: unknown,
   expectedKinds: ReadonlySet<string>,
 ) {
@@ -442,7 +537,7 @@ function resolveHandle(
   if (match[1] !== context.realmNonce) {
     throw new StoreFailure('STORE-REALM-MISMATCH', 'The handle belongs to another realm');
   }
-  const handle = working.handles.get(token);
+  const handle = working.handles.get(String(token));
   if (!handle) {
     throw new StoreFailure('STORE-REFERENCE-INVALID', 'The handle is not registered');
   }
@@ -472,7 +567,7 @@ function resolveHandle(
   return handle;
 }
 
-function resolveScope(working: any, context: any, scopeRef: unknown) {
+function resolveScope(working: StoreWorkingRoot, context: StoreRealmContext, scopeRef: unknown) {
   const handle = resolveHandle(working, context, scopeRef, new Set(['scope']));
   const scope = working.scopes.get(handle.slot);
   if (!scope || scope.generation !== handle.generation) {
@@ -487,7 +582,7 @@ function createRefValue(storeKey: object, nodeSlot: number, generation: number) 
   return value;
 }
 
-function resolveSourceNode(working: any, context: any, source: unknown) {
+function resolveSourceNode(working: StoreWorkingRoot, context: StoreRealmContext, source: unknown) {
   if (isDsl4RefValue(source)) {
     throw new StoreFailure(
       'STORE-HANDLE-KIND',
@@ -508,7 +603,7 @@ function resolveSourceNode(working: any, context: any, source: unknown) {
   return {node, ownerScopeSlot: lease.ownerScopeSlot};
 }
 
-function normalizePath(path: unknown, limits: any) {
+function normalizePath(path: unknown, limits: StoreLimits) {
   if (path === undefined || path === null || path === '$') return [];
   if (Array.isArray(path)) {
     if (path.length > limits.maxDepth) {
@@ -565,7 +660,11 @@ function normalizePath(path: unknown, limits: any) {
   return segments;
 }
 
-function followPath(working: any, startNode: any, segments: readonly (string | number)[]) {
+function followPath(
+  working: StoreWorkingRoot,
+  startNode: StoreNodeRecord,
+  segments: readonly (string | number)[],
+) {
   let node = startNode;
   for (const segment of segments) {
     if (node.kind === 'scalar') {
@@ -578,16 +677,17 @@ function followPath(working: any, startNode: any, segments: readonly (string | n
     ) {
       throw new StoreFailure('STORE-REFERENCE-INVALID', 'The reference path does not exist');
     }
-    const member = node.members.get(key);
-    node = member && working.nodes.get(member.targetNodeSlot);
-    if (!member || !node) {
+    const member = nodeMembers(node).get(key);
+    const next = member && working.nodes.get(member.targetNodeSlot);
+    if (!member || !next) {
       throw new StoreFailure('STORE-REFERENCE-INVALID', 'The reference path does not exist');
     }
+    node = next;
   }
   return node;
 }
 
-function normalizeMemberKey(node: any, key: string | number) {
+function normalizeMemberKey(node: StoreNodeRecord, key: string | number) {
   if (node.kind === 'object') {
     if (typeof key !== 'string' || forbiddenKeys.has(key)) {
       throw new StoreFailure('STORE-VALUE-INVALID', 'The reference member key is invalid');
@@ -603,11 +703,15 @@ function normalizeMemberKey(node: any, key: string | number) {
   throw new StoreFailure('STORE-VALUE-INVALID', 'Reference members require a container node');
 }
 
-function wouldCreateStrongCycle(working: any, sourceEntrySlot: number, targetEntrySlot: number) {
+function wouldCreateStrongCycle(
+  working: StoreWorkingRoot,
+  sourceEntrySlot: number,
+  targetEntrySlot: number,
+) {
   if (sourceEntrySlot === targetEntrySlot) return false;
   const adjacency = new Map();
   for (const node of working.nodes.values()) {
-    for (const member of node.kind === 'scalar' ? [] : node.members.values()) {
+    for (const member of node.kind === 'scalar' ? [] : nodeMembers(node).values()) {
       if (member.kind !== 'ref') continue;
       const target = working.nodes.get(member.targetNodeSlot);
       if (!target || target.entrySlot === node.entrySlot) continue;
@@ -629,7 +733,7 @@ function wouldCreateStrongCycle(working: any, sourceEntrySlot: number, targetEnt
   return false;
 }
 
-function adjustIncomingCount(node: any, delta: number) {
+function adjustIncomingCount(node: StoreNodeRecord, delta: number) {
   const next = node.incomingCount + delta;
   if (!Number.isSafeInteger(next) || next < 0) {
     throw new StoreInvariantFailure('Reference count underflow');
@@ -674,7 +778,7 @@ function releaseClosure(
   }
   for (const sourceNode of working.nodes.values()) {
     if (entrySlots.has(sourceNode.entrySlot) || sourceNode.kind === 'scalar') continue;
-    for (const member of sourceNode.members.values()) {
+    for (const member of nodeMembers(sourceNode).values()) {
       if (member.kind === 'ref' && nodeSlots.has(member.targetNodeSlot)) {
         throw new StoreFailure(
           'STORE-OBJECT-IN-USE',
@@ -699,7 +803,7 @@ function releaseClosure(
 
   for (const sourceNode of working.nodes.values()) {
     if (!entrySlots.has(sourceNode.entrySlot) || sourceNode.kind === 'scalar') continue;
-    for (const member of sourceNode.members.values()) {
+    for (const member of nodeMembers(sourceNode).values()) {
       if (member.kind !== 'ref' || nodeSlots.has(member.targetNodeSlot)) continue;
       const target = working.nodes.get(member.targetNodeSlot);
       if (!target) throw new StoreInvariantFailure('Reference target is missing');
@@ -727,7 +831,7 @@ function releaseClosure(
   }
 }
 
-function verifyWorking(working: any, limits: any) {
+function verifyWorking(working: StoreWorkingRoot, limits: StoreLimits) {
   if (
     working.scopes.size > limits.maxScopes ||
     working.entries.size > limits.maxEntries ||
@@ -787,7 +891,7 @@ function verifyWorking(working: any, limits: any) {
     if (!entryNodes.has(node.entrySlot)) entryNodes.set(node.entrySlot, new Set());
     entryNodes.get(node.entrySlot).add(node.slot);
     if (node.kind === 'scalar') continue;
-    for (const member of node.members.values()) {
+    for (const member of nodeMembers(node).values()) {
       step();
       const target = working.nodes.get(member.targetNodeSlot);
       if (!target) throw new StoreInvariantFailure('Node member target is missing');
@@ -813,14 +917,15 @@ function verifyWorking(working: any, limits: any) {
     const pending = [entry.rootNodeSlot];
     while (pending.length > 0) {
       step();
-      const nodeSlot = pending.pop();
+      // The loop runs while `pending` is non-empty, so the pop always yields a slot.
+      const nodeSlot = pending.pop() as number;
       if (reachable.has(nodeSlot)) throw new StoreInvariantFailure('Structural graph is shared');
       reachable.add(nodeSlot);
       const node = working.nodes.get(nodeSlot);
       if (!node || node.entrySlot !== entry.slot)
         throw new StoreInvariantFailure('Entry node is invalid');
       if (node.kind !== 'scalar') {
-        for (const member of node.members.values()) {
+        for (const member of nodeMembers(node).values()) {
           if (member.kind === 'node') pending.push(member.targetNodeSlot);
         }
       }
@@ -856,11 +961,12 @@ function verifyWorking(working: any, limits: any) {
     const key = `${handle.kind}:${handle.slot}:${handle.generation}`;
     activeHandleKeys.set(key, (activeHandleKeys.get(key) ?? 0) + 1);
   }
-  for (const [kind, records] of [
+  const recordsByHandleKind: readonly [string, ReadonlyMap<number, StoreSlotRecord>][] = [
     ['scope', working.scopes],
     ['owner', working.entries],
     ['lease', working.leases],
-  ]) {
+  ];
+  for (const [kind, records] of recordsByHandleKind) {
     for (const record of records.values()) {
       step();
       if (activeHandleKeys.get(`${kind}:${record.slot}:${record.generation}`) !== 1) {
@@ -872,7 +978,7 @@ function verifyWorking(working: any, limits: any) {
   const adjacency = new Map();
   for (const node of working.nodes.values()) {
     if (node.kind === 'scalar') continue;
-    for (const member of node.members.values()) {
+    for (const member of nodeMembers(node).values()) {
       if (member.kind !== 'ref') continue;
       const target = working.nodes.get(member.targetNodeSlot);
       if (!target || target.entrySlot === node.entrySlot) continue;
@@ -894,7 +1000,7 @@ function verifyWorking(working: any, limits: any) {
   for (const entrySlot of working.entries.keys()) visitEntry(entrySlot);
 }
 
-function snapshotMembers(node: any): any[] {
+function snapshotMembers(node: Readonly<Record<string, any>>): any[] {
   return (node.members ?? []) as any[];
 }
 
@@ -1007,7 +1113,7 @@ function createNodeView(working: any, rootNode: any) {
   }
 
   function projectMember(node: any, key: string | number) {
-    const member = node.members.get(key);
+    const member = nodeMembers(node).get(key);
     const target = member && working.nodes.get(member.targetNodeSlot);
     if (!member || !target) throw new TypeError('Object Store node member is invalid');
     return project(target);
@@ -1021,7 +1127,7 @@ function createNodeView(working: any, rootNode: any) {
       const node = resolve(projected);
       if (node.kind !== 'object') throw new TypeError('Object Store node is not an object');
       return Object.freeze(
-        [...node.members.keys()].map((key) =>
+        [...nodeMembers(node).keys()].map((key) =>
           Object.freeze([String(key), projectMember(node, key)]),
         ),
       );
@@ -1029,7 +1135,7 @@ function createNodeView(working: any, rootNode: any) {
     arrayLength(projected: unknown) {
       const node = resolve(projected);
       if (node.kind !== 'array') throw new TypeError('Object Store node is not an array');
-      return node.members.size;
+      return nodeMembers(node).size;
     },
     arrayItem(projected: unknown, index: number) {
       const node = resolve(projected);
@@ -1420,7 +1526,7 @@ export function createDsl4ObjectStore({
           'The reference member key limit was exceeded',
         );
       }
-      const oldMember = sourceNode.members.get(memberKey);
+      const oldMember = nodeMembers(sourceNode).get(memberKey);
       if (oldMember?.kind === 'node') {
         throw new StoreFailure(
           'STORE-VALUE-INVALID',
@@ -1429,7 +1535,7 @@ export function createDsl4ObjectStore({
       }
       const highestArrayIndex =
         sourceNode.kind === 'array'
-          ? Math.max(-1, ...[...sourceNode.members.keys()].map(Number))
+          ? Math.max(-1, ...[...nodeMembers(sourceNode).keys()].map(Number))
           : -1;
       if (target === null) {
         if (!oldMember) return {changed: false, value: {changed: false}};
@@ -1442,7 +1548,7 @@ export function createDsl4ObjectStore({
         const oldTarget = working.nodes.get(oldMember.targetNodeSlot);
         if (!oldTarget) throw new StoreInvariantFailure('Reference target is missing');
         adjustIncomingCount(oldTarget, -1);
-        sourceNode.members.delete(memberKey);
+        nodeMembers(sourceNode).delete(memberKey);
         return {changed: true, value: {changed: true}};
       }
       const targetNode = resolveSourceNode(working, context, target).node;
@@ -1459,12 +1565,12 @@ export function createDsl4ObjectStore({
         const oldTarget = working.nodes.get(oldMember.targetNodeSlot);
         if (!oldTarget) throw new StoreInvariantFailure('Reference target is missing');
         adjustIncomingCount(oldTarget, -1);
-        sourceNode.members.delete(memberKey);
+        nodeMembers(sourceNode).delete(memberKey);
       }
       if (wouldCreateStrongCycle(working, sourceNode.entrySlot, targetNode.entrySlot)) {
         throw new StoreFailure('STORE-STRONG-CYCLE', 'The reference would create a strong cycle');
       }
-      sourceNode.members.set(memberKey, {kind: 'ref', targetNodeSlot: targetNode.slot});
+      nodeMembers(sourceNode).set(memberKey, {kind: 'ref', targetNodeSlot: targetNode.slot});
       adjustIncomingCount(targetNode, 1);
       return {changed: true, value: {changed: true}};
     });
@@ -1474,14 +1580,14 @@ export function createDsl4ObjectStore({
     return execute('deleteReferenceValue', (working) => {
       const sourceNode = resolveSourceNode(working, context, source).node;
       const memberKey = normalizeMemberKey(sourceNode, key as string | number);
-      const oldMember = sourceNode.members.get(memberKey);
+      const oldMember = nodeMembers(sourceNode).get(memberKey);
       if (!oldMember) return {changed: false, value: {changed: false}};
       if (oldMember.kind !== 'ref') {
         throw new StoreFailure('STORE-VALUE-INVALID', 'A structural member is not a RefValue');
       }
       if (
         sourceNode.kind === 'array' &&
-        memberKey !== Math.max(-1, ...[...sourceNode.members.keys()].map(Number))
+        memberKey !== Math.max(-1, ...[...nodeMembers(sourceNode).keys()].map(Number))
       ) {
         throw new StoreFailure(
           'STORE-VALUE-INVALID',
@@ -1491,7 +1597,7 @@ export function createDsl4ObjectStore({
       const oldTarget = working.nodes.get(oldMember.targetNodeSlot);
       if (!oldTarget) throw new StoreInvariantFailure('Reference target is missing');
       adjustIncomingCount(oldTarget, -1);
-      sourceNode.members.delete(memberKey);
+      nodeMembers(sourceNode).delete(memberKey);
       return {changed: true, value: {changed: true}};
     });
   }
@@ -1549,7 +1655,7 @@ export function createDsl4ObjectStore({
         if (node.kind === 'scalar') return node.scalar;
         if (node.kind === 'array') {
           const array = [];
-          for (const [key, member] of [...node.members.entries()].sort(([left], [right]) =>
+          for (const [key, member] of [...nodeMembers(node).entries()].sort(([left], [right]) =>
             compareMemberKeys(left, right),
           )) {
             const target = working.nodes.get(member.targetNodeSlot);
@@ -1562,7 +1668,7 @@ export function createDsl4ObjectStore({
           return deepFreeze(array);
         }
         const object = {};
-        for (const [key, member] of node.members.entries()) {
+        for (const [key, member] of nodeMembers(node).entries()) {
           const target = working.nodes.get(member.targetNodeSlot);
           if (!target) throw new StoreInvariantFailure('Materialized target is missing');
           Object.defineProperty(object, String(key), {
