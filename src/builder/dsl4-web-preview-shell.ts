@@ -1,4 +1,4 @@
-import type {Dsl4PreviewDocument} from './preview-dom.js';
+import type {Dsl4PreviewDocument} from '../dsl4/preview-dom.js';
 import type {Dsl4PreviewReloadSurface} from '../dsl4/preview-reload-surface-contract.js';
 import {createDsl4BrowserAssetReloadPipeline} from '../dsl4/browser-asset-reload-pipeline.js';
 import {createDsl4BrowserPreviewCoordinator} from '../dsl4/browser-preview-coordinator.js';
