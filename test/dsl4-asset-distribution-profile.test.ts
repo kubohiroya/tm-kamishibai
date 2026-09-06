@@ -27,14 +27,57 @@ const lockSchema = JSON.parse(
   await readFile(path.join(projectRoot, 'schema', 'dsl-4-asset-lock.schema.json'), 'utf8'),
 );
 const frontend = createDsl4SourceFrontend(storySchema);
-const AjvConstructor = /** @type {any} */ (Ajv2020);
+/** The compiled validator Ajv hands back, with the failures it hangs off it. */
+interface SchemaValidator {
+  (data: unknown): boolean;
+  errors?: readonly unknown[] | null;
+}
+
+// Ajv publishes its constructor through an ESM/CJS interop default that TypeScript resolves as a
+// namespace here, so name the construct signature this suite uses.
+const AjvConstructor = Ajv2020 as unknown as new (options: {
+  allErrors: boolean;
+  strict: boolean;
+}) => {compile(schema: unknown): SchemaValidator};
 const ajv = new AjvConstructor({allErrors: true, strict: true});
 const validateConfigSchema = ajv.compile(configSchema);
 const validateLockSchema = ajv.compile(lockSchema);
 
-const hash = (digit) => `sha256-${digit.repeat(64)}`;
+const hash = (digit: string) => `sha256-${digit.repeat(64)}`;
 
-function story() {
+/** The StoryDocument members this suite reads back out of a resolved profile. */
+interface StoryWithAssets extends Readonly<Record<string, unknown>> {
+  readonly assets: Record<StoryAssetId, Record<string, unknown>>;
+}
+
+/**
+ * Read and write a cloned fixture at a known path.
+ *
+ * These tests build invalid variants by corrupting a clone, which is the one thing the fixture
+ * literal's own type will not let them say. Naming the path keeps each corruption explicit and
+ * keeps the fixtures themselves precisely typed.
+ */
+function readAt(root: unknown, ...path: readonly string[]): unknown {
+  return path.reduce<unknown>((node, key) => (node as Record<string, unknown>)[key], root);
+}
+
+function setAt(root: unknown, path: readonly string[], value: unknown) {
+  const parent = readAt(root, ...path.slice(0, -1)) as Record<string, unknown>;
+  parent[String(path.at(-1))] = value;
+}
+
+/** The three assets the fixture story declares. */
+type StoryAssetId = 'Logo' | 'Narration' | 'RescuePose';
+
+/** The resolution this suite reads back: the rewritten story plus the per-asset delivery. */
+interface ResolvedDistribution extends Readonly<Record<string, unknown>> {
+  readonly storyDocument: StoryWithAssets;
+  readonly assets: readonly {readonly id: string; readonly delivery: string}[];
+  readonly canonicalResolution: unknown;
+  readonly network: unknown;
+}
+
+function story(): StoryWithAssets {
   const result = frontend.parse(
     [
       "kamishibai: '4.0'",
@@ -55,7 +98,7 @@ function story() {
     {sourceId: 'asset-distribution-test'},
   );
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  return result.storyDocument;
+  return result.storyDocument as unknown as StoryWithAssets;
 }
 
 function config() {
@@ -124,16 +167,16 @@ function lock() {
   };
 }
 
-function assertDeepFrozen(value) {
+function assertDeepFrozen(value: unknown) {
   if (typeof value !== 'object' || value === null) return;
   assert.equal(Object.isFrozen(value), true);
-  for (const child of Object.values(value)) assertDeepFrozen(child);
+  for (const child of Object.values(value as Record<string, unknown>)) assertDeepFrozen(child);
 }
 
-function rejectsCode(callback, code) {
-  assert.throws(callback, (error) => {
+function rejectsCode(callback: () => unknown, code: string) {
+  assert.throws(callback, (error: unknown) => {
     assert.equal(error instanceof Dsl4AssetDistributionError, true);
-    assert.equal(error.code, code);
+    assert.equal((error as {code?: unknown}).code, code);
     return true;
   });
 }
@@ -143,10 +186,14 @@ test('publishes strict machine-readable config and lock schemas', () => {
   assert.equal(validateLockSchema(lock()), true, JSON.stringify(validateLockSchema.errors));
 
   const invalidConfig = structuredClone(config());
-  invalidConfig.profiles.online.extra = true;
+  (invalidConfig.profiles.online as Record<string, unknown>).extra = true;
   assert.equal(validateConfigSchema(invalidConfig), false);
   const invalidLock = structuredClone(lock());
-  invalidLock.assets.Narration.providers.remote.transportIntegrity = 'sha256-invalid';
+  setAt(
+    invalidLock,
+    ['assets', 'Narration', 'providers', 'remote', 'transportIntegrity'],
+    'sha256-invalid',
+  );
   assert.equal(validateLockSchema(invalidLock), false);
 });
 
@@ -172,7 +219,12 @@ test('normalizes config and lock records into deterministic immutable order', ()
 
 test('resolves explicit asset, kind, default, and source delivery in fixed precedence order', () => {
   const sourceStory = story();
-  const result = resolveDsl4AssetDistributionProfile(sourceStory, config(), lock(), 'online');
+  const result = resolveDsl4AssetDistributionProfile(
+    sourceStory,
+    config(),
+    lock(),
+    'online',
+  ) as unknown as ResolvedDistribution;
   assert.deepEqual(
     result.assets.map(({id, delivery}) => [id, delivery]),
     [
@@ -195,7 +247,7 @@ test('resolves explicit asset, kind, default, and source delivery in fixed prece
   assert.equal(sourceStory.assets.RescuePose.file, 'models/rescue');
   assert.equal(result.storyDocument.assets.RescuePose.loading, 'eager');
   assert.equal(result.storyDocument.assets.RescuePose.retention, 'scene');
-  assert.match(result.canonicalResolution, /"profile":"online"/u);
+  assert.match(String(result.canonicalResolution), /"profile":"online"/u);
   assertDeepFrozen(result);
   assert.deepEqual(validateDsl4AssetDistributionResolution(sourceStory, result), result);
 
@@ -212,7 +264,12 @@ test('resolves explicit asset, kind, default, and source delivery in fixed prece
 });
 
 test('creates a cold-offline resolution containing embedded providers only', () => {
-  const result = resolveDsl4AssetDistributionProfile(story(), config(), lock(), 'offline');
+  const result = resolveDsl4AssetDistributionProfile(
+    story(),
+    config(),
+    lock(),
+    'offline',
+  ) as unknown as ResolvedDistribution;
   assert.equal(result.network, 'forbidden');
   assert.equal(
     result.assets.every(({delivery}) => delivery === 'embedded'),
@@ -230,16 +287,20 @@ test('creates a cold-offline resolution containing embedded providers only', () 
 test('rejects unsafe or ambiguous author configuration', () => {
   const cases = [];
   const unknown = structuredClone(config());
-  unknown.extra = true;
+  setAt(unknown, ['extra'], true);
   cases.push(unknown);
   const unknownProfileKey = structuredClone(config());
-  unknownProfileKey.profiles.online.extra = true;
+  setAt(unknownProfileKey, ['profiles', 'online', 'extra'], true);
   cases.push(unknownProfileKey);
   const unknownKind = structuredClone(config());
-  unknownKind.profiles.online.kinds.video = 'remote';
+  setAt(unknownKind, ['profiles', 'online', 'kinds', 'video'], 'remote');
   cases.push(unknownKind);
   const invalidProfileName = structuredClone(config());
-  invalidProfileName.profiles['../online'] = invalidProfileName.profiles.online;
+  setAt(
+    invalidProfileName,
+    ['profiles', '../online'],
+    readAt(invalidProfileName, 'profiles', 'online'),
+  );
   cases.push(invalidProfileName);
   for (const candidate of cases) {
     rejectsCode(() => validateDsl4AssetDistributionConfig(candidate), 'K4-ASSET-PROFILE-001');
@@ -255,7 +316,7 @@ test('rejects unsafe or ambiguous author configuration', () => {
     'assets\\narration.mp3',
   ]) {
     const candidate = structuredClone(config());
-    candidate.providers.Narration.embedded = {file: invalidPath};
+    setAt(candidate, ['providers', 'Narration', 'embedded'], {file: invalidPath});
     rejectsCode(() => validateDsl4AssetDistributionConfig(candidate), 'K4-ASSET-PROVIDER-001');
   }
   for (const invalidUrl of [
@@ -265,56 +326,58 @@ test('rejects unsafe or ambiguous author configuration', () => {
     '/narration.mp3',
   ]) {
     const candidate = structuredClone(config());
-    candidate.providers.Narration.remote.url = invalidUrl;
+    setAt(candidate, ['providers', 'Narration', 'remote', 'url'], invalidUrl);
     rejectsCode(() => validateDsl4AssetDistributionConfig(candidate), 'K4-ASSET-PROVIDER-001');
   }
 });
 
 test('rejects malformed locks and single-file content mismatches', () => {
   const unknown = structuredClone(lock());
-  unknown.extra = true;
+  setAt(unknown, ['extra'], true);
   rejectsCode(() => validateDsl4AssetDistributionLock(unknown), 'K4-ASSET-LOCK-001');
 
   const invalidIntegrity = structuredClone(lock());
-  invalidIntegrity.assets.Logo.contentIntegrity = `sha256-${'A'.repeat(64)}`;
+  setAt(invalidIntegrity, ['assets', 'Logo', 'contentIntegrity'], `sha256-${'A'.repeat(64)}`);
   rejectsCode(() => validateDsl4AssetDistributionLock(invalidIntegrity), 'K4-ASSET-LOCK-001');
 
   const mismatch = structuredClone(lock());
-  mismatch.assets.Narration.providers.remote.size += 1;
+  const mismatchPath = ['assets', 'Narration', 'providers', 'remote', 'size'];
+  setAt(mismatch, mismatchPath, Number(readAt(mismatch, ...mismatchPath)) + 1);
   rejectsCode(() => validateDsl4AssetDistributionLock(mismatch), 'K4-ASSET-CONTENT-MISMATCH-001');
 
   const poseTransportDiffers = structuredClone(lock());
-  poseTransportDiffers.assets.RescuePose.providers.remote.size += 1;
+  const posePath = ['assets', 'RescuePose', 'providers', 'remote', 'size'];
+  setAt(poseTransportDiffers, posePath, Number(readAt(poseTransportDiffers, ...posePath)) + 1);
   assert.equal(
-    validateDsl4AssetDistributionLock(poseTransportDiffers).assets.RescuePose.size,
+    readAt(validateDsl4AssetDistributionLock(poseTransportDiffers), 'assets', 'RescuePose', 'size'),
     1000,
   );
 });
 
 test('binds every lock provider to StoryDocument and config declarations', () => {
   const missing = structuredClone(lock());
-  delete missing.assets.Logo;
+  delete (readAt(missing, 'assets') as Record<string, unknown>).Logo;
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), config(), missing, 'online'),
     'K4-ASSET-LOCK-001',
   );
 
   const stalePath = structuredClone(lock());
-  stalePath.assets.Narration.providers.embedded.file = 'assets/old.mp3';
+  setAt(stalePath, ['assets', 'Narration', 'providers', 'embedded', 'file'], 'assets/old.mp3');
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), config(), stalePath, 'online'),
     'K4-ASSET-LOCK-001',
   );
 
   const conflicting = structuredClone(config());
-  conflicting.providers.Narration.embedded = {file: 'assets/alternate.mp3'};
+  setAt(conflicting, ['providers', 'Narration', 'embedded'], {file: 'assets/alternate.mp3'});
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), conflicting, lock(), 'online'),
     'K4-ASSET-PROVIDER-001',
   );
 
   const unknownProvider = structuredClone(config());
-  unknownProvider.providers.Unknown = {embedded: {file: 'assets/unknown.svg'}};
+  setAt(unknownProvider, ['providers', 'Unknown'], {embedded: {file: 'assets/unknown.svg'}});
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), unknownProvider, lock(), 'online'),
     'K4-ASSET-PROVIDER-001',
@@ -323,7 +386,7 @@ test('binds every lock provider to StoryDocument and config declarations', () =>
 
 test('fails closed for offline remote selection, missing providers, and unknown assets', () => {
   const offlineRemote = structuredClone(config());
-  offlineRemote.profiles.offline.assets = {RescuePose: 'remote'};
+  setAt(offlineRemote, ['profiles', 'offline', 'assets'], {RescuePose: 'remote'});
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), offlineRemote, lock(), 'offline'),
     'K4-ASSET-OFFLINE-001',
@@ -335,7 +398,7 @@ test('fails closed for offline remote selection, missing providers, and unknown 
   );
 
   const unknownAsset = structuredClone(config());
-  unknownAsset.profiles.online.assets.Unknown = 'embedded';
+  setAt(unknownAsset, ['profiles', 'online', 'assets', 'Unknown'], 'embedded');
   rejectsCode(
     () => resolveDsl4AssetDistributionProfile(story(), unknownAsset, lock(), 'online'),
     'K4-ASSET-PROFILE-001',
