@@ -1,4 +1,4 @@
-import type {Dsl4PreviewDocument} from './preview-dom.js';
+import type {Dsl4PreviewDocument} from '../dsl4/preview-dom.js';
 import {dsl4PreviewReloadAnchors} from '../dsl4/preview-layout-coordinator.js';
 import {deepFreeze} from '../dsl4/story-document.js';
 

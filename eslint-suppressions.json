@@ -66,7 +66,7 @@
   },
   "src/builder/dsl4-local-preview-browser-client.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 17
+      "count": 10
     }
   },
   "src/builder/dsl4-local-preview-browser-entry.ts": {
@@ -280,14 +280,6 @@
       "count": 4
     }
   },
-  "src/dsl4/browser-turbowarp-stage.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 19
-    },
-    "@typescript-eslint/no-unsafe-function-type": {
-      "count": 1
-    }
-  },
   "src/dsl4/debug-execution.ts": {
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 3
@@ -465,7 +457,7 @@
   },
   "src/dsl4/platform/standard-app-shell.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 18
+      "count": 3
     }
   },
   "src/dsl4/platform/svg-text-action-port.ts": {

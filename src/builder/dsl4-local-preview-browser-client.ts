@@ -1,3 +1,4 @@
+import type {Dsl4PreviewDocument, Dsl4PreviewElement} from '../dsl4/preview-dom.js';
 import {dsl4PreviewSourceGenerationWireDefaults} from '../dsl4/preview-source-generation-wire.js';
 import {
   dsl4BrowserTurboWarpStageDefaults,
@@ -13,6 +14,25 @@ const restartChoiceNames = Object.freeze({
   action: 'currentAction',
 });
 const missingCodes = new Set(['K4-SOURCE-MISSING']);
+
+interface Dsl4LocalPreviewLocation {
+  hash?: string;
+  pathname?: string;
+  search?: string;
+}
+
+interface Dsl4LocalPreviewHistory {
+  replaceState(data: unknown, unused: string, url?: string | URL | null): void;
+}
+
+interface Dsl4LocalPreviewEventTarget {
+  addEventListener(type: string, listener: () => unknown, options?: unknown): unknown;
+  removeEventListener(type: string, listener: () => unknown, options?: unknown): unknown;
+}
+
+interface Dsl4LocalPreviewDocument extends Dsl4PreviewDocument {
+  querySelector(selector: string): Dsl4PreviewElement | null;
+}
 
 export const dsl4LocalPreviewBrowserClientDefaults = deepFreeze({
   maxProjectBytes: dsl4BrowserTurboWarpStageDefaults.maxProjectBytes,
@@ -98,10 +118,10 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   ) {
     throw new TypeError('history and eventTarget must provide browser lifecycle methods');
   }
-  const document = documentCandidate as Record<string, any>;
-  const location = locationCandidate as Record<string, any>;
-  const history = historyCandidate as Record<string, any>;
-  const eventTarget = eventTargetCandidate as Record<string, any>;
+  const document = documentCandidate as unknown as Dsl4LocalPreviewDocument;
+  const location = locationCandidate as Dsl4LocalPreviewLocation;
+  const history = historyCandidate as unknown as Dsl4LocalPreviewHistory;
+  const eventTarget = eventTargetCandidate as unknown as Dsl4LocalPreviewEventTarget;
   const fetchRequest = options.fetch ?? globalThis.fetch;
   if (typeof fetchRequest !== 'function') throw new TypeError('fetch must be a function');
   if (!isRecord(options.sourceFrontend) || typeof options.sourceFrontend.parse !== 'function') {
@@ -145,7 +165,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   );
   const mountCandidate = document.querySelector('#dsl4-local-preview-runtime');
   if (!isRecord(mountCandidate)) throw new TypeError('The local preview runtime mount is missing');
-  const mount = mountCandidate as Record<string, any>;
+  const mount = mountCandidate as Dsl4PreviewElement;
   const sourceName = document.querySelector('#dsl4-local-preview-source-name')?.textContent;
   const sourceDisplayName =
     typeof sourceName === 'string' && sourceName.length > 0 ? sourceName : 'story.k4.yml';
@@ -186,7 +206,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
   let processingFailure: unknown = null;
   let startPromise: Promise<Readonly<Record<string, unknown>>> | null = null;
   let disposePromise: Promise<Readonly<Record<string, unknown>>> | null = null;
-  let errorAlert: Record<string, any> | null = null;
+  let errorAlert: Dsl4PreviewElement | null = null;
 
   const shell = createShell({
     environment: 'development',
@@ -210,7 +230,7 @@ export function createDsl4LocalPreviewBrowserClient(optionsInput: object) {
     if (!errorAlert) {
       const alert = document.createElement?.('p');
       if (isRecord(alert)) {
-        errorAlert = alert as Record<string, any>;
+        errorAlert = alert;
         errorAlert.setAttribute?.('role', 'alert');
         mount.appendChild?.(errorAlert);
       }
